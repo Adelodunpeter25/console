@@ -7,24 +7,15 @@ import type { AgentTool } from "../../../agent/src/types/index.js";
 import type { GeminiFunctionDeclaration } from "../types/index.js";
 
 /**
- * Strips JSON Schema keywords that Google Cloud Code Assist does not accept.
- *
- * `zod-to-json-schema` emits standard JSON Schema (Draft 2020-12) keywords that
- * the CCA function-declaration format rejects — it only accepts a narrow
- * OpenAPI 3.0 subset. The full list comes from Google's own schema validation:
- *   https://ai.google.dev/api/generate-content#v1beta.WriteToolConfig
- *
- * Key categories stripped here:
- *   - Meta/reference: $schema, $ref, $defs, $dynamicRef, $dynamicAnchor
- *   - Validation constraints: exclusiveMinimum, exclusiveMaximum, minimum,
- *     maximum, multipleOf, minLength, maxLength, minItems, maxItems, pattern,
- *     format, minProperties, maxProperties
- *   - Structural/advanced: patternProperties, propertyNames,
- *     unevaluatedProperties, unevaluatedItems, dependencies,
- *     dependentSchemas, dependentRequired, examples, prefixItems
- *   - additionalProperties (already not accepted by some Gemini models)
+ * Simplified CCA schema normalization based on oh-my-pi reference.
+ * 
+ * Key differences from simple sanitization:
+ * - Handles combiners (anyOf, oneOf) by merging or collapsing
+ * - Converts type arrays to nullable for CCA compatibility  
+ * - Normalizes field names (snake_case to camelCase)
+ * - Strips combiners that CCA doesn't support
  */
-function sanitizeSchema(schema: Record<string, unknown>): Record<string, unknown> {
+function normalizeSchemaForCCA(schema: Record<string, unknown>): Record<string, unknown> {
   const banned = new Set([
     "$schema", "$ref", "$defs", "$dynamicRef", "$dynamicAnchor",
     "exclusiveMinimum", "exclusiveMaximum", "minimum", "maximum",
@@ -35,35 +26,78 @@ function sanitizeSchema(schema: Record<string, unknown>): Record<string, unknown
     "dependencies", "dependentSchemas", "dependentRequired",
     "additionalProperties", "examples", "prefixItems",
   ]);
-  const result: Record<string, unknown> = {};
+  
+  const snakeToCamelMap = new Map([
+    ["additional_properties", "additionalProperties"],
+    ["any_of", "anyOf"],
+    ["one_of", "oneOf"],
+    ["prefix_items", "prefixItems"],
+  ]);
 
-  for (const [key, value] of Object.entries(schema)) {
-    if (banned.has(key)) continue;
-
-    if (key === "properties" && typeof value === "object" && value !== null) {
-      result[key] = Object.fromEntries(
-        Object.entries(value as Record<string, unknown>).map(([k, v]) => [
-          k,
-          typeof v === "object" && v !== null ? sanitizeSchema(v as Record<string, unknown>) : v,
-        ]),
-      );
-    } else if (Array.isArray(value)) {
-      result[key] = value.map((item) =>
-        typeof item === "object" && item !== null
-          ? sanitizeSchema(item as Record<string, unknown>)
-          : item,
-      );
-    } else if (typeof value === "object" && value !== null) {
-      result[key] = sanitizeSchema(value as Record<string, unknown>);
-    } else {
-      result[key] = value;
+  function normalize(value: unknown): unknown {
+    if (Array.isArray(value)) {
+      return value.map(normalize);
     }
+    if (typeof value !== "object" || value === null) {
+      return value;
+    }
+
+    const obj = value as Record<string, unknown>;
+    const result: Record<string, unknown> = {};
+
+    // Handle field name normalization
+    for (const [key, val] of Object.entries(obj)) {
+      const normalizedKey = snakeToCamelMap.get(key) ?? key;
+      
+      if (banned.has(normalizedKey)) continue;
+
+      // Handle combiners - CCA doesn't support anyOf/oneOf well
+      if (normalizedKey === "anyOf" || normalizedKey === "oneOf") {
+        const variants = val as unknown[];
+        if (Array.isArray(variants) && variants.length > 0) {
+          // Simple fallback: use the first variant if all are objects
+          const objectVariants = variants.filter(
+            (v): v is Record<string, unknown> => typeof v === "object" && v !== null
+          );
+          if (objectVariants.length > 0) {
+            // Merge properties from all object variants
+            const merged: Record<string, unknown> = { type: "object" };
+            for (const variant of objectVariants) {
+              if (variant.type === "object" && typeof variant.properties === "object") {
+                Object.assign(merged.properties = merged.properties ?? {}, variant.properties);
+              }
+            }
+            Object.assign(result, merged);
+            continue;
+          }
+        }
+      }
+
+      // Handle type arrays - convert to nullable
+      if (normalizedKey === "type" && Array.isArray(val)) {
+        const types = val as string[];
+        const nonNull = types.filter(t => t !== "null");
+        if (nonNull.length === 1) {
+          result.type = nonNull[0];
+          if (types.includes("null")) {
+            result.nullable = true;
+          }
+          continue;
+        }
+      }
+
+      result[normalizedKey] = normalize(val);
+    }
+
+    return result;
   }
 
-  return result;
+  return normalize(schema) as Record<string, unknown>;
 }
 
-export function convertTools(tools: AgentTool[]): GeminiFunctionDeclaration[] {
+export function convertTools(tools: AgentTool[], modelId?: string): GeminiFunctionDeclaration[] {
+  const isClaude = modelId?.toLowerCase().includes("claude");
+
   return tools.map((tool) => {
     const rawSchema = zodToJsonSchema(tool.inputSchema, {
       target: "openApi3",
@@ -71,13 +105,17 @@ export function convertTools(tools: AgentTool[]): GeminiFunctionDeclaration[] {
     }) as Record<string, unknown>;
 
     // zodToJsonSchema wraps in { type: "object", properties, required, ... }
-    // Gemini wants parameters at this level
-    const parameters = sanitizeSchema(rawSchema);
+    // CCA wants parameters at this level
+    const parameters = normalizeSchemaForCCA(rawSchema);
 
-    return {
+    // Claude models need 'parameters' field, others use 'parameters' as well
+    // (the reference uses 'parameters' for CCA, not 'parametersJsonSchema')
+    const declaration: GeminiFunctionDeclaration = {
       name: tool.name,
       description: tool.description,
       parameters,
     };
+
+    return declaration;
   });
 }

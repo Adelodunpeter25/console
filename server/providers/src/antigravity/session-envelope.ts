@@ -1,7 +1,7 @@
 /**
  * Antigravity per-session request envelope.
  *
- * Mirrors the real `antigravity/hub` client:
+ * Based on oh-my-pi reference implementation.
  *   - agentId: stable UUID for the Agent instance
  *   - trajectoryId: stable UUID for a single run()
  *   - sessionId: signed-decimal session id (stable per Agent instance)
@@ -29,6 +29,12 @@ export function createSessionState(): AntigravitySessionState {
   };
 }
 
+/**
+ * Build the Antigravity request envelope (sessionId, structured requestId,
+ * labels) advancing the per-conversation session state. Mirrors the real
+ * `antigravity/hub` client: `requestId` is `agent/<agentId>/<ts>/<trajectoryId>/<step>`
+ * and `labels.last_step_index` trails the requestId step by one.
+ */
 export function buildEnvelope(
   state: AntigravitySessionState,
   wireModelId: string,
@@ -37,14 +43,16 @@ export function buildEnvelope(
   sessionId: string;
   requestId: string;
 } {
-  const labels: Record<string, string> = {
-    request_id: randomUUID(),
-    session_id: state.sessionId,
-    agent_id: state.agentId,
-    trajectory_id: state.trajectoryId,
-    step_index: String(state.stepIndex),
-  };
-
+  // Increment step index for this request
+  state.stepIndex = (state.stepIndex ?? 0) + 1;
+  const step = state.stepIndex;
+  
+  // Build requestId in the format: agent/<agentId>/<timestamp>/<trajectoryId>/<step>
+  const requestId = `agent/${state.agentId}/${Date.now()}/${state.trajectoryId}/${step}`;
+  
+  // Check if this is a Claude model
+  const isClaude = wireModelId.toLowerCase().includes("claude");
+  
   // model_enum is optional telemetry; known values from gemini-headers.ts
   const modelEnums: Record<string, string> = {
     "gemini-3.5-flash-extra-low": "MODEL_PLACEHOLDER_M187",
@@ -54,18 +62,26 @@ export function buildEnvelope(
     "gemini-pro-agent": "MODEL_PLACEHOLDER_M16",
   };
   const modelEnum = modelEnums[wireModelId];
-  if (modelEnum) labels.model_enum = modelEnum;
-
+  
+  const labels: Record<string, string> = {
+    trajectory_id: state.trajectoryId,
+    last_step_index: String(step - 1), // Previous step index
+    used_claude: String(isClaude),
+    used_claude_conservative: String(isClaude),
+  };
+  
+  if (modelEnum) {
+    labels.model_enum = modelEnum;
+  }
+  
   if (state.lastExecutionId) {
     labels.last_execution_id = state.lastExecutionId;
   }
 
-  state.stepIndex += 1;
-
   return {
     labels,
     sessionId: state.sessionId,
-    requestId: labels.request_id!,
+    requestId,
   };
 }
 

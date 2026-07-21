@@ -123,7 +123,7 @@ export const geminiStreamFn: StreamFn = async function* ({
   const endpoint = buildEndpointUrl(baseUrl);
 
   const contents = convertMessages(messages);
-  const functionDeclarations = convertTools(tools);
+  const functionDeclarations = convertTools(tools, model.id);
   const body = buildGeminiRequest(
     cred.projectId,
     model.id,

@@ -116,6 +116,31 @@ function buildToolDeclarations(
   return [declarations];
 }
 
+/**
+ * Normalize Antigravity tools to ensure they use 'parameters' field.
+ * Based on oh-my-pi reference - converts parametersJsonSchema to parameters if needed.
+ */
+function normalizeAntigravityTools(
+  tools: CcaToolDeclarations[] | undefined,
+): CcaToolDeclarations[] | undefined {
+  return tools?.map(tool => ({
+    ...tool,
+    functionDeclarations: tool.functionDeclarations.map(declaration => {
+      // If it already has 'parameters', keep it as-is
+      if ("parameters" in declaration) {
+        return declaration;
+      }
+
+      // Otherwise, convert parametersJsonSchema to parameters
+      const { parametersJsonSchema, ...rest } = declaration as Record<string, unknown>;
+      return {
+        ...rest,
+        parameters: parametersJsonSchema,
+      };
+    }),
+  }));
+}
+
 function buildAntigravityRequest(
   projectId: string,
   modelId: string,
@@ -138,7 +163,7 @@ function buildAntigravityRequest(
     sessionId: envelope.sessionId,
     systemInstruction: buildSystemInstruction(modelId, systemPrompt),
     generationConfig,
-    tools: buildToolDeclarations(tools),
+    tools: normalizeAntigravityTools(buildToolDeclarations(tools)),
     toolConfig: (tools.length > 0 || isClaudeModel(modelId))
       ? buildToolConfig(tools, modelId)
       : undefined,
@@ -191,7 +216,7 @@ export function createAntigravityStreamFn(): StreamFn {
     const endpoint = buildEndpointUrl(baseUrl);
 
     const contents = convertMessages(messages);
-    const functionDeclarations = convertTools(tools);
+    const functionDeclarations = convertTools(tools, model.id);
     const body = buildAntigravityRequest(
       cred.projectId,
       model.id,
