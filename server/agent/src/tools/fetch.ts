@@ -1,0 +1,175 @@
+import { z } from "zod";
+import type { AgentTool } from "../types/index.js";
+
+const inputSchema = z.object({
+  url: z
+    .string()
+    .url()
+    .describe("The URL to fetch"),
+  method: z
+    .enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"])
+    .optional()
+    .default("GET")
+    .describe("HTTP method"),
+  headers: z
+    .record(z.string())
+    .optional()
+    .describe("HTTP request headers as key-value pairs"),
+  body: z
+    .string()
+    .optional()
+    .describe("Request body as a string (for POST/PUT/PATCH)"),
+  timeoutMs: z
+    .number()
+    .int()
+    .min(1000)
+    .max(60_000)
+    .optional()
+    .default(15_000)
+    .describe("Request timeout in milliseconds (default 15s)"),
+  maxBytes: z
+    .number()
+    .int()
+    .min(1024)
+    .max(5 * 1024 * 1024)
+    .optional()
+    .default(512 * 1024)
+    .describe("Maximum response body size in bytes (default 512KB)"),
+  returnHeaders: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe("Include response headers in the output"),
+});
+
+type Input = z.infer<typeof inputSchema>;
+
+const MAX_PREVIEW_BYTES = 512 * 1024; // 512KB
+
+/**
+ * Naively strip HTML tags and collapse whitespace for cleaner LLM context.
+ * Not a full HTML parser — good enough for plain-text extraction.
+ */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export const fetchTool: AgentTool<typeof inputSchema> = {
+  name: "fetch",
+  description: `Fetch content from a URL via HTTP. Returns the response body as text.
+Supports GET, POST, PUT, PATCH, DELETE requests with custom headers and body.
+HTML pages are automatically converted to plain text for readability.
+JSON responses are pretty-printed. Binary content is summarised (not returned raw).
+Use this to:
+  - Read public documentation, README files, and API references
+  - Call JSON REST APIs
+  - Download plain-text content
+Do NOT use for authentication-required pages.`,
+  inputSchema,
+  execute: async (args: Input): Promise<unknown> => {
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), args.timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(args.url, {
+        method: args.method,
+        headers: args.headers,
+        body: args.body,
+        signal: controller.signal,
+      });
+    } catch (err: unknown) {
+      clearTimeout(timeoutHandle);
+      const error = err as Error;
+      if (error.name === "AbortError") {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: Request timed out after ${args.timeoutMs}ms — ${args.url}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: "text", text: `Error: ${error.message}` }],
+        isError: true,
+      };
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+
+    // Collect response headers summary
+    const headersText = args.returnHeaders
+      ? Array.from(response.headers.entries())
+          .map(([k, v]) => `  ${k}: ${v}`)
+          .join("\n")
+      : "";
+
+    // Read body with size cap
+    const contentType = response.headers.get("content-type") ?? "";
+    let bodyText: string;
+    try {
+      const buffer = await response.arrayBuffer();
+      const bytes = Buffer.from(buffer);
+
+      if (bytes.length > args.maxBytes) {
+        const truncated = bytes.slice(0, args.maxBytes).toString("utf-8");
+        bodyText =
+          truncated +
+          `\n\n[... response truncated: ${bytes.length} bytes total, showing first ${args.maxBytes} bytes ...]`;
+      } else {
+        bodyText = bytes.toString("utf-8");
+      }
+    } catch (err: unknown) {
+      return {
+        content: [{ type: "text", text: `Error reading response body: ${(err as Error).message}` }],
+        isError: true,
+      };
+    }
+
+    // Format body based on content type
+    let formattedBody: string;
+    if (contentType.includes("application/json") || contentType.includes("+json")) {
+      try {
+        const parsed = JSON.parse(bodyText);
+        formattedBody = JSON.stringify(parsed, null, 2);
+      } catch {
+        formattedBody = bodyText;
+      }
+    } else if (contentType.includes("text/html")) {
+      formattedBody = htmlToText(bodyText);
+    } else {
+      formattedBody = bodyText;
+    }
+
+    const sections: string[] = [
+      `URL: ${args.url}`,
+      `Status: ${response.status} ${response.statusText}`,
+      `Content-Type: ${contentType}`,
+    ];
+    if (args.returnHeaders && headersText) {
+      sections.push(`Headers:\n${headersText}`);
+    }
+    sections.push("", "Body:", formattedBody);
+
+    const isError = response.status >= 400;
+    return {
+      content: [{ type: "text", text: sections.join("\n") }],
+      isError,
+    };
+  },
+};

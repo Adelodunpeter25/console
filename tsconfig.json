@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    /* Base Options */
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "target": "ES2022",
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "moduleDetection": "force",
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+
+    /* Strictness */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitAny": true,
+
+    /* Bundler & Module Resolution */
+    "moduleResolution": "NodeNext",
+    "module": "NodeNext",
+    "noEmit": true,
+
+    /* Node.js types */
+    "types": ["node"],
+
+    /* Path Aliases */
+    "paths": {
+      "@/*": ["./server/*"]
+    }
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"]
+}
