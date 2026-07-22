@@ -49,7 +49,7 @@ function log(message: string): void {
 }
 
 async function shutdown(): Promise<void> {
-  log("🛑 Shutting down server...");
+  log("Shutting down server...");
   
   // Close log stream
   if (logStream) {
@@ -117,12 +117,12 @@ async function startServer(): Promise<void> {
   await setupLogging();
   
   server.listen(port, host, () => {
-    log(`🚀 Console Agent Server running on http://${host}:${port}`);
-    log(`📡 API Base: http://${host}:${port}/api (Accepting connections from all hosts/devices)`);
-    log(`📝 Mode: ${isDaemon ? "daemon" : "foreground"}`);
+    log(`Console Agent Server running on http://${host}:${port}`);
+    log(`API Base: http://${host}:${port}/api (Accepting connections from all hosts/devices)`);
+    log(`Mode: ${isDaemon ? "daemon" : "foreground"}`);
     
     if (isDaemon) {
-      log(`📁 Logs: ${logFile}`);
+      log(`Logs: ${logFile}`);
     }
   });
 }
