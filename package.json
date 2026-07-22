@@ -8,7 +8,8 @@
   "author": "",
   "type": "module",
   "scripts": {
-    "dev": "vp dev",
+    "dev": "tsx watch server/index.ts",
+    "start": "tsx server/index.ts",
     "check": "vp check",
     "typecheck": "tsc --noEmit",
     "test": "tsc --noEmit && tsx tests/run-all-tests.ts"
