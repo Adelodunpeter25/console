@@ -3,26 +3,26 @@
 @layer base {
   :root {
     /* Minimal Dark Mode Only (Cursor Palette) */
-    --background: 0 0% 7%;          /* #121212 / Dark charcoal */
-    --foreground: 0 0% 95%;         /* #f2f2f2 / Clean white */
-    --card: 0 0% 9%;                /* #171717 / Elevating panel dark */
+    --background: 0 0% 7%; /* #121212 / Dark charcoal */
+    --foreground: 0 0% 95%; /* #f2f2f2 / Clean white */
+    --card: 0 0% 9%; /* #171717 / Elevating panel dark */
     --card-foreground: 0 0% 95%;
     --popover: 0 0% 9%;
     --popover-foreground: 0 0% 95%;
-    --primary: 0 0% 98%;            /* Bright crisp white */
+    --primary: 0 0% 98%; /* Bright crisp white */
     --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 15%;          /* #262626 / Subtle dark gray accent */
+    --secondary: 0 0% 15%; /* #262626 / Subtle dark gray accent */
     --secondary-foreground: 0 0% 95%;
     --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 60%;   /* Muted gray text */
-    --accent: 0 0% 18%;             /* Hover state accent */
+    --muted-foreground: 0 0% 60%; /* Muted gray text */
+    --accent: 0 0% 18%; /* Hover state accent */
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 16%;             /* Crisp subtle border lines */
+    --border: 0 0% 16%; /* Crisp subtle border lines */
     --input: 0 0% 16%;
     --ring: 0 0% 80%;
-    --radius: 0.375rem;             /* Minimal tight radius */
+    --radius: 0.375rem; /* Minimal tight radius */
   }
 }
 
