@@ -12,7 +12,9 @@ export const fsService = {
     return res.data;
   },
 
-  async getFsBrowse(path?: string): Promise<{ currentPath: string; parentPath: string | null; entries: FsTreeEntry[] }> {
+  async getFsBrowse(
+    path?: string,
+  ): Promise<{ currentPath: string; parentPath: string | null; entries: FsTreeEntry[] }> {
     const res = await getConsoleApiClient().get("/api/fs/browse", { params: { path } });
     return res.data;
   },

@@ -3,13 +3,7 @@
  * NO external LLM API calls — uses mock StreamFn.
  */
 import assert from "node:assert/strict";
-import {
-  Agent,
-  agentLoop,
-  type AgentTool,
-  type Model,
-  type StreamFn,
-} from "../agent/src/index.js";
+import { Agent, agentLoop, type AgentTool, type Model, type StreamFn } from "../agent/src/index.js";
 import { z } from "zod";
 
 console.log("Running AgentLoop service tests...");

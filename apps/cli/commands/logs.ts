@@ -11,7 +11,7 @@ export async function logsDaemon(options: LogsOptions): Promise<void> {
   const consoleDir = CONSOLE_DIR;
   const logsDir = LOGS_DIR;
   const logFile = path.join(logsDir, "daemon.log");
-  
+
   if (!existsSync(logFile)) {
     console.log("No log file found");
     console.log("Daemon may not have been started yet");

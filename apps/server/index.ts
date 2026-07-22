@@ -18,10 +18,10 @@ let logStream: fs.FileHandle | null = null;
 
 async function setupLogging(): Promise<void> {
   if (!isDaemon) return;
-  
+
   const consoleDir = path.join(process.env.HOME || process.env.USERPROFILE || "", ".console");
   const logsDir = path.join(consoleDir, "logs");
-  
+
   try {
     await fs.mkdir(logsDir, { recursive: true });
     logFile = path.join(logsDir, "daemon.log");
@@ -34,14 +34,14 @@ async function setupLogging(): Promise<void> {
 function log(message: string): void {
   const timestamp = new Date().toISOString();
   const logMessage = `[${timestamp}] ${message}\n`;
-  
+
   // Always log to stdout/stderr
   if (isDaemon) {
     process.stdout.write(logMessage);
   } else {
     console.log(message);
   }
-  
+
   // Write to log file in daemon mode
   if (logStream) {
     logStream.write(logMessage);
@@ -50,12 +50,12 @@ function log(message: string): void {
 
 async function shutdown(): Promise<void> {
   log("Shutting down server...");
-  
+
   // Close log stream
   if (logStream) {
     await logStream.close();
   }
-  
+
   process.exit(0);
 }
 
@@ -115,12 +115,12 @@ process.on("SIGINT", shutdown);
 // Start server
 async function startServer(): Promise<void> {
   await setupLogging();
-  
+
   server.listen(port, host, () => {
     log(`Console Agent Server running on http://${host}:${port}`);
     log(`API Base: http://${host}:${port}/api (Accepting connections from all hosts/devices)`);
     log(`Mode: ${isDaemon ? "daemon" : "foreground"}`);
-    
+
     if (isDaemon) {
       log(`Logs: ${logFile}`);
     }

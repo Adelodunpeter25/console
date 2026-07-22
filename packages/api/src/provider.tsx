@@ -18,9 +18,5 @@ export const ConsoleApiProvider: React.FC<ConsoleApiProviderProps> = ({
     configureConsoleApi({ baseUrl, getToken });
   }
 
-  return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-    </QueryClientProvider>
-  );
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 };

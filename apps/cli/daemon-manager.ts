@@ -120,13 +120,13 @@ export async function isProcessRunning(pid: number): Promise<boolean> {
  */
 export async function getDaemonStatus(): Promise<DaemonStatus> {
   const pid = await readPidFile();
-  
+
   if (!pid) {
     return { running: false };
   }
 
   const running = await isProcessRunning(pid);
-  
+
   if (!running) {
     // Clean up stale PID file
     await removePidFile();
@@ -144,7 +144,7 @@ export async function getDaemonStatus(): Promise<DaemonStatus> {
   }
 
   const config = await loadConfig();
-  
+
   return {
     running: true,
     pid,
@@ -160,16 +160,16 @@ export async function getDaemonStatus(): Promise<DaemonStatus> {
 export async function killDaemon(pid: number): Promise<void> {
   try {
     process.kill(pid, "SIGTERM");
-    
+
     // Wait up to 5 seconds for graceful shutdown
     for (let i = 0; i < 50; i++) {
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
       if (!(await isProcessRunning(pid))) {
         await removePidFile();
         return;
       }
     }
-    
+
     // Force kill if still running
     process.kill(pid, "SIGKILL");
     await removePidFile();

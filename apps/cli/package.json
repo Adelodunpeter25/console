@@ -2,10 +2,10 @@
   "name": "@console/cli",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
   "bin": {
     "console": "./index.ts"
   },
+  "type": "module",
   "dependencies": {
     "@console/types": "*",
     "commander": "^12.1.0"

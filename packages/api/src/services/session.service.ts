@@ -1,5 +1,10 @@
 import { getConsoleApiClient } from "../client.js";
-import type { SessionHeader, SessionDetailResponse, CreateSessionDto, UpdateSessionDto } from "@console/types";
+import type {
+  SessionHeader,
+  SessionDetailResponse,
+  CreateSessionDto,
+  UpdateSessionDto,
+} from "@console/types";
 
 export const sessionService = {
   async getSessions(): Promise<SessionHeader[]> {

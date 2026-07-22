@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Console Agent CLI - Daemon Management Interface
- * 
+ *
  * Commands:
  *   console start   - Start the daemon server
  *   console stop    - Stop the running daemon
@@ -18,10 +18,7 @@ import { restartDaemon } from "./commands/restart.js";
 
 const program = new Command();
 
-program
-  .name("console")
-  .description("Console Agent - AI coding agent daemon")
-  .version("1.0.0");
+program.name("console").description("Console Agent - AI coding agent daemon").version("1.0.0");
 
 program
   .command("start")
@@ -32,10 +29,7 @@ program
   .option("--no-daemon", "Run in foreground")
   .action(startDaemon);
 
-program
-  .command("stop")
-  .description("Stop the running console agent daemon")
-  .action(stopDaemon);
+program.command("stop").description("Stop the running console agent daemon").action(stopDaemon);
 
 program
   .command("status")

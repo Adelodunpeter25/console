@@ -50,7 +50,8 @@ export function useReadFile(path: string) {
 export function useWriteFile() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ path, content }: { path: string; content: string }) => fsService.writeFile(path, content),
+    mutationFn: ({ path, content }: { path: string; content: string }) =>
+      fsService.writeFile(path, content),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: fsKeys.file(variables.path) });
       queryClient.invalidateQueries({ queryKey: ["fs"] });
