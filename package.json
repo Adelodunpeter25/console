@@ -10,11 +10,17 @@
   "scripts": {
     "dev:server": "npm run dev --workspace=@console/server",
     "start:server": "npm run start --workspace=@console/server",
+    "dev:web": "npm run dev --workspace=@console/web",
     "cli": "npm run cli --workspace=@console/cli",
+    "check": "vp check",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@tanstack/router-plugin": "^1.95.0",
     "@types/node": "^26.1.1",
-    "typescript": "^7.0.2"
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^7.0.2",
+    "vite": "^6.0.11"
   }
 }
