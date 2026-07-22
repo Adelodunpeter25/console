@@ -13,14 +13,14 @@ export async function logsDaemon(options: LogsOptions): Promise<void> {
   const logFile = path.join(logsDir, "daemon.log");
   
   if (!existsSync(logFile)) {
-    console.log("❌ No log file found");
-    console.log("   Daemon may not have been started yet");
-    console.log("   Run 'console start' to start the daemon");
+    console.log("No log file found");
+    console.log("Daemon may not have been started yet");
+    console.log("Run 'console start' to start the daemon");
     process.exit(1);
   }
 
-  console.log(`📋 Daemon logs (${logFile})`);
-  console.log("   Press Ctrl+C to exit\n");
+  console.log(`Daemon logs (${logFile})`);
+  console.log("Press Ctrl+C to exit\n");
 
   if (options.follow) {
     // Use tail -f for following logs

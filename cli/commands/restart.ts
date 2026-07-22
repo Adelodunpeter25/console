@@ -8,14 +8,14 @@ export async function restartDaemon(options: {
   port: string;
   host: string;
 }): Promise<void> {
-  console.log("🔄 Restarting daemon...");
+  console.log("Restarting daemon...");
   
   // Stop if running
   try {
     await stopDaemon();
   } catch (error) {
     // Ignore if not running
-    console.log("   (daemon was not running)");
+    console.log("Daemon was not running");
   }
   
   // Start with same options

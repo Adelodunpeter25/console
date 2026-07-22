@@ -15,9 +15,9 @@ export async function startDaemon(options: StartOptions): Promise<void> {
   const status = await getDaemonStatus();
   
   if (status.running) {
-    console.log(`❌ Daemon is already running (PID: ${status.pid})`);
-    console.log(`   Server: http://${status.host}:${status.port}`);
-    console.log(`   Uptime: ${status.uptime}`);
+    console.log(`Daemon is already running (PID: ${status.pid})`);
+    console.log(`Server: http://${status.host}:${status.port}`);
+    console.log(`Uptime: ${status.uptime}`);
     process.exit(1);
   }
 
@@ -35,9 +35,9 @@ export async function startDaemon(options: StartOptions): Promise<void> {
   
   if (options.daemon) {
     // Start as background daemon
-    console.log(`🚀 Starting console agent daemon...`);
-    console.log(`   Port: ${options.port}`);
-    console.log(`   Host: ${options.host}`);
+    console.log(`Starting console agent daemon...`);
+    console.log(`Port: ${options.port}`);
+    console.log(`Host: ${options.host}`);
     
     const args = [serverPath];
     const env = {
@@ -60,21 +60,21 @@ export async function startDaemon(options: StartOptions): Promise<void> {
     
     if (child.pid && child.exitCode === null) {
       await writePidFile(child.pid);
-      console.log(`✅ Daemon started successfully (PID: ${child.pid})`);
-      console.log(`   Server: http://${options.host}:${options.port}`);
-      console.log(`   Logs: ~/.console/logs/daemon.log`);
-      console.log(`   Run 'console logs' to view logs`);
-      console.log(`   Run 'console stop' to stop the daemon`);
+      console.log(`Daemon started successfully (PID: ${child.pid})`);
+      console.log(`Server: http://${options.host}:${options.port}`);
+      console.log(`Logs: ~/.console/logs/daemon.log`);
+      console.log(`Run 'console logs' to view logs`);
+      console.log(`Run 'console stop' to stop the daemon`);
     } else {
       console.log(`❌ Failed to start daemon`);
       process.exit(1);
     }
   } else {
     // Run in foreground
-    console.log(`🚀 Starting console agent in foreground...`);
-    console.log(`   Port: ${options.port}`);
-    console.log(`   Host: ${options.host}`);
-    console.log(`   Press Ctrl+C to stop`);
+    console.log(`Starting console agent in foreground...`);
+    console.log(`Port: ${options.port}`);
+    console.log(`Host: ${options.host}`);
+    console.log(`Press Ctrl+C to stop`);
     
     process.env.PORT = options.port;
     process.env.HOST = options.host;
