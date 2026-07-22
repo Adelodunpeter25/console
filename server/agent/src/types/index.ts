@@ -1,5 +1,5 @@
 /**
- * Re-export all core types from shared module.
+ * Re-export all core types from shared/types module.
  */
-export * from "../../../../shared/src/index.js";
+export * from "../../../../shared/types/index.js";
 export * from "./system-prompt.js";

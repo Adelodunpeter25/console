@@ -24,8 +24,11 @@
     "types": ["node"],
 
     /* Path Aliases */
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./server/*"]
+      "@/*": ["./server/*"],
+      "@shared": ["./shared/types/index.js"],
+      "@shared/*": ["./shared/types/*"]
     }
   },
   "include": ["**/*.ts"],
