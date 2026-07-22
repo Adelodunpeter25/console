@@ -9,7 +9,7 @@ import DatabaseConstructor, { type Database as DatabaseType } from "better-sqlit
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { AgentMessage, SessionHeader } from "../types/index.js";
+import type { AgentMessage, SessionHeader, ProjectInfo } from "../types/index.js";
 import { initSessionDatabase } from "./schema.js";
 
 const MAX_PERSIST_CHARS = 500_000;
@@ -59,12 +59,94 @@ export class SqliteSessionStorage {
   }
 
   /**
+   * Create a new project record.
+   */
+  createProject(options: {
+    id?: string;
+    name: string;
+    dir: string;
+  }): ProjectInfo {
+    const id = options.id ?? crypto.randomUUID();
+    const now = Date.now();
+    const stmt = this.db.prepare(`
+      INSERT INTO projects (id, name, dir, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(dir) DO UPDATE SET
+        name = excluded.name,
+        updated_at = excluded.updated_at
+    `);
+    stmt.run(id, options.name, options.dir, now, now);
+
+    const row = this.db.prepare(`SELECT * FROM projects WHERE dir = ?`).get(options.dir) as any;
+    return {
+      id: row.id,
+      name: row.name,
+      path: row.dir,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  /**
+   * Get a project by ID.
+   */
+  getProject(projectId: string): ProjectInfo | null {
+    const row = this.db.prepare(`SELECT * FROM projects WHERE id = ?`).get(projectId) as any;
+    if (!row) return null;
+    return {
+      id: row.id,
+      name: row.name,
+      path: row.dir,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  /**
+   * Get a project by its directory path.
+   */
+  getProjectByDir(dir: string): ProjectInfo | null {
+    const row = this.db.prepare(`SELECT * FROM projects WHERE dir = ?`).get(dir) as any;
+    if (!row) return null;
+    return {
+      id: row.id,
+      name: row.name,
+      path: row.dir,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  /**
+   * List all projects.
+   */
+  listProjects(): ProjectInfo[] {
+    const rows = this.db.prepare(`SELECT * FROM projects ORDER BY updated_at DESC`).all() as any[];
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      path: row.dir,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }
+
+  /**
+   * Delete a project.
+   */
+  deleteProject(projectId: string): boolean {
+    const info = this.db.prepare(`DELETE FROM projects WHERE id = ?`).run(projectId);
+    return info.changes > 0;
+  }
+
+  /**
    * Create a new session record.
    */
   createSession(options: {
     id?: string;
     title?: string;
     cwd: string;
+    projectId?: string;
     modelId: string;
     provider: string;
   }): SessionHeader {
@@ -73,16 +155,17 @@ export class SqliteSessionStorage {
     const title = options.title?.trim() || "New Session";
 
     const stmt = this.db.prepare(`
-      INSERT INTO sessions (id, title, cwd, model_id, provider, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO sessions (id, title, cwd, project_id, model_id, provider, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(id, title, options.cwd, options.modelId, options.provider, now, now);
+    stmt.run(id, title, options.cwd, options.projectId || null, options.modelId, options.provider, now, now);
 
     return {
       id,
       title,
       cwd: options.cwd,
+      projectId: options.projectId,
       modelId: options.modelId,
       provider: options.provider,
       createdAt: now,
@@ -156,6 +239,7 @@ export class SqliteSessionStorage {
           id: string;
           title: string;
           cwd: string;
+          project_id: string | null;
           model_id: string;
           provider: string;
           created_at: number;
@@ -177,6 +261,7 @@ export class SqliteSessionStorage {
       id: sessionRow.id,
       title: sessionRow.title,
       cwd: sessionRow.cwd,
+      projectId: sessionRow.project_id || undefined,
       modelId: sessionRow.model_id,
       provider: sessionRow.provider,
       createdAt: sessionRow.created_at,
@@ -188,14 +273,15 @@ export class SqliteSessionStorage {
   }
 
   /**
-   * List saved sessions (optionally filtered by cwd).
+   * List saved sessions (optionally filtered by cwd or projectId).
    */
-  listSessions(options?: { cwd?: string; limit?: number }): SessionHeader[] {
+  listSessions(options?: { cwd?: string; projectId?: string; limit?: number }): SessionHeader[] {
     const limit = options?.limit ?? 100;
     let rows: Array<{
       id: string;
       title: string;
       cwd: string;
+      project_id: string | null;
       model_id: string;
       provider: string;
       created_at: number;
@@ -203,7 +289,18 @@ export class SqliteSessionStorage {
       msg_count: number;
     }>;
 
-    if (options?.cwd) {
+    if (options?.projectId) {
+      const stmt = this.db.prepare(`
+        SELECT s.*, COUNT(m.id) as msg_count
+        FROM sessions s
+        LEFT JOIN messages m ON s.id = m.session_id
+        WHERE s.project_id = ?
+        GROUP BY s.id
+        ORDER BY s.updated_at DESC
+        LIMIT ?
+      `);
+      rows = stmt.all(options.projectId, limit) as typeof rows;
+    } else if (options?.cwd) {
       const stmt = this.db.prepare(`
         SELECT s.*, COUNT(m.id) as msg_count
         FROM sessions s
@@ -230,6 +327,7 @@ export class SqliteSessionStorage {
       id: r.id,
       title: r.title,
       cwd: r.cwd,
+      projectId: r.project_id || undefined,
       modelId: r.model_id,
       provider: r.provider,
       createdAt: r.created_at,

@@ -9,6 +9,7 @@ export interface ApiResponse<T = unknown> {
 
 export interface CreateSessionDto {
   cwd: string;
+  projectId?: string;
   modelId?: string;
   provider?: "gemini" | "antigravity";
   title?: string;
@@ -48,9 +49,11 @@ export interface ApproveToolPermissionDto {
 }
 
 export interface ProjectInfo {
+  id: string;
   name: string;
   path: string;
-  lastModified?: number;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface AuthStatusResponse {
