@@ -1,35 +1,20 @@
 {
-  "name": "console-agent",
+  "name": "console-monorepo",
   "version": "1.0.0",
   "private": true,
-  "description": "A coding agent harness with persistent daemon CLI",
-  "keywords": ["agent", "ai", "coding", "daemon", "cli"],
-  "license": "MIT",
-  "author": "",
-  "type": "module",
-  "bin": {
-    "console": "./cli/index.js"
-  },
+  "description": "A coding agent engine monorepo with CLI, Server, Web, Mobile and shared API package",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "tsx watch server/index.ts",
-    "start": "tsx server/index.ts",
-    "check": "vp check",
-    "typecheck": "tsc --noEmit",
-    "test": "tsc --noEmit && tsx tests/run-all-tests.ts",
-    "cli": "tsx cli/index.ts"
-  },
-  "dependencies": {
-    "@ff-labs/fff-node": "^0.10.0",
-    "better-sqlite3": "^12.11.1",
-    "commander": "^12.1.0",
-    "hono": "^4.4.12",
-    "zod": "^3.23.8",
-    "zod-to-json-schema": "^3.25.2"
+    "dev:server": "npm run dev --workspace=@console/server",
+    "start:server": "npm run start --workspace=@console/server",
+    "cli": "npm run cli --workspace=@console/cli",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.1.1",
-    "tsx": "^4.23.1",
     "typescript": "^7.0.2"
   }
 }

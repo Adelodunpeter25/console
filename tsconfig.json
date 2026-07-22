@@ -1,36 +1,17 @@
 {
   "compilerOptions": {
-    /* Base Options */
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "jsx": "react-jsx",
+    "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "target": "ES2022",
-    "allowJs": true,
-    "resolveJsonModule": true,
-    "moduleDetection": "force",
-    "isolatedModules": true,
-    "verbatimModuleSyntax": true,
-
-    /* Strictness */
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitAny": true,
-
-    /* Bundler & Module Resolution */
-    "moduleResolution": "NodeNext",
-    "module": "NodeNext",
-    "noEmit": true,
-
-    /* Node.js types */
-    "types": ["node"],
-
-    /* Path Aliases */
-    "baseUrl": ".",
+    "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@/*": ["./server/*"],
-      "@shared": ["./shared/types/index.js"],
-      "@shared/*": ["./shared/types/*"]
+      "@console/types": ["./packages/types/src/index.ts"],
+      "@console/api": ["./packages/api/src/index.ts"]
     }
   },
-  "include": ["**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "**/dist"]
 }
