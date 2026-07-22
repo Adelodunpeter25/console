@@ -24,13 +24,13 @@ function parseArgs(): { prompt: string; provider: "gemini" | "antigravity"; mode
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--provider" && args[i + 1]) {
-      provider = args[i + 1] as "gemini" | "antigravity";
+      provider = (args[i + 1] ?? "gemini") as "gemini" | "antigravity";
       i++;
     } else if (args[i] === "--model" && args[i + 1]) {
-      modelId = args[i + 1];
+      modelId = args[i + 1] ?? "gemini-2.5-pro";
       i++;
-    } else {
-      promptParts.push(args[i]);
+    } else if (args[i]) {
+      promptParts.push(args[i]!);
     }
   }
 
@@ -137,7 +137,7 @@ async function main() {
 
         case "toolExecutionResult":
           console.log(
-            `\x1b[32m  ✔ [Tool ${event.result.toolCallId.slice(0, 8)}] Result:\x1b[0m ${
+            `\x1b[32m  ✔ [Tool ${event.result.toolName || event.result.toolCallId.slice(0, 8)}] Result:\x1b[0m ${
               typeof event.result.content === "string"
                 ? event.result.content.slice(0, 120).replace(/\n/g, " ")
                 : "Done"

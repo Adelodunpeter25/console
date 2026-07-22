@@ -97,6 +97,7 @@ async function executeTool(
   if (!tool) {
     const result: ToolResult = {
       toolCallId: call.id,
+      toolName: call.name,
       content: `Tool "${call.name}" is not registered. Available tools: ${tools.map((t) => t.name).join(", ")}`,
       isError: true,
     };
@@ -112,6 +113,7 @@ async function executeTool(
       .join("\n");
     const result: ToolResult = {
       toolCallId: call.id,
+      toolName: call.name,
       content: `Invalid arguments for tool "${call.name}":\n${errorText}`,
       isError: true,
     };
@@ -124,6 +126,7 @@ async function executeTool(
   if (approval.policy === "deny") {
     const result: ToolResult = {
       toolCallId: call.id,
+      toolName: call.name,
       content: `Execution denied: ${approval.reason}`,
       isError: true,
     };
@@ -147,6 +150,7 @@ async function executeTool(
       if (!allowed) {
         const result: ToolResult = {
           toolCallId: call.id,
+          toolName: call.name,
           content: `Execution denied by user permission decision.`,
           isError: true,
         };
@@ -161,6 +165,7 @@ async function executeTool(
     const output = await tool.execute(parsed.data);
     const result: ToolResult = {
       toolCallId: call.id,
+      toolName: call.name,
       content: output,
     };
     await onToolResult?.(call, result);
@@ -169,6 +174,7 @@ async function executeTool(
     const message = err instanceof Error ? err.message : String(err);
     const result: ToolResult = {
       toolCallId: call.id,
+      toolName: call.name,
       content: message,
       isError: true,
     };
