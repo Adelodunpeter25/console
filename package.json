@@ -1,22 +1,27 @@
 {
-  "name": "server",
+  "name": "console-agent",
   "version": "1.0.0",
   "private": true,
-  "description": "a coding agent harness",
-  "keywords": [],
+  "description": "A coding agent harness with persistent daemon CLI",
+  "keywords": ["agent", "ai", "coding", "daemon", "cli"],
   "license": "MIT",
   "author": "",
   "type": "module",
+  "bin": {
+    "console": "./cli/index.js"
+  },
   "scripts": {
     "dev": "tsx watch server/index.ts",
     "start": "tsx server/index.ts",
     "check": "vp check",
     "typecheck": "tsc --noEmit",
-    "test": "tsc --noEmit && tsx tests/run-all-tests.ts"
+    "test": "tsc --noEmit && tsx tests/run-all-tests.ts",
+    "cli": "tsx cli/index.ts"
   },
   "dependencies": {
     "@ff-labs/fff-node": "^0.10.0",
     "better-sqlite3": "^12.11.1",
+    "commander": "^12.1.0",
     "hono": "^4.4.12",
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.25.2"
