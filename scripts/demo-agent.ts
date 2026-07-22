@@ -48,7 +48,7 @@ async function promptUserInteractive(): Promise<string> {
   });
 
   return new Promise((resolve) => {
-    rl.question("\n🤖 Enter your prompt for Console Agent: ", (answer) => {
+    rl.question("\nEnter your prompt for Console Agent: ", (answer) => {
       rl.close();
       resolve(answer.trim());
     });
@@ -60,7 +60,7 @@ async function main() {
   let prompt = parsed.prompt;
 
   console.log("=========================================");
-  console.log("🚀 Console Agent Engine — Interactive Demo");
+  console.log("Console Agent Engine — Interactive Demo");
   console.log("=========================================");
 
   if (!prompt) {
@@ -83,11 +83,11 @@ async function main() {
     provider: parsed.provider,
   });
 
-  console.log(`\n📌 Session ID: ${header.id}`);
-  console.log(`📡 Provider: ${parsed.provider}`);
-  console.log(`🧠 Model: ${parsed.modelId}`);
-  console.log(`📂 Workspace CWD: ${cwd}`);
-  console.log(`💬 User Prompt: "${prompt}"\n`);
+  console.log(`\nSession ID: ${header.id}`);
+  console.log(`Provider: ${parsed.provider}`);
+  console.log(`Model: ${parsed.modelId}`);
+  console.log(`Workspace CWD: ${cwd}`);
+  console.log(`User Prompt: "${prompt}"\n`);
   console.log("-----------------------------------------");
 
   const model: Model = {
@@ -112,7 +112,7 @@ async function main() {
     approvalMode: "accept-edits",
   });
 
-  console.log("✨ Streaming Agent Execution:\n");
+  console.log("Streaming Agent Execution:\n");
 
   try {
     const eventStream = agent.run(prompt);
@@ -129,15 +129,15 @@ async function main() {
           break;
 
         case "toolExecutionStart":
-          console.log(`\n\n\x1b[33m🔧 Executing Tools (${event.calls.length}):\x1b[0m`);
+          console.log(`\n\n\x1b[33mExecuting Tools (${event.calls.length}):\x1b[0m`);
           for (const call of event.calls) {
-            console.log(`  ▶ [${call.name}] args: ${JSON.stringify(call.arguments)}`);
+            console.log(`  > [${call.name}] args: ${JSON.stringify(call.arguments)}`);
           }
           break;
 
         case "toolExecutionResult":
           console.log(
-            `\x1b[32m  ✔ [Tool ${event.result.toolName || event.result.toolCallId.slice(0, 8)}] Result:\x1b[0m ${
+            `\x1b[32m  [Tool ${event.result.toolName || event.result.toolCallId.slice(0, 8)}] Result:\x1b[0m ${
               typeof event.result.content === "string"
                 ? event.result.content.slice(0, 120).replace(/\n/g, " ")
                 : "Done"
@@ -146,11 +146,11 @@ async function main() {
           break;
 
         case "compaction":
-          console.log(`\n\x1b[35m🗜️ Context compacted (${event.summary})\x1b[0m`);
+          console.log(`\n\x1b[35mContext compacted (${event.summary})\x1b[0m`);
           break;
 
         case "error":
-          console.error(`\n\x1b[31m❌ Error: ${event.error.message}\x1b[0m`);
+          console.error(`\n\x1b[31mError: ${event.error.message}\x1b[0m`);
           break;
       }
     }
@@ -159,8 +159,8 @@ async function main() {
     sessionStorage.appendMessages(header.id, finalMessages);
 
     console.log("\n-----------------------------------------");
-    console.log(`🎉 Run Finished! Total messages stored: ${finalMessages.length}`);
-    console.log(`💾 Saved to SQLite Session ID: ${header.id}`);
+    console.log(`Run Finished. Total messages stored: ${finalMessages.length}`);
+    console.log(`Saved to SQLite Session ID: ${header.id}`);
     console.log("=========================================\n");
   } catch (err) {
     console.error("Execution failed:", err);
