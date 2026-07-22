@@ -5,11 +5,9 @@ import * as path from "node:path";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { CONSOLE_DIR, LOGS_DIR } from "../daemon-manager.js";
+import type { LogsOptions } from "../types.js";
 
-export async function logsDaemon(options: {
-  follow: boolean;
-  lines: string;
-}): Promise<void> {
+export async function logsDaemon(options: LogsOptions): Promise<void> {
   const consoleDir = CONSOLE_DIR;
   const logsDir = LOGS_DIR;
   const logFile = path.join(logsDir, "daemon.log");

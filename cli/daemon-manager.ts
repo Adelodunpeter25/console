@@ -6,6 +6,7 @@ import * as path from "node:path";
 import { existsSync } from "node:fs";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import type { DaemonStatus, DaemonConfig } from "./types.js";
 
 const execAsync = promisify(exec);
 
@@ -15,20 +16,6 @@ const PID_FILE = path.join(CONSOLE_DIR, "daemon.pid");
 export const LOGS_DIR = path.join(CONSOLE_DIR, "logs");
 const LOG_FILE = path.join(LOGS_DIR, "daemon.log");
 const CONFIG_FILE = path.join(CONSOLE_DIR, "config.json");
-
-export interface DaemonStatus {
-  running: boolean;
-  pid?: number;
-  uptime?: string;
-  port?: string;
-  host?: string;
-}
-
-export interface DaemonConfig {
-  port: string;
-  host: string;
-  logLevel: string;
-}
 
 /**
  * Ensure console directory structure exists

@@ -8,14 +8,10 @@ import {
   writePidFile,
   saveConfig,
   getDaemonStatus,
-  type DaemonConfig,
 } from "../daemon-manager.js";
+import type { StartOptions } from "../types.js";
 
-export async function startDaemon(options: {
-  port: string;
-  host: string;
-  daemon: boolean;
-}): Promise<void> {
+export async function startDaemon(options: StartOptions): Promise<void> {
   const status = await getDaemonStatus();
   
   if (status.running) {
@@ -26,7 +22,7 @@ export async function startDaemon(options: {
   }
 
   // Save config
-  const config: DaemonConfig = {
+  const config = {
     port: options.port,
     host: options.host,
     logLevel: "info",
