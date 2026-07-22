@@ -2,23 +2,14 @@ import { z } from "zod";
 import type { AgentTool } from "../types/index.js";
 
 const inputSchema = z.object({
-  url: z
-    .string()
-    .url()
-    .describe("The URL to fetch"),
+  url: z.string().url().describe("The URL to fetch"),
   method: z
     .enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"])
     .optional()
     .default("GET")
     .describe("HTTP method"),
-  headers: z
-    .record(z.string())
-    .optional()
-    .describe("HTTP request headers as key-value pairs"),
-  body: z
-    .string()
-    .optional()
-    .describe("Request body as a string (for POST/PUT/PATCH)"),
+  headers: z.record(z.string()).optional().describe("HTTP request headers as key-value pairs"),
+  body: z.string().optional().describe("Request body as a string (for POST/PUT/PATCH)"),
   timeoutMs: z
     .number()
     .int()
@@ -43,8 +34,6 @@ const inputSchema = z.object({
 });
 
 type Input = z.infer<typeof inputSchema>;
-
-const MAX_PREVIEW_BYTES = 512 * 1024; // 512KB
 
 /**
  * Naively strip HTML tags and collapse whitespace for cleaner LLM context.

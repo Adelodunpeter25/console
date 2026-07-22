@@ -22,12 +22,20 @@ function makeTextPart(text: string): GeminiTextPart {
   return { text };
 }
 
-function makeFunctionCallPart(name: string, args: Record<string, unknown>, id: string): GeminiFunctionCallPart {
+function makeFunctionCallPart(
+  name: string,
+  args: Record<string, unknown>,
+  id: string,
+): GeminiFunctionCallPart {
   const ref: GeminiFunctionCallRef = { name, args, id };
   return { functionCall: ref };
 }
 
-function makeFunctionResponsePart(name: string, id: string, content: unknown): GeminiFunctionResponsePart {
+function makeFunctionResponsePart(
+  name: string,
+  id: string,
+  content: unknown,
+): GeminiFunctionResponsePart {
   const body: GeminiFunctionResponseBody = { content };
   const ref: GeminiFunctionResponseRef = { name, id, response: body };
   return { functionResponse: ref };

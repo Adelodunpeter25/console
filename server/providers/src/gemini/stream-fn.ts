@@ -23,25 +23,7 @@ import type {
   SystemInstruction,
   SystemInstructionPart,
 } from "../types/index.js";
-import { GEMINI_BASE_URL, DEFAULT_GEMINI_CLI_VERSION } from "../constants.js";
-
-function getGeminiCliVersion(): string {
-  return process.env.GEMINI_CLI_VERSION ?? DEFAULT_GEMINI_CLI_VERSION;
-}
-
-function getGeminiUserAgent(modelId: string): string {
-  const version = getGeminiCliVersion();
-  const platform = process.platform === "win32" ? "win32" : process.platform;
-  const arch = process.arch === "x64" ? "x64" : process.arch;
-  return `GeminiCLI/${version}/${modelId} (${platform}; ${arch}; terminal)`;
-}
-
-function getGeminiHeaders(modelId: string): Record<string, string> {
-  return {
-    "User-Agent": getGeminiUserAgent(modelId),
-    "Client-Metadata": "ideType=IDE_UNSPECIFIED,platform=PLATFORM_UNSPECIFIED,pluginType=GEMINI",
-  };
-}
+import { GEMINI_BASE_URL, getGeminiCliHeaders } from "../constants.js";
 
 function buildSystemInstruction(systemPrompt: string): SystemInstruction | undefined {
   if (!systemPrompt.trim()) return undefined;
@@ -135,7 +117,7 @@ export const geminiStreamFn: StreamFn = async function* ({
   yield* streamCore({
     endpoint,
     accessToken: cred.accessToken,
-    extraHeaders: getGeminiHeaders(model.id),
+    extraHeaders: getGeminiCliHeaders(model.id),
     body,
     signal,
   });

@@ -7,9 +7,7 @@ const inputSchema = z.object({
   pattern: z.string().describe("Search term or regular expression to look for"),
   path: z
     .string()
-    .describe(
-      "File or directory to search in. If a directory, searches all files recursively.",
-    ),
+    .describe("File or directory to search in. If a directory, searches all files recursively."),
   mode: z
     .enum(["plain", "regex", "fuzzy"])
     .optional()
@@ -41,7 +39,7 @@ const inputSchema = z.object({
   includePattern: z
     .string()
     .optional()
-    .describe("Only search files matching this glob pattern, e.g. \"*.ts\""),
+    .describe('Only search files matching this glob pattern, e.g. "*.ts"'),
 });
 
 type Input = z.infer<typeof inputSchema>;

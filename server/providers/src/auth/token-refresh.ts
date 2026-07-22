@@ -29,13 +29,12 @@ async function doRefresh(
   signal?: AbortSignal,
 ): Promise<ParsedCredential> {
   if (!cred.refreshToken) {
-    throw new Error(
-      "OAuth token expired and no refresh_token available. Please login again.",
-    );
+    throw new Error("OAuth token expired and no refresh_token available. Please login again.");
   }
 
   const clientId = type === "antigravity" ? ANTIGRAVITY_CLIENT_ID : GEMINI_CLI_CLIENT_ID;
-  const clientSecret = type === "antigravity" ? ANTIGRAVITY_CLIENT_SECRET : GEMINI_CLI_CLIENT_SECRET;
+  const clientSecret =
+    type === "antigravity" ? ANTIGRAVITY_CLIENT_SECRET : GEMINI_CLI_CLIENT_SECRET;
 
   const body = new URLSearchParams({
     client_id: clientId,
@@ -83,8 +82,7 @@ export async function refreshIfNeeded(
   signal?: AbortSignal,
 ): Promise<ParsedCredential> {
   const needsRefresh =
-    cred.expiresAtMs !== undefined &&
-    Date.now() + REFRESH_SKEW_MS >= cred.expiresAtMs;
+    cred.expiresAtMs !== undefined && Date.now() + REFRESH_SKEW_MS >= cred.expiresAtMs;
 
   if (!needsRefresh) return cred;
 

@@ -36,7 +36,7 @@ import {
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { ANTIGRAVITY_BASE_URL, DEFAULT_ANTIGRAVITY_VERSION } from "../constants.js";
+import { ANTIGRAVITY_BASE_URL, getAntigravityUserAgent } from "../constants.js";
 
 /**
  * System instruction injected by the Antigravity client for Gemini 3 + Claude models.
@@ -58,18 +58,6 @@ const MODEL_MAX_OUTPUT_TOKENS: Record<string, number> = {
   "claude-sonnet-4-6": 64000,
   "claude-opus-4-6-thinking": 64000,
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-function getAntigravityUserAgent(): string {
-  const version = process.env.ANTIGRAVITY_VERSION ?? DEFAULT_ANTIGRAVITY_VERSION;
-  const os = process.platform === "win32" ? "windows" : process.platform;
-  const arch =
-    process.arch === "x64" ? "amd64" : process.arch === "ia32" ? "386" : process.arch;
-  return `antigravity/hub/${version} ${os}/${arch}`;
-}
 
 function shouldInjectSystemInstruction(modelId: string): boolean {
   const lower = modelId.toLowerCase();
@@ -123,9 +111,9 @@ function buildToolDeclarations(
 function normalizeAntigravityTools(
   tools: CcaToolDeclarations[] | undefined,
 ): CcaToolDeclarations[] | undefined {
-  return tools?.map(tool => ({
+  return tools?.map((tool) => ({
     ...tool,
-    functionDeclarations: tool.functionDeclarations.map(declaration => {
+    functionDeclarations: tool.functionDeclarations.map((declaration) => {
       // If it already has 'parameters', keep it as-is
       if ("parameters" in declaration) {
         return declaration;
@@ -164,9 +152,8 @@ function buildAntigravityRequest(
     systemInstruction: buildSystemInstruction(modelId, systemPrompt),
     generationConfig,
     tools: normalizeAntigravityTools(buildToolDeclarations(tools)),
-    toolConfig: (tools.length > 0 || isClaudeModel(modelId))
-      ? buildToolConfig(tools, modelId)
-      : undefined,
+    toolConfig:
+      tools.length > 0 || isClaudeModel(modelId) ? buildToolConfig(tools, modelId) : undefined,
     labels: envelope.labels,
   };
 

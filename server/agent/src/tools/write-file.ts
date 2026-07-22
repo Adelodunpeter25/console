@@ -6,11 +6,7 @@ import type { AgentTool } from "../types/index.js";
 const inputSchema = z.object({
   path: z.string().describe("Absolute or relative path to write the file to"),
   content: z.string().describe("Full content to write to the file"),
-  encoding: z
-    .enum(["utf-8"])
-    .optional()
-    .default("utf-8")
-    .describe("File encoding"),
+  encoding: z.enum(["utf-8"]).optional().default("utf-8").describe("File encoding"),
   createDirs: z
     .boolean()
     .optional()
@@ -57,9 +53,7 @@ For targeted changes to an existing file, use editFile instead to avoid rewritin
       const error = err as NodeJS.ErrnoException;
       if (error.code === "EACCES") {
         return {
-          content: [
-            { type: "text", text: `Error: Permission denied writing to: ${filePath}` },
-          ],
+          content: [{ type: "text", text: `Error: Permission denied writing to: ${filePath}` }],
           isError: true,
         };
       }

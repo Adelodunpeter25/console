@@ -1,4 +1,12 @@
-import type { AgentMessage, AgentSessionEvent, AgentTool, Model } from "../types/index.js";
+import type {
+  AgentMessage,
+  AgentSessionEvent,
+  AgentTool,
+  ApprovalMode,
+  Model,
+  PermissionRequest,
+} from "../types/index.js";
+import { setTaskToolContext } from "../tools/task.js";
 import { agentLoop, agentLoopContinue, type AgentLoopConfig, type StreamFn } from "./agent-loop.js";
 import type { EventStream } from "./event-stream.js";
 
@@ -24,6 +32,10 @@ export interface AgentOptions {
   tools: AgentTool[];
   systemPrompt?: string;
   streamFn: StreamFn;
+  /** Security approval mode ("always-ask" | "accept-edits" | "plan-mode" | "full-access"). Default: "always-ask" */
+  approvalMode?: ApprovalMode;
+  /** Hook called when a tool call requires user permission. */
+  onApproval?: (request: PermissionRequest) => Promise<boolean> | boolean;
   /** Max agentic turns per run. Default: 50 */
   maxTurns?: number;
   /** Called for every event emitted during a run. */
@@ -36,20 +48,14 @@ export interface AgentOptions {
 
 /**
  * Stateful agent that maintains conversation history across runs.
- *
- * Usage:
- * ```ts
- * const agent = new Agent({ model, tools, streamFn });
- * const stream = agent.run("Hello!");
- * for await (const event of stream) { ... }
- * const allMessages = await stream.result();
- * ```
  */
 export class Agent {
   private _model: Model;
   private _tools: AgentTool[];
   private _systemPrompt: string;
   private _streamFn: StreamFn;
+  private _approvalMode: ApprovalMode;
+  private _onApproval?: AgentOptions["onApproval"];
   private _maxTurns: number;
   private _onEvent?: (event: AgentSessionEvent) => void;
 
@@ -62,6 +68,8 @@ export class Agent {
     this._tools = options.tools;
     this._systemPrompt = options.systemPrompt ?? "";
     this._streamFn = options.streamFn;
+    this._approvalMode = options.approvalMode ?? "always-ask";
+    this._onApproval = options.onApproval;
     this._maxTurns = options.maxTurns ?? 50;
     this._onEvent = options.onEvent;
   }
@@ -92,6 +100,10 @@ export class Agent {
     return this._systemPrompt;
   }
 
+  get approvalMode(): ApprovalMode {
+    return this._approvalMode;
+  }
+
   // -------------------------------------------------------------------------
   // Configuration setters (can be changed between runs)
   // -------------------------------------------------------------------------
@@ -108,6 +120,18 @@ export class Agent {
     this._systemPrompt = prompt;
   }
 
+  setStreamFn(streamFn: StreamFn): void {
+    this._streamFn = streamFn;
+  }
+
+  setApprovalMode(mode: ApprovalMode): void {
+    this._approvalMode = mode;
+  }
+
+  setOnApproval(onApproval?: AgentOptions["onApproval"]): void {
+    this._onApproval = onApproval;
+  }
+
   // -------------------------------------------------------------------------
   // Run management
   // -------------------------------------------------------------------------
@@ -118,10 +142,7 @@ export class Agent {
    * Returns an EventStream you can subscribe to with for-await-of.
    * New messages are appended to this.messages when the run completes.
    */
-  run(
-    prompt: string,
-    signal?: AbortSignal,
-  ): EventStream<AgentSessionEvent, AgentMessage[]> {
+  run(prompt: string, signal?: AbortSignal): EventStream<AgentSessionEvent, AgentMessage[]> {
     if (this._running) {
       throw new AgentBusyError();
     }
@@ -134,11 +155,20 @@ export class Agent {
       signal.addEventListener("abort", () => this._abortController?.abort());
     }
 
+    setTaskToolContext({
+      model: this._model,
+      streamFn: this._streamFn,
+      tools: this._tools,
+      systemPrompt: this._systemPrompt,
+    });
+
     const config: AgentLoopConfig = {
       model: this._model,
       systemPrompt: this._systemPrompt,
       tools: this._tools,
       streamFn: this._streamFn,
+      approvalMode: this._approvalMode,
+      onApproval: this._onApproval,
       signal: this._abortController.signal,
       maxTurns: this._maxTurns,
       onEvent: this._onEvent,

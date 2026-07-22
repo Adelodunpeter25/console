@@ -50,7 +50,12 @@ For directories, use listDir instead.`,
       }
       if (error.code === "EISDIR") {
         return {
-          content: [{ type: "text", text: `Error: "${filePath}" is a directory. Use listDir to browse directories.` }],
+          content: [
+            {
+              type: "text",
+              text: `Error: "${filePath}" is a directory. Use listDir to browse directories.`,
+            },
+          ],
           isError: true,
         };
       }

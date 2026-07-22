@@ -5,11 +5,7 @@ import type { AgentTool } from "../types/index.js";
 
 const inputSchema = z.object({
   path: z.string().describe("Directory path to list"),
-  recursive: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe("Recursively list subdirectories"),
+  recursive: z.boolean().optional().default(false).describe("Recursively list subdirectories"),
   maxDepth: z
     .number()
     .int()
@@ -93,11 +89,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}GB`;
 }
 
-function renderTree(
-  entries: TreeEntry[],
-  prefix = "",
-  isLast = false,
-): string[] {
+function renderTree(entries: TreeEntry[], prefix = "", _isLast = false): string[] {
   const lines: string[] = [];
 
   for (let i = 0; i < entries.length; i++) {
@@ -162,13 +154,7 @@ Use recursive: true to explore subdirectories (up to maxDepth levels deep).`,
 
     let tree: TreeEntry[];
     try {
-      tree = await buildTree(
-        dirPath,
-        1,
-        args.maxDepth,
-        args.recursive,
-        args.showHidden,
-      );
+      tree = await buildTree(dirPath, 1, args.maxDepth, args.recursive, args.showHidden);
     } catch (err: unknown) {
       return {
         content: [{ type: "text", text: String(err) }],

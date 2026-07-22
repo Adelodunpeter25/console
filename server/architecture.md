@@ -19,11 +19,11 @@ The server will support two primary protocols to provide flexibility for client 
 - **Inspiration:** The design is heavily inspired by the API client logic found in `oh-my-pi`.
 - **Functionality:** A self-contained TypeScript class, `GeminiClient`, will be the heart of the application. It will be responsible for all direct communication with Google's APIs.
 - **Responsibilities:**
-    - Managing OAuth 2.0 credentials.
-    - Automatically refreshing access tokens when they expire.
-    - Constructing the correct request body and headers for the target provider.
-    - Selecting the appropriate API endpoint based on the chosen provider.
-    - Handling API responses and streaming them back.
+  - Managing OAuth 2.0 credentials.
+  - Automatically refreshing access tokens when they expire.
+  - Constructing the correct request body and headers for the target provider.
+  - Selecting the appropriate API endpoint based on the chosen provider.
+  - Handling API responses and streaming them back.
 
 ## 4. Provider Model
 

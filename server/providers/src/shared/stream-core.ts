@@ -9,7 +9,11 @@
  *  5. Surfacing in-band stream errors
  */
 import type { LLMDelta } from "../../../agent/src/service/agent-loop.js";
-import type { CcaResponsePart, CloudCodeAssistChunk, CloudCodeAssistRequest } from "../types/index.js";
+import type {
+  CcaResponsePart,
+  CloudCodeAssistChunk,
+  CloudCodeAssistRequest,
+} from "../types/index.js";
 import { parseSse } from "./sse-parser.js";
 
 export interface StreamCoreOptions {
@@ -56,9 +60,7 @@ export async function* streamCore(options: StreamCoreOptions): AsyncGenerator<LL
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(
-      `CCA request failed (${response.status} ${response.statusText}): ${detail}`,
-    );
+    throw new Error(`CCA request failed (${response.status} ${response.statusText}): ${detail}`);
   }
 
   for await (const chunk of parseSse<CloudCodeAssistChunk>(response)) {

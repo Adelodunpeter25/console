@@ -19,10 +19,7 @@ export class EventStream<TEvent, TResult> {
   private resolveResult!: (value: TResult) => void;
   private rejectResult!: (err: unknown) => void;
 
-  constructor(
-    isDone: (event: TEvent) => boolean,
-    extractResult: (event: TEvent) => TResult,
-  ) {
+  constructor(isDone: (event: TEvent) => boolean, extractResult: (event: TEvent) => TResult) {
     this.isDone = isDone;
     this.extractResult = extractResult;
     this.resultPromise = new Promise<TResult>((res, rej) => {
@@ -88,7 +85,6 @@ export class EventStream<TEvent, TResult> {
       // If there's something in the queue at the current index, deliver it
       if (localIndex < this.queue.length) {
         const event = this.queue[localIndex++]!;
-        const isDone = this.isDone(event);
         return Promise.resolve({ value: event, done: false });
       }
 

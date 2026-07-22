@@ -7,6 +7,11 @@ export interface TextPart {
   text: string;
 }
 
+export interface ThinkingPart {
+  type: "thinking";
+  text: string;
+}
+
 export interface ToolCallPart {
   type: "toolCall";
   call: ToolCall;
@@ -20,7 +25,7 @@ export interface UserMessage {
 export interface AssistantMessage {
   role: "assistant";
   id: string; // Unique ID for the assistant's turn
-  content: (TextPart | ToolCallPart)[]; // Can contain text and tool calls
+  content: (TextPart | ThinkingPart | ToolCallPart)[]; // Can contain text, thinking, and tool calls
   stopReason: "stop" | "toolUse" | "error" | "maxTokens";
 }
 
@@ -31,10 +36,6 @@ export interface ToolResultMessage {
 
 /**
  * A discriminated union representing all possible messages that can be part
- * of a conversation history. This structure is more robust and closer to
-* what production systems like oh-my-pi use.
+ * of a conversation history.
  */
-export type AgentMessage =
-  | UserMessage
-  | AssistantMessage
-  | ToolResultMessage;
+export type AgentMessage = UserMessage | AssistantMessage | ToolResultMessage;

@@ -21,7 +21,9 @@ const inputSchema = z.object({
     .max(300_000)
     .optional()
     .default(30_000)
-    .describe("Timeout in milliseconds. The process is killed if it exceeds this. Default: 30s, max: 5min."),
+    .describe(
+      "Timeout in milliseconds. The process is killed if it exceeds this. Default: 30s, max: 5min.",
+    ),
   env: z
     .record(z.string())
     .optional()
@@ -109,10 +111,7 @@ stdout and stderr are each capped at 50KB.`,
     const truncatedStdout = truncateOutput(stdout, MAX_OUTPUT_BYTES, "stdout");
     const truncatedStderr = truncateOutput(stderr, MAX_OUTPUT_BYTES, "stderr");
 
-    const sections: string[] = [
-      `Exit code: ${exitCode}`,
-      `Working directory: ${cwd}`,
-    ];
+    const sections: string[] = [`Exit code: ${exitCode}`, `Working directory: ${cwd}`];
 
     if (truncatedStdout.trim()) {
       sections.push("", "stdout:", truncatedStdout);

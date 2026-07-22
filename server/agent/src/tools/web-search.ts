@@ -39,8 +39,7 @@ async function searchDuckDuckGo(
   const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
   const response = await fetch(url, {
     headers: {
-      "User-Agent":
-        "Mozilla/5.0 (compatible; AgentHarness/1.0; +https://github.com/console-agent)",
+      "User-Agent": "Mozilla/5.0 (compatible; AgentHarness/1.0; +https://github.com/console-agent)",
       Accept: "text/html",
     },
     signal,
@@ -121,7 +120,7 @@ async function searchBrave(
   const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${numResults}`;
   const response = await fetch(url, {
     headers: {
-      "Accept": "application/json",
+      Accept: "application/json",
       "Accept-Encoding": "gzip",
       "X-Subscription-Token": apiKey,
     },

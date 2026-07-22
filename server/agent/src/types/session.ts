@@ -1,6 +1,28 @@
 import type { AgentMessage, AssistantMessage } from "./message.js";
 import type { Model } from "./model.js";
-import type { AgentTool, ToolCall, ToolResult } from "./tool.js";
+import type { AgentTool, PermissionRequest, ToolCall, ToolResult } from "./tool.js";
+
+/** Interactive question payload emitted when the model calls the 'ask' tool */
+export interface AskQuestionRequest {
+  requestId: string;
+  question: string;
+  options: string[];
+  isMultiSelect?: boolean;
+}
+
+/**
+ * Metadata header for a saved conversation session.
+ */
+export interface SessionHeader {
+  id: string;
+  title: string;
+  cwd: string;
+  modelId: string;
+  provider: string;
+  createdAt: number; // epoch ms
+  updatedAt: number; // epoch ms
+  messageCount?: number;
+}
 
 /**
  * Represents the full context of a conversation at a specific point in time.
@@ -13,18 +35,19 @@ export interface SessionContext {
 
 /**
  * A discriminated union representing the rich lifecycle events of the agent.
- * This allows for detailed observation of the agent's state.
  */
 export type AgentSessionEvent =
   | { type: "sessionStart" }
   | { type: "turnStart"; prompt: string }
   | { type: "modelStreamStart"; turnId: string }
-  | { type: "modelStreamPart"; part: { text?: string; toolCall?: ToolCall } }
+  | { type: "modelStreamPart"; part: { text?: string; thinking?: string; toolCall?: ToolCall } }
   | { type: "modelStreamEnd"; turn: AssistantMessage }
   | { type: "toolExecutionStart"; calls: ToolCall[] }
+  | { type: "permissionRequest"; request: PermissionRequest }
+  | { type: "askQuestion"; request: AskQuestionRequest }
   | { type: "toolExecutionResult"; result: ToolResult }
   | { type: "toolExecutionEnd"; results: ToolResult[] }
+  | { type: "compaction"; summary: string; originalMessageCount: number }
   | { type: "turnEnd"; turnId: string }
   | { type: "sessionEnd" }
   | { type: "error"; error: { message: string; data?: unknown } };
-

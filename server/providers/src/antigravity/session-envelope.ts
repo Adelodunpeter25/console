@@ -46,13 +46,13 @@ export function buildEnvelope(
   // Increment step index for this request
   state.stepIndex = (state.stepIndex ?? 0) + 1;
   const step = state.stepIndex;
-  
+
   // Build requestId in the format: agent/<agentId>/<timestamp>/<trajectoryId>/<step>
   const requestId = `agent/${state.agentId}/${Date.now()}/${state.trajectoryId}/${step}`;
-  
+
   // Check if this is a Claude model
   const isClaude = wireModelId.toLowerCase().includes("claude");
-  
+
   // model_enum is optional telemetry; known values from gemini-headers.ts
   const modelEnums: Record<string, string> = {
     "gemini-3.5-flash-extra-low": "MODEL_PLACEHOLDER_M187",
@@ -62,18 +62,18 @@ export function buildEnvelope(
     "gemini-pro-agent": "MODEL_PLACEHOLDER_M16",
   };
   const modelEnum = modelEnums[wireModelId];
-  
+
   const labels: Record<string, string> = {
     trajectory_id: state.trajectoryId,
     last_step_index: String(step - 1), // Previous step index
     used_claude: String(isClaude),
     used_claude_conservative: String(isClaude),
   };
-  
+
   if (modelEnum) {
     labels.model_enum = modelEnum;
   }
-  
+
   if (state.lastExecutionId) {
     labels.last_execution_id = state.lastExecutionId;
   }

@@ -1,5 +1,24 @@
 import type { z } from "zod";
 
+/** Tool capability tier used for permission approval resolution */
+export type ToolTier = "read" | "write" | "exec";
+
+/** Security approval mode for controlling tool execution permissions */
+export type ApprovalMode = "always-ask" | "accept-edits" | "plan-mode" | "full-access";
+
+/** Permission resolution policy decision */
+export type ApprovalPolicy = "allow" | "deny" | "prompt";
+
+/** Permission request payload emitted when a tool call requires user approval */
+export interface PermissionRequest {
+  requestId: string;
+  toolCallId: string;
+  toolName: string;
+  args: unknown;
+  tier: ToolTier;
+  reason?: string;
+}
+
 /**
  * Represents the AI model's request to execute a tool.
  */
@@ -56,6 +75,10 @@ export interface AgentTool<T extends z.ZodTypeAny = z.ZodTypeAny> {
    * to use the tool.
    */
   description: string;
+  /**
+   * Capability tier ("read" | "write" | "exec"). Defaults to "read" if omitted.
+   */
+  tier?: ToolTier;
   /**
    * A schema from the 'zod' library that defines the shape, types, and validation
    * rules for the tool's input arguments.

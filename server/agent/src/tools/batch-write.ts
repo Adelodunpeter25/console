@@ -142,9 +142,7 @@ Validates that no two entries share the same path before writing.`,
       }
     } else {
       // Concurrent — attempt all
-      results = await Promise.all(
-        args.files.map((file) => writeOneFile(file.path, file.content)),
-      );
+      results = await Promise.all(args.files.map((file) => writeOneFile(file.path, file.content)));
     }
 
     const anyFailed = results.some((r) => r.status === "failed");

@@ -23,7 +23,9 @@ function credentialCandidates(type: CredentialType): string[] {
   if (type === "gemini") {
     const geminiCliPath1 = path.join(os.homedir(), ".gemini", "oauth_creds.json");
     const geminiCliPath2 = path.join(os.homedir(), ".config", "gemini", "oauth_creds.json");
-    return custom ? [custom, defaultPath, geminiCliPath1, geminiCliPath2] : [defaultPath, geminiCliPath1, geminiCliPath2];
+    return custom
+      ? [custom, defaultPath, geminiCliPath1, geminiCliPath2]
+      : [defaultPath, geminiCliPath1, geminiCliPath2];
   }
 
   // For Antigravity, only use our default path (no legacy)
@@ -41,14 +43,10 @@ export function parseCredential(raw: GeminiOAuthCredential): ParsedCredential {
   const projectId = raw.projectId ?? raw.project_id;
 
   if (!accessToken) {
-    throw new Error(
-      "Missing access token in OAuth credential. Please login again.",
-    );
+    throw new Error("Missing access token in OAuth credential. Please login again.");
   }
   if (!projectId) {
-    throw new Error(
-      "Missing projectId in OAuth credential. Please login again.",
-    );
+    throw new Error("Missing projectId in OAuth credential. Please login again.");
   }
 
   return {
@@ -89,7 +87,10 @@ export async function loadCredential(type: CredentialType = "gemini"): Promise<P
   );
 }
 
-export async function saveCredential(raw: GeminiOAuthCredential, type: CredentialType = "gemini"): Promise<void> {
+export async function saveCredential(
+  raw: GeminiOAuthCredential,
+  type: CredentialType = "gemini",
+): Promise<void> {
   let filePath = credentialPaths.get(type);
   if (!filePath) {
     filePath = credentialCandidates(type)[0]!;

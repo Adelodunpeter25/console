@@ -1,7 +1,4 @@
-export type {
-  GeminiOAuthCredential,
-  ParsedCredential,
-} from "./oauth.js";
+export type { GeminiOAuthCredential, ParsedCredential } from "./oauth.js";
 
 export type {
   // Outgoing parts

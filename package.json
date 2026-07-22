@@ -1,15 +1,18 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "a coding agent harness",
   "private": true,
+  "description": "a coding agent harness",
+  "keywords": [],
+  "license": "MIT",
+  "author": "",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts"
+    "dev": "vp dev",
+    "check": "vp check",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc --noEmit && tsx tests/run-all-tests.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
   "dependencies": {
     "@ff-labs/fff-node": "^0.10.0",
     "better-sqlite3": "^12.11.1",

@@ -1,0 +1,127 @@
+/**
+ * Filesystem & File Browser Service.
+ * Implements business logic for browsing system directories, reading/writing files, creating/deleting folders.
+ */
+import fs from "node:fs/promises";
+import path from "node:path";
+import { listDirTool, readFileTool, writeFileTool } from "../../../agent/src/tools/index.js";
+import type { FsTreeEntry } from "../types/index.js";
+
+export class FsService {
+  /**
+   * Browse a system directory for the mobile/desktop file picker UI.
+   */
+  async browseDirectory(
+    targetPath?: string,
+  ): Promise<{ path: string; parentPath: string | null; entries: FsTreeEntry[] }> {
+    const resolvedPath = targetPath ? path.resolve(targetPath) : process.cwd();
+    const parentPath =
+      path.dirname(resolvedPath) !== resolvedPath ? path.dirname(resolvedPath) : null;
+
+    const dirEntries = await fs.readdir(resolvedPath, { withFileTypes: true });
+    const entries: FsTreeEntry[] = [];
+
+    for (const entry of dirEntries) {
+      const entryPath = path.join(resolvedPath, entry.name);
+      let size: number | undefined;
+
+      if (!entry.isDirectory()) {
+        try {
+          const stat = await fs.stat(entryPath);
+          size = stat.size;
+        } catch {
+          // Ignored if stat fails
+        }
+      }
+
+      entries.push({
+        name: entry.name,
+        path: entryPath,
+        isDir: entry.isDirectory(),
+        size,
+      });
+    }
+
+    // Sort directories first, then files alphabetically
+    entries.sort((a, b) => {
+      if (a.isDir && !b.isDir) return -1;
+      if (!a.isDir && b.isDir) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return {
+      path: resolvedPath,
+      parentPath,
+      entries,
+    };
+  }
+
+  /**
+   * Get formatted directory tree for a project path.
+   */
+  async getDirectoryTree(targetPath: string, maxDepth = 3): Promise<string> {
+    const result = (await listDirTool.execute(
+      listDirTool.inputSchema.parse({
+        path: targetPath,
+        maxDepth,
+        recursive: true,
+      }),
+    )) as { content: Array<{ text: string }> };
+
+    return result.content[0]?.text ?? "";
+  }
+
+  /**
+   * Read file content with line range support.
+   */
+  async readFileContent(filePath: string, startLine?: number, endLine?: number): Promise<string> {
+    const result = (await readFileTool.execute(
+      readFileTool.inputSchema.parse({
+        path: filePath,
+        startLine,
+        endLine,
+      }),
+    )) as { content: Array<{ text: string }> };
+
+    return result.content[0]?.text ?? "";
+  }
+
+  /**
+   * Write or overwrite file content.
+   */
+  async writeFileContent(filePath: string, content: string): Promise<string> {
+    const result = (await writeFileTool.execute(
+      writeFileTool.inputSchema.parse({
+        path: filePath,
+        content,
+        createDirs: true,
+      }),
+    )) as { content: Array<{ text: string }> };
+
+    return result.content[0]?.text ?? "File written successfully.";
+  }
+
+  /**
+   * Delete a file from disk.
+   */
+  async deleteFile(filePath: string): Promise<boolean> {
+    await fs.unlink(filePath);
+    return true;
+  }
+
+  /**
+   * Create a new directory.
+   */
+  async createDirectory(dirPath: string): Promise<boolean> {
+    await fs.mkdir(dirPath, { recursive: true });
+    return true;
+  }
+
+  /**
+   * Delete a directory recursively.
+   */
+  async deleteDirectory(dirPath: string): Promise<boolean> {
+    await fs.rm(dirPath, { recursive: true, force: true });
+    return true;
+  }
+}

@@ -9,10 +9,7 @@ const inputSchema = z.object({
     .describe(
       'Glob pattern compatible with npm `glob`. Examples: "src/**/*.ts", "**/*.json", "*.md", "{src,test}/**"',
     ),
-  cwd: z
-    .string()
-    .optional()
-    .describe("Root directory to search from. Defaults to process.cwd()."),
+  cwd: z.string().optional().describe("Root directory to search from. Defaults to process.cwd()."),
   maxResults: z
     .number()
     .int()

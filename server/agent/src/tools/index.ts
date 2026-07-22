@@ -1,3 +1,4 @@
+export * from "./ask.js";
 export * from "./bash.js";
 export * from "./batch-write.js";
 export * from "./edit-file.js";
@@ -6,9 +7,12 @@ export * from "./glob.js";
 export * from "./grep.js";
 export * from "./list-dir.js";
 export * from "./read-file.js";
+export * from "./task.js";
+export * from "./todo.js";
 export * from "./web-search.js";
 export * from "./write-file.js";
 
+import { askTool } from "./ask.js";
 import { bashTool } from "./bash.js";
 import { batchWriteTool } from "./batch-write.js";
 import { editFileTool } from "./edit-file.js";
@@ -17,6 +21,8 @@ import { globTool } from "./glob.js";
 import { grepTool } from "./grep.js";
 import { listDirTool } from "./list-dir.js";
 import { readFileTool } from "./read-file.js";
+import { taskTool } from "./task.js";
+import { todoTool } from "./todo.js";
 import { webSearchTool } from "./web-search.js";
 import { writeFileTool } from "./write-file.js";
 
@@ -28,8 +34,8 @@ export const allTools = [
   // File system — read
   readFileTool,
   listDirTool,
-  globTool,    // fff-powered (Rust native, warm-indexed)
-  grepTool,    // fff-powered (Rust native, warm-indexed)
+  globTool, // fff-powered (Rust native, warm-indexed)
+  grepTool, // fff-powered (Rust native, warm-indexed)
   // File system — write
   writeFileTool,
   editFileTool,
@@ -39,4 +45,9 @@ export const allTools = [
   // Network
   webSearchTool,
   fetchTool,
+  // Task management & subagents
+  todoTool,
+  taskTool,
+  // Interactive UI
+  askTool,
 ] as const;

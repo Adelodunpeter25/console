@@ -10,9 +10,7 @@ const inputSchema = z.object({
     .describe(
       "The exact string to find in the file (including whitespace and newlines). Must match exactly once.",
     ),
-  newContent: z
-    .string()
-    .describe("The replacement string to insert in place of oldContent"),
+  newContent: z.string().describe("The replacement string to insert in place of oldContent"),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -59,9 +57,7 @@ For complete file rewrites, use writeFile instead.`,
     if (occurrences === 0) {
       // Provide a helpful hint: show the first 80 chars of what we were looking for
       const preview =
-        args.oldContent.length > 80
-          ? args.oldContent.slice(0, 80) + "..."
-          : args.oldContent;
+        args.oldContent.length > 80 ? args.oldContent.slice(0, 80) + "..." : args.oldContent;
       return {
         content: [
           {
@@ -78,7 +74,8 @@ For complete file rewrites, use writeFile instead.`,
         content: [
           {
             type: "text",
-            text: `Error: The oldContent appears ${occurrences} times in "${filePath}". ` +
+            text:
+              `Error: The oldContent appears ${occurrences} times in "${filePath}". ` +
               `Include more surrounding context in oldContent to make it unique.`,
           },
         ],
