@@ -58,10 +58,8 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(port, host, () => {
-  console.log("=========================================");
   console.log(`Console Agent Server running on http://${host}:${port}`);
   console.log(
     `API Base: http://${host}:${port}/api (Accepting connections from all hosts/devices)`,
   );
-  console.log("=========================================");
 });

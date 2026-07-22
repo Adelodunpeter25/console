@@ -3,7 +3,7 @@
  * Registers supported providers ("gemini", "antigravity") with static bundled fallback models
  * and dynamic endpoint discovery via /v1internal:fetchAvailableModels (mirroring oh-my-pi).
  */
-import type { Model } from "../types/index.js";
+
 import {
   createAntigravityStreamFn,
   fetchAvailableModels,
@@ -13,11 +13,9 @@ import {
 } from "../../../providers/src/index.js";
 import type { StreamFn } from "../service/agent-loop.js";
 
-export interface ProviderCatalogEntry {
-  name: "gemini" | "antigravity";
-  displayName: string;
-  description: string;
-  models: Model[];
+import type { Model, ProviderCatalogEntry } from "../types/index.js";
+
+export interface ProviderEntry extends ProviderCatalogEntry {
   getStreamFn: () => StreamFn;
 }
 
@@ -37,7 +35,9 @@ export const BUNDLED_FALLBACK_MODELS: Record<"gemini" | "antigravity", Model[]> 
   ],
 };
 
-export const PROVIDER_CATALOG: Record<"gemini" | "antigravity", ProviderCatalogEntry> = {
+export type { ProviderCatalogEntry } from "../types/index.js";
+
+export const PROVIDER_CATALOG: Record<"gemini" | "antigravity", ProviderEntry> = {
   gemini: {
     name: "gemini",
     displayName: "Google Gemini CLI",
@@ -55,10 +55,10 @@ export const PROVIDER_CATALOG: Record<"gemini" | "antigravity", ProviderCatalogE
 };
 
 export function listProviders(): ProviderCatalogEntry[] {
-  return Object.values(PROVIDER_CATALOG);
+  return Object.values(PROVIDER_CATALOG).map(({ getStreamFn: _getStreamFn, ...rest }) => rest);
 }
 
-export function getProvider(name: string): ProviderCatalogEntry | undefined {
+export function getProvider(name: string): ProviderEntry | undefined {
   return PROVIDER_CATALOG[name as "gemini" | "antigravity"];
 }
 

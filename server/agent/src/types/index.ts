@@ -1,5 +1,5 @@
-export * from "./message.js";
-export * from "./model.js";
-export * from "./session.js";
+/**
+ * Re-export all core types from shared module.
+ */
+export * from "../../../../shared/src/index.js";
 export * from "./system-prompt.js";
-export * from "./tool.js";

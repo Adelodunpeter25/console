@@ -14,7 +14,7 @@ import { SqliteSessionStorage } from "../server/agent/src/session/storage.js";
 import { buildSystemPrompt } from "../server/agent/src/systemprompt/builder.js";
 import { createAntigravityStreamFn } from "../server/providers/src/antigravity/stream-fn.js";
 import { geminiStreamFn } from "../server/providers/src/gemini/stream-fn.js";
-import type { AgentSessionEvent, Model } from "../server/agent/src/types/index.js";
+import type { AgentSessionEvent, Model } from "../shared/src/index.js";
 
 function parseArgs(): { prompt: string; provider: "gemini" | "antigravity"; modelId: string } {
   const args = process.argv.slice(2);
@@ -59,9 +59,7 @@ async function main() {
   const parsed = parseArgs();
   let prompt = parsed.prompt;
 
-  console.log("=========================================");
   console.log("Console Agent Engine — Interactive Demo");
-  console.log("=========================================");
 
   if (!prompt) {
     prompt = await promptUserInteractive();
@@ -83,12 +81,11 @@ async function main() {
     provider: parsed.provider,
   });
 
-  console.log(`\nSession ID: ${header.id}`);
+  console.log(`Session ID: ${header.id}`);
   console.log(`Provider: ${parsed.provider}`);
   console.log(`Model: ${parsed.modelId}`);
   console.log(`Workspace CWD: ${cwd}`);
   console.log(`User Prompt: "${prompt}"\n`);
-  console.log("-----------------------------------------");
 
   const model: Model = {
     id: parsed.modelId,
@@ -158,10 +155,8 @@ async function main() {
     const finalMessages = await eventStream.result();
     sessionStorage.appendMessages(header.id, finalMessages);
 
-    console.log("\n-----------------------------------------");
-    console.log(`Run Finished. Total messages stored: ${finalMessages.length}`);
+    console.log(`\nRun Finished. Total messages stored: ${finalMessages.length}`);
     console.log(`Saved to SQLite Session ID: ${header.id}`);
-    console.log("=========================================\n");
   } catch (err) {
     console.error("Execution failed:", err);
   }

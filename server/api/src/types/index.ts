@@ -1,3 +1,4 @@
-export * from "./request.js";
-export * from "./response.js";
-export * from "./sse.js";
+/**
+ * Re-export all API DTOs and shared types.
+ */
+export * from "../../../../shared/src/index.js";
