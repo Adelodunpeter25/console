@@ -28,7 +28,7 @@ export function useCreateSession() {
   return useMutation({
     mutationFn: (payload: CreateSessionDto) => sessionService.createSession(payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: sessionKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: sessionKeys.all });
     },
   });
 }
@@ -39,8 +39,7 @@ export function useUpdateSession() {
     mutationFn: ({ id, payload }: { id: string; payload: UpdateSessionDto }) =>
       sessionService.updateSession(id, payload),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: sessionKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: sessionKeys.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: sessionKeys.all });
     },
   });
 }
@@ -50,7 +49,7 @@ export function useDeleteSession() {
   return useMutation({
     mutationFn: (id: string) => sessionService.deleteSession(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: sessionKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: sessionKeys.all });
     },
   });
 }

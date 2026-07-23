@@ -15,7 +15,7 @@ export const ProjectSidebar = observer(() => {
   const toggleExpand = (projectId: string) => {
     setExpandedProjects((prev) => ({
       ...prev,
-      [projectId]: !prev[projectId],
+      [projectId]: prev[projectId] === undefined ? false : !prev[projectId],
     }));
   };
 
@@ -76,7 +76,7 @@ export const ProjectSidebar = observer(() => {
             <SidebarListItem
               key={project.id}
               project={project}
-              isExpanded={Boolean(expandedProjects[project.id])}
+              isExpanded={expandedProjects[project.id] ?? true}
               onToggleExpand={() => toggleExpand(project.id)}
             />
           ))
