@@ -6,20 +6,19 @@ import {
   useCreateSession,
   useDeleteSession,
 } from "@console/api";
-import { globalState$ } from "../state/global-state.js";
+import { globalState$ } from "../../state/global-state.js";
 import { observer } from "@legendapp/state/react";
 import {
   FolderPlus,
   MessageSquarePlus,
   Trash2,
   ChevronDown,
-  FolderOpen,
   Terminal,
   X,
   Plus,
-  Sparkles,
   MessageSquare,
 } from "lucide-react";
+import { DirectoryPickerModal } from "../common/directory-picker-modal.js";
 
 export const ProjectSidebar = observer(() => {
   const { data: projects = [] } = useProjects();
@@ -31,8 +30,7 @@ export const ProjectSidebar = observer(() => {
   const activeSessionId = globalState$.activeSessionId.get();
   const isOpen = globalState$.isSidebarOpen.get();
 
-  const [newProjectPath, setNewProjectPath] = useState("");
-  const [showAddProjectModal, setShowAddProjectModal] = useState(false);
+  const [showDirPicker, setShowDirPicker] = useState(false);
   const [newSessionTitle, setNewSessionTitle] = useState("");
   const [showAddSession, setShowAddSession] = useState(false);
 
@@ -40,14 +38,10 @@ export const ProjectSidebar = observer(() => {
     activeProjectId ? { projectId: activeProjectId } : undefined,
   );
 
-  const handleAddProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProjectPath.trim()) return;
+  const handleSelectDirectory = async (path: string) => {
     try {
-      const added = await addProjectMutation.mutateAsync(newProjectPath);
+      const added = await addProjectMutation.mutateAsync(path);
       globalState$.activeProjectId.set(added.id);
-      setNewProjectPath("");
-      setShowAddProjectModal(false);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to add project");
     }
@@ -86,8 +80,6 @@ export const ProjectSidebar = observer(() => {
 
   if (!isOpen) return null;
 
-  const activeProject = projects.find((p) => p.id === activeProjectId);
-
   return (
     <aside className="w-72 h-screen sidebar-surface flex flex-col z-30 shrink-0 select-none">
       {/* Header Titlebar */}
@@ -111,10 +103,10 @@ export const ProjectSidebar = observer(() => {
         <div className="flex items-center justify-between mb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
           <span>Project</span>
           <button
-            onClick={() => setShowAddProjectModal(true)}
+            onClick={() => setShowDirPicker(true)}
             className="hover:text-foreground cursor-pointer flex items-center gap-1 text-[11px] capitalize text-primary font-normal"
           >
-            <Plus size={12} /> Add
+            <Plus size={12} /> Add Folder
           </button>
         </div>
 
@@ -220,41 +212,12 @@ export const ProjectSidebar = observer(() => {
         )}
       </div>
 
-      {/* Project Add Modal */}
-      {showAddProjectModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-card border border-border/80 rounded-lg w-full max-w-sm p-4 shadow-xl">
-            <h3 className="font-medium text-sm text-foreground mb-3 flex items-center gap-2">
-              <FolderPlus size={16} className="text-primary" /> Add Local Workspace Project
-            </h3>
-            <form onSubmit={handleAddProject}>
-              <input
-                type="text"
-                placeholder="/absolute/path/to/project"
-                value={newProjectPath}
-                onChange={(e) => setNewProjectPath(e.target.value)}
-                className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary/60 mb-3"
-                autoFocus
-              />
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddProjectModal(false)}
-                  className="px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-accent"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground font-medium"
-                >
-                  Add Project
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Interactive Directory Picker */}
+      <DirectoryPickerModal
+        isOpen={showDirPicker}
+        onClose={() => setShowDirPicker(false)}
+        onSelect={handleSelectDirectory}
+      />
     </aside>
   );
 });
