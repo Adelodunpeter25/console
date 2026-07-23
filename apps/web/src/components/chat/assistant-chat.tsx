@@ -12,10 +12,7 @@ import { Thread } from "../assistant-ui/thread.js";
 import { Sparkles } from "lucide-react";
 import type { AgentMessage } from "@console/types";
 
-function mapAgentMessageToAssistantMessage(
-  msg: AgentMessage,
-  idx: number,
-): ThreadMessageLike {
+function mapAgentMessageToAssistantMessage(msg: AgentMessage, idx: number): ThreadMessageLike {
   const id = (msg as { id?: string }).id || `msg-${idx}`;
 
   if (msg.role === "user") {
@@ -214,9 +211,7 @@ function SessionChatRuntime({ sessionId }: { sessionId: string }) {
             content: [
               {
                 type: "text",
-                text: accumulatedText
-                  ? `${accumulatedText}\n\n⚠️ ${streamError}`
-                  : streamError,
+                text: accumulatedText ? `${accumulatedText}\n\n⚠️ ${streamError}` : streamError,
               },
             ],
             status: { type: "incomplete", reason: "error", error: streamError },
@@ -243,9 +238,7 @@ function SessionChatRuntime({ sessionId }: { sessionId: string }) {
     if (!sessionData?.messages) return;
     if (runtime.thread.getState().isRunning) return;
 
-    const mapped = sessionData.messages.map((m, idx) =>
-      mapAgentMessageToAssistantMessage(m, idx),
-    );
+    const mapped = sessionData.messages.map((m, idx) => mapAgentMessageToAssistantMessage(m, idx));
     runtime.thread.reset(mapped);
   }, [sessionData, runtime]);
 
