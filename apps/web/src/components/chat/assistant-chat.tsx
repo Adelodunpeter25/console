@@ -7,7 +7,7 @@ import {
   AssistantRuntimeProvider,
   type ChatModelAdapter,
 } from "@assistant-ui/react";
-import { Thread } from "@assistant-ui/react";
+import { Thread } from "../assistant-ui/thread.js";
 import { Sparkles } from "lucide-react";
 import type { AgentMessage } from "@console/types";
 
