@@ -61,7 +61,8 @@ export const ProjectSidebar = observer(() => {
           disabled={pickNativeFolderMutation.isPending}
           className="p-1 rounded hover:bg-accent text-primary flex items-center gap-1 text-[11px] font-medium cursor-pointer disabled:opacity-50"
         >
-          <FolderPlus size={13} /> {pickNativeFolderMutation.isPending ? "Opening Finder..." : "Add Project"}
+          <FolderPlus size={13} />{" "}
+          {pickNativeFolderMutation.isPending ? "Opening Finder..." : "Add Project"}
         </button>
       </div>
 
@@ -76,7 +77,7 @@ export const ProjectSidebar = observer(() => {
             <SidebarListItem
               key={project.id}
               project={project}
-              isExpanded={expandedProjects[project.id] ?? true}
+              isExpanded={expandedProjects[project.id] ?? false}
               onToggleExpand={() => toggleExpand(project.id)}
             />
           ))

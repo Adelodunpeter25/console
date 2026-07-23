@@ -4,7 +4,8 @@ import type { CreateSessionDto, UpdateSessionDto } from "@console/types";
 
 export const sessionKeys = {
   all: ["sessions"] as const,
-  lists: (params?: { cwd?: string; projectId?: string }) => [...sessionKeys.all, "list", params] as const,
+  lists: (params?: { cwd?: string; projectId?: string }) =>
+    [...sessionKeys.all, "list", params] as const,
   detail: (id: string) => [...sessionKeys.all, "detail", id] as const,
 };
 

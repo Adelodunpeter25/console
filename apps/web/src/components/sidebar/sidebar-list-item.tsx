@@ -65,8 +65,13 @@ export const SidebarListItem = observer(
           }`}
         >
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <Folder size={15} className="text-muted-foreground group-hover:text-foreground shrink-0 transition-colors" />
-            <span className="truncate text-xs font-medium tracking-tight text-foreground/90">{project.name}</span>
+            <Folder
+              size={15}
+              className="text-muted-foreground group-hover:text-foreground shrink-0 transition-colors"
+            />
+            <span className="truncate text-xs font-medium tracking-tight text-foreground/90">
+              {project.name}
+            </span>
           </div>
 
           <button
@@ -103,7 +108,14 @@ export const SidebarListItem = observer(
                     }`}
                   >
                     <div className="flex items-center gap-2 truncate">
-                      <MessageSquare size={12} className={isActiveSession ? "text-primary shrink-0" : "text-muted-foreground shrink-0"} />
+                      <MessageSquare
+                        size={12}
+                        className={
+                          isActiveSession
+                            ? "text-primary shrink-0"
+                            : "text-muted-foreground shrink-0"
+                        }
+                      />
                       <span className="truncate">{sess.title || "New Chat"}</span>
                     </div>
 
@@ -128,5 +140,5 @@ export const SidebarListItem = observer(
         )}
       </div>
     );
-  }
+  },
 );
