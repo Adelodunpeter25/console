@@ -2,17 +2,15 @@ import React from "react";
 import { Text, View, TouchableOpacity, Alert, Platform } from "react-native";
 
 interface BottomNavProps {
-  activeTab: "home" | "chat";
-  setActiveTab: (tab: "home" | "chat") => void;
+  activeTab: "home" | "chat" | "settings";
+  setActiveTab: (tab: "home" | "chat" | "settings") => void;
   selectedSessionId: string | null;
-  onOpenConfig: () => void;
 }
 
 export function BottomNav({
   activeTab,
   setActiveTab,
   selectedSessionId,
-  onOpenConfig,
 }: BottomNavProps) {
   const isIos = Platform.OS === "ios";
   return (
@@ -39,8 +37,13 @@ export function BottomNav({
           Chat
         </Text>
       </TouchableOpacity>
-      <TouchableOpacity className="flex-1 items-center justify-center" onPress={onOpenConfig}>
-        <Text className="text-[#9095a0] text-xs font-medium">Config</Text>
+      <TouchableOpacity
+        className={`flex-1 items-center justify-center ${activeTab === "settings" ? "bg-white/5" : ""}`}
+        onPress={() => setActiveTab("settings")}
+      >
+        <Text className={`text-xs font-medium ${activeTab === "settings" ? "text-sky-400" : "text-[#9095a0]"}`}>
+          Settings
+        </Text>
       </TouchableOpacity>
     </View>
   );

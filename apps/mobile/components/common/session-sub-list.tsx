@@ -7,7 +7,22 @@ interface SessionSubListProps {
   projectPath: string;
   selectedSessionId: string | null;
   setSelectedSessionId: (id: string | null) => void;
-  setActiveTab: (tab: "home" | "chat") => void;
+  setActiveTab: (tab: "home" | "chat" | "settings") => void;
+}
+
+function formatRelativeTime(dateInput?: string | number): string {
+  if (!dateInput) return "";
+  const date = new Date(dateInput);
+  const now = new Date();
+  const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (isNaN(diffSec) || diffSec < 0) return "";
+  if (diffSec < 60) return "just now";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDays = Math.floor(diffHr / 24);
+  return `${diffDays}d ago`;
 }
 
 export function SessionSubList({
@@ -73,6 +88,7 @@ export function SessionSubList({
 
       {sessions.map((sess) => {
         const isActive = selectedSessionId === sess.id;
+        const timeAgo = formatRelativeTime(sess.createdAt || sess.updatedAt);
         return (
           <View
             key={sess.id}
@@ -81,22 +97,30 @@ export function SessionSubList({
             }`}
           >
             <TouchableOpacity
-              className="flex-1 pr-2.5"
+              className="flex-1 flex-row items-center justify-between pr-2"
               onPress={() => {
                 setSelectedSessionId(sess.id);
                 setActiveTab("chat");
               }}
             >
               <Text
-                className={`text-xs ${
+                className={`text-xs flex-1 ${
                   isActive ? "text-[#f1f3f7] font-medium" : "text-[#9095a0]"
                 }`}
+                numberOfLines={1}
               >
                 {sess.title || "New Chat"}
               </Text>
+
+              {Boolean(timeAgo) && (
+                <Text className="text-[10px] text-[#9095a0]/70 font-mono ml-2">
+                  {timeAgo}
+                </Text>
+              )}
             </TouchableOpacity>
+
             <TouchableOpacity
-              className="p-1"
+              className="p-1 ml-1"
               onPress={() => handleDeleteSession(sess.id)}
             >
               <Text className="text-red-500 text-xs font-bold">✕</Text>

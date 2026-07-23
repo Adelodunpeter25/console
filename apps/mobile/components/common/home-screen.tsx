@@ -13,7 +13,7 @@ interface HomeScreenProps {
   setSelectedProjectId: (id: string | null) => void;
   selectedSessionId: string | null;
   setSelectedSessionId: (id: string | null) => void;
-  setActiveTab: (tab: "home" | "chat") => void;
+  setActiveTab: (tab: "home" | "chat" | "settings") => void;
 }
 
 export function HomeScreen({

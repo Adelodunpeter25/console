@@ -2,13 +2,12 @@ import "./global.css";
 import React, { useState, useEffect } from "react";
 import { registerRootComponent } from "expo";
 import { StatusBar } from "expo-status-bar";
-import { View, Text, ActivityIndicator, Alert } from "react-native";
+import { View, Text, ActivityIndicator, TouchableOpacity } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ConsoleApiProvider, configureConsoleApi } from "@console/api";
 import { QueryClient } from "@tanstack/react-query";
 import { MainContent } from "./components/common/main-content";
-import { ConfigModal } from "./components/modal/config-modal";
 import { BottomNav } from "./components/navigation/bottom-nav";
 
 const queryClient = new QueryClient();
@@ -16,12 +15,10 @@ const BACKEND_URL_KEY = "@console_backend_url";
 
 function AppRoot() {
   const [backendUrl, setBackendUrl] = useState<string | null>(null);
-  const [inputUrl, setInputUrl] = useState("http://localhost:3000");
-  const [showConfigModal, setShowConfigModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Tab State: 'home' | 'chat'
-  const [activeTab, setActiveTab] = useState<"home" | "chat">("home");
+  // Tab State: 'home' | 'chat' | 'settings'
+  const [activeTab, setActiveTab] = useState<"home" | "chat" | "settings">("home");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
@@ -34,36 +31,21 @@ function AppRoot() {
       const stored = await AsyncStorage.getItem(BACKEND_URL_KEY);
       if (stored) {
         setBackendUrl(stored);
-        setInputUrl(stored);
         configureConsoleApi({ baseUrl: stored });
+      } else {
+        setActiveTab("settings");
       }
-      setShowConfigModal(true);
     } catch {
-      setShowConfigModal(true);
+      setActiveTab("settings");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const saveBackendUrl = async () => {
-    if (!inputUrl.trim()) {
-      Alert.alert("Error", "Backend URL cannot be empty");
-      return;
-    }
-    try {
-      await AsyncStorage.setItem(BACKEND_URL_KEY, inputUrl.trim());
-      setBackendUrl(inputUrl.trim());
-      configureConsoleApi({ baseUrl: inputUrl.trim() });
-      setShowConfigModal(false);
-    } catch {
-      Alert.alert("Error", "Failed to save URL");
     }
   };
 
   if (loading) {
     return (
       <View className="flex-1 bg-[#0d0d0e] items-center justify-center">
-        <ActivityIndicator size="large" color="#ffffff" />
+        <ActivityIndicator size="large" color="#38bdf8" />
       </View>
     );
   }
@@ -83,34 +65,28 @@ function AppRoot() {
               setSelectedSessionId={setSelectedSessionId}
               setActiveTab={setActiveTab}
               backendUrl={backendUrl}
+              setBackendUrl={setBackendUrl}
             />
           </ConsoleApiProvider>
         ) : (
-          <SafeAreaView className="flex-1 bg-[#0d0d0e]">
-            <View className="flex-1 items-center justify-center p-6">
-              <Text className="text-[#9095a0] text-center text-sm">
-                Please configure the backend URL to start.
-              </Text>
-            </View>
+          <SafeAreaView className="flex-1 bg-[#0d0d0e] justify-center items-center p-6">
+            <Text className="text-[#f1f3f7] text-base font-bold mb-2">Welcome to Console Mobile</Text>
+            <Text className="text-[#9095a0] text-xs text-center mb-6 max-w-xs leading-5">
+              Please specify your server endpoint in Settings to get started.
+            </Text>
+            <TouchableOpacity
+              className="bg-sky-500 py-3 px-6 rounded-full"
+              onPress={() => setActiveTab("settings")}
+            >
+              <Text className="text-xs font-bold text-white">Configure Server URL</Text>
+            </TouchableOpacity>
           </SafeAreaView>
         )}
-
-        <ConfigModal
-          visible={showConfigModal}
-          backendUrl={backendUrl}
-          inputUrl={inputUrl}
-          setInputUrl={setInputUrl}
-          onSave={saveBackendUrl}
-          onClose={() => {
-            if (backendUrl) setShowConfigModal(false);
-          }}
-        />
 
         <BottomNav
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           selectedSessionId={selectedSessionId}
-          onOpenConfig={() => setShowConfigModal(true)}
         />
       </View>
     </SafeAreaProvider>
