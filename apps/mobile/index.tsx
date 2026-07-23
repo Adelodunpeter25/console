@@ -229,4 +229,4 @@ function AppRoot() {
   );
 }
 
-export default registerRootComponent(AppRoot);
+export default AppRoot;
