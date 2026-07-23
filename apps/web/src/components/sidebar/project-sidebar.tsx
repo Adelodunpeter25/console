@@ -1,15 +1,17 @@
 import React, { useState } from "react";
 import { useProjects, useAddProject, usePickNativeFolder } from "@console/api";
-import { isSidebarOpen$, activeProjectId$ } from "../../state/index.js";
-import { observer } from "@legendapp/state/react";
+import { useConsoleStore } from "../../state/index";
 import { FolderPlus, Terminal, X } from "lucide-react";
-import { SidebarListItem } from "./sidebar-list-item.js";
+import { SidebarListItem } from "./sidebar-list-item";
 
-export const ProjectSidebar = observer(() => {
+export const ProjectSidebar = () => {
   const { data: projects = [] } = useProjects();
   const addProjectMutation = useAddProject();
   const pickNativeFolderMutation = usePickNativeFolder();
-  const isOpen = isSidebarOpen$.get();
+  const isSidebarOpen = useConsoleStore((s) => s.isSidebarOpen);
+  const setIsSidebarOpen = useConsoleStore((s) => s.setIsSidebarOpen);
+  const setActiveProjectId = useConsoleStore((s) => s.setActiveProjectId);
+
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
 
   const toggleExpand = (projectId: string) => {
@@ -27,14 +29,14 @@ export const ProjectSidebar = observer(() => {
       const result = await pickNativeFolderMutation.mutateAsync();
       if (result?.path) {
         const added = await addProjectMutation.mutateAsync(result.path);
-        activeProjectId$.set(added.id);
+        setActiveProjectId(added.id);
       }
     } catch {
       // User cancelled native Finder dialog
     }
   };
 
-  if (!isOpen) return null;
+  if (!isSidebarOpen) return null;
 
   return (
     <aside className="w-72 h-screen sidebar-surface flex flex-col z-30 shrink-0 select-none">
@@ -47,7 +49,7 @@ export const ProjectSidebar = observer(() => {
           <span className="font-semibold text-sm tracking-tight text-foreground">Console</span>
         </div>
         <button
-          onClick={() => isSidebarOpen$.set(false)}
+          onClick={() => setIsSidebarOpen(false)}
           className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
         >
           <X size={15} />
@@ -88,4 +90,4 @@ export const ProjectSidebar = observer(() => {
       </div>
     </aside>
   );
-});
+};

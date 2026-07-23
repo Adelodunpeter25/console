@@ -1,7 +1,6 @@
 import React, { useState } from "react";
-import { Text, View, TextInput, TouchableOpacity, Alert } from "react-native";
+import { Text, View, TextInput, TouchableOpacity, Alert, FlatList } from "react-native";
 import { useAddProject } from "@console/api";
-import { LegendList } from "@legendapp/list";
 import { Folder02Icon } from "hugeicons-react";
 import { styles } from "../../styles/styles";
 import { SessionSubList } from "./session-sub-list";
@@ -65,10 +64,9 @@ export function HomeScreen({
           <Text style={styles.emptyListText}>No projects configured.</Text>
         </View>
       ) : (
-        <LegendList
+        <FlatList
           data={projects}
           keyExtractor={(item) => (item as ProjectInfo).id}
-          estimatedItemLength={() => 60}
           renderItem={({ item }) => {
             const project = item as ProjectInfo;
             const isSelected = selectedProjectId === project.id;

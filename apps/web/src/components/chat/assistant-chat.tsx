@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo } from "react";
 import { useSession, runService } from "@console/api";
-import { activeSessionId$ } from "../../state/index.js";
-import { observer } from "@legendapp/state/react";
+import { useConsoleStore } from "../../state/index";
 import {
   useLocalRuntime,
   AssistantRuntimeProvider,
@@ -259,8 +258,8 @@ function SessionChatRuntime({ sessionId }: { sessionId: string }) {
   );
 }
 
-export const AssistantChat = observer(() => {
-  const activeSessionId = activeSessionId$.get();
+export const AssistantChat = () => {
+  const activeSessionId = useConsoleStore((s) => s.activeSessionId);
 
   if (!activeSessionId) {
     return (
