@@ -1,6 +1,6 @@
 # Dependencies
 /node_modules
-
+apps/cli/node_modules
 # Logs
 logs
 *.log
