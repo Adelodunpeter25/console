@@ -1,15 +1,12 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@import 'uniwind';
 
-@layer base {
-  :root {
-    --color-screen: #0a0a0b;
-    --color-card: #121316;
-    --color-card-alt: #18191c;
-    --color-border: rgba(255, 255, 255, 0.12);
-    --color-foreground: #ffffff;
-    --color-foreground-secondary: #a1a1aa;
-    --color-primary: #ffffff;
-  }
+@theme {
+  --color-screen: #0a0a0b;
+  --color-card: #121316;
+  --color-card-alt: #18191c;
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-foreground: #ffffff;
+  --color-foreground-secondary: #a1a1aa;
+  --color-primary: #ffffff;
 }
