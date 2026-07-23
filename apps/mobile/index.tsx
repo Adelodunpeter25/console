@@ -1,3 +1,4 @@
+import "./global.css";
 import React, { useState, useEffect } from "react";
 import { registerRootComponent } from "expo";
 import { StatusBar } from "expo-status-bar";
