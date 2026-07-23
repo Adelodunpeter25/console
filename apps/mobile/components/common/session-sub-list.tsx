@@ -1,7 +1,6 @@
 import React from "react";
 import { Text, View, TouchableOpacity, Alert } from "react-native";
 import { useSessions, useCreateSession, useDeleteSession } from "@console/api";
-import { styles } from "../../styles/styles";
 
 interface SessionSubListProps {
   projectId: string;
@@ -32,7 +31,7 @@ export function SessionSubList({
       setSelectedSessionId(sess.id);
       refetchSessions();
       setActiveTab("chat");
-    } catch (e) {
+    } catch {
       Alert.alert("Error", "Failed to create session");
     }
   };
@@ -50,7 +49,7 @@ export function SessionSubList({
               setSelectedSessionId(null);
             }
             refetchSessions();
-          } catch (e) {
+          } catch {
             Alert.alert("Error", "Failed to delete session");
           }
         },
@@ -59,41 +58,57 @@ export function SessionSubList({
   };
 
   return (
-    <View style={styles.sessionsContainer}>
-      <View style={styles.sessionHeaderRow}>
-        <Text style={styles.sessionsTitle}>Sessions</Text>
-        <TouchableOpacity style={styles.newSessionBtn} onPress={handleCreateSession}>
-          <Text style={styles.newSessionBtnText}>+ New Chat</Text>
+    <View className="px-3.5 pb-3.5 pt-1 border-t border-white/5">
+      <View className="flex-row justify-between items-center mb-2 mt-1">
+        <Text className="text-[11px] font-bold text-[#9095a0] uppercase tracking-wider">
+          Sessions
+        </Text>
+        <TouchableOpacity
+          className="py-1 px-2 rounded bg-white/10"
+          onPress={handleCreateSession}
+        >
+          <Text className="text-[#f1f3f7] text-[10px] font-semibold">+ New Chat</Text>
         </TouchableOpacity>
       </View>
 
       {sessions.map((sess) => {
         const isActive = selectedSessionId === sess.id;
         return (
-          <View key={sess.id} style={[styles.sessionRow, isActive && styles.sessionRowActive]}>
+          <View
+            key={sess.id}
+            className={`flex-row items-center justify-between py-2 px-2.5 rounded-md mb-1 ${
+              isActive ? "bg-white/10" : "bg-white/5"
+            }`}
+          >
             <TouchableOpacity
-              style={styles.sessionClickArea}
+              className="flex-1 pr-2.5"
               onPress={() => {
                 setSelectedSessionId(sess.id);
                 setActiveTab("chat");
               }}
             >
-              <Text style={[styles.sessionText, isActive && styles.sessionTextActive]}>
+              <Text
+                className={`text-xs ${
+                  isActive ? "text-[#f1f3f7] font-medium" : "text-[#9095a0]"
+                }`}
+              >
                 {sess.title || "New Chat"}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.sessionDeleteBtn}
+              className="p-1"
               onPress={() => handleDeleteSession(sess.id)}
             >
-              <Text style={styles.sessionDeleteText}>✕</Text>
+              <Text className="text-red-500 text-xs font-bold">✕</Text>
             </TouchableOpacity>
           </View>
         );
       })}
 
       {sessions.length === 0 && (
-        <Text style={styles.emptySessionsText}>No active chat sessions.</Text>
+        <Text className="text-[11px] text-[#9095a0] italic text-center py-2">
+          No active chat sessions.
+        </Text>
       )}
     </View>
   );

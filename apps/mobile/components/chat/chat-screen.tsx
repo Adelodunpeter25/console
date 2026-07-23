@@ -9,7 +9,6 @@ import {
   FlatList,
   Platform,
 } from "react-native";
-import { styles } from "../../styles/styles";
 import { AgentMessage } from "@console/types";
 
 interface ChatScreenProps {
@@ -38,7 +37,7 @@ export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps
       if (data && data.messages) {
         setMessages(data.messages);
       }
-    } catch (e) {
+    } catch {
       // Ignore initial load fetch errors
     }
   };
@@ -71,10 +70,7 @@ export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps
       let buffer = "";
 
       // Add temporary response placeholder
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: [{ type: "text", text: "" }] },
-      ]);
+      setMessages((prev) => [...prev, { role: "assistant", content: [{ type: "text", text: "" }] }]);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -103,13 +99,13 @@ export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps
                   return updated;
                 });
               }
-            } catch (err) {
+            } catch {
               // Ignore frames parse issues
             }
           }
         }
       }
-    } catch (e) {
+    } catch {
       fetchSessionMessages();
     } finally {
       setRunning(false);
@@ -121,19 +117,23 @@ export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-      style={styles.chatContainer}
+      className="flex-1 pt-3"
     >
-      <Text style={styles.headerTitle}>Console Chat</Text>
+      <Text className="text-xl font-bold text-[#f1f3f7] mb-4 tracking-tight px-4">
+        Console Chat
+      </Text>
 
       {messages.length === 0 ? (
-        <View style={styles.emptyList}>
-          <Text style={styles.emptyListText}>No messages. Type a prompt below to start.</Text>
+        <View className="items-center justify-center py-10">
+          <Text className="text-[#9095a0] text-xs italic">
+            No messages. Type a prompt below to start.
+          </Text>
         </View>
       ) : (
         <FlatList
           data={messages}
           keyExtractor={(_, index) => index.toString()}
-          contentContainerStyle={styles.messageContentList}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 80 }}
           renderItem={({ item }) => {
             const msg = item as AgentMessage;
             const isUser = msg.role === "user";
@@ -148,19 +148,25 @@ export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps
 
             return (
               <View
-                style={[styles.bubbleContainer, isUser ? styles.bubbleUser : styles.bubbleAgent]}
+                className={`p-3 rounded-lg mb-3 ${
+                  isUser
+                    ? "bg-white/5 border border-white/10 self-end max-w-[85%]"
+                    : "bg-[#121316] border border-white/5 self-start w-full max-w-[90%]"
+                }`}
               >
-                <Text style={styles.bubbleRole}>{isUser ? "You" : "Agent"}</Text>
-                <Text style={styles.bubbleText}>{text}</Text>
+                <Text className="text-[10px] font-bold text-[#9095a0] uppercase mb-1">
+                  {isUser ? "You" : "Agent"}
+                </Text>
+                <Text className="text-[#f1f3f7] text-xs leading-5">{text}</Text>
               </View>
             );
           }}
         />
       )}
 
-      <View style={styles.chatComposer}>
+      <View className="flex-row gap-2 p-3 bg-[#0d0d0e] border-t border-white/10 items-center">
         <TextInput
-          style={styles.chatInput}
+          className="flex-1 min-h-10 max-h-25 bg-[#16171a] border border-white/10 rounded-lg px-3 py-2 text-[#f1f3f7] text-xs"
           value={inputVal}
           onChangeText={setInputVal}
           placeholder="Ask agent to write code..."
@@ -168,18 +174,21 @@ export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps
           multiline
         />
         <TouchableOpacity
-          style={[styles.chatSendBtn, (!inputVal.trim() || running) && styles.chatSendBtnDisabled]}
+          className={`h-10 bg-[#f1f3f7] rounded-lg px-4 items-center justify-center ${
+            !inputVal.trim() || running ? "opacity-30" : ""
+          }`}
           onPress={handleSend}
           disabled={!inputVal.trim() || running}
         >
           {running ? (
             <ActivityIndicator size="small" color="#09090b" />
           ) : (
-            <Text style={styles.chatSendBtnText}>Send</Text>
+            <Text className="text-[#09090b] text-xs font-semibold">Send</Text>
           )}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
 }
+
 export default ChatScreen;

@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { styles } from "../../styles/styles";
 
 interface ConfigModalProps {
   visible: boolean;
@@ -34,17 +33,19 @@ export function ConfigModal({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
+      <View className="flex-1 bg-black/85 justify-center p-6">
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalContent}
+          className="bg-[#121316] rounded-xl border border-white/10 p-5 shadow-2xl"
         >
-          <Text style={styles.modalTitle}>Backend Connection</Text>
-          <Text style={styles.modalSub}>
+          <Text className="text-lg font-bold text-[#f1f3f7] mb-1.5">
+            Backend Connection
+          </Text>
+          <Text className="text-xs text-[#9095a0] mb-4">
             Specify your Console agent server endpoint:
           </Text>
           <TextInput
-            style={styles.input}
+            className="h-11 bg-[#16171a] border border-white/10 rounded-lg px-3 text-[#f1f3f7] text-sm mb-5"
             value={inputUrl}
             onChangeText={setInputUrl}
             placeholder="http://192.168.1.X:3000"
@@ -52,20 +53,20 @@ export function ConfigModal({
             autoCapitalize="none"
             autoCorrect={false}
           />
-          <View style={styles.modalButtons}>
+          <View className="flex-row justify-end gap-3">
             {backendUrl && (
               <TouchableOpacity
-                style={[styles.btn, styles.btnCancel]}
+                className="py-2.5 px-4 rounded-lg bg-white/5 items-center justify-center min-w-[80px]"
                 onPress={onClose}
               >
-                <Text style={styles.btnText}>Cancel</Text>
+                <Text className="text-xs font-semibold text-[#f1f3f7]">Cancel</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={[styles.btn, styles.btnSave]}
+              className="py-2.5 px-4 rounded-lg bg-[#f1f3f7] items-center justify-center min-w-[80px]"
               onPress={onSave}
             >
-              <Text style={styles.btnText}>Connect</Text>
+              <Text className="text-xs font-semibold text-[#09090b]">Connect</Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

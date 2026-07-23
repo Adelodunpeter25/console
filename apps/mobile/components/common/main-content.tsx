@@ -1,7 +1,6 @@
 import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useProjects } from "@console/api";
-import { styles } from "../../styles/styles";
 import { HomeScreen } from "./home-screen";
 import { ChatScreen } from "../chat/chat-screen";
 
@@ -27,7 +26,7 @@ export function MainContent({
   const { data: projects = [], refetch: refetchProjects } = useProjects();
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
+    <SafeAreaView className="flex-1 bg-[#0d0d0e]" edges={["top", "left", "right"]}>
       {activeTab === "home" ? (
         <HomeScreen
           projects={projects}

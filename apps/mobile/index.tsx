@@ -7,7 +7,6 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ConsoleApiProvider, configureConsoleApi } from "@console/api";
 import { QueryClient } from "@tanstack/react-query";
-import { styles } from "./styles/styles";
 import { MainContent } from "./components/common/main-content";
 import { ConfigModal } from "./components/modal/config-modal";
 import { BottomNav } from "./components/navigation/bottom-nav";
@@ -63,7 +62,7 @@ function AppRoot() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View className="flex-1 bg-[#0d0d0e] items-center justify-center">
         <ActivityIndicator size="large" color="#ffffff" />
       </View>
     );
@@ -71,7 +70,7 @@ function AppRoot() {
 
   return (
     <SafeAreaProvider>
-      <View style={styles.appContainer}>
+      <View className="flex-1 bg-[#0d0d0e]">
         <StatusBar style="light" />
 
         {backendUrl ? (
@@ -87,9 +86,11 @@ function AppRoot() {
             />
           </ConsoleApiProvider>
         ) : (
-          <SafeAreaView style={styles.safeArea}>
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>Please configure the backend URL to start.</Text>
+          <SafeAreaView className="flex-1 bg-[#0d0d0e]">
+            <View className="flex-1 items-center justify-center p-6">
+              <Text className="text-[#9095a0] text-center text-sm">
+                Please configure the backend URL to start.
+              </Text>
             </View>
           </SafeAreaView>
         )}

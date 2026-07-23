@@ -1,6 +1,5 @@
 import React from "react";
-import { Text, View, TouchableOpacity, Alert } from "react-native";
-import { styles } from "../../styles/styles";
+import { Text, View, TouchableOpacity, Alert, Platform } from "react-native";
 
 interface BottomNavProps {
   activeTab: "home" | "chat";
@@ -15,18 +14,19 @@ export function BottomNav({
   selectedSessionId,
   onOpenConfig,
 }: BottomNavProps) {
+  const isIos = Platform.OS === "ios";
   return (
-    <View style={styles.bottomBar}>
+    <View className={`h-15 flex-row border-t border-white/10 bg-[#080809] ${isIos ? "pb-2.5" : ""}`}>
       <TouchableOpacity
-        style={[styles.tabButton, activeTab === "home" && styles.tabButtonActive]}
+        className={`flex-1 items-center justify-center ${activeTab === "home" ? "bg-white/5" : ""}`}
         onPress={() => setActiveTab("home")}
       >
-        <Text style={[styles.tabText, activeTab === "home" && styles.tabTextActive]}>
+        <Text className={`text-xs font-medium ${activeTab === "home" ? "text-sky-400" : "text-[#9095a0]"}`}>
           Home
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.tabButton, activeTab === "chat" && styles.tabButtonActive]}
+        className={`flex-1 items-center justify-center ${activeTab === "chat" ? "bg-white/5" : ""}`}
         onPress={() => {
           if (!selectedSessionId) {
             Alert.alert("No Session", "Select or create a chat session on the Home tab first.");
@@ -35,12 +35,12 @@ export function BottomNav({
           setActiveTab("chat");
         }}
       >
-        <Text style={[styles.tabText, activeTab === "chat" && styles.tabTextActive]}>
+        <Text className={`text-xs font-medium ${activeTab === "chat" ? "text-sky-400" : "text-[#9095a0]"}`}>
           Chat
         </Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.tabButton} onPress={onOpenConfig}>
-        <Text style={styles.tabTextSettings}>Config</Text>
+      <TouchableOpacity className="flex-1 items-center justify-center" onPress={onOpenConfig}>
+        <Text className="text-[#9095a0] text-xs font-medium">Config</Text>
       </TouchableOpacity>
     </View>
   );
