@@ -1,71 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { registerRootComponent } from "expo";
 import { StatusBar } from "expo-status-bar";
-import {
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
-  Modal,
-  SafeAreaView,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-} from "react-native";
+import { View, Text, ActivityIndicator, Alert } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ConsoleApiProvider, useProjects, configureConsoleApi } from "@console/api";
+import { ConsoleApiProvider, configureConsoleApi } from "@console/api";
 import { QueryClient } from "@tanstack/react-query";
 import { styles } from "./styles/styles";
-import { HomeScreen } from "./components/common/home-screen";
-import { ChatScreen } from "./components/chat/chat-screen";
+import { MainContent } from "./components/common/main-content";
+import { ConfigModal } from "./components/modal/config-modal";
+import { BottomNav } from "./components/navigation/bottom-nav";
 
 const queryClient = new QueryClient();
 const BACKEND_URL_KEY = "@console_backend_url";
-
-interface MainContentProps {
-  activeTab: "home" | "chat";
-  selectedProjectId: string | null;
-  setSelectedProjectId: (id: string | null) => void;
-  selectedSessionId: string | null;
-  setSelectedSessionId: (id: string | null) => void;
-  setActiveTab: (tab: "home" | "chat") => void;
-  backendUrl: string;
-}
-
-function MainContent({
-  activeTab,
-  selectedProjectId,
-  setSelectedProjectId,
-  selectedSessionId,
-  setSelectedSessionId,
-  setActiveTab,
-  backendUrl,
-}: MainContentProps) {
-  const { data: projects = [], refetch: refetchProjects } = useProjects();
-
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      {activeTab === "home" ? (
-        <HomeScreen
-          projects={projects}
-          refetchProjects={refetchProjects}
-          selectedProjectId={selectedProjectId}
-          setSelectedProjectId={setSelectedProjectId}
-          selectedSessionId={selectedSessionId}
-          setSelectedSessionId={setSelectedSessionId}
-          setActiveTab={setActiveTab}
-        />
-      ) : (
-        <ChatScreen
-          projectId={selectedProjectId}
-          sessionId={selectedSessionId}
-          backendUrl={backendUrl}
-        />
-      )}
-    </SafeAreaView>
-  );
-}
 
 function AppRoot() {
   const [backendUrl, setBackendUrl] = useState<string | null>(null);
@@ -91,7 +38,7 @@ function AppRoot() {
         configureConsoleApi({ baseUrl: stored });
       }
       setShowConfigModal(true);
-    } catch (e) {
+    } catch {
       setShowConfigModal(true);
     } finally {
       setLoading(false);
@@ -108,7 +55,7 @@ function AppRoot() {
       setBackendUrl(inputUrl.trim());
       configureConsoleApi({ baseUrl: inputUrl.trim() });
       setShowConfigModal(false);
-    } catch (e) {
+    } catch {
       Alert.alert("Error", "Failed to save URL");
     }
   };
@@ -122,108 +69,49 @@ function AppRoot() {
   }
 
   return (
-    <View style={styles.appContainer}>
-      <StatusBar style="light" />
+    <SafeAreaProvider>
+      <View style={styles.appContainer}>
+        <StatusBar style="light" />
 
-      {backendUrl ? (
-        <ConsoleApiProvider baseUrl={backendUrl} queryClient={queryClient}>
-          <MainContent
-            activeTab={activeTab}
-            selectedProjectId={selectedProjectId}
-            setSelectedProjectId={setSelectedProjectId}
-            selectedSessionId={selectedSessionId}
-            setSelectedSessionId={setSelectedSessionId}
-            setActiveTab={setActiveTab}
-            backendUrl={backendUrl}
-          />
-        </ConsoleApiProvider>
-      ) : (
-        <SafeAreaView style={styles.safeArea}>
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Please configure the backend URL to start.</Text>
-          </View>
-        </SafeAreaView>
-      )}
-
-      {/* Backend Configuration Modal */}
-      <Modal
-        visible={showConfigModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => {
-          if (backendUrl) setShowConfigModal(false);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.modalContent}
-          >
-            <Text style={styles.modalTitle}>Backend Connection</Text>
-            <Text style={styles.modalSub}>
-              Specify your Console agent server endpoint:
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={inputUrl}
-              onChangeText={setInputUrl}
-              placeholder="http://192.168.1.X:3000"
-              placeholderTextColor="#9095a0"
-              autoCapitalize="none"
-              autoCorrect={false}
+        {backendUrl ? (
+          <ConsoleApiProvider baseUrl={backendUrl} queryClient={queryClient}>
+            <MainContent
+              activeTab={activeTab}
+              selectedProjectId={selectedProjectId}
+              setSelectedProjectId={setSelectedProjectId}
+              selectedSessionId={selectedSessionId}
+              setSelectedSessionId={setSelectedSessionId}
+              setActiveTab={setActiveTab}
+              backendUrl={backendUrl}
             />
-            <View style={styles.modalButtons}>
-              {backendUrl && (
-                <TouchableOpacity
-                  style={[styles.btn, styles.btnCancel]}
-                  onPress={() => setShowConfigModal(false)}
-                >
-                  <Text style={styles.btnText}>Cancel</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={[styles.btn, styles.btnSave]}
-                onPress={saveBackendUrl}
-              >
-                <Text style={styles.btnText}>Connect</Text>
-              </TouchableOpacity>
+          </ConsoleApiProvider>
+        ) : (
+          <SafeAreaView style={styles.safeArea}>
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>Please configure the backend URL to start.</Text>
             </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
+          </SafeAreaView>
+        )}
 
-      {/* Bottom Navigation Bar */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === "home" && styles.tabButtonActive]}
-          onPress={() => setActiveTab("home")}
-        >
-          <Text style={[styles.tabText, activeTab === "home" && styles.tabTextActive]}>
-            Home
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === "chat" && styles.tabButtonActive]}
-          onPress={() => {
-            if (!selectedSessionId) {
-              Alert.alert("No Session", "Select or create a chat session on the Home tab first.");
-              return;
-            }
-            setActiveTab("chat");
+        <ConfigModal
+          visible={showConfigModal}
+          backendUrl={backendUrl}
+          inputUrl={inputUrl}
+          setInputUrl={setInputUrl}
+          onSave={saveBackendUrl}
+          onClose={() => {
+            if (backendUrl) setShowConfigModal(false);
           }}
-        >
-          <Text style={[styles.tabText, activeTab === "chat" && styles.tabTextActive]}>
-            Chat
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.tabButton}
-          onPress={() => setShowConfigModal(true)}
-        >
-          <Text style={styles.tabTextSettings}>Config</Text>
-        </TouchableOpacity>
+        />
+
+        <BottomNav
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          selectedSessionId={selectedSessionId}
+          onOpenConfig={() => setShowConfigModal(true)}
+        />
       </View>
-    </View>
+    </SafeAreaProvider>
   );
 }
 

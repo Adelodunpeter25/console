@@ -1,4 +1,4 @@
-import { StyleSheet, Platform } from "react-native";
+import { StyleSheet, Platform, StatusBar } from "react-native";
 
 export const styles = StyleSheet.create({
   loadingContainer: {
@@ -14,6 +14,7 @@ export const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#0d0d0e",
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight || 24 : 0,
   },
   container: {
     flex: 1,
