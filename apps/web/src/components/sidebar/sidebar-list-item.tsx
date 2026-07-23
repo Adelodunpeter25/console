@@ -52,7 +52,7 @@ export const SidebarListItem = observer(
 
     return (
       <div className="flex flex-col select-none">
-        {/* Project Header Row - Clean layout without caret button, matching screenshot */}
+        {/* Project Header Row */}
         <div
           onClick={() => {
             activeProjectId$.set(project.id);
@@ -67,7 +67,7 @@ export const SidebarListItem = observer(
           <div className="flex items-center gap-2.5 overflow-hidden">
             <Folder
               size={15}
-              className="text-muted-foreground group-hover:text-foreground shrink-0 transition-colors"
+              className="text-amber-500/80 group-hover:text-amber-400 shrink-0 transition-colors"
             />
             <span className="truncate text-xs font-medium tracking-tight text-foreground/90">
               {project.name}
@@ -112,8 +112,8 @@ export const SidebarListItem = observer(
                         size={12}
                         className={
                           isActiveSession
-                            ? "text-primary shrink-0"
-                            : "text-muted-foreground shrink-0"
+                            ? "text-sky-400 shrink-0"
+                            : "text-sky-400/60 group-hover:text-sky-400 shrink-0 transition-colors"
                         }
                       />
                       <span className="truncate">{sess.title || "New Chat"}</span>
