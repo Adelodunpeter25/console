@@ -28,5 +28,6 @@ help:
 	@echo "Available commands:"
 	@echo "  make dev-server  - Start the backend agent server"
 	@echo "  make dev-web     - Start the web app dev server"
+	@echo "  make dev-mobile  - Start the Expo mobile app dev server"
 	@echo "  make typecheck   - Run TypeScript typechecking"
 	@echo "  make check       - Run Vite+ code format and lint checks"

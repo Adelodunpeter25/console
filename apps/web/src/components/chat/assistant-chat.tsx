@@ -1,14 +1,14 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useSession } from "@console/api";
 import { activeSessionId$ } from "../../state/index.js";
 import { observer } from "@legendapp/state/react";
 import {
   useLocalRuntime,
   AssistantRuntimeProvider,
-  useAssistantRuntime,
   type ChatModelAdapter,
 } from "@assistant-ui/react";
-import { Send, Sparkles, Cpu } from "lucide-react";
+import { Thread } from "@assistant-ui/react";
+import { Sparkles } from "lucide-react";
 import type { AgentMessage } from "@console/types";
 
 function mapAgentMessageToAssistantMessage(msg: AgentMessage, idx: number) {
@@ -204,94 +204,9 @@ export const AssistantChat = observer(() => {
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <ChatViewport messages={messages} />
+      <div className="flex-1 flex flex-col h-screen bg-background relative overflow-hidden text-foreground">
+        <Thread />
+      </div>
     </AssistantRuntimeProvider>
   );
 });
-
-// Viewport container wrapping layout
-const ChatViewport = ({ messages }: { messages: any[] }) => {
-  const runtime = useAssistantRuntime();
-  const [inputValue, setInputValue] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const handleSend = () => {
-    if (!inputValue.trim()) return;
-    runtime.thread.append({
-      role: "user",
-      content: [{ type: "text", text: inputValue.trim() }],
-    });
-    setInputValue("");
-  };
-
-  // Scroll to bottom
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  return (
-    <div className="flex-1 flex flex-col h-screen bg-background relative overflow-hidden text-foreground">
-      {/* Scrollable Chat Area */}
-      <div className="flex-1 overflow-y-auto px-6 py-20 flex flex-col gap-6 max-w-4xl mx-auto w-full">
-        {messages.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center opacity-50 py-16">
-            <Cpu className="w-10 h-10 mb-3" />
-            <p className="text-sm">
-              This session has no logs. Enter a prompt below to interact with the coding agent.
-            </p>
-          </div>
-        ) : (
-          messages.map((msg) => {
-            const isUser = msg.role === "user";
-            const textContent = msg.content?.[0]?.text || "";
-
-            return (
-              <div
-                key={msg.id}
-                className={`flex gap-4 p-4 rounded-xl border transition-all ${
-                  isUser
-                    ? "bg-secondary/40 border-border/80 self-end ml-12 max-w-[85%]"
-                    : "bg-card border-border/50 self-start mr-12 w-full max-w-[90%]"
-                }`}
-              >
-                <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-background border border-border text-xs font-mono font-bold">
-                  {isUser ? "U" : "A"}
-                </div>
-                <div className="flex-1 overflow-hidden flex flex-col gap-2">
-                  <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                    {isUser ? "You" : "Console Agent"}
-                  </div>
-                  <div className="text-sm leading-relaxed whitespace-pre-wrap font-sans break-words text-foreground/90">
-                    {textContent}
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input Bar */}
-      <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-background via-background/90 to-transparent border-t border-border/10">
-        <div className="max-w-4xl mx-auto w-full relative flex items-center bg-card border border-border rounded-xl px-4 py-3 shadow-2xl focus-within:ring-1 focus-within:ring-ring">
-          <input
-            type="text"
-            placeholder="Ask agent to write code, review, or debug..."
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none pr-12"
-          />
-          <button
-            onClick={handleSend}
-            disabled={!inputValue.trim()}
-            className="absolute right-4 p-2 rounded-lg bg-primary text-primary-foreground font-medium disabled:opacity-30 disabled:pointer-events-none hover:opacity-90 transition-all cursor-pointer"
-          >
-            <Send size={16} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
