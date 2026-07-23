@@ -29,14 +29,29 @@ export class RunService {
     let session = this.sessionStorage.loadSession(sessionId);
     if (!session) {
       const cwd = process.cwd();
+      const autoTitle = prompt.length > 35 ? `${prompt.slice(0, 35)}...` : prompt;
       const header = this.sessionStorage.createSession({
         id: sessionId,
-        title: prompt.slice(0, 30),
+        title: autoTitle,
         cwd,
         modelId: dto.modelId || "gemini-2.5-pro",
         provider: dto.provider || "antigravity",
       });
       session = { header, messages: [] };
+    } else {
+      const currentTitle = session.header.title;
+      const isGenericTitle =
+        !currentTitle ||
+        currentTitle === "New Session" ||
+        currentTitle === "New mobile session" ||
+        currentTitle === "New Chat" ||
+        currentTitle === "Untitled";
+
+      if (isGenericTitle || session.messages.length === 0) {
+        const autoTitle = prompt.length > 35 ? `${prompt.slice(0, 35)}...` : prompt;
+        this.sessionStorage.updateTitle(sessionId, autoTitle);
+        session.header.title = autoTitle;
+      }
     }
 
     const provider = dto.provider || session.header.provider || "antigravity";

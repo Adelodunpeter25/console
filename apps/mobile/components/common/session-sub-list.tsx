@@ -27,7 +27,7 @@ export function SessionSubList({
       const sess = await createSessionMutation.mutateAsync({
         cwd: projectPath,
         projectId,
-        title: "New mobile session",
+        title: "New Chat",
       });
       setSelectedSessionId(sess.id);
       refetchSessions();
