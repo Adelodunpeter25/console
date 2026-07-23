@@ -1,17 +1,16 @@
 import React, { useState } from "react";
-import { useProjects, useAddProject } from "@console/api";
+import { useProjects, useAddProject, usePickNativeFolder } from "@console/api";
 import { isSidebarOpen$, activeProjectId$ } from "../../state/index.js";
 import { observer } from "@legendapp/state/react";
 import { FolderPlus, Terminal, X } from "lucide-react";
-import { DirectoryPickerModal } from "../common/directory-picker-modal.js";
 import { SidebarListItem } from "./sidebar-list-item.js";
 import { ChatList } from "../chat/chat-list.js";
 
 export const ProjectSidebar = observer(() => {
   const { data: projects = [] } = useProjects();
   const addProjectMutation = useAddProject();
+  const pickNativeFolderMutation = usePickNativeFolder();
   const isOpen = isSidebarOpen$.get();
-  const [showDirPicker, setShowDirPicker] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
 
   const toggleExpand = (projectId: string) => {
@@ -21,12 +20,15 @@ export const ProjectSidebar = observer(() => {
     }));
   };
 
-  const handleSelectDirectory = async (path: string) => {
+  const handleOpenNativeFinder = async () => {
     try {
-      const added = await addProjectMutation.mutateAsync(path);
-      activeProjectId$.set(added.id);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to add project");
+      const result = await pickNativeFolderMutation.mutateAsync();
+      if (result?.path) {
+        const added = await addProjectMutation.mutateAsync(result.path);
+        activeProjectId$.set(added.id);
+      }
+    } catch {
+      // User cancelled native Finder dialog
     }
   };
 
@@ -56,10 +58,11 @@ export const ProjectSidebar = observer(() => {
           Projects
         </span>
         <button
-          onClick={() => setShowDirPicker(true)}
-          className="p-1 rounded hover:bg-accent text-primary flex items-center gap-1 text-[11px] font-medium cursor-pointer"
+          onClick={handleOpenNativeFinder}
+          disabled={pickNativeFolderMutation.isPending}
+          className="p-1 rounded hover:bg-accent text-primary flex items-center gap-1 text-[11px] font-medium cursor-pointer disabled:opacity-50"
         >
-          <FolderPlus size={13} /> Add Project
+          <FolderPlus size={13} /> {pickNativeFolderMutation.isPending ? "Opening Finder..." : "Add Project"}
         </button>
       </div>
 
@@ -83,13 +86,6 @@ export const ProjectSidebar = observer(() => {
 
       {/* Searchable Chat List */}
       <ChatList />
-
-      {/* Directory Picker Modal */}
-      <DirectoryPickerModal
-        isOpen={showDirPicker}
-        onClose={() => setShowDirPicker(false)}
-        onSelect={handleSelectDirectory}
-      />
     </aside>
   );
 });

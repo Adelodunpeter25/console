@@ -23,6 +23,24 @@ fsRoutes.get("/browse", async (c) => {
 });
 
 /**
+ * POST /api/fs/pick-folder — Opens native macOS Finder folder picker dialog.
+ */
+fsRoutes.post("/pick-folder", async (c) => {
+  const { exec } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const execAsync = promisify(exec);
+
+  try {
+    const script = `osascript -e 'POSIX path of (choose folder with prompt "Select Project Folder")'`;
+    const { stdout } = await execAsync(script);
+    const selectedPath = stdout.trim().replace(/\/$/, "");
+    return c.json({ success: true, data: { path: selectedPath } });
+  } catch (err) {
+    return c.json({ success: false, error: "Folder selection cancelled or failed." }, 400);
+  }
+});
+
+/**
  * GET /api/fs/tree — Return structured directory tree summary.
  */
 fsRoutes.get("/tree", async (c) => {
