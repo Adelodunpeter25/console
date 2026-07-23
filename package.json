@@ -29,6 +29,7 @@
     "react-native-safe-area-context": "~5.6.0"
   },
   "dependencies": {
+    "metro-runtime": "^0.87.0",
     "react-native-safe-area-context": "~5.6.0"
   }
 }
