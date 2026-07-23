@@ -3,6 +3,7 @@
  */
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import * as os from "node:os";
 import { existsSync } from "node:fs";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
@@ -11,7 +12,10 @@ import type { DaemonStatus, DaemonConfig } from "./types.js";
 const execAsync = promisify(exec);
 
 // Directory structure
-export const CONSOLE_DIR = path.join(process.env.HOME || process.env.USERPROFILE || "", ".console");
+const isDev = process.env.NODE_ENV === "development" || process.env.CONSOLE_ENV === "dev";
+const homeDir = os.homedir();
+const folderName = isDev ? ".console-dev" : ".console";
+export const CONSOLE_DIR = path.join(homeDir, folderName);
 const PID_FILE = path.join(CONSOLE_DIR, "daemon.pid");
 export const LOGS_DIR = path.join(CONSOLE_DIR, "logs");
 const LOG_FILE = path.join(LOGS_DIR, "daemon.log");
