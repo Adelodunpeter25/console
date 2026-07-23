@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   useProjects,
   useAddProject,
@@ -13,16 +12,17 @@ import {
   FolderPlus,
   MessageSquarePlus,
   Trash2,
-  ChevronRight,
-  Folder,
+  ChevronDown,
+  FolderOpen,
   Terminal,
-  Layers,
-  Menu,
   X,
+  Plus,
+  Sparkles,
+  MessageSquare,
 } from "lucide-react";
 
 export const ProjectSidebar = observer(() => {
-  const { data: projects = [], isLoading: isLoadingProjects } = useProjects();
+  const { data: projects = [] } = useProjects();
   const addProjectMutation = useAddProject();
   const createSessionMutation = useCreateSession();
   const deleteSessionMutation = useDeleteSession();
@@ -36,7 +36,6 @@ export const ProjectSidebar = observer(() => {
   const [newSessionTitle, setNewSessionTitle] = useState("");
   const [showAddSession, setShowAddSession] = useState(false);
 
-  // Fetch sessions for active project
   const { data: sessions = [] } = useSessions(
     activeProjectId ? { projectId: activeProjectId } : undefined,
   );
@@ -62,7 +61,7 @@ export const ProjectSidebar = observer(() => {
       const created = await createSessionMutation.mutateAsync({
         cwd: activeProject?.path || "",
         projectId: activeProjectId,
-        title: newSessionTitle.trim() || "New Chat Session",
+        title: newSessionTitle.trim() || "New Session",
       });
       globalState$.activeSessionId.set(created.id);
       setNewSessionTitle("");
@@ -74,7 +73,7 @@ export const ProjectSidebar = observer(() => {
 
   const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Are you sure you want to delete this session?")) return;
+    if (!confirm("Delete session?")) return;
     try {
       await deleteSessionMutation.mutateAsync(sessionId);
       if (activeSessionId === sessionId) {
@@ -85,183 +84,175 @@ export const ProjectSidebar = observer(() => {
     }
   };
 
-  if (!isOpen) {
-    return (
-      <button
-        onClick={() => globalState$.isSidebarOpen.set(true)}
-        className="fixed top-4 left-4 z-40 p-2 rounded-lg bg-card border border-border text-foreground hover:bg-accent cursor-pointer transition-colors"
-      >
-        <Menu size={20} />
-      </button>
-    );
-  }
+  if (!isOpen) return null;
 
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
   return (
-    <aside className="w-80 h-screen border-r border-border bg-card flex flex-col z-30 shrink-0 text-foreground transition-all duration-300">
-      {/* Sidebar Header */}
-      <div className="p-4 border-b border-border flex items-center justify-between">
+    <aside className="w-72 h-screen sidebar-surface flex flex-col z-30 shrink-0 select-none">
+      {/* Header Titlebar */}
+      <div className="h-12 px-3 border-b border-border/40 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Terminal className="text-primary w-5 h-5" />
-          <span className="font-semibold text-lg tracking-wide text-primary">Console Agent</span>
+          <div className="w-6 h-6 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+            <Terminal size={14} />
+          </div>
+          <span className="font-semibold text-sm tracking-tight text-foreground">Console</span>
         </div>
         <button
           onClick={() => globalState$.isSidebarOpen.set(false)}
-          className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
+          className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
         >
-          <X size={18} />
+          <X size={15} />
         </button>
       </div>
 
-      {/* Projects Dropdown / Selector */}
-      <div className="p-4 border-b border-border flex flex-col gap-2">
-        <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          <span>Active Project</span>
+      {/* Active Project Dropdown */}
+      <div className="p-3 border-b border-border/30 bg-card/20">
+        <div className="flex items-center justify-between mb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+          <span>Project</span>
           <button
             onClick={() => setShowAddProjectModal(true)}
-            className="p-1 rounded hover:bg-accent hover:text-foreground cursor-pointer transition-colors"
-            title="Register Project Directory"
+            className="hover:text-foreground cursor-pointer flex items-center gap-1 text-[11px] capitalize text-primary font-normal"
           >
-            <FolderPlus size={16} />
+            <Plus size={12} /> Add
           </button>
         </div>
 
-        {showAddProjectModal ? (
-          <form onSubmit={handleAddProject} className="flex flex-col gap-2 mt-2">
+        <div className="relative">
+          <select
+            value={activeProjectId || ""}
+            onChange={(e) => globalState$.activeProjectId.set(e.target.value || null)}
+            className="w-full bg-card/60 border border-border/60 rounded-md px-2.5 py-1.5 text-xs text-foreground appearance-none cursor-pointer focus:outline-none focus:border-primary/50"
+          >
+            <option value="" disabled>Select Project...</option>
+            {projects.map((proj) => (
+              <option key={proj.id} value={proj.id}>
+                {proj.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={14} className="absolute right-2.5 top-2.5 text-muted-foreground pointer-events-none" />
+        </div>
+      </div>
+
+      {/* Sessions List */}
+      <div className="flex-1 overflow-y-auto p-2">
+        <div className="px-2 py-1 flex items-center justify-between mb-1">
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            Sessions
+          </span>
+          {activeProjectId && (
+            <button
+              onClick={() => setShowAddSession(true)}
+              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
+              title="New Chat Session"
+            >
+              <MessageSquarePlus size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Modal/Input for New Session */}
+        {showAddSession && (
+          <form onSubmit={handleCreateSession} className="mb-2 p-2 rounded-md bg-card/80 border border-border/60">
             <input
               type="text"
-              placeholder="Absolute folder path..."
-              value={newProjectPath}
-              onChange={(e) => setNewProjectPath(e.target.value)}
-              className="px-3 py-1.5 text-sm rounded bg-background border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              required
+              placeholder="Session Title..."
+              value={newSessionTitle}
+              onChange={(e) => setNewSessionTitle(e.target.value)}
+              className="w-full bg-background/50 border border-border/40 rounded px-2 py-1 text-xs text-foreground focus:outline-none mb-2"
+              autoFocus
             />
-            <div className="flex gap-2 justify-end">
+            <div className="flex justify-end gap-1.5">
               <button
                 type="button"
-                onClick={() => setShowAddProjectModal(false)}
-                className="px-2.5 py-1 text-xs rounded hover:bg-accent cursor-pointer"
+                onClick={() => setShowAddSession(false)}
+                className="px-2 py-1 text-[11px] rounded hover:bg-accent text-muted-foreground"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-2.5 py-1 text-xs rounded bg-primary text-primary-foreground font-semibold hover:opacity-90 cursor-pointer"
+                className="px-2 py-1 text-[11px] rounded bg-primary text-primary-foreground font-medium"
               >
-                Add
+                Create
               </button>
             </div>
           </form>
-        ) : (
-          <select
-            value={activeProjectId || ""}
-            onChange={(e) => {
-              const val = e.target.value;
-              globalState$.activeProjectId.set(val || null);
-              globalState$.activeSessionId.set(null);
-            }}
-            className="w-full px-3 py-2 rounded bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">Select a workspace...</option>
-            {projects.map((proj) => (
-              <option key={proj.id} value={proj.id}>
-                {proj.name} ({proj.path})
-              </option>
-            ))}
-          </select>
         )}
-      </div>
 
-      {/* Sessions List */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-        {activeProjectId ? (
-          <>
-            <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              <span>Chat Sessions</span>
-              <button
-                onClick={() => setShowAddSession(true)}
-                className="p-1 rounded hover:bg-accent hover:text-foreground cursor-pointer transition-colors"
-                title="New Chat Session"
-              >
-                <MessageSquarePlus size={16} />
-              </button>
-            </div>
-
-            {showAddSession && (
-              <form
-                onSubmit={handleCreateSession}
-                className="flex flex-col gap-2 p-2 rounded bg-background border border-border"
-              >
-                <input
-                  type="text"
-                  placeholder="Session title..."
-                  value={newSessionTitle}
-                  onChange={(e) => setNewSessionTitle(e.target.value)}
-                  className="px-2.5 py-1 text-xs rounded bg-card border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-                <div className="flex gap-2 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddSession(false)}
-                    className="px-2 py-0.5 text-[10px] rounded hover:bg-accent cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-2 py-0.5 text-[10px] rounded bg-primary text-primary-foreground font-semibold hover:opacity-90 cursor-pointer"
-                  >
-                    Create
-                  </button>
-                </div>
-              </form>
-            )}
-
-            <div className="flex flex-col gap-1">
-              {sessions.length === 0 ? (
-                <div className="text-xs text-muted-foreground text-center py-6">
-                  No sessions yet. Start a new one!
-                </div>
-              ) : (
-                sessions.map((sess) => (
-                  <div
-                    key={sess.id}
-                    onClick={() => globalState$.activeSessionId.set(sess.id)}
-                    className={`group flex items-center justify-between px-3 py-2.5 rounded-md cursor-pointer transition-all text-sm ${
-                      activeSessionId === sess.id
-                        ? "bg-accent text-accent-foreground font-medium"
-                        : "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <ChevronRight size={14} className="shrink-0" />
-                      <span className="truncate">{sess.title}</span>
-                    </div>
-                    <button
-                      onClick={(e) => handleDeleteSession(sess.id, e)}
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-accent text-muted-foreground hover:text-destructive cursor-pointer transition-all"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </>
+        {!activeProjectId ? (
+          <div className="p-4 text-center text-xs text-muted-foreground">
+            Select a project above to view sessions
+          </div>
+        ) : sessions.length === 0 ? (
+          <div className="p-4 text-center text-xs text-muted-foreground">
+            No sessions yet. Click + to create one.
+          </div>
         ) : (
-          <div className="text-sm text-muted-foreground text-center py-10 flex flex-col items-center gap-2">
-            <Layers className="w-8 h-8 opacity-40" />
-            <span>Select a project workspace above to view its chat logs and options.</span>
+          <div className="flex flex-col gap-0.5">
+            {sessions.map((sess) => {
+              const isActive = sess.id === activeSessionId;
+              return (
+                <div
+                  key={sess.id}
+                  onClick={() => globalState$.activeSessionId.set(sess.id)}
+                  className={`group px-2.5 py-1.5 rounded-md text-xs flex items-center justify-between cursor-pointer transition-colors ${
+                    isActive
+                      ? "bg-accent/80 text-foreground font-medium border border-border/50"
+                      : "text-muted-foreground hover:bg-accent/40 hover:text-foreground"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <MessageSquare size={13} className={isActive ? "text-primary" : "text-muted-foreground"} />
+                    <span className="truncate">{sess.title || "Untitled Session"}</span>
+                  </div>
+                  <button
+                    onClick={(e) => handleDeleteSession(sess.id, e)}
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:text-destructive transition-opacity"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Sidebar Footer */}
-      {activeProject && (
-        <div className="p-4 border-t border-border bg-background/50 flex flex-col gap-1.5 text-xs text-muted-foreground">
-          <div className="font-semibold text-foreground truncate">{activeProject.name}</div>
-          <div className="truncate font-mono text-[10px]">{activeProject.path}</div>
+      {/* Project Add Modal */}
+      {showAddProjectModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-card border border-border/80 rounded-lg w-full max-w-sm p-4 shadow-xl">
+            <h3 className="font-medium text-sm text-foreground mb-3 flex items-center gap-2">
+              <FolderPlus size={16} className="text-primary" /> Add Local Workspace Project
+            </h3>
+            <form onSubmit={handleAddProject}>
+              <input
+                type="text"
+                placeholder="/absolute/path/to/project"
+                value={newProjectPath}
+                onChange={(e) => setNewProjectPath(e.target.value)}
+                className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary/60 mb-3"
+                autoFocus
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddProjectModal(false)}
+                  className="px-3 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground font-medium"
+                >
+                  Add Project
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </aside>

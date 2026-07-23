@@ -1,52 +1,106 @@
 @import "tailwindcss";
 
-@layer base {
-  :root {
-    /* Minimal Dark Mode Only (Cursor Palette) */
-    --background: 0 0% 7%; /* #121212 / Dark charcoal */
-    --foreground: 0 0% 95%; /* #f2f2f2 / Clean white */
-    --card: 0 0% 9%; /* #171717 / Elevating panel dark */
-    --card-foreground: 0 0% 95%;
-    --popover: 0 0% 9%;
-    --popover-foreground: 0 0% 95%;
-    --primary: 0 0% 98%; /* Bright crisp white */
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 15%; /* #262626 / Subtle dark gray accent */
-    --secondary-foreground: 0 0% 95%;
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 60%; /* Muted gray text */
-    --accent: 0 0% 18%; /* Hover state accent */
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 16%; /* Crisp subtle border lines */
-    --input: 0 0% 16%;
-    --ring: 0 0% 80%;
-    --radius: 0.375rem; /* Minimal tight radius */
-  }
+@custom-variant dark (&:is(.dark, .dark *));
+
+:root {
+  --app-scrollbar-width: 6px;
+  --workspace-topbar-height: 48px;
+  --radius: 0.625rem;
+  --surface-grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+
+  color-scheme: dark;
+  --background: #0d0d0e;
+  --app-chrome-background: #0d0d0e;
+  --foreground: #f1f3f7;
+  --card: #121316;
+  --card-foreground: #f1f3f7;
+  --popover: #16171a;
+  --popover-foreground: #f1f3f7;
+  --primary: #ffffff;
+  --primary-foreground: #09090b;
+  --secondary: rgba(255, 255, 255, 0.05);
+  --secondary-foreground: #f1f3f7;
+  --muted: rgba(255, 255, 255, 0.05);
+  --muted-foreground: #9095a0;
+  --accent: rgba(255, 255, 255, 0.08);
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: rgba(255, 255, 255, 0.2);
 }
 
-@theme {
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-none;
+  }
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+  body {
+    background-image: var(--surface-grain);
+    background-repeat: repeat;
+    background-size: 256px 256px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+}
+
+@layer components {
+  .chat-composer-glass {
+    background: color-mix(in srgb, var(--card) 65%, transparent);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    box-shadow: 0 18px 48px -20px rgba(0, 0, 0, 0.6), 0 4px 14px -7px rgba(0, 0, 0, 0.4);
+  }
+
+  .sidebar-surface {
+    background-color: #080809;
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
+  }
+}
+
+::-webkit-scrollbar {
+  width: var(--app-scrollbar-width);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
