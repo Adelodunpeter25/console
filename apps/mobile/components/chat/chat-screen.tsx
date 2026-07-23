@@ -6,9 +6,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   KeyboardAvoidingView,
+  FlatList,
   Platform,
 } from "react-native";
-import { LegendList } from "@legendapp/list";
 import { styles } from "../../styles/styles";
 import { AgentMessage } from "@console/types";
 
@@ -130,10 +130,9 @@ export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps
           <Text style={styles.emptyListText}>No messages. Type a prompt below to start.</Text>
         </View>
       ) : (
-        <LegendList
+        <FlatList
           data={messages}
           keyExtractor={(_, index) => index.toString()}
-          estimatedItemLength={() => 70}
           contentContainerStyle={styles.messageContentList}
           renderItem={({ item }) => {
             const msg = item as AgentMessage;
