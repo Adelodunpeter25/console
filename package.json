@@ -16,6 +16,11 @@
     "check": "vp check",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "metro-runtime": "^0.87.0",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-worklets": "^0.11.2"
+  },
   "devDependencies": {
     "@types/node": "^26.1.1",
     "@types/react": "^19.1.0",
@@ -27,10 +32,5 @@
   "overrides": {
     "react": "19.1.0",
     "react-native-safe-area-context": "~5.6.0"
-  },
-  "dependencies": {
-    "metro-runtime": "^0.87.0",
-    "react-native-safe-area-context": "~5.6.0",
-    "react-native-worklets": "^0.11.2"
   }
 }

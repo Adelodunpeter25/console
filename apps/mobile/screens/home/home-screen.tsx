@@ -44,9 +44,7 @@ export function HomeScreen({
       {/* Workspace Header */}
       <View className="flex-row justify-between items-center mb-5">
         <View>
-          <Text className="text-2xl font-bold text-white tracking-tight">
-            Console Workspace
-          </Text>
+          <Text className="text-2xl font-bold text-white tracking-tight">Console Workspace</Text>
           <Text className="text-sm text-zinc-400 mt-1">
             Manage your repositories & AI agent sessions
           </Text>
@@ -56,9 +54,7 @@ export function HomeScreen({
           className="bg-transparent border border-white/20 px-4 py-2 rounded-full active:bg-white/10"
           onPress={() => setIsAddingProject(true)}
         >
-          <Text className="text-sm font-semibold text-white">
-            + Add Project
-          </Text>
+          <Text className="text-sm font-semibold text-white">+ Add Project</Text>
         </TouchableOpacity>
       </View>
 

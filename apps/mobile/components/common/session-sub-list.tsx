@@ -64,10 +64,7 @@ export function SessionSubList({
         <Text className="text-[11px] font-bold text-[#9095a0] uppercase tracking-wider">
           Sessions
         </Text>
-        <TouchableOpacity
-          className="py-1 px-2 rounded bg-white/10"
-          onPress={handleCreateSession}
-        >
+        <TouchableOpacity className="py-1 px-2 rounded bg-white/10" onPress={handleCreateSession}>
           <Text className="text-[#f1f3f7] text-[10px] font-semibold">+ New Chat</Text>
         </TouchableOpacity>
       </View>
@@ -99,16 +96,11 @@ export function SessionSubList({
               </Text>
 
               {Boolean(timeAgo) && (
-                <Text className="text-[10px] text-[#9095a0]/70 font-mono ml-2">
-                  {timeAgo}
-                </Text>
+                <Text className="text-[10px] text-[#9095a0]/70 font-mono ml-2">{timeAgo}</Text>
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity
-              className="p-1 ml-1"
-              onPress={() => handleDeleteSession(sess.id)}
-            >
+            <TouchableOpacity className="p-1 ml-1" onPress={() => handleDeleteSession(sess.id)}>
               <Text className="text-red-500 text-xs font-bold">✕</Text>
             </TouchableOpacity>
           </View>

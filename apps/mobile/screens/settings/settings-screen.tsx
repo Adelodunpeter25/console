@@ -20,11 +20,7 @@ interface SettingsScreenProps {
   setActiveTab: (tab: "home" | "chat" | "settings") => void;
 }
 
-export function SettingsScreen({
-  backendUrl,
-  setBackendUrl,
-  setActiveTab,
-}: SettingsScreenProps) {
+export function SettingsScreen({ backendUrl, setBackendUrl, setActiveTab }: SettingsScreenProps) {
   const [inputUrl, setInputUrl] = useState(backendUrl || "http://localhost:3000");
   const [isSaving, setIsSaving] = useState(false);
   const [testingStatus, setTestingStatus] = useState<string | null>(null);
@@ -64,31 +60,25 @@ export function SettingsScreen({
   };
 
   const handleDisconnect = async () => {
-    Alert.alert(
-      "Disconnect Backend",
-      "Are you sure you want to clear the saved backend URL?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Disconnect",
-          style: "destructive",
-          onPress: async () => {
-            await AsyncStorage.removeItem(BACKEND_URL_KEY);
-            setBackendUrl(null);
-            setActiveTab("home");
-          },
+    Alert.alert("Disconnect Backend", "Are you sure you want to clear the saved backend URL?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Disconnect",
+        style: "destructive",
+        onPress: async () => {
+          await AsyncStorage.removeItem(BACKEND_URL_KEY);
+          setBackendUrl(null);
+          setActiveTab("home");
         },
-      ]
-    );
+      },
+    ]);
   };
 
   return (
     <ScrollView className="flex-1 bg-[#0d0d0e] px-4 pt-4">
       {/* Header */}
       <View className="mb-5">
-        <Text className="text-2xl font-bold text-white tracking-tight">
-          Console Settings
-        </Text>
+        <Text className="text-2xl font-bold text-white tracking-tight">Console Settings</Text>
         <Text className="text-sm text-zinc-400 mt-1">
           Configure server connections & app environment
         </Text>
@@ -97,9 +87,7 @@ export function SettingsScreen({
       {/* Connection Endpoint Card */}
       <GlassSurface className="mb-4 p-5">
         <View className="flex-row items-center justify-between mb-3">
-          <Text className="text-base font-semibold text-white">
-            Backend Server Endpoint
-          </Text>
+          <Text className="text-base font-semibold text-white">Backend Server Endpoint</Text>
           <View className="flex-row items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20">
             <View className="w-2 h-2 rounded-full bg-white" />
             <Text className="text-xs font-bold text-white">
@@ -131,10 +119,10 @@ export function SettingsScreen({
               {testingStatus === "testing"
                 ? "Testing..."
                 : testingStatus === "success"
-                ? "✅ Online"
-                : testingStatus === "error"
-                ? "❌ Offline"
-                : "Test Connection"}
+                  ? "✅ Online"
+                  : testingStatus === "error"
+                    ? "❌ Offline"
+                    : "Test Connection"}
             </Text>
           </TouchableOpacity>
 
@@ -154,9 +142,7 @@ export function SettingsScreen({
 
       {/* App Environment Info Card */}
       <GlassSurface className="mb-4 p-5">
-        <Text className="text-base font-semibold text-white mb-3">
-          App Info & Diagnostics
-        </Text>
+        <Text className="text-base font-semibold text-white mb-3">App Info & Diagnostics</Text>
 
         <View className="flex-row justify-between py-2.5 border-b border-white/10">
           <Text className="text-sm text-zinc-400">Console Mobile Version</Text>
@@ -181,9 +167,7 @@ export function SettingsScreen({
 
       {/* Danger Zone Card */}
       <GlassSurface className="mb-8 p-5 border-red-500/30 bg-red-500/5">
-        <Text className="text-base font-semibold text-red-400 mb-1">
-          Server Connection Reset
-        </Text>
+        <Text className="text-base font-semibold text-red-400 mb-1">Server Connection Reset</Text>
         <Text className="text-sm text-zinc-400 mb-4">
           Clear the saved backend URL and reset connection preferences.
         </Text>
@@ -192,9 +176,7 @@ export function SettingsScreen({
           className="py-2.5 px-5 rounded-full bg-transparent border border-red-500/40 items-center justify-center self-start"
           onPress={handleDisconnect}
         >
-          <Text className="text-sm font-bold text-red-400">
-            Disconnect Backend Endpoint
-          </Text>
+          <Text className="text-sm font-bold text-red-400">Disconnect Backend Endpoint</Text>
         </TouchableOpacity>
       </GlassSurface>
     </ScrollView>

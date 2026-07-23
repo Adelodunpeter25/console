@@ -12,11 +12,7 @@ export interface SidebarListItemProps {
   onToggleExpand: () => void;
 }
 
-export const SidebarListItem = ({
-  project,
-  isExpanded,
-  onToggleExpand,
-}: SidebarListItemProps) => {
+export const SidebarListItem = ({ project, isExpanded, onToggleExpand }: SidebarListItemProps) => {
   const activeSessionId = useConsoleStore((s) => s.activeSessionId);
   const activeProjectId = useConsoleStore((s) => s.activeProjectId);
   const setActiveSessionId = useConsoleStore((s) => s.setActiveSessionId);

@@ -276,4 +276,4 @@ export const AssistantChat = () => {
 
   // key forces a fresh runtime when switching sessions
   return <SessionChatRuntime key={activeSessionId} sessionId={activeSessionId} />;
-});
+};

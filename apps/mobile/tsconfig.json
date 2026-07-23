@@ -4,20 +4,10 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "@console/api": [
-        "../../packages/api/src"
-      ],
-      "@console/types": [
-        "../../packages/types/src"
-      ]
+      "@console/api": ["../../packages/api/src"],
+      "@console/types": ["../../packages/types/src"]
     }
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    "uniwind-types.d.ts"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
+  "include": ["**/*.ts", "**/*.tsx", "uniwind-types.d.ts"],
+  "exclude": ["node_modules"]
 }

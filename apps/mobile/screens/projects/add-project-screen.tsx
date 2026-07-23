@@ -1,12 +1,5 @@
 import React, { useState } from "react";
-import {
-  Text,
-  View,
-  TouchableOpacity,
-  FlatList,
-  ActivityIndicator,
-  Alert,
-} from "react-native";
+import { Text, View, TouchableOpacity, FlatList, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFsBrowse, useAddProject } from "@console/api";
 import { Folder } from "lucide-react-native";
@@ -38,7 +31,7 @@ export function AddProjectScreen({ onClose, onProjectAdded }: AddProjectScreenPr
     } catch (e) {
       Alert.alert(
         "Failed to Add Project",
-        e instanceof Error ? e.message : "Directory could not be added as a project."
+        e instanceof Error ? e.message : "Directory could not be added as a project.",
       );
     }
   };
@@ -80,7 +73,9 @@ export function AddProjectScreen({ onClose, onProjectAdded }: AddProjectScreenPr
           </View>
         ) : isError ? (
           <View className="flex-1 items-center justify-center p-6">
-            <Text className="text-base font-semibold text-red-400 mb-2">Failed to load directory</Text>
+            <Text className="text-base font-semibold text-red-400 mb-2">
+              Failed to load directory
+            </Text>
             <TouchableOpacity
               className="px-5 py-2.5 bg-white/10 border border-white/20 rounded-full"
               onPress={() => refetch()}
@@ -152,9 +147,7 @@ export function AddProjectScreen({ onClose, onProjectAdded }: AddProjectScreenPr
           {addProjectMutation.isPending ? (
             <ActivityIndicator size="small" color="#000000" />
           ) : (
-            <Text className="text-sm font-bold text-black tracking-wide">
-              + Add Directory
-            </Text>
+            <Text className="text-sm font-bold text-black tracking-wide">+ Add Directory</Text>
           )}
         </TouchableOpacity>
       </GlassSurface>

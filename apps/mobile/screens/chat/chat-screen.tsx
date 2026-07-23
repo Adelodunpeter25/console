@@ -70,7 +70,10 @@ export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps
       let buffer = "";
 
       // Add temporary response placeholder
-      setMessages((prev) => [...prev, { role: "assistant", content: [{ type: "text", text: "" }] }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: [{ type: "text", text: "" }] },
+      ]);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -119,9 +122,7 @@ export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps
       keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       className="flex-1 pt-4"
     >
-      <Text className="text-2xl font-bold text-white mb-4 tracking-tight px-4">
-        Console Chat
-      </Text>
+      <Text className="text-2xl font-bold text-white mb-4 tracking-tight px-4">Console Chat</Text>
 
       {messages.length === 0 ? (
         <View className="items-center justify-center py-14">

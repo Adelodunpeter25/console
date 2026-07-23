@@ -7,11 +7,7 @@ interface BottomNavProps {
   selectedSessionId: string | null;
 }
 
-export function BottomNav({
-  activeTab,
-  setActiveTab,
-  selectedSessionId,
-}: BottomNavProps) {
+export function BottomNav({ activeTab, setActiveTab, selectedSessionId }: BottomNavProps) {
   const isIos = Platform.OS === "ios";
   return (
     <View className={`h-16 flex-row border-t border-white/10 bg-[#080809] ${isIos ? "pb-3" : ""}`}>
@@ -19,7 +15,9 @@ export function BottomNav({
         className={`flex-1 items-center justify-center ${activeTab === "home" ? "bg-white/10" : ""}`}
         onPress={() => setActiveTab("home")}
       >
-        <Text className={`text-sm ${activeTab === "home" ? "text-white font-bold" : "text-zinc-400 font-medium"}`}>
+        <Text
+          className={`text-sm ${activeTab === "home" ? "text-white font-bold" : "text-zinc-400 font-medium"}`}
+        >
           Home
         </Text>
       </TouchableOpacity>
@@ -34,7 +32,9 @@ export function BottomNav({
           setActiveTab("chat");
         }}
       >
-        <Text className={`text-sm ${activeTab === "chat" ? "text-white font-bold" : "text-zinc-400 font-medium"}`}>
+        <Text
+          className={`text-sm ${activeTab === "chat" ? "text-white font-bold" : "text-zinc-400 font-medium"}`}
+        >
           Chat
         </Text>
       </TouchableOpacity>
@@ -43,7 +43,9 @@ export function BottomNav({
         className={`flex-1 items-center justify-center ${activeTab === "settings" ? "bg-white/10" : ""}`}
         onPress={() => setActiveTab("settings")}
       >
-        <Text className={`text-sm ${activeTab === "settings" ? "text-white font-bold" : "text-zinc-400 font-medium"}`}>
+        <Text
+          className={`text-sm ${activeTab === "settings" ? "text-white font-bold" : "text-zinc-400 font-medium"}`}
+        >
           Settings
         </Text>
       </TouchableOpacity>
