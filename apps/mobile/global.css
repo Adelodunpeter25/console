@@ -1,3 +1,17 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --color-screen: #0d0d0e;
+    --color-card: #121316;
+    --color-card-alt: #16171a;
+    --color-border: rgba(255, 255, 255, 0.08);
+    --color-border-subtle: rgba(255, 255, 255, 0.04);
+    --color-foreground: #f1f3f7;
+    --color-foreground-secondary: #9095a0;
+    --color-primary: #38bdf8;
+    --color-accent: rgba(56, 189, 248, 0.1);
+  }
+}
