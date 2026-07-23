@@ -2,13 +2,25 @@ import React from "react";
 import { useSessions, useCreateSession, useDeleteSession } from "@console/api";
 import { activeProjectId$, activeSessionId$ } from "../../state/index.js";
 import { observer } from "@legendapp/state/react";
-import { Folder, Plus, MessageSquare, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Folder, SquarePen, MessageSquare, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import type { ProjectInfo } from "@console/types";
 
 export interface SidebarListItemProps {
   project: ProjectInfo;
   isExpanded: boolean;
   onToggleExpand: () => void;
+}
+
+function formatRelativeTime(timestamp?: number): string {
+  if (!timestamp) return "";
+  const diffMs = Date.now() - timestamp;
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 export const SidebarListItem = observer(
@@ -51,51 +63,52 @@ export const SidebarListItem = observer(
 
     return (
       <div className="flex flex-col select-none">
-        {/* Project Item Row */}
+        {/* Project Item Row - Taller Card with padding & height */}
         <div
           onClick={() => {
             activeProjectId$.set(project.id);
             onToggleExpand();
           }}
-          className={`group px-2 py-1.5 rounded-md text-xs flex items-center justify-between cursor-pointer transition-colors ${
+          className={`group px-3 py-2.5 my-0.5 rounded-lg text-xs flex items-center justify-between cursor-pointer transition-all duration-150 ${
             isSelectedProject
-              ? "bg-accent/80 text-foreground font-medium border border-border/50"
-              : "text-muted-foreground hover:bg-accent/40 hover:text-foreground"
+              ? "bg-accent/90 text-foreground font-medium border border-border/70 shadow-xs"
+              : "text-muted-foreground hover:bg-accent/40 hover:text-foreground border border-transparent"
           }`}
         >
-          <div className="flex items-center gap-2 overflow-hidden">
+          <div className="flex items-center gap-2.5 overflow-hidden">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleExpand();
               }}
-              className="p-0.5 rounded hover:bg-card/60 text-muted-foreground"
+              className="p-0.5 rounded hover:bg-card/60 text-muted-foreground shrink-0"
             >
               {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
-            <Folder size={14} className="text-primary/80 shrink-0" />
-            <span className="truncate">{project.name}</span>
+            <Folder size={15} className="text-primary/90 shrink-0" />
+            <span className="truncate text-xs tracking-tight font-medium">{project.name}</span>
           </div>
 
           <button
             onClick={handleCreateNewSession}
-            title="Create New Session"
-            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-card/80 hover:text-foreground text-muted-foreground rounded transition-opacity"
+            title="New Chat Session"
+            className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-card hover:text-foreground text-muted-foreground rounded-md transition-all cursor-pointer"
           >
-            <Plus size={13} />
+            <SquarePen size={14} />
           </button>
         </div>
 
         {/* Child Sessions List */}
         {isExpanded && (
-          <div className="ml-5 mt-0.5 pl-2 border-l border-border/30 flex flex-col gap-0.5">
+          <div className="ml-5 mt-1 pl-2.5 border-l border-border/40 flex flex-col gap-1">
             {sessions.length === 0 ? (
-              <div className="px-2 py-1 text-[11px] text-muted-foreground italic">
+              <div className="px-2 py-1.5 text-[11px] text-muted-foreground italic">
                 No sessions yet
               </div>
             ) : (
               sessions.map((sess) => {
                 const isActiveSession = activeSessionId === sess.id;
+                const timeAgo = formatRelativeTime(sess.createdAt || sess.updatedAt);
                 return (
                   <div
                     key={sess.id}
@@ -103,22 +116,30 @@ export const SidebarListItem = observer(
                       activeProjectId$.set(project.id);
                       activeSessionId$.set(sess.id);
                     }}
-                    className={`group px-2 py-1 rounded text-[11px] flex items-center justify-between cursor-pointer transition-colors ${
+                    className={`group px-2.5 py-1.5 rounded-md text-[11px] flex items-center justify-between cursor-pointer transition-colors ${
                       isActiveSession
                         ? "bg-primary/10 text-primary font-medium border border-primary/20"
-                        : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
+                        : "text-muted-foreground hover:bg-accent/30 hover:text-foreground border border-transparent"
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 truncate">
-                      <MessageSquare size={12} className={isActiveSession ? "text-primary" : "text-muted-foreground"} />
+                    <div className="flex items-center gap-2 truncate">
+                      <MessageSquare size={12} className={isActiveSession ? "text-primary shrink-0" : "text-muted-foreground shrink-0"} />
                       <span className="truncate">{sess.title || "New Chat"}</span>
                     </div>
-                    <button
-                      onClick={(e) => handleDeleteSession(sess.id, e)}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-destructive transition-opacity"
-                    >
-                      <Trash2 size={11} />
-                    </button>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {timeAgo && (
+                        <span className="text-[10px] text-muted-foreground/70 font-mono opacity-80 group-hover:opacity-100">
+                          {timeAgo}
+                        </span>
+                      )}
+                      <button
+                        onClick={(e) => handleDeleteSession(sess.id, e)}
+                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-destructive transition-opacity"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
                   </div>
                 );
               })
