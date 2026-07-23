@@ -1,4 +1,4 @@
-import { getConsoleApiClient } from "../client.js";
+import { getConsoleApiClient } from "../client";
 import type {
   SessionHeader,
   SessionDetailResponse,

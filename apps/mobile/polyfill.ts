@@ -26,5 +26,3 @@ if (typeof globalThis.FormData === "undefined" || typeof global.FormData === "un
   (globalThis as any).FormData = (globalThis as any).FormData || FormDataFallback;
   (global as any).FormData = (global as any).FormData || FormDataFallback;
 }
-
-

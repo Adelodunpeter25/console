@@ -1,10 +1,5 @@
 import React from "react";
-import {
-  Text,
-  View,
-  TouchableOpacity,
-  Alert,
-} from "react-native";
+import { Text, View, TouchableOpacity, Alert } from "react-native";
 import { useSessions, useCreateSession, useDeleteSession } from "@console/api";
 import { styles } from "../../styles/styles";
 

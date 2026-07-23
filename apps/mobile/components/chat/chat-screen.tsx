@@ -71,7 +71,10 @@ export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps
       let buffer = "";
 
       // Add temporary response placeholder
-      setMessages((prev) => [...prev, { role: "assistant", content: [{ type: "text", text: "" }] }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: [{ type: "text", text: "" }] },
+      ]);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -145,7 +148,9 @@ export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps
             }
 
             return (
-              <View style={[styles.bubbleContainer, isUser ? styles.bubbleUser : styles.bubbleAgent]}>
+              <View
+                style={[styles.bubbleContainer, isUser ? styles.bubbleUser : styles.bubbleAgent]}
+              >
                 <Text style={styles.bubbleRole}>{isUser ? "You" : "Agent"}</Text>
                 <Text style={styles.bubbleText}>{text}</Text>
               </View>

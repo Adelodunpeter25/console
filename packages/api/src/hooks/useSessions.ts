@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { sessionService } from "../services/session.service.js";
+import { sessionService } from "../services/session.service";
 import type { CreateSessionDto, UpdateSessionDto } from "@console/types";
 
 export const sessionKeys = {

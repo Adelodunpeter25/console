@@ -1,11 +1,5 @@
 import React, { useState } from "react";
-import {
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
-  Alert,
-} from "react-native";
+import { Text, View, TextInput, TouchableOpacity, Alert } from "react-native";
 import { useAddProject } from "@console/api";
 import { LegendList } from "@legendapp/list";
 import { Folder02Icon } from "hugeicons-react";

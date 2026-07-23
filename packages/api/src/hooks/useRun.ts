@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { runService } from "../services/run.service.js";
+import { runService } from "../services/run.service";
 
 export function useAbortRun() {
   return useMutation({

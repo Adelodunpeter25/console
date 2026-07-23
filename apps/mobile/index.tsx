@@ -130,9 +130,7 @@ function AppRoot() {
             style={styles.modalContent}
           >
             <Text style={styles.modalTitle}>Backend Connection</Text>
-            <Text style={styles.modalSub}>
-              Specify your Console agent server endpoint:
-            </Text>
+            <Text style={styles.modalSub}>Specify your Console agent server endpoint:</Text>
             <TextInput
               style={styles.input}
               value={inputUrl}
@@ -151,10 +149,7 @@ function AppRoot() {
                   <Text style={styles.btnText}>Cancel</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity
-                style={[styles.btn, styles.btnSave]}
-                onPress={saveBackendUrl}
-              >
+              <TouchableOpacity style={[styles.btn, styles.btnSave]} onPress={saveBackendUrl}>
                 <Text style={styles.btnText}>Connect</Text>
               </TouchableOpacity>
             </View>
@@ -168,9 +163,7 @@ function AppRoot() {
           style={[styles.tabButton, activeTab === "home" && styles.tabButtonActive]}
           onPress={() => setActiveTab("home")}
         >
-          <Text style={[styles.tabText, activeTab === "home" && styles.tabTextActive]}>
-            Home
-          </Text>
+          <Text style={[styles.tabText, activeTab === "home" && styles.tabTextActive]}>Home</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === "chat" && styles.tabButtonActive]}
@@ -182,14 +175,9 @@ function AppRoot() {
             setActiveTab("chat");
           }}
         >
-          <Text style={[styles.tabText, activeTab === "chat" && styles.tabTextActive]}>
-            Chat
-          </Text>
+          <Text style={[styles.tabText, activeTab === "chat" && styles.tabTextActive]}>Chat</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.tabButton}
-          onPress={() => setShowConfigModal(true)}
-        >
+        <TouchableOpacity style={styles.tabButton} onPress={() => setShowConfigModal(true)}>
           <Text style={styles.tabTextSettings}>Config</Text>
         </TouchableOpacity>
       </View>
