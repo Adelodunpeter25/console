@@ -3,7 +3,7 @@ import { useSessions, useCreateSession, useDeleteSession } from "@console/api";
 import { activeProjectId$, activeSessionId$ } from "../../state/index.js";
 import { observer } from "@legendapp/state/react";
 import { SquarePen, Trash2 } from "lucide-react";
-import { Folder01Icon, Folder02Icon } from "hugeicons-react";
+import { Folder02Icon } from "hugeicons-react";
 import type { ProjectInfo } from "@console/types";
 import { formatRelativeTime } from "../../utils/index.js";
 
@@ -51,8 +51,6 @@ export const SidebarListItem = observer(
       }
     };
 
-    const FolderIcon = isExpanded ? Folder02Icon : Folder01Icon;
-
     return (
       <div className="flex flex-col select-none">
         {/* Project Header Row */}
@@ -68,7 +66,7 @@ export const SidebarListItem = observer(
           }`}
         >
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <FolderIcon
+            <Folder02Icon
               size={15}
               className="text-muted-foreground/85 group-hover:text-foreground shrink-0 transition-colors"
             />
