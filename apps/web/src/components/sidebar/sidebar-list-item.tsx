@@ -2,7 +2,7 @@ import React from "react";
 import { useSessions, useCreateSession, useDeleteSession } from "@console/api";
 import { activeProjectId$, activeSessionId$ } from "../../state/index.js";
 import { observer } from "@legendapp/state/react";
-import { Folder, SquarePen, MessageSquare, Trash2 } from "lucide-react";
+import { Folder, SquarePen, Trash2 } from "lucide-react";
 import type { ProjectInfo } from "@console/types";
 import { formatRelativeTime } from "../../utils/index.js";
 
@@ -67,7 +67,7 @@ export const SidebarListItem = observer(
           <div className="flex items-center gap-2.5 overflow-hidden">
             <Folder
               size={15}
-              className="text-amber-500/80 group-hover:text-amber-400 shrink-0 transition-colors"
+              className="text-muted-foreground/80 group-hover:text-foreground shrink-0 transition-colors"
             />
             <span className="truncate text-xs font-medium tracking-tight text-foreground/90">
               {project.name}
@@ -85,9 +85,9 @@ export const SidebarListItem = observer(
 
         {/* Child Sessions List */}
         {isExpanded && (
-          <div className="ml-4 mt-0.5 pl-2 border-l border-border/30 flex flex-col gap-0.5">
+          <div className="mt-0.5 flex flex-col gap-0.5">
             {sessions.length === 0 ? (
-              <div className="px-2 py-1 text-[11px] text-muted-foreground/60 italic">
+              <div className="px-7 py-1 text-[11px] text-muted-foreground/60 italic">
                 No sessions yet
               </div>
             ) : (
@@ -101,23 +101,15 @@ export const SidebarListItem = observer(
                       activeProjectId$.set(project.id);
                       activeSessionId$.set(sess.id);
                     }}
-                    className={`group px-2 py-1 rounded text-[11px] flex items-center justify-between cursor-pointer transition-colors ${
+                    className={`group px-7 py-1.5 rounded text-xs flex items-center justify-between cursor-pointer transition-colors ${
                       isActiveSession
-                        ? "bg-primary/10 text-primary font-medium"
-                        : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
+                        ? "bg-accent/80 text-foreground font-medium"
+                        : "text-muted-foreground hover:bg-accent/40 hover:text-foreground"
                     }`}
                   >
-                    <div className="flex items-center gap-2 truncate">
-                      <MessageSquare
-                        size={12}
-                        className={
-                          isActiveSession
-                            ? "text-sky-400 shrink-0"
-                            : "text-sky-400/60 group-hover:text-sky-400 shrink-0 transition-colors"
-                        }
-                      />
-                      <span className="truncate">{sess.title || "New Chat"}</span>
-                    </div>
+                    <span className="truncate text-xs font-normal tracking-tight">
+                      {sess.title || "New Chat"}
+                    </span>
 
                     <div className="flex items-center gap-1.5 shrink-0">
                       {timeAgo && (
