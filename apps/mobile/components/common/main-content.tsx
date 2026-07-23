@@ -1,9 +1,7 @@
 import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useProjects } from "@console/api";
-import { HomeScreen } from "./home-screen";
-import { ChatScreen } from "../chat/chat-screen";
-import { SettingsScreen } from "../../screens/settings/settings-screen";
+import { HomeScreen, ChatScreen, SettingsScreen } from "../../screens";
 
 interface MainContentProps {
   activeTab: "home" | "chat" | "settings";

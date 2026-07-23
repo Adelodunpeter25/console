@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFsBrowse, useAddProject } from "@console/api";
 import { Folder02Icon } from "hugeicons-react";
-import { GlassSurface } from "./glass-surface";
+import { GlassSurface } from "../../components/common/glass-surface";
 
 interface AddProjectScreenProps {
   onClose: () => void;

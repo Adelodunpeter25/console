@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { Text, View, TouchableOpacity, FlatList } from "react-native";
 import { Folder02Icon } from "hugeicons-react";
-import { SessionSubList } from "./session-sub-list";
-import { AddProjectScreen } from "./add-project-screen";
-import { GlassSurface } from "./glass-surface";
+import { SessionSubList } from "../../components/common/session-sub-list";
+import { AddProjectScreen } from "../projects/add-project-screen";
+import { GlassSurface } from "../../components/common/glass-surface";
 import { ProjectInfo } from "@console/types";
 
 interface HomeScreenProps {
@@ -31,7 +31,7 @@ export function HomeScreen({
     return (
       <AddProjectScreen
         onClose={() => setIsAddingProject(false)}
-        onProjectAdded={(newId) => {
+        onProjectAdded={(newId: string) => {
           setSelectedProjectId(newId);
           refetchProjects();
         }}
