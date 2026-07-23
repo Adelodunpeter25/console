@@ -1,6 +1,6 @@
-import type { AgentMessage } from "./agent.js";
-import type { Model } from "./model.js";
-import type { AgentTool } from "./tool.js";
+import type { AgentMessage } from "./agent";
+import type { Model } from "./model";
+import type { AgentTool } from "./tool";
 
 export interface SessionHeader {
   id: string;
