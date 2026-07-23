@@ -25,6 +25,50 @@ import { ChatScreen } from "./components/chat/chat-screen";
 const queryClient = new QueryClient();
 const BACKEND_URL_KEY = "@console_backend_url";
 
+interface MainContentProps {
+  activeTab: "home" | "chat";
+  selectedProjectId: string | null;
+  setSelectedProjectId: (id: string | null) => void;
+  selectedSessionId: string | null;
+  setSelectedSessionId: (id: string | null) => void;
+  setActiveTab: (tab: "home" | "chat") => void;
+  backendUrl: string;
+}
+
+function MainContent({
+  activeTab,
+  selectedProjectId,
+  setSelectedProjectId,
+  selectedSessionId,
+  setSelectedSessionId,
+  setActiveTab,
+  backendUrl,
+}: MainContentProps) {
+  const { data: projects = [], refetch: refetchProjects } = useProjects();
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      {activeTab === "home" ? (
+        <HomeScreen
+          projects={projects}
+          refetchProjects={refetchProjects}
+          selectedProjectId={selectedProjectId}
+          setSelectedProjectId={setSelectedProjectId}
+          selectedSessionId={selectedSessionId}
+          setSelectedSessionId={setSelectedSessionId}
+          setActiveTab={setActiveTab}
+        />
+      ) : (
+        <ChatScreen
+          projectId={selectedProjectId}
+          sessionId={selectedSessionId}
+          backendUrl={backendUrl}
+        />
+      )}
+    </SafeAreaView>
+  );
+}
+
 function AppRoot() {
   const [backendUrl, setBackendUrl] = useState<string | null>(null);
   const [inputUrl, setInputUrl] = useState("http://localhost:3000");
@@ -35,8 +79,6 @@ function AppRoot() {
   const [activeTab, setActiveTab] = useState<"home" | "chat">("home");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
-
-  const { data: projects = [], refetch: refetchProjects } = useProjects();
 
   useEffect(() => {
     loadBackendUrl();
@@ -87,25 +129,15 @@ function AppRoot() {
 
       {backendUrl ? (
         <ConsoleApiProvider baseUrl={backendUrl} queryClient={queryClient}>
-          <SafeAreaView style={styles.safeArea}>
-            {activeTab === "home" ? (
-              <HomeScreen
-                projects={projects}
-                refetchProjects={refetchProjects}
-                selectedProjectId={selectedProjectId}
-                setSelectedProjectId={setSelectedProjectId}
-                selectedSessionId={selectedSessionId}
-                setSelectedSessionId={setSelectedSessionId}
-                setActiveTab={setActiveTab}
-              />
-            ) : (
-              <ChatScreen
-                projectId={selectedProjectId}
-                sessionId={selectedSessionId}
-                backendUrl={backendUrl}
-              />
-            )}
-          </SafeAreaView>
+          <MainContent
+            activeTab={activeTab}
+            selectedProjectId={selectedProjectId}
+            setSelectedProjectId={setSelectedProjectId}
+            selectedSessionId={selectedSessionId}
+            setSelectedSessionId={setSelectedSessionId}
+            setActiveTab={setActiveTab}
+            backendUrl={backendUrl}
+          />
         </ConsoleApiProvider>
       ) : (
         <SafeAreaView style={styles.safeArea}>
@@ -130,7 +162,9 @@ function AppRoot() {
             style={styles.modalContent}
           >
             <Text style={styles.modalTitle}>Backend Connection</Text>
-            <Text style={styles.modalSub}>Specify your Console agent server endpoint:</Text>
+            <Text style={styles.modalSub}>
+              Specify your Console agent server endpoint:
+            </Text>
             <TextInput
               style={styles.input}
               value={inputUrl}
@@ -149,7 +183,10 @@ function AppRoot() {
                   <Text style={styles.btnText}>Cancel</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity style={[styles.btn, styles.btnSave]} onPress={saveBackendUrl}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSave]}
+                onPress={saveBackendUrl}
+              >
                 <Text style={styles.btnText}>Connect</Text>
               </TouchableOpacity>
             </View>
@@ -163,7 +200,9 @@ function AppRoot() {
           style={[styles.tabButton, activeTab === "home" && styles.tabButtonActive]}
           onPress={() => setActiveTab("home")}
         >
-          <Text style={[styles.tabText, activeTab === "home" && styles.tabTextActive]}>Home</Text>
+          <Text style={[styles.tabText, activeTab === "home" && styles.tabTextActive]}>
+            Home
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === "chat" && styles.tabButtonActive]}
@@ -175,9 +214,14 @@ function AppRoot() {
             setActiveTab("chat");
           }}
         >
-          <Text style={[styles.tabText, activeTab === "chat" && styles.tabTextActive]}>Chat</Text>
+          <Text style={[styles.tabText, activeTab === "chat" && styles.tabTextActive]}>
+            Chat
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tabButton} onPress={() => setShowConfigModal(true)}>
+        <TouchableOpacity
+          style={styles.tabButton}
+          onPress={() => setShowConfigModal(true)}
+        >
           <Text style={styles.tabTextSettings}>Config</Text>
         </TouchableOpacity>
       </View>
