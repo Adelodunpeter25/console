@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useProjects } from "@console/api";
-import { globalState$ } from "../../state/global-state.js";
+import { isSidebarOpen$ } from "../../state/index.js";
 import { observer } from "@legendapp/state/react";
 import { FolderPlus, Terminal, X } from "lucide-react";
 import { DirectoryPickerModal } from "../common/directory-picker-modal.js";
@@ -9,7 +9,7 @@ import { ChatList } from "../chat/chat-list.js";
 
 export const ProjectSidebar = observer(() => {
   const { data: projects = [] } = useProjects();
-  const isOpen = globalState$.isSidebarOpen.get();
+  const isOpen = isSidebarOpen$.get();
   const [showDirPicker, setShowDirPicker] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
 
@@ -33,7 +33,7 @@ export const ProjectSidebar = observer(() => {
           <span className="font-semibold text-sm tracking-tight text-foreground">Console</span>
         </div>
         <button
-          onClick={() => globalState$.isSidebarOpen.set(false)}
+          onClick={() => isSidebarOpen$.set(false)}
           className="p-1 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
         >
           <X size={15} />

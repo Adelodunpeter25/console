@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useSession } from "@console/api";
-import { globalState$ } from "../state/global-state.js";
+import { activeSessionId$ } from "../../state/index.js";
 import { observer } from "@legendapp/state/react";
 import {
   useLocalRuntime,
@@ -68,7 +68,7 @@ function mapAgentMessageToAssistantMessage(msg: AgentMessage, idx: number) {
 }
 
 export const AssistantChat = observer(() => {
-  const activeSessionId = globalState$.activeSessionId.get();
+  const activeSessionId = activeSessionId$.get();
 
   const { data: sessionData, refetch: refetchSession } = useSession(activeSessionId || "");
   const [messages, setMessages] = useState<any[]>([]);

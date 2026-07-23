@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import { useSessions } from "@console/api";
-import { globalState$ } from "../../state/global-state.js";
+import { activeProjectId$, activeSessionId$ } from "../../state/index.js";
 import { observer } from "@legendapp/state/react";
 import { Search, MessageSquare } from "lucide-react";
 
 export const ChatList = observer(() => {
   const [searchQuery, setSearchQuery] = useState("");
-  const activeProjectId = globalState$.activeProjectId.get();
-  const activeSessionId = globalState$.activeSessionId.get();
+  const activeProjectId = activeProjectId$.get();
+  const activeSessionId = activeSessionId$.get();
 
   const { data: sessions = [] } = useSessions(
     activeProjectId ? { projectId: activeProjectId } : undefined,
@@ -40,7 +40,7 @@ export const ChatList = observer(() => {
           return (
             <div
               key={sess.id}
-              onClick={() => globalState$.activeSessionId.set(sess.id)}
+              onClick={() => activeSessionId$.set(sess.id)}
               className={`px-2 py-1 rounded text-xs flex items-center gap-2 cursor-pointer transition-colors ${
                 isActive
                   ? "bg-accent/80 text-foreground font-medium"

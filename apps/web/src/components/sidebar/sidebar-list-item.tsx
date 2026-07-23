@@ -1,6 +1,6 @@
 import React from "react";
 import { useSessions, useCreateSession, useDeleteSession } from "@console/api";
-import { globalState$ } from "../../state/global-state.js";
+import { activeProjectId$, activeSessionId$ } from "../../state/index.js";
 import { observer } from "@legendapp/state/react";
 import { Folder, Plus, MessageSquare, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import type { ProjectInfo } from "@console/types";
@@ -13,8 +13,8 @@ export interface SidebarListItemProps {
 
 export const SidebarListItem = observer(
   ({ project, isExpanded, onToggleExpand }: SidebarListItemProps) => {
-    const activeSessionId = globalState$.activeSessionId.get();
-    const activeProjectId = globalState$.activeProjectId.get();
+    const activeSessionId = activeSessionId$.get();
+    const activeProjectId = activeProjectId$.get();
     const createSessionMutation = useCreateSession();
     const deleteSessionMutation = useDeleteSession();
 
@@ -29,8 +29,8 @@ export const SidebarListItem = observer(
           projectId: project.id,
           title: "New Session",
         });
-        globalState$.activeProjectId.set(project.id);
-        globalState$.activeSessionId.set(created.id);
+        activeProjectId$.set(project.id);
+        activeSessionId$.set(created.id);
       } catch (err) {
         alert(err instanceof Error ? err.message : "Failed to create new session");
       }
@@ -42,7 +42,7 @@ export const SidebarListItem = observer(
       try {
         await deleteSessionMutation.mutateAsync(sessionId);
         if (activeSessionId === sessionId) {
-          globalState$.activeSessionId.set(null);
+          activeSessionId$.set(null);
         }
       } catch (err) {
         alert(err instanceof Error ? err.message : "Failed to delete session");
@@ -54,7 +54,7 @@ export const SidebarListItem = observer(
         {/* Project Item Row */}
         <div
           onClick={() => {
-            globalState$.activeProjectId.set(project.id);
+            activeProjectId$.set(project.id);
             onToggleExpand();
           }}
           className={`group px-2 py-1.5 rounded-md text-xs flex items-center justify-between cursor-pointer transition-colors ${
@@ -100,8 +100,8 @@ export const SidebarListItem = observer(
                   <div
                     key={sess.id}
                     onClick={() => {
-                      globalState$.activeProjectId.set(project.id);
-                      globalState$.activeSessionId.set(sess.id);
+                      activeProjectId$.set(project.id);
+                      activeSessionId$.set(sess.id);
                     }}
                     className={`group px-2 py-1 rounded text-[11px] flex items-center justify-between cursor-pointer transition-colors ${
                       isActiveSession
