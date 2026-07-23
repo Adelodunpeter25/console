@@ -13,10 +13,13 @@ export const ProjectSidebar = observer(() => {
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
 
   const toggleExpand = (projectId: string) => {
-    setExpandedProjects((prev) => ({
-      ...prev,
-      [projectId]: prev[projectId] === undefined ? false : !prev[projectId],
-    }));
+    setExpandedProjects((prev) => {
+      const currentVal = prev[projectId] ?? true;
+      return {
+        ...prev,
+        [projectId]: !currentVal,
+      };
+    });
   };
 
   const handleOpenNativeFinder = async () => {
@@ -77,7 +80,7 @@ export const ProjectSidebar = observer(() => {
             <SidebarListItem
               key={project.id}
               project={project}
-              isExpanded={expandedProjects[project.id] ?? false}
+              isExpanded={expandedProjects[project.id] ?? true}
               onToggleExpand={() => toggleExpand(project.id)}
             />
           ))
