@@ -2,16 +2,15 @@ import React from "react";
 import { useSessions, useCreateSession, useDeleteSession } from "@console/api";
 import { activeProjectId$, activeSessionId$ } from "../../state/index.js";
 import { observer } from "@legendapp/state/react";
-import { Folder, SquarePen, MessageSquare, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Folder, SquarePen, MessageSquare, Trash2 } from "lucide-react";
 import type { ProjectInfo } from "@console/types";
+import { formatRelativeTime } from "../../utils/index.js";
 
 export interface SidebarListItemProps {
   project: ProjectInfo;
   isExpanded: boolean;
   onToggleExpand: () => void;
 }
-
-import { formatRelativeTime } from "../../utils/index.js";
 
 export const SidebarListItem = observer(
   ({ project, isExpanded, onToggleExpand }: SidebarListItemProps) => {
@@ -53,7 +52,7 @@ export const SidebarListItem = observer(
 
     return (
       <div className="flex flex-col select-none">
-        {/* Project Item Row - Taller Card with padding & height */}
+        {/* Project Header Row - Clean layout without caret button, matching screenshot */}
         <div
           onClick={() => {
             activeProjectId$.set(project.id);
@@ -61,38 +60,29 @@ export const SidebarListItem = observer(
           }}
           className={`group px-2 py-1.5 rounded-md text-xs flex items-center justify-between cursor-pointer transition-colors ${
             isSelectedProject
-              ? "bg-accent/80 text-foreground font-medium border border-border/50"
-              : "text-muted-foreground hover:bg-accent/40 hover:text-foreground border border-transparent"
+              ? "bg-accent/80 text-foreground font-medium"
+              : "text-muted-foreground hover:bg-accent/40 hover:text-foreground"
           }`}
         >
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleExpand();
-              }}
-              className="p-0.5 rounded hover:bg-card/60 text-muted-foreground shrink-0"
-            >
-              {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </button>
-            <Folder size={15} className="text-primary/90 shrink-0" />
-            <span className="truncate text-xs tracking-tight font-medium">{project.name}</span>
+            <Folder size={15} className="text-muted-foreground group-hover:text-foreground shrink-0 transition-colors" />
+            <span className="truncate text-xs font-medium tracking-tight text-foreground/90">{project.name}</span>
           </div>
 
           <button
             onClick={handleCreateNewSession}
             title="New Chat Session"
-            className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-card hover:text-foreground text-muted-foreground rounded-md transition-all cursor-pointer"
+            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-card hover:text-foreground text-muted-foreground rounded transition-opacity cursor-pointer"
           >
-            <SquarePen size={14} />
+            <SquarePen size={13} />
           </button>
         </div>
 
         {/* Child Sessions List */}
         {isExpanded && (
-          <div className="ml-5 mt-1 pl-2.5 border-l border-border/40 flex flex-col gap-1">
+          <div className="ml-4 mt-0.5 pl-2 border-l border-border/30 flex flex-col gap-0.5">
             {sessions.length === 0 ? (
-              <div className="px-2 py-1.5 text-[11px] text-muted-foreground italic">
+              <div className="px-2 py-1 text-[11px] text-muted-foreground/60 italic">
                 No sessions yet
               </div>
             ) : (
@@ -106,10 +96,10 @@ export const SidebarListItem = observer(
                       activeProjectId$.set(project.id);
                       activeSessionId$.set(sess.id);
                     }}
-                    className={`group px-2.5 py-1.5 rounded-md text-[11px] flex items-center justify-between cursor-pointer transition-colors ${
+                    className={`group px-2 py-1 rounded text-[11px] flex items-center justify-between cursor-pointer transition-colors ${
                       isActiveSession
-                        ? "bg-primary/10 text-primary font-medium border border-primary/20"
-                        : "text-muted-foreground hover:bg-accent/30 hover:text-foreground border border-transparent"
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
                     }`}
                   >
                     <div className="flex items-center gap-2 truncate">
@@ -119,7 +109,7 @@ export const SidebarListItem = observer(
 
                     <div className="flex items-center gap-1.5 shrink-0">
                       {timeAgo && (
-                        <span className="text-[10px] text-muted-foreground/70 font-mono opacity-80 group-hover:opacity-100">
+                        <span className="text-[10px] text-muted-foreground/60 font-mono opacity-80 group-hover:opacity-100">
                           {timeAgo}
                         </span>
                       )}
