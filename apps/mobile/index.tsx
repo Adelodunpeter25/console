@@ -4,6 +4,13 @@ import { registerRootComponent } from "expo";
 import { StatusBar } from "expo-status-bar";
 import { View, Text, ActivityIndicator, TouchableOpacity } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import {
+  useFonts,
+  JetBrainsMono_400Regular,
+  JetBrainsMono_500Medium,
+  JetBrainsMono_600SemiBold,
+  JetBrainsMono_700Bold,
+} from "@expo-google-fonts/jetbrains-mono";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ConsoleApiProvider, configureConsoleApi } from "@console/api";
 import { QueryClient } from "@tanstack/react-query";
@@ -16,6 +23,13 @@ const BACKEND_URL_KEY = "@console_backend_url";
 function AppRoot() {
   const [backendUrl, setBackendUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const [fontsLoaded] = useFonts({
+    JetBrainsMono: JetBrainsMono_400Regular,
+    "JetBrainsMono-Medium": JetBrainsMono_500Medium,
+    "JetBrainsMono-SemiBold": JetBrainsMono_600SemiBold,
+    "JetBrainsMono-Bold": JetBrainsMono_700Bold,
+  });
 
   // Tab State: 'home' | 'chat' | 'settings'
   const [activeTab, setActiveTab] = useState<"home" | "chat" | "settings">("home");
@@ -42,17 +56,17 @@ function AppRoot() {
     }
   };
 
-  if (loading) {
+  if (loading || !fontsLoaded) {
     return (
-      <View className="flex-1 bg-[#0d0d0e] items-center justify-center">
-        <ActivityIndicator size="large" color="#38bdf8" />
+      <View className="flex-1 bg-[#0a0a0b] items-center justify-center">
+        <ActivityIndicator size="large" color="#ffffff" />
       </View>
     );
   }
 
   return (
     <SafeAreaProvider>
-      <View className="flex-1 bg-[#0d0d0e]">
+      <View className="flex-1 bg-[#0a0a0b]">
         <StatusBar style="light" />
 
         {backendUrl ? (
@@ -69,16 +83,16 @@ function AppRoot() {
             />
           </ConsoleApiProvider>
         ) : (
-          <SafeAreaView className="flex-1 bg-[#0d0d0e] justify-center items-center p-6">
-            <Text className="text-[#f1f3f7] text-base font-bold mb-2">Welcome to Console Mobile</Text>
-            <Text className="text-[#9095a0] text-xs text-center mb-6 max-w-xs leading-5">
+          <SafeAreaView className="flex-1 bg-[#0a0a0b] justify-center items-center p-6">
+            <Text className="text-white text-lg font-bold mb-2">Welcome to Console Mobile</Text>
+            <Text className="text-zinc-400 text-sm text-center mb-6 max-w-xs leading-6">
               Please specify your server endpoint in Settings to get started.
             </Text>
             <TouchableOpacity
-              className="bg-sky-500 py-3 px-6 rounded-full"
+              className="bg-white py-3 px-6 rounded-full"
               onPress={() => setActiveTab("settings")}
             >
-              <Text className="text-xs font-bold text-white">Configure Server URL</Text>
+              <Text className="text-sm font-bold text-black">Configure Server URL</Text>
             </TouchableOpacity>
           </SafeAreaView>
         )}

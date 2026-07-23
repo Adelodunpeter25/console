@@ -9,4 +9,6 @@
   --color-foreground: #ffffff;
   --color-foreground-secondary: #a1a1aa;
   --color-primary: #ffffff;
+  --font-mono: 'JetBrainsMono';
+  --font-sans: 'JetBrainsMono';
 }
