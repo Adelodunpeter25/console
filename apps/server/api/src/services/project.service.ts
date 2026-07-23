@@ -38,34 +38,6 @@ export class ProjectService {
       console.error("Failed to load projects from DB:", e);
     }
 
-    // Auto-discover sibling workspace directories
-    try {
-      const entries = await fs.readdir(rootDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.isDirectory() && !entry.name.startsWith(".")) {
-          const fullPath = path.join(rootDir, entry.name);
-          if (!projectsMap.has(fullPath)) {
-            const registered = this.storage.createProject({
-              name: entry.name,
-              dir: fullPath,
-            });
-            projectsMap.set(fullPath, registered);
-          }
-        }
-      }
-    } catch {
-      // Ignored if readdir fails
-    }
-
-    // Always ensure current working directory is included
-    if (!projectsMap.has(rootDir)) {
-      const registered = this.storage.createProject({
-        name: path.basename(rootDir),
-        dir: rootDir,
-      });
-      projectsMap.set(rootDir, registered);
-    }
-
     return Array.from(projectsMap.values());
   }
 

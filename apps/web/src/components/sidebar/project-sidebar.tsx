@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { useProjects } from "@console/api";
-import { isSidebarOpen$ } from "../../state/index.js";
+import { useProjects, useAddProject } from "@console/api";
+import { isSidebarOpen$, activeProjectId$ } from "../../state/index.js";
 import { observer } from "@legendapp/state/react";
 import { FolderPlus, Terminal, X } from "lucide-react";
 import { DirectoryPickerModal } from "../common/directory-picker-modal.js";
@@ -9,6 +9,7 @@ import { ChatList } from "../chat/chat-list.js";
 
 export const ProjectSidebar = observer(() => {
   const { data: projects = [] } = useProjects();
+  const addProjectMutation = useAddProject();
   const isOpen = isSidebarOpen$.get();
   const [showDirPicker, setShowDirPicker] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
@@ -18,6 +19,15 @@ export const ProjectSidebar = observer(() => {
       ...prev,
       [projectId]: !prev[projectId],
     }));
+  };
+
+  const handleSelectDirectory = async (path: string) => {
+    try {
+      const added = await addProjectMutation.mutateAsync(path);
+      activeProjectId$.set(added.id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to add project");
+    }
   };
 
   if (!isOpen) return null;
@@ -78,9 +88,7 @@ export const ProjectSidebar = observer(() => {
       <DirectoryPickerModal
         isOpen={showDirPicker}
         onClose={() => setShowDirPicker(false)}
-        onSelect={(path) => {
-          // Handled via DirectoryPickerModal selection callback
-        }}
+        onSelect={handleSelectDirectory}
       />
     </aside>
   );
