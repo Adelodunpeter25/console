@@ -59,9 +59,9 @@ export const SidebarListItem = observer(
             activeProjectId$.set(project.id);
             onToggleExpand();
           }}
-          className={`group px-3 py-2.5 my-0.5 rounded-lg text-xs flex items-center justify-between cursor-pointer transition-all duration-150 ${
+          className={`group px-2 py-1.5 rounded-md text-xs flex items-center justify-between cursor-pointer transition-colors ${
             isSelectedProject
-              ? "bg-accent/90 text-foreground font-medium border border-border/70 shadow-xs"
+              ? "bg-accent/80 text-foreground font-medium border border-border/50"
               : "text-muted-foreground hover:bg-accent/40 hover:text-foreground border border-transparent"
           }`}
         >

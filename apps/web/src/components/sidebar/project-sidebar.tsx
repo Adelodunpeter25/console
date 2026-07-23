@@ -4,7 +4,6 @@ import { isSidebarOpen$, activeProjectId$ } from "../../state/index.js";
 import { observer } from "@legendapp/state/react";
 import { FolderPlus, Terminal, X } from "lucide-react";
 import { SidebarListItem } from "./sidebar-list-item.js";
-import { ChatList } from "../chat/chat-list.js";
 
 export const ProjectSidebar = observer(() => {
   const { data: projects = [] } = useProjects();
@@ -83,9 +82,6 @@ export const ProjectSidebar = observer(() => {
           ))
         )}
       </div>
-
-      {/* Searchable Chat List */}
-      <ChatList />
     </aside>
   );
 });
