@@ -2,7 +2,8 @@ import React from "react";
 import { useSessions, useCreateSession, useDeleteSession } from "@console/api";
 import { activeProjectId$, activeSessionId$ } from "../../state/index.js";
 import { observer } from "@legendapp/state/react";
-import { Folder, SquarePen, Trash2 } from "lucide-react";
+import { SquarePen, Trash2 } from "lucide-react";
+import { Folder02Icon } from "hugeicons-react";
 import type { ProjectInfo } from "@console/types";
 import { formatRelativeTime } from "../../utils/index.js";
 
@@ -65,9 +66,9 @@ export const SidebarListItem = observer(
           }`}
         >
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <Folder
+            <Folder02Icon
               size={15}
-              className="text-muted-foreground/80 group-hover:text-foreground shrink-0 transition-colors"
+              className="text-muted-foreground/85 group-hover:text-foreground shrink-0 transition-colors"
             />
             <span className="truncate text-xs font-medium tracking-tight text-foreground/90">
               {project.name}
