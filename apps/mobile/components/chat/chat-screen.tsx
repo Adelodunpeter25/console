@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { LegendList } from "@legendapp/list";
 import { styles } from "../../styles/styles";
+import { AgentMessage } from "@console/types";
 
 interface ChatScreenProps {
   projectId: string | null;
@@ -18,7 +19,7 @@ interface ChatScreenProps {
 }
 
 export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps) {
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [inputVal, setInputVal] = useState("");
   const [running, setRunning] = useState(false);
   const [activeSession, setActiveSession] = useState<string | null>(sessionId);
@@ -121,35 +122,37 @@ export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps
     >
       <Text style={styles.headerTitle}>Console Chat</Text>
 
-      <LegendList
-        data={messages}
-        keyExtractor={(_, index) => index.toString()}
-        estimatedItemSize={70}
-        contentContainerStyle={styles.messageContentList}
-        renderItem={({ item }) => {
-          const isUser = item.role === "user";
-          let text = "";
-          if (typeof item.content === "string") {
-            text = item.content;
-          } else if (Array.isArray(item.content)) {
-            text = item.content
-              .map((c: any) => c.text || "")
-              .join("\n");
-          }
+      {messages.length === 0 ? (
+        <View style={styles.emptyList}>
+          <Text style={styles.emptyListText}>No messages. Type a prompt below to start.</Text>
+        </View>
+      ) : (
+        <LegendList
+          data={messages}
+          keyExtractor={(_, index) => index.toString()}
+          estimatedItemLength={() => 70}
+          contentContainerStyle={styles.messageContentList}
+          renderItem={({ item }) => {
+            const msg = item as AgentMessage;
+            const isUser = msg.role === "user";
+            let text = "";
+            if (msg.role === "user") {
+              text = msg.content;
+            } else if (msg.role === "assistant") {
+              text = msg.content
+                .map((c) => (c.type === "text" || c.type === "thinking" ? c.text : ""))
+                .join("\n");
+            }
 
-          return (
-            <View style={[styles.bubbleContainer, isUser ? styles.bubbleUser : styles.bubbleAgent]}>
-              <Text style={styles.bubbleRole}>{isUser ? "You" : "Agent"}</Text>
-              <Text style={styles.bubbleText}>{text}</Text>
-            </View>
-          );
-        }}
-        ListEmptyComponent={
-          <View style={styles.emptyList}>
-            <Text style={styles.emptyListText}>No messages. Type a prompt below to start.</Text>
-          </View>
-        }
-      />
+            return (
+              <View style={[styles.bubbleContainer, isUser ? styles.bubbleUser : styles.bubbleAgent]}>
+                <Text style={styles.bubbleRole}>{isUser ? "You" : "Agent"}</Text>
+                <Text style={styles.bubbleText}>{text}</Text>
+              </View>
+            );
+          }}
+        />
+      )}
 
       <View style={styles.chatComposer}>
         <TextInput

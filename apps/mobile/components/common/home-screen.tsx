@@ -11,9 +11,10 @@ import { LegendList } from "@legendapp/list";
 import { Folder02Icon } from "hugeicons-react";
 import { styles } from "../../styles/styles";
 import { SessionSubList } from "./session-sub-list";
+import { ProjectInfo } from "@console/types";
 
 interface HomeScreenProps {
-  projects: any[];
+  projects: ProjectInfo[];
   refetchProjects: () => void;
   selectedProjectId: string | null;
   setSelectedProjectId: (id: string | null) => void;
@@ -65,45 +66,47 @@ export function HomeScreen({
         </TouchableOpacity>
       </View>
 
-      <LegendList
-        data={projects}
-        keyExtractor={(item) => item.id}
-        estimatedItemSize={60}
-        renderItem={({ item }) => {
-          const isSelected = selectedProjectId === item.id;
-          return (
-            <View style={styles.projectCard}>
-              <TouchableOpacity
-                style={[styles.projectHeader, isSelected && styles.projectHeaderActive]}
-                onPress={() => {
-                  setSelectedProjectId(isSelected ? null : item.id);
-                  setSelectedSessionId(null);
-                }}
-              >
-                <Folder02Icon size={16} color={isSelected ? "#38bdf8" : "#9095a0"} />
-                <Text style={[styles.projectTitle, isSelected && styles.projectTitleActive]}>
-                  {item.name}
-                </Text>
-              </TouchableOpacity>
+      {projects.length === 0 ? (
+        <View style={styles.emptyList}>
+          <Text style={styles.emptyListText}>No projects configured.</Text>
+        </View>
+      ) : (
+        <LegendList
+          data={projects}
+          keyExtractor={(item) => (item as ProjectInfo).id}
+          estimatedItemLength={() => 60}
+          renderItem={({ item }) => {
+            const project = item as ProjectInfo;
+            const isSelected = selectedProjectId === project.id;
+            return (
+              <View style={styles.projectCard}>
+                <TouchableOpacity
+                  style={[styles.projectHeader, isSelected && styles.projectHeaderActive]}
+                  onPress={() => {
+                    setSelectedProjectId(isSelected ? null : project.id);
+                    setSelectedSessionId(null);
+                  }}
+                >
+                  <Folder02Icon size={16} color={isSelected ? "#38bdf8" : "#9095a0"} />
+                  <Text style={[styles.projectTitle, isSelected && styles.projectTitleActive]}>
+                    {project.name}
+                  </Text>
+                </TouchableOpacity>
 
-              {isSelected && (
-                <SessionSubList
-                  projectId={item.id}
-                  projectPath={item.path}
-                  selectedSessionId={selectedSessionId}
-                  setSelectedSessionId={setSelectedSessionId}
-                  setActiveTab={setActiveTab}
-                />
-              )}
-            </View>
-          );
-        }}
-        ListEmptyComponent={
-          <View style={styles.emptyList}>
-            <Text style={styles.emptyListText}>No projects configured.</Text>
-          </View>
-        }
-      />
+                {isSelected && (
+                  <SessionSubList
+                    projectId={project.id}
+                    projectPath={project.path}
+                    selectedSessionId={selectedSessionId}
+                    setSelectedSessionId={setSelectedSessionId}
+                    setActiveTab={setActiveTab}
+                  />
+                )}
+              </View>
+            );
+          }}
+        />
+      )}
     </View>
   );
 }

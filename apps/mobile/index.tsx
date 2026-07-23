@@ -1,3 +1,5 @@
+// Require polyfill synchronously before ES module imports (prevent Babel hoisting of @console/api/axios)
+require("./polyfill");
 import React, { useState, useEffect } from "react";
 import { registerRootComponent } from "expo";
 import { StatusBar } from "expo-status-bar";
