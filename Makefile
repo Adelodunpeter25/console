@@ -11,6 +11,10 @@ dev-server:
 dev-web:
 	npm run dev:web
 
+## dev-mobile: Start the Expo React Native app dev server
+dev-mobile:
+	npm run dev:mobile
+
 ## typecheck: Run TypeScript check across all monorepo workspaces
 typecheck:
 	npm run typecheck

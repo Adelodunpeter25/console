@@ -11,6 +11,7 @@
     "dev:server": "npm run dev --workspace=@console/server",
     "start:server": "npm run start --workspace=@console/server",
     "dev:web": "npm run dev --workspace=@console/web",
+    "dev:mobile": "npm run start --workspace=@console/mobile",
     "cli": "npm run cli --workspace=@console/cli",
     "check": "vp check",
     "typecheck": "tsc --noEmit"
