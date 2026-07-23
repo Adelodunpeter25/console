@@ -175,7 +175,7 @@ export function SettingsScreen({
 
         <View className="flex-row justify-between py-2">
           <Text className="text-xs text-[#9095a0]">Styling Engine</Text>
-          <Text className="text-xs font-mono text-[#38bdf8]">NativeWind v4</Text>
+          <Text className="text-xs font-mono text-[#38bdf8]">Uniwind v1</Text>
         </View>
       </GlassSurface>
 
