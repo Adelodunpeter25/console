@@ -40,23 +40,23 @@ export function HomeScreen({
   }
 
   return (
-    <View className="flex-1 px-4 pt-3">
+    <View className="flex-1 px-4 pt-4">
       {/* Workspace Header */}
-      <View className="flex-row justify-between items-center mb-4">
+      <View className="flex-row justify-between items-center mb-5">
         <View>
-          <Text className="text-xl font-bold text-[#f1f3f7] tracking-tight">
+          <Text className="text-2xl font-bold text-white tracking-tight">
             Console Workspace
           </Text>
-          <Text className="text-xs text-[#9095a0] mt-0.5">
+          <Text className="text-sm text-zinc-400 mt-1">
             Manage your repositories & AI agent sessions
           </Text>
         </View>
 
         <TouchableOpacity
-          className="bg-sky-500/20 border border-sky-500/30 px-4 py-2 rounded-full active:opacity-80"
+          className="bg-transparent border border-white/20 px-4 py-2 rounded-full active:bg-white/10"
           onPress={() => setIsAddingProject(true)}
         >
-          <Text className="text-xs font-bold text-[#38bdf8]">
+          <Text className="text-sm font-semibold text-white">
             + Add Project
           </Text>
         </TouchableOpacity>
@@ -64,17 +64,17 @@ export function HomeScreen({
 
       {/* Project Tree List */}
       {projects.length === 0 ? (
-        <GlassSurface className="items-center justify-center py-12 m-2 p-6">
-          <Folder size={36} color="#38bdf8" />
-          <Text className="text-[#f1f3f7] text-sm font-semibold mt-3">No Projects Added</Text>
-          <Text className="text-[#9095a0] text-xs text-center mt-1.5 max-w-xs leading-5">
+        <GlassSurface className="items-center justify-center py-14 m-2 p-6">
+          <Folder size={40} color="#ffffff" />
+          <Text className="text-white text-base font-semibold mt-4">No Projects Added</Text>
+          <Text className="text-zinc-400 text-sm text-center mt-2 max-w-xs leading-6">
             Tap "+ Add Project" to browse your host's filesystem directly and select a folder.
           </Text>
           <TouchableOpacity
-            className="mt-4 bg-sky-500 py-2.5 px-5 rounded-full"
+            className="mt-6 bg-white py-3 px-6 rounded-full"
             onPress={() => setIsAddingProject(true)}
           >
-            <Text className="text-xs font-bold text-white">Browse Filesystem</Text>
+            <Text className="text-sm font-bold text-black">Browse Filesystem</Text>
           </TouchableOpacity>
         </GlassSurface>
       ) : (
@@ -85,27 +85,27 @@ export function HomeScreen({
             const project = item as ProjectInfo;
             const isSelected = selectedProjectId === project.id;
             return (
-              <GlassSurface className="mb-3 p-0 overflow-hidden rounded-2xl">
+              <GlassSurface className="mb-3.5 p-0 overflow-hidden rounded-2xl">
                 <TouchableOpacity
                   className={`flex-row items-center justify-between p-4 ${
-                    isSelected ? "bg-white/5 border-b border-white/10" : ""
+                    isSelected ? "bg-white/10 border-b border-white/10" : ""
                   }`}
                   onPress={() => {
                     setSelectedProjectId(isSelected ? null : project.id);
                     setSelectedSessionId(null);
                   }}
                 >
-                  <View className="flex-row items-center gap-3 flex-1 pr-2">
-                    <Folder size={20} color={isSelected ? "#38bdf8" : "#9095a0"} />
+                  <View className="flex-row items-center gap-3.5 flex-1 pr-2">
+                    <Folder size={22} color="#ffffff" />
                     <View className="flex-1">
                       <Text
-                        className={`text-sm font-semibold ${
-                          isSelected ? "text-[#f1f3f7]" : "text-[#9095a0]"
+                        className={`text-base font-semibold ${
+                          isSelected ? "text-white" : "text-zinc-300"
                         }`}
                       >
                         {project.name}
                       </Text>
-                      <Text className="text-[11px] text-[#9095a0]/70 font-mono" numberOfLines={1}>
+                      <Text className="text-xs text-zinc-400 font-mono mt-0.5" numberOfLines={1}>
                         {project.path}
                       </Text>
                     </View>

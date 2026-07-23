@@ -117,15 +117,15 @@ export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-      className="flex-1 pt-3"
+      className="flex-1 pt-4"
     >
-      <Text className="text-xl font-bold text-[#f1f3f7] mb-4 tracking-tight px-4">
+      <Text className="text-2xl font-bold text-white mb-4 tracking-tight px-4">
         Console Chat
       </Text>
 
       {messages.length === 0 ? (
-        <View className="items-center justify-center py-10">
-          <Text className="text-[#9095a0] text-xs italic">
+        <View className="items-center justify-center py-14">
+          <Text className="text-zinc-400 text-sm italic">
             No messages. Type a prompt below to start.
           </Text>
         </View>
@@ -148,42 +148,42 @@ export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps
 
             return (
               <View
-                className={`p-3 rounded-lg mb-3 ${
+                className={`p-4 rounded-xl mb-3.5 ${
                   isUser
-                    ? "bg-white/5 border border-white/10 self-end max-w-[85%]"
-                    : "bg-[#121316] border border-white/5 self-start w-full max-w-[90%]"
+                    ? "bg-white/10 border border-white/20 self-end max-w-[85%]"
+                    : "bg-[#121316] border border-white/10 self-start w-full max-w-[92%]"
                 }`}
               >
-                <Text className="text-[10px] font-bold text-[#9095a0] uppercase mb-1">
+                <Text className="text-xs font-bold text-zinc-400 uppercase mb-1.5">
                   {isUser ? "You" : "Agent"}
                 </Text>
-                <Text className="text-[#f1f3f7] text-xs leading-5">{text}</Text>
+                <Text className="text-white text-sm leading-6">{text}</Text>
               </View>
             );
           }}
         />
       )}
 
-      <View className="flex-row gap-2 p-3 bg-[#0d0d0e] border-t border-white/10 items-center">
+      <View className="flex-row gap-2.5 p-3.5 bg-[#0d0d0e] border-t border-white/10 items-center">
         <TextInput
-          className="flex-1 min-h-10 max-h-25 bg-[#16171a] border border-white/10 rounded-lg px-3 py-2 text-[#f1f3f7] text-xs"
+          className="flex-1 min-h-11 max-h-28 bg-[#16171a] border border-white/20 rounded-xl px-4 py-2.5 text-white text-sm"
           value={inputVal}
           onChangeText={setInputVal}
           placeholder="Ask agent to write code..."
-          placeholderTextColor="#9095a0"
+          placeholderTextColor="#71717a"
           multiline
         />
         <TouchableOpacity
-          className={`h-10 bg-[#f1f3f7] rounded-lg px-4 items-center justify-center ${
+          className={`h-11 bg-white rounded-xl px-5 items-center justify-center ${
             !inputVal.trim() || running ? "opacity-30" : ""
           }`}
           onPress={handleSend}
           disabled={!inputVal.trim() || running}
         >
           {running ? (
-            <ActivityIndicator size="small" color="#09090b" />
+            <ActivityIndicator size="small" color="#000000" />
           ) : (
-            <Text className="text-[#09090b] text-xs font-semibold">Send</Text>
+            <Text className="text-black text-sm font-bold">Send</Text>
           )}
         </TouchableOpacity>
       </View>

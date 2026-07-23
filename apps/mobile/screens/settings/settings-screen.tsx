@@ -83,51 +83,51 @@ export function SettingsScreen({
   };
 
   return (
-    <ScrollView className="flex-1 bg-[#0d0d0e] px-4 pt-3">
+    <ScrollView className="flex-1 bg-[#0d0d0e] px-4 pt-4">
       {/* Header */}
-      <View className="mb-4">
-        <Text className="text-xl font-bold text-[#f1f3f7] tracking-tight">
+      <View className="mb-5">
+        <Text className="text-2xl font-bold text-white tracking-tight">
           Console Settings
         </Text>
-        <Text className="text-xs text-[#9095a0] mt-0.5">
+        <Text className="text-sm text-zinc-400 mt-1">
           Configure server connections & app environment
         </Text>
       </View>
 
       {/* Connection Endpoint Card */}
-      <GlassSurface className="mb-4 p-4">
+      <GlassSurface className="mb-4 p-5">
         <View className="flex-row items-center justify-between mb-3">
-          <Text className="text-sm font-semibold text-[#f1f3f7]">
+          <Text className="text-base font-semibold text-white">
             Backend Server Endpoint
           </Text>
-          <View className="flex-row items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-            <View className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <Text className="text-[10px] font-bold text-emerald-400">
+          <View className="flex-row items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20">
+            <View className="w-2 h-2 rounded-full bg-white" />
+            <Text className="text-xs font-bold text-white">
               {backendUrl ? "Connected" : "Disconnected"}
             </Text>
           </View>
         </View>
 
-        <Text className="text-xs text-[#9095a0] mb-3">
+        <Text className="text-sm text-zinc-400 mb-4">
           HTTP URL of your running Console backend server instance:
         </Text>
 
         <TextInput
-          className="h-11 bg-[#16171a] border border-white/10 rounded-xl px-3 text-[#f1f3f7] text-xs font-mono mb-3"
+          className="h-12 bg-[#16171a] border border-white/20 rounded-xl px-4 text-white text-sm font-mono mb-4"
           value={inputUrl}
           onChangeText={setInputUrl}
           placeholder="http://192.168.1.X:3000"
-          placeholderTextColor="#9095a0"
+          placeholderTextColor="#71717a"
           autoCapitalize="none"
           autoCorrect={false}
         />
 
-        <View className="flex-row gap-2 justify-end">
+        <View className="flex-row gap-3 justify-end">
           <TouchableOpacity
-            className="px-4 py-2.5 rounded-full bg-white/10 border border-white/10 items-center justify-center"
+            className="px-4 py-2.5 rounded-full bg-transparent border border-white/20 items-center justify-center"
             onPress={handleTestConnection}
           >
-            <Text className="text-xs font-semibold text-[#f1f3f7]">
+            <Text className="text-sm font-semibold text-white">
               {testingStatus === "testing"
                 ? "Testing..."
                 : testingStatus === "success"
@@ -139,60 +139,60 @@ export function SettingsScreen({
           </TouchableOpacity>
 
           <TouchableOpacity
-            className="px-5 py-2.5 rounded-full bg-sky-500 items-center justify-center flex-row gap-2"
+            className="px-5 py-2.5 rounded-full bg-white items-center justify-center flex-row gap-2"
             onPress={handleSaveConnection}
             disabled={isSaving}
           >
             {isSaving ? (
-              <ActivityIndicator size="small" color="#ffffff" />
+              <ActivityIndicator size="small" color="#000000" />
             ) : (
-              <Text className="text-xs font-bold text-white">Save Changes</Text>
+              <Text className="text-sm font-bold text-black">Save Changes</Text>
             )}
           </TouchableOpacity>
         </View>
       </GlassSurface>
 
       {/* App Environment Info Card */}
-      <GlassSurface className="mb-4 p-4">
-        <Text className="text-sm font-semibold text-[#f1f3f7] mb-3">
+      <GlassSurface className="mb-4 p-5">
+        <Text className="text-base font-semibold text-white mb-3">
           App Info & Diagnostics
         </Text>
 
-        <View className="flex-row justify-between py-2 border-b border-white/5">
-          <Text className="text-xs text-[#9095a0]">Console Mobile Version</Text>
-          <Text className="text-xs font-mono text-[#f1f3f7]">1.0.0 (Build 2026)</Text>
+        <View className="flex-row justify-between py-2.5 border-b border-white/10">
+          <Text className="text-sm text-zinc-400">Console Mobile Version</Text>
+          <Text className="text-sm font-mono text-white">1.0.0 (Build 2026)</Text>
         </View>
 
-        <View className="flex-row justify-between py-2 border-b border-white/5">
-          <Text className="text-xs text-[#9095a0]">Expo Framework</Text>
-          <Text className="text-xs font-mono text-[#f1f3f7]">SDK 54</Text>
+        <View className="flex-row justify-between py-2.5 border-b border-white/10">
+          <Text className="text-sm text-zinc-400">Expo Framework</Text>
+          <Text className="text-sm font-mono text-white">SDK 54</Text>
         </View>
 
-        <View className="flex-row justify-between py-2 border-b border-white/5">
-          <Text className="text-xs text-[#9095a0]">React Native Engine</Text>
-          <Text className="text-xs font-mono text-[#f1f3f7]">0.81.5 (Hermes)</Text>
+        <View className="flex-row justify-between py-2.5 border-b border-white/10">
+          <Text className="text-sm text-zinc-400">React Native Engine</Text>
+          <Text className="text-sm font-mono text-white">0.81.5 (Hermes)</Text>
         </View>
 
-        <View className="flex-row justify-between py-2">
-          <Text className="text-xs text-[#9095a0]">Styling Engine</Text>
-          <Text className="text-xs font-mono text-[#38bdf8]">NativeWind v4</Text>
+        <View className="flex-row justify-between py-2.5">
+          <Text className="text-sm text-zinc-400">Styling Engine</Text>
+          <Text className="text-sm font-mono text-white">NativeWind v4</Text>
         </View>
       </GlassSurface>
 
       {/* Danger Zone Card */}
-      <GlassSurface className="mb-8 p-4 border-red-500/20 bg-red-500/5">
-        <Text className="text-sm font-semibold text-red-400 mb-1">
+      <GlassSurface className="mb-8 p-5 border-red-500/30 bg-red-500/5">
+        <Text className="text-base font-semibold text-red-400 mb-1">
           Server Connection Reset
         </Text>
-        <Text className="text-xs text-[#9095a0] mb-4">
+        <Text className="text-sm text-zinc-400 mb-4">
           Clear the saved backend URL and reset connection preferences.
         </Text>
 
         <TouchableOpacity
-          className="py-2.5 px-4 rounded-full bg-red-500/20 border border-red-500/30 items-center justify-center self-start"
+          className="py-2.5 px-5 rounded-full bg-transparent border border-red-500/40 items-center justify-center self-start"
           onPress={handleDisconnect}
         >
-          <Text className="text-xs font-bold text-red-400">
+          <Text className="text-sm font-bold text-red-400">
             Disconnect Backend Endpoint
           </Text>
         </TouchableOpacity>
