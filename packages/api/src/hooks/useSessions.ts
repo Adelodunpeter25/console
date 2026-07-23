@@ -4,14 +4,14 @@ import type { CreateSessionDto, UpdateSessionDto } from "@console/types";
 
 export const sessionKeys = {
   all: ["sessions"] as const,
-  lists: () => [...sessionKeys.all, "list"] as const,
+  lists: (params?: { cwd?: string; projectId?: string }) => [...sessionKeys.all, "list", params] as const,
   detail: (id: string) => [...sessionKeys.all, "detail", id] as const,
 };
 
-export function useSessions() {
+export function useSessions(params?: { cwd?: string; projectId?: string }) {
   return useQuery({
-    queryKey: sessionKeys.lists(),
-    queryFn: () => sessionService.getSessions(),
+    queryKey: sessionKeys.lists(params),
+    queryFn: () => sessionService.getSessions(params),
   });
 }
 

@@ -359,6 +359,17 @@ export class SqliteSessionStorage {
           LIMIT ?
         `);
         rows = stmt.all(cwdVal, limit);
+      } else if (projId) {
+        const stmt = db.prepare(`
+          SELECT s.*, COUNT(m.id) as msg_count
+          FROM sessions s
+          LEFT JOIN messages m ON s.id = m.session_id
+          WHERE s.project_id = ?
+          GROUP BY s.id
+          ORDER BY s.updated_at DESC
+          LIMIT ?
+        `);
+        rows = stmt.all(projId, limit);
       } else {
         const stmt = db.prepare(`
           SELECT s.*, COUNT(m.id) as msg_count
