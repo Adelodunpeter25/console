@@ -1,18 +1,24 @@
 import React, { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useProjects, useAddProject, useSessions, useCreateSession, useDeleteSession } from "@console/api";
+import {
+  useProjects,
+  useAddProject,
+  useSessions,
+  useCreateSession,
+  useDeleteSession,
+} from "@console/api";
 import { globalState$ } from "../state/global-state.js";
 import { observer } from "@legendapp/state/react";
-import { 
-  FolderPlus, 
-  MessageSquarePlus, 
-  Trash2, 
-  ChevronRight, 
-  Folder, 
+import {
+  FolderPlus,
+  MessageSquarePlus,
+  Trash2,
+  ChevronRight,
+  Folder,
   Terminal,
   Layers,
   Menu,
-  X
+  X,
 } from "lucide-react";
 
 export const ProjectSidebar = observer(() => {
@@ -32,7 +38,7 @@ export const ProjectSidebar = observer(() => {
 
   // Fetch sessions for active project
   const { data: sessions = [] } = useSessions(
-    activeProjectId ? { projectId: activeProjectId } : undefined
+    activeProjectId ? { projectId: activeProjectId } : undefined,
   );
 
   const handleAddProject = async (e: React.FormEvent) => {
@@ -52,11 +58,11 @@ export const ProjectSidebar = observer(() => {
     e.preventDefault();
     if (!activeProjectId) return;
     try {
-      const activeProject = projects.find(p => p.id === activeProjectId);
+      const activeProject = projects.find((p) => p.id === activeProjectId);
       const created = await createSessionMutation.mutateAsync({
         cwd: activeProject?.path || "",
         projectId: activeProjectId,
-        title: newSessionTitle.trim() || "New Chat Session"
+        title: newSessionTitle.trim() || "New Chat Session",
       });
       globalState$.activeSessionId.set(created.id);
       setNewSessionTitle("");
@@ -81,7 +87,7 @@ export const ProjectSidebar = observer(() => {
 
   if (!isOpen) {
     return (
-      <button 
+      <button
         onClick={() => globalState$.isSidebarOpen.set(true)}
         className="fixed top-4 left-4 z-40 p-2 rounded-lg bg-card border border-border text-foreground hover:bg-accent cursor-pointer transition-colors"
       >
@@ -90,7 +96,7 @@ export const ProjectSidebar = observer(() => {
     );
   }
 
-  const activeProject = projects.find(p => p.id === activeProjectId);
+  const activeProject = projects.find((p) => p.id === activeProjectId);
 
   return (
     <aside className="w-80 h-screen border-r border-border bg-card flex flex-col z-30 shrink-0 text-foreground transition-all duration-300">
@@ -100,7 +106,7 @@ export const ProjectSidebar = observer(() => {
           <Terminal className="text-primary w-5 h-5" />
           <span className="font-semibold text-lg tracking-wide text-primary">Console Agent</span>
         </div>
-        <button 
+        <button
           onClick={() => globalState$.isSidebarOpen.set(false)}
           className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
         >
@@ -112,7 +118,7 @@ export const ProjectSidebar = observer(() => {
       <div className="p-4 border-b border-border flex flex-col gap-2">
         <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           <span>Active Project</span>
-          <button 
+          <button
             onClick={() => setShowAddProjectModal(true)}
             className="p-1 rounded hover:bg-accent hover:text-foreground cursor-pointer transition-colors"
             title="Register Project Directory"
@@ -123,7 +129,7 @@ export const ProjectSidebar = observer(() => {
 
         {showAddProjectModal ? (
           <form onSubmit={handleAddProject} className="flex flex-col gap-2 mt-2">
-            <input 
+            <input
               type="text"
               placeholder="Absolute folder path..."
               value={newProjectPath}
@@ -132,14 +138,14 @@ export const ProjectSidebar = observer(() => {
               required
             />
             <div className="flex gap-2 justify-end">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setShowAddProjectModal(false)}
                 className="px-2.5 py-1 text-xs rounded hover:bg-accent cursor-pointer"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 type="submit"
                 className="px-2.5 py-1 text-xs rounded bg-primary text-primary-foreground font-semibold hover:opacity-90 cursor-pointer"
               >
@@ -148,7 +154,7 @@ export const ProjectSidebar = observer(() => {
             </div>
           </form>
         ) : (
-          <select 
+          <select
             value={activeProjectId || ""}
             onChange={(e) => {
               const val = e.target.value;
@@ -173,7 +179,7 @@ export const ProjectSidebar = observer(() => {
           <>
             <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               <span>Chat Sessions</span>
-              <button 
+              <button
                 onClick={() => setShowAddSession(true)}
                 className="p-1 rounded hover:bg-accent hover:text-foreground cursor-pointer transition-colors"
                 title="New Chat Session"
@@ -183,8 +189,11 @@ export const ProjectSidebar = observer(() => {
             </div>
 
             {showAddSession && (
-              <form onSubmit={handleCreateSession} className="flex flex-col gap-2 p-2 rounded bg-background border border-border">
-                <input 
+              <form
+                onSubmit={handleCreateSession}
+                className="flex flex-col gap-2 p-2 rounded bg-background border border-border"
+              >
+                <input
                   type="text"
                   placeholder="Session title..."
                   value={newSessionTitle}
@@ -192,14 +201,14 @@ export const ProjectSidebar = observer(() => {
                   className="px-2.5 py-1 text-xs rounded bg-card border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 />
                 <div className="flex gap-2 justify-end">
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => setShowAddSession(false)}
                     className="px-2 py-0.5 text-[10px] rounded hover:bg-accent cursor-pointer"
                   >
                     Cancel
                   </button>
-                  <button 
+                  <button
                     type="submit"
                     className="px-2 py-0.5 text-[10px] rounded bg-primary text-primary-foreground font-semibold hover:opacity-90 cursor-pointer"
                   >
@@ -211,15 +220,17 @@ export const ProjectSidebar = observer(() => {
 
             <div className="flex flex-col gap-1">
               {sessions.length === 0 ? (
-                <div className="text-xs text-muted-foreground text-center py-6">No sessions yet. Start a new one!</div>
+                <div className="text-xs text-muted-foreground text-center py-6">
+                  No sessions yet. Start a new one!
+                </div>
               ) : (
                 sessions.map((sess) => (
-                  <div 
+                  <div
                     key={sess.id}
                     onClick={() => globalState$.activeSessionId.set(sess.id)}
                     className={`group flex items-center justify-between px-3 py-2.5 rounded-md cursor-pointer transition-all text-sm ${
-                      activeSessionId === sess.id 
-                        ? "bg-accent text-accent-foreground font-medium" 
+                      activeSessionId === sess.id
+                        ? "bg-accent text-accent-foreground font-medium"
                         : "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -227,7 +238,7 @@ export const ProjectSidebar = observer(() => {
                       <ChevronRight size={14} className="shrink-0" />
                       <span className="truncate">{sess.title}</span>
                     </div>
-                    <button 
+                    <button
                       onClick={(e) => handleDeleteSession(sess.id, e)}
                       className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-accent text-muted-foreground hover:text-destructive cursor-pointer transition-all"
                     >

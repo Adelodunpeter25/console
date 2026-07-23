@@ -84,11 +84,7 @@ export class SqliteSessionStorage {
   /**
    * Create a new project record.
    */
-  createProject(options: {
-    id?: string;
-    name: string;
-    dir: string;
-  }): ProjectInfo {
+  createProject(options: { id?: string; name: string; dir: string }): ProjectInfo {
     const id = options.id ?? crypto.randomUUID();
     const now = Date.now();
     const stmt = this.globalDb.prepare(`
@@ -100,7 +96,9 @@ export class SqliteSessionStorage {
     `);
     stmt.run(id, options.name, options.dir, now, now);
 
-    const row = this.globalDb.prepare(`SELECT * FROM projects WHERE dir = ?`).get(options.dir) as any;
+    const row = this.globalDb
+      .prepare(`SELECT * FROM projects WHERE dir = ?`)
+      .get(options.dir) as any;
     return {
       id: row.id,
       name: row.name,
@@ -144,7 +142,9 @@ export class SqliteSessionStorage {
    * List all projects.
    */
   listProjects(): ProjectInfo[] {
-    const rows = this.globalDb.prepare(`SELECT * FROM projects ORDER BY updated_at DESC`).all() as any[];
+    const rows = this.globalDb
+      .prepare(`SELECT * FROM projects ORDER BY updated_at DESC`)
+      .all() as any[];
     return rows.map((row) => ({
       id: row.id,
       name: row.name,
@@ -342,7 +342,11 @@ export class SqliteSessionStorage {
   listSessions(options?: { cwd?: string; projectId?: string; limit?: number }): SessionHeader[] {
     const limit = options?.limit ?? 100;
 
-    const querySessionsFromDb = (db: DatabaseType, projId?: string, cwdVal?: string): SessionHeader[] => {
+    const querySessionsFromDb = (
+      db: DatabaseType,
+      projId?: string,
+      cwdVal?: string,
+    ): SessionHeader[] => {
       let rows: any[];
       if (cwdVal) {
         const stmt = db.prepare(`
@@ -428,9 +432,7 @@ export class SqliteSessionStorage {
     }
 
     // Sort combined sessions
-    return allSessions
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-      .slice(0, limit);
+    return allSessions.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit);
   }
 
   /**
