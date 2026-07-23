@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Text, View, TouchableOpacity, FlatList } from "react-native";
-import { Folder02Icon } from "hugeicons-react";
+import { Folder } from "lucide-react-native";
 import { SessionSubList } from "../../components/common/session-sub-list";
 import { AddProjectScreen } from "../projects/add-project-screen";
 import { GlassSurface } from "../../components/common/glass-surface";
@@ -65,7 +65,7 @@ export function HomeScreen({
       {/* Project Tree List */}
       {projects.length === 0 ? (
         <GlassSurface className="items-center justify-center py-12 m-2 p-6">
-          <Folder02Icon size={36} color="#38bdf8" />
+          <Folder size={36} color="#38bdf8" />
           <Text className="text-[#f1f3f7] text-sm font-semibold mt-3">No Projects Added</Text>
           <Text className="text-[#9095a0] text-xs text-center mt-1.5 max-w-xs leading-5">
             Tap "+ Add Project" to browse your host's filesystem directly and select a folder.
@@ -96,7 +96,7 @@ export function HomeScreen({
                   }}
                 >
                   <View className="flex-row items-center gap-3 flex-1 pr-2">
-                    <Folder02Icon size={20} color={isSelected ? "#38bdf8" : "#9095a0"} />
+                    <Folder size={20} color={isSelected ? "#38bdf8" : "#9095a0"} />
                     <View className="flex-1">
                       <Text
                         className={`text-sm font-semibold ${

@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFsBrowse, useAddProject } from "@console/api";
-import { Folder02Icon } from "hugeicons-react";
+import { Folder } from "lucide-react-native";
 import { GlassSurface } from "../../components/common/glass-surface";
 
 interface AddProjectScreenProps {
@@ -65,7 +65,7 @@ export function AddProjectScreen({ onClose, onProjectAdded }: AddProjectScreenPr
 
       {/* Path Breadcrumb Bar */}
       <View className="px-4 py-3 bg-[#121316]/60 border-b border-white/5 flex-row items-center gap-2">
-        <Folder02Icon size={16} color="#38bdf8" />
+        <Folder size={16} color="#38bdf8" />
         <Text className="text-xs font-mono text-[#38bdf8] flex-1" numberOfLines={1}>
           {activePath}
         </Text>
@@ -119,7 +119,7 @@ export function AddProjectScreen({ onClose, onProjectAdded }: AddProjectScreenPr
                 onPress={() => setCurrentPath(item.path)}
               >
                 <View className="flex-row items-center gap-3 flex-1 pr-2">
-                  <Folder02Icon size={18} color="#9095a0" />
+                  <Folder size={18} color="#9095a0" />
                   <Text className="text-xs font-medium text-[#f1f3f7] flex-1" numberOfLines={1}>
                     {item.name}
                   </Text>

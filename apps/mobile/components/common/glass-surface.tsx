@@ -2,7 +2,7 @@ import React from "react";
 import { View, ViewProps } from "react-native";
 
 interface GlassSurfaceProps extends ViewProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   className?: string;
 }
 

@@ -20,6 +20,7 @@ config.resolver.nodeModulesPaths = [
 config.resolver.extraNodeModules = {
   react: path.resolve(workspaceRoot, "node_modules/react"),
   "react-native": path.resolve(workspaceRoot, "node_modules/react-native"),
+  "react-native-safe-area-context": path.resolve(workspaceRoot, "node_modules/react-native-safe-area-context"),
   "@console/api": path.resolve(workspaceRoot, "packages/api/src"),
   "@console/types": path.resolve(workspaceRoot, "packages/types/src"),
 };
