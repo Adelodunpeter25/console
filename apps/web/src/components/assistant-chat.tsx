@@ -185,16 +185,9 @@ export const AssistantChat = observer(() => {
     },
   };
 
-  const runtime = useLocalRuntime(chatAdapter);
-
-  // Sync assistant-ui state with our mapped messages array
-  useEffect(() => {
-    if (messages.length > 0) {
-      runtime.thread.switchToThread(activeSessionId, { messages });
-    } else {
-      runtime.thread.switchToThread(activeSessionId, { messages: [] });
-    }
-  }, [messages, activeSessionId, runtime]);
+  const runtime = useLocalRuntime(chatAdapter, {
+    initialMessages: messages,
+  });
 
   if (!activeSessionId) {
     return (
