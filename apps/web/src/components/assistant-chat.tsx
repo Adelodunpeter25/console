@@ -190,11 +190,11 @@ export const AssistantChat = observer(() => {
   // Sync assistant-ui state with our mapped messages array
   useEffect(() => {
     if (messages.length > 0) {
-      runtime.reset(messages);
+      runtime.thread.switchToThread(activeSessionId, { messages });
     } else {
-      runtime.reset([]);
+      runtime.thread.switchToThread(activeSessionId, { messages: [] });
     }
-  }, [messages, runtime]);
+  }, [messages, activeSessionId, runtime]);
 
   if (!activeSessionId) {
     return (
@@ -224,7 +224,7 @@ const ChatViewport = ({ messages }: { messages: any[] }) => {
 
   const handleSend = () => {
     if (!inputValue.trim()) return;
-    runtime.append({
+    runtime.thread.append({
       role: "user",
       content: [{ type: "text", text: inputValue.trim() }],
     });
