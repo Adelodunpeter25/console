@@ -7,9 +7,9 @@ import type {
 } from "@console/types";
 
 export const sessionService = {
-  async getSessions(): Promise<SessionHeader[]> {
-    const res = await getConsoleApiClient().get("/api/sessions");
-    return res.data;
+  async getSessions(params?: { cwd?: string; projectId?: string }): Promise<SessionHeader[]> {
+    const res = await getConsoleApiClient().get("/api/sessions", { params });
+    return res.data.data;
   },
 
   async getSession(id: string): Promise<SessionDetailResponse> {

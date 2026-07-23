@@ -3,7 +3,30 @@
  */
 import type Database from "better-sqlite3";
 
-export function initSessionDatabase(db: Database.Database): void {
+export function initGlobalDatabase(db: Database.Database): void {
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      dir TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions_lookup (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_projects_dir ON projects(dir);
+    CREATE INDEX IF NOT EXISTS idx_sessions_lookup_project_id ON sessions_lookup(project_id);
+  `);
+}
+
+export function initProjectDatabase(db: Database.Database): void {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
 
@@ -12,6 +35,7 @@ export function initSessionDatabase(db: Database.Database): void {
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       cwd TEXT NOT NULL,
+      project_id TEXT,
       model_id TEXT NOT NULL,
       provider TEXT NOT NULL,
       created_at INTEGER NOT NULL,
@@ -29,6 +53,7 @@ export function initSessionDatabase(db: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_cwd ON sessions(cwd);
+    CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC);
   `);
 }

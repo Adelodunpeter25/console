@@ -14,7 +14,8 @@ const sessionService = new SessionService();
  */
 sessionRoutes.get("/sessions", (c) => {
   const cwd = c.req.query("cwd");
-  const sessions = sessionService.listSessions(cwd);
+  const projectId = c.req.query("projectId");
+  const sessions = sessionService.listSessions(cwd, projectId);
   return c.json({
     success: true,
     data: sessions,

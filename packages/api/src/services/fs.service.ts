@@ -4,12 +4,12 @@ import type { ProjectInfo, FsTreeEntry } from "@console/types";
 export const fsService = {
   async getProjects(): Promise<ProjectInfo[]> {
     const res = await getConsoleApiClient().get("/api/projects");
-    return res.data;
+    return res.data.data;
   },
 
   async addProject(path: string): Promise<ProjectInfo> {
     const res = await getConsoleApiClient().post("/api/projects", { path });
-    return res.data;
+    return res.data.data;
   },
 
   async getFsBrowse(

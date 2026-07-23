@@ -6,6 +6,7 @@ export interface SessionHeader {
   id: string;
   title: string;
   cwd: string;
+  projectId?: string;
   modelId: string;
   provider: string;
   createdAt: number;

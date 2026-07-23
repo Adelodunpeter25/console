@@ -7,6 +7,8 @@ import { createApiApp } from "./api/src/app.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
+import { getConsoleStorageDir } from "./agent/src/session/apppaths.js";
+
 const app = createApiApp();
 const port = Number.parseInt(process.env.PORT || "3000", 10);
 const host = process.env.HOST || "0.0.0.0";
@@ -19,7 +21,7 @@ let logStream: fs.FileHandle | null = null;
 async function setupLogging(): Promise<void> {
   if (!isDaemon) return;
 
-  const consoleDir = path.join(process.env.HOME || process.env.USERPROFILE || "", ".console");
+  const consoleDir = getConsoleStorageDir();
   const logsDir = path.join(consoleDir, "logs");
 
   try {

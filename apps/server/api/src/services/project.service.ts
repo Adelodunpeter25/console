@@ -5,10 +5,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ProjectInfo } from "../types/index.js";
-
-const customProjects = new Set<string>();
+import { SqliteSessionStorage } from "../../../agent/src/session/storage.js";
 
 export class ProjectService {
+  private storage = new SqliteSessionStorage();
+
   /**
    * List all recent and selected project directories on the server.
    */
@@ -16,18 +17,25 @@ export class ProjectService {
     const rootDir = process.cwd();
     const projectsMap = new Map<string, ProjectInfo>();
 
-    // Add custom added projects
-    for (const projPath of customProjects) {
-      try {
-        const stat = await fs.stat(projPath);
-        projectsMap.set(projPath, {
-          name: path.basename(projPath),
-          path: projPath,
-          lastModified: stat.mtimeMs,
-        });
-      } catch {
-        // Ignored if custom project folder no longer exists
+    // Load persistent projects from SQLite database
+    try {
+      const dbProjects = this.storage.listProjects();
+      for (const proj of dbProjects) {
+        try {
+          const stat = await fs.stat(proj.path);
+          projectsMap.set(proj.path, {
+            id: proj.id,
+            name: proj.name,
+            path: proj.path,
+            createdAt: proj.createdAt,
+            updatedAt: stat.mtimeMs,
+          });
+        } catch {
+          // Ignored if custom project folder no longer exists
+        }
       }
+    } catch (e) {
+      console.error("Failed to load projects from DB:", e);
     }
 
     // Auto-discover sibling workspace directories
@@ -37,12 +45,11 @@ export class ProjectService {
         if (entry.isDirectory() && !entry.name.startsWith(".")) {
           const fullPath = path.join(rootDir, entry.name);
           if (!projectsMap.has(fullPath)) {
-            const stat = await fs.stat(fullPath);
-            projectsMap.set(fullPath, {
+            const registered = this.storage.createProject({
               name: entry.name,
-              path: fullPath,
-              lastModified: stat.mtimeMs,
+              dir: fullPath,
             });
+            projectsMap.set(fullPath, registered);
           }
         }
       }
@@ -52,11 +59,11 @@ export class ProjectService {
 
     // Always ensure current working directory is included
     if (!projectsMap.has(rootDir)) {
-      projectsMap.set(rootDir, {
+      const registered = this.storage.createProject({
         name: path.basename(rootDir),
-        path: rootDir,
-        lastModified: Date.now(),
+        dir: rootDir,
       });
+      projectsMap.set(rootDir, registered);
     }
 
     return Array.from(projectsMap.values());
@@ -73,12 +80,9 @@ export class ProjectService {
       throw new Error(`Path '${folderPath}' is not a valid directory.`);
     }
 
-    customProjects.add(resolvedPath);
-
-    return {
+    return this.storage.createProject({
       name: path.basename(resolvedPath),
-      path: resolvedPath,
-      lastModified: stat.mtimeMs,
-    };
+      dir: resolvedPath,
+    });
   }
 }
