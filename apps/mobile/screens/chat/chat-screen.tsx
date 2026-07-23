@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   Text,
   View,
@@ -10,111 +10,10 @@ import {
   Platform,
 } from "react-native";
 import { AgentMessage } from "@console/types";
+import { useChatStream } from "../../hooks";
 
-interface ChatScreenProps {
-  projectId: string | null;
-  sessionId: string | null;
-  backendUrl: string;
-}
-
-export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps) {
-  const [messages, setMessages] = useState<AgentMessage[]>([]);
-  const [inputVal, setInputVal] = useState("");
-  const [running, setRunning] = useState(false);
-  const [activeSession, setActiveSession] = useState<string | null>(sessionId);
-
-  useEffect(() => {
-    setActiveSession(sessionId);
-    if (sessionId) {
-      fetchSessionMessages();
-    }
-  }, [sessionId]);
-
-  const fetchSessionMessages = async () => {
-    try {
-      const response = await fetch(`${backendUrl}/api/sessions/${sessionId}`);
-      const data = await response.json();
-      if (data && data.messages) {
-        setMessages(data.messages);
-      }
-    } catch {
-      // Ignore initial load fetch errors
-    }
-  };
-
-  const handleSend = async () => {
-    if (!inputVal.trim() || !activeSession) return;
-    const prompt = inputVal.trim();
-    setInputVal("");
-    setRunning(true);
-
-    // Optimistically push user message to UI
-    setMessages((prev) => [...prev, { role: "user", content: prompt }]);
-
-    try {
-      const res = await fetch(`${backendUrl}/api/sessions/${activeSession}/run`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      });
-
-      if (!res.body) {
-        setRunning(false);
-        fetchSessionMessages();
-        return;
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let accumulatedText = "";
-      let buffer = "";
-
-      // Add temporary response placeholder
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: [{ type: "text", text: "" }] },
-      ]);
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith("data: ")) {
-            try {
-              const frame = JSON.parse(trimmed.slice(6));
-              if (frame.type === "modelStreamPart" && frame.part?.text) {
-                accumulatedText += frame.part.text;
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  const lastIndex = updated.length - 1;
-                  if (updated[lastIndex] && updated[lastIndex].role === "assistant") {
-                    updated[lastIndex] = {
-                      role: "assistant",
-                      content: [{ type: "text", text: accumulatedText }],
-                    };
-                  }
-                  return updated;
-                });
-              }
-            } catch {
-              // Ignore frames parse issues
-            }
-          }
-        }
-      }
-    } catch {
-      fetchSessionMessages();
-    } finally {
-      setRunning(false);
-      fetchSessionMessages();
-    }
-  };
+export function ChatScreen() {
+  const { messages, inputVal, setInputVal, running, sendMessage } = useChatStream();
 
   return (
     <KeyboardAvoidingView
@@ -178,7 +77,7 @@ export function ChatScreen({ projectId, sessionId, backendUrl }: ChatScreenProps
           className={`h-11 bg-white rounded-xl px-5 items-center justify-center ${
             !inputVal.trim() || running ? "opacity-30" : ""
           }`}
-          onPress={handleSend}
+          onPress={sendMessage}
           disabled={!inputVal.trim() || running}
         >
           {running ? (

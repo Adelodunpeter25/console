@@ -5,27 +5,19 @@ import { SessionSubList } from "../../components/common/session-sub-list";
 import { AddProjectScreen } from "../projects/add-project-screen";
 import { GlassSurface } from "../../components/common/glass-surface";
 import { ProjectInfo } from "@console/types";
+import { useAppStore } from "../../stores";
 
 interface HomeScreenProps {
   projects: ProjectInfo[];
   refetchProjects: () => void;
-  selectedProjectId: string | null;
-  setSelectedProjectId: (id: string | null) => void;
-  selectedSessionId: string | null;
-  setSelectedSessionId: (id: string | null) => void;
-  setActiveTab: (tab: "home" | "chat" | "settings") => void;
 }
 
-export function HomeScreen({
-  projects,
-  refetchProjects,
-  selectedProjectId,
-  setSelectedProjectId,
-  selectedSessionId,
-  setSelectedSessionId,
-  setActiveTab,
-}: HomeScreenProps) {
+export function HomeScreen({ projects, refetchProjects }: HomeScreenProps) {
   const [isAddingProject, setIsAddingProject] = useState(false);
+
+  const selectedProjectId = useAppStore((state) => state.selectedProjectId);
+  const setSelectedProjectId = useAppStore((state) => state.setSelectedProjectId);
+  const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
 
   if (isAddingProject) {
     return (
@@ -108,15 +100,7 @@ export function HomeScreen({
                   </View>
                 </TouchableOpacity>
 
-                {isSelected && (
-                  <SessionSubList
-                    projectId={project.id}
-                    projectPath={project.path}
-                    selectedSessionId={selectedSessionId}
-                    setSelectedSessionId={setSelectedSessionId}
-                    setActiveTab={setActiveTab}
-                  />
-                )}
+                {isSelected && <SessionSubList projectId={project.id} projectPath={project.path} />}
               </GlassSurface>
             );
           }}

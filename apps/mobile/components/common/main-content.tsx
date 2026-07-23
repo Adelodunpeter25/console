@@ -2,54 +2,20 @@ import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useProjects } from "@console/api";
 import { HomeScreen, ChatScreen, SettingsScreen } from "../../screens";
+import { useAppStore } from "../../stores";
 
-interface MainContentProps {
-  activeTab: "home" | "chat" | "settings";
-  selectedProjectId: string | null;
-  setSelectedProjectId: (id: string | null) => void;
-  selectedSessionId: string | null;
-  setSelectedSessionId: (id: string | null) => void;
-  setActiveTab: (tab: "home" | "chat" | "settings") => void;
-  backendUrl: string;
-  setBackendUrl: (url: string | null) => void;
-}
-
-export function MainContent({
-  activeTab,
-  selectedProjectId,
-  setSelectedProjectId,
-  selectedSessionId,
-  setSelectedSessionId,
-  setActiveTab,
-  backendUrl,
-  setBackendUrl,
-}: MainContentProps) {
+export function MainContent() {
+  const activeTab = useAppStore((state) => state.activeTab);
   const { data: projects = [], refetch: refetchProjects } = useProjects();
 
   return (
     <SafeAreaView className="flex-1 bg-[#0d0d0e]" edges={["top", "left", "right"]}>
       {activeTab === "home" ? (
-        <HomeScreen
-          projects={projects}
-          refetchProjects={refetchProjects}
-          selectedProjectId={selectedProjectId}
-          setSelectedProjectId={setSelectedProjectId}
-          selectedSessionId={selectedSessionId}
-          setSelectedSessionId={setSelectedSessionId}
-          setActiveTab={setActiveTab}
-        />
+        <HomeScreen projects={projects} refetchProjects={refetchProjects} />
       ) : activeTab === "chat" ? (
-        <ChatScreen
-          projectId={selectedProjectId}
-          sessionId={selectedSessionId}
-          backendUrl={backendUrl}
-        />
+        <ChatScreen />
       ) : (
-        <SettingsScreen
-          backendUrl={backendUrl}
-          setBackendUrl={setBackendUrl}
-          setActiveTab={setActiveTab}
-        />
+        <SettingsScreen />
       )}
     </SafeAreaView>
   );

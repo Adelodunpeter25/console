@@ -1,13 +1,12 @@
 import React from "react";
 import { Text, View, TouchableOpacity, Alert, Platform } from "react-native";
+import { useAppStore } from "../../stores";
 
-interface BottomNavProps {
-  activeTab: "home" | "chat" | "settings";
-  setActiveTab: (tab: "home" | "chat" | "settings") => void;
-  selectedSessionId: string | null;
-}
+export function BottomNav() {
+  const activeTab = useAppStore((state) => state.activeTab);
+  const setActiveTab = useAppStore((state) => state.setActiveTab);
+  const selectedSessionId = useAppStore((state) => state.selectedSessionId);
 
-export function BottomNav({ activeTab, setActiveTab, selectedSessionId }: BottomNavProps) {
   const isIos = Platform.OS === "ios";
   return (
     <View className={`h-16 flex-row border-t border-white/10 bg-[#080809] ${isIos ? "pb-3" : ""}`}>

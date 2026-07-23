@@ -1,78 +1,26 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   Text,
   View,
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { configureConsoleApi } from "@console/api";
 import { GlassSurface } from "../../components/common/glass-surface";
+import { useServerConnection } from "../../hooks";
 
-const BACKEND_URL_KEY = "@console_backend_url";
-
-interface SettingsScreenProps {
-  backendUrl: string | null;
-  setBackendUrl: (url: string | null) => void;
-  setActiveTab: (tab: "home" | "chat" | "settings") => void;
-}
-
-export function SettingsScreen({ backendUrl, setBackendUrl, setActiveTab }: SettingsScreenProps) {
-  const [inputUrl, setInputUrl] = useState(backendUrl || "http://localhost:3000");
-  const [isSaving, setIsSaving] = useState(false);
-  const [testingStatus, setTestingStatus] = useState<string | null>(null);
-
-  const handleSaveConnection = async () => {
-    if (!inputUrl.trim()) {
-      Alert.alert("Invalid URL", "Backend server endpoint cannot be empty.");
-      return;
-    }
-    setIsSaving(true);
-    try {
-      const url = inputUrl.trim();
-      await AsyncStorage.setItem(BACKEND_URL_KEY, url);
-      configureConsoleApi({ baseUrl: url });
-      setBackendUrl(url);
-      Alert.alert("Success", "Console backend server endpoint updated successfully!");
-    } catch {
-      Alert.alert("Error", "Failed to save endpoint URL.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleTestConnection = async () => {
-    if (!inputUrl.trim()) return;
-    setTestingStatus("testing");
-    try {
-      const res = await fetch(`${inputUrl.trim()}/api/projects`);
-      if (res.ok) {
-        setTestingStatus("success");
-      } else {
-        setTestingStatus("error");
-      }
-    } catch {
-      setTestingStatus("error");
-    }
-  };
-
-  const handleDisconnect = async () => {
-    Alert.alert("Disconnect Backend", "Are you sure you want to clear the saved backend URL?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Disconnect",
-        style: "destructive",
-        onPress: async () => {
-          await AsyncStorage.removeItem(BACKEND_URL_KEY);
-          setBackendUrl(null);
-          setActiveTab("home");
-        },
-      },
-    ]);
-  };
+export function SettingsScreen() {
+  const {
+    backendUrl,
+    inputUrl,
+    setInputUrl,
+    isSaving,
+    testingStatus,
+    saveConnection,
+    testConnection,
+    disconnect,
+  } = useServerConnection();
 
   return (
     <ScrollView className="flex-1 bg-[#0d0d0e] px-4 pt-4">
@@ -113,7 +61,7 @@ export function SettingsScreen({ backendUrl, setBackendUrl, setActiveTab }: Sett
         <View className="flex-row gap-3 justify-end">
           <TouchableOpacity
             className="px-4 py-2.5 rounded-full bg-transparent border border-white/20 items-center justify-center"
-            onPress={handleTestConnection}
+            onPress={testConnection}
           >
             <Text className="text-sm font-semibold text-white">
               {testingStatus === "testing"
@@ -128,7 +76,7 @@ export function SettingsScreen({ backendUrl, setBackendUrl, setActiveTab }: Sett
 
           <TouchableOpacity
             className="px-5 py-2.5 rounded-full bg-white items-center justify-center flex-row gap-2"
-            onPress={handleSaveConnection}
+            onPress={saveConnection}
             disabled={isSaving}
           >
             {isSaving ? (
@@ -160,8 +108,8 @@ export function SettingsScreen({ backendUrl, setBackendUrl, setActiveTab }: Sett
         </View>
 
         <View className="flex-row justify-between py-2.5">
-          <Text className="text-sm text-zinc-400">Styling Engine</Text>
-          <Text className="text-sm font-mono text-white">NativeWind v4 / Uniwind</Text>
+          <Text className="text-sm text-zinc-400">State Management</Text>
+          <Text className="text-sm font-mono text-white">Zustand v5</Text>
         </View>
       </GlassSurface>
 
@@ -174,7 +122,7 @@ export function SettingsScreen({ backendUrl, setBackendUrl, setActiveTab }: Sett
 
         <TouchableOpacity
           className="py-2.5 px-5 rounded-full bg-transparent border border-red-500/40 items-center justify-center self-start"
-          onPress={handleDisconnect}
+          onPress={disconnect}
         >
           <Text className="text-sm font-bold text-red-400">Disconnect Backend Endpoint</Text>
         </TouchableOpacity>

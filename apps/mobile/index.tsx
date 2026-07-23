@@ -1,5 +1,5 @@
 import "./global.css";
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { registerRootComponent } from "expo";
 import { StatusBar } from "expo-status-bar";
 import { View, Text, ActivityIndicator, TouchableOpacity } from "react-native";
@@ -11,18 +11,18 @@ import {
   JetBrainsMono_600SemiBold,
   JetBrainsMono_700Bold,
 } from "@expo-google-fonts/jetbrains-mono";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ConsoleApiProvider, configureConsoleApi } from "@console/api";
+import { ConsoleApiProvider } from "@console/api";
 import { QueryClient } from "@tanstack/react-query";
 import { MainContent } from "./components/common/main-content";
 import { BottomNav } from "./components/navigation/bottom-nav";
+import { useServerConnection } from "./hooks";
+import { useAppStore } from "./stores";
 
 const queryClient = new QueryClient();
-const BACKEND_URL_KEY = "@console_backend_url";
 
 function AppRoot() {
-  const [backendUrl, setBackendUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { backendUrl, loading } = useServerConnection();
+  const setActiveTab = useAppStore((state) => state.setActiveTab);
 
   const [fontsLoaded] = useFonts({
     JetBrainsMono: JetBrainsMono_400Regular,
@@ -30,31 +30,6 @@ function AppRoot() {
     "JetBrainsMono-SemiBold": JetBrainsMono_600SemiBold,
     "JetBrainsMono-Bold": JetBrainsMono_700Bold,
   });
-
-  // Tab State: 'home' | 'chat' | 'settings'
-  const [activeTab, setActiveTab] = useState<"home" | "chat" | "settings">("home");
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
-
-  useEffect(() => {
-    loadBackendUrl();
-  }, []);
-
-  const loadBackendUrl = async () => {
-    try {
-      const stored = await AsyncStorage.getItem(BACKEND_URL_KEY);
-      if (stored) {
-        setBackendUrl(stored);
-        configureConsoleApi({ baseUrl: stored });
-      } else {
-        setActiveTab("settings");
-      }
-    } catch {
-      setActiveTab("settings");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading || !fontsLoaded) {
     return (
@@ -71,16 +46,7 @@ function AppRoot() {
 
         {backendUrl ? (
           <ConsoleApiProvider baseUrl={backendUrl} queryClient={queryClient}>
-            <MainContent
-              activeTab={activeTab}
-              selectedProjectId={selectedProjectId}
-              setSelectedProjectId={setSelectedProjectId}
-              selectedSessionId={selectedSessionId}
-              setSelectedSessionId={setSelectedSessionId}
-              setActiveTab={setActiveTab}
-              backendUrl={backendUrl}
-              setBackendUrl={setBackendUrl}
-            />
+            <MainContent />
           </ConsoleApiProvider>
         ) : (
           <SafeAreaView className="flex-1 bg-[#0a0a0b] justify-center items-center p-6">
@@ -97,11 +63,7 @@ function AppRoot() {
           </SafeAreaView>
         )}
 
-        <BottomNav
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          selectedSessionId={selectedSessionId}
-        />
+        <BottomNav />
       </View>
     </SafeAreaProvider>
   );

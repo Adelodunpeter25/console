@@ -1,116 +1,90 @@
 import React from "react";
-import { Text, View, TouchableOpacity, Alert } from "react-native";
-import { useSessions, useCreateSession, useDeleteSession } from "@console/api";
+import { Text, View, TouchableOpacity, ActivityIndicator } from "react-native";
 import { formatRelativeTime } from "../../utils/time";
+import { useProjectSessions } from "../../hooks";
 
 interface SessionSubListProps {
   projectId: string;
   projectPath: string;
-  selectedSessionId: string | null;
-  setSelectedSessionId: (id: string | null) => void;
-  setActiveTab: (tab: "home" | "chat" | "settings") => void;
 }
 
-export function SessionSubList({
-  projectId,
-  projectPath,
-  selectedSessionId,
-  setSelectedSessionId,
-  setActiveTab,
-}: SessionSubListProps) {
-  const { data: sessions = [], refetch: refetchSessions } = useSessions({ projectId });
-  const createSessionMutation = useCreateSession();
-  const deleteSessionMutation = useDeleteSession();
-
-  const handleCreateSession = async () => {
-    try {
-      const sess = await createSessionMutation.mutateAsync({
-        cwd: projectPath,
-        projectId,
-        title: "New Chat",
-      });
-      setSelectedSessionId(sess.id);
-      refetchSessions();
-      setActiveTab("chat");
-    } catch {
-      Alert.alert("Error", "Failed to create session");
-    }
-  };
-
-  const handleDeleteSession = async (id: string) => {
-    Alert.alert("Delete", "Delete this chat session?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deleteSessionMutation.mutateAsync(id);
-            if (selectedSessionId === id) {
-              setSelectedSessionId(null);
-            }
-            refetchSessions();
-          } catch {
-            Alert.alert("Error", "Failed to delete session");
-          }
-        },
-      },
-    ]);
-  };
+export function SessionSubList({ projectId, projectPath }: SessionSubListProps) {
+  const {
+    sessions,
+    selectedSessionId,
+    setSelectedSessionId,
+    createSession,
+    deleteSession,
+    isCreating,
+  } = useProjectSessions(projectId, projectPath);
 
   return (
-    <View className="px-3.5 pb-3.5 pt-1 border-t border-white/5">
-      <View className="flex-row justify-between items-center mb-2 mt-1">
-        <Text className="text-[11px] font-bold text-[#9095a0] uppercase tracking-wider">
-          Sessions
+    <View className="px-4 pb-4 pt-2 bg-white/5 border-t border-white/10">
+      <View className="flex-row justify-between items-center mb-3">
+        <Text className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+          Chat Sessions ({sessions.length})
         </Text>
-        <TouchableOpacity className="py-1 px-2 rounded bg-white/10" onPress={handleCreateSession}>
-          <Text className="text-[#f1f3f7] text-[10px] font-semibold">+ New Chat</Text>
+
+        <TouchableOpacity
+          className={`px-3 py-1.5 bg-transparent border border-white/20 rounded-full flex-row items-center gap-1.5 ${
+            isCreating ? "opacity-50" : ""
+          }`}
+          onPress={createSession}
+          disabled={isCreating}
+        >
+          {isCreating ? (
+            <ActivityIndicator size="small" color="#ffffff" />
+          ) : (
+            <Text className="text-xs font-bold text-white">+ New Chat</Text>
+          )}
         </TouchableOpacity>
       </View>
 
-      {sessions.map((sess) => {
-        const isActive = selectedSessionId === sess.id;
-        const timeAgo = formatRelativeTime(sess.createdAt || sess.updatedAt);
-        return (
-          <View
-            key={sess.id}
-            className={`flex-row items-center justify-between py-2 px-2.5 rounded-md mb-1 ${
-              isActive ? "bg-white/10" : "bg-white/5"
-            }`}
-          >
+      {sessions.length === 0 ? (
+        <View className="py-3 items-center">
+          <Text className="text-xs text-zinc-400 italic">
+            No active chat sessions for this project.
+          </Text>
+        </View>
+      ) : (
+        sessions.map((sess) => {
+          const isSessionActive = selectedSessionId === sess.id;
+          const displayTime = formatRelativeTime(sess.createdAt);
+
+          return (
             <TouchableOpacity
-              className="flex-1 flex-row items-center justify-between pr-2"
-              onPress={() => {
-                setSelectedSessionId(sess.id);
-                setActiveTab("chat");
-              }}
+              key={sess.id}
+              className={`p-3 mb-2 rounded-xl border flex-row items-center justify-between ${
+                isSessionActive ? "bg-white/15 border-white/30" : "bg-[#16171a] border-white/10"
+              }`}
+              onPress={() => setSelectedSessionId(isSessionActive ? null : sess.id)}
             >
-              <Text
-                className={`text-xs flex-1 ${
-                  isActive ? "text-[#f1f3f7] font-medium" : "text-[#9095a0]"
-                }`}
-                numberOfLines={1}
-              >
-                {sess.title || "New Chat"}
-              </Text>
+              <View className="flex-1 pr-3">
+                <Text
+                  className={`text-sm font-medium ${
+                    isSessionActive ? "text-white font-semibold" : "text-zinc-300"
+                  }`}
+                  numberOfLines={1}
+                >
+                  {sess.title || "Untitled Session"}
+                </Text>
+                <Text className="text-xs text-zinc-400 font-mono mt-0.5" numberOfLines={1}>
+                  {sess.modelId}
+                </Text>
+              </View>
 
-              {Boolean(timeAgo) && (
-                <Text className="text-[10px] text-[#9095a0]/70 font-mono ml-2">{timeAgo}</Text>
-              )}
+              <View className="flex-row items-center gap-3">
+                {displayTime ? (
+                  <Text className="text-xs text-zinc-400 font-medium">{displayTime}</Text>
+                ) : null}
+
+                <TouchableOpacity className="p-1" onPress={() => deleteSession(sess.id)}>
+                  <Text className="text-xs text-zinc-400">✕</Text>
+                </TouchableOpacity>
+              </View>
             </TouchableOpacity>
-
-            <TouchableOpacity className="p-1 ml-1" onPress={() => handleDeleteSession(sess.id)}>
-              <Text className="text-red-500 text-xs font-bold">✕</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      })}
-
-      {sessions.length === 0 && (
-        <Text className="text-[11px] text-[#9095a0] italic text-center py-2">
-          No active chat sessions.
-        </Text>
+          );
+        })
       )}
     </View>
   );
