@@ -10,10 +10,25 @@ import { loadCredential } from "../../../providers/src/auth/token-store.js";
 import { completeAuthFlowWithCode } from "../../../providers/src/auth/login.js";
 import type { AuthStatusResponse } from "../types/index.js";
 
+/**
+ * Safely attempt to load a credential, returning null when the user is not
+ * logged in (no credential file, invalid JSON, missing token, etc.) instead of
+ * throwing — so getAuthStatus() can report "not logged in" gracefully.
+ */
+async function tryLoadCredential(
+  type: "gemini" | "antigravity",
+) {
+  try {
+    return await loadCredential(type);
+  } catch {
+    return null;
+  }
+}
+
 export class AuthService {
   async getAuthStatus(): Promise<AuthStatusResponse> {
-    const geminiCred = await loadCredential("gemini");
-    const antigravityCred = await loadCredential("antigravity");
+    const geminiCred = await tryLoadCredential("gemini");
+    const antigravityCred = await tryLoadCredential("antigravity");
 
     return {
       gemini: {
