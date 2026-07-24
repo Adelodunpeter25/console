@@ -1,0 +1,713 @@
+import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
+import CodevisorCore
+
+/// The new-chat page: a centered "What should we build in <project>?" title with
+/// an inline project dropdown, and the composer. The session is created only
+/// when the user sends.
+/// Surfaces the backing NSView of the new-chat pane's background so it can
+/// register as a whitespace-click zone with the workspace's focus
+/// controller (`handleTranscriptClick` needs an AppKit view for geometry).
+private struct PaneClickZoneCapture: NSViewRepresentable {
+    let onReady: (NSView) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { onReady(view) }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+struct NewChatView: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.theme) private var theme
+    let store: SessionStore
+    @Binding var selection: SidebarSelection?
+    var preferredProjectId: UUID?
+    /// Set when the page was opened for a specific project (sidebar "+" /
+    /// "New chat here"); nil for the generic new-chat entry. An explicit
+    /// project moves a retained draft; an implicit one follows the draft.
+    var explicitProjectId: UUID?
+    /// In-pane draft mode: the id of the DRAFT CHAT PANE hosting this
+    /// composer (inside a workspace). The created session binds to the pane
+    /// via `onCreatedInPane` instead of navigating, and the composer uses a
+    /// per-pane draft controller rather than the per-server page draft.
+    var paneDraftId: UUID? = nil
+    var onCreatedInPane: ((ChatSession) -> Void)? = nil
+    /// The pane's session ALREADY EXISTS (created eagerly so the sidebar
+    /// lists it before the first message): first send fills in its details
+    /// (title, harness, worktree/cwd) instead of creating a new record.
+    var preCreatedSession: ChatSession? = nil
+    /// The WORKSPACE's shared focus controller (pane mode only). The
+    /// composer registers under the pre-created chat's id so pane/tab
+    /// clicks and the container's open sequence can focus it exactly like
+    /// a started chat's composer.
+    var paneFocus: TerminalFocusController? = nil
+    /// The hosting workspace (pane mode): scopes the run-context picker to
+    /// the workspace's existing worktrees. Nil on the standalone page, which
+    /// offers only the project root and a new worktree.
+    var hostWorkspaceId: UUID? = nil
+
+    @State private var controller: SessionController?
+    @State private var selectedProjectId: UUID?
+    @State private var focus = TerminalFocusController()
+    @StateObject private var addProjectFlow = AddProjectFlow()
+    @Namespace private var composerGlassNamespace
+    /// Setup state for the no-projects panel. Owned here (not by the panel)
+    /// because a clone registers its project immediately — the page must keep
+    /// showing the panel with the clone as a selected row, exactly like
+    /// onboarding, instead of flipping to the composer mid-setup.
+    @StateObject private var projectSetup = ProjectSetupModel()
+
+    private var projects: [Project] { environment.projectList.activeProjects }
+    private var selectedProject: Project? {
+        projects.first { $0.id == selectedProjectId } ?? projects.first
+    }
+    private var setupIdentity: String {
+        "\(environment.machines.selectedMachineId):\(preferredProjectId?.uuidString ?? "default")"
+    }
+    private var harnessCatalogRevision: UInt64 {
+        environment.harnessCatalogRevision(for: environment.machines.selectedMachineId)
+    }
+
+    /// Worktrees only make sense when the project folder is a git repository
+    /// (as probed by the session's server).
+    private var worktreeAvailable: Bool {
+        selectedProject?.isGitRepository ?? false
+    }
+
+    /// The run locations the picker offers: the project root plus the host
+    /// workspace's existing worktrees (none on the standalone page, where no
+    /// workspace exists yet).
+    private var workspaceContexts: [WorkspaceRunContext] {
+        guard let project = selectedProject else { return [] }
+        if let hostWorkspaceId,
+           let workspace = environment.workspaces.workspace(id: hostWorkspaceId) {
+            return WorkspaceRunContexts.contexts(
+                workspace: workspace,
+                project: project,
+                sessions: environment.projectList.sessions.filter {
+                    $0.serverId == project.serverId
+                }
+            )
+        }
+        return [
+            WorkspaceRunContext(
+                kind: .projectRoot,
+                name: project.name,
+                path: project.folderURL.path,
+                worktreeName: nil
+            )
+        ]
+    }
+
+    /// The setup panel shows while the machine has no projects, and stays up
+    /// while the user has staged-but-unconfirmed work (a completed clone
+    /// already counts as a project, but setup isn't done until confirmed).
+    private var showsProjectSetup: Bool {
+        projects.isEmpty || projectSetup.hasStagedWork
+    }
+
+    var body: some View {
+        if paneDraftId == nil {
+            // Page mode only: an embedded draft pane must not override the
+            // workspace window's title.
+            content.navigationTitle("New chat")
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
+        VStack {
+            // 2:3 spacer split sits the composer slightly above true center.
+            Spacer()
+            Spacer()
+            VStack(spacing: 22) {
+                title
+                if showsProjectSetup {
+                    // Inline setup instead of pointing at the sidebar's "+":
+                    // onboarding's project step, adapted to the selected
+                    // machine. This is the first thing a user sees after
+                    // adding a fresh (often headless remote) machine.
+                    ProjectSetupPanel(model: projectSetup) { project in
+                        projectSetup = ProjectSetupModel()
+                        selectedProjectId = project.id
+                        selection = .newChat(project.id)
+                    }
+                } else if let controller {
+                    VStack(alignment: .leading, spacing: 8) {
+                        GlassEffectContainer(spacing: ComposerGlassStyle.clusterSpacing) {
+                            VStack(alignment: .leading, spacing: ComposerGlassStyle.clusterSpacing) {
+                                ComposerCard(
+                                    controller: controller,
+                                    placeholder: "Do anything",
+                                    showsHarnessPicker: false,
+                                    onTextViewReady: { textView in
+                                        focus.composerTextView = textView
+                                        if let paneFocus, let chatId = preCreatedSession?.id {
+                                            // REGISTRATION ONLY, like ChatScreen:
+                                            // the container's keyed focus request
+                                            // (open sequence, pane/tab clicks)
+                                            // applies the moment this lands.
+                                            paneFocus.registerComposer(textView, forChat: chatId)
+                                        } else {
+                                            // Standalone page: the text view isn't
+                                            // attached to a window yet during
+                                            // makeNSView; focus once it is.
+                                            DispatchQueue.main.async { focus.focusComposer() }
+                                        }
+                                    },
+                                    focus: paneFocus ?? focus,
+                                    focusChatId: preCreatedSession?.id,
+                                    glassNamespace: composerGlassNamespace
+                                )
+                                HStack(spacing: 4) {
+                                    if controller.canChooseHarness {
+                                        HarnessPickerMenu(controller: controller)
+                                        Divider()
+                                            .frame(height: 14)
+                                            .accessibilityHidden(true)
+                                    }
+                                    // In-pane drafts belong to their
+                                    // workspace's project — no picker.
+                                    if paneDraftId == nil {
+                                        workspacePicker
+                                        Divider()
+                                            .frame(height: 14)
+                                            .accessibilityHidden(true)
+                                    }
+                                    runLocationPicker(controller)
+                                }
+                                .font(.callout)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .contentShape(Capsule())
+                                .glassEffect(.regular.interactive(), in: Capsule())
+                                .glassEffectID(
+                                    ComposerGlassElement.newChatConfiguration.rawValue,
+                                    in: composerGlassNamespace
+                                )
+                                .glassEffectTransition(.matchedGeometry)
+                            }
+                        }
+                        statusLabel(controller)
+                    }
+                    .frame(maxWidth: 720)
+                }
+            }
+            .frame(maxWidth: 720)
+            .padding()
+            Spacer()
+            Spacer()
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Pinned to the pane's top edge as an overlay: appearing or
+        // dismissing the update notice never shifts the composer's layout.
+        .overlay(alignment: .top) {
+            if let controller {
+                Group {
+                    if case let .failed(message) = controller.status {
+                        setupFailureBanner(message)
+                    } else {
+                        HarnessUpdateBannerView(
+                            controller: controller,
+                            hasRunningChats: controller.activeHarnessId.map { harnessId in
+                                store.hasActiveSessions(
+                                    forHarness: harnessId,
+                                    onServer: environment.machines.selectedMachineId
+                                )
+                            } ?? false
+                        )
+                    }
+                }
+                .frame(maxWidth: 720)
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+            }
+        }
+        // The whole pane is a click-to-focus zone, exactly like a started
+        // chat's transcript: whitespace clicks land in the composer (the
+        // pane's one input) unless the click claimed focus itself.
+        .background {
+            if let paneFocus, let chatId = preCreatedSession?.id {
+                PaneClickZoneCapture { view in
+                    paneFocus.registerTranscript(view, forChat: chatId)
+                }
+            }
+        }
+        .attachmentDropTarget(controller)
+        // Same add-project flow as the sidebar's +.
+        .addProjectFlow(addProjectFlow) { project in
+            selectedProjectId = project.id
+            selection = .newChat(project.id)
+        }
+        // Stale-while-revalidate: the persisted project snapshot renders the
+        // page immediately, then the server re-probes folder capabilities in
+        // the background and publishes any changed Git status into this view.
+        .task {
+            await environment.projectList.refreshFromServer()
+        }
+        .task(id: setupIdentity) { setUpController() }
+        // A machine's projects can arrive after this view's initial task has
+        // already returned. Retry when the active project set changes so the
+        // composer does not remain hidden after the first project appears.
+        .onChange(of: projects.map(\.id)) { _ in
+            // Not while setup is staging: a clone registers its project
+            // immediately, and eagerly connecting an agent there would be
+            // premature — the user may confirm with a different selection.
+            guard controller == nil, !showsProjectSetup else { return }
+            setUpController()
+        }
+        // Settings lives in a separate window, so this page can remain mounted
+        // while sign-in changes a harness from unavailable to ready. Refetch
+        // the live capabilities snapshot when that machine's catalog changes.
+        .onChange(of: harnessCatalogRevision) { _ in
+            guard let controller else { return }
+            Task { await controller.refreshHarnessCapabilities() }
+        }
+        // Update knowledge is fetched separately from the picker's plain
+        // list so the composer stays snappy; the update banner reads this.
+        .task(id: harnessCatalogRevision) {
+            await environment.refreshHarnessLifecycle(
+                for: environment.machines.selectedMachineId
+            )
+        }
+        .focusedSceneValue(\.newChatComposerFocus, NewChatComposerFocus(
+            focus: { focus.focusComposer() }
+        ))
+    }
+
+    // MARK: - Title
+
+    @ViewBuilder
+    private var title: some View {
+        if showsProjectSetup {
+            Text("Add a project to start")
+                .font(.system(size: 26, weight: .semibold))
+        } else {
+            Text("What should we build?")
+                .font(.system(size: 26, weight: .semibold))
+        }
+    }
+
+    private var workspacePicker: some View {
+        Menu {
+            ForEach(projects) { project in
+                // Toggle for the native selected checkmark; MenuSymbolIcon
+                // because AppKit menus drop plain SF Symbol images.
+                Toggle(isOn: Binding(
+                    get: { project.id == selectedProject?.id },
+                    set: { isOn in
+                        guard isOn else { return }
+                        selectedProjectId = project.id
+                        // Worktree choice doesn't carry across projects: an
+                        // existing worktree belongs to the old project, and
+                        // non-git projects can't host new ones.
+                        controller?.setRunContext(.projectRoot)
+                        if let controller { Task { await controller.selectProject(project) } }
+                        // Keep the cached selection responsive, then re-probe
+                        // project metadata independently in the background.
+                        Task {
+                            await environment.projectList.refreshFromServer()
+                        }
+                    }
+                )) {
+                    Label {
+                        Text(project.name)
+                    } icon: {
+                        // Same filled variant the sidebar rows use.
+                        MenuSymbolIcon(systemName: FilledSymbol.preferred(project.symbolName))
+                    }
+                }
+            }
+            Divider()
+            Button {
+                addProjectFlow.begin()
+            } label: {
+                Label {
+                    Text("New project…")
+                } icon: {
+                    MenuSymbolIcon(systemName: "folder.badge.plus")
+                }
+            }
+        } label: {
+            PickerChip(text: selectedProject?.name ?? "Workspace") {
+                Image(
+                    systemName: selectedProject.map {
+                        FilledSymbol.preferred($0.symbolName)
+                    } ?? "folder.fill"
+                )
+                .font(.system(size: 12))
+            }
+        }
+        .menuStyle(.button)
+        .buttonStyle(HoverIconButtonStyle(shape: .chip))
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Choose workspace")
+    }
+
+    /// Where the chat runs: the project root (named), an existing workspace
+    /// worktree (named), or a new worktree created on first send. The chat's
+    /// directory is its own — the workspace root never moves.
+    @ViewBuilder
+    private func runLocationPicker(_ controller: SessionController) -> some View {
+        Menu {
+            ForEach(workspaceContexts) { context in
+                Toggle(isOn: Binding(
+                    get: { isSelected(context, in: controller) },
+                    set: { isOn in
+                        guard isOn, !isSelected(context, in: controller) else { return }
+                        if let name = context.worktreeName {
+                            controller.selectRunContext(
+                                .existingWorktree(name: name, path: context.path)
+                            )
+                        } else {
+                            controller.selectRunContext(.projectRoot)
+                        }
+                        // Move any eager connection to the picked directory.
+                        Task { await controller.reconnect() }
+                    }
+                )) {
+                    Label {
+                        Text(context.name)
+                        Text(context.displayPath)
+                    } icon: {
+                        MenuSymbolIcon(systemName: context.symbolName)
+                    }
+                }
+            }
+            // Hidden (not disabled) for non-git projects: they have no
+            // worktree concept at all, so the option can never apply.
+            if worktreeAvailable {
+                Divider()
+                Toggle(isOn: Binding(
+                    get: { controller.runContext == .newWorktree },
+                    set: { isOn in
+                        guard isOn, controller.runContext != .newWorktree else { return }
+                        controller.selectRunContext(.newWorktree)
+                        // Drop any eager connection pinned to a directory; the
+                        // agent reconnects in the worktree on first send.
+                        Task { await controller.reconnect() }
+                    }
+                )) {
+                    Label {
+                        Text("New worktree")
+                    } icon: {
+                        MenuSymbolIcon(systemName: "arrow.triangle.branch")
+                    }
+                }
+            }
+        } label: {
+            PickerChip(text: runContextChipTitle(controller)) {
+                Image(systemName: runContextChipSymbol(controller))
+                    .font(.system(size: 12))
+            }
+        }
+        .menuStyle(.button)
+        .buttonStyle(HoverIconButtonStyle(shape: .chip))
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Where this chat's commands run")
+        .accessibilityLabel("Run location")
+        .accessibilityValue(runContextChipTitle(controller))
+    }
+
+    private func isSelected(
+        _ context: WorkspaceRunContext, in controller: SessionController
+    ) -> Bool {
+        switch controller.runContext {
+        case .projectRoot:
+            context.worktreeName == nil
+        case let .existingWorktree(name, _):
+            context.worktreeName == name
+        case .newWorktree:
+            false
+        }
+    }
+
+    private func runContextChipTitle(_ controller: SessionController) -> String {
+        switch controller.runContext {
+        case .projectRoot:
+            selectedProject?.name ?? "Project"
+        case let .existingWorktree(name, _):
+            name
+        case .newWorktree:
+            "New worktree"
+        }
+    }
+
+    private func runContextChipSymbol(_ controller: SessionController) -> String {
+        switch controller.runContext {
+        case .projectRoot: "folder.fill"
+        case .existingWorktree, .newWorktree: "arrow.triangle.branch"
+        }
+    }
+
+    /// A rebooting server remains a calm loading state beneath the composer.
+    /// Terminal setup errors use the pane's established top-banner position.
+    @ViewBuilder
+    private func statusLabel(_ controller: SessionController) -> some View {
+        if let waitMessage = controller.serverWaitMessage {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                ShimmeringText(text: waitMessage)
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func setupFailureBanner(_ message: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.callout)
+                .foregroundStyle(theme.statusError)
+            Text(message)
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            // Relaunching the app restarts the managed server too.
+            if message == serverUnreachableErrorMessage {
+                Button("Restart") { AppRelauncher.relaunch() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("Restart Codevisor and its server")
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(theme.cardBackground))
+        .themedCardShadow(theme)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Could not start chat. \(message)")
+    }
+
+    // MARK: - Setup
+
+    private func setUpController() {
+        selectedProjectId = preferredProjectId ?? projects.first?.id
+        guard let project = selectedProject else { return }
+        // Keep the original draft controller path: it owns both the complete
+        // per-composer snapshot and the machine-wide composer defaults.
+        let controller = paneDraftId.map {
+            store.paneDraft(
+                paneId: $0,
+                project: project,
+                preCreatedSession: preCreatedSession
+            )
+        } ?? store.draft(project: project)
+        if controller.project.id != project.id {
+            let draftProjectExists = projects.contains { $0.id == controller.project.id }
+            if explicitProjectId == project.id || !draftProjectExists {
+                // Opened explicitly for this project (or the draft's project is
+                // gone): move the draft here, keeping its text/attachments.
+                Task { await controller.selectProject(project) }
+            } else {
+                // Generic entry: follow the draft's own project so the title
+                // and pickers match the composer state the user left.
+                selectedProjectId = controller.project.id
+            }
+        }
+        // Clamp the draft's restored run context: non-git projects can't run
+        // worktrees at all, and a stale existing-worktree choice (worktree
+        // removed, or a draft carried across workspaces) falls back to the
+        // project root rather than pointing at a directory this workspace
+        // doesn't own.
+        if selectedProject?.isGitRepository == false {
+            controller.setRunContext(.projectRoot)
+        } else if case let .existingWorktree(name, _) = controller.runContext,
+                  !workspaceContexts.contains(where: { $0.worktreeName == name }) {
+            controller.setRunContext(.projectRoot)
+        }
+        controller.onFirstSend = { [weak controller] in
+            guard let controller, let project = selectedProject else { return }
+            let title = Self.title(from: controller.composerText)
+            let session: ChatSession
+            if let preCreatedSession,
+               let updated = environment.projectList.updateSessionForFirstSend(
+                   preCreatedSession,
+                   title: title,
+                   harnessId: controller.selectedHarnessId,
+                   worktreeName: controller.worktreeName,
+                   cwd: controller.sessionCwdOverride
+               ) {
+                // The record already exists (eager creation put it in the
+                // sidebar); first send fills in what's now known.
+                session = updated
+            } else {
+                session = environment.projectList.newSession(
+                    in: project,
+                    title: title,
+                    harnessId: controller.selectedHarnessId,
+                    worktreeName: controller.worktreeName,
+                    cwd: controller.sessionCwdOverride,
+                    syncToServer: false
+                )
+            }
+            controller.serverSession = session
+            // The eager connection may already hold an agent session id; persist
+            // it, and capture any future-created id too.
+            if let agentSessionId = controller.connectedAgentSessionId {
+                environment.projectList.setAgentSessionId(
+                    agentSessionId,
+                    for: session.id,
+                    serverId: session.serverId
+                )
+            }
+            controller.onAgentSessionCreated = { [weak projectList = environment.projectList] agentSessionId in
+                projectList?.setAgentSessionId(
+                    agentSessionId,
+                    for: session.id,
+                    serverId: session.serverId
+                )
+            }
+            // The session record is registered before the worktree exists (the
+            // page opens while setup streams progress); patch in the worktree
+            // name/cwd once the server has materialized it.
+            controller.onWorktreeCreated = { [weak projectList = environment.projectList] worktree in
+                // The chat moves into the worktree while the workspace keeps
+                // its project-root anchor. Only its automatic display name
+                // follows the new worktree.
+                projectList?.setWorktree(
+                    name: worktree.name,
+                    cwd: worktree.path,
+                    for: session.id,
+                    serverId: session.serverId
+                )
+                if let hostWorkspaceId {
+                    environment.workspaces.setAutomaticName(
+                        worktree.name,
+                        forWorkspace: hostWorkspaceId
+                    )
+                }
+            }
+            // Keep the session/workspace, but put this same controller back
+            // behind the original draft persistence hooks. The restored text,
+            // attachments, harness/config, run context, and goal state then
+            // survive navigation and relaunch exactly as they did before.
+            controller.onSetupFailed = { [weak controller] in
+                guard let controller else { return }
+                controller.serverSession = nil
+                controller.onAgentSessionCreated = nil
+                controller.onWorktreeCreated = nil
+                if let paneDraftId {
+                    store.restorePaneDraftPersistence(
+                        controller,
+                        paneId: paneDraftId
+                    )
+                } else {
+                    store.restoreDraftPersistence(controller)
+                }
+            }
+            store.register(controller, for: session)
+            if let paneDraftId, let onCreatedInPane {
+                // In-pane draft: bind the pane to its new session in place —
+                // no navigation, the workspace stays exactly where it is.
+                store.removePaneDraft(paneId: paneDraftId)
+                onCreatedInPane(session)
+            } else {
+                selection = .session(serverId: session.serverId, id: session.id)
+            }
+        }
+        self.controller = controller
+        Task {
+            await controller.prepare()
+            if !AppPreview.isRunning,
+               !controller.showsNewChatAfterSetupFailure {
+                await controller.connectIfNeeded()
+            }
+        }
+    }
+
+    private static func title(from prompt: String) -> String {
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let firstLine = trimmed.split(separator: "\n").first.map(String.init) ?? "New session"
+        return firstLine.count > 48 ? String(firstLine.prefix(48)) + "…" : (firstLine.isEmpty ? "New session" : firstLine)
+    }
+}
+
+/// A simple line-wrapping layout: places subviews left-to-right, breaking onto a
+/// new line when the next subview won't fit the proposed width. Each row is
+/// centered (or leading/trailing) and its subviews vertically centered within
+/// the row's height. Used by the new-chat title so a mix of word Texts and an
+/// inline picker chip flow like a normal wrapping paragraph.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+    var lineSpacing: CGFloat = 6
+    var alignment: HorizontalAlignment = .center
+
+    private struct Row {
+        var items: [(index: Int, size: CGSize)] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    private func computeRows(maxWidth: CGFloat, subviews: Subviews) -> [Row] {
+        var rows: [Row] = []
+        var current = Row()
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let projected = current.items.isEmpty ? size.width : current.width + spacing + size.width
+            if !current.items.isEmpty, projected > maxWidth {
+                rows.append(current)
+                current = Row()
+            }
+            current.width = current.items.isEmpty ? size.width : current.width + spacing + size.width
+            current.height = max(current.height, size.height)
+            current.items.append((index, size))
+        }
+        if !current.items.isEmpty { rows.append(current) }
+        return rows
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        let rows = computeRows(maxWidth: maxWidth, subviews: subviews)
+        let width = proposal.width ?? (rows.map(\.width).max() ?? 0)
+        let height = rows.map(\.height).reduce(0, +) + lineSpacing * CGFloat(max(0, rows.count - 1))
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
+        let rows = computeRows(maxWidth: bounds.width, subviews: subviews)
+        var y = bounds.minY
+        for row in rows {
+            var x: CGFloat
+            switch alignment {
+            case .trailing: x = bounds.maxX - row.width
+            case .leading: x = bounds.minX
+            default: x = bounds.minX + (bounds.width - row.width) / 2
+            }
+            for item in row.items {
+                subviews[item.index].place(
+                    at: CGPoint(x: x, y: y + (row.height - item.size.height) / 2),
+                    proposal: ProposedViewSize(item.size)
+                )
+                x += item.size.width + spacing
+            }
+            y += row.height + lineSpacing
+        }
+    }
+}
+
+#Preview {
+    @Previewable @State var selection: SidebarSelection?
+    let environment = AppEnvironment.preview()
+    return NewChatView(
+        store: SessionStore(environment: environment),
+        selection: $selection,
+        preferredProjectId: nil
+    )
+    .environmentObject(environment)
+    .frame(width: 900, height: 640)
+}
