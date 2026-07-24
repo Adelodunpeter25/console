@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Orb setup — runs once per fresh orb (and again when restoring a cached snapshot).
+# Installs the toolchain and dependencies needed to build, test, and run this monorepo.
+set -euo pipefail
+
+echo "[setup] console-monorepo orb setup starting"
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+# 1. System packages: ensure a C++ build toolchain for the native `better-sqlite3` module.
+#    These are usually preinstalled in the base orb; the install is idempotent.
+if ! command -v g++ >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1 || ! command -v make >/dev/null 2>&1; then
+  echo "[setup] installing build toolchain"
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y
+  apt-get install -y build-essential python3 make g++ pkg-config
+else
+  echo "[setup] build toolchain present"
+fi
+
+# 2. npm must resolve with legacy peer deps — the mobile workspace has a
+#    react-native-worklets / react-native-reanimated peer conflict that `npm ci`
+#    rejects by default. Persist it so later `npm install` calls by agents succeed too.
+if [ ! -f .npmrc ] || ! grep -q '^legacy-peer-deps' .npmrc 2>/dev/null; then
+  echo "[setup] writing .npmrc (legacy-peer-deps=true)"
+  printf 'legacy-peer-deps=true\n' >> .npmrc
+fi
+
+# 3. Install dependencies. Use `npm ci` for a fresh install (reproducible from the
+#    lockfile) and the faster `npm install` to reconcile when node_modules already
+#    exists (e.g. restored from a snapshot).
+if [ -d node_modules ] && [ -f node_modules/.package-lock.json ]; then
+  echo "[setup] node_modules present; reconciling with npm install"
+  npm install --no-audit --no-fund
+else
+  echo "[setup] fresh install with npm ci"
+  npm ci --no-audit --no-fund
+fi
+
+# 4. Smoke-check the native module compiled.
+if [ -f node_modules/better-sqlite3/build/Release/better_sqlite3.node ]; then
+  echo "[setup] better-sqlite3 native module OK"
+else
+  echo "[setup] WARNING: better-sqlite3 native module not built" >&2
+fi
+
+echo "[setup] done"
