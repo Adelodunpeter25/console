@@ -1,4 +1,4 @@
-.PHONY: dev-server dev-web dev build typecheck check help
+.PHONY: dev-server dev-web dev-mobile dev-desktop build-desktop typecheck check help
 
 # Default target
 .DEFAULT_GOAL := help
@@ -15,6 +15,14 @@ dev-web:
 dev-mobile:
 	npm run dev:mobile
 
+## dev-desktop: Start the Tauri desktop app in dev mode (requires server running)
+dev-desktop:
+	npm run dev:desktop
+
+## build-desktop: Build the Tauri desktop app for production
+build-desktop:
+	npm run build:desktop
+
 ## typecheck: Run TypeScript check across all monorepo workspaces
 typecheck:
 	npm run typecheck
@@ -29,5 +37,7 @@ help:
 	@echo "  make dev-server  - Start the backend agent server"
 	@echo "  make dev-web     - Start the web app dev server"
 	@echo "  make dev-mobile  - Start the Expo mobile app dev server"
+	@echo "  make dev-desktop  - Start the Tauri desktop app dev server"
+	@echo "  make build-desktop  - Build the Tauri desktop app for production"
 	@echo "  make typecheck   - Run TypeScript typechecking"
 	@echo "  make check       - Run Vite+ code format and lint checks"

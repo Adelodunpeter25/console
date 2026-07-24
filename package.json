@@ -2,7 +2,7 @@
   "name": "console-monorepo",
   "version": "1.0.0",
   "private": true,
-  "description": "A coding agent engine monorepo with CLI, Server, Web, Mobile and shared API package",
+  "description": "A coding agent engine monorepo with CLI, Server, Web, Mobile, Desktop and shared API package",
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -12,6 +12,8 @@
     "start:server": "npm run start --workspace=@console/server",
     "dev:web": "npm run dev --workspace=@console/web",
     "dev:mobile": "npm run start --workspace=@console/mobile",
+    "dev:desktop": "npm run tauri dev --workspace=@console/desktop",
+    "build:desktop": "npm run tauri build --workspace=@console/desktop",
     "cli": "npm run cli --workspace=@console/cli",
     "check": "vp check",
     "typecheck": "tsc --noEmit"
