@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Orb resume — runs every time an existing paused orb wakes, before Amp continues.
+# Must be fast (<10s) and idempotent. Never install dependencies here.
+#
+# This monorepo uses file-based SQLite via `better-sqlite3` (no external database)
+# and needs no tunnels, so there is nothing to restart — just a quick health check.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+if [ -d node_modules ]; then
+  echo "[resume] node_modules present"
+else
+  echo "[resume] WARNING: node_modules missing — run .agents/setup" >&2
+fi
+
+echo "[resume] done"
