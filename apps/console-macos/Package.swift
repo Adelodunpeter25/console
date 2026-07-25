@@ -15,8 +15,9 @@ let package = Package(
             url: "https://github.com/ZeeZide/CodeEditor.git",
             branch: "main"
         ),
-        // Ghostty terminal — vendored locally, downgraded to swift-tools-version 5.9
-        .package(path: "Packages/libghostty-spm")
+        // Ghostty terminal — vendored locally, downgraded to swift-tools-version 5.9.
+        // Temporarily disabled while Swift 5.9 compatibility is finalized.
+        // .package(path: "Packages/libghostty-spm")
     ],
     targets: [
         // MARK: ConsoleCore — models + API client matching the Rust/Node backend
@@ -35,10 +36,14 @@ let package = Package(
             name: "ConsoleMacOS",
             dependencies: [
                 "ConsoleCore",
-                .product(name: "CodeEditor", package: "CodeEditor"),
-                .product(name: "GhosttyTerminal", package: "libghostty-spm")
+                .product(name: "CodeEditor", package: "CodeEditor")
             ],
-            path: "Sources/ConsoleMacOS"
+            path: "Sources/ConsoleMacOS",
+            // Terminal pane temporarily excluded while libghostty-spm
+            // Swift 5.9 compatibility is finalized.
+            exclude: [
+                "Features/Terminal"
+            ]
         )
     ]
 )

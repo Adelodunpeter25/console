@@ -6,8 +6,10 @@ struct ChatView: View {
     let sessionId: String
     @StateObject private var sessionVM: SessionViewModel
 
-    @State private var showTerminal = false
-    @State private var terminalHeight: CGFloat = 240
+    // Terminal pane temporarily disabled while libghostty-spm Swift 5.9
+    // compatibility is finalized.
+    // @State private var showTerminal = false
+    // @State private var terminalHeight: CGFloat = 240
 
     init(app: AppViewModel, sessionId: String) {
         self.app = app
@@ -19,31 +21,30 @@ struct ChatView: View {
         VStack(spacing: 0) {
             messageList
 
-            if showTerminal {
-                Divider()
-                // Resizable terminal pane
-                VStack(spacing: 0) {
-                    TerminalPaneCard(
-                        mode: .local,
-                        workingDirectory: sessionVM.header?.cwd,
-                        onClose: { showTerminal = false }
-                    )
-                    .frame(height: terminalHeight)
-                }
-                .background(Color.clear)
-                .overlay(alignment: .top) {
-                    // Drag handle to resize terminal
-                    Rectangle()
-                        .fill(Color(nsColor: .separatorColor))
-                        .frame(height: 4)
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    terminalHeight = max(120, min(600, terminalHeight - value.translation.height))
-                                }
-                        )
-                }
-            }
+            // Terminal pane — temporarily disabled.
+            // if showTerminal {
+            //     Divider()
+            //     VStack(spacing: 0) {
+            //         TerminalPaneCard(
+            //             mode: .local,
+            //             workingDirectory: sessionVM.header?.cwd,
+            //             onClose: { showTerminal = false }
+            //         )
+            //         .frame(height: terminalHeight)
+            //     }
+            //     .background(Color.clear)
+            //     .overlay(alignment: .top) {
+            //         Rectangle()
+            //             .fill(Color(nsColor: .separatorColor))
+            //             .frame(height: 4)
+            //             .gesture(
+            //                 DragGesture()
+            //                     .onChanged { value in
+            //                         terminalHeight = max(120, min(600, terminalHeight - value.translation.height))
+            //                     }
+            //             )
+            //     }
+            // }
 
             Divider()
 
@@ -60,9 +61,10 @@ struct ChatView: View {
                     Task { await sessionVM.sendPrompt(prompt, modelId: modelId, provider: provider) }
                 },
                 onAbort: { Task { await sessionVM.abort() } },
-                providers: app.providers,
-                onToggleTerminal: { showTerminal.toggle() },
-                isTerminalVisible: showTerminal
+                providers: app.providers
+                // Terminal toggle temporarily disabled.
+                // onToggleTerminal: { showTerminal.toggle() },
+                // isTerminalVisible: showTerminal
             )
         }
         .task {
