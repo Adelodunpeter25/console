@@ -88,9 +88,9 @@ public final class AppViewModel: ObservableObject {
         }
     }
 
-    public func createSession(cwd: String, modelId: String? = nil, provider: String? = nil, title: String? = nil) async -> SessionHeader? {
+    public func createSession(cwd: String, projectId: String? = nil, modelId: String? = nil, provider: String? = nil, title: String? = nil) async -> SessionHeader? {
         do {
-            let dto = CreateSessionDto(cwd: cwd, modelId: modelId, provider: provider, title: title)
+            let dto = CreateSessionDto(cwd: cwd, projectId: projectId, modelId: modelId, provider: provider, title: title)
             let session = try await client.createSession(dto)
             sessions.insert(session, at: 0)
             return session

@@ -5,6 +5,9 @@ import StreamMarkdown
 struct ChatView: View {
     @ObservedObject var app: AppViewModel
     let sessionId: String
+    /// Switching the composer's project picker creates a new session under the
+    /// chosen project and navigates to it; owned by `ContentView`.
+    var onSwitchProject: (ProjectInfo) -> Void = { _ in }
     @StateObject private var sessionVM: SessionViewModel
 
     // Terminal pane temporarily disabled while libghostty-spm Swift 5.9
@@ -12,9 +15,10 @@ struct ChatView: View {
     // @State private var showTerminal = false
     // @State private var terminalHeight: CGFloat = 240
 
-    init(app: AppViewModel, sessionId: String) {
+    init(app: AppViewModel, sessionId: String, onSwitchProject: @escaping (ProjectInfo) -> Void = { _ in }) {
         self.app = app
         self.sessionId = sessionId
+        self.onSwitchProject = onSwitchProject
         _sessionVM = StateObject(wrappedValue: SessionViewModel(client: app.client, sessionId: sessionId))
     }
 
@@ -62,7 +66,10 @@ struct ChatView: View {
                     Task { await sessionVM.sendPrompt(prompt, modelId: modelId, provider: provider) }
                 },
                 onAbort: { Task { await sessionVM.abort() } },
-                providers: app.providers
+                providers: app.providers,
+                projects: app.projects,
+                selectedProjectId: sessionVM.header?.projectId,
+                onSwitchProject: onSwitchProject
                 // Terminal toggle temporarily disabled.
                 // onToggleTerminal: { showTerminal.toggle() },
                 // isTerminalVisible: showTerminal
