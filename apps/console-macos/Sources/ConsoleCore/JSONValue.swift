@@ -59,6 +59,22 @@ public extension JSONValue {
     var boolValue: Bool?     { if case .bool(let v) = self { return v }; return nil }
     var arrayValue: [JSONValue]? { if case .array(let v) = self { return v }; return nil }
     var objectValue: [String: JSONValue]? { if case .object(let v) = self { return v }; return nil }
+
+    /// Pretty-printed, human-readable JSON representation (2-space indent).
+    /// Falls back to a compact string for empty values.
+    var prettyPrinted: String {
+        do {
+            let data = try JSONEncoder().encode(self)
+            let object = try JSONSerialization.jsonObject(with: data, options: [.allowFragments])
+            let pretty = try JSONSerialization.data(
+                withJSONObject: object,
+                options: [.prettyPrinted, .fragmentsAllowed]
+            )
+            return String(data: pretty, encoding: .utf8) ?? "\(self)"
+        } catch {
+            return "\(self)"
+        }
+    }
 }
 
 extension JSONValue: ExpressibleByStringLiteral     { public init(stringLiteral v: String) { self = .string(v) } }

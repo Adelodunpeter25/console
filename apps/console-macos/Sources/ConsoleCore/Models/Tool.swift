@@ -50,7 +50,15 @@ public struct PermissionRequest: Codable, Sendable, Hashable {
 public struct ToolCall: Codable, Sendable, Hashable {
     public let id: String
     public let name: String
-    public let arguments: JSONValue
+    /// Arguments may be absent during streaming — the server emits a tool
+    /// call with just `id` + `name` first, then arguments arrive later.
+    public let arguments: JSONValue?
+
+    public init(id: String, name: String, arguments: JSONValue? = nil) {
+        self.id = id
+        self.name = name
+        self.arguments = arguments
+    }
 }
 
 // MARK: - ToolResult

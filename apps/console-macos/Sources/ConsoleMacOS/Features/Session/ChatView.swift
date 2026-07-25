@@ -159,7 +159,7 @@ struct AssistantMessageView: View {
                     ToolCallView(call: call)
                 }
             }
-            if let stopReason, stopReason != "end_turn" {
+            if let stopReason, stopReason != "stop", stopReason != "toolUse", stopReason != "end_turn" {
                 Text("Stopped: \(stopReason)")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
@@ -183,17 +183,19 @@ struct ToolCallView: View {
                         .font(.caption)
                     Text(call.name)
                         .font(.callout.monospaced())
-                    Image(systemName: "chevron.right")
-                        .font(.caption2)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    if call.arguments != nil {
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    }
                     Spacer()
                 }
                 .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
 
-            if isExpanded {
-                Text(call.arguments.stringValue ?? String(describing: call.arguments))
+            if isExpanded, let args = call.arguments {
+                Text(args.prettyPrinted)
                     .font(.caption.monospaced())
                     .textSelection(.enabled)
                     .padding(8)
@@ -215,7 +217,7 @@ struct ToolResultView: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(result.isError == true ? .red : .secondary)
                     }
-                    Text(result.content.stringValue ?? String(describing: result.content))
+                    Text(result.content.prettyPrinted)
                         .font(.caption.monospaced())
                         .textSelection(.enabled)
                         .lineLimit(20)
