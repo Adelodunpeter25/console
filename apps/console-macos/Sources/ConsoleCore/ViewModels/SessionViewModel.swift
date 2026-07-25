@@ -22,6 +22,7 @@ public final class SessionViewModel: ObservableObject {
 
     // Accumulated assistant turn during streaming
     private var currentAssistantParts: [AssistantMessageContent] = []
+    private var eventsReceived = false
 
     public init(client: ApiClient, sessionId: String) {
         self.client = client
@@ -53,6 +54,7 @@ public final class SessionViewModel: ObservableObject {
         streamingThinking = ""
         currentAssistantParts = []
         errorMessage = nil
+        eventsReceived = false
 
         let dto = RunPromptDto(
             prompt: prompt,
@@ -74,9 +76,12 @@ public final class SessionViewModel: ObservableObject {
         do {
             try await client.runAgentStream(sessionId: sessionId, dto: dto, onEvent: handle)
             // Stream ended — finalize the assistant turn
+            if !eventsReceived {
+                errorMessage = "No response from server. Make sure the backend is running at \(ConsoleConfig.serverURL)."
+            }
             finalizeAssistantTurn()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = "Connection failed: \(error.localizedDescription)\n\nServer: \(ConsoleConfig.serverURL)"
             finalizeAssistantTurn()
         }
 
@@ -134,6 +139,7 @@ public final class SessionViewModel: ObservableObject {
     // MARK: - Event handling
 
     private func handleEvent(_ event: AgentSessionEvent) {
+        eventsReceived = true
         switch event {
         case .sessionStart:
             break
