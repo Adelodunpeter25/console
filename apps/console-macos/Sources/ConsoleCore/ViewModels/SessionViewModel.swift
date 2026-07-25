@@ -61,10 +61,13 @@ public final class SessionViewModel: ObservableObject {
             approvalMode: approvalMode?.rawValue
         )
 
-        // Capture a sendable handler that dispatches to MainActor
+        // Capture a sendable handler that dispatches to MainActor.
+        // Bind `self` to a local `let` before the Task so we don't reference
+        // the captured `weak var` from concurrently-executing code.
         let handle: @Sendable (AgentSessionEvent) -> Void = { [weak self] event in
+            guard let self else { return }
             Task { @MainActor in
-                self?.handleEvent(event)
+                self.handleEvent(event)
             }
         }
 
