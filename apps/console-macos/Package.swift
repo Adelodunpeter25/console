@@ -10,6 +10,12 @@ let package = Package(
         .executable(name: "ConsoleMacOS", targets: ["ConsoleMacOS"]),
         .library(name: "ConsoleCore", targets: ["ConsoleCore"])
     ],
+    dependencies: [
+        .package(
+            url: "https://github.com/ZeeZide/CodeEditor.git",
+            branch: "main"
+        )
+    ],
     targets: [
         // MARK: ConsoleCore — models + API client matching the Rust/Node backend
         .target(
@@ -25,7 +31,10 @@ let package = Package(
         // MARK: ConsoleMacOS — SwiftUI app (UI files ported from Codevisor)
         .executableTarget(
             name: "ConsoleMacOS",
-            dependencies: ["ConsoleCore"],
+            dependencies: [
+                "ConsoleCore",
+                .product(name: "CodeEditor", package: "CodeEditor")
+            ],
             path: "Sources/ConsoleMacOS"
         )
     ]

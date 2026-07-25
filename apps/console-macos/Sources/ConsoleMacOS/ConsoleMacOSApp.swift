@@ -1,5 +1,4 @@
 import SwiftUI
-import ConsoleCore
 
 @main
 struct ConsoleMacOSApp: App {
@@ -8,7 +7,8 @@ struct ConsoleMacOSApp: App {
             ContentView()
                 .frame(minWidth: 900, minHeight: 600)
         }
-        .windowStyle(.hiddenTitleBar)
+        .windowStyle(.titleBar)
+        .defaultSize(width: 1280, height: 820)
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
