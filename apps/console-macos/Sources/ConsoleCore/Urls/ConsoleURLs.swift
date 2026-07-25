@@ -52,11 +52,10 @@ public enum ConsoleURLs {
 
         let joined = "\(ConsoleConfig.serverURL)\(prefix)\(relativePath)"
 
-        guard let components = URLComponents(string: joined) else {
+        guard var components = URLComponents(string: joined) else {
             throw AppError.config("Invalid URL for path: \(path)")
         }
 
-        var components = components
         if !query.isEmpty {
             components.queryItems = query
         }
