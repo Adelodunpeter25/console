@@ -32,7 +32,7 @@ public final class AppViewModel: ObservableObject {
     // MARK: - Health check
 
     public func pingServer() async -> Bool {
-        guard let url = URL(string: ConsoleConfig.healthURL) else { return false }
+        guard let url = try? ConsoleURLs.healthURL() else { return false }
         do {
             let (_, resp) = try await URLSession.shared.data(from: url)
             return (resp as? HTTPURLResponse)?.statusCode == 200

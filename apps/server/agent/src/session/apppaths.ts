@@ -35,16 +35,19 @@ export function getProjectDbPath(projectId: string): string {
 }
 
 /**
- * Returns the directory holding one SQLite file per session.
+ * Returns the directory holding one SQLite file per session for a project.
+ * Sessions are linked to their project on disk: each session DB lives at
+ * `<storage>/projects/<projectId>/sessions/<sessionId>.db`.
  */
-export function getSessionsDir(): string {
-  return path.join(getConsoleStorageDir(), "sessions");
+export function getProjectSessionsDir(projectId: string): string {
+  return path.join(getProjectStorageDir(projectId), "sessions");
 }
 
 /**
- * Returns the path to a single session's SQLite database.
- * Each session is fully self-contained: header metadata + message history.
+ * Returns the path to a single session's SQLite database, scoped to its
+ * project. Each session is fully self-contained: header metadata + message
+ * history, and the file location records project ownership.
  */
-export function getSessionDbPath(sessionId: string): string {
-  return path.join(getSessionsDir(), `${sessionId}.db`);
+export function getSessionDbPath(projectId: string, sessionId: string): string {
+  return path.join(getProjectSessionsDir(projectId), `${sessionId}.db`);
 }

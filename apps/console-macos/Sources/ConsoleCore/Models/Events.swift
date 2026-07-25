@@ -40,6 +40,15 @@ public struct AgentSessionError: Codable, Sendable, Hashable {
 // MARK: - AgentSessionEvent
 // Mirrors models/events.rs — serde(tag = "type", rename_all = "camelCase")
 
+/// Thrown when an event payload carries a `type` the client does not yet
+/// recognize. The SSE parser catches this and skips the event (with a debug
+/// log) instead of surfacing it as a hard error, so newer backend event
+/// types don't break older clients.
+public struct UnknownEventTypeError: Error, CustomStringConvertible {
+    public let typeName: String
+    public var description: String { "Unknown event type: \(typeName)" }
+}
+
 public enum AgentSessionEvent: Codable, Sendable, Hashable {
     case sessionStart
     case turnStart(prompt: String)
@@ -90,7 +99,13 @@ public enum AgentSessionEvent: Codable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        let type = try c.decode(EventType.self, forKey: .type)
+        // Decode the type tag as a raw string first so unknown types throw a
+        // typed `UnknownEventTypeError` (skippable) rather than a generic
+        // decoding error (which would surface as a hard error to the UI).
+        let typeRaw = try c.decode(String.self, forKey: .type)
+        guard let type = EventType(rawValue: typeRaw) else {
+            throw UnknownEventTypeError(typeName: typeRaw)
+        }
         switch type {
         case .sessionStart:
             self = .sessionStart

@@ -42,11 +42,7 @@ public final class ApiClient: @unchecked Sendable {
         query: [URLQueryItem] = [],
         body: B?
     ) async throws -> T {
-        var components = URLComponents(string: "\(ConsoleConfig.apiBase)\(path)")
-        if !query.isEmpty { components?.queryItems = query }
-        guard let url = components?.url else {
-            throw AppError.config("Invalid URL for path: \(path)")
-        }
+        let url = try ConsoleURLs.apiURL(path, query: query)
 
         var req = URLRequest(url: url)
         req.httpMethod = method
@@ -100,9 +96,7 @@ public final class ApiClient: @unchecked Sendable {
         method: String = "POST",
         body: Data? = nil
     ) async throws -> (URLSession.AsyncBytes, HTTPURLResponse) {
-        guard let url = URL(string: "\(ConsoleConfig.apiBase)\(path)") else {
-            throw AppError.config("Invalid URL for path: \(path)")
-        }
+        let url = try ConsoleURLs.sseURL(path)
 
         var req = URLRequest(url: url)
         req.httpMethod = method
@@ -129,5 +123,5 @@ public final class ApiClient: @unchecked Sendable {
         return (bytes, http)
     }
 
-    public var baseURL: String { ConsoleConfig.serverURL }
+    public var baseURL: String { ConsoleURLs.base }
 }
