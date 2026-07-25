@@ -5,17 +5,14 @@ import Testing
 @MainActor
 @Suite("App update model")
 struct AppUpdateModelTests {
-    @Test("User and background checks use the correct presentation mode")
-    func checkModes() async {
+    @Test("Update checks are no-ops")
+    func checksAreNoOps() async {
         let model = AppUpdateModel(currentVersion: "1.2.3", currentBuildNumber: 42)
-        var modes: [Bool] = []
-        model.checkHandler = { modes.append($0) }
 
         await model.checkForUpdatesInBackground()
         await model.checkForUpdates()
 
-        #expect(modes == [false, true])
-        #expect(model.phase == .checking)
+        #expect(model.phase == .idle)
         #expect(model.currentBuildNumber == 42)
     }
 
@@ -23,16 +20,13 @@ struct AppUpdateModelTests {
     func availableReleaseInstalls() async throws {
         let releaseURL = URL(string: "https://updates.codevisor.dev/notes/1.2.4.md")
         let model = AppUpdateModel(currentVersion: "1.2.3")
-        var installed: AppUpdateRelease?
-        model.installHandler = { installed = $0 }
-
         model.reportAvailable(version: "1.2.4", releasePageURL: releaseURL)
         let release = try #require(model.availableRelease)
         #expect(release.version == "1.2.4")
         #expect(release.releasePageURL == releaseURL)
 
         await model.installUpdate()
-        #expect(installed == release)
+        #expect(model.phase == .available(release))
 
         model.reportInstalling(version: release.version, releasePageURL: release.releasePageURL)
         #expect(model.phase == .updating(release))
@@ -55,16 +49,14 @@ struct AppUpdateModelTests {
         #expect(model.availableRelease?.version == "1.2.4")
     }
 
-    @Test("Channel changes are delegated to Sparkle")
+    @Test("Channel preference can still be changed")
     func channelChanges() {
         let model = AppUpdateModel(currentVersion: "1.2.3")
-        var values: [Bool] = []
-        model.channelChangeHandler = { values.append($0) }
 
         model.setAllowsAlphaUpdates(true)
+        #expect(model.allowsAlphaUpdates)
         model.setAllowsAlphaUpdates(false)
 
-        #expect(values == [true, false])
         #expect(!model.allowsAlphaUpdates)
     }
 

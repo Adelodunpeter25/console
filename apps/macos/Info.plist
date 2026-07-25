@@ -2,16 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>SUAllowsAutomaticUpdates</key>
-	<true/>
-	<key>SUEnableAutomaticChecks</key>
-	<true/>
-	<key>SUEnableSystemProfiling</key>
-	<false/>
-	<key>SUFeedURL</key>
-	<string>https://updates.codevisor.dev/appcast-arm64.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>1FsNm9QTvUciP2sETZFfeTkWHCPjRNU6mEQ1wzqQz2k=</string>
 	<!--
 	  Codevisor servers speak plain HTTP: the local server on 127.0.0.1 and
 	  remote machines over private networks (e.g. Tailscale, which encrypts
@@ -25,11 +15,6 @@
 	</dict>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>Codevisor uses window sharing to show which apps Computer Use can see and control.</string>
-	<!-- Public event-ingestion configuration; this token cannot read PostHog data. -->
-	<key>CodevisorPostHogProjectToken</key>
-	<string>$(CODEVISOR_POSTHOG_PROJECT_TOKEN)</string>
-	<key>CodevisorPostHogHost</key>
-	<string>$(CODEVISOR_POSTHOG_HOST)</string>
 	<!--
 	  codevisor:// deeplinks (codevisor-dev:// in Debug so the dev app and
 	  the installed production app never race for the same handler). Used by

@@ -1,9 +1,7 @@
 import Combine
 import Foundation
 
-/// The small, framework-independent portion of app update state consumed by
-/// Codevisor's existing sidebar and composer. Sparkle owns discovery,
-/// verification, installation, rollback, release notes, and relaunching.
+/// Framework-independent app update state. Update operations are disabled.
 public struct AppUpdateRelease: Equatable, Sendable {
     public var version: String
     public var releasePageURL: URL?
@@ -30,19 +28,6 @@ public final class AppUpdateModel: ObservableObject {
     public let currentBuildNumber: Int?
     @Published public private(set) var allowsAlphaUpdates: Bool
 
-    /// Installed by the app target's Sparkle coordinator. The boolean is true
-    /// for a user-initiated check (show Sparkle's native UI) and false for a
-    /// quiet information check used to drive the sidebar banner.
-    @Published public var checkHandler: (@MainActor (_ userInitiated: Bool) async -> Void)? = nil
-    /// Presents Sparkle's native update UI for the release behind the banner.
-    @Published public var installHandler: (@MainActor (AppUpdateRelease) async -> Void)? = nil
-    /// Runs one headless check-download-install-relaunch cycle with no UI.
-    /// Used when a remote client asked this machine to update itself — there
-    /// may be nobody at this screen to accept a prompt.
-    @Published public var unattendedInstallHandler: (@MainActor () async -> Void)? = nil
-    /// Resets Sparkle's update cycle after the user changes channels.
-    @Published public var channelChangeHandler: (@MainActor (_ allowsAlpha: Bool) -> Void)? = nil
-
     public init(
         currentVersion: String,
         currentBuildNumber: Int? = nil,
@@ -55,7 +40,6 @@ public final class AppUpdateModel: ObservableObject {
 
     public func setAllowsAlphaUpdates(_ value: Bool) {
         allowsAlphaUpdates = value
-        channelChangeHandler?(value)
     }
 
     public var availableRelease: AppUpdateRelease? {
@@ -79,33 +63,13 @@ public final class AppUpdateModel: ObservableObject {
         return nil
     }
 
-    public func checkForUpdates() async {
-        guard let checkHandler else { return }
-        phase = .checking
-        await checkHandler(true)
-    }
+    public func checkForUpdates() async {}
 
-    public func checkForUpdatesInBackground() async {
-        guard let checkHandler else { return }
-        await checkHandler(false)
-    }
+    public func checkForUpdatesInBackground() async {}
 
-    public func installUpdate() async {
-        guard let release = availableRelease, let installHandler else { return }
-        await installHandler(release)
-    }
+    public func installUpdate() async {}
 
-    /// Installs the newest release without any Sparkle UI, then relaunches.
-    /// Falls back to the interactive check when no unattended handler is
-    /// installed (development builds have no Sparkle coordinator).
-    public func installUpdateUnattended() async {
-        guard let unattendedInstallHandler else {
-            await checkForUpdates()
-            return
-        }
-        phase = .checking
-        await unattendedInstallHandler()
-    }
+    public func installUpdateUnattended() async {}
 
     public func reportAvailable(version: String, releasePageURL: URL?) {
         let release = AppUpdateRelease(version: version, releasePageURL: releasePageURL)

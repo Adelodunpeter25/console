@@ -16,9 +16,7 @@ let package = Package(
         .library(name: "CodeHighlighter", targets: ["CodeHighlighter"]),
         .library(name: "CodevisorCore", targets: ["CodevisorCore"])
     ],
-    dependencies: [
-        .package(url: "https://github.com/PostHog/posthog-ios.git", exact: "3.59.3")
-    ],
+    dependencies: [],
     targets: [
         // MARK: CodevisorTheming (VSCode/Shiki theme parsing, normalization,
         // palette derivation — Foundation-only, no SwiftUI)
@@ -73,8 +71,7 @@ let package = Package(
             name: "CodevisorCore",
             dependencies: [
                 "ACPKit",
-                "CodevisorTheming",
-                .product(name: "PostHog", package: "posthog-ios")
+                "CodevisorTheming"
             ],
             path: "CodevisorCore/Sources/CodevisorCore"
         ),

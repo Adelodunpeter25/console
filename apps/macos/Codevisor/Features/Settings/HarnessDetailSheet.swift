@@ -99,7 +99,7 @@ struct HarnessDetailSheet: View {
     }
 
     /// The dual-install block: the desktop app's own copy of this CLI, with
-    /// its own Sparkle-fed update state and an explicit update action —
+    /// its own server-fed update state and an explicit update action —
     /// deliberately separate from the row's Update button, which targets the
     /// user's primary install.
     @ViewBuilder

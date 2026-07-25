@@ -548,7 +548,7 @@ public final class MachineController: ObservableObject {
                     // confirmed. Alpha manifests include a prerelease suffix,
                     // while the bundled runtime reports its base version, and
                     // a remote Mac may install an even newer release according
-                    // to its own Sparkle channel.
+                    // to its own update channel.
                     serverUpdatePhase = .idle
                     await refreshStatus(for: machineId)
                     await projectList.refreshFromServer()

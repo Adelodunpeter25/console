@@ -937,7 +937,7 @@ struct ServerCustomHarnessListEnvelope: Codable, Equatable, Sendable {
 }
 
 /// Dual-install: a desktop app bundling a copy of the harness CLI, with its
-/// own Sparkle-fed update state. Mirrors `HarnessBundledApp` in @codevisor/api.
+/// own update state. Mirrors `HarnessBundledApp` in @codevisor/api.
 public struct ServerHarnessBundledApp: Codable, Equatable, Sendable {
     public var appName: String
     public var bundlePath: String

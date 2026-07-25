@@ -287,7 +287,7 @@ public final class LocalCodevisorServer: ObservableObject {
         }
     }
 
-    /// Stops launchd ownership before Sparkle replaces the bundle, then waits
+    /// Stops launchd ownership before an updater replaces the bundle, then waits
     /// for the old runtime to release its executable and database lease.
     @discardableResult
     public func prepareForAppUpdate() async -> Bool {

@@ -7,7 +7,6 @@ import QuickLook
 struct CodevisorApp: App {
     @State private var environment: AppEnvironment
     @State private var serverAgent: MacServerAgentController
-    @State private var sparkleUpdater: SparkleUpdateController?
 
     init() {
         let serverAgent = MacServerAgentController()
@@ -15,18 +14,10 @@ struct CodevisorApp: App {
         if !CodevisorAppVariant.isDevelopment {
             environment.localServer?.configureManagedService(serverAgent.managedService)
         }
-        let sparkleUpdater = CodevisorAppVariant.isDevelopment
-            ? nil
-            : SparkleUpdateController(
-                model: environment.appUpdate,
-                localServer: environment.localServer,
-                serverAgent: serverAgent
-            )
         AnalyticsClient.shared.configureFromMainBundle(enabled: environment.settings.shareAnalytics)
         AnalyticsClient.shared.captureAppOpenedOnce()
         _environment = State(initialValue: environment)
         _serverAgent = State(initialValue: serverAgent)
-        _sparkleUpdater = State(initialValue: sparkleUpdater)
         ChatNotificationManager.shared.configure(settings: environment.settings)
     }
 
@@ -149,19 +140,6 @@ struct RootView: View {
             if store == nil {
                 store = SessionStore(environment: environment)
                 store?.setWindowFocused(controlActiveState == .key)
-            }
-            if !AppPreview.isRunning {
-                // A remote client updated this machine's server: the bundled
-                // server hands the update back here. Sparkle installs the
-                // signed app update and replaces app + bundled server
-                // together — unattended, because the person who asked is at
-                // ANOTHER machine's screen and nobody here could accept a
-                // prompt.
-                environment.localServer?.onUpdateRequested = { [environment] in
-                    Task { @MainActor in
-                        await environment.appUpdate.installUpdateUnattended()
-                    }
-                }
             }
         }
         // codevisor://add-machine deeplinks, printed by `codevisor setup` on a
