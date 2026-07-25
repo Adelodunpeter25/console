@@ -24,7 +24,7 @@ public final class MarkdownSegmentCache {
     /// Streaming rewrites a message's text every flush, so intermediate texts
     /// pass through here once each; the LRU keeps the bound tight while the
     /// settled final texts — what scrolling re-encounters — stay hot.
-    public init(limit: Int = 128) {
+    public nonisolated init(limit: Int = 128) {
         self.limit = max(1, limit)
     }
 
@@ -90,7 +90,7 @@ public final class CodeHighlightResultCache {
     private var order: [Key] = []
     private let limit: Int
 
-    public init(limit: Int = 100) {
+    public nonisolated init(limit: Int = 100) {
         self.limit = max(1, limit)
     }
 

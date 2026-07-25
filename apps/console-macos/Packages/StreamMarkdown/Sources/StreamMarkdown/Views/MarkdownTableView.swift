@@ -249,7 +249,7 @@ final class MarkdownTableRenderMemo {
     private var entries: [CGFloat: MarkdownTableRenderCache.RenderedTable] = [:]
     private let cache: MarkdownTableRenderCache
 
-    init(cache: MarkdownTableRenderCache = .shared) {
+    nonisolated init(cache: MarkdownTableRenderCache = .shared) {
         self.cache = cache
     }
 
@@ -859,18 +859,4 @@ enum MarkdownTableRenderer {
         case .trailing: return .right
         }
     }
-}
-
-#Preview {
-    MarkdownTableView(
-        headers: ["Name", "Age", "City"],
-        alignments: [.leading, .center, .trailing],
-        rows: [
-            ["Ann", "30", "New York"],
-            ["Bob", "25", "LA"],
-            ["A very long name that wraps onto two lines", "1", "San Francisco"],
-        ]
-    )
-    .padding()
-    .frame(width: 420)
 }

@@ -250,6 +250,7 @@ enum MarkdownTextRunRenderer {
 /// identity lets both paths skip unchanged settled Markdown in O(1).
 @MainActor
 private final class TextRunMemo {
+    nonisolated init() {}
     private var blocks: [MarkdownBlock]?
     private var themeFingerprint: Int?
     private var foregroundColor: Color?

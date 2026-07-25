@@ -29,6 +29,7 @@ import Foundation
 /// back whole-message selection (and populates the shared LRU for scrolling).
 @MainActor
 final class StreamingSegmenter {
+    nonisolated init() {}
     private let parser = MarkdownParser()
 
     private var lastText: String?

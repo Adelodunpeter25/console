@@ -90,6 +90,7 @@ struct CodeBlockView: View {
     /// The shared-cache lookup, gated on `isComplete`: only settled blocks are
     /// ever stored, so a mid-stream probe is a guaranteed miss that still
     /// hashes the whole growing code string — on every body evaluation.
+    @MainActor
     private var settledCacheProbe: AttributedString? {
         isComplete ? CodeHighlightResultCache.shared.value(for: resultCacheKey) : nil
     }
@@ -301,6 +302,7 @@ private final class CodeScrollView: NSScrollView {
 /// actually grows.
 @MainActor
 private final class PlainCodeMemo {
+    nonisolated init() {}
     private var code: String?
     private var cached: AttributedString?
 
@@ -313,14 +315,3 @@ private final class PlainCodeMemo {
     }
 }
 
-#Preview("Complete") {
-    CodeBlockView(language: "swift", code: "let x = 1\nprint(x)", isComplete: true)
-        .padding()
-        .frame(width: 360)
-}
-
-#Preview("Streaming") {
-    CodeBlockView(language: "python", code: "def main():\n    return", isComplete: false)
-        .padding()
-        .frame(width: 360)
-}
