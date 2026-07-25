@@ -19,6 +19,9 @@ struct Theme: Equatable {
     var border: Color { Color(nsColor: .separatorColor) }
     var separator: Color { Color(nsColor: .separatorColor) }
 
+    var rowHoverBackground: Color { Color.secondary.opacity(0.12) }
+    var rowSelectedBackground: Color { Color.primary.opacity(0.14) }
+
     var statusOK: Color { .green }
     var statusWarn: Color { .orange }
     var statusError: Color { .red }
