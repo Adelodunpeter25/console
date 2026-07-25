@@ -1,5 +1,6 @@
 import SwiftUI
 import ConsoleCore
+import StreamMarkdown
 
 struct ChatView: View {
     @ObservedObject var app: AppViewModel
@@ -144,9 +145,9 @@ struct AssistantMessageView: View {
             ForEach(Array(content.enumerated()), id: \.offset) { _, part in
                 switch part {
                 case .text(let text):
-                    Text(text)
+                    StreamingMarkdownView(text)
                         .textSelection(.enabled)
-                        .font(.body)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 case .thinking(let text):
                     Text(text)
                         .font(.callout)
@@ -242,9 +243,8 @@ struct StreamingTextView: View {
                     .foregroundStyle(.secondary)
                     .italic()
             }
-            Text(text)
-                .textSelection(.enabled)
-                .font(.body)
+            StreamingMarkdownView(text, isComplete: false)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

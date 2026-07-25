@@ -28,7 +28,23 @@ export function getProjectStorageDir(projectId: string): string {
 
 /**
  * Returns the path to a specific project's session SQLite database.
+ * @deprecated Per-session DBs (`getSessionDbPath`) replace project-level DBs.
  */
 export function getProjectDbPath(projectId: string): string {
   return path.join(getProjectStorageDir(projectId), "project-sessions.db");
+}
+
+/**
+ * Returns the directory holding one SQLite file per session.
+ */
+export function getSessionsDir(): string {
+  return path.join(getConsoleStorageDir(), "sessions");
+}
+
+/**
+ * Returns the path to a single session's SQLite database.
+ * Each session is fully self-contained: header metadata + message history.
+ */
+export function getSessionDbPath(sessionId: string): string {
+  return path.join(getSessionsDir(), `${sessionId}.db`);
 }

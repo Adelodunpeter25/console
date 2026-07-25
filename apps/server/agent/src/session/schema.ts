@@ -16,13 +16,56 @@ export function initGlobalDatabase(db: Database.Database): void {
       updated_at INTEGER NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS sessions_lookup (
+    -- Per-session index. Each session's full history lives in its own
+    -- SQLite file (see getSessionDbPath); this table mirrors the header
+    -- for fast listing without opening every session DB.
+    CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL
+      title TEXT NOT NULL,
+      cwd TEXT NOT NULL,
+      project_id TEXT,
+      model_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      message_count INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
     );
 
     CREATE INDEX IF NOT EXISTS idx_projects_dir ON projects(dir);
-    CREATE INDEX IF NOT EXISTS idx_sessions_lookup_project_id ON sessions_lookup(project_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_cwd ON sessions(cwd);
+    CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC);
+  `);
+}
+
+/**
+ * Schema for a single session's SQLite database.
+ * One row in `session_meta` holds the header; `messages` holds history.
+ */
+export function initSessionDatabase(db: Database.Database): void {
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS session_meta (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      title TEXT NOT NULL,
+      cwd TEXT NOT NULL,
+      project_id TEXT,
+      model_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
   `);
 }
 

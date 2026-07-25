@@ -1,16 +1,21 @@
 /**
  * SQLite-backed Session & History Storage Engine (WAL mode).
- * Provides dynamic multi-database storage routing:
- * - A global database for project configurations.
- * - Per-project databases for isolated session histories & message logs.
+ *
+ * Per-session storage layout:
+ * - A global database (`console-global.db`) holds the `projects` table and a
+ *   `sessions` index mirroring session headers for fast listing.
+ * - Each session is fully self-contained in its own SQLite file at
+ *   `sessions/<session-id>.db` (`session_meta` + `messages`). The selected
+ *   model and provider are persisted there and reloaded on `loadSession`.
  */
 import DatabaseConstructor, { type Database as DatabaseType } from "better-sqlite3";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { AgentMessage, SessionHeader, ProjectInfo } from "../types/index.js";
-import { initGlobalDatabase, initProjectDatabase } from "./schema.js";
-import { getGlobalDbPath, getProjectDbPath } from "./apppaths.js";
+import { initGlobalDatabase, initSessionDatabase } from "./schema.js";
+import { getGlobalDbPath, getSessionsDir as defaultGetSessionsDir } from "./apppaths.js";
 
 const MAX_PERSIST_CHARS = 500_000;
 const TRUNCATION_NOTICE = "\n\n[Session persistence truncated large content]";
@@ -34,30 +39,70 @@ function truncateForPersistence(message: AgentMessage): AgentMessage {
   return message;
 }
 
+interface SessionMetaRow {
+  title: string;
+  cwd: string;
+  project_id: string | null;
+  model_id: string;
+  provider: string;
+  created_at: number;
+  updated_at: number;
+}
+
 export class SqliteSessionStorage {
   private globalDb: DatabaseType;
-  private projectDbs = new Map<string, DatabaseType>();
+  private sessionDbs = new Map<string, DatabaseType>();
+  private sessionsDir: string;
 
-  constructor() {
-    const globalDbPath = getGlobalDbPath();
+  /**
+   * @param options Optional overrides for testability.
+   *   - `dbPath`: global DB path (use `":memory:"` for in-memory tests).
+   *   - `sessionsDir`: directory for per-session DB files. Defaults to the
+   *     Console storage dir; when `dbPath` is `:memory:`, a temp dir is used
+   *     so per-session files don't collide with real storage.
+   */
+  constructor(options?: { dbPath?: string; sessionsDir?: string }) {
+    const globalDbPath = options?.dbPath ?? getGlobalDbPath();
     const dir = path.dirname(globalDbPath);
-    try {
-      fs.mkdirSync(dir, { recursive: true });
-    } catch {
-      // Ignored if folder exists
+    if (dir !== "." && dir !== "/") {
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+      } catch {
+        // Ignored if folder exists
+      }
     }
 
     this.globalDb = new DatabaseConstructor(globalDbPath);
     initGlobalDatabase(this.globalDb);
+
+    if (options?.sessionsDir) {
+      this.sessionsDir = options.sessionsDir;
+    } else if (options?.dbPath === ":memory:") {
+      this.sessionsDir = fs.mkdtempSync(path.join(os.tmpdir(), "console-sessions-"));
+    } else {
+      this.sessionsDir = defaultGetSessionsDir();
+    }
+    try {
+      fs.mkdirSync(this.sessionsDir, { recursive: true });
+    } catch {
+      // Ignored if folder exists
+    }
   }
 
   /**
-   * Retrieves or initializes the SQLite connection for a specific project.
+   * Resolves the SQLite path for a single session.
    */
-  private getProjectDb(projectId: string): DatabaseType {
-    let db = this.projectDbs.get(projectId);
+  private getSessionDbPath(sessionId: string): string {
+    return path.join(this.sessionsDir, `${sessionId}.db`);
+  }
+
+  /**
+   * Opens (and caches) the SQLite connection for a single session.
+   */
+  private getSessionDb(sessionId: string): DatabaseType {
+    let db = this.sessionDbs.get(sessionId);
     if (!db) {
-      const dbPath = getProjectDbPath(projectId);
+      const dbPath = this.getSessionDbPath(sessionId);
       const dir = path.dirname(dbPath);
       try {
         fs.mkdirSync(dir, { recursive: true });
@@ -65,21 +110,15 @@ export class SqliteSessionStorage {
         // Ignored if folder exists
       }
       db = new DatabaseConstructor(dbPath);
-      initProjectDatabase(db);
-      this.projectDbs.set(projectId, db);
+      initSessionDatabase(db);
+      this.sessionDbs.set(sessionId, db);
     }
     return db;
   }
 
-  /**
-   * Look up which project ID a specific session ID belongs to.
-   */
-  private getProjectIdBySessionId(sessionId: string): string | null {
-    const row = this.globalDb
-      .prepare("SELECT project_id FROM sessions_lookup WHERE id = ?")
-      .get(sessionId) as { project_id: string } | undefined;
-    return row ? row.project_id : null;
-  }
+  // ----------------------------------------------------------------------
+  // Projects (global DB only)
+  // ----------------------------------------------------------------------
 
   /**
    * Create a new project record.
@@ -155,36 +194,28 @@ export class SqliteSessionStorage {
   }
 
   /**
-   * Delete a project.
+   * Delete a project and all sessions belonging to it.
    */
   deleteProject(projectId: string): boolean {
-    // 1. Delete associated database connection if open
-    const db = this.projectDbs.get(projectId);
-    if (db) {
-      db.close();
-      this.projectDbs.delete(projectId);
+    // 1. Delete every session DB file owned by this project.
+    const sessionIds = this.globalDb
+      .prepare(`SELECT id FROM sessions WHERE project_id = ?`)
+      .all(projectId) as Array<{ id: string }>;
+    for (const { id } of sessionIds) {
+      this.deleteSession(id);
     }
 
-    // 2. Delete project database file on disk if exists
-    try {
-      const dbPath = getProjectDbPath(projectId);
-      if (fs.existsSync(dbPath)) {
-        fs.unlinkSync(dbPath);
-      }
-    } catch {
-      // Ignored
-    }
-
-    // 3. Clear sessions mapping lookup
-    this.globalDb.prepare(`DELETE FROM sessions_lookup WHERE project_id = ?`).run(projectId);
-
-    // 4. Delete the project entry
+    // 2. Delete the project entry.
     const info = this.globalDb.prepare(`DELETE FROM projects WHERE id = ?`).run(projectId);
     return info.changes > 0;
   }
 
+  // ----------------------------------------------------------------------
+  // Sessions (per-session DB + global index)
+  // ----------------------------------------------------------------------
+
   /**
-   * Create a new session record inside the appropriate project database.
+   * Create a new session in its own SQLite file and index it globally.
    */
   createSession(options: {
     id?: string;
@@ -199,26 +230,29 @@ export class SqliteSessionStorage {
     const title = options.title?.trim() || "New Session";
     const projectId = options.projectId || "default";
 
-    // 1. Write session meta to project DB
-    const projectDb = this.getProjectDb(projectId);
-    const stmt = projectDb.prepare(`
-      INSERT INTO sessions (id, title, cwd, project_id, model_id, provider, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(id, title, options.cwd, projectId, options.modelId, options.provider, now, now);
+    // 1. Write header to the global index (fast listing).
+    this.globalDb
+      .prepare(
+        `INSERT INTO sessions
+          (id, title, cwd, project_id, model_id, provider, message_count, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      )
+      .run(id, title, options.cwd, projectId, options.modelId, options.provider, now, now);
 
-    // 2. Add to global session lookup index
-    const lookupStmt = this.globalDb.prepare(`
-      INSERT INTO sessions_lookup (id, project_id)
-      VALUES (?, ?)
-    `);
-    lookupStmt.run(id, projectId);
+    // 2. Initialize the per-session DB and persist the authoritative meta row.
+    const sessionDb = this.getSessionDb(id);
+    sessionDb
+      .prepare(
+        `INSERT INTO session_meta
+          (id, title, cwd, project_id, model_id, provider, created_at, updated_at)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(title, options.cwd, projectId, options.modelId, options.provider, now, now);
 
     return {
       id,
       title,
       cwd: options.cwd,
-      projectId,
       modelId: options.modelId,
       provider: options.provider,
       createdAt: now,
@@ -231,30 +265,21 @@ export class SqliteSessionStorage {
    * Append a single message to session history.
    */
   appendMessage(sessionId: string, message: AgentMessage): void {
-    const projectId = this.getProjectIdBySessionId(sessionId);
-    if (!projectId) return;
-
     const now = Date.now();
     const safeMsg = truncateForPersistence(message);
     const msgId = (safeMsg as any).id || crypto.randomUUID();
     const contentJson = JSON.stringify(safeMsg);
 
-    const projectDb = this.getProjectDb(projectId);
-    const insertMsg = projectDb.prepare(`
-      INSERT INTO messages (id, session_id, role, content, created_at)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-
-    const updateSession = projectDb.prepare(`
-      UPDATE sessions SET updated_at = ? WHERE id = ?
-    `);
-
-    const transaction = projectDb.transaction(() => {
-      insertMsg.run(msgId, sessionId, safeMsg.role, contentJson, now);
-      updateSession.run(now, sessionId);
+    const sessionDb = this.getSessionDb(sessionId);
+    const insertMsg = sessionDb.prepare(
+      `INSERT INTO messages (id, role, content, created_at) VALUES (?, ?, ?, ?)`,
+    );
+    const tx = sessionDb.transaction(() => {
+      insertMsg.run(msgId, safeMsg.role, contentJson, now);
     });
+    tx();
 
-    transaction();
+    this.bumpSessionUpdated(sessionId, now, 1);
   }
 
   /**
@@ -262,43 +287,36 @@ export class SqliteSessionStorage {
    */
   appendMessages(sessionId: string, messages: AgentMessage[]): void {
     if (messages.length === 0) return;
-    const projectId = this.getProjectIdBySessionId(sessionId);
-    if (!projectId) return;
-
     const now = Date.now();
-    const projectDb = this.getProjectDb(projectId);
-    const insertMsg = projectDb.prepare(`
-      INSERT OR IGNORE INTO messages (id, session_id, role, content, created_at)
-      VALUES (?, ?, ?, ?, ?)
-    `);
+    const sessionDb = this.getSessionDb(sessionId);
+    const insertMsg = sessionDb.prepare(
+      `INSERT OR IGNORE INTO messages (id, role, content, created_at) VALUES (?, ?, ?, ?)`,
+    );
 
-    const updateSession = projectDb.prepare(`
-      UPDATE sessions SET updated_at = ? WHERE id = ?
-    `);
-
-    const transaction = projectDb.transaction(() => {
+    let inserted = 0;
+    const tx = sessionDb.transaction(() => {
       for (const msg of messages) {
         const safeMsg = truncateForPersistence(msg);
         const msgId =
           (safeMsg as any).id ||
           crypto.createHash("sha256").update(JSON.stringify(safeMsg)).digest("hex").slice(0, 32);
-        insertMsg.run(msgId, sessionId, safeMsg.role, JSON.stringify(safeMsg), now);
+        const info = insertMsg.run(msgId, safeMsg.role, JSON.stringify(safeMsg), now);
+        if (info.changes > 0) inserted++;
       }
-      updateSession.run(now, sessionId);
     });
+    tx();
 
-    transaction();
+    this.bumpSessionUpdated(sessionId, now, inserted);
   }
 
   /**
-   * Load session header and all associated messages.
+   * Load session header and all associated messages from the per-session DB.
+   * Falls back to the global index header if the session DB meta is missing.
    */
   loadSession(sessionId: string): { header: SessionHeader; messages: AgentMessage[] } | null {
-    const projectId = this.getProjectIdBySessionId(sessionId);
-    if (!projectId) return null;
-
-    const projectDb = this.getProjectDb(projectId);
-    const sessionRow = projectDb.prepare(`SELECT * FROM sessions WHERE id = ?`).get(sessionId) as
+    const indexRow = this.globalDb
+      .prepare(`SELECT * FROM sessions WHERE id = ?`)
+      .get(sessionId) as
       | {
           id: string;
           title: string;
@@ -306,30 +324,61 @@ export class SqliteSessionStorage {
           project_id: string | null;
           model_id: string;
           provider: string;
+          message_count: number;
           created_at: number;
           updated_at: number;
         }
       | undefined;
 
-    if (!sessionRow) return null;
+    // No index row and no session DB file => session does not exist.
+    const dbPath = this.getSessionDbPath(sessionId);
+    const hasDbFile = fs.existsSync(dbPath);
+    if (!indexRow && !hasDbFile) return null;
 
-    const messageRows = projectDb
-      .prepare(
-        `SELECT content FROM messages WHERE session_id = ? ORDER BY created_at ASC, rowid ASC`,
-      )
-      .all(sessionId) as Array<{ content: string }>;
+    // Authoritative meta comes from the session DB when present.
+    let meta: SessionMetaRow | null = null;
+    let messages: AgentMessage[] = [];
 
-    const messages: AgentMessage[] = messageRows.map((r) => JSON.parse(r.content) as AgentMessage);
+    if (hasDbFile) {
+      const sessionDb = this.getSessionDb(sessionId);
+      meta = (sessionDb
+        .prepare(`SELECT title, cwd, project_id, model_id, provider, created_at, updated_at FROM session_meta WHERE id = 1`)
+        .get() as SessionMetaRow | undefined) ?? null;
+
+      const messageRows = sessionDb
+        .prepare(`SELECT content FROM messages ORDER BY created_at ASC, rowid ASC`)
+        .all() as Array<{ content: string }>;
+      messages = messageRows.map((r) => JSON.parse(r.content) as AgentMessage);
+    }
+
+    // Reconcile: prefer session DB meta, fall back to global index.
+    const title = meta?.title ?? indexRow?.title ?? "New Session";
+    const cwd = meta?.cwd ?? indexRow?.cwd ?? process.cwd();
+    const projectId = meta?.project_id ?? indexRow?.project_id ?? undefined;
+    const modelId = meta?.model_id ?? indexRow?.model_id ?? "gemini-2.5-pro";
+    const provider = meta?.provider ?? indexRow?.provider ?? "antigravity";
+    const createdAt = meta?.created_at ?? indexRow?.created_at ?? Date.now();
+    const updatedAt = meta?.updated_at ?? indexRow?.updated_at ?? createdAt;
+
+    // If the global index was missing but the session DB exists, repair it.
+    if (!indexRow) {
+      this.globalDb
+        .prepare(
+          `INSERT INTO sessions
+            (id, title, cwd, project_id, model_id, provider, message_count, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(sessionId, title, cwd, projectId ?? null, modelId, provider, messages.length, createdAt, updatedAt);
+    }
 
     const header: SessionHeader = {
-      id: sessionRow.id,
-      title: sessionRow.title,
-      cwd: sessionRow.cwd,
-      projectId: sessionRow.project_id || undefined,
-      modelId: sessionRow.model_id,
-      provider: sessionRow.provider,
-      createdAt: sessionRow.created_at,
-      updatedAt: sessionRow.updated_at,
+      id: sessionId,
+      title,
+      cwd,
+      modelId,
+      provider,
+      createdAt,
+      updatedAt,
       messageCount: messages.length,
     };
 
@@ -337,157 +386,134 @@ export class SqliteSessionStorage {
   }
 
   /**
-   * List saved sessions.
+   * List saved sessions directly from the global index (no per-DB opens).
    */
   listSessions(options?: { cwd?: string; projectId?: string; limit?: number }): SessionHeader[] {
     const limit = options?.limit ?? 100;
 
-    const querySessionsFromDb = (
-      db: DatabaseType,
-      projId?: string,
-      cwdVal?: string,
-    ): SessionHeader[] => {
-      let rows: any[];
-      if (cwdVal) {
-        const stmt = db.prepare(`
-          SELECT s.*, COUNT(m.id) as msg_count
-          FROM sessions s
-          LEFT JOIN messages m ON s.id = m.session_id
-          WHERE s.cwd = ?
-          GROUP BY s.id
-          ORDER BY s.updated_at DESC
-          LIMIT ?
-        `);
-        rows = stmt.all(cwdVal, limit);
-      } else if (projId) {
-        const stmt = db.prepare(`
-          SELECT s.*, COUNT(m.id) as msg_count
-          FROM sessions s
-          LEFT JOIN messages m ON s.id = m.session_id
-          WHERE s.project_id = ?
-          GROUP BY s.id
-          ORDER BY s.updated_at DESC
-          LIMIT ?
-        `);
-        rows = stmt.all(projId, limit);
-      } else {
-        const stmt = db.prepare(`
-          SELECT s.*, COUNT(m.id) as msg_count
-          FROM sessions s
-          LEFT JOIN messages m ON s.id = m.session_id
-          GROUP BY s.id
-          ORDER BY s.updated_at DESC
-          LIMIT ?
-        `);
-        rows = stmt.all(limit);
-      }
-
-      return rows.map((r) => ({
-        id: r.id,
-        title: r.title,
-        cwd: r.cwd,
-        projectId: r.project_id || undefined,
-        modelId: r.model_id,
-        provider: r.provider,
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
-        messageCount: r.msg_count,
-      }));
-    };
-
-    // 1. Query filtered by projectId
-    if (options?.projectId) {
-      const db = this.getProjectDb(options.projectId);
-      return querySessionsFromDb(db, options.projectId);
-    }
-
-    // 2. Query filtered by cwd (resolve project first)
+    let rows: any[];
     if (options?.cwd) {
-      const proj = this.getProjectByDir(options.cwd);
-      const projectId = proj ? proj.id : "default";
-      const db = this.getProjectDb(projectId);
-      return querySessionsFromDb(db, projectId, options.cwd);
+      rows = this.globalDb
+        .prepare(
+          `SELECT * FROM sessions WHERE cwd = ? ORDER BY updated_at DESC LIMIT ?`,
+        )
+        .all(options.cwd, limit);
+    } else if (options?.projectId) {
+      rows = this.globalDb
+        .prepare(
+          `SELECT * FROM sessions WHERE project_id = ? ORDER BY updated_at DESC LIMIT ?`,
+        )
+        .all(options.projectId, limit);
+    } else {
+      rows = this.globalDb
+        .prepare(`SELECT * FROM sessions ORDER BY updated_at DESC LIMIT ?`)
+        .all(limit);
     }
 
-    // 3. Unfiltered - merge from all projects
-    const allProjects = this.listProjects();
-    const allSessions: SessionHeader[] = [];
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      cwd: r.cwd,
+      modelId: r.model_id,
+      provider: r.provider,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      messageCount: r.message_count,
+    }));
+  }
 
-    // Always include default project sessions
+  /**
+   * Delete a session: close its DB connection, remove the file, drop the index row.
+   */
+  deleteSession(sessionId: string): boolean {
+    // 1. Close and discard any cached connection.
+    const db = this.sessionDbs.get(sessionId);
+    if (db) {
+      try {
+        db.close();
+      } catch {
+        // Ignored
+      }
+      this.sessionDbs.delete(sessionId);
+    }
+
+    // 2. Delete the per-session DB file (and WAL/SHM sidecars).
     try {
-      const defaultDb = this.getProjectDb("default");
-      allSessions.push(...querySessionsFromDb(defaultDb, "default"));
+      const dbPath = this.getSessionDbPath(sessionId);
+      if (fs.existsSync(dbPath)) {
+        fs.unlinkSync(dbPath);
+      }
+      for (const ext of ["-wal", "-shm"]) {
+        const sidecar = `${dbPath}${ext}`;
+        if (fs.existsSync(sidecar)) fs.unlinkSync(sidecar);
+      }
     } catch {
       // Ignored
     }
 
-    for (const proj of allProjects) {
-      if (proj.id === "default") continue;
-      try {
-        const db = this.getProjectDb(proj.id);
-        allSessions.push(...querySessionsFromDb(db, proj.id));
-      } catch {
-        // Ignored
-      }
-    }
-
-    // Sort combined sessions
-    return allSessions.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit);
-  }
-
-  /**
-   * Delete a session and its associated messages.
-   */
-  deleteSession(sessionId: string): boolean {
-    const projectId = this.getProjectIdBySessionId(sessionId);
-    if (!projectId) return false;
-
-    const projectDb = this.getProjectDb(projectId);
-    const info = projectDb.prepare(`DELETE FROM sessions WHERE id = ?`).run(sessionId);
-
-    this.globalDb.prepare(`DELETE FROM sessions_lookup WHERE id = ?`).run(sessionId);
-
+    // 3. Remove from the global index.
+    const info = this.globalDb.prepare(`DELETE FROM sessions WHERE id = ?`).run(sessionId);
     return info.changes > 0;
   }
 
   /**
-   * Update the title of a session.
+   * Update the title of a session (both session DB and global index).
    */
   updateTitle(sessionId: string, title: string): boolean {
-    const projectId = this.getProjectIdBySessionId(sessionId);
-    if (!projectId) return false;
-
     const now = Date.now();
-    const projectDb = this.getProjectDb(projectId);
-    const info = projectDb
+    const trimmed = title.trim();
+
+    if (this.sessionDbs.has(sessionId) || fs.existsSync(this.getSessionDbPath(sessionId))) {
+      const sessionDb = this.getSessionDb(sessionId);
+      sessionDb
+        .prepare(`UPDATE session_meta SET title = ?, updated_at = ? WHERE id = 1`)
+        .run(trimmed, now);
+    }
+
+    const info = this.globalDb
       .prepare(`UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?`)
-      .run(title.trim(), now, sessionId);
+      .run(trimmed, now, sessionId);
     return info.changes > 0;
   }
 
   /**
-   * Update the active model of a session.
+   * Update the active model + provider of a session (both session DB and global index).
    */
   updateModel(sessionId: string, modelId: string, provider: string): boolean {
-    const projectId = this.getProjectIdBySessionId(sessionId);
-    if (!projectId) return false;
-
     const now = Date.now();
-    const projectDb = this.getProjectDb(projectId);
-    const info = projectDb
+
+    if (this.sessionDbs.has(sessionId) || fs.existsSync(this.getSessionDbPath(sessionId))) {
+      const sessionDb = this.getSessionDb(sessionId);
+      sessionDb
+        .prepare(`UPDATE session_meta SET model_id = ?, provider = ?, updated_at = ? WHERE id = 1`)
+        .run(modelId, provider, now);
+    }
+
+    const info = this.globalDb
       .prepare(`UPDATE sessions SET model_id = ?, provider = ?, updated_at = ? WHERE id = ?`)
       .run(modelId, provider, now, sessionId);
     return info.changes > 0;
   }
 
   /**
+   * Refresh the global index's `updated_at` and `message_count` for a session.
+   */
+  private bumpSessionUpdated(sessionId: string, now: number, added: number): void {
+    this.globalDb
+      .prepare(
+        `UPDATE sessions SET updated_at = ?, message_count = message_count + ? WHERE id = ?`,
+      )
+      .run(now, added, sessionId);
+  }
+
+  /**
    * Clear all sessions and messages (used for testing or reset).
    */
   clearAll(): void {
-    this.globalDb.exec(`DELETE FROM sessions_lookup; DELETE FROM projects;`);
-    for (const [projectId, db] of this.projectDbs) {
+    this.globalDb.exec(`DELETE FROM sessions; DELETE FROM projects;`);
+    for (const [, db] of this.sessionDbs) {
       try {
-        db.exec(`DELETE FROM messages; DELETE FROM sessions;`);
+        db.exec(`DELETE FROM messages; DELETE FROM session_meta;`);
       } catch {
         // Ignored
       }
@@ -499,13 +525,13 @@ export class SqliteSessionStorage {
    */
   close(): void {
     this.globalDb.close();
-    for (const [projectId, db] of this.projectDbs) {
+    for (const [, db] of this.sessionDbs) {
       try {
         db.close();
       } catch {
         // Ignored
       }
     }
-    this.projectDbs.clear();
+    this.sessionDbs.clear();
   }
 }

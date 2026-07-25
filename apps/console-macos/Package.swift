@@ -15,6 +15,8 @@ let package = Package(
             url: "https://github.com/ZeeZide/CodeEditor.git",
             branch: "main"
         ),
+        // Streaming Markdown renderer (vendored from Codevisor, macOS 13 + Swift 5.9).
+        .package(path: "Packages/StreamMarkdown"),
         // Ghostty terminal — vendored locally, downgraded to swift-tools-version 5.9.
         // Temporarily disabled while Swift 5.9 compatibility is finalized.
         // .package(path: "Packages/libghostty-spm")
@@ -36,7 +38,8 @@ let package = Package(
             name: "ConsoleMacOS",
             dependencies: [
                 "ConsoleCore",
-                .product(name: "CodeEditor", package: "CodeEditor")
+                .product(name: "CodeEditor", package: "CodeEditor"),
+                .product(name: "StreamMarkdown", package: "StreamMarkdown")
             ],
             path: "Sources/ConsoleMacOS",
             // Terminal pane temporarily excluded while libghostty-spm
