@@ -140,7 +140,7 @@ struct CodeEditorView: View {
         case "sql": language = .sql
         case "diff", "patch": language = .diff
         case "dockerfile": language = .dockerfile
-        default: language = CodeEditor.Language(rawValue: ext) ?? .swift
+        default: language = CodeEditor.Language(rawValue: ext)
         }
     }
 }

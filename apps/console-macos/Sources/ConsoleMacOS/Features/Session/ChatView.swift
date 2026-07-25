@@ -112,7 +112,7 @@ struct MessageView: View {
         switch message {
         case .user(let content):
             UserMessageView(text: content)
-        case .assistant(let id, let content, let stopReason):
+        case .assistant(_, let content, let stopReason):
             AssistantMessageView(content: content, stopReason: stopReason)
         case .toolResult(let results):
             ToolResultView(results: results)

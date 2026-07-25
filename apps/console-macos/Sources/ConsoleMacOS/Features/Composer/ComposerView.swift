@@ -46,7 +46,7 @@ struct ComposerView: View {
                         } label: {
                             Image(systemName: isTerminalVisible ? "terminal.fill" : "terminal")
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(isTerminalVisible ? .accent : .secondary)
+                                .foregroundStyle(isTerminalVisible ? Color.accentColor : Color.secondary)
                         }
                         .buttonStyle(.plain)
                         .help(isTerminalVisible ? "Hide terminal" : "Show terminal")
