@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 import ConsoleCore
 
 struct SidebarView: View {
@@ -58,7 +57,6 @@ struct SidebarView: View {
                 .padding(.bottom, 8)
             }
             .scrollContentBackground(.hidden)
-            .scrollBounceBehavior(.basedOnSize)
         }
         .background(.regularMaterial)
         .navigationTitle("Console")
@@ -117,17 +115,6 @@ struct SidebarView: View {
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.clear)
-        )
-        .onHover { isHovered in
-            if isHovered {
-                NSCursor.pointingArrow.push()
-            } else {
-                NSCursor.pop()
-            }
-        }
         .onTapGesture(perform: action)
     }
 
