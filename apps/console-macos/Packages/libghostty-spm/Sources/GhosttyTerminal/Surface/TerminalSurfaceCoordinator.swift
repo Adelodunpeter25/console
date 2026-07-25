@@ -301,11 +301,8 @@ final class TerminalSurfaceCoordinator {
         // `@MainActor` classes have a nonisolated deinit by default, but
         // `tearDownSurface` calls methods on other main-actor types (surface,
         // bridge, controller). We rely on deinit running synchronously with
-        // exclusive access; assume main-actor isolation so teardown can run
-        // inline without crossing isolation.
-        MainActor.assumeIsolated {
-            tearDownSurface(removingBridgeFrom: controller)
-        }
+        // exclusive access; call teardown inline without crossing isolation.
+        tearDownSurface(removingBridgeFrom: controller)
     }
 
     private func tearDownSurface(removingBridgeFrom controller: TerminalController?) {

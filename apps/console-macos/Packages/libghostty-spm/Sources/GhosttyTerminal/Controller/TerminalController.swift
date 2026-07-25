@@ -48,8 +48,8 @@ public final class TerminalController {
     static let defaultRenderedConfig = TerminalConfiguration.default.rendered
     private static var runtimeInitialized = false
 
-    nonisolated var app: ghostty_app_t?
-    nonisolated var config: ghostty_config_t?
+    var app: ghostty_app_t?
+    var config: ghostty_config_t?
     var retainedBridges: [TerminalCallbackBridge] = []
     var configSource: ConfigSource
     var managedConfigURL: URL?

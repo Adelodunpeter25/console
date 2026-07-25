@@ -212,10 +212,8 @@
         }
 
         func updateColorScheme() {
-            let scheme: TerminalColorScheme = switch effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) {
-            case .darkAqua: .dark
-            default: .light
-            }
+            let match = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua])
+            let scheme: TerminalColorScheme = (match == .darkAqua) ? .dark : .light
             surface?.setColorScheme(scheme.ghosttyValue)
             if let controller,
                let viewState = delegate as? TerminalViewState,

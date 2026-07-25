@@ -5,15 +5,11 @@ func terminalRunOnMain(
     _ operation: @escaping @MainActor () -> Void
 ) {
     if Thread.isMainThread {
-        MainActor.assumeIsolated {
-            operation()
-        }
+        operation()
         return
     }
 
     DispatchQueue.main.async {
-        MainActor.assumeIsolated {
-            operation()
-        }
+        operation()
     }
 }

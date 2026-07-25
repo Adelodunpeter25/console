@@ -6,9 +6,9 @@
 //
 
 #if canImport(AppKit) && !canImport(UIKit)
-    import AppKit
+    @preconcurrency import AppKit
 
-    extension AppTerminalView: @preconcurrency NSTextInputClient {
+    extension AppTerminalView: NSTextInputClient {
         open func insertText(_ string: Any, replacementRange _: NSRange) {
             inputHandler?.inputMethodHandler?.insertText(string)
         }
