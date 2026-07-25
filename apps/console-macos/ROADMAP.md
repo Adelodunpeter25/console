@@ -95,3 +95,14 @@ All features are built on the HTTP-based `ConsoleCore` layer:
 Dependencies:
 - [CodeEditor](https://github.com/ZeeZide/CodeEditor) — syntax-highlighted code editor
 - [libghostty-spm](https://github.com/Lakr233/libghostty-spm) — Ghostty terminal (requires Xcode 16+)
+
+## Multi-Window Support
+
+The app must support multiple independent windows with no state bleeding
+between them. See [MULTI_WINDOW.md](./MULTI_WINDOW.md) for the full
+architecture: what's per-window vs. shared, the target `AppGlobalState` /
+`WindowViewModel` split, and implementation constraints.
+
+Key principle: each window is a fully isolated workspace. Sidebar state,
+selected session, scroll position, and streaming state are all per-window.
+Only the backend connection (server URL, auth, provider catalog) is shared.
