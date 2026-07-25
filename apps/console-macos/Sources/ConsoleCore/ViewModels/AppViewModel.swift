@@ -125,11 +125,9 @@ public final class AppViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        async let auth = refreshAuthStatus()
-        async let projs = refreshProjects()
-        async let sess = refreshSessions()
-        async let provs = refreshProviders()
-
-        _ = await (auth, projs, sess, provs)
+        await refreshAuthStatus()
+        await refreshProjects()
+        await refreshSessions()
+        await refreshProviders()
     }
 }

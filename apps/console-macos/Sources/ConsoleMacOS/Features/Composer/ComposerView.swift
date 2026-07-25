@@ -6,6 +6,8 @@ struct ComposerView: View {
     let onSend: (String, String?, String?) -> Void
     let onAbort: () -> Void
     let providers: [ProviderCatalogEntry]
+    var onToggleTerminal: (() -> Void)? = nil
+    var isTerminalVisible: Bool = false
 
     @State private var prompt = ""
     @State private var selectedModelId: String?
@@ -37,6 +39,18 @@ struct ComposerView: View {
                     .frame(maxWidth: 160)
 
                     Spacer()
+
+                    if let onToggleTerminal {
+                        Button {
+                            onToggleTerminal()
+                        } label: {
+                            Image(systemName: isTerminalVisible ? "terminal.fill" : "terminal")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(isTerminalVisible ? .accent : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help(isTerminalVisible ? "Hide terminal" : "Show terminal")
+                    }
                 }
                 .font(.caption)
             }

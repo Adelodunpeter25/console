@@ -46,7 +46,7 @@ public extension ApiClient {
 
     /// Aborts a running agent session.
     func abortRun(sessionId: String) async throws -> JSONValue {
-        struct EmptyBody: Encodable {}
+        struct EmptyBody: Encodable, Sendable {}
         return try await post("/sessions/\(sessionId)/abort", body: EmptyBody())
     }
 

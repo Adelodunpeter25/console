@@ -61,12 +61,15 @@ public final class SessionViewModel: ObservableObject {
             approvalMode: approvalMode?.rawValue
         )
 
-        do {
-            try await client.runAgentStream(sessionId: sessionId, dto: dto) { [weak self] event in
-                Task { @MainActor in
-                    self?.handleEvent(event)
-                }
+        // Capture a sendable handler that dispatches to MainActor
+        let handle: @Sendable (AgentSessionEvent) -> Void = { [weak self] event in
+            Task { @MainActor in
+                self?.handleEvent(event)
             }
+        }
+
+        do {
+            try await client.runAgentStream(sessionId: sessionId, dto: dto, onEvent: handle)
             // Stream ended — finalize the assistant turn
             finalizeAssistantTurn()
         } catch {
@@ -182,7 +185,7 @@ public final class SessionViewModel: ObservableObject {
                 messages.append(.toolResult(results: results))
             }
 
-        case .compaction(let summary, let originalCount):
+        case .compaction:
             // Compaction replaces history — reload from server
             Task { await loadDetails() }
 

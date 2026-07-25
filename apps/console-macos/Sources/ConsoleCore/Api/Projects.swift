@@ -8,7 +8,7 @@ public extension ApiClient {
     }
 
     func addProject(path: String) async throws -> ProjectInfo {
-        struct Body: Encodable { let path: String }
+        struct Body: Encodable, Sendable { let path: String }
         return try await post("/projects", body: Body(path: path))
     }
 }

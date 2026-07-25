@@ -28,7 +28,7 @@ public extension ApiClient {
     }
 
     func writeFile(path: String, content: String) async throws -> JSONValue {
-        struct Body: Encodable { let path: String; let content: String }
+        struct Body: Encodable, Sendable { let path: String; let content: String }
         return try await post("/fs/file", body: Body(path: path, content: content))
     }
 
@@ -37,7 +37,7 @@ public extension ApiClient {
     }
 
     func createDirectory(path: String) async throws -> JSONValue {
-        struct Body: Encodable { let path: String }
+        struct Body: Encodable, Sendable { let path: String }
         return try await post("/fs/dir", body: Body(path: path))
     }
 

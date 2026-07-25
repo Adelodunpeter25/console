@@ -12,29 +12,31 @@ public final class ApiClient: @unchecked Sendable {
 
     // MARK: - Generic request helpers
 
-    public func get<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
-        try await request("GET", path, query: query, body: nil as Data?)
+    public func get<T: Decodable & Sendable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
+        try await request("GET", path, query: query, body: nil as EmptyBody?)
     }
 
-    public func post<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
+    public func post<T: Decodable & Sendable, B: Encodable & Sendable>(_ path: String, body: B) async throws -> T {
         try await request("POST", path, body: body)
     }
 
-    public func post<T: Decodable>(_ path: String) async throws -> T {
-        try await request("POST", path, body: nil as Data?)
+    public func post<T: Decodable & Sendable>(_ path: String) async throws -> T {
+        try await request("POST", path, body: nil as EmptyBody?)
     }
 
-    public func patch<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
+    public func patch<T: Decodable & Sendable, B: Encodable & Sendable>(_ path: String, body: B) async throws -> T {
         try await request("PATCH", path, body: body)
     }
 
-    public func delete<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
-        try await request("DELETE", path, query: query, body: nil as Data?)
+    public func delete<T: Decodable & Sendable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
+        try await request("DELETE", path, query: query, body: nil as EmptyBody?)
     }
 
     // MARK: - Core
 
-    private func request<T: Decodable, B: Encodable>(
+    private struct EmptyBody: Encodable, Sendable {}
+
+    private func request<T: Decodable & Sendable, B: Encodable & Sendable>(
         _ method: String,
         _ path: String,
         query: [URLQueryItem] = [],
@@ -49,7 +51,7 @@ public final class ApiClient: @unchecked Sendable {
         var req = URLRequest(url: url)
         req.httpMethod = method
 
-        if let body {
+        if body != nil {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try JSONEncoder().encode(body)
         }

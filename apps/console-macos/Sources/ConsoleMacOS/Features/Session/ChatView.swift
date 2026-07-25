@@ -6,6 +6,9 @@ struct ChatView: View {
     let sessionId: String
     @StateObject private var sessionVM: SessionViewModel
 
+    @State private var showTerminal = false
+    @State private var terminalHeight: CGFloat = 240
+
     init(app: AppViewModel, sessionId: String) {
         self.app = app
         self.sessionId = sessionId
@@ -15,20 +18,51 @@ struct ChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             messageList
+
+            if showTerminal {
+                Divider()
+                // Resizable terminal pane
+                VStack(spacing: 0) {
+                    TerminalPaneCard(
+                        mode: .local,
+                        workingDirectory: sessionVM.header?.cwd,
+                        onClose: { showTerminal = false }
+                    )
+                    .frame(height: terminalHeight)
+                }
+                .background(Color.clear)
+                .overlay(alignment: .top) {
+                    // Drag handle to resize terminal
+                    Rectangle()
+                        .fill(Color(nsColor: .separatorColor))
+                        .frame(height: 4)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    terminalHeight = max(120, min(600, terminalHeight - value.translation.height))
+                                }
+                        )
+                }
+            }
+
             Divider()
+
             if let perm = sessionVM.pendingPermission {
                 PermissionBanner(perm: perm, onApprove: { Task { await sessionVM.approveTool(allow: true) } }, onDeny: { Task { await sessionVM.approveTool(allow: false) } })
             }
             if let question = sessionVM.pendingQuestion {
                 QuestionBanner(question: question, onAnswer: { answer in Task { await sessionVM.answerQuestion(answer) } })
             }
+
             ComposerView(
                 isStreaming: sessionVM.isStreaming,
                 onSend: { prompt, modelId, provider in
                     Task { await sessionVM.sendPrompt(prompt, modelId: modelId, provider: provider) }
                 },
                 onAbort: { Task { await sessionVM.abort() } },
-                providers: app.providers
+                providers: app.providers,
+                onToggleTerminal: { showTerminal.toggle() },
+                isTerminalVisible: showTerminal
             )
         }
         .task {
@@ -66,6 +100,8 @@ struct ChatView: View {
         }
     }
 }
+
+// MARK: - Message Views
 
 struct MessageView: View {
     let message: AgentMessage
@@ -287,7 +323,6 @@ struct PermissionBanner: View {
 struct QuestionBanner: View {
     let question: AskQuestionRequest
     let onAnswer: (String) -> Void
-    @State private var selectedAnswer: String = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
