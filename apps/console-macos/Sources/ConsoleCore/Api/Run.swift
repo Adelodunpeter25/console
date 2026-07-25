@@ -43,25 +43,44 @@ public extension ApiClient {
         flushDataLines(&dataLines, onEvent: onEvent)
     }
 
-    /// Decode accumulated data lines into an event and call onEvent.
-    /// Surfaces decoding errors as synthetic error events instead of
-    /// silently dropping them.
+    /// Decode accumulated data lines into events and call `onEvent` for each.
+    ///
+    /// The server emits one JSON event per `data:` line. When the SSE
+    /// blank-line event separators are not surfaced by the line streamer
+    /// (observed with `URL.AsyncBytes.lines`), multiple events accumulate
+    /// here. We therefore try decoding each line on its own first, and only
+    /// fall back to the spec-compliant joined payload (genuine multi-line
+    /// `data:` fields) for any lines that did not decode individually.
+    /// Surfaces ultimate decoding failures as synthetic error events
+    /// instead of silently dropping them.
     private func flushDataLines(
         _ dataLines: inout [String],
         onEvent: @escaping @Sendable (AgentSessionEvent) -> Void
     ) {
         guard !dataLines.isEmpty else { return }
-        let payload = dataLines.joined(separator: "\n")
-        dataLines.removeAll()
+        defer { dataLines.removeAll() }
 
+        var leftovers: [String] = []
+        for line in dataLines {
+            guard let jsonData = line.data(using: .utf8) else {
+                leftovers.append(line)
+                continue
+            }
+            if let event = try? JSONDecoder().decode(AgentSessionEvent.self, from: jsonData) {
+                onEvent(event)
+            } else {
+                leftovers.append(line)
+            }
+        }
+
+        guard !leftovers.isEmpty else { return }
+        let payload = leftovers.joined(separator: "\n")
         guard let jsonData = payload.data(using: .utf8) else { return }
 
         do {
             let event = try JSONDecoder().decode(AgentSessionEvent.self, from: jsonData)
             onEvent(event)
         } catch {
-            // Surface decoding errors so the UI can show them instead of
-            // silently dropping the event.
             #if DEBUG
             print("[SSE] Failed to decode event: \(error)\n  payload: \(payload)")
             #endif
