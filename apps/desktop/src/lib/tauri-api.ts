@@ -4,78 +4,31 @@ import type {
   AgentSessionEvent,
   AuthStatusResponse,
   CreateSessionDto,
-  FsTreeEntry,
-  Model,
   ProjectInfo,
   ProviderCatalogEntry,
   SessionDetailResponse,
   SessionHeader,
   UpdateSessionDto,
 } from "@console/types";
+import type {
+  BrowseResult,
+  CreateDirectoryResult,
+  DeleteDirectoryResult,
+  DeleteFileResult,
+  DirectoryTreeResult,
+  LoginUrlResult,
+  OAuthCallbackResult,
+  PickFolderResult,
+  ProviderModelsResult,
+  ReadFileResult,
+  WriteFileResult,
+} from "../types";
 
-// ---------------------------------------------------------------------------
-// Response shapes — mirror the `data` field returned by the Console server.
-// ---------------------------------------------------------------------------
-
-export interface BrowseResult {
-  path: string;
-  parentPath: string | null;
-  entries: FsTreeEntry[];
-}
-
-export interface LoginUrlResult {
-  provider: string;
-  authUrl: string;
-  redirectUri: string;
-}
-
-export interface OAuthCallbackResult {
-  provider: string;
-  userEmail?: string;
-  projectId?: string;
-}
-
-export interface ProviderModelsResult {
-  provider: string;
-  models: Model[];
-}
-
-export interface PickFolderResult {
-  path: string;
-}
-
-export interface DirectoryTreeResult {
-  path: string;
-  treeFormatted: string;
-}
-
-export interface ReadFileResult {
-  path: string;
-  content: string;
-}
-
-export interface WriteFileResult {
-  path: string;
-  message: string;
-}
-
-export interface DeleteFileResult {
-  path: string;
-  deleted: boolean;
-}
-
-export interface CreateDirectoryResult {
-  path: string;
-  created: boolean;
-}
-
-export interface DeleteDirectoryResult {
-  path: string;
-  deleted: boolean;
-}
-
-// ---------------------------------------------------------------------------
-
+/**
+ * Thin Tauri IPC bridge. Every method maps to a `#[tauri::command]` in
+ * `src-tauri` and ultimately to a Console server route. Response types live
+ * in `src/types` (desktop-specific) and `@console/types` (shared).
+ */
 export const tauriApi = {
   // --- server / health -----------------------------------------------------
   pingServer: () => invoke<unknown>("ping_server"),

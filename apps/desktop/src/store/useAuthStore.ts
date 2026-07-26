@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { AuthStatusResponse } from "@console/types";
-import { tauriApi, type LoginUrlResult, type OAuthCallbackResult } from "../lib/tauri-api";
+import { tauriApi } from "../lib/tauri-api";
+import type { LoginUrlResult, OAuthCallbackResult } from "../types";
 
 export type ProviderId = "gemini" | "antigravity";
 

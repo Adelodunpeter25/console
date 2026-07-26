@@ -1,12 +1,12 @@
 import { create } from "zustand";
 import type { FsTreeEntry } from "@console/types";
-import {
-  tauriApi,
-  type BrowseResult,
-  type DirectoryTreeResult,
-  type PickFolderResult,
-  type ReadFileResult,
-} from "../lib/tauri-api";
+import { tauriApi } from "../lib/tauri-api";
+import type {
+  BrowseResult,
+  DirectoryTreeResult,
+  PickFolderResult,
+  ReadFileResult,
+} from "../types";
 
 interface FsState {
   /** Current browse location and its entries (file-picker navigation). */
@@ -172,6 +172,3 @@ export const useFsStore = create<FsState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 }));
-
-// Re-export for consumers that need the entry type.
-export type { FsTreeEntry };
