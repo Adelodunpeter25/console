@@ -5,6 +5,7 @@ import type {
   AuthStatusResponse,
   CreateSessionDto,
   FsTreeEntry,
+  Model,
   ProjectInfo,
   ProviderCatalogEntry,
   SessionDetailResponse,
@@ -12,23 +13,87 @@ import type {
   UpdateSessionDto,
 } from "@console/types";
 
+// ---------------------------------------------------------------------------
+// Response shapes — mirror the `data` field returned by the Console server.
+// ---------------------------------------------------------------------------
+
 export interface BrowseResult {
   path: string;
   parentPath: string | null;
   entries: FsTreeEntry[];
 }
 
+export interface LoginUrlResult {
+  provider: string;
+  authUrl: string;
+  redirectUri: string;
+}
+
+export interface OAuthCallbackResult {
+  provider: string;
+  userEmail?: string;
+  projectId?: string;
+}
+
+export interface ProviderModelsResult {
+  provider: string;
+  models: Model[];
+}
+
+export interface PickFolderResult {
+  path: string;
+}
+
+export interface DirectoryTreeResult {
+  path: string;
+  treeFormatted: string;
+}
+
+export interface ReadFileResult {
+  path: string;
+  content: string;
+}
+
+export interface WriteFileResult {
+  path: string;
+  message: string;
+}
+
+export interface DeleteFileResult {
+  path: string;
+  deleted: boolean;
+}
+
+export interface CreateDirectoryResult {
+  path: string;
+  created: boolean;
+}
+
+export interface DeleteDirectoryResult {
+  path: string;
+  deleted: boolean;
+}
+
+// ---------------------------------------------------------------------------
+
 export const tauriApi = {
+  // --- server / health -----------------------------------------------------
   pingServer: () => invoke<unknown>("ping_server"),
   getBackendUrl: () => invoke<string>("get_backend_url"),
   setBackendUrl: (url: string) => invoke<void>("set_backend_url", { url }),
 
+  // --- auth ----------------------------------------------------------------
   getAuthStatus: () => invoke<AuthStatusResponse>("get_auth_status"),
   getLoginUrl: (provider: string) =>
-    invoke<unknown>("get_login_url", { provider }),
+    invoke<LoginUrlResult>("get_login_url", { provider }),
   handleOAuthCallback: (provider: string, code: string, state?: string) =>
-    invoke<unknown>("handle_oauth_callback", { provider, code, state }),
+    invoke<OAuthCallbackResult>("handle_oauth_callback", {
+      provider,
+      code,
+      state,
+    }),
 
+  // --- sessions ------------------------------------------------------------
   listSessions: (cwd?: string, projectId?: string) =>
     invoke<SessionHeader[]>("list_sessions", { cwd, projectId }),
   createSession: (dto: CreateSessionDto) =>
@@ -48,31 +113,35 @@ export const tauriApi = {
       modelId: dto.modelId,
       provider: dto.provider,
     }),
-  deleteSession: (id: string) =>
-    invoke<unknown>("delete_session", { id }),
+  deleteSession: (id: string) => invoke<unknown>("delete_session", { id }),
 
+  // --- projects ------------------------------------------------------------
   listProjects: () => invoke<ProjectInfo[]>("list_projects"),
   addProject: (path: string) => invoke<ProjectInfo>("add_project", { path }),
 
+  // --- providers / models --------------------------------------------------
   listProviders: () => invoke<ProviderCatalogEntry[]>("list_providers"),
   getProviderModels: (providerId: string) =>
-    invoke<unknown>("get_provider_models", { providerId }),
+    invoke<ProviderModelsResult>("get_provider_models", { providerId }),
 
+  // --- filesystem ----------------------------------------------------------
   browseDirectory: (path?: string) =>
     invoke<BrowseResult>("browse_directory", { path }),
-  pickFolder: () => invoke<unknown>("pick_folder"),
+  pickFolder: () => invoke<PickFolderResult>("pick_folder"),
   getDirectoryTree: (path?: string, depth?: number) =>
-    invoke<unknown>("get_directory_tree", { path, depth }),
+    invoke<DirectoryTreeResult>("get_directory_tree", { path, depth }),
   readFile: (path: string, startLine?: number, endLine?: number) =>
-    invoke<unknown>("read_file", { path, startLine, endLine }),
+    invoke<ReadFileResult>("read_file", { path, startLine, endLine }),
   writeFile: (path: string, content: string) =>
-    invoke<unknown>("write_file", { path, content }),
-  deleteFile: (path: string) => invoke<unknown>("delete_file", { path }),
+    invoke<WriteFileResult>("write_file", { path, content }),
+  deleteFile: (path: string) =>
+    invoke<DeleteFileResult>("delete_file", { path }),
   createDirectory: (path: string) =>
-    invoke<unknown>("create_directory", { path }),
+    invoke<CreateDirectoryResult>("create_directory", { path }),
   deleteDirectory: (path: string) =>
-    invoke<unknown>("delete_directory", { path }),
+    invoke<DeleteDirectoryResult>("delete_directory", { path }),
 
+  // --- agent run / streaming -----------------------------------------------
   runAgent: (
     sessionId: string,
     prompt: string,

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ProjectInfo, SessionHeader } from "@console/types";
+import type { ProjectInfo, SessionHeader, UpdateSessionDto } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 
 interface ProjectState {
@@ -13,6 +13,11 @@ interface ProjectState {
     cwd: string,
     projectId: string,
     title?: string,
+  ) => Promise<SessionHeader>;
+  updateSession: (
+    id: string,
+    projectId: string,
+    dto: UpdateSessionDto,
   ) => Promise<SessionHeader>;
   deleteSession: (id: string, projectId: string) => Promise<void>;
 }
@@ -65,6 +70,19 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       },
     }));
     return session;
+  },
+
+  updateSession: async (id, projectId, dto) => {
+    const updated = await tauriApi.updateSession(id, dto);
+    set((s) => ({
+      sessionsByProject: {
+        ...s.sessionsByProject,
+        [projectId]: (s.sessionsByProject[projectId] ?? []).map((sess) =>
+          sess.id === id ? updated : sess,
+        ),
+      },
+    }));
+    return updated;
   },
 
   deleteSession: async (id: string, projectId: string) => {
