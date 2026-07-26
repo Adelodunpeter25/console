@@ -1,7 +1,7 @@
 import React from "react";
 import { Folder, Plus, FolderOpen } from "lucide-react";
 import { useAppStore, useProjectStore } from "../store";
-import { GlassSurface } from "../components/GlassSurface";
+import { GlassSurface } from "../components/common";
 
 export function HomeScreen() {
   const { setSelectedProjectId, setSelectedSessionId, setActiveView } = useAppStore();

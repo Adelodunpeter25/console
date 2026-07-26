@@ -1,7 +1,7 @@
 import React from "react";
 import { Wifi, WifiOff } from "lucide-react";
 import { useServerStore } from "../store";
-import { GlassSurface } from "../components/GlassSurface";
+import { GlassSurface } from "../components/common";
 
 export function SettingsScreen() {
   const { backendUrl, connected, testing, init, setUrl, testConnection } = useServerStore();

@@ -1,6 +1,7 @@
 import React from "react";
 import { ChevronRight, Wrench, AlertCircle, CheckCircle2 } from "lucide-react";
 import type { ToolCall, ToolResult } from "@console/types";
+import { formatUnknown } from "../../utils/format";
 
 interface ToolCallBlockProps {
   calls: ToolCall[];
@@ -75,9 +76,4 @@ export function ToolCallBlock({ calls, results }: ToolCallBlockProps) {
       )}
     </div>
   );
-}
-
-function formatUnknown(value: unknown): string {
-  if (typeof value === "string") return value;
-  return JSON.stringify(value, null, 2);
 }

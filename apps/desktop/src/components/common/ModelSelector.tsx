@@ -1,6 +1,6 @@
 import React from "react";
 import { ChevronDown, Check } from "lucide-react";
-import { useProviderStore } from "../store";
+import { useProviderStore } from "../../store";
 
 interface ModelSelectorProps {
   value: string | null;
