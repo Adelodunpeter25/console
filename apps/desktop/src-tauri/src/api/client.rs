@@ -1,7 +1,21 @@
 use reqwest::Client;
 
+use once_cell::sync::Lazy;
+
 use crate::config::api_base;
 use crate::error::{AppError, AppResult};
+
+/// A single shared `reqwest::Client` reused across every command so connection
+/// pools are kept warm instead of being rebuilt per invocation.
+static SHARED_HTTP: Lazy<Client> = Lazy::new(|| {
+    Client::builder()
+        .build()
+        .expect("failed to build reqwest client")
+});
+
+pub fn shared_http_client() -> &'static Client {
+    &SHARED_HTTP
+}
 
 #[derive(Clone)]
 pub struct ApiClient {
@@ -10,10 +24,9 @@ pub struct ApiClient {
 
 impl ApiClient {
     pub fn new() -> Self {
-        let http = Client::builder()
-            .build()
-            .expect("failed to build reqwest client");
-        Self { http }
+        Self {
+            http: SHARED_HTTP.clone(),
+        }
     }
 
     fn endpoint(path: &str) -> String {

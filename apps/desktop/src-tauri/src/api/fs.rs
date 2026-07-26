@@ -1,8 +1,8 @@
 use crate::api::ApiClient;
 use crate::error::AppResult;
-use crate::models::FsTreeEntry;
+use crate::models::BrowseResult;
 
-pub async fn browse_directory(client: &ApiClient, path: Option<&str>) -> AppResult<Vec<FsTreeEntry>> {
+pub async fn browse_directory(client: &ApiClient, path: Option<&str>) -> AppResult<BrowseResult> {
     match path {
         Some(p) => client.get_with_query("/fs/browse", &[("path", p)]).await,
         None => client.get("/fs/browse").await,

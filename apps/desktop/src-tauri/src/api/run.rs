@@ -39,6 +39,23 @@ pub async fn abort_run(client: &ApiClient, session_id: &str) -> AppResult<serde_
         .await
 }
 
+/// Decode a complete SSE event from accumulated `data:` lines and forward it.
+/// Each `data:` line already had its `data: ` prefix stripped before being
+/// pushed, so the joined buffer is raw JSON — no further prefix stripping.
+fn flush_event<F: FnMut(AgentSessionEvent)>(
+    data_lines: &mut Vec<String>,
+    on_event: &mut F,
+) {
+    if data_lines.is_empty() {
+        return;
+    }
+    let data = data_lines.join("\n");
+    data_lines.clear();
+    if let Ok(event) = serde_json::from_str::<AgentSessionEvent>(&data) {
+        on_event(event);
+    }
+}
+
 async fn parse_sse_stream<F>(resp: Response, on_event: &mut F) -> AppResult<()>
 where
     F: FnMut(AgentSessionEvent) + Send + 'static,
@@ -57,13 +74,9 @@ where
 
             let trimmed = line.trim();
 
+            // A blank line terminates the current event frame.
             if trimmed.is_empty() {
-                if let Some(data) = data_lines.join("\n").strip_prefix("data: ") {
-                    if let Ok(event) = serde_json::from_str::<AgentSessionEvent>(data) {
-                        on_event(event);
-                    }
-                }
-                data_lines.clear();
+                flush_event(&mut data_lines, on_event);
                 continue;
             }
 
@@ -72,6 +85,9 @@ where
             }
         }
     }
+
+    // Flush any trailing event that wasn't followed by a blank line.
+    flush_event(&mut data_lines, on_event);
 
     Ok(())
 }

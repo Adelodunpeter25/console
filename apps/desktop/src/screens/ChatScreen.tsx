@@ -1,7 +1,7 @@
 import React from "react";
 import { ArrowUp, Square } from "lucide-react";
-import type { AgentMessage } from "@console/types";
-import { useAppStore, useChatStore } from "../store";
+import type { AgentMessage, AssistantMessageContent } from "@console/types";
+import { useAppStore, useChatStore, useProjectStore } from "../store";
 
 export function ChatScreen() {
   const { selectedSessionId, selectedProjectId } = useAppStore();
@@ -10,12 +10,14 @@ export function ChatScreen() {
     input,
     running,
     streamingText,
+    streamingThinking,
     setInput,
     sendMessage,
     abort,
     loadSession,
     clear,
   } = useChatStore();
+  const { projects } = useProjectStore();
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -31,12 +33,14 @@ export function ChatScreen() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, streamingText]);
+  }, [messages, streamingText, streamingThinking]);
 
   const handleSend = () => {
     if (!selectedSessionId || !input.trim() || running) return;
     sendMessage(selectedSessionId);
   };
+
+  const projectName = projects.find((p) => p.id === selectedProjectId)?.name;
 
   if (!selectedSessionId) {
     return (
@@ -55,7 +59,7 @@ export function ChatScreen() {
     <div className="flex-1 flex flex-col h-full">
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
-        {messages.length === 0 && !streamingText ? (
+        {messages.length === 0 && !streamingText && !streamingThinking ? (
           <div className="flex items-center justify-center py-14">
             <p className="text-foreground-muted text-sm italic">
               No messages yet. Type a prompt below to start.
@@ -64,16 +68,13 @@ export function ChatScreen() {
         ) : (
           <div className="space-y-3.5 max-w-4xl mx-auto">
             {messages.map((msg, i) => (
-              <MessageBubble key={i} message={msg} />
-            ))}
-            {streamingText && (
               <MessageBubble
-                message={{
-                  role: "assistant",
-                  content: [{ type: "text", text: streamingText }],
-                }}
-                streaming
+                key={msg.role === "assistant" && msg.id ? msg.id : `${msg.role}-${i}`}
+                message={msg}
               />
+            ))}
+            {(streamingText || streamingThinking) && (
+              <StreamingBubble text={streamingText} thinking={streamingThinking} />
             )}
           </div>
         )}
@@ -112,9 +113,9 @@ export function ChatScreen() {
             </button>
           )}
         </div>
-        {selectedProjectId && (
+        {projectName && (
           <p className="text-xs text-foreground-muted mt-2 text-center">
-            Project: {selectedProjectId}
+            Project: {projectName}
           </p>
         )}
       </div>
@@ -122,38 +123,118 @@ export function ChatScreen() {
   );
 }
 
-function MessageBubble({ message, streaming }: { message: AgentMessage; streaming?: boolean }) {
+function StreamingBubble({ text, thinking }: { text: string; thinking: string }) {
+  return (
+    <div className="p-4 rounded-xl bg-card border border-border w-full">
+      <div className="text-xs font-bold text-foreground-muted uppercase mb-1.5">Agent</div>
+      {thinking && (
+        <div className="text-foreground-muted text-sm italic whitespace-pre-wrap break-words mb-2 border-l-2 border-border pl-3">
+          {thinking}
+        </div>
+      )}
+      <div className="text-foreground text-sm leading-6 whitespace-pre-wrap break-words">
+        {text || "..."}
+      </div>
+    </div>
+  );
+}
+
+function MessageBubble({ message }: { message: AgentMessage }) {
   const isUser = message.role === "user";
 
-  let text = "";
-  if (message.role === "user") {
-    text = message.content;
-  } else if (message.role === "assistant") {
-    text = message.content
-      .map((c) => (c.type === "text" || c.type === "thinking" ? c.text : ""))
-      .join("\n");
-  } else if (message.role === "toolResult") {
-    text = message.results
-      .map((r) => `${r.toolName ?? "tool"}: ${typeof r.content === "string" ? r.content : JSON.stringify(r.content)}`)
-      .join("\n");
+  if (isUser) {
+    return (
+      <div className="p-4 rounded-xl bg-white/10 border border-border self-end max-w-[85%] ml-auto">
+        <div className="text-xs font-bold text-foreground-muted uppercase mb-1.5">You</div>
+        <div className="text-foreground text-sm leading-6 whitespace-pre-wrap break-words">
+          {message.content}
+        </div>
+      </div>
+    );
   }
 
+  if (message.role === "toolResult") {
+    return (
+      <div className="p-4 rounded-xl bg-card-alt border border-border w-full">
+        <div className="text-xs font-bold text-foreground-muted uppercase mb-1.5">Tool</div>
+        <div className="space-y-2">
+          {message.results.map((r, i) => (
+            <ToolResultRow
+              key={r.toolCallId ?? i}
+              name={r.toolName ?? "tool"}
+              content={r.content}
+              isError={r.isError}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // assistant
+  return (
+    <div className="p-4 rounded-xl bg-card border border-border w-full">
+      <div className="text-xs font-bold text-foreground-muted uppercase mb-1.5">Agent</div>
+      <div className="space-y-2">
+        {message.content.map((part, i) => (
+          <AssistantPart key={i} part={part} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AssistantPart({ part }: { part: AssistantMessageContent }) {
+  if (part.type === "text") {
+    return (
+      <div className="text-foreground text-sm leading-6 whitespace-pre-wrap break-words">
+        {part.text}
+      </div>
+    );
+  }
+  if (part.type === "thinking") {
+    return (
+      <div className="text-foreground-muted text-sm italic whitespace-pre-wrap break-words border-l-2 border-border pl-3">
+        {part.text}
+      </div>
+    );
+  }
+  // toolCall
+  const args = part.call.arguments;
+  const argsText =
+    typeof args === "string" ? args : JSON.stringify(args, null, 2);
+  return (
+    <div className="text-foreground-secondary text-xs font-mono whitespace-pre-wrap break-words border border-border rounded-lg px-3 py-2 bg-screen">
+      <span className="text-foreground font-bold">→ {part.call.name}</span>
+      <span className="text-foreground-muted">(</span>
+      <span className="text-foreground-secondary">{argsText}</span>
+      <span className="text-foreground-muted">)</span>
+    </div>
+  );
+}
+
+function ToolResultRow({
+  name,
+  content,
+  isError,
+}: {
+  name: string;
+  content: unknown;
+  isError?: boolean;
+}) {
+  const text =
+    typeof content === "string" ? content : JSON.stringify(content, null, 2);
   return (
     <div
-      className={`p-4 rounded-xl ${
-        isUser
-          ? "bg-white/10 border border-border self-end max-w-[85%] ml-auto"
-          : streaming
-            ? "bg-card border border-border w-full"
-            : "bg-card border border-border w-full"
+      className={`text-xs font-mono whitespace-pre-wrap break-words rounded-lg px-3 py-2 border ${
+        isError
+          ? "border-danger/40 bg-danger/10 text-danger"
+          : "border-border bg-screen text-foreground-secondary"
       }`}
     >
-      <div className="text-xs font-bold text-foreground-muted uppercase mb-1.5">
-        {isUser ? "You" : message.role === "toolResult" ? "Tool" : "Agent"}
-      </div>
-      <div className="text-foreground text-sm leading-6 whitespace-pre-wrap break-words">
-        {text || (streaming ? "..." : "")}
-      </div>
+      <span className={`font-bold ${isError ? "text-danger" : "text-foreground"}`}>{name}</span>
+      <span className="text-foreground-muted"> →</span>
+      <pre className="mt-1 whitespace-pre-wrap break-words">{text}</pre>
     </div>
   );
 }

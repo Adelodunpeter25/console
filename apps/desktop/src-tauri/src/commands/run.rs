@@ -21,8 +21,12 @@ pub async fn run_agent(
         approval_mode,
     };
 
+    // Emit on a per-session channel so concurrent/switched sessions can't
+    // cross-talk into the wrong conversation.
+    let channel = format!("agent-event:{session_id}");
+
     crate::api::run::run_agent_stream(&client, &session_id, &dto, move |event| {
-        let _ = app.emit("agent-event", &event);
+        let _ = app.emit(&channel, &event);
     })
     .await
 }

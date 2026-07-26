@@ -1,9 +1,9 @@
 use crate::api::ApiClient;
 use crate::error::AppResult;
-use crate::models::FsTreeEntry;
+use crate::models::BrowseResult;
 
 #[tauri::command]
-pub async fn browse_directory(path: Option<String>) -> AppResult<Vec<FsTreeEntry>> {
+pub async fn browse_directory(path: Option<String>) -> AppResult<BrowseResult> {
     let client = ApiClient::new();
     crate::api::fs::browse_directory(&client, path.as_deref()).await
 }

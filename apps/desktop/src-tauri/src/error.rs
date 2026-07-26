@@ -20,6 +20,9 @@ pub enum AppError {
     #[error("SSE stream error: {0}")]
     Sse(String),
 
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
     #[error("Tauri error: {0}")]
     Tauri(#[from] tauri::Error),
 }

@@ -13,7 +13,7 @@ import type {
 } from "@console/types";
 
 export interface BrowseResult {
-  currentPath: string;
+  path: string;
   parentPath: string | null;
   entries: FsTreeEntry[];
 }
@@ -59,7 +59,7 @@ export const tauriApi = {
     invoke<unknown>("get_provider_models", { providerId }),
 
   browseDirectory: (path?: string) =>
-    invoke<FsTreeEntry[]>("browse_directory", { path }),
+    invoke<BrowseResult>("browse_directory", { path }),
   pickFolder: () => invoke<unknown>("pick_folder"),
   getDirectoryTree: (path?: string, depth?: number) =>
     invoke<unknown>("get_directory_tree", { path, depth }),
@@ -91,6 +91,11 @@ export const tauriApi = {
     invoke<unknown>("abort_run", { sessionId }),
 
   listenAgentEvents: (
+    sessionId: string,
     callback: (event: AgentSessionEvent) => void,
-  ): Promise<UnlistenFn> => listen<AgentSessionEvent>("agent-event", (e) => callback(e.payload)),
+  ): Promise<UnlistenFn> =>
+    listen<AgentSessionEvent>(
+      `agent-event:${sessionId}`,
+      (e) => callback(e.payload),
+    ),
 };

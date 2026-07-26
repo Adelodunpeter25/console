@@ -7,6 +7,7 @@ interface ChatState {
   input: string;
   running: boolean;
   streamingText: string;
+  streamingThinking: string;
   loadSession: (sessionId: string) => Promise<void>;
   setInput: (val: string) => void;
   sendMessage: (sessionId: string) => Promise<void>;
@@ -20,13 +21,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
   input: "",
   running: false,
   streamingText: "",
+  streamingThinking: "",
 
   loadSession: async (sessionId: string) => {
     try {
       const detail = await tauriApi.getSession(sessionId);
-      set({ messages: detail.messages, streamingText: "" });
+      set({ messages: detail.messages, streamingText: "", streamingThinking: "" });
     } catch {
-      set({ messages: [], streamingText: "" });
+      set({ messages: [], streamingText: "", streamingThinking: "" });
     }
   },
 
@@ -41,11 +43,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       running: true,
       messages: [...s.messages, { role: "user", content: prompt }],
       streamingText: "",
+      streamingThinking: "",
     }));
 
     let unlisten: (() => void) | null = null;
     try {
-      unlisten = await tauriApi.listenAgentEvents((event) => {
+      unlisten = await tauriApi.listenAgentEvents(sessionId, (event) => {
         get().handleEvent(event);
       });
       await tauriApi.runAgent(sessionId, prompt);
@@ -54,7 +57,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await get().loadSession(sessionId);
     } finally {
       if (unlisten) unlisten();
-      set({ running: false, streamingText: "" });
+      set({ running: false, streamingText: "", streamingThinking: "" });
       await get().loadSession(sessionId);
     }
   },
@@ -65,10 +68,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } catch {
       // ignore
     }
-    set({ running: false, streamingText: "" });
+    set({ running: false, streamingText: "", streamingThinking: "" });
   },
 
-  clear: () => set({ messages: [], input: "", running: false, streamingText: "" }),
+  clear: () =>
+    set({ messages: [], input: "", running: false, streamingText: "", streamingThinking: "" }),
 
   handleEvent: (event: AgentSessionEvent) => {
     switch (event.type) {
@@ -76,14 +80,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (event.part.text) {
           set((s) => ({ streamingText: s.streamingText + event.part.text! }));
         }
+        if (event.part.thinking) {
+          set((s) => ({ streamingThinking: s.streamingThinking + event.part.thinking! }));
+        }
         break;
       case "modelStreamEnd":
         if (event.turn?.content) {
           set((s) => ({
             messages: [...s.messages, event.turn],
             streamingText: "",
+            streamingThinking: "",
           }));
         }
+        break;
+      case "toolExecutionEnd":
+        set((s) => ({
+          messages: [...s.messages, { role: "toolResult", results: event.results }],
+        }));
         break;
       case "error":
         set((s) => ({
@@ -100,6 +113,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             },
           ],
           streamingText: "",
+          streamingThinking: "",
         }));
         break;
       default:

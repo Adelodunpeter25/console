@@ -45,10 +45,14 @@ pub fn run() {
             run_agent,
             abort_run,
         ])
-        .setup(|_app| {
+        .setup(|app| {
+            // Load the persisted backend URL before the frontend initialises
+            // so `get_backend_url` returns the saved value on first read.
+            crate::config::load_config(app.handle());
+
             #[cfg(debug_assertions)]
             {
-                let _ = _app.handle().plugin(tauri_plugin_log::Builder::new().build());
+                let _ = app.handle().plugin(tauri_plugin_log::Builder::new().build());
             }
             Ok(())
         })

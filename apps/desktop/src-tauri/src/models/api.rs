@@ -98,6 +98,14 @@ pub struct FsTreeEntry {
     pub children: Option<Vec<FsTreeEntry>>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowseResult {
+    pub path: String,
+    pub parent_path: Option<String>,
+    pub entries: Vec<FsTreeEntry>,
+}
+
 pub type SessionListResponse = ApiResponse<Vec<SessionHeader>>;
 pub type SessionDetailApiResponse = ApiResponse<SessionDetailResponse>;
 pub type ProjectListResponse = ApiResponse<Vec<ProjectInfo>>;

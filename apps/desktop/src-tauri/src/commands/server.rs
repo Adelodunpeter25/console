@@ -1,10 +1,17 @@
-use crate::config::{get_server_url, health_url, set_server_url};
+use tauri::AppHandle;
+
+use crate::api::client::shared_http_client;
+use crate::config::{get_server_url, health_url, save_config, set_server_url};
 use crate::error::AppResult;
 
 #[tauri::command]
 pub async fn ping_server() -> AppResult<serde_json::Value> {
-    let client = reqwest::Client::new();
-    let resp = client.get(health_url()).send().await?.text().await?;
+    let resp = shared_http_client()
+        .get(health_url())
+        .send()
+        .await?
+        .text()
+        .await?;
     let json: serde_json::Value = serde_json::from_str(&resp)?;
     Ok(json)
 }
@@ -15,7 +22,7 @@ pub fn get_backend_url() -> String {
 }
 
 #[tauri::command]
-pub fn set_backend_url(url: String) -> AppResult<()> {
+pub fn set_backend_url(app: AppHandle, url: String) -> AppResult<()> {
     set_server_url(&url);
-    Ok(())
+    save_config(&app)
 }
