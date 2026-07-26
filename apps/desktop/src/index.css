@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark, .dark *));
+
+@theme {
+  --color-screen: #0a0a0b;
+  --color-screen-alt: #0d0d0e;
+  --color-card: #121316;
+  --color-card-alt: #18191c;
+  --color-card-hover: #1e1f23;
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-foreground: #ffffff;
+  --color-foreground-secondary: #a1a1aa;
+  --color-foreground-muted: #71717a;
+  --color-primary: #ffffff;
+  --color-primary-foreground: #000000;
+  --color-danger: #ef4444;
+  --color-danger-muted: rgba(239, 68, 68, 0.3);
+
+  --font-sans: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-glass: 1rem;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    background-color: var(--color-screen);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  .glass-surface {
+    background-color: rgba(18, 19, 22, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-glass);
+    padding: 1rem;
+    box-shadow: 0 18px 48px -20px rgba(0, 0, 0, 0.6);
+  }
+
+  .glass-surface-flat {
+    background-color: rgba(18, 19, 22, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.75rem;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
