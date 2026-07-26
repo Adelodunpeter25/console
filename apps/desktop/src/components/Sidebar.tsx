@@ -47,7 +47,7 @@ export function Sidebar() {
 
   if (!sidebarOpen) {
     return (
-      <div className="w-12 bg-screen-alt border-r border-border flex flex-col items-center py-4 gap-4">
+      <div className="w-12 bg-sidebar border-r border-border flex flex-col items-center py-4 gap-4">
         <button
           onClick={toggleSidebar}
           className="text-foreground-secondary hover:text-foreground transition-colors"
@@ -68,7 +68,7 @@ export function Sidebar() {
   }
 
   return (
-    <div className="w-72 bg-screen-alt border-r border-border flex flex-col h-full">
+    <div className="w-72 bg-sidebar border-r border-border flex flex-col h-full">
       {/* Header */}
       <div className="px-4 py-4 border-b border-border flex items-center justify-between">
         <h1 className="text-base font-bold text-foreground tracking-tight">Console</h1>

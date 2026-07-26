@@ -1,4 +1,5 @@
 import React from "react";
+import { Toaster } from "sonner";
 import { Sidebar } from "./components/Sidebar";
 import { HomeScreen } from "./screens/HomeScreen";
 import { ChatScreen } from "./screens/ChatScreen";
@@ -14,13 +15,26 @@ export function App() {
   }, [init]);
 
   return (
-    <div className="flex h-screen w-screen bg-screen overflow-hidden">
-      <Sidebar />
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {activeView === "home" && <HomeScreen />}
-        {activeView === "chat" && <ChatScreen />}
-        {activeView === "settings" && <SettingsScreen />}
+    <>
+      <div className="flex h-screen w-screen bg-screen overflow-hidden">
+        <Sidebar />
+        <div className="flex-1 flex flex-col h-full overflow-hidden">
+          {activeView === "home" && <HomeScreen />}
+          {activeView === "chat" && <ChatScreen />}
+          {activeView === "settings" && <SettingsScreen />}
+        </div>
       </div>
-    </div>
+      <Toaster
+        theme="dark"
+        position="bottom-right"
+        toastOptions={{
+          style: {
+            background: "var(--color-card)",
+            border: "1px solid var(--color-border-strong)",
+            color: "var(--color-foreground)",
+          },
+        }}
+      />
+    </>
   );
 }

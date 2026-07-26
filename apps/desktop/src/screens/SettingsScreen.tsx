@@ -27,7 +27,7 @@ export function SettingsScreen() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6">
+    <div className="flex-1 overflow-y-auto px-6 py-6 bg-screen">
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-foreground tracking-tight">Console Settings</h2>
         <p className="text-sm text-foreground-secondary mt-1">
