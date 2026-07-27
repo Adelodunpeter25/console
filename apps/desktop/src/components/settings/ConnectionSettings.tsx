@@ -1,9 +1,16 @@
 import React from "react";
 import { Wifi, WifiOff } from "lucide-react";
-import { useServerStore } from "../store";
-import { GlassSurface } from "../components/common";
+import { useServerStore } from "../../store";
+import { GlassSurface } from "../common";
 
-export function SettingsScreen() {
+/**
+ * Connection settings panel — backend server endpoint configuration,
+ * connection testing, and app diagnostics.
+ *
+ * Extracted from the former SettingsScreen into a dedicated settings
+ * section component.
+ */
+export function ConnectionSettings() {
   const { backendUrl, connected, testing, init, setUrl, testConnection } = useServerStore();
   const [inputUrl, setInputUrl] = React.useState(backendUrl);
   const [saving, setSaving] = React.useState(false);
@@ -29,9 +36,9 @@ export function SettingsScreen() {
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6 bg-screen">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-foreground tracking-tight">Console Settings</h2>
+        <h2 className="text-2xl font-bold text-foreground tracking-tight">Connection</h2>
         <p className="text-sm text-foreground-secondary mt-1">
-          Configure server connections & app environment
+          Configure your Console backend server connection
         </p>
       </div>
 
@@ -95,7 +102,8 @@ export function SettingsScreen() {
         <InfoRow label="Framework" value="Tauri v2" />
         <InfoRow label="Frontend" value="React 19 + Vite 6" />
         <InfoRow label="Styling" value="Tailwind CSS v4" />
-        <InfoRow label="State Management" value="Zustand v5" last />
+        <InfoRow label="State Management" value="Zustand v5" />
+        <InfoRow label="Routing" value="TanStack Router" last />
       </GlassSurface>
 
       {/* About Card */}
@@ -114,9 +122,7 @@ export function SettingsScreen() {
 
 function InfoRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
   return (
-    <div
-      className={`flex justify-between py-2.5 ${last ? "" : "border-b border-border"}`}
-    >
+    <div className={`flex justify-between py-2.5 ${last ? "" : "border-b border-border"}`}>
       <span className="text-sm text-foreground-secondary">{label}</span>
       <span className="text-sm font-mono text-foreground">{value}</span>
     </div>

@@ -1,0 +1,18 @@
+{
+  "adHocServices": {
+    "dev": {
+      "name": "dev",
+      "command": "npx vite --port 31901 --strictPort --host 0.0.0.0",
+      "portals": [
+        {
+          "url": "/",
+          "title": "dev"
+        }
+      ],
+      "health": "/",
+      "review": true,
+      "cwd": "/home/user/workspace/repo/apps/desktop",
+      "port": 31901
+    }
+  }
+}

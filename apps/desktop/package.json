@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@console/types": "*",
+    "@tanstack/react-router": "^1.161.3",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "lucide-react": "^0.474.0",

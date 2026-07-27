@@ -1,18 +1,35 @@
 import React from "react";
-import { Folder, Home, MessageSquare, Settings, ChevronLeft, Plus } from "lucide-react";
+import {
+  Folder,
+  ChevronRight,
+  Plus,
+  MessageSquare,
+  PanelLeftClose,
+  PanelLeft,
+  X,
+  FolderOpen,
+} from "lucide-react";
 import type { SessionHeader } from "@console/types";
 import { useAppStore, useProjectStore } from "../store";
 import { formatRelativeTime } from "../utils/time";
 
+/**
+ * Left sidebar — project and session navigator.
+ *
+ * Each project is a collapsible row. Expanding a project loads and reveals
+ * its sessions; collapsing hides them. A "+" button at the top adds new
+ * projects inline. No view-switching nav buttons — routing handles that.
+ */
 export function Sidebar() {
   const {
-    activeView,
-    setActiveView,
     selectedProjectId,
     setSelectedProjectId,
+    selectedSessionId,
     setSelectedSessionId,
     sidebarOpen,
     toggleSidebar,
+    expandedProjects,
+    toggleProjectExpanded,
   } = useAppStore();
 
   const {
@@ -22,19 +39,23 @@ export function Sidebar() {
     sessionsByProject,
     loadSessions,
     createSession,
+    addProject,
   } = useProjectStore();
+
+  const [showAddForm, setShowAddForm] = React.useState(false);
+  const [addingPath, setAddingPath] = React.useState("");
+  const [adding, setAdding] = React.useState(false);
+  const [addError, setAddError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     loadProjects();
   }, [loadProjects]);
 
-  const handleProjectClick = (projectId: string) => {
-    if (selectedProjectId === projectId) {
-      setSelectedProjectId(null);
-      setSelectedSessionId(null);
-    } else {
-      setSelectedProjectId(projectId);
-      setSelectedSessionId(null);
+  const handleProjectToggle = (projectId: string) => {
+    const isExpanded = expandedProjects.has(projectId);
+    toggleProjectExpanded(projectId);
+    setSelectedProjectId(isExpanded ? null : projectId);
+    if (!isExpanded && !sessionsByProject[projectId]) {
       loadSessions(projectId);
     }
   };
@@ -42,66 +63,115 @@ export function Sidebar() {
   const handleNewChat = async (projectId: string, cwd: string) => {
     const session = await createSession(cwd, projectId, "New Chat");
     setSelectedSessionId(session.id);
-    setActiveView("chat");
   };
 
+  const handleAddProject = async () => {
+    if (!addingPath.trim()) return;
+    setAdding(true);
+    setAddError(null);
+    try {
+      const project = await addProject(addingPath.trim());
+      setSelectedProjectId(project.id);
+      toggleProjectExpanded(project.id);
+      setShowAddForm(false);
+      setAddingPath("");
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : "Failed to add project");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  // Collapsed rail
   if (!sidebarOpen) {
     return (
-      <div className="w-12 bg-sidebar border-r border-border flex flex-col items-center py-4 gap-4">
+      <div className="w-12 bg-sidebar border-r border-border flex flex-col items-center py-3 gap-3 shrink-0">
         <button
           onClick={toggleSidebar}
-          className="text-foreground-secondary hover:text-foreground transition-colors"
+          className="p-2 rounded-lg text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors"
+          title="Expand sidebar"
         >
-          <ChevronLeft size={20} className="rotate-180" />
+          <PanelLeft size={18} />
         </button>
-        <NavIcon active={activeView === "home"} onClick={() => setActiveView("home")}>
-          <Home size={20} />
-        </NavIcon>
-        <NavIcon active={activeView === "chat"} onClick={() => setActiveView("chat")}>
-          <MessageSquare size={20} />
-        </NavIcon>
-        <NavIcon active={activeView === "settings"} onClick={() => setActiveView("settings")}>
-          <Settings size={20} />
-        </NavIcon>
+        <button
+          onClick={() => setShowAddForm(true)}
+          className="p-2 rounded-lg text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors"
+          title="Add project"
+        >
+          <Plus size={18} />
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="w-72 bg-sidebar border-r border-border flex flex-col h-full">
+    <div className="w-72 bg-sidebar border-r border-border flex flex-col h-full shrink-0">
       {/* Header */}
-      <div className="px-4 py-4 border-b border-border flex items-center justify-between">
-        <h1 className="text-base font-bold text-foreground tracking-tight">Console</h1>
-        <button
-          onClick={toggleSidebar}
-          className="text-foreground-secondary hover:text-foreground transition-colors"
-        >
-          <ChevronLeft size={18} />
-        </button>
-      </div>
-
-      {/* Nav items */}
-      <div className="px-2 py-2 border-b border-border flex gap-1">
-        <NavButton active={activeView === "home"} onClick={() => setActiveView("home")}>
-          <Home size={16} /> Home
-        </NavButton>
-        <NavButton active={activeView === "chat"} onClick={() => setActiveView("chat")}>
-          <MessageSquare size={16} /> Chat
-        </NavButton>
-        <NavButton active={activeView === "settings"} onClick={() => setActiveView("settings")}>
-          <Settings size={16} />
-        </NavButton>
-      </div>
-
-      {/* Projects + Sessions */}
-      <div className="flex-1 overflow-y-auto px-2 py-3">
-        <div className="flex items-center justify-between mb-2 px-2">
-          <span className="text-xs font-semibold text-foreground-secondary uppercase tracking-wider">
-            Projects
-          </span>
-          <span className="text-xs text-foreground-muted">{projects.length}</span>
+      <div className="px-4 h-12 flex items-center justify-between border-b border-border shrink-0">
+        <span className="text-sm font-bold text-foreground tracking-tight">Projects</span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="p-1.5 rounded-lg text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors"
+            title="Add project"
+          >
+            <Plus size={16} />
+          </button>
+          <button
+            onClick={toggleSidebar}
+            className="p-1.5 rounded-lg text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors"
+            title="Collapse sidebar"
+          >
+            <PanelLeftClose size={16} />
+          </button>
         </div>
+      </div>
 
+      {/* Add project form */}
+      {showAddForm && (
+        <div className="px-3 py-3 border-b border-border shrink-0">
+          <div className="flex items-center gap-2 mb-2">
+            <FolderOpen size={16} className="text-foreground shrink-0" />
+            <input
+              type="text"
+              value={addingPath}
+              onChange={(e) => setAddingPath(e.target.value)}
+              placeholder="/path/to/project"
+              className="flex-1 bg-card-alt border border-border rounded-lg px-3 py-2 text-xs text-foreground font-mono outline-none focus:border-border-strong transition-colors"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAddProject();
+                if (e.key === "Escape") {
+                  setShowAddForm(false);
+                  setAddingPath("");
+                  setAddError(null);
+                }
+              }}
+              autoFocus
+            />
+            <button
+              onClick={() => {
+                setShowAddForm(false);
+                setAddingPath("");
+                setAddError(null);
+              }}
+              className="p-1.5 text-foreground-muted hover:text-foreground transition-colors"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <button
+            onClick={handleAddProject}
+            disabled={adding || !addingPath.trim()}
+            className="w-full bg-white text-black rounded-lg py-2 text-xs font-bold disabled:opacity-30 hover:bg-white/90 transition-colors"
+          >
+            {adding ? "Adding..." : "Add Project"}
+          </button>
+          {addError && <p className="text-xs text-danger mt-2">{addError}</p>}
+        </div>
+      )}
+
+      {/* Project + session list */}
+      <div className="flex-1 overflow-y-auto px-2 py-2">
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <span className="text-sm text-foreground-muted">Loading...</span>
@@ -110,26 +180,33 @@ export function Sidebar() {
           <div className="px-2 py-8 text-center">
             <Folder size={28} className="mx-auto text-foreground-muted mb-2" />
             <p className="text-xs text-foreground-muted">
-              No projects yet. Add one from the Home tab.
+              No projects yet. Click + to add one.
             </p>
           </div>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-0.5">
             {projects.map((project) => {
-              const isSelected = selectedProjectId === project.id;
+              const isExpanded = expandedProjects.has(project.id);
               const sessions = sessionsByProject[project.id] ?? [];
 
               return (
                 <div key={project.id}>
+                  {/* Project row */}
                   <button
-                    onClick={() => handleProjectClick(project.id)}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-colors text-left ${
-                      isSelected
-                        ? "bg-white/10 border border-border"
+                    onClick={() => handleProjectToggle(project.id)}
+                    className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors text-left ${
+                      isExpanded
+                        ? "bg-white/8 border border-border"
                         : "hover:bg-white/5 border border-transparent"
                     }`}
                   >
-                    <Folder size={16} className="shrink-0 text-foreground" />
+                    <ChevronRight
+                      size={14}
+                      className={`text-foreground-muted shrink-0 transition-transform ${
+                        isExpanded ? "rotate-90" : ""
+                      }`}
+                    />
+                    <Folder size={15} className="shrink-0 text-foreground" />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-foreground truncate">
                         {project.name}
@@ -140,17 +217,18 @@ export function Sidebar() {
                     </div>
                   </button>
 
-                  {isSelected && (
-                    <div className="ml-4 mt-1 mb-2 space-y-1">
+                  {/* Sessions (collapsible) */}
+                  {isExpanded && (
+                    <div className="ml-4 mt-0.5 mb-1.5 border-l border-border pl-2 space-y-0.5">
                       <div className="flex items-center justify-between px-2 py-1">
                         <span className="text-xs text-foreground-muted uppercase tracking-wider">
                           Sessions ({sessions.length})
                         </span>
                         <button
                           onClick={() => handleNewChat(project.id, project.path)}
-                          className="text-xs font-bold text-foreground hover:text-white flex items-center gap-0.5 px-2 py-1 rounded-full border border-border hover:bg-white/10 transition-colors"
+                          className="text-xs font-bold text-foreground-secondary hover:text-foreground flex items-center gap-0.5 px-2 py-0.5 rounded-full border border-border hover:bg-white/10 transition-colors"
                         >
-                          <Plus size={12} /> New
+                          <Plus size={11} /> New
                         </button>
                       </div>
 
@@ -160,7 +238,12 @@ export function Sidebar() {
                         </p>
                       ) : (
                         sessions.map((sess) => (
-                          <SessionItem key={sess.id} session={sess} projectId={project.id} />
+                          <SessionItem
+                            key={sess.id}
+                            session={sess}
+                            projectId={project.id}
+                            isActive={selectedSessionId === sess.id}
+                          />
                         ))
                       )}
                     </div>
@@ -178,89 +261,47 @@ export function Sidebar() {
 function SessionItem({
   session,
   projectId,
+  isActive,
 }: {
   session: SessionHeader;
   projectId: string;
+  isActive: boolean;
 }) {
-  const { selectedSessionId, setSelectedSessionId, setActiveView } = useAppStore();
+  const { setSelectedSessionId } = useAppStore();
   const { deleteSession } = useProjectStore();
-  const isActive = selectedSessionId === session.id;
 
   return (
     <div
-      className={`group flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${
-        isActive ? "bg-white/15 border border-border" : "hover:bg-white/5 border border-transparent"
+      className={`group flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors ${
+        isActive ? "bg-white/12 border border-border" : "hover:bg-white/5 border border-transparent"
       }`}
-      onClick={() => {
-        setSelectedSessionId(isActive ? null : session.id);
-        if (!isActive) setActiveView("chat");
-      }}
+      onClick={() => setSelectedSessionId(isActive ? null : session.id)}
     >
-      <div className="flex-1 min-w-0 pr-2">
-        <div className={`text-xs font-medium truncate ${isActive ? "text-foreground" : "text-foreground-secondary"}`}>
-          {session.title || "Untitled"}
-        </div>
-        <div className="text-xs text-foreground-muted font-mono truncate">
-          {session.modelId}
+      <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
+        <MessageSquare size={13} className="shrink-0 text-foreground-muted" />
+        <div className="flex-1 min-w-0">
+          <div
+            className={`text-xs font-medium truncate ${
+              isActive ? "text-foreground" : "text-foreground-secondary"
+            }`}
+          >
+            {session.title || "Untitled"}
+          </div>
+          <div className="text-xs text-foreground-muted font-mono truncate">
+            {formatRelativeTime(session.createdAt)}
+          </div>
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <span className="text-xs text-foreground-muted">
-          {formatRelativeTime(session.createdAt)}
-        </span>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            deleteSession(session.id, projectId);
-            if (isActive) setSelectedSessionId(null);
-          }}
-          className="text-foreground-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity text-xs"
-        >
-          ✕
-        </button>
-      </div>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          deleteSession(session.id, projectId);
+          if (isActive) setSelectedSessionId(null);
+        }}
+        className="text-foreground-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity text-xs shrink-0"
+      >
+        <X size={12} />
+      </button>
     </div>
-  );
-}
-
-function NavButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition-colors ${
-        active ? "bg-white/10 text-foreground" : "text-foreground-secondary hover:text-foreground hover:bg-white/5"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function NavIcon({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`p-2 rounded-lg transition-colors ${
-        active ? "bg-white/10 text-foreground" : "text-foreground-secondary hover:text-foreground hover:bg-white/5"
-      }`}
-    >
-      {children}
-    </button>
   );
 }

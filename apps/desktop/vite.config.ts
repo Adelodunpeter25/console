@@ -11,6 +11,7 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
     host: host || false,
+    allowedHosts: true,
     hmr: host
       ? {
           protocol: "ws",
