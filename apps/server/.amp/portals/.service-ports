@@ -1,0 +1,5 @@
+{
+  "servicePorts": {
+    "backend": 31647
+  }
+}
