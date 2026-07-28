@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import type { AgentMessage, AgentSessionEvent } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
+import { useProviderStore } from "./useProviderStore";
 
 interface ChatState {
   messages: AgentMessage[];
@@ -9,12 +10,37 @@ interface ChatState {
   running: boolean;
   streamingText: string;
   streamingThinking: string;
+  /** Model ID for the active session (persisted per-session). */
+  sessionModelId: string | null;
+  /** Provider for the active session (persisted per-session). */
+  sessionProvider: string | null;
+
   loadSession: (sessionId: string) => Promise<void>;
   setInput: (val: string) => void;
+  /**
+   * Change the model for the active session. Resolves the provider from the
+   * catalog, updates local state, and persists the change to the backend.
+   */
+  changeModel: (sessionId: string, projectId: string, modelId: string) => void;
   sendMessage: (sessionId: string) => Promise<void>;
   abort: (sessionId: string) => Promise<void>;
   clear: () => void;
   handleEvent: (event: AgentSessionEvent) => void;
+}
+
+/**
+ * Resolve the provider for a given model ID by scanning the provider catalog.
+ * Falls back to the supplied default if no match is found.
+ */
+function resolveProvider(modelId: string, fallback: string | null): string | null {
+  const { providers, modelsByProvider } = useProviderStore.getState();
+  for (const provider of providers) {
+    const models = modelsByProvider[provider.name] ?? [];
+    if (models.some((m) => m.id === modelId)) {
+      return provider.name;
+    }
+  }
+  return fallback;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -23,21 +49,51 @@ export const useChatStore = create<ChatState>((set, get) => ({
   running: false,
   streamingText: "",
   streamingThinking: "",
+  sessionModelId: null,
+  sessionProvider: null,
 
   loadSession: async (sessionId: string) => {
     try {
       const detail = await tauriApi.getSession(sessionId);
-      set({ messages: detail.messages, streamingText: "", streamingThinking: "" });
+      set({
+        messages: detail.messages,
+        streamingText: "",
+        streamingThinking: "",
+        sessionModelId: detail.header.modelId ?? null,
+        sessionProvider: detail.header.provider ?? null,
+      });
     } catch {
-      set({ messages: [], streamingText: "", streamingThinking: "" });
+      set({
+        messages: [],
+        streamingText: "",
+        streamingThinking: "",
+        sessionModelId: null,
+        sessionProvider: null,
+      });
     }
   },
 
   setInput: (input) => set({ input }),
 
+  changeModel: (sessionId, projectId, modelId) => {
+    const provider = resolveProvider(modelId, get().sessionProvider);
+    set({ sessionModelId: modelId, sessionProvider: provider });
+
+    // Persist to the backend so this session remembers its model.
+    tauriApi
+      .updateSession(sessionId, {
+        modelId,
+        provider: provider as "gemini" | "antigravity" | undefined,
+      })
+      .catch(() => {
+        // Silently ignore — local state is already updated.
+      });
+  },
+
   sendMessage: async (sessionId: string) => {
-    const prompt = get().input.trim();
-    if (!prompt || get().running) return;
+    const { input, running, sessionModelId, sessionProvider } = get();
+    const prompt = input.trim();
+    if (!prompt || running) return;
 
     set((s) => ({
       input: "",
@@ -54,10 +110,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       unlisten = await tauriApi.listenAgentEvents(sessionId, (event) => {
         get().handleEvent(event);
       });
-      await tauriApi.runAgent(sessionId, prompt);
+      await tauriApi.runAgent(
+        sessionId,
+        prompt,
+        sessionModelId ?? undefined,
+        sessionProvider ?? undefined,
+      );
     } catch (err) {
       hadError = true;
-      const msg = err instanceof Error ? err.message : "Failed to send message. Is the backend running?";
+      const msg =
+        err instanceof Error ? err.message : "Failed to send message. Is the backend running?";
       toast.error(msg);
       // Show the error inline as an assistant message so the user sees it.
       set((s) => ({
@@ -90,7 +152,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   clear: () =>
-    set({ messages: [], input: "", running: false, streamingText: "", streamingThinking: "" }),
+    set({
+      messages: [],
+      input: "",
+      running: false,
+      streamingText: "",
+      streamingThinking: "",
+      sessionModelId: null,
+      sessionProvider: null,
+    }),
 
   handleEvent: (event: AgentSessionEvent) => {
     switch (event.type) {

@@ -6,8 +6,8 @@ import { MessageList, Composer } from "../components/chat";
  * Chat screen — thin orchestrator.
  *
  * Rendered only when a session is selected (ChatPage handles the empty state).
- * Owns store wiring, session lifecycle, the selected-model state, and the
- * send/abort handlers. All rendering is delegated to MessageList + Composer.
+ * All business logic (model resolution, persistence, send/abort) lives in
+ * the stores. This component only wires stores to UI components.
  */
 export function ChatScreen() {
   const { selectedSessionId, selectedProjectId } = useAppStore();
@@ -17,15 +17,15 @@ export function ChatScreen() {
     running,
     streamingText,
     streamingThinking,
+    sessionModelId,
     setInput,
+    changeModel,
     sendMessage,
     abort,
     loadSession,
   } = useChatStore();
   const { projects } = useProjectStore();
   const { loadProviders } = useProviderStore();
-
-  const [selectedModel, setSelectedModel] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     loadProviders();
@@ -36,15 +36,6 @@ export function ChatScreen() {
       loadSession(selectedSessionId);
     }
   }, [selectedSessionId, loadSession]);
-
-  const handleSend = React.useCallback(() => {
-    if (!selectedSessionId || !input.trim() || running) return;
-    void sendMessage(selectedSessionId);
-  }, [selectedSessionId, input, running, sendMessage]);
-
-  const handleAbort = React.useCallback(() => {
-    if (selectedSessionId) void abort(selectedSessionId);
-  }, [selectedSessionId, abort]);
 
   const projectName = projects.find((p) => p.id === selectedProjectId)?.name;
 
@@ -59,12 +50,16 @@ export function ChatScreen() {
       <Composer
         value={input}
         onChange={setInput}
-        onSend={handleSend}
-        onAbort={handleAbort}
+        onSend={() => selectedSessionId && sendMessage(selectedSessionId)}
+        onAbort={() => selectedSessionId && abort(selectedSessionId)}
         running={running}
         disabled={!input.trim()}
-        selectedModel={selectedModel}
-        onModelChange={setSelectedModel}
+        selectedModel={sessionModelId}
+        onModelChange={(modelId) =>
+          selectedSessionId &&
+          selectedProjectId &&
+          changeModel(selectedSessionId, selectedProjectId, modelId)
+        }
         projectName={projectName}
       />
     </div>

@@ -45,6 +45,7 @@ export interface SessionIndexRow {
   model_id: string;
   provider: string;
   message_count: number;
+  status: string | null;
   created_at: number;
   updated_at: number;
 }

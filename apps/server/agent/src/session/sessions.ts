@@ -295,6 +295,7 @@ export function loadSession(
       createdAt,
       updatedAt,
       messageCount: messages.length,
+      status: indexRow?.status ?? "idle",
     },
     messages,
   };
