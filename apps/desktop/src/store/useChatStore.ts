@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { toast } from "sonner";
 import type { AgentMessage, AgentSessionEvent } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 
@@ -47,18 +48,35 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
 
     let unlisten: (() => void) | null = null;
+    let hadError = false;
+
     try {
       unlisten = await tauriApi.listenAgentEvents(sessionId, (event) => {
         get().handleEvent(event);
       });
       await tauriApi.runAgent(sessionId, prompt);
-    } catch {
-      // On error, reload the session to get the true state
-      await get().loadSession(sessionId);
+    } catch (err) {
+      hadError = true;
+      const msg = err instanceof Error ? err.message : "Failed to send message. Is the backend running?";
+      toast.error(msg);
+      // Show the error inline as an assistant message so the user sees it.
+      set((s) => ({
+        messages: [
+          ...s.messages,
+          {
+            role: "assistant",
+            content: [{ type: "text", text: `Error: ${msg}` }],
+          },
+        ],
+      }));
     } finally {
       if (unlisten) unlisten();
       set({ running: false, streamingText: "", streamingThinking: "" });
-      await get().loadSession(sessionId);
+      // Only reload from server if the stream completed successfully —
+      // reloading after an error would wipe the error message we just added.
+      if (!hadError) {
+        await get().loadSession(sessionId);
+      }
     }
   },
 

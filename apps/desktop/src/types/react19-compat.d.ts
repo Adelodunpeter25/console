@@ -15,6 +15,12 @@ declare module "react-markdown" {
 declare module "sonner" {
   import type { ComponentType } from "react";
   export const Toaster: ComponentType<Record<string, unknown>>;
+  export function toast(message: string, options?: Record<string, unknown>): void;
+  export namespace toast {
+    export function error(message: string, options?: Record<string, unknown>): void;
+    export function success(message: string, options?: Record<string, unknown>): void;
+    export function message(message: string, options?: Record<string, unknown>): void;
+  }
 }
 
 declare module "cmdk" {
