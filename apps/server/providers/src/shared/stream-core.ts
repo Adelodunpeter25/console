@@ -46,6 +46,12 @@ function hasFunctionCall(part: CcaResponsePart): boolean {
 export async function* streamCore(options: StreamCoreOptions): AsyncGenerator<LLMDelta> {
   const { endpoint, accessToken, extraHeaders, body, signal } = options;
 
+  // Stable ID counter for function calls that arrive without an explicit id.
+  // Some CCA responses omit fc.id, and generating a fresh randomUUID per delta
+  // would split a single logical tool call into duplicates. We assign a
+  // sequential synthetic id so all deltas for the same call accumulate.
+  let syntheticCallIndex = 0;
+
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -88,7 +94,7 @@ export async function* streamCore(options: StreamCoreOptions): AsyncGenerator<LL
         const fc = part.functionCall;
         const delta: LLMDelta = {
           type: "toolCall",
-          id: fc.id ?? crypto.randomUUID(),
+          id: fc.id ?? `call-${syntheticCallIndex++}`,
           name: fc.name,
           argumentsJson: JSON.stringify(fc.args),
         };

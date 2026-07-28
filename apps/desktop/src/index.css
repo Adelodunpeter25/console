@@ -74,7 +74,9 @@
    Placed outside @layer base so these class/element selectors always win
    over the universal * rule above. */
 .markdown-body,
-.selectable-text {
+.markdown-body *,
+.selectable-text,
+.selectable-text * {
   -webkit-user-select: text;
   user-select: text;
 }

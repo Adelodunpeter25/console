@@ -110,6 +110,7 @@ export function MessageList({
                 key={messageKey(msg, i)}
                 message={msg}
                 prevMessage={messages[i - 1]}
+                nextMessage={messages[i + 1]}
               />
             ))}
             {showStreamingBubble && (

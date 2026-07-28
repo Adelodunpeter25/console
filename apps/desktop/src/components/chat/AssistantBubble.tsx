@@ -1,12 +1,13 @@
 import React from "react";
 import { AlertCircle } from "lucide-react";
-import type { AgentMessage } from "@console/types";
+import type { AgentMessage, ToolResult } from "@console/types";
 import { MarkdownRenderer, ThinkingBlock, ToolCallBlock } from "../common";
 
 type AssistantMessage = Extract<AgentMessage, { role: "assistant" }>;
 
 interface AssistantBubbleProps {
   message: AssistantMessage;
+  toolResults?: ToolResult[];
 }
 
 /**
@@ -19,6 +20,7 @@ interface AssistantBubbleProps {
  */
 export const AssistantBubble = React.memo(function AssistantBubble({
   message,
+  toolResults = [],
 }: AssistantBubbleProps) {
   const textParts = message.content.filter((c) => c.type === "text");
   const thinkingParts = message.content.filter((c) => c.type === "thinking");
@@ -30,7 +32,7 @@ export const AssistantBubble = React.memo(function AssistantBubble({
       <div className="rounded-xl bg-danger-muted border border-danger/30 px-4 py-3">
         <div className="flex items-start gap-2.5">
           <AlertCircle size={16} className="text-danger shrink-0 mt-0.5" />
-          <div className="text-sm text-danger">
+          <div className="text-sm text-danger selectable-text">
             {textParts.map((c, i) => (
               <p key={i} className="font-mono">
                 {c.type === "text" && c.text}
@@ -66,6 +68,7 @@ export const AssistantBubble = React.memo(function AssistantBubble({
           calls={toolCallParts
             .map((c) => (c.type === "toolCall" ? c.call : null))
             .filter((c): c is NonNullable<typeof c> => c !== null)}
+          results={toolResults}
         />
       )}
     </div>

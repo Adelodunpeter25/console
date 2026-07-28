@@ -1,5 +1,5 @@
 import React from "react";
-import type { AgentMessage, AssistantMessageContent, ToolCall } from "@console/types";
+import type { AgentMessage, AssistantMessageContent, ToolCall, ToolResult } from "@console/types";
 import { ToolCallBlock } from "../common";
 import { UserBubble } from "./UserBubble";
 import { AssistantBubble } from "./AssistantBubble";
@@ -7,6 +7,7 @@ import { AssistantBubble } from "./AssistantBubble";
 interface MessageBubbleProps {
   message: AgentMessage;
   prevMessage?: AgentMessage;
+  nextMessage?: AgentMessage;
 }
 
 /**
@@ -20,6 +21,7 @@ interface MessageBubbleProps {
 export const MessageBubble = React.memo(function MessageBubble({
   message,
   prevMessage,
+  nextMessage,
 }: MessageBubbleProps) {
   if (message.role === "user") {
     return <UserBubble content={message.content} />;
@@ -41,5 +43,10 @@ export const MessageBubble = React.memo(function MessageBubble({
     return <ToolCallBlock calls={prevCalls} results={message.results} />;
   }
 
-  return <AssistantBubble message={message} />;
+  // Assistant message — pass results from the following toolResult message
+  // so embedded ToolCallBlocks can show completion status.
+  const toolResults: ToolResult[] =
+    nextMessage?.role === "toolResult" ? nextMessage.results : [];
+
+  return <AssistantBubble message={message} toolResults={toolResults} />;
 });
