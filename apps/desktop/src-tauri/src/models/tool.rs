@@ -26,6 +26,7 @@ pub enum ApprovalPolicy {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PermissionRequest {
     pub request_id: String,
     pub tool_call_id: String,
@@ -36,13 +37,17 @@ pub struct PermissionRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ToolCall {
     pub id: String,
     pub name: String,
-    pub arguments: serde_json::Value,
+    /// Omitted on partial `modelStreamPart` tool-call frames (args stream later).
+    #[serde(default)]
+    pub arguments: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ToolResult {
     pub tool_call_id: String,
     pub tool_name: Option<String>,

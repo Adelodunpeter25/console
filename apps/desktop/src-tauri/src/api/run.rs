@@ -51,8 +51,20 @@ fn flush_event<F: FnMut(AgentSessionEvent)>(
     }
     let data = data_lines.join("\n");
     data_lines.clear();
-    if let Ok(event) = serde_json::from_str::<AgentSessionEvent>(&data) {
-        on_event(event);
+    match serde_json::from_str::<AgentSessionEvent>(&data) {
+        Ok(event) => on_event(event),
+        Err(err) => {
+            // Surface parse failures instead of silently dropping the frame —
+            // a camelCase/schema mismatch used to make the UI look "stuck"
+            // with only the optimistic user message.
+            eprintln!("agent SSE deserialize error: {err}; payload={}", &data[..data.len().min(500)]);
+            on_event(AgentSessionEvent::Error {
+                error: crate::models::AgentSessionError {
+                    message: format!("Failed to parse agent event: {err}"),
+                    data: Some(serde_json::json!({ "raw": data })),
+                },
+            });
+        }
     }
 }
 
@@ -80,8 +92,9 @@ where
                 continue;
             }
 
-            if let Some(rest) = trimmed.strip_prefix("data: ") {
-                data_lines.push(rest.to_string());
+            // Accept both "data: {...}" and "data:{...}" (no space).
+            if let Some(rest) = trimmed.strip_prefix("data:") {
+                data_lines.push(rest.trim_start().to_string());
             }
         }
     }
