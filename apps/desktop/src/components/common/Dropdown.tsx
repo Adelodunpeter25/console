@@ -6,6 +6,12 @@ import { ChevronDown, Check } from "lucide-react";
 /* model selector, approval mode selector, etc.                        */
 /* ------------------------------------------------------------------ */
 
+interface DropdownContextValue {
+  close: () => void;
+}
+
+const DropdownContext = React.createContext<DropdownContextValue>({ close: () => {} });
+
 interface DropdownProps {
   /** Currently selected value label shown in the trigger button. */
   label: string;
@@ -21,6 +27,7 @@ interface DropdownProps {
 /**
  * Generic dropdown with the same visual style as the model selector:
  * compact trigger button, upward-opening popover with a heading.
+ * Closes automatically when any DropdownItem is selected.
  */
 export function Dropdown({ label, heading, onOpen, width = 256, children }: DropdownProps) {
   const [open, setOpen] = React.useState(false);
@@ -42,6 +49,8 @@ export function Dropdown({ label, heading, onOpen, width = 256, children }: Drop
     setOpen(!open);
   };
 
+  const close = () => setOpen(false);
+
   return (
     <div ref={ref} className="relative">
       <button
@@ -53,17 +62,19 @@ export function Dropdown({ label, heading, onOpen, width = 256, children }: Drop
       </button>
 
       {open && (
-        <div
-          className="absolute bottom-full left-0 mb-2 bg-card border border-border-strong rounded-xl shadow-2xl overflow-hidden z-50"
-          style={{ width }}
-        >
-          <div className="px-3 py-2 border-b border-border">
-            <span className="text-xs font-semibold text-foreground-muted uppercase tracking-wider">
-              {heading}
-            </span>
+        <DropdownContext.Provider value={{ close }}>
+          <div
+            className="absolute bottom-full left-0 mb-2 bg-card border border-border-strong rounded-xl shadow-2xl overflow-hidden z-50"
+            style={{ width }}
+          >
+            <div className="px-3 py-2 border-b border-border">
+              <span className="text-xs font-semibold text-foreground-muted uppercase tracking-wider">
+                {heading}
+              </span>
+            </div>
+            <div className="max-h-64 overflow-y-auto">{children}</div>
           </div>
-          <div className="max-h-64 overflow-y-auto">{children}</div>
-        </div>
+        </DropdownContext.Provider>
       )}
     </div>
   );
@@ -80,9 +91,13 @@ interface DropdownItemProps {
 }
 
 export function DropdownItem({ selected, onClick, children }: DropdownItemProps) {
+  const { close } = React.useContext(DropdownContext);
   return (
     <button
-      onClick={onClick}
+      onClick={() => {
+        onClick();
+        close();
+      }}
       className="w-full flex items-center justify-between px-3 py-2 text-sm text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors text-left"
     >
       <span className="truncate font-mono text-xs">{children}</span>

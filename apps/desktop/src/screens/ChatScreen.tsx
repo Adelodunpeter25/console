@@ -49,7 +49,13 @@ export function ChatScreen() {
         streamingThinking={streamingThinking}
         running={running}
       />
-      {selectedSessionId && <InteractionPanel sessionId={selectedSessionId} />}
+      {selectedSessionId && (
+        <div className="px-6 pb-1">
+          <div className="max-w-3xl mx-auto">
+            <InteractionPanel sessionId={selectedSessionId} />
+          </div>
+        </div>
+      )}
       <Composer
         value={input}
         onChange={setInput}
