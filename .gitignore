@@ -1,4 +1,5 @@
 # Dependencies
+apps/console-macos/.build
 /node_modules
 apps/cli/node_modules
 # Logs
