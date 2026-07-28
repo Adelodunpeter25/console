@@ -1,15 +1,16 @@
 import React from "react";
-import type { AgentMessage, AssistantMessageContent, ToolCall } from "@console/types";
+import type { AgentMessage, ToolResult } from "@console/types";
 import { MessageBubble } from "./MessageBubble";
 import { StreamingBubble } from "./StreamingBubble";
 import { ScrollToBottom } from "./ScrollToBottom";
-import { ToolCallBlock } from "../common";
 
 interface MessageListProps {
   messages: AgentMessage[];
   streamingText: string;
   streamingThinking: string;
   running: boolean;
+  /** Tool results arriving in real-time via `toolExecutionResult` events. */
+  liveToolResults: ToolResult[];
 }
 
 /**
@@ -21,17 +22,6 @@ interface MessageListProps {
 function messageKey(msg: AgentMessage, index: number): string {
   if (msg.role === "assistant" && msg.id) return msg.id;
   return `${msg.role}-${index}`;
-}
-
-/**
- * Extract tool calls from an assistant message (used to show pending calls
- * while the agent is executing tools and to pair results with their calls).
- */
-function assistantToolCalls(msg: AgentMessage | undefined): ToolCall[] {
-  if (!msg || msg.role !== "assistant") return [];
-  return msg.content
-    .filter((c): c is Extract<AssistantMessageContent, { type: "toolCall" }> => c.type === "toolCall")
-    .map((c) => c.call);
 }
 
 /**
@@ -52,6 +42,7 @@ export function MessageList({
   streamingText,
   streamingThinking,
   running,
+  liveToolResults,
 }: MessageListProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = React.useState(true);
@@ -61,7 +52,7 @@ export function MessageList({
     if (autoScroll && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, streamingText, streamingThinking, autoScroll]);
+  }, [messages, streamingText, streamingThinking, autoScroll, liveToolResults]);
 
   const handleScroll = React.useCallback(() => {
     if (!scrollRef.current) return;
@@ -80,17 +71,6 @@ export function MessageList({
   // "Agent is thinking..." state — not only after the first delta arrives.
   const showStreamingBubble = running || isStreaming;
   const showEmpty = messages.length === 0 && !showStreamingBubble;
-
-  // Pending tool calls from the latest assistant message, shown while the
-  // agent is executing tools and no streaming text is being emitted.
-  const lastAssistant = React.useMemo(
-    () => [...messages].reverse().find((m) => m.role === "assistant"),
-    [messages],
-  );
-  const pendingToolCalls = React.useMemo(
-    () => (running && !streamingText ? assistantToolCalls(lastAssistant) : []),
-    [running, streamingText, lastAssistant],
-  );
 
   const showScrollButton = !autoScroll;
 
@@ -111,12 +91,12 @@ export function MessageList({
                 message={msg}
                 prevMessage={messages[i - 1]}
                 nextMessage={messages[i + 1]}
+                liveToolResults={liveToolResults}
               />
             ))}
             {showStreamingBubble && (
               <StreamingBubble text={streamingText} thinking={streamingThinking} />
             )}
-            {pendingToolCalls.length > 0 && <ToolCallBlock calls={pendingToolCalls} />}
           </div>
         )}
       </div>

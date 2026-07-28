@@ -19,6 +19,7 @@ export function ChatScreen() {
     streamingThinking,
     sessionModelId,
     approvalMode,
+    liveToolResults,
     setInput,
     changeModel,
     setApprovalMode,
@@ -48,6 +49,7 @@ export function ChatScreen() {
         streamingText={streamingText}
         streamingThinking={streamingThinking}
         running={running}
+        liveToolResults={liveToolResults}
       />
       {selectedSessionId && (
         <div className="px-6 pb-1">

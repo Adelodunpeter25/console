@@ -8,6 +8,9 @@ interface MessageBubbleProps {
   message: AgentMessage;
   prevMessage?: AgentMessage;
   nextMessage?: AgentMessage;
+  /** Real-time tool results from `toolExecutionResult` events, used to
+      update tool call status before `toolExecutionEnd` finalises the batch. */
+  liveToolResults?: ToolResult[];
 }
 
 /**
@@ -22,6 +25,7 @@ export const MessageBubble = React.memo(function MessageBubble({
   message,
   prevMessage,
   nextMessage,
+  liveToolResults = [],
 }: MessageBubbleProps) {
   if (message.role === "user") {
     return <UserBubble content={message.content} />;
@@ -43,10 +47,20 @@ export const MessageBubble = React.memo(function MessageBubble({
     return <ToolCallBlock calls={prevCalls} results={message.results} />;
   }
 
-  // Assistant message — pass results from the following toolResult message
-  // so embedded ToolCallBlocks can show completion status.
+  // Assistant message — merge results from the following toolResult message
+  // with any live results that arrived before the batch finalised. This
+  // ensures tool call spinners flip to checkmarks in real-time as each
+  // tool completes, not only after all tools finish.
   const toolResults: ToolResult[] =
     nextMessage?.role === "toolResult" ? nextMessage.results : [];
 
-  return <AssistantBubble message={message} toolResults={toolResults} />;
+  // Merge: prefer finalised results, add any live results not yet in the list.
+  const mergedResults: ToolResult[] = [...toolResults];
+  for (const live of liveToolResults) {
+    if (!mergedResults.some((r) => r.toolCallId === live.toolCallId)) {
+      mergedResults.push(live);
+    }
+  }
+
+  return <AssistantBubble message={message} toolResults={mergedResults} />;
 });

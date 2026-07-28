@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { toast } from "sonner";
-import type { AgentMessage, AgentSessionEvent, AskQuestionRequest, PermissionRequest, ApprovalMode } from "@console/types";
+import type { AgentMessage, AgentSessionEvent, AskQuestionRequest, PermissionRequest, ApprovalMode, ToolResult } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 import { useProviderStore } from "./useProviderStore";
 import { useProjectStore } from "./useProjectStore";
@@ -34,6 +34,9 @@ interface ChatState {
   pendingQuestion: PendingQuestion | null;
   /** Pending permission request from the agent, if any. */
   pendingPermission: PendingPermission | null;
+  /** Tool results arriving in real-time via `toolExecutionResult` events.
+      Cleared when `toolExecutionEnd` finalises the batch. */
+  liveToolResults: ToolResult[];
 
   loadSession: (sessionId: string) => Promise<void>;
   setInput: (val: string) => void;
@@ -99,11 +102,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeSessionId: null,
   pendingQuestion: null,
   pendingPermission: null,
+  liveToolResults: [],
 
   loadSession: async (sessionId: string) => {
     // Mark this as the active session so SSE events from other sessions
     // are dropped instead of contaminating the view.
-    set({ activeSessionId: sessionId, streamingText: "", streamingThinking: "" });
+    set({ activeSessionId: sessionId, streamingText: "", streamingThinking: "", liveToolResults: [] });
     try {
       const detail = await tauriApi.getSession(sessionId);
       // Guard against a rapid session switch — if the user switched again
@@ -159,6 +163,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messages: [...s.messages, { role: "user", content: prompt }],
       streamingText: "",
       streamingThinking: "",
+      liveToolResults: [],
     }));
     syncSessionStatus(sessionId, "working");
 
@@ -280,6 +285,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       activeSessionId: null,
       pendingQuestion: null,
       pendingPermission: null,
+      liveToolResults: [],
     }),
 
   handleEvent: (event: AgentSessionEvent) => {
@@ -325,9 +331,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
         }
         break;
+      case "toolExecutionResult":
+        set((s) => ({
+          liveToolResults: [...s.liveToolResults, event.result],
+        }));
+        break;
       case "toolExecutionEnd":
         set((s) => ({
           messages: [...s.messages, { role: "toolResult", results: event.results }],
+          liveToolResults: [],
         }));
         break;
       case "askQuestion":
