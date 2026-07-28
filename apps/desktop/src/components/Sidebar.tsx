@@ -3,7 +3,6 @@ import {
   Folder,
   ChevronRight,
   Plus,
-  MessageSquare,
   PanelLeftClose,
   PanelLeft,
   X,
@@ -206,11 +205,10 @@ export function Sidebar() {
                         isExpanded ? "rotate-90" : ""
                       }`}
                     />
-                    {isExpanded ? (
-                      <FolderOpen size={15} className="shrink-0 text-foreground" />
-                    ) : (
-                      <Folder size={15} className="shrink-0 text-foreground" />
-                    )}
+                    <Folder
+                      size={15}
+                      className={`shrink-0 ${isExpanded ? "text-blue-400 fill-blue-400/20" : "text-foreground"}`}
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-foreground truncate">
                         {project.name}
@@ -298,17 +296,17 @@ function SessionItem({
         <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[status]}`} />
       )}
 
-      <div className="flex-1 min-w-0">
-        <div
+      <div className="flex-1 min-w-0 flex items-baseline gap-2">
+        <span
           className={`text-xs font-medium truncate ${
             isActive ? "text-foreground" : "text-foreground-secondary"
           }`}
         >
           {session.title || "Untitled"}
-        </div>
-        <div className="text-xs text-foreground-muted">
+        </span>
+        <span className="text-xs text-foreground-muted shrink-0">
           {formatRelativeTime(session.createdAt)}
-        </div>
+        </span>
       </div>
 
       <button
