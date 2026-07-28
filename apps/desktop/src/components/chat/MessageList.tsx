@@ -92,7 +92,7 @@ export function MessageList({
     [running, streamingText, lastAssistant],
   );
 
-  const showScrollButton = !autoScroll && showStreamingBubble;
+  const showScrollButton = !autoScroll;
 
   return (
     <>

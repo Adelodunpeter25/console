@@ -3,8 +3,8 @@ interface ScrollToBottomProps {
 }
 
 /**
- * Floating "↓ Latest" button that appears when the user has scrolled up
- * during streaming and new content is arriving below the viewport.
+ * Floating "↓ Latest" button that appears whenever the user has scrolled
+ * away from the bottom of the chat — whether the agent is streaming or not.
  */
 export function ScrollToBottom({ onClick }: ScrollToBottomProps) {
   return (
