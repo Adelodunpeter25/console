@@ -27,6 +27,9 @@ interface ChatState {
   sessionProvider: string | null;
   /** Approval mode for the agent (always-ask, accept-edits, plan-mode, full-access). */
   approvalMode: ApprovalMode;
+  /** The session currently displayed in the chat view. SSE events from
+      other sessions are dropped so they don't contaminate the active view. */
+  activeSessionId: string | null;
   /** Pending ask-question request from the agent, if any. */
   pendingQuestion: PendingQuestion | null;
   /** Pending permission request from the agent, if any. */
@@ -93,12 +96,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
   sessionModelId: null,
   sessionProvider: null,
   approvalMode: "always-ask",
+  activeSessionId: null,
   pendingQuestion: null,
   pendingPermission: null,
 
   loadSession: async (sessionId: string) => {
+    // Mark this as the active session so SSE events from other sessions
+    // are dropped instead of contaminating the view.
+    set({ activeSessionId: sessionId, streamingText: "", streamingThinking: "" });
     try {
       const detail = await tauriApi.getSession(sessionId);
+      // Guard against a rapid session switch — if the user switched again
+      // while this fetch was in flight, don't overwrite the new session's state.
+      if (get().activeSessionId !== sessionId) return;
       set({
         messages: detail.messages,
         streamingText: "",
@@ -173,6 +183,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       // Subscribe before invoking so early SSE frames aren't dropped.
       unlisten = await tauriApi.listenAgentEvents(sessionId, (event) => {
+        // Drop events from a session the user has already navigated away from.
+        if (get().activeSessionId !== sessionId) return;
         if (event.type === "error") {
           if (isAbortError(event.error.message)) {
             hadError = true; // prevent reload, but don't toast or show inline error
@@ -206,13 +218,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     } finally {
       if (unlisten) unlisten();
-      set({ running: false, streamingText: "", streamingThinking: "" });
+      // Only update running/streaming state if this session is still active.
+      // If the user switched to another session, don't wipe their view.
+      if (get().activeSessionId === sessionId) {
+        set({ running: false, streamingText: "", streamingThinking: "" });
+      }
       // Reload after a clean run so persisted turns (tools, etc.) match server.
       // loadSession also syncs the server's authoritative status to the sidebar.
       // Skip on error so inline error bubbles aren't wiped by a stale session.
-      if (!hadError) {
+      // Skip if the user has already navigated to a different session.
+      if (!hadError && get().activeSessionId === sessionId) {
         await get().loadSession(sessionId);
-      } else {
+      } else if (hadError) {
         syncSessionStatus(sessionId, "needs_attention");
       }
     }
@@ -260,6 +277,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       sessionModelId: null,
       sessionProvider: null,
       approvalMode: "always-ask",
+      activeSessionId: null,
       pendingQuestion: null,
       pendingPermission: null,
     }),
