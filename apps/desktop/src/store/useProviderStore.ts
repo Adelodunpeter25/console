@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Model, ProviderCatalogEntry } from "@console/types";
+import type { ApprovalModeOption, Model, ProviderCatalogEntry } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 
 interface ProviderState {
@@ -12,8 +12,13 @@ interface ProviderState {
   loadingModels: Record<string, boolean>;
   error: string | null;
 
+  /** Approval mode options fetched from the backend. */
+  approvalModes: ApprovalModeOption[];
+  loadingApprovalModes: boolean;
+
   loadProviders: () => Promise<void>;
   loadModels: (providerId: string) => Promise<Model[]>;
+  loadApprovalModes: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -23,6 +28,8 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
   loadingProviders: false,
   loadingModels: {},
   error: null,
+  approvalModes: [],
+  loadingApprovalModes: false,
 
   loadProviders: async () => {
     set({ loadingProviders: true, error: null });
@@ -60,6 +67,20 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
         error: e instanceof Error ? e.message : "Failed to load models",
       }));
       throw e;
+    }
+  },
+
+  loadApprovalModes: async () => {
+    if (get().approvalModes.length > 0) return;
+    set({ loadingApprovalModes: true, error: null });
+    try {
+      const modes = await tauriApi.getApprovalModes();
+      set({ approvalModes: modes, loadingApprovalModes: false });
+    } catch (e) {
+      set({
+        loadingApprovalModes: false,
+        error: e instanceof Error ? e.message : "Failed to load approval modes",
+      });
     }
   },
 

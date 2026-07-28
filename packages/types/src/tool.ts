@@ -4,6 +4,13 @@ export type ToolTier = "read" | "write" | "exec";
 
 export type ApprovalMode = "always-ask" | "accept-edits" | "plan-mode" | "full-access";
 
+/** Approval mode metadata served by the backend for dynamic UI rendering. */
+export interface ApprovalModeOption {
+  value: ApprovalMode;
+  label: string;
+  description: string;
+}
+
 export type ApprovalPolicy = "allow" | "deny" | "prompt";
 
 export interface PermissionRequest {

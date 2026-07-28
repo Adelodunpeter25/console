@@ -88,7 +88,13 @@ export const providerCommand: SlashCommand = {
 
     // Refresh dynamic models for the new provider
     const models = await fetchModelsForProvider(providerEntry.name);
-    const defaultModel = models[0] ?? providerEntry.models[0]!;
+    if (models.length === 0) {
+      return {
+        handled: true,
+        message: `Switched provider to: ${providerEntry.displayName}\nNo models are currently available — check your authentication and network connection.`,
+      };
+    }
+    const defaultModel = models[0]!;
     ctx.setModel(defaultModel);
 
     if (ctx.currentSessionId && ctx.sessionStorage) {

@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod config;
 pub mod fs;
 pub mod projects;
 pub mod providers;
@@ -7,6 +8,7 @@ pub mod sessions;
 pub mod server;
 
 pub use auth::*;
+pub use config::*;
 pub use fs::*;
 pub use projects::*;
 pub use providers::*;

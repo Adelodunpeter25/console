@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AgentSessionEvent,
+  ApprovalModeOption,
   AuthStatusResponse,
   CreateSessionDto,
   ProjectInfo,
@@ -76,6 +77,9 @@ export const tauriApi = {
   listProviders: () => invoke<ProviderCatalogEntry[]>("list_providers"),
   getProviderModels: (providerId: string) =>
     invoke<ProviderModelsResult>("get_provider_models", { providerId }),
+
+  // --- config / approval modes --------------------------------------------
+  getApprovalModes: () => invoke<ApprovalModeOption[]>("get_approval_modes"),
 
   // --- filesystem ----------------------------------------------------------
   browseDirectory: (path?: string) =>

@@ -9,9 +9,10 @@ mod models;
 use commands::{
     abort_run, add_project, answer_question, approve_permission, browse_directory,
     create_directory, create_session, delete_directory, delete_file, delete_session,
-    get_auth_status, get_backend_url, get_directory_tree, get_login_url, get_provider_models,
-    get_session, handle_oauth_callback, list_projects, list_providers, list_sessions, pick_folder,
-    ping_server, read_file, run_agent, set_backend_url, update_session, write_file,
+    get_approval_modes, get_auth_status, get_backend_url, get_directory_tree, get_login_url,
+    get_provider_models, get_session, handle_oauth_callback, list_projects, list_providers,
+    list_sessions, pick_folder, ping_server, read_file, run_agent, set_backend_url, update_session,
+    write_file,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -34,6 +35,7 @@ pub fn run() {
             add_project,
             list_providers,
             get_provider_models,
+            get_approval_modes,
             browse_directory,
             pick_folder,
             get_directory_tree,

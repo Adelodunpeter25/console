@@ -1,7 +1,7 @@
 /**
  * Provider Registry & Hybrid Model Catalog.
- * Registers supported providers ("gemini", "antigravity") with static bundled fallback models
- * and dynamic endpoint discovery via /v1internal:fetchAvailableModels (mirroring oh-my-pi).
+ * Registers supported providers ("gemini", "antigravity") with dynamic
+ * endpoint discovery via /v1internal:fetchAvailableModels (mirroring oh-my-pi).
  */
 
 import {
@@ -19,22 +19,6 @@ export interface ProviderEntry extends ProviderCatalogEntry {
   getStreamFn: () => StreamFn;
 }
 
-/** Static bundled fallback models (used offline or pre-login) */
-export const BUNDLED_FALLBACK_MODELS: Record<"gemini" | "antigravity", Model[]> = {
-  gemini: [
-    { id: "gemini-3.1-pro", provider: "gemini", contextWindow: 1_000_000 },
-    { id: "gemini-2.5-pro", provider: "gemini", contextWindow: 1_000_000 },
-    { id: "gemini-2.5-flash", provider: "gemini", contextWindow: 1_000_000 },
-  ],
-  antigravity: [
-    { id: "gemini-3.1-pro-low", provider: "antigravity", contextWindow: 1_000_000 },
-    { id: "gemini-3-flash-agent", provider: "antigravity", contextWindow: 1_000_000 },
-    { id: "gemini-3.5-flash-low", provider: "antigravity", contextWindow: 1_000_000 },
-    { id: "claude-sonnet-4-6", provider: "antigravity", contextWindow: 200_000 },
-    { id: "claude-opus-4-6-thinking", provider: "antigravity", contextWindow: 200_000 },
-  ],
-};
-
 export type { ProviderCatalogEntry } from "../types/index.js";
 
 export const PROVIDER_CATALOG: Record<"gemini" | "antigravity", ProviderEntry> = {
@@ -42,14 +26,14 @@ export const PROVIDER_CATALOG: Record<"gemini" | "antigravity", ProviderEntry> =
     name: "gemini",
     displayName: "Google Gemini CLI",
     description: "Cloud Code Assist REST endpoint with Gemini CLI OAuth",
-    models: [...BUNDLED_FALLBACK_MODELS.gemini],
+    models: [],
     getStreamFn: () => geminiStreamFn,
   },
   antigravity: {
     name: "antigravity",
     displayName: "Google Antigravity",
     description: "Daily Cloud Code Assist endpoint with Antigravity session envelope",
-    models: [...BUNDLED_FALLBACK_MODELS.antigravity],
+    models: [],
     getStreamFn: () => createAntigravityStreamFn(),
   },
 };
@@ -75,7 +59,7 @@ export function findModelInProvider(providerName: string, modelId: string): Mode
 /**
  * Dynamically fetch models from the provider endpoint via /v1internal:fetchAvailableModels.
  * Updates the provider's cached model list if successful.
- * Falls back to bundled static models if offline, unauthenticated, or on network error.
+ * Returns an empty array if offline, unauthenticated, or on network error — no fallbacks.
  */
 export async function fetchModelsForProvider(
   providerName: "gemini" | "antigravity",
@@ -99,8 +83,8 @@ export async function fetchModelsForProvider(
       return discovered;
     }
   } catch {
-    // Network/auth error — preserve existing dynamic or fallback list
+    // Network/auth error — no fallback models to offer
   }
 
-  return provider.models;
+  return [];
 }
