@@ -194,18 +194,57 @@ export async function discoverContext(
   };
 }
 
-function renderPlanModeInstruction(mode?: ApprovalMode): string {
-  if (mode !== "plan-mode") return "";
-  return [
-    "# Plan Mode Active",
-    "<plan-mode-instructions>",
-    "Plan mode is ACTIVE. You MUST perform READ-ONLY exploration and research:",
-    "- Explore the codebase, read files, search symbols, and understand the requirements.",
-    "- You MUST NOT write, edit, or delete any files in the workspace.",
-    "- Formulate a detailed, step-by-step implementation plan artifact.",
-    "- Present your proposed implementation plan for user review and approval before proceeding to execution.",
-    "</plan-mode-instructions>",
-  ].join("\n");
+function renderApprovalModeInstruction(mode?: ApprovalMode): string {
+  if (!mode) return "";
+  const heading = "# Approval Mode Active";
+  const tag = "<approval-mode-instructions>";
+
+  switch (mode) {
+    case "always-ask":
+      return [
+        heading,
+        tag,
+        "You are in Normal mode. Use tools freely, but request approval before any write, edit, delete, or command execution.",
+        "Do not claim a restricted action was performed until the user approves it.",
+        "If approval is denied, stop and report the denial rather than retrying silently.",
+        "</approval-mode-instructions>",
+      ].join("\n");
+
+    case "accept-edits":
+      return [
+        heading,
+        tag,
+        "You are in Accept Edits mode. Read, write, and edit files directly without pausing for each edit.",
+        "Still request approval before executing commands or performing higher-risk operations.",
+        "Proceed efficiently through multi-file edits; do not stop to ask permission for routine file writes.",
+        "</approval-mode-instructions>",
+      ].join("\n");
+
+    case "plan-mode":
+      return [
+        heading,
+        tag,
+        "Plan mode is ACTIVE. You MUST perform READ-ONLY exploration and research:",
+        "- Explore the codebase, read files, search symbols, and understand the requirements.",
+        "- You MUST NOT write, edit, or delete any files in the workspace.",
+        "- Formulate a detailed, step-by-step implementation plan artifact.",
+        "- Present your proposed implementation plan for user review and approval before proceeding to execution.",
+        "</approval-mode-instructions>",
+      ].join("\n");
+
+    case "full-access":
+      return [
+        heading,
+        tag,
+        "You are in Bypass Permissions mode. Execute all necessary tools directly without asking for approval.",
+        "You remain responsible for avoiding unrelated or destructive work; freedom is not a license to be careless.",
+        "Report every action you take accurately so the user can audit what happened.",
+        "</approval-mode-instructions>",
+      ].join("\n");
+
+    default:
+      return "";
+  }
 }
 
 /**
@@ -222,7 +261,7 @@ export async function buildSystemPrompt(
 
   const parts = [
     section("identity", identity),
-    section("plan-mode", renderPlanModeInstruction(options.approvalMode)),
+    section("approval-mode", renderApprovalModeInstruction(options.approvalMode)),
     section("skills", renderSkills(context.skills)),
     section("always-apply-rules", renderAlwaysApplyRules(context.rules)),
     section("domain-rules", renderDomainRules(context.rules)),
