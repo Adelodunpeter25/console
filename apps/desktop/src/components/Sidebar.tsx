@@ -205,11 +205,7 @@ export function Sidebar() {
                         isExpanded ? "rotate-90" : ""
                       }`}
                     />
-                    {isExpanded ? (
-                      <FolderOpen size={15} className="shrink-0 text-foreground" />
-                    ) : (
-                      <Folder size={15} className="shrink-0 text-foreground" />
-                    )}
+                    <FolderOpen size={15} className="shrink-0 text-foreground" />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-foreground truncate">
                         {project.name}
