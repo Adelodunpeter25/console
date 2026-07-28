@@ -194,3 +194,20 @@
 .hljs-attr { color: #f472b6; }
 .hljs-built_in { color: #fb923c; }
 .hljs-type { color: #22d3ee; }
+
+/* cmdk command palette */
+[cmdk-root] {
+  outline: none;
+}
+[cmdk-list] {
+  outline: none;
+}
+[cmdk-input] {
+  outline: none;
+}
+[cmdk-item] {
+  outline: none;
+}
+[cmdk-group-heading] {
+  pointer-events: none;
+}
