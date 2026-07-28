@@ -119,6 +119,10 @@ export class SqliteSessionStorage {
     return Sessions.deleteSession(this.state, sessionId);
   }
 
+  updateSessionStatus(sessionId: string, status: string): void {
+    Sessions.updateSessionStatus(this.state.globalDb, sessionId, status);
+  }
+
   updateTitle(sessionId: string, title: string): boolean {
     return Sessions.updateTitle(this.state, sessionId, title);
   }

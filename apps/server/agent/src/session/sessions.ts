@@ -158,6 +158,7 @@ export function createSession(state: StorageState, options: CreateSessionOptions
     createdAt: now,
     updatedAt: now,
     messageCount: 0,
+    status: "idle",
   };
 }
 
@@ -329,6 +330,7 @@ export function listSessions(
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     messageCount: r.message_count,
+    status: r.status ?? "idle",
   }));
 }
 
@@ -406,6 +408,17 @@ export function updateModel(
     .prepare(`UPDATE sessions SET model_id = ?, provider = ?, updated_at = ? WHERE id = ?`)
     .run(modelId, provider, now, sessionId);
   return info.changes > 0;
+}
+
+export function updateSessionStatus(
+  globalDb: DatabaseType,
+  sessionId: string,
+  status: string,
+): void {
+  const now = Date.now();
+  globalDb
+    .prepare(`UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?`)
+    .run(status, now, sessionId);
 }
 
 export function clearAll(state: StorageState): void {

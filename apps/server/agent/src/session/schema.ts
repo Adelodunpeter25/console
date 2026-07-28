@@ -27,6 +27,7 @@ export function initGlobalDatabase(db: Database.Database): void {
       model_id TEXT NOT NULL,
       provider TEXT NOT NULL,
       message_count INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'idle',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
@@ -36,6 +37,12 @@ export function initGlobalDatabase(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC);
   `);
+
+  // Migration: add status column to pre-existing sessions tables.
+  const cols = db.prepare("PRAGMA table_info(sessions)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "status")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'idle'");
+  }
 }
 
 /**

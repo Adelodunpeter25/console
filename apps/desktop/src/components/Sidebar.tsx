@@ -9,16 +9,16 @@ import {
   X,
   FolderOpen,
 } from "lucide-react";
-import type { SessionHeader } from "@console/types";
+import type { SessionHeader, SessionStatus } from "@console/types";
 import { useAppStore, useProjectStore } from "../store";
 import { formatRelativeTime } from "../utils/time";
 
 /**
  * Left sidebar — project and session navigator.
  *
- * Each project is a collapsible row. Expanding a project loads and reveals
- * its sessions; collapsing hides them. A "+" button at the top adds new
- * projects inline. No view-switching nav buttons — routing handles that.
+ * Each project is a collapsible row with a folder icon. Expanding a project
+ * loads and reveals its sessions with status dots (working/done/needs_attention).
+ * A "+" button at the top adds new projects inline.
  */
 export function Sidebar() {
   const {
@@ -206,23 +206,24 @@ export function Sidebar() {
                         isExpanded ? "rotate-90" : ""
                       }`}
                     />
-                    <Folder size={15} className="shrink-0 text-foreground" />
+                    {isExpanded ? (
+                      <FolderOpen size={15} className="shrink-0 text-foreground" />
+                    ) : (
+                      <Folder size={15} className="shrink-0 text-foreground" />
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-foreground truncate">
                         {project.name}
-                      </div>
-                      <div className="text-xs text-foreground-muted font-mono truncate">
-                        {project.path}
                       </div>
                     </div>
                   </button>
 
                   {/* Sessions (collapsible) */}
                   {isExpanded && (
-                    <div className="ml-4 mt-0.5 mb-1.5 border-l border-border pl-2 space-y-0.5">
+                    <div className="ml-5 mt-0.5 mb-1.5 border-l border-border pl-1.5 space-y-0.5">
                       <div className="flex items-center justify-between px-2 py-1">
                         <span className="text-xs text-foreground-muted uppercase tracking-wider">
-                          Sessions ({sessions.length})
+                          {sessions.length} session{sessions.length !== 1 ? "s" : ""}
                         </span>
                         <button
                           onClick={() => handleNewChat(project.id, project.path)}
@@ -258,6 +259,20 @@ export function Sidebar() {
   );
 }
 
+const STATUS_CONFIG: Record<
+  SessionStatus,
+  { dot: string; label: string; text: string }
+> = {
+  idle: { dot: "bg-foreground-muted", label: "Idle", text: "text-foreground-muted" },
+  working: { dot: "bg-blue-500", label: "Working", text: "text-blue-400" },
+  done: { dot: "bg-green-500", label: "Done", text: "text-green-400" },
+  needs_attention: {
+    dot: "bg-amber-500",
+    label: "Needs Attention",
+    text: "text-amber-400",
+  },
+};
+
 function SessionItem({
   session,
   projectId,
@@ -269,36 +284,41 @@ function SessionItem({
 }) {
   const { setSelectedSessionId } = useAppStore();
   const { deleteSession } = useProjectStore();
+  const status = session.status ?? "idle";
+  const statusCfg = STATUS_CONFIG[status];
 
   return (
     <div
-      className={`group flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors ${
+      className={`group flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors ${
         isActive ? "bg-white/12 border border-border" : "hover:bg-white/5 border border-transparent"
       }`}
       onClick={() => setSelectedSessionId(isActive ? null : session.id)}
     >
-      <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
-        <MessageSquare size={13} className="shrink-0 text-foreground-muted" />
-        <div className="flex-1 min-w-0">
-          <div
-            className={`text-xs font-medium truncate ${
-              isActive ? "text-foreground" : "text-foreground-secondary"
-            }`}
-          >
-            {session.title || "Untitled"}
-          </div>
-          <div className="text-xs text-foreground-muted font-mono truncate">
-            {formatRelativeTime(session.createdAt)}
-          </div>
+      {/* Status dot */}
+      <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusCfg.dot}`} />
+
+      <div className="flex-1 min-w-0">
+        <div
+          className={`text-xs font-medium truncate ${
+            isActive ? "text-foreground" : "text-foreground-secondary"
+          }`}
+        >
+          {session.title || "Untitled"}
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-foreground-muted">
+          <span className={statusCfg.text}>{statusCfg.label}</span>
+          <span>·</span>
+          <span>{formatRelativeTime(session.createdAt)}</span>
         </div>
       </div>
+
       <button
         onClick={(e) => {
           e.stopPropagation();
           deleteSession(session.id, projectId);
           if (isActive) setSelectedSessionId(null);
         }}
-        className="text-foreground-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity text-xs shrink-0"
+        className="text-foreground-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
       >
         <X size={12} />
       </button>

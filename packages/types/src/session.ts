@@ -2,6 +2,8 @@ import type { AgentMessage } from "./agent";
 import type { Model } from "./model";
 import type { AgentTool } from "./tool";
 
+export type SessionStatus = "idle" | "working" | "done" | "needs_attention";
+
 export interface SessionHeader {
   id: string;
   title: string;
@@ -12,6 +14,7 @@ export interface SessionHeader {
   createdAt: number;
   updatedAt: number;
   messageCount?: number;
+  status?: SessionStatus;
 }
 
 export interface SessionContext {

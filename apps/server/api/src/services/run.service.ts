@@ -85,11 +85,18 @@ export class RunService {
     const abortController = new AbortController();
     this.activeRuns.set(sessionId, abortController);
 
+    this.sessionStorage.updateSessionStatus(sessionId, "working");
+
     try {
       const eventStream = agent.run(prompt, abortController.signal);
 
       for await (const event of eventStream) {
         await onEvent(event);
+
+        // Mark needs_attention when the agent asks a question or requests permission
+        if (event.type === "askQuestion" || event.type === "permissionRequest") {
+          this.sessionStorage.updateSessionStatus(sessionId, "needs_attention");
+        }
 
         // Incremental turn persistence on modelStreamEnd
         if (event.type === "modelStreamEnd") {
@@ -100,6 +107,10 @@ export class RunService {
       // Final persistence sync for all messages
       const updatedMessages = await eventStream.result();
       this.sessionStorage.appendMessages(sessionId, updatedMessages.slice(session.messages.length));
+      this.sessionStorage.updateSessionStatus(sessionId, "done");
+    } catch (err) {
+      this.sessionStorage.updateSessionStatus(sessionId, "needs_attention");
+      throw err;
     } finally {
       this.activeRuns.delete(sessionId);
     }
