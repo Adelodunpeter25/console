@@ -69,9 +69,9 @@ pub struct ProjectInfo {
     pub id: Option<String>,
     pub name: String,
     pub path: String,
-    pub created_at: Option<u64>,
-    pub updated_at: Option<u64>,
-    pub last_modified: Option<u64>,
+    pub created_at: Option<f64>,
+    pub updated_at: Option<f64>,
+    pub last_modified: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

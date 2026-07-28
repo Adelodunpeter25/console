@@ -11,8 +11,8 @@ pub struct SessionHeader {
     pub project_id: Option<String>,
     pub model_id: String,
     pub provider: String,
-    pub created_at: u64,
-    pub updated_at: u64,
+    pub created_at: f64,
+    pub updated_at: f64,
     pub message_count: Option<u64>,
 }
 
