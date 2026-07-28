@@ -17,7 +17,7 @@ export function ThinkingBlock({ text }: ThinkingBlockProps) {
           Thinking
         </span>
       </div>
-      <p className="text-sm text-foreground-secondary italic whitespace-pre-wrap break-words">
+      <p className="text-sm text-foreground-secondary italic whitespace-pre-wrap break-words selectable-text">
         {text}
       </p>
     </div>

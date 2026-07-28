@@ -60,6 +60,29 @@
     font-size: 14px;
     line-height: 1.5;
   }
+
+  /* Disable native text selection across the entire app — buttons, labels,
+     icons, and layout containers should never be selectable. Re-enable it
+     only on actual content text below. */
+  * {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Allow selection inside message content (markdown body, user bubbles,
+     thinking blocks, and tool call details). */
+  .markdown-body,
+  .selectable-text {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* Allow selection in input/textarea fields. */
+  input,
+  textarea {
+    -webkit-user-select: text;
+    user-select: text;
+  }
 }
 
 @layer components {
