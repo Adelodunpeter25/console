@@ -23,15 +23,13 @@ export function useServerConnection() {
         setBackendUrl(stored);
         setInputUrl(stored);
         configureConsoleApi({ baseUrl: stored });
-      } else {
-        setActiveTab("settings");
       }
     } catch {
-      setActiveTab("settings");
+      // No URL stored — onboarding screen will show
     } finally {
       setLoading(false);
     }
-  }, [setActiveTab, setBackendUrl]);
+  }, [setBackendUrl]);
 
   useEffect(() => {
     loadBackendUrl();

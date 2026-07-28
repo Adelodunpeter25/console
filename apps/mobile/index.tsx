@@ -2,7 +2,13 @@ import "./global.css";
 import React from "react";
 import { registerRootComponent } from "expo";
 import { StatusBar } from "expo-status-bar";
-import { View, Text, ActivityIndicator, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import {
   useFonts,
@@ -15,13 +21,47 @@ import { ConsoleApiProvider } from "@console/api";
 import { QueryClient } from "@tanstack/react-query";
 import { MainContent } from "./components/common/main-content";
 import { useServerConnection } from "./hooks";
-import { useAppStore } from "./stores";
 
 const queryClient = new QueryClient();
 
+function OnboardingScreen() {
+  const { inputUrl, setInputUrl, saveConnection, isSaving } = useServerConnection();
+
+  return (
+    <SafeAreaView className="flex-1 bg-[#0a0a0b] justify-center p-6">
+      <Text className="text-white text-2xl font-bold mb-2 tracking-tight">Console Mobile</Text>
+      <Text className="text-zinc-400 text-sm mb-8 leading-6">
+        Enter your Console backend server URL to get started.
+      </Text>
+
+      <TextInput
+        className="h-12 bg-[#16171a] border border-white/20 rounded-xl px-4 text-white text-sm font-mono mb-4"
+        value={inputUrl}
+        onChangeText={setInputUrl}
+        placeholder="http://192.168.1.X:3000"
+        placeholderTextColor="#71717a"
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="url"
+      />
+
+      <TouchableOpacity
+        className="bg-white py-3.5 px-6 rounded-full items-center"
+        onPress={saveConnection}
+        disabled={isSaving}
+      >
+        {isSaving ? (
+          <ActivityIndicator size="small" color="#000000" />
+        ) : (
+          <Text className="text-sm font-bold text-black">Connect</Text>
+        )}
+      </TouchableOpacity>
+    </SafeAreaView>
+  );
+}
+
 function AppRoot() {
   const { backendUrl, loading } = useServerConnection();
-  const setActiveTab = useAppStore((state) => state.setActiveTab);
 
   const [fontsLoaded] = useFonts({
     JetBrainsMono: JetBrainsMono_400Regular,
@@ -48,18 +88,7 @@ function AppRoot() {
             <MainContent />
           </ConsoleApiProvider>
         ) : (
-          <SafeAreaView className="flex-1 bg-[#0a0a0b] justify-center items-center p-6">
-            <Text className="text-white text-lg font-bold mb-2">Welcome to Console Mobile</Text>
-            <Text className="text-zinc-400 text-sm text-center mb-6 max-w-xs leading-6">
-              Please specify your server endpoint in Settings to get started.
-            </Text>
-            <TouchableOpacity
-              className="bg-white py-3 px-6 rounded-full"
-              onPress={() => setActiveTab("settings")}
-            >
-              <Text className="text-sm font-bold text-black">Configure Server URL</Text>
-            </TouchableOpacity>
-          </SafeAreaView>
+          <OnboardingScreen />
         )}
       </View>
     </SafeAreaProvider>
