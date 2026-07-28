@@ -244,10 +244,6 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* Branch bar at bottom */}
-      <div className="px-4 py-2.5 border-t border-border shrink-0 flex items-center gap-2">
-        <span className="text-xs text-foreground-muted font-mono">main</span>
-      </div>
     </div>
   );
 }
@@ -274,45 +270,49 @@ function SessionItem({
 
   return (
     <div
-      className={`group flex items-center gap-2 px-6 py-1.5 cursor-pointer transition-colors ${
-        isActive ? "bg-white/10" : "hover:bg-white/[0.03]"
+      className={`group mx-2 flex flex-col gap-0.5 px-3 py-1.5 rounded-lg cursor-pointer transition-colors ${
+        isActive ? "bg-white/10" : "hover:bg-white/[0.04]"
       }`}
       onClick={() => setSelectedSessionId(isActive ? null : session.id)}
     >
-      {/* Status indicator */}
-      {status === "working" ? (
-        <div className="w-3.5 h-3.5 shrink-0 flex items-center justify-center">
-          <div className="w-3 h-3 border-[1.5px] border-blue-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : (
-        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[status]}`} />
-      )}
+      {/* Row 1: status indicator + title + timestamp */}
+      <div className="flex items-center gap-2">
+        {status === "working" ? (
+          <div className="w-3.5 h-3.5 shrink-0 flex items-center justify-center">
+            <div className="w-3 h-3 border-[1.5px] border-blue-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[status]}`} />
+        )}
 
-      {/* Title — truncates, takes available space */}
-      <span
-        className={`text-xs font-medium truncate flex-1 ${
-          isActive ? "text-foreground" : "text-foreground-secondary"
-        }`}
-      >
-        {session.title || "Untitled"}
+        <span
+          className={`text-xs font-medium truncate flex-1 ${
+            isActive ? "text-foreground" : "text-foreground-secondary"
+          }`}
+        >
+          {session.title || "Untitled"}
+        </span>
+
+        <span className="text-xs text-foreground-muted shrink-0">
+          {formatRelativeTime(session.createdAt)}
+        </span>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            deleteSession(session.id, projectId);
+            if (isActive) setSelectedSessionId(null);
+          }}
+          className="text-foreground-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+        >
+          <X size={12} />
+        </button>
+      </div>
+
+      {/* Row 2: branch name */}
+      <span className="text-xs text-foreground-muted font-mono pl-6">
+        main
       </span>
-
-      {/* Timestamp — always at far right */}
-      <span className="text-xs text-foreground-muted shrink-0">
-        {formatRelativeTime(session.createdAt)}
-      </span>
-
-      {/* Delete on hover */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          deleteSession(session.id, projectId);
-          if (isActive) setSelectedSessionId(null);
-        }}
-        className="text-foreground-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-      >
-        <X size={12} />
-      </button>
     </div>
   );
 }
