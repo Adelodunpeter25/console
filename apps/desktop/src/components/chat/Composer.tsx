@@ -1,6 +1,7 @@
 import React from "react";
 import { ArrowUp, Square, Paperclip } from "lucide-react";
-import { ModelSelector } from "../common";
+import type { ApprovalMode } from "@console/types";
+import { ModelSelector, ApprovalModeSelector } from "../common";
 
 interface ComposerProps {
   value: string;
@@ -11,12 +12,15 @@ interface ComposerProps {
   disabled: boolean;
   selectedModel: string | null;
   onModelChange: (modelId: string) => void;
+  approvalMode: ApprovalMode;
+  onApprovalModeChange: (mode: ApprovalMode) => void;
   projectName?: string;
 }
 
 /**
  * Conductor-style composer: auto-growing textarea, model selector,
- * attachment button, circular send/stop button, and keyboard hints.
+ * approval mode selector, attachment button, circular send/stop button,
+ * and keyboard hints.
  */
 export function Composer({
   value,
@@ -27,6 +31,8 @@ export function Composer({
   disabled,
   selectedModel,
   onModelChange,
+  approvalMode,
+  onApprovalModeChange,
   projectName,
 }: ComposerProps) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
@@ -62,6 +68,7 @@ export function Composer({
           {/* Toolbar */}
           <div className="flex items-center gap-1 px-3 pb-2.5">
             <ModelSelector value={selectedModel} onChange={onModelChange} />
+            <ApprovalModeSelector value={approvalMode} onChange={onApprovalModeChange} />
 
             <button
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-foreground-muted hover:text-foreground-secondary hover:bg-white/5 transition-colors"

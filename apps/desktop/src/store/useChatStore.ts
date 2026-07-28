@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { toast } from "sonner";
-import type { AgentMessage, AgentSessionEvent, AskQuestionRequest, PermissionRequest } from "@console/types";
+import type { AgentMessage, AgentSessionEvent, AskQuestionRequest, PermissionRequest, ApprovalMode } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 import { useProviderStore } from "./useProviderStore";
 import { useProjectStore } from "./useProjectStore";
@@ -25,6 +25,8 @@ interface ChatState {
   sessionModelId: string | null;
   /** Provider for the active session (persisted per-session). */
   sessionProvider: string | null;
+  /** Approval mode for the agent (always-ask, accept-edits, plan-mode, full-access). */
+  approvalMode: ApprovalMode;
   /** Pending ask-question request from the agent, if any. */
   pendingQuestion: PendingQuestion | null;
   /** Pending permission request from the agent, if any. */
@@ -37,6 +39,8 @@ interface ChatState {
    * catalog, updates local state, and persists the change to the backend.
    */
   changeModel: (sessionId: string, projectId: string, modelId: string) => void;
+  /** Set the approval mode for agent runs. */
+  setApprovalMode: (mode: ApprovalMode) => void;
   sendMessage: (sessionId: string) => Promise<void>;
   abort: (sessionId: string) => Promise<void>;
   /** Answer a pending question from the agent. */
@@ -88,6 +92,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   streamingThinking: "",
   sessionModelId: null,
   sessionProvider: null,
+  approvalMode: "always-ask",
   pendingQuestion: null,
   pendingPermission: null,
 
@@ -131,8 +136,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
   },
 
+  setApprovalMode: (mode) => set({ approvalMode: mode }),
+
   sendMessage: async (sessionId: string) => {
-    const { input, running, sessionModelId, sessionProvider } = get();
+    const { input, running, sessionModelId, sessionProvider, approvalMode } = get();
     const prompt = input.trim();
     if (!prompt || running) return;
 
@@ -185,6 +192,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         prompt,
         sessionModelId ?? undefined,
         sessionProvider ?? undefined,
+        approvalMode,
       );
     } catch (err) {
       const msg =
@@ -251,6 +259,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       streamingThinking: "",
       sessionModelId: null,
       sessionProvider: null,
+      approvalMode: "always-ask",
       pendingQuestion: null,
       pendingPermission: null,
     }),

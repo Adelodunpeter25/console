@@ -18,8 +18,10 @@ export function ChatScreen() {
     streamingText,
     streamingThinking,
     sessionModelId,
+    approvalMode,
     setInput,
     changeModel,
+    setApprovalMode,
     sendMessage,
     abort,
     loadSession,
@@ -61,6 +63,8 @@ export function ChatScreen() {
           selectedProjectId &&
           changeModel(selectedSessionId, selectedProjectId, modelId)
         }
+        approvalMode={approvalMode}
+        onApprovalModeChange={setApprovalMode}
         projectName={projectName}
       />
     </div>

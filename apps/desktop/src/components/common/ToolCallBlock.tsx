@@ -171,9 +171,7 @@ const ToolCallRow = React.memo(function ToolCallRow({
 /* ------------------------------------------------------------------ */
 
 export function ToolCallBlock({ calls, results }: ToolCallBlockProps) {
-  // Auto-expand when there's only one call — the common case.
-  const autoExpand = calls.length === 1;
-
+  // Tool calls are collapsed by default — the user clicks to expand.
   return (
     <div className="rounded-lg border border-tool-border bg-tool overflow-hidden">
       {calls.map((call, i) => {
@@ -183,7 +181,7 @@ export function ToolCallBlock({ calls, results }: ToolCallBlockProps) {
             key={call.id ?? i}
             call={call}
             result={result}
-            defaultOpen={autoExpand}
+            defaultOpen={false}
           />
         );
       })}
