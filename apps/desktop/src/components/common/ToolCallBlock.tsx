@@ -1,5 +1,22 @@
 import React from "react";
-import { ChevronRight, Wrench, AlertCircle, CheckCircle2 } from "lucide-react";
+import {
+  ChevronRight,
+  Wrench,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  FileText,
+  FilePlus,
+  Files,
+  SquarePen,
+  Terminal,
+  Search,
+  FolderTree,
+  Globe,
+  HelpCircle,
+  ListTodo,
+  Sparkles,
+} from "lucide-react";
 import type { ToolCall, ToolResult } from "@console/types";
 import { formatUnknown } from "../../utils/format";
 
@@ -8,72 +25,168 @@ interface ToolCallBlockProps {
   results?: ToolResult[];
 }
 
-/**
- * Collapsible block showing tool calls and their results, styled like
- * Conductor's expandable "tool calls" sections.
- */
+/* ------------------------------------------------------------------ */
+/* Tool metadata: human-readable label + icon per tool name            */
+/* ------------------------------------------------------------------ */
+
+const TOOL_META: Record<string, { label: string; icon: React.ElementType }> = {
+  readFile: { label: "Read File", icon: FileText },
+  writeFile: { label: "Write File", icon: FilePlus },
+  batchWrite: { label: "Batch Write", icon: Files },
+  editFile: { label: "Edit File", icon: SquarePen },
+  bash: { label: "Run Command", icon: Terminal },
+  grep: { label: "Search Code", icon: Search },
+  glob: { label: "Find Files", icon: FolderTree },
+  listDir: { label: "List Directory", icon: FolderTree },
+  fetch: { label: "Fetch URL", icon: Globe },
+  webSearch: { label: "Web Search", icon: Globe },
+  task: { label: "Delegate Task", icon: Sparkles },
+  ask: { label: "Ask Question", icon: HelpCircle },
+  todo: { label: "Todo", icon: ListTodo },
+};
+
+function getToolMeta(name: string) {
+  return TOOL_META[name] ?? { label: name, icon: Wrench };
+}
+
+/** Extract a short summary string from the tool arguments (e.g. file path). */
+function argSummary(call: ToolCall): string | null {
+  const args = call.arguments;
+  if (!args || typeof args !== "object") return null;
+  const obj = args as Record<string, unknown>;
+  if (typeof obj.path === "string") return obj.path;
+  if (typeof obj.filePath === "string") return obj.filePath;
+  if (typeof obj.command === "string") {
+    const cmd = obj.command as string;
+    return cmd.length > 60 ? cmd.slice(0, 57) + "…" : cmd;
+  }
+  if (typeof obj.pattern === "string") return obj.pattern;
+  if (typeof obj.query === "string") {
+    const q = obj.query as string;
+    return q.length > 60 ? q.slice(0, 57) + "…" : q;
+  }
+  if (typeof obj.url === "string") return obj.url;
+  if (typeof obj.directory === "string") return obj.directory;
+  if (typeof obj.question === "string") {
+    const q = obj.question as string;
+    return q.length > 60 ? q.slice(0, 57) + "…" : q;
+  }
+  if (Array.isArray(obj.paths) && obj.paths.length > 0) {
+    return `${(obj.paths as unknown[]).length} files`;
+  }
+  if (Array.isArray(obj.operations) && obj.operations.length > 0) {
+    return `${(obj.operations as unknown[]).length} operations`;
+  }
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Single tool call row — independently expandable                     */
+/* ------------------------------------------------------------------ */
+
+interface ToolCallRowProps {
+  call: ToolCall;
+  result?: ToolResult;
+  defaultOpen?: boolean;
+}
+
+const ToolCallRow = React.memo(function ToolCallRow({
+  call,
+  result,
+  defaultOpen = false,
+}: ToolCallRowProps) {
+  const [open, setOpen] = React.useState(defaultOpen);
+  const meta = getToolMeta(call.name);
+  const Icon = meta.icon;
+  const summary = argSummary(call);
+  const hasResult = !!result;
+  const isError = result?.isError;
+
+  return (
+    <div className="border-b border-border last:border-b-0">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 transition-colors"
+      >
+        <ChevronRight
+          size={13}
+          className={`text-foreground-muted transition-transform shrink-0 ${
+            open ? "rotate-90" : ""
+          }`}
+        />
+        <Icon size={14} className="text-blue-400 shrink-0" />
+        <span className="text-xs font-medium text-foreground-secondary shrink-0">
+          {meta.label}
+        </span>
+        {summary && (
+          <span className="text-xs font-mono text-foreground-muted truncate">
+            {summary}
+          </span>
+        )}
+        <span className="ml-auto shrink-0">
+          {isError ? (
+            <AlertCircle size={13} className="text-danger" />
+          ) : hasResult ? (
+            <CheckCircle2 size={13} className="text-success" />
+          ) : (
+            <Loader2 size={13} className="text-foreground-muted animate-spin" />
+          )}
+        </span>
+      </button>
+
+      {open && (
+        <div className="px-3 pb-2.5 space-y-1.5">
+          {call.arguments != null && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-foreground-muted mb-1">
+                Arguments
+              </p>
+              <pre className="text-xs font-mono text-foreground-secondary whitespace-pre-wrap break-all bg-black/30 rounded p-2 max-h-48 overflow-y-auto">
+                {formatUnknown(call.arguments)}
+              </pre>
+            </div>
+          )}
+          {result && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-foreground-muted mb-1">
+                Result
+              </p>
+              <pre
+                className={`text-xs font-mono whitespace-pre-wrap break-all bg-black/30 rounded p-2 max-h-64 overflow-y-auto ${
+                  isError ? "text-danger" : "text-foreground-secondary"
+                }`}
+              >
+                {formatUnknown(result.content)}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
+
+/* ------------------------------------------------------------------ */
+/* Tool call block — renders each call as a named, expandable row       */
+/* ------------------------------------------------------------------ */
+
 export function ToolCallBlock({ calls, results }: ToolCallBlockProps) {
-  const [expanded, setExpanded] = React.useState(false);
-  const hasResults = results && results.length > 0;
-  const hasError = results?.some((r) => r.isError);
+  // Auto-expand when there's only one call — the common case.
+  const autoExpand = calls.length === 1;
 
   return (
     <div className="rounded-lg border border-tool-border bg-tool overflow-hidden">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-white/5 transition-colors"
-      >
-        <ChevronRight
-          size={14}
-          className={`text-foreground-muted transition-transform ${expanded ? "rotate-90" : ""}`}
-        />
-        <Wrench size={14} className="text-blue-400 shrink-0" />
-        <span className="text-xs font-medium text-foreground-secondary">
-          {calls.length} tool {calls.length === 1 ? "call" : "calls"}
-          {hasResults && results ? `, ${results.length} result${results.length === 1 ? "" : "s"}` : ""}
-        </span>
-        {hasError ? (
-          <AlertCircle size={14} className="text-danger ml-auto shrink-0" />
-        ) : hasResults ? (
-          <CheckCircle2 size={14} className="text-success ml-auto shrink-0" />
-        ) : null}
-      </button>
-
-      {expanded && (
-        <div className="border-t border-tool-border divide-y divide-border">
-          {calls.map((call, i) => {
-            const result = results?.find((r) => r.toolCallId === call.id);
-            return (
-              <div key={call.id ?? i} className="px-3 py-2.5">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-xs font-mono font-semibold text-blue-400">
-                    {call.name}
-                  </span>
-                  {result?.isError ? (
-                    <AlertCircle size={12} className="text-danger" />
-                  ) : result ? (
-                    <CheckCircle2 size={12} className="text-success" />
-                  ) : null}
-                </div>
-                {call.arguments != null && (
-                  <pre className="text-xs font-mono text-foreground-muted whitespace-pre-wrap break-all mb-1.5 bg-black/30 rounded p-2">
-                    {formatUnknown(call.arguments)}
-                  </pre>
-                )}
-                {result && (
-                  <pre
-                    className={`text-xs font-mono whitespace-pre-wrap break-all bg-black/30 rounded p-2 mt-1.5 ${
-                      result.isError ? "text-danger" : "text-foreground-secondary"
-                    }`}
-                  >
-                    {formatUnknown(result.content)}
-                  </pre>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {calls.map((call, i) => {
+        const result = results?.find((r) => r.toolCallId === call.id);
+        return (
+          <ToolCallRow
+            key={call.id ?? i}
+            call={call}
+            result={result}
+            defaultOpen={autoExpand}
+          />
+        );
+      })}
     </div>
   );
 }

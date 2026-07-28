@@ -97,14 +97,12 @@ export class RunService {
         if (event.type === "askQuestion" || event.type === "permissionRequest") {
           this.sessionStorage.updateSessionStatus(sessionId, "needs_attention");
         }
-
-        // Incremental turn persistence on modelStreamEnd
-        if (event.type === "modelStreamEnd") {
-          this.sessionStorage.appendMessages(sessionId, [event.turn]);
-        }
       }
 
-      // Final persistence sync for all messages
+      // Persist all new messages in one batch so they share a single
+      // created_at timestamp and are ordered by insertion (rowid) — this
+      // preserves the correct conversation order (user → assistant → tool
+      // result → assistant → …) on reload.
       const updatedMessages = await eventStream.result();
       this.sessionStorage.appendMessages(sessionId, updatedMessages.slice(session.messages.length));
       this.sessionStorage.updateSessionStatus(sessionId, "done");
