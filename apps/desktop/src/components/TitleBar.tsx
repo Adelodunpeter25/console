@@ -1,4 +1,6 @@
 import React from "react";
+import { PanelLeft, PanelLeftClose } from "lucide-react";
+import { useAppStore } from "../store";
 
 interface TitleBarProps {
   /** Right-side action button (e.g. settings gear or back-to-app). */
@@ -22,19 +24,25 @@ interface TitleBarProps {
  * No custom window control buttons — the OS provides minimize/maximize/close.
  */
 export function TitleBar({ rightAction, title }: TitleBarProps) {
+  const { sidebarOpen, toggleSidebar } = useAppStore();
+
   return (
     <div
       data-tauri-drag-region
       className="flex items-center h-10 bg-sidebar border-b border-border shrink-0 select-none"
     >
-      {/* Left: app brand (padded past traffic lights on macOS) */}
-      <div className="flex items-center gap-2 pl-20 px-4" data-tauri-drag-region>
-        <div className="w-5 h-5 rounded bg-white/10 border border-border flex items-center justify-center">
-          <span className="text-xs font-bold text-foreground">C</span>
-        </div>
-        <span className="text-sm font-semibold text-foreground tracking-tight">
-          Console
-        </span>
+      {/* Left: sidebar toggle (padded past traffic lights on macOS) */}
+      <div className="flex items-center pl-20 px-2" data-tauri-drag-region>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleSidebar();
+          }}
+          className="p-1.5 rounded-lg text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors"
+          title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+        >
+          {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeft size={16} />}
+        </button>
       </div>
 
       {/* Center: optional title */}
