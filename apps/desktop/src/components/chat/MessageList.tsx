@@ -76,7 +76,10 @@ export function MessageList({
   }, []);
 
   const isStreaming = Boolean(streamingText || streamingThinking);
-  const showEmpty = messages.length === 0 && !isStreaming;
+  // Show the live bubble for the whole run — including the pre-token
+  // "Agent is thinking..." state — not only after the first delta arrives.
+  const showStreamingBubble = running || isStreaming;
+  const showEmpty = messages.length === 0 && !showStreamingBubble;
 
   // Pending tool calls from the latest assistant message, shown while the
   // agent is executing tools and no streaming text is being emitted.
@@ -89,7 +92,7 @@ export function MessageList({
     [running, streamingText, lastAssistant],
   );
 
-  const showScrollButton = !autoScroll && (isStreaming || running);
+  const showScrollButton = !autoScroll && showStreamingBubble;
 
   return (
     <>
@@ -109,7 +112,7 @@ export function MessageList({
                 prevMessage={messages[i - 1]}
               />
             ))}
-            {isStreaming && (
+            {showStreamingBubble && (
               <StreamingBubble text={streamingText} thinking={streamingThinking} />
             )}
             {pendingToolCalls.length > 0 && <ToolCallBlock calls={pendingToolCalls} />}
