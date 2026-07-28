@@ -348,7 +348,7 @@ function runAgentLoop(
           emit,
         );
 
-        emit({ type: "modelStreamEnd", turn: assistantMessage });
+        emit({ type: "modelStreamEnd", turnId, turn: assistantMessage });
         messages.push(assistantMessage);
 
         const toolCalls = assistantMessage.content

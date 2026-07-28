@@ -13,7 +13,7 @@ export type AgentSessionEvent =
   | { type: "turnStart"; prompt: string }
   | { type: "modelStreamStart"; turnId: string }
   | { type: "modelStreamPart"; part: { text?: string; thinking?: string; toolCall?: ToolCall } }
-  | { type: "modelStreamEnd"; turn: AssistantMessage }
+  | { type: "modelStreamEnd"; turnId: string; turn: AssistantMessage }
   | { type: "toolExecutionStart"; calls: ToolCall[] }
   | { type: "permissionRequest"; request: PermissionRequest }
   | { type: "askQuestion"; request: AskQuestionRequest }
