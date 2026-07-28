@@ -43,6 +43,19 @@ function resolveProvider(modelId: string, fallback: string | null): string | nul
   return fallback;
 }
 
+/** Abort-related error messages that should not be surfaced to the user. */
+const ABORT_MESSAGES = [
+  "This operation was aborted.",
+  "Run was aborted.",
+  "The operation was aborted.",
+  "aborted",
+];
+
+function isAbortError(msg: string): boolean {
+  const lower = msg.toLowerCase();
+  return ABORT_MESSAGES.some((m) => lower.includes(m.toLowerCase()));
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   input: "",
@@ -125,8 +138,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Subscribe before invoking so early SSE frames aren't dropped.
       unlisten = await tauriApi.listenAgentEvents(sessionId, (event) => {
         if (event.type === "error") {
-          hadError = true;
-          toast.error(event.error.message);
+          if (isAbortError(event.error.message)) {
+            hadError = true; // prevent reload, but don't toast or show inline error
+          } else {
+            hadError = true;
+            toast.error(event.error.message);
+          }
         }
         get().handleEvent(event);
       });
@@ -143,7 +160,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
           : typeof err === "string"
             ? err
             : "Failed to send message. Is the backend running?";
-      markError(msg);
+      if (!isAbortError(msg)) {
+        markError(msg);
+      }
     } finally {
       if (unlisten) unlisten();
       set({ running: false, streamingText: "", streamingThinking: "" });
@@ -224,6 +243,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }));
         break;
       case "error":
+        if (isAbortError(event.error?.message ?? "")) {
+          // User-initiated abort — don't show an inline error bubble.
+          set({ streamingText: "", streamingThinking: "" });
+          break;
+        }
         set((s) => ({
           messages: [
             ...s.messages,

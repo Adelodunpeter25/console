@@ -109,8 +109,17 @@ export class RunService {
       this.sessionStorage.appendMessages(sessionId, updatedMessages.slice(session.messages.length));
       this.sessionStorage.updateSessionStatus(sessionId, "done");
     } catch (err) {
-      this.sessionStorage.updateSessionStatus(sessionId, "needs_attention");
-      throw err;
+      // User-initiated abort is normal control flow — don't mark as needs_attention.
+      const isAbort =
+        abortController.signal.aborted ||
+        (err instanceof Error && err.name === "AbortError") ||
+        (err instanceof Error && err.message === "This operation was aborted.");
+      if (isAbort) {
+        this.sessionStorage.updateSessionStatus(sessionId, "done");
+      } else {
+        this.sessionStorage.updateSessionStatus(sessionId, "needs_attention");
+        throw err;
+      }
     } finally {
       this.activeRuns.delete(sessionId);
     }

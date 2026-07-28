@@ -20,14 +20,14 @@ pub enum AgentSessionEvent {
     SessionStart,
     #[serde(rename = "turnStart")]
     TurnStart { prompt: String },
-    #[serde(rename = "modelStreamStart")]
+    #[serde(rename = "modelStreamStart", rename_all = "camelCase")]
     ModelStreamStart { turn_id: String },
     #[serde(rename = "modelStreamPart")]
     ModelStreamPart {
         part: ModelStreamPartData,
     },
-    #[serde(rename = "modelStreamEnd")]
-    ModelStreamEnd { turn: AssistantMessage },
+    #[serde(rename = "modelStreamEnd", rename_all = "camelCase")]
+    ModelStreamEnd { turn_id: String, turn: AssistantMessage },
     #[serde(rename = "toolExecutionStart")]
     ToolExecutionStart { calls: Vec<ToolCall> },
     #[serde(rename = "permissionRequest")]
@@ -38,12 +38,12 @@ pub enum AgentSessionEvent {
     ToolExecutionResult { result: ToolResult },
     #[serde(rename = "toolExecutionEnd")]
     ToolExecutionEnd { results: Vec<ToolResult> },
-    #[serde(rename = "compaction")]
+    #[serde(rename = "compaction", rename_all = "camelCase")]
     Compaction {
         summary: String,
         original_message_count: u64,
     },
-    #[serde(rename = "turnEnd")]
+    #[serde(rename = "turnEnd", rename_all = "camelCase")]
     TurnEnd { turn_id: String },
     #[serde(rename = "sessionEnd")]
     SessionEnd,

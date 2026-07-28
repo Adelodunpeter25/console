@@ -315,7 +315,8 @@ function runAgentLoop(
 
       while (true) {
         if (signal?.aborted) {
-          emit({ type: "error", error: { message: "Run was aborted." } });
+          // User-initiated abort is normal control flow, not an error.
+          // Just break the loop — sessionEnd is emitted in finally.
           break;
         }
 
@@ -382,8 +383,15 @@ function runAgentLoop(
         emit({ type: "turnEnd", turnId });
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      emit({ type: "error", error: { message } });
+      // User-initiated abort is normal control flow — don't surface as error.
+      const isAbort =
+        signal?.aborted ||
+        (err instanceof Error && err.name === "AbortError") ||
+        (err instanceof Error && err.message === "This operation was aborted.");
+      if (!isAbort) {
+        const message = err instanceof Error ? err.message : String(err);
+        emit({ type: "error", error: { message } });
+      }
     } finally {
       emit({ type: "sessionEnd" });
     }
