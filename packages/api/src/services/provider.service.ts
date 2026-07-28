@@ -1,4 +1,4 @@
-import { getConsoleApiClient } from "../client";
+import { getConsoleApiClient } from "../client.js";
 
 function unwrapData<T>(body: { success?: boolean; data?: T; error?: string }, action: string): T {
   if (body?.success === false || body?.data === undefined) {

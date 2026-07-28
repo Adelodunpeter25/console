@@ -8,7 +8,9 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { GlassSurface } from "../../components/common/glass-surface";
+import { ScreenHeader } from "../../components/common/screen-header";
 import { useServerConnection } from "../../hooks";
+import { useAppStore } from "../../stores";
 
 export function SettingsScreen() {
   const {
@@ -21,13 +23,13 @@ export function SettingsScreen() {
     testConnection,
     disconnect,
   } = useServerConnection();
+  const setActiveTab = useAppStore((state) => state.setActiveTab);
 
   return (
     <ScrollView className="flex-1 bg-[#0d0d0e] px-4 pt-4">
-      {/* Header */}
       <View className="mb-5">
-        <Text className="text-2xl font-bold text-white tracking-tight">Console Settings</Text>
-        <Text className="text-sm text-zinc-400 mt-1">
+        <ScreenHeader title="Console Settings" onBack={() => setActiveTab("home")} />
+        <Text className="text-sm text-zinc-400 mt-1 ml-4">
           Configure server connections & app environment
         </Text>
       </View>

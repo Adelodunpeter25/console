@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { authService } from "../services/auth.service";
+import { authService } from "../services/auth.service.js";
 import type { OAuthLoginUrlDto, OAuthCallbackDto } from "@console/types";
 
 export const authKeys = {

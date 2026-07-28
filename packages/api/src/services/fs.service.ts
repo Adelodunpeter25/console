@@ -1,4 +1,4 @@
-import { getConsoleApiClient } from "../client";
+import { getConsoleApiClient } from "../client.js";
 import type { ProjectInfo, FsTreeEntry } from "@console/types";
 
 export const fsService = {

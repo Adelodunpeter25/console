@@ -14,7 +14,6 @@ import {
 import { ConsoleApiProvider } from "@console/api";
 import { QueryClient } from "@tanstack/react-query";
 import { MainContent } from "./components/common/main-content";
-import { BottomNav } from "./components/navigation/bottom-nav";
 import { useServerConnection } from "./hooks";
 import { useAppStore } from "./stores";
 
@@ -62,8 +61,6 @@ function AppRoot() {
             </TouchableOpacity>
           </SafeAreaView>
         )}
-
-        <BottomNav />
       </View>
     </SafeAreaProvider>
   );

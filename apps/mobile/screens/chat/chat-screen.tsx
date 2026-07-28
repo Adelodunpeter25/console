@@ -10,10 +10,13 @@ import {
   Platform,
 } from "react-native";
 import { AgentMessage } from "@console/types";
+import { ScreenHeader } from "../../components/common/screen-header";
 import { useChatStream } from "../../hooks";
+import { useAppStore } from "../../stores";
 
 export function ChatScreen() {
   const { messages, inputVal, setInputVal, running, sendMessage } = useChatStream();
+  const setActiveTab = useAppStore((state) => state.setActiveTab);
 
   return (
     <KeyboardAvoidingView
@@ -21,7 +24,7 @@ export function ChatScreen() {
       keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       className="flex-1 pt-4"
     >
-      <Text className="text-2xl font-bold text-white mb-4 tracking-tight px-4">Console Chat</Text>
+      <ScreenHeader title="Console Chat" onBack={() => setActiveTab("home")} />
 
       {messages.length === 0 ? (
         <View className="items-center justify-center py-14">

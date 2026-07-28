@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fsService } from "../services/fs.service";
+import { fsService } from "../services/fs.service.js";
 
 export const fsKeys = {
   projects: ["projects"] as const,

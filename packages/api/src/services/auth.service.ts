@@ -1,4 +1,4 @@
-import { getConsoleApiClient } from "../client";
+import { getConsoleApiClient } from "../client.js";
 import type { AuthStatusResponse, OAuthLoginUrlDto, OAuthCallbackDto } from "@console/types";
 
 function unwrapData<T>(body: { success?: boolean; data?: T; error?: string }, action: string): T {

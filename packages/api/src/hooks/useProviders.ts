@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { providerService } from "../services/provider.service";
+import { providerService } from "../services/provider.service.js";
 
 export const providerKeys = {
   all: ["providers"] as const,

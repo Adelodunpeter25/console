@@ -1,5 +1,5 @@
-import type { AssistantMessage } from "./agent";
-import type { PermissionRequest, ToolCall, ToolResult } from "./tool";
+import type { AssistantMessage } from "./agent.js";
+import type { PermissionRequest, ToolCall, ToolResult } from "./tool.js";
 
 export interface AskQuestionRequest {
   requestId: string;

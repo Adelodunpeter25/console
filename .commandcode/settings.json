@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(git add -A && git commit -F - <<'EOF' feat(mobile): redesign home screen, remove bottom nav, extract header, fix package import extensions Co-authored-by: CommandCodeBot <noreply@commandcode.ai> EOF)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}
