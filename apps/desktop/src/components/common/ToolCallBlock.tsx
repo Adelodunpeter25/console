@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { ToolCall, ToolResult } from "@console/types";
 import { formatUnknown } from "../../utils/format";
+import { ToolResultContent } from "./ToolResultContent";
 
 interface ToolCallBlockProps {
   calls: ToolCall[];
@@ -141,7 +142,7 @@ const ToolCallRow = React.memo(function ToolCallRow({
               <p className="text-[10px] uppercase tracking-wide text-foreground-muted mb-1">
                 Arguments
               </p>
-              <pre className="text-xs font-mono text-foreground-secondary whitespace-pre-wrap break-all bg-black/30 rounded p-2 max-h-48 overflow-y-auto">
+              <pre className="text-xs font-mono text-foreground-secondary whitespace-pre-wrap break-all bg-black/30 rounded p-2 max-h-48 overflow-y-auto selectable-text">
                 {formatUnknown(call.arguments)}
               </pre>
             </div>
@@ -151,13 +152,18 @@ const ToolCallRow = React.memo(function ToolCallRow({
               <p className="text-[10px] uppercase tracking-wide text-foreground-muted mb-1">
                 Result
               </p>
-              <pre
-                className={`text-xs font-mono whitespace-pre-wrap break-all bg-black/30 rounded p-2 max-h-64 overflow-y-auto ${
-                  isError ? "text-danger" : "text-foreground-secondary"
-                }`}
-              >
-                {formatUnknown(result.content)}
-              </pre>
+              <ToolResultContent
+                toolName={call.name}
+                result={result}
+                callFilePath={
+                  call.arguments &&
+                  typeof call.arguments === "object" &&
+                  "path" in (call.arguments as Record<string, unknown>) &&
+                  typeof (call.arguments as Record<string, unknown>).path === "string"
+                    ? (call.arguments as Record<string, unknown>).path as string
+                    : undefined
+                }
+              />
             </div>
           )}
         </div>

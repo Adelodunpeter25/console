@@ -1,0 +1,466 @@
+import React from "react";
+import {
+  FileText,
+  Terminal,
+  FolderTree,
+  Search,
+  Globe,
+  FilePlus,
+  SquarePen,
+  HelpCircle,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
+import type { ToolResult } from "@console/types";
+import { MarkdownRenderer } from "./MarkdownRenderer";
+import { formatUnknown } from "../../utils/format";
+
+/* ------------------------------------------------------------------ */
+/* Helpers                                                             */
+/* ------------------------------------------------------------------ */
+
+/** Extract text from a ToolResult's content array. */
+function resultText(result: ToolResult): string {
+  const content = result.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((c) => {
+        if (typeof c === "string") return c;
+        if (c && typeof c === "object" && c.type === "text" && typeof c.text === "string")
+          return c.text;
+        return "";
+      })
+      .join("\n");
+  }
+  return formatUnknown(content);
+}
+
+/** Map file extension to a language string for syntax highlighting. */
+const EXT_LANG_MAP: Record<string, string> = {
+  ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
+  mjs: "javascript", cjs: "javascript", json: "json", html: "html",
+  css: "css", scss: "scss", py: "python", rb: "ruby", go: "go",
+  rs: "rust", java: "java", kt: "kotlin", swift: "swift", c: "c",
+  h: "c", cpp: "cpp", hpp: "cpp", cs: "csharp", php: "php",
+  sh: "bash", bash: "bash", zsh: "bash", yml: "yaml", yaml: "yaml",
+  toml: "toml", xml: "xml", md: "markdown", markdown: "markdown",
+  sql: "sql", lua: "lua", r: "r", dart: "dart", vue: "html",
+  svelte: "html", graphql: "graphql", dockerfile: "dockerfile",
+};
+
+function langFromPath(filePath: string): string | undefined {
+  const basename = filePath.split("/").pop() ?? "";
+  if (basename === "Dockerfile") return "dockerfile";
+  if (basename === "Makefile") return "makefile";
+  const ext = basename.split(".").pop()?.toLowerCase();
+  if (!ext) return undefined;
+  return EXT_LANG_MAP[ext];
+}
+
+/* ------------------------------------------------------------------ */
+/* Status badge — reusable one-liner for write/edit/ask results        */
+/* ------------------------------------------------------------------ */
+
+function StatusLine({
+  icon: Icon,
+  text,
+  isError,
+}: {
+  icon: React.ElementType;
+  text: string;
+  isError?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2 py-1">
+      <Icon size={13} className={isError ? "text-danger" : "text-success"} />
+      <span
+        className={`text-xs font-mono selectable-text ${
+          isError ? "text-danger" : "text-foreground-secondary"
+        }`}
+      >
+        {text}
+      </span>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* readFile — header metadata + syntax-highlighted code                */
+/* ------------------------------------------------------------------ */
+
+function ReadFileResult({ text, filePath }: { text: string; filePath?: string }) {
+  // Parse header: "File: <path>\nShowing: <range>\nSize: <bytes>\n\n<code>"
+  const lines = text.split("\n");
+  const headerEnd = lines.findIndex((l, i) => i > 0 && l === "");
+  if (headerEnd === -1 || headerEnd > 5) {
+    // Doesn't match expected format — fall back to raw
+    return <RawResult text={text} />;
+  }
+
+  const headerLines = lines.slice(0, headerEnd);
+  const codeLines = lines.slice(headerEnd + 1);
+
+  // Extract metadata
+  const fileMatch = headerLines.find((l) => l.startsWith("File:"));
+  const showingMatch = headerLines.find((l) => l.startsWith("Showing:"));
+  const sizeMatch = headerLines.find((l) => l.startsWith("Size:"));
+
+  const path = fileMatch?.replace(/^File:\s*/, "") ?? filePath ?? "";
+  const lang = langFromPath(path);
+
+  // Build markdown code block for highlighting
+  const fence = "```";
+  const markdown = `${fence}${lang ?? ""}\n${codeLines.join("\n")}\n${fence}`;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <FileText size={11} className="text-foreground-muted" />
+        <span className="text-[10px] font-mono text-foreground-muted">{path}</span>
+        {showingMatch && (
+          <span className="text-[10px] text-foreground-muted/70">
+            · {showingMatch.replace(/^Showing:\s*/, "")}
+          </span>
+        )}
+        {sizeMatch && (
+          <span className="text-[10px] text-foreground-muted/70">
+            · {sizeMatch.replace(/^Size:\s*/, "")}
+          </span>
+        )}
+      </div>
+      <div className="max-h-80 overflow-y-auto rounded bg-black/30">
+        <MarkdownRenderer content={markdown} />
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* bash — exit code badge + stdout/stderr sections                     */
+/* ------------------------------------------------------------------ */
+
+function BashResult({ text, isError }: { text: string; isError?: boolean }) {
+  // Parse: "Exit code: N\nWorking directory: /path\n\nstdout:\n...\n\nstderr:\n..."
+  const exitMatch = text.match(/^Exit code:\s*(\d+)/);
+  const cwdMatch = text.match(/^Working directory:\s*(.+)/m);
+  const exitCode = exitMatch ? parseInt(exitMatch[1]!, 10) : undefined;
+  const cwd = cwdMatch?.[1];
+
+  const stdoutIdx = text.indexOf("stdout:");
+  const stderrIdx = text.indexOf("stderr:");
+
+  if (stdoutIdx === -1) {
+    return <RawResult text={text} isError={isError} />;
+  }
+
+  const stdoutStart = stdoutIdx + "stdout:".length;
+  const stdoutEnd = stderrIdx > stdoutStart ? stderrIdx : text.length;
+  const stdoutText = text.slice(stdoutStart, stdoutEnd).trim();
+
+  const stderrText =
+    stderrIdx > -1
+      ? text.slice(stderrIdx + "stderr:".length).trim()
+      : "";
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {exitCode !== undefined && (
+          <span
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono ${
+              exitCode === 0
+                ? "bg-success/15 text-success"
+                : "bg-danger/15 text-danger"
+            }`}
+          >
+            {exitCode === 0 ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
+            Exit {exitCode}
+          </span>
+        )}
+        {cwd && (
+          <span className="text-[10px] font-mono text-foreground-muted truncate">
+            {cwd}
+          </span>
+        )}
+      </div>
+      {stdoutText && (
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-foreground-muted mb-0.5">
+            stdout
+          </p>
+          <pre className="text-xs font-mono text-foreground-secondary whitespace-pre-wrap break-all bg-black/30 rounded p-2 max-h-48 overflow-y-auto selectable-text">
+            {stdoutText}
+          </pre>
+        </div>
+      )}
+      {stderrText && (
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-foreground-muted mb-0.5">
+            stderr
+          </p>
+          <pre
+            className={`text-xs font-mono whitespace-pre-wrap break-all bg-danger/5 rounded p-2 max-h-48 overflow-y-auto selectable-text ${
+              isError ? "text-danger" : "text-foreground-secondary"
+            }`}
+          >
+            {stderrText}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* listDir — tree header + monospace tree                              */
+/* ------------------------------------------------------------------ */
+
+function ListDirResult({ text }: { text: string }) {
+  // Parse: "Directory: <path> <note>\n<tree>"
+  const lines = text.split("\n");
+  const dirMatch = lines[0]?.match(/^Directory:\s*(.+)/);
+  const dirPath = dirMatch?.[1] ?? "";
+  const treeLines = lines.slice(1);
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        <FolderTree size={11} className="text-foreground-muted" />
+        <span className="text-[10px] font-mono text-foreground-muted truncate">
+          {dirPath}
+        </span>
+      </div>
+      <pre className="text-xs font-mono text-foreground-secondary whitespace-pre-wrap bg-black/30 rounded p-2 max-h-64 overflow-y-auto selectable-text">
+        {treeLines.join("\n")}
+      </pre>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* grep — search header + results                                      */
+/* ------------------------------------------------------------------ */
+
+function GrepResult({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const headerMatch = lines[0]?.match(/^Found\s+(\d+)\s+match/);
+
+  if (!headerMatch) {
+    return <RawResult text={text} />;
+  }
+
+  const header = lines[0];
+  const bodyLines = lines.slice(1).filter((l) => l !== "");
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        <Search size={11} className="text-foreground-muted" />
+        <span className="text-[10px] font-mono text-foreground-muted">{header}</span>
+      </div>
+      <pre className="text-xs font-mono text-foreground-secondary whitespace-pre-wrap bg-black/30 rounded p-2 max-h-64 overflow-y-auto selectable-text">
+        {bodyLines.join("\n")}
+      </pre>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* glob — file list                                                    */
+/* ------------------------------------------------------------------ */
+
+function GlobResult({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const headerMatch = lines[0]?.match(/^Found\s+(\d+)\s+file/);
+
+  if (!headerMatch) {
+    return <RawResult text={text} />;
+  }
+
+  const header = lines[0];
+  const files = lines.slice(1).filter((l) => l.trim());
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        <FolderTree size={11} className="text-foreground-muted" />
+        <span className="text-[10px] font-mono text-foreground-muted">{header}</span>
+      </div>
+      <pre className="text-xs font-mono text-foreground-secondary whitespace-pre-wrap bg-black/30 rounded p-2 max-h-48 overflow-y-auto selectable-text">
+        {files.join("\n")}
+      </pre>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* webSearch / fetch — markdown rendered                               */
+/* ------------------------------------------------------------------ */
+
+function WebSearchResult({ text }: { text: string }) {
+  // Convert to markdown: the tool already outputs structured text with
+  // numbered results, URLs, and snippets. Wrap URLs in markdown links.
+  const markdown = text
+    .split("\n")
+    .map((line) => {
+      const urlMatch = line.match(/^\s*URL:\s*(https?:\/\/\S+)/);
+      if (urlMatch) return `    <${urlMatch[1]}>`;
+      return line;
+    })
+    .join("\n");
+
+  return (
+    <div className="max-h-80 overflow-y-auto rounded bg-black/20 p-2">
+      <MarkdownRenderer content={markdown} />
+    </div>
+  );
+}
+
+function FetchResult({ text }: { text: string }) {
+  // Parse: "URL: ...\nStatus: ...\nContent-Type: ...\n\nBody:\n<content>"
+  const bodyIdx = text.indexOf("Body:\n");
+  const headerText = bodyIdx > -1 ? text.slice(0, bodyIdx) : "";
+  const bodyText = bodyIdx > -1 ? text.slice(bodyIdx + "Body:\n".length) : text;
+
+  const urlMatch = headerText.match(/^URL:\s*(.+)/m);
+  const statusMatch = headerText.match(/^Status:\s*(\d+)/m);
+
+  // Try to render body as markdown (works for HTML-converted text and JSON)
+  const bodyIsJson = bodyText.trim().startsWith("{") || bodyText.trim().startsWith("[");
+  const renderedBody = bodyIsJson
+    ? "```json\n" + bodyText + "\n```"
+    : bodyText;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Globe size={11} className="text-foreground-muted" />
+        {urlMatch && (
+          <span className="text-[10px] font-mono text-foreground-muted truncate">
+            {urlMatch[1]}
+          </span>
+        )}
+        {statusMatch && (
+          <span
+            className={`text-[10px] font-mono px-1 rounded ${
+              parseInt(statusMatch[1]!, 10) < 400
+                ? "text-success bg-success/10"
+                : "text-danger bg-danger/10"
+            }`}
+          >
+            {statusMatch[1]}
+          </span>
+        )}
+      </div>
+      <div className="max-h-80 overflow-y-auto rounded bg-black/20 p-2">
+        <MarkdownRenderer content={renderedBody} />
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* writeFile / editFile — compact status line                          */
+/* ------------------------------------------------------------------ */
+
+function WriteFileResult({ text, isError }: { text: string; isError?: boolean }) {
+  // "Written: /path\n  Bytes: 123\n  Lines: 42"
+  const firstLine = text.split("\n")[0] ?? text;
+  return (
+    <StatusLine icon={isError ? XCircle : FilePlus} text={firstLine} isError={isError} />
+  );
+}
+
+function EditFileResult({ text, isError }: { text: string; isError?: boolean }) {
+  // "Edited: /path\n  Replaced 3 line(s) with 5 line(s) (+2 lines)"
+  const firstLine = text.split("\n")[0] ?? text;
+  const summary = text.split("\n")[1]?.trim();
+  const fullText = summary ? `${firstLine} — ${summary}` : firstLine;
+  return (
+    <StatusLine icon={isError ? XCircle : SquarePen} text={fullText} isError={isError} />
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* ask — compact answer line                                           */
+/* ------------------------------------------------------------------ */
+
+function AskResult({ text }: { text: string }) {
+  // "[User Answer]: \"option text\""
+  return <StatusLine icon={HelpCircle} text={text} />;
+}
+
+/* ------------------------------------------------------------------ */
+/* Raw fallback — existing <pre> rendering                             */
+/* ------------------------------------------------------------------ */
+
+function RawResult({ text, isError }: { text: string; isError?: boolean }) {
+  return (
+    <pre
+      className={`text-xs font-mono whitespace-pre-wrap break-all bg-black/30 rounded p-2 max-h-64 overflow-y-auto selectable-text ${
+        isError ? "text-danger" : "text-foreground-secondary"
+      }`}
+    >
+      {text}
+    </pre>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Main component — switches on tool name                              */
+/* ------------------------------------------------------------------ */
+
+interface ToolResultContentProps {
+  toolName?: string;
+  result: ToolResult;
+  /** File path extracted from the tool call arguments, used for language detection. */
+  callFilePath?: string;
+}
+
+export function ToolResultContent({
+  toolName,
+  result,
+  callFilePath,
+}: ToolResultContentProps) {
+  const text = resultText(result);
+  const isError = result.isError;
+
+  // Errors always render raw with danger styling
+  if (isError) {
+    switch (toolName) {
+      case "writeFile":
+        return <WriteFileResult text={text} isError />;
+      case "editFile":
+        return <EditFileResult text={text} isError />;
+      default:
+        return <RawResult text={text} isError />;
+    }
+  }
+
+  switch (toolName) {
+    case "readFile":
+      return <ReadFileResult text={text} filePath={callFilePath} />;
+    case "bash":
+      return <BashResult text={text} />;
+    case "listDir":
+      return <ListDirResult text={text} />;
+    case "grep":
+      return <GrepResult text={text} />;
+    case "glob":
+      return <GlobResult text={text} />;
+    case "webSearch":
+      return <WebSearchResult text={text} />;
+    case "fetch":
+      return <FetchResult text={text} />;
+    case "writeFile":
+    case "batchWrite":
+      return <WriteFileResult text={text} />;
+    case "editFile":
+      return <EditFileResult text={text} />;
+    case "ask":
+      return <AskResult text={text} />;
+    default:
+      return <RawResult text={text} />;
+  }
+}
