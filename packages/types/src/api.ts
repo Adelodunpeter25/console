@@ -1,5 +1,5 @@
-import type { AgentMessage } from "./agent.js";
-import type { SessionHeader } from "./session.js";
+import type { AgentMessage } from "./agent";
+import type { SessionHeader } from "./session";
 
 export interface ApiResponse<T = unknown> {
   success: boolean;

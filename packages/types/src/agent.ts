@@ -1,4 +1,4 @@
-import type { ToolCall } from "./tool.js";
+import type { ToolCall } from "./tool";
 
 export interface TextPart {
   type: "text";
@@ -31,7 +31,7 @@ export interface AssistantMessage {
 
 export interface ToolResultMessage {
   role: "toolResult";
-  results: import("./tool.js").ToolResult[];
+  results: import("./tool").ToolResult[];
 }
 
 export type AgentMessage = UserMessage | AssistantMessage | ToolResultMessage;

@@ -1,4 +1,4 @@
-import { getConsoleApiClient } from "../client.js";
+import { getConsoleApiClient } from "../client";
 import type { RunPromptDto } from "@console/types";
 
 export const runService = {

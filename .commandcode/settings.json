@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Shell(git add -A && git commit -F - <<'EOF' feat(mobile): redesign home screen, remove bottom nav, extract header, fix package import extensions Co-authored-by: CommandCodeBot <noreply@commandcode.ai> EOF)"
+      "Shell(git add -A && git commit -F - <<'EOF' feat(mobile): redesign home screen, remove bottom nav, extract header, fix package import extensions Co-authored-by: CommandCodeBot <noreply@commandcode.ai> EOF)",
+      "Shell(node /private/tmp/commandcode-502/-Users-techclub-Documents-projects-console/03839dfb-7d89-4ecb-be17-c376ae58de3f/scratchpad/fix-imports.mjs)"
     ],
     "deny": [],
     "defaultMode": "default"

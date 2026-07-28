@@ -1,7 +1,7 @@
 import React, { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { consoleQueryClient } from "./query-client.js";
-import { configureConsoleApi, ConsoleApiClientOptions } from "./client.js";
+import { consoleQueryClient } from "./query-client";
+import { configureConsoleApi, ConsoleApiClientOptions } from "./client";
 
 export interface ConsoleApiProviderProps extends ConsoleApiClientOptions {
   children: ReactNode;
