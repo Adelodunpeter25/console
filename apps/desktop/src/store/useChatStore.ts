@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import type { AgentMessage, AgentSessionEvent, AskQuestionRequest, PermissionRequest } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 import { useProviderStore } from "./useProviderStore";
+import { useProjectStore } from "./useProjectStore";
 
 /** A pending question from the agent's ask tool, awaiting user input. */
 export interface PendingQuestion {
@@ -74,6 +75,11 @@ function isAbortError(msg: string): boolean {
   return ABORT_MESSAGES.some((m) => lower.includes(m.toLowerCase()));
 }
 
+/** Push a status update to the project store so the sidebar reflects it. */
+function syncSessionStatus(sessionId: string, status: "idle" | "working" | "done" | "needs_attention") {
+  useProjectStore.getState().updateSessionStatus(sessionId, status);
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   input: "",
@@ -95,6 +101,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         sessionModelId: detail.header.modelId ?? null,
         sessionProvider: detail.header.provider ?? null,
       });
+      // Sync the server's authoritative status to the sidebar.
+      syncSessionStatus(sessionId, detail.header.status ?? "idle");
     } catch {
       set({
         messages: [],
@@ -135,6 +143,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       streamingText: "",
       streamingThinking: "",
     }));
+    syncSessionStatus(sessionId, "working");
 
     let unlisten: (() => void) | null = null;
     let hadError = false;
@@ -165,6 +174,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
             toast.error(event.error.message);
           }
         }
+        // Sync needs_attention to the sidebar when the agent pauses.
+        if (event.type === "askQuestion" || event.type === "permissionRequest") {
+          syncSessionStatus(sessionId, "needs_attention");
+        }
         get().handleEvent(event);
       });
       await tauriApi.runAgent(
@@ -187,9 +200,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (unlisten) unlisten();
       set({ running: false, streamingText: "", streamingThinking: "" });
       // Reload after a clean run so persisted turns (tools, etc.) match server.
+      // loadSession also syncs the server's authoritative status to the sidebar.
       // Skip on error so inline error bubbles aren't wiped by a stale session.
       if (!hadError) {
         await get().loadSession(sessionId);
+      } else {
+        syncSessionStatus(sessionId, "needs_attention");
       }
     }
   },
@@ -201,10 +217,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // ignore
     }
     set({ running: false, streamingText: "", streamingThinking: "" });
+    syncSessionStatus(sessionId, "done");
   },
 
   answerQuestion: async (sessionId: string, requestId: string, answer: string | string[]) => {
     set({ pendingQuestion: null });
+    syncSessionStatus(sessionId, "working");
     try {
       await tauriApi.answerQuestion(sessionId, requestId, answer);
     } catch (err) {
@@ -215,6 +233,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   approvePermission: async (sessionId: string, requestId: string, allow: boolean) => {
     set({ pendingPermission: null });
+    syncSessionStatus(sessionId, "working");
     try {
       await tauriApi.approvePermission(sessionId, requestId, allow);
     } catch (err) {
