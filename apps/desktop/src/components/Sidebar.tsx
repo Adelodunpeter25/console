@@ -259,18 +259,11 @@ export function Sidebar() {
   );
 }
 
-const STATUS_CONFIG: Record<
-  SessionStatus,
-  { dot: string; label: string; text: string }
-> = {
-  idle: { dot: "bg-foreground-muted", label: "Idle", text: "text-foreground-muted" },
-  working: { dot: "bg-blue-500", label: "Working", text: "text-blue-400" },
-  done: { dot: "bg-green-500", label: "Done", text: "text-green-400" },
-  needs_attention: {
-    dot: "bg-amber-500",
-    label: "Needs Attention",
-    text: "text-amber-400",
-  },
+const STATUS_DOT: Record<SessionStatus, string> = {
+  idle: "bg-foreground-muted",
+  working: "bg-blue-500",
+  done: "bg-green-500",
+  needs_attention: "bg-amber-500",
 };
 
 function SessionItem({
@@ -285,7 +278,6 @@ function SessionItem({
   const { setSelectedSessionId } = useAppStore();
   const { deleteSession } = useProjectStore();
   const status = session.status ?? "idle";
-  const statusCfg = STATUS_CONFIG[status];
 
   return (
     <div
@@ -294,8 +286,14 @@ function SessionItem({
       }`}
       onClick={() => setSelectedSessionId(isActive ? null : session.id)}
     >
-      {/* Status dot */}
-      <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusCfg.dot}`} />
+      {/* Status indicator */}
+      {status === "working" ? (
+        <div className="w-3.5 h-3.5 shrink-0 flex items-center justify-center">
+          <div className="w-3 h-3 border-[1.5px] border-blue-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[status]}`} />
+      )}
 
       <div className="flex-1 min-w-0">
         <div
@@ -305,10 +303,8 @@ function SessionItem({
         >
           {session.title || "Untitled"}
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-foreground-muted">
-          <span className={statusCfg.text}>{statusCfg.label}</span>
-          <span>·</span>
-          <span>{formatRelativeTime(session.createdAt)}</span>
+        <div className="text-xs text-foreground-muted">
+          {formatRelativeTime(session.createdAt)}
         </div>
       </div>
 
