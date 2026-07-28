@@ -1,23 +1,23 @@
 import React from "react";
 import {
-  Folder,
+  FolderOpen,
+  ChevronDown,
   ChevronRight,
   Plus,
+  X,
   PanelLeftClose,
   PanelLeft,
-  X,
-  FolderOpen,
 } from "lucide-react";
 import type { SessionHeader, SessionStatus } from "@console/types";
 import { useAppStore, useProjectStore } from "../store";
 import { formatRelativeTime } from "../utils/time";
 
 /**
- * Left sidebar — project and session navigator.
+ * Left sidebar — Conductor-style project navigator.
  *
- * Each project is a collapsible row with a folder icon. Expanding a project
- * loads and reveals its sessions with status dots (working/done/needs_attention).
- * A "+" button at the top adds new projects inline.
+ * Each project is a section with a bold header and a chevron to
+ * collapse/expand. Sessions are listed below with a status indicator,
+ * truncating title, and right-aligned timestamp.
  */
 export function Sidebar() {
   const {
@@ -93,7 +93,10 @@ export function Sidebar() {
           <PanelLeft size={18} />
         </button>
         <button
-          onClick={() => setShowAddForm(true)}
+          onClick={() => {
+            setShowAddForm(true);
+            setSidebarOpenViaToggle();
+          }}
           className="p-2 rounded-lg text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors"
           title="Add project"
         >
@@ -103,9 +106,13 @@ export function Sidebar() {
     );
   }
 
+  function setSidebarOpenViaToggle() {
+    toggleSidebar();
+  }
+
   return (
     <div className="w-72 bg-sidebar border-r border-border flex flex-col h-full shrink-0">
-      {/* Header */}
+      {/* Top bar */}
       <div className="px-4 h-12 flex items-center justify-between border-b border-border shrink-0">
         <span className="text-sm font-bold text-foreground tracking-tight">Projects</span>
         <div className="flex items-center gap-1">
@@ -169,89 +176,77 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Project + session list */}
-      <div className="flex-1 overflow-y-auto px-2 py-2">
+      {/* Project sections */}
+      <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <span className="text-sm text-foreground-muted">Loading...</span>
           </div>
         ) : projects.length === 0 ? (
           <div className="px-2 py-8 text-center">
-            <Folder size={28} className="mx-auto text-foreground-muted mb-2" />
+            <FolderOpen size={28} className="mx-auto text-foreground-muted mb-2" />
             <p className="text-xs text-foreground-muted">
               No projects yet. Click + to add one.
             </p>
           </div>
         ) : (
-          <div className="space-y-0.5">
-            {projects.map((project) => {
-              const isExpanded = expandedProjects.has(project.id);
-              const sessions = sessionsByProject[project.id] ?? [];
+          projects.map((project) => {
+            const isExpanded = expandedProjects.has(project.id);
+            const sessions = sessionsByProject[project.id] ?? [];
 
-              return (
-                <div key={project.id}>
-                  {/* Project row */}
-                  <button
-                    onClick={() => handleProjectToggle(project.id)}
-                    className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors text-left ${
-                      isExpanded
-                        ? "bg-white/8 border border-border"
-                        : "hover:bg-white/5 border border-transparent"
-                    }`}
-                  >
-                    <ChevronRight
-                      size={14}
-                      className={`text-foreground-muted shrink-0 transition-transform ${
-                        isExpanded ? "rotate-90" : ""
-                      }`}
-                    />
-                    <FolderOpen size={15} className="shrink-0 text-foreground" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-foreground truncate">
-                        {project.name}
-                      </div>
-                    </div>
-                  </button>
+            return (
+              <div key={project.id} className="border-b border-border/50">
+                {/* Project header */}
+                <button
+                  onClick={() => handleProjectToggle(project.id)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.03] transition-colors"
+                >
+                  <span className="text-sm font-semibold text-foreground truncate">
+                    {project.name}
+                  </span>
+                  {isExpanded ? (
+                    <ChevronDown size={15} className="text-foreground-muted shrink-0 ml-2" />
+                  ) : (
+                    <ChevronRight size={15} className="text-foreground-muted shrink-0 ml-2" />
+                  )}
+                </button>
 
-                  {/* Sessions (collapsible) */}
-                  {isExpanded && (
-                    <div className="relative ml-4 mt-0.5 mb-1.5 pl-3 space-y-0.5">
-                      {/* Vertical tree line */}
-                      <div className="absolute left-0 top-0 bottom-0 w-px bg-border" />
+                {/* Sessions */}
+                {isExpanded && (
+                  <div className="pb-2">
+                    {/* New chat button */}
+                    <button
+                      onClick={() => handleNewChat(project.id, project.path)}
+                      className="w-full flex items-center gap-2 px-6 py-1.5 text-xs font-medium text-foreground-secondary hover:text-foreground transition-colors"
+                    >
+                      <Plus size={13} />
+                      New Chat
+                    </button>
 
-                      <div className="flex items-center justify-between px-2 py-1 relative">
-                        <span className="text-xs text-foreground-muted uppercase tracking-wider">
-                          {sessions.length} session{sessions.length !== 1 ? "s" : ""}
-                        </span>
-                        <button
-                          onClick={() => handleNewChat(project.id, project.path)}
-                          className="text-xs font-bold text-foreground-secondary hover:text-foreground flex items-center gap-0.5 px-2 py-0.5 rounded-full border border-border hover:bg-white/10 transition-colors"
-                        >
-                          <Plus size={11} /> New
-                        </button>
-                      </div>
-
-                      {sessions.length === 0 ? (
-                        <p className="text-xs text-foreground-muted italic px-2 py-1">
-                          No sessions yet.
-                        </p>
-                      ) : (
-                        sessions.map((sess) => (
+                    {/* Session list */}
+                    {sessions.length > 0 && (
+                      <div className="mt-0.5">
+                        {sessions.map((sess) => (
                           <SessionItem
                             key={sess.id}
                             session={sess}
                             projectId={project.id}
                             isActive={selectedSessionId === sess.id}
                           />
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
+      </div>
+
+      {/* Branch bar at bottom */}
+      <div className="px-4 py-2.5 border-t border-border shrink-0 flex items-center gap-2">
+        <span className="text-xs text-foreground-muted font-mono">main</span>
       </div>
     </div>
   );
@@ -279,8 +274,8 @@ function SessionItem({
 
   return (
     <div
-      className={`group flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors ${
-        isActive ? "bg-white/12 border border-border" : "hover:bg-white/5 border border-transparent"
+      className={`group flex items-center gap-2 px-6 py-1.5 cursor-pointer transition-colors ${
+        isActive ? "bg-white/10" : "hover:bg-white/[0.03]"
       }`}
       onClick={() => setSelectedSessionId(isActive ? null : session.id)}
     >
@@ -293,19 +288,21 @@ function SessionItem({
         <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[status]}`} />
       )}
 
-      <div className="flex-1 min-w-0 flex items-baseline gap-2">
-        <span
-          className={`text-xs font-medium truncate ${
-            isActive ? "text-foreground" : "text-foreground-secondary"
-          }`}
-        >
-          {session.title || "Untitled"}
-        </span>
-        <span className="text-xs text-foreground-muted shrink-0">
-          {formatRelativeTime(session.createdAt)}
-        </span>
-      </div>
+      {/* Title — truncates, takes available space */}
+      <span
+        className={`text-xs font-medium truncate flex-1 ${
+          isActive ? "text-foreground" : "text-foreground-secondary"
+        }`}
+      >
+        {session.title || "Untitled"}
+      </span>
 
+      {/* Timestamp — always at far right */}
+      <span className="text-xs text-foreground-muted shrink-0">
+        {formatRelativeTime(session.createdAt)}
+      </span>
+
+      {/* Delete on hover */}
       <button
         onClick={(e) => {
           e.stopPropagation();
