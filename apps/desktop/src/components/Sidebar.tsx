@@ -220,8 +220,11 @@ export function Sidebar() {
 
                   {/* Sessions (collapsible) */}
                   {isExpanded && (
-                    <div className="ml-5 mt-0.5 mb-1.5 border-l border-border pl-1.5 space-y-0.5">
-                      <div className="flex items-center justify-between px-2 py-1">
+                    <div className="relative ml-4 mt-0.5 mb-1.5 pl-3 space-y-0.5">
+                      {/* Vertical tree line */}
+                      <div className="absolute left-0 top-0 bottom-0 w-px bg-border" />
+
+                      <div className="flex items-center justify-between px-2 py-1 relative">
                         <span className="text-xs text-foreground-muted uppercase tracking-wider">
                           {sessions.length} session{sessions.length !== 1 ? "s" : ""}
                         </span>
