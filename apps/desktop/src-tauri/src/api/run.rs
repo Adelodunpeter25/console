@@ -39,6 +39,34 @@ pub async fn abort_run(client: &ApiClient, session_id: &str) -> AppResult<serde_
         .await
 }
 
+pub async fn answer_question(
+    client: &ApiClient,
+    session_id: &str,
+    request_id: &str,
+    answer: &serde_json::Value,
+) -> AppResult<serde_json::Value> {
+    client
+        .post(
+            &format!("/sessions/{}/answer", session_id),
+            &serde_json::json!({ "requestId": request_id, "answer": answer }),
+        )
+        .await
+}
+
+pub async fn approve_permission(
+    client: &ApiClient,
+    session_id: &str,
+    request_id: &str,
+    allow: bool,
+) -> AppResult<serde_json::Value> {
+    client
+        .post(
+            &format!("/sessions/{}/approve", session_id),
+            &serde_json::json!({ "requestId": request_id, "allow": allow }),
+        )
+        .await
+}
+
 /// Decode a complete SSE event from accumulated `data:` lines and forward it.
 /// Each `data:` line already had its `data: ` prefix stripped before being
 /// pushed, so the joined buffer is raw JSON — no further prefix stripping.

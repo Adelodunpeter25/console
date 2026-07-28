@@ -36,3 +36,23 @@ pub async fn abort_run(session_id: String) -> AppResult<serde_json::Value> {
     let client = ApiClient::new();
     crate::api::run::abort_run(&client, &session_id).await
 }
+
+#[tauri::command]
+pub async fn answer_question(
+    session_id: String,
+    request_id: String,
+    answer: serde_json::Value,
+) -> AppResult<serde_json::Value> {
+    let client = ApiClient::new();
+    crate::api::run::answer_question(&client, &session_id, &request_id, &answer).await
+}
+
+#[tauri::command]
+pub async fn approve_permission(
+    session_id: String,
+    request_id: String,
+    allow: bool,
+) -> AppResult<serde_json::Value> {
+    let client = ApiClient::new();
+    crate::api::run::approve_permission(&client, &session_id, &request_id, allow).await
+}

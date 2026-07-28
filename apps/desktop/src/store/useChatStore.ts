@@ -1,8 +1,18 @@
 import { create } from "zustand";
 import { toast } from "sonner";
-import type { AgentMessage, AgentSessionEvent } from "@console/types";
+import type { AgentMessage, AgentSessionEvent, AskQuestionRequest, PermissionRequest } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 import { useProviderStore } from "./useProviderStore";
+
+/** A pending question from the agent's ask tool, awaiting user input. */
+export interface PendingQuestion {
+  request: AskQuestionRequest;
+}
+
+/** A pending tool permission request, awaiting user approval. */
+export interface PendingPermission {
+  request: PermissionRequest;
+}
 
 interface ChatState {
   messages: AgentMessage[];
@@ -14,6 +24,10 @@ interface ChatState {
   sessionModelId: string | null;
   /** Provider for the active session (persisted per-session). */
   sessionProvider: string | null;
+  /** Pending ask-question request from the agent, if any. */
+  pendingQuestion: PendingQuestion | null;
+  /** Pending permission request from the agent, if any. */
+  pendingPermission: PendingPermission | null;
 
   loadSession: (sessionId: string) => Promise<void>;
   setInput: (val: string) => void;
@@ -24,6 +38,10 @@ interface ChatState {
   changeModel: (sessionId: string, projectId: string, modelId: string) => void;
   sendMessage: (sessionId: string) => Promise<void>;
   abort: (sessionId: string) => Promise<void>;
+  /** Answer a pending question from the agent. */
+  answerQuestion: (sessionId: string, requestId: string, answer: string | string[]) => Promise<void>;
+  /** Approve or deny a pending permission request. */
+  approvePermission: (sessionId: string, requestId: string, allow: boolean) => Promise<void>;
   clear: () => void;
   handleEvent: (event: AgentSessionEvent) => void;
 }
@@ -64,6 +82,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   streamingThinking: "",
   sessionModelId: null,
   sessionProvider: null,
+  pendingQuestion: null,
+  pendingPermission: null,
 
   loadSession: async (sessionId: string) => {
     try {
@@ -183,6 +203,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ running: false, streamingText: "", streamingThinking: "" });
   },
 
+  answerQuestion: async (sessionId: string, requestId: string, answer: string | string[]) => {
+    set({ pendingQuestion: null });
+    try {
+      await tauriApi.answerQuestion(sessionId, requestId, answer);
+    } catch (err) {
+      toast.error("Failed to send answer. Please try again.");
+      console.error("answerQuestion error:", err);
+    }
+  },
+
+  approvePermission: async (sessionId: string, requestId: string, allow: boolean) => {
+    set({ pendingPermission: null });
+    try {
+      await tauriApi.approvePermission(sessionId, requestId, allow);
+    } catch (err) {
+      toast.error("Failed to send approval. Please try again.");
+      console.error("approvePermission error:", err);
+    }
+  },
+
   clear: () =>
     set({
       messages: [],
@@ -192,6 +232,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       streamingThinking: "",
       sessionModelId: null,
       sessionProvider: null,
+      pendingQuestion: null,
+      pendingPermission: null,
     }),
 
   handleEvent: (event: AgentSessionEvent) => {
@@ -241,6 +283,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         set((s) => ({
           messages: [...s.messages, { role: "toolResult", results: event.results }],
         }));
+        break;
+      case "askQuestion":
+        set({ pendingQuestion: { request: event.request } });
+        break;
+      case "permissionRequest":
+        set({ pendingPermission: { request: event.request } });
         break;
       case "error":
         if (isAbortError(event.error?.message ?? "")) {

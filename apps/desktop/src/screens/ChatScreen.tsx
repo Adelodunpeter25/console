@@ -1,6 +1,6 @@
 import React from "react";
 import { useAppStore, useChatStore, useProjectStore, useProviderStore } from "../store";
-import { MessageList, Composer } from "../components/chat";
+import { MessageList, Composer, InteractionPanel } from "../components/chat";
 
 /**
  * Chat screen — thin orchestrator.
@@ -47,6 +47,7 @@ export function ChatScreen() {
         streamingThinking={streamingThinking}
         running={running}
       />
+      {selectedSessionId && <InteractionPanel sessionId={selectedSessionId} />}
       <Composer
         value={input}
         onChange={setInput}

@@ -4,6 +4,7 @@
  */
 import { Agent } from "../../../agent/src/service/agent.js";
 import { allTools } from "../../../agent/src/tools/index.js";
+import { setAskQuestionHandler } from "../../../agent/src/tools/ask.js";
 import { SqliteSessionStorage } from "../../../agent/src/session/storage.js";
 import { buildSystemPrompt } from "../../../agent/src/systemprompt/builder.js";
 import { createAntigravityStreamFn } from "../../../providers/src/antigravity/stream-fn.js";
@@ -14,6 +15,16 @@ import type { RunPromptDto } from "../types/index.js";
 export class RunService {
   private sessionStorage = new SqliteSessionStorage();
   private activeRuns = new Map<string, AbortController>();
+  /** Pending question answers keyed by requestId. */
+  private pendingQuestions = new Map<
+    string,
+    { resolve: (answer: string | string[]) => void; reject: (err: unknown) => void }
+  >();
+  /** Pending permission approvals keyed by requestId. */
+  private pendingApprovals = new Map<
+    string,
+    { resolve: (allow: boolean) => void; reject: (err: unknown) => void }
+  >();
 
   /**
    * Execute an agent run, streaming lifecycle events to onEvent callback.
@@ -72,12 +83,29 @@ export class RunService {
       approvalMode,
     });
 
+    // Wire the ask-question handler so the ask tool pauses for user input
+    // instead of auto-selecting the first option. The handler emits the
+    // askQuestion event through onEvent and waits for answerQuestion().
+    setAskQuestionHandler((request) => {
+      return new Promise<string | string[]>((resolve, reject) => {
+        this.pendingQuestions.set(request.requestId, { resolve, reject });
+        onEvent({ type: "askQuestion", request });
+      });
+    });
+
     const agent = new Agent({
       model,
       tools: [...allTools] as any,
       systemPrompt,
       streamFn,
       approvalMode,
+      onApproval: (req) => {
+        // executeTool already emitted the permissionRequest event;
+        // we just need to wait for the user's decision.
+        return new Promise<boolean>((resolve, reject) => {
+          this.pendingApprovals.set(req.requestId, { resolve, reject });
+        });
+      },
     });
 
     agent.loadHistory(session.messages);
@@ -120,7 +148,37 @@ export class RunService {
       }
     } finally {
       this.activeRuns.delete(sessionId);
+      // Reject any unresolved pending questions/approvals so the agent
+      // loop doesn't hang forever after the run ends.
+      for (const [, { reject }] of this.pendingQuestions) reject(new Error("Run ended"));
+      this.pendingQuestions.clear();
+      for (const [, { reject }] of this.pendingApprovals) reject(new Error("Run ended"));
+      this.pendingApprovals.clear();
+      // Unset the global ask handler so a stale closure doesn't linger.
+      setAskQuestionHandler(undefined);
     }
+  }
+
+  /**
+   * Answer a pending question from the ask tool.
+   */
+  answerQuestion(requestId: string, answer: string | string[]): boolean {
+    const pending = this.pendingQuestions.get(requestId);
+    if (!pending) return false;
+    this.pendingQuestions.delete(requestId);
+    pending.resolve(answer);
+    return true;
+  }
+
+  /**
+   * Approve or deny a pending tool permission request.
+   */
+  approvePermission(requestId: string, allow: boolean): boolean {
+    const pending = this.pendingApprovals.get(requestId);
+    if (!pending) return false;
+    this.pendingApprovals.delete(requestId);
+    pending.resolve(allow);
+    return true;
   }
 
   /**

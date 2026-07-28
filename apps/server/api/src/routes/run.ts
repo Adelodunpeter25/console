@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { RunService } from "../services/run.service.js";
-import type { RunPromptDto } from "../types/index.js";
+import type { AnswerQuestionDto, ApproveToolPermissionDto, RunPromptDto } from "../types/index.js";
 
 export const runRoutes = new Hono();
 const runService = new RunService();
@@ -58,4 +58,34 @@ runRoutes.post("/sessions/:id/abort", (c) => {
     success: true,
     data: { sessionId, aborted: true },
   });
+});
+
+/**
+ * POST /api/sessions/:id/answer — Answer a pending agent question.
+ */
+runRoutes.post("/sessions/:id/answer", async (c) => {
+  const body = await c.req.json<AnswerQuestionDto>();
+  const ok = runService.answerQuestion(body.requestId, body.answer);
+  if (!ok) {
+    return c.json(
+      { success: false, error: `No pending question for requestId '${body.requestId}'.` },
+      404,
+    );
+  }
+  return c.json({ success: true, data: { answered: true } });
+});
+
+/**
+ * POST /api/sessions/:id/approve — Approve or deny a pending tool permission request.
+ */
+runRoutes.post("/sessions/:id/approve", async (c) => {
+  const body = await c.req.json<ApproveToolPermissionDto>();
+  const ok = runService.approvePermission(body.requestId, body.allow);
+  if (!ok) {
+    return c.json(
+      { success: false, error: `No pending permission for requestId '${body.requestId}'.` },
+      404,
+    );
+  }
+  return c.json({ success: true, data: { approved: body.allow } });
 });

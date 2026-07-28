@@ -111,6 +111,18 @@ export const tauriApi = {
     }),
   abortRun: (sessionId: string) =>
     invoke<unknown>("abort_run", { sessionId }),
+  answerQuestion: (sessionId: string, requestId: string, answer: string | string[]) =>
+    invoke<unknown>("answer_question", {
+      sessionId,
+      requestId,
+      answer,
+    }),
+  approvePermission: (sessionId: string, requestId: string, allow: boolean) =>
+    invoke<unknown>("approve_permission", {
+      sessionId,
+      requestId,
+      allow,
+    }),
 
   listenAgentEvents: (
     sessionId: string,
