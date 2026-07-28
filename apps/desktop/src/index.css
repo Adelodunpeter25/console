@@ -68,21 +68,21 @@
     -webkit-user-select: none;
     user-select: none;
   }
+}
 
-  /* Allow selection inside message content (markdown body, user bubbles,
-     thinking blocks, and tool call details). */
-  .markdown-body,
-  .selectable-text {
-    -webkit-user-select: text;
-    user-select: text;
-  }
+/* Re-enable text selection on actual message content and input fields.
+   Placed outside @layer base so these class/element selectors always win
+   over the universal * rule above. */
+.markdown-body,
+.selectable-text {
+  -webkit-user-select: text;
+  user-select: text;
+}
 
-  /* Allow selection in input/textarea fields. */
-  input,
-  textarea {
-    -webkit-user-select: text;
-    user-select: text;
-  }
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 @layer components {
