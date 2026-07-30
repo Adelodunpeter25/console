@@ -16,7 +16,7 @@ interface StreamingBubbleProps {
 export function StreamingBubble({ text, thinking }: StreamingBubbleProps) {
   return (
     <div className="space-y-2">
-      {thinking && <ThinkingBlock text={thinking} />}
+      {thinking && <ThinkingBlock text={thinking} isStreaming={true} />}
 
       {text && (
         <div className="px-1">
