@@ -56,11 +56,6 @@ export function ProjectSection({ project, sessions, isExpanded }: ProjectSection
             : "text-foreground-secondary hover:text-foreground"
         }`}
       >
-        {/* Active Project Pill/Bar */}
-        {isProjectActive && (
-          <div className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-white rounded-r" />
-        )}
-
         {/* Folder Icon + Name */}
         <div className="flex items-center gap-2.5 truncate flex-1 min-w-0 pr-2">
           {isExpanded ? (
