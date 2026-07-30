@@ -1,14 +1,7 @@
-import type { SessionHeader, SessionStatus } from "@console/types";
-import { X } from "lucide-react";
+import type { SessionHeader } from "@console/types";
+import { Trash2 } from "lucide-react";
 import { useAppStore, useProjectStore } from "../../store";
 import { formatRelativeTime } from "../../utils/time";
-
-const STATUS_DOT: Record<SessionStatus, string> = {
-  idle: "bg-foreground-muted",
-  working: "bg-blue-500",
-  done: "bg-green-500",
-  needs_attention: "bg-amber-500",
-};
 
 interface SessionItemProps {
   session: SessionHeader;
@@ -17,7 +10,7 @@ interface SessionItemProps {
 }
 
 /**
- * Single session row in the sidebar — status dot, title, timestamp, delete.
+ * Single session row in the sidebar — title, timestamp, and hover Delete button.
  */
 export function SessionItem({ session, projectId, isActive }: SessionItemProps) {
   const { setSelectedSessionId } = useAppStore();
@@ -25,10 +18,10 @@ export function SessionItem({ session, projectId, isActive }: SessionItemProps) 
 
   return (
     <div
-      className={`group relative flex items-center justify-between px-3 py-1.5 rounded-md cursor-pointer transition-colors ${
+      className={`group relative flex items-center justify-between px-3 py-1.5 rounded-md cursor-pointer ${
         isActive
           ? "bg-white/[0.08] text-foreground font-medium"
-          : "text-foreground-secondary hover:bg-white/[0.04] hover:text-foreground"
+          : "text-foreground-secondary hover:text-foreground"
       }`}
       onClick={() => setSelectedSessionId(isActive ? null : session.id)}
     >
@@ -47,7 +40,7 @@ export function SessionItem({ session, projectId, isActive }: SessionItemProps) 
         {formatRelativeTime(session.createdAt, true)}
       </span>
 
-      {/* Hover Delete Action */}
+      {/* Hover Delete Action Button */}
       <button
         onClick={(e) => {
           e.stopPropagation();
@@ -57,7 +50,7 @@ export function SessionItem({ session, projectId, isActive }: SessionItemProps) 
         className="hidden group-hover:flex items-center text-foreground-muted hover:text-danger transition-colors shrink-0"
         title="Delete session"
       >
-        <X size={13} />
+        <Trash2 size={13} />
       </button>
     </div>
   );

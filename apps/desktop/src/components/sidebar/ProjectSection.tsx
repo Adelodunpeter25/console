@@ -50,10 +50,10 @@ export function ProjectSection({ project, sessions, isExpanded }: ProjectSection
       {/* Project Header Row */}
       <div
         onClick={handleToggle}
-        className={`group relative flex items-center justify-between px-3 py-1.5 rounded-md cursor-pointer select-none transition-colors ${
+        className={`group relative flex items-center justify-between px-3 py-1.5 rounded-md cursor-pointer select-none ${
           isProjectActive
             ? "text-foreground font-semibold"
-            : "text-foreground-secondary hover:text-foreground hover:bg-white/[0.03]"
+            : "text-foreground-secondary hover:text-foreground"
         }`}
       >
         {/* Active Project Pill/Bar */}
