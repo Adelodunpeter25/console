@@ -21,19 +21,42 @@ export interface ProviderEntry extends ProviderCatalogEntry {
 
 export type { ProviderCatalogEntry } from "../types/index.js";
 
+export const DEFAULT_GEMINI_MODELS: Model[] = [
+  { id: "gemini-2.5-flash", provider: "gemini", contextWindow: 1_048_576 },
+  { id: "gemini-2.5-pro", provider: "gemini", contextWindow: 1_048_576 },
+  { id: "gemini-3-flash", provider: "gemini", contextWindow: 1_048_576 },
+  { id: "gemini-3.1-pro-low", provider: "gemini", contextWindow: 1_048_576 },
+  { id: "gemini-3.1-pro-high", provider: "gemini", contextWindow: 1_048_576 },
+  { id: "gemini-3.5-flash-low", provider: "gemini", contextWindow: 1_048_576 },
+  { id: "gemini-3.6-flash-medium", provider: "gemini", contextWindow: 1_048_576 },
+  { id: "claude-sonnet-4-6", provider: "gemini", contextWindow: 250_000 },
+];
+
+export const DEFAULT_ANTIGRAVITY_MODELS: Model[] = [
+  { id: "gemini-2.5-flash", provider: "antigravity", contextWindow: 1_048_576 },
+  { id: "gemini-2.5-pro", provider: "antigravity", contextWindow: 1_048_576 },
+  { id: "gemini-3-flash", provider: "antigravity", contextWindow: 1_048_576 },
+  { id: "gemini-3.1-pro-low", provider: "antigravity", contextWindow: 1_048_576 },
+  { id: "gemini-3.1-pro-high", provider: "antigravity", contextWindow: 1_048_576 },
+  { id: "gemini-3.5-flash-low", provider: "antigravity", contextWindow: 1_048_576 },
+  { id: "gemini-3.6-flash-medium", provider: "antigravity", contextWindow: 1_048_576 },
+  { id: "claude-sonnet-4-6", provider: "antigravity", contextWindow: 250_000 },
+  { id: "claude-opus-4-6-thinking", provider: "antigravity", contextWindow: 250_000 },
+];
+
 export const PROVIDER_CATALOG: Record<"gemini" | "antigravity", ProviderEntry> = {
   gemini: {
     name: "gemini",
     displayName: "Google Gemini CLI",
     description: "Cloud Code Assist REST endpoint with Gemini CLI OAuth",
-    models: [],
+    models: DEFAULT_GEMINI_MODELS,
     getStreamFn: () => geminiStreamFn,
   },
   antigravity: {
     name: "antigravity",
     displayName: "Google Antigravity",
     description: "Daily Cloud Code Assist endpoint with Antigravity session envelope",
-    models: [],
+    models: DEFAULT_ANTIGRAVITY_MODELS,
     getStreamFn: () => createAntigravityStreamFn(),
   },
 };
@@ -59,7 +82,7 @@ export function findModelInProvider(providerName: string, modelId: string): Mode
 /**
  * Dynamically fetch models from the provider endpoint via /v1internal:fetchAvailableModels.
  * Updates the provider's cached model list if successful.
- * Returns an empty array if offline, unauthenticated, or on network error — no fallbacks.
+ * Falls back to bundled static models if offline, unauthenticated, or on network error.
  */
 export async function fetchModelsForProvider(
   providerName: "gemini" | "antigravity",
@@ -83,8 +106,14 @@ export async function fetchModelsForProvider(
       return discovered;
     }
   } catch {
-    // Network/auth error — no fallback models to offer
+    // Network/auth error — fall back to static models below
   }
 
-  return [];
+  // If dynamic fetch failed or yielded no models, return static/cached models
+  const staticFallback = providerName === "gemini" ? DEFAULT_GEMINI_MODELS : DEFAULT_ANTIGRAVITY_MODELS;
+  if (!provider.models || provider.models.length === 0) {
+    provider.models = staticFallback;
+  }
+
+  return provider.models;
 }
