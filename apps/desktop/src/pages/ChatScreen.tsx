@@ -3,11 +3,8 @@ import { useAppStore, useChatStore, useProjectStore, useProviderStore } from "..
 import { MessageList, Composer, InteractionPanel } from "../components/chat";
 
 /**
- * Chat screen — thin orchestrator.
- *
- * Rendered only when a session is selected (ChatPage handles the empty state).
- * All business logic (model resolution, persistence, send/abort) lives in
- * the stores. This component only wires stores to UI components.
+ * Chat view component — thin orchestrator inside pages/.
+ * Rendered when a session is selected.
  */
 export function ChatScreen() {
   const { selectedSessionId, selectedProjectId } = useAppStore();

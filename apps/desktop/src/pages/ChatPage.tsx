@@ -3,7 +3,7 @@ import { Settings as SettingsIcon } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { TitleBar } from "../components/TitleBar";
 import { Sidebar } from "../components/sidebar";
-import { ChatScreen } from "../screens/ChatScreen";
+import { ChatScreen } from "./ChatScreen";
 import { EmptyState } from "../components/common";
 import { CommandPalette } from "../components/commandpalette";
 import { useAppStore, useServerStore } from "../store";
