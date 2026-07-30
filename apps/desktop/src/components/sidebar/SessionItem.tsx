@@ -35,23 +35,23 @@ export function SessionItem({ session, projectId, isActive }: SessionItemProps) 
         {session.title || "Untitled Chat"}
       </span>
 
-      {/* Relative Time */}
-      <span className="text-[11px] text-foreground-muted shrink-0 group-hover:hidden">
-        {formatRelativeTime(session.createdAt, true)}
-      </span>
-
-      {/* Hover Delete Action Button */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          deleteSession(session.id, projectId);
-          if (isActive) setSelectedSessionId(null);
-        }}
-        className="hidden group-hover:flex items-center text-foreground-muted hover:text-danger transition-colors shrink-0"
-        title="Delete session"
-      >
-        <Trash2 size={13} />
-      </button>
+      {/* Right Slot: Timestamp & Hover Delete Icon */}
+      <div className="relative shrink-0 flex items-center justify-end">
+        <span className="text-[11px] text-foreground-muted group-hover:opacity-0 transition-opacity">
+          {formatRelativeTime(session.createdAt, true)}
+        </span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            deleteSession(session.id, projectId);
+            if (isActive) setSelectedSessionId(null);
+          }}
+          className="absolute inset-0 flex items-center justify-end text-foreground-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          title="Delete session"
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
     </div>
   );
 }

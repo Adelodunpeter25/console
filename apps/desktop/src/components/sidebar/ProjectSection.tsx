@@ -62,7 +62,7 @@ export function ProjectSection({ project, sessions, isExpanded }: ProjectSection
         )}
 
         {/* Folder Icon + Name */}
-        <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
+        <div className="flex items-center gap-2.5 truncate flex-1 min-w-0 pr-2">
           {isExpanded ? (
             <FolderOpen size={16} className="text-foreground shrink-0" />
           ) : (
@@ -73,10 +73,10 @@ export function ProjectSection({ project, sessions, isExpanded }: ProjectSection
           </span>
         </div>
 
-        {/* Hover Quick Add Chat Action */}
+        {/* Quick Add Chat Action */}
         <button
           onClick={handleNewChat}
-          className="hidden group-hover:flex items-center justify-center p-1 text-foreground-muted hover:text-foreground hover:bg-white/10 rounded transition-colors shrink-0"
+          className="p-1 text-foreground-muted hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
           title="New chat in project"
         >
           <Plus size={14} />
