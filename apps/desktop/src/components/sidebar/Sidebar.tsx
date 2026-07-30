@@ -1,13 +1,14 @@
 import React from "react";
-import { FolderOpen, Plus, Search, SquarePen } from "lucide-react";
+import { FolderOpen, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useAppStore, useProjectStore } from "../../store";
 import { ProjectSection } from "./ProjectSection";
+import { SearchBar } from "./SearchBar";
 
 /**
  * Left sidebar — project navigator.
- * Matches screenshot design with Search bar, PROJECTS header, tree view,
- * and bottom + New Project stub button (without Clone button).
+ * Extracted SearchBar component with clear (X) button, PROJECTS header, tree view,
+ * and bottom + New Project stub button.
  */
 export function Sidebar() {
   const { sidebarOpen, expandedProjects, setSelectedProjectId, setSelectedSessionId, toggleProjectExpanded } =
@@ -58,27 +59,12 @@ export function Sidebar() {
 
   return (
     <div className="w-72 bg-sidebar border-r border-border flex flex-col h-full shrink-0 select-none">
-      {/* Top Search Bar + Quick New Chat */}
-      <div className="px-3 pt-3 pb-2 flex items-center gap-2 shrink-0">
-        <div className="flex-1 flex items-center gap-2 bg-white/[0.05] border border-white/10 rounded-lg px-2.5 py-1.5 focus-within:border-white/20 transition-colors">
-          <Search size={14} className="text-foreground-muted shrink-0" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search..."
-            className="w-full bg-transparent text-xs text-foreground placeholder:text-foreground-muted outline-none"
-          />
-        </div>
-
-        <button
-          onClick={handleGlobalNewChat}
-          className="p-1.5 text-foreground-muted hover:text-foreground hover:bg-white/10 rounded-lg transition-colors shrink-0"
-          title="New Chat"
-        >
-          <SquarePen size={16} />
-        </button>
-      </div>
+      {/* Top Search Bar */}
+      <SearchBar
+        value={searchQuery}
+        onChange={setSearchQuery}
+        onNewChat={handleGlobalNewChat}
+      />
 
       {/* Category Header */}
       <div className="px-4 pt-2 pb-1">
