@@ -22,53 +22,43 @@ interface SessionItemProps {
 export function SessionItem({ session, projectId, isActive }: SessionItemProps) {
   const { setSelectedSessionId } = useAppStore();
   const { deleteSession } = useProjectStore();
-  const status = session.status ?? "idle";
 
   return (
     <div
-      className={`group mx-2 flex flex-col gap-0.5 px-3 py-1.5 rounded-lg cursor-pointer transition-colors ${
-        isActive ? "bg-white/10" : "hover:bg-white/[0.04]"
+      className={`group relative flex items-center justify-between px-3 py-1.5 rounded-md cursor-pointer transition-colors ${
+        isActive
+          ? "bg-white/[0.08] text-foreground font-medium"
+          : "text-foreground-secondary hover:bg-white/[0.04] hover:text-foreground"
       }`}
       onClick={() => setSelectedSessionId(isActive ? null : session.id)}
     >
-      {/* Row 1: status indicator + title + timestamp */}
-      <div className="flex items-center gap-2">
-        {status === "working" ? (
-          <div className="w-3.5 h-3.5 shrink-0 flex items-center justify-center">
-            <div className="w-3 h-3 border-[1.5px] border-blue-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : (
-          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[status]}`} />
-        )}
+      {/* Active Indicator Bar */}
+      {isActive && (
+        <div className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-white rounded-r" />
+      )}
 
-        <span
-          className={`text-xs font-medium truncate flex-1 ${
-            isActive ? "text-foreground" : "text-foreground-secondary"
-          }`}
-        >
-          {session.title || "Untitled"}
-        </span>
-
-        <span className="text-xs text-foreground-muted shrink-0">
-          {formatRelativeTime(session.createdAt)}
-        </span>
-
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            deleteSession(session.id, projectId);
-            if (isActive) setSelectedSessionId(null);
-          }}
-          className="text-foreground-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-        >
-          <X size={12} />
-        </button>
-      </div>
-
-      {/* Row 2: branch name */}
-      <span className="text-xs text-foreground-muted font-mono pl-6">
-        main
+      {/* Title */}
+      <span className="text-xs truncate flex-1 pr-2">
+        {session.title || "Untitled Chat"}
       </span>
+
+      {/* Relative Time */}
+      <span className="text-[11px] text-foreground-muted shrink-0 group-hover:hidden">
+        {formatRelativeTime(session.createdAt, true)}
+      </span>
+
+      {/* Hover Delete Action */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          deleteSession(session.id, projectId);
+          if (isActive) setSelectedSessionId(null);
+        }}
+        className="hidden group-hover:flex items-center text-foreground-muted hover:text-danger transition-colors shrink-0"
+        title="Delete session"
+      >
+        <X size={13} />
+      </button>
     </div>
   );
 }
