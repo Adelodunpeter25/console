@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  ChevronRight,
   Wrench,
   AlertCircle,
   CheckCircle2,
@@ -41,7 +40,7 @@ const TOOL_META: Record<string, { label: string; icon: React.ElementType }> = {
   listDir: { label: "List Directory", icon: FolderTree },
   fetch: { label: "Fetch URL", icon: Globe },
   webSearch: { label: "Web Search", icon: Globe },
-  task: { label: "Delegate Task", icon: Sparkles },
+  subagent: { label: "Subagent", icon: Sparkles },
   ask: { label: "Ask Question", icon: HelpCircle },
   todo: { label: "Todo", icon: ListTodo },
 };
@@ -106,15 +105,11 @@ const ToolCallRow = React.memo(function ToolCallRow({
   return (
     <div className="border-b border-border last:border-b-0">
       <button
+        type="button"
+        aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 transition-colors"
+        className="flex w-full items-center gap-2 bg-white/[0.02] px-3 py-2 text-left transition-colors hover:bg-white/[0.06]"
       >
-        <ChevronRight
-          size={13}
-          className={`text-foreground-muted transition-transform shrink-0 ${
-            open ? "rotate-90" : ""
-          }`}
-        />
         <Icon size={14} className="text-blue-400 shrink-0" />
         <span className="text-xs font-medium text-foreground-secondary shrink-0">
           {meta.label}
@@ -179,7 +174,7 @@ const ToolCallRow = React.memo(function ToolCallRow({
 export function ToolCallBlock({ calls, results }: ToolCallBlockProps) {
   // Tool calls are collapsed by default — the user clicks to expand.
   return (
-    <div className="rounded-lg border border-tool-border bg-tool overflow-hidden">
+    <div className="overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.015]">
       {calls.map((call, i) => {
         const result = results?.find((r) => r.toolCallId === call.id);
         return (

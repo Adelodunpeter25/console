@@ -17,6 +17,6 @@ export const DEFAULT_TOOL_NAMES = [
   "webSearch",
   "fetch",
   "todo",
-  "task",
+  "subagent",
   "ask",
 ] as const;

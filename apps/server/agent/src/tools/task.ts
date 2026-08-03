@@ -38,7 +38,7 @@ The subagent runs in its own memory context and returns its final summary result
 
 export function createTaskTool(context?: TaskToolContext): AgentTool<typeof inputSchema> {
   return {
-    name: "task",
+    name: "subagent",
     description,
     tier: "read",
     inputSchema,
@@ -62,7 +62,7 @@ export function createTaskTool(context?: TaskToolContext): AgentTool<typeof inpu
       const stream = agentLoop(prompt, {
         model,
         systemPrompt: subagentSystemPrompt,
-        tools: tools.filter((t) => t.name !== "task"), // Prevent infinite recursion
+        tools: tools.filter((t) => t.name !== "subagent"), // Prevent infinite recursion
         streamFn,
         maxTurns,
         approvalMode: "accept-edits",
@@ -92,4 +92,6 @@ export function createTaskTool(context?: TaskToolContext): AgentTool<typeof inpu
   };
 }
 
-export const taskTool = createTaskTool();
+/** Backward-compatible export name; the model-facing tool is `subagent`. */
+export const subagentTool = createTaskTool();
+export const taskTool = subagentTool;

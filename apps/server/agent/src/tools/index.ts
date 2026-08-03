@@ -21,7 +21,7 @@ import { globTool } from "./glob.js";
 import { grepTool } from "./grep.js";
 import { listDirTool } from "./list-dir.js";
 import { readFileTool } from "./read-file.js";
-import { taskTool } from "./task.js";
+import { subagentTool } from "./task.js";
 import { todoTool } from "./todo.js";
 import { webSearchTool } from "./web-search.js";
 import { writeFileTool } from "./write-file.js";
@@ -47,7 +47,7 @@ export const allTools = [
   fetchTool,
   // Task management & subagents
   todoTool,
-  taskTool,
+  subagentTool,
   // Interactive UI
   askTool,
 ] as const;

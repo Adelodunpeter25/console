@@ -114,10 +114,6 @@ export function Composer({
           <ApprovalModeSelector value={approvalMode} onChange={onApprovalModeChange} />
         </div>
 
-        <p className="text-xs text-foreground-muted text-center mt-2">
-          <kbd className="font-mono">Enter</kbd> to send ·{" "}
-          <kbd className="font-mono">Shift+Enter</kbd> for newline
-        </p>
       </div>
     </div>
   );

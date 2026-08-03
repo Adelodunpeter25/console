@@ -156,7 +156,7 @@ export class Agent {
     }
 
     const tools = this._tools.map((tool) =>
-      tool.name === "task"
+      tool.name === "subagent"
         ? createTaskTool({
             model: this._model,
             streamFn: this._streamFn,
