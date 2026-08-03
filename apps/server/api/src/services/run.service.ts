@@ -113,6 +113,11 @@ export class RunService {
       },
     });
 
+    // Persist the user message immediately so it survives crashes, errors, and
+    // session switches even if the run never completes. The agent also appends
+    // this prompt to its internal history; we skip the duplicate at the end.
+    this.sessionStorage.appendMessage(sessionId, { role: "user", content: prompt });
+
     agent.loadHistory(session.messages);
 
     const abortController = new AbortController();
@@ -123,12 +128,20 @@ export class RunService {
     try {
       const eventStream = agent.run(prompt, abortController.signal);
 
+      // Track run failures reported by the agent loop (stream errors, max
+      // turns, provider failures) so they can be persisted as error messages.
+      let runError: string | null = null;
+
       for await (const event of eventStream) {
         await onEvent(event);
 
         // Mark needs_attention when the agent asks a question or requests permission
         if (event.type === "askQuestion" || event.type === "permissionRequest") {
           this.sessionStorage.updateSessionStatus(sessionId, "needs_attention");
+        }
+
+        if (event.type === "error") {
+          runError = event.error?.message ?? "Unknown agent error";
         }
       }
 
@@ -137,8 +150,21 @@ export class RunService {
       // preserves the correct conversation order (user → assistant → tool
       // result → assistant → …) on reload.
       const updatedMessages = await eventStream.result();
-      this.sessionStorage.appendMessages(sessionId, updatedMessages.slice(session.messages.length));
-      this.sessionStorage.updateSessionStatus(sessionId, "done");
+      const persistedBefore = session.messages.length;
+      const newMessages = updatedMessages
+        .slice(persistedBefore)
+        // The user prompt is already persisted above — skip it to avoid a duplicate row.
+        .filter((m) => !(m.role === "user" && m.content === prompt));
+      this.sessionStorage.appendMessages(sessionId, newMessages);
+
+      // Persist run failures as an error bubble so they survive reloads.
+      if (runError) {
+        this.sessionStorage.appendMessage(sessionId, {
+          role: "assistant",
+          content: [{ type: "text", text: `Error: ${runError}` }],
+        });
+      }
+      this.sessionStorage.updateSessionStatus(sessionId, runError ? "needs_attention" : "done");
     } catch (err) {
       // User-initiated abort is normal control flow — don't mark as needs_attention.
       const isAbort =
@@ -149,6 +175,12 @@ export class RunService {
         this.sessionStorage.updateSessionStatus(sessionId, "done");
       } else {
         this.sessionStorage.updateSessionStatus(sessionId, "needs_attention");
+        // Persist the failure so the error survives session switches.
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        this.sessionStorage.appendMessage(sessionId, {
+          role: "assistant",
+          content: [{ type: "text", text: `Error: ${errorMsg}` }],
+        });
         throw err;
       }
     } finally {

@@ -249,6 +249,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (get().activeSessionId === sessionId) {
         syncSessionStatus(sessionId, hadError ? "needs_attention" : "done");
       }
+      // Refresh the header so a first-prompt auto-rename of the title shows
+      // up in the sidebar (the server renames it in the DB when the run starts).
+      useProjectStore.getState().refreshSessionHeader(sessionId);
     }
   },
 

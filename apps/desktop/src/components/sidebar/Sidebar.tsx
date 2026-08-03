@@ -1,20 +1,17 @@
 import React from "react";
-import { FolderOpen, Plus } from "lucide-react";
+import { FolderOpen, Plus, SquarePen } from "lucide-react";
 import { toast } from "sonner";
 import { useAppStore, useProjectStore } from "../../store";
 import { ProjectSection } from "./ProjectSection";
-import { SearchBar } from "./SearchBar";
 
 /**
  * Left sidebar — project navigator.
- * Extracted SearchBar component with clear (X) button, PROJECTS header, tree view,
- * and bottom + New Project stub button.
+ * PROJECTS header, tree view, and bottom + New Project stub button.
  */
 export function Sidebar() {
   const { sidebarOpen, expandedProjects, setSelectedProjectId, setSelectedSessionId, toggleProjectExpanded } =
     useAppStore();
   const { projects, loading, loadProjects, sessionsByProject, createSession, addProject } = useProjectStore();
-  const [searchQuery, setSearchQuery] = React.useState("");
 
   React.useEffect(() => {
     loadProjects();
@@ -48,23 +45,18 @@ export function Sidebar() {
     }
   };
 
-  const filteredProjects = projects.filter((project) => {
-    if (!searchQuery.trim()) return true;
-    const query = searchQuery.toLowerCase();
-    const matchesProject = project.name.toLowerCase().includes(query);
-    const projectSessions = sessionsByProject[project.id] ?? [];
-    const matchesSession = projectSessions.some((s) => s.title?.toLowerCase().includes(query));
-    return matchesProject || matchesSession;
-  });
-
   return (
     <div className="w-72 bg-sidebar border-r border-border flex flex-col h-full shrink-0 select-none">
-      {/* Top Search Bar */}
-      <SearchBar
-        value={searchQuery}
-        onChange={setSearchQuery}
-        onNewChat={handleGlobalNewChat}
-      />
+      {/* Top Actions Bar */}
+      <div className="px-3 pt-3 pb-2 flex items-center justify-end shrink-0">
+        <button
+          onClick={handleGlobalNewChat}
+          className="p-1.5 text-foreground-muted hover:text-foreground rounded-lg shrink-0 cursor-pointer"
+          title="New Chat"
+        >
+          <SquarePen size={16} />
+        </button>
+      </div>
 
       {/* Category Header */}
       <div className="px-4 pt-2 pb-1">
@@ -79,20 +71,18 @@ export function Sidebar() {
           <div className="flex items-center justify-center py-8">
             <span className="text-xs text-foreground-muted">Loading projects...</span>
           </div>
-        ) : filteredProjects.length === 0 ? (
+        ) : projects.length === 0 ? (
           <div className="px-2 py-8 text-center">
             <FolderOpen size={24} className="mx-auto text-foreground-muted mb-2" />
-            <p className="text-xs text-foreground-muted">
-              {searchQuery ? "No matching projects or chats." : "No projects yet."}
-            </p>
+            <p className="text-xs text-foreground-muted">No projects yet.</p>
           </div>
         ) : (
-          filteredProjects.map((project) => (
+          projects.map((project) => (
             <ProjectSection
               key={project.id}
               project={project}
               sessions={sessionsByProject[project.id] ?? []}
-              isExpanded={expandedProjects.has(project.id) || Boolean(searchQuery.trim())}
+              isExpanded={expandedProjects.has(project.id)}
             />
           ))
         )}

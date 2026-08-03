@@ -22,6 +22,8 @@ interface ProjectState {
   deleteSession: (id: string, projectId: string) => Promise<void>;
   /** Update a session's status in-place across all project buckets. */
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
+  /** Re-fetch a session header from the backend and patch it in-place (e.g. after an auto-renamed title). */
+  refreshSessionHeader: (sessionId: string) => Promise<void>;
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -116,5 +118,29 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         ? { sessionsByProject: { ...s.sessionsByProject, ...updated } }
         : s;
     });
+  },
+
+  refreshSessionHeader: async (sessionId) => {
+    try {
+      const detail = await tauriApi.getSession(sessionId);
+      const header = detail.header;
+      set((s) => {
+        const updated: Record<string, SessionHeader[]> = {};
+        let changed = false;
+        for (const [pid, sessions] of Object.entries(s.sessionsByProject)) {
+          if (sessions.some((sess) => sess.id === sessionId)) {
+            changed = true;
+            updated[pid] = sessions.map((sess) =>
+              sess.id === sessionId ? { ...sess, ...header } : sess,
+            );
+          }
+        }
+        return changed
+          ? { sessionsByProject: { ...s.sessionsByProject, ...updated } }
+          : s;
+      });
+    } catch {
+      // Ignore refresh failures — the header will update on next load.
+    }
   },
 }));
