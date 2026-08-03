@@ -129,16 +129,18 @@ export function DropdownSearch({
 }) {
   return (
     <div className="relative px-1.5 pb-1">
-      <Search
-        size={13}
-        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted"
-      />
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="h-8 w-full rounded-md border border-white/[0.16] bg-[#1d1d1d] pl-8 pr-2 text-xs text-foreground outline-none placeholder:text-[#737373] transition-colors hover:border-white/[0.22] focus:border-white/[0.28] focus:bg-[#202020] focus:ring-1 focus:ring-white/[0.06]"
-      />
+      <div className="relative">
+        <Search
+          size={13}
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted"
+        />
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className="h-8 w-full rounded-md border border-white/[0.16] bg-[#1d1d1d] pl-8 pr-2 text-xs text-foreground outline-none placeholder:text-[#737373] transition-colors hover:border-white/[0.22] focus:border-white/[0.28] focus:bg-[#202020] focus:ring-1 focus:ring-white/[0.06]"
+        />
+      </div>
     </div>
   );
 }
