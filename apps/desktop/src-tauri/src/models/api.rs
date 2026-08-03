@@ -26,6 +26,7 @@ pub struct UpdateSessionDto {
     pub title: Option<String>,
     pub model_id: Option<String>,
     pub provider: Option<String>,
+    pub approval_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

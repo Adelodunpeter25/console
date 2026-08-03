@@ -44,12 +44,14 @@ pub async fn update_session(
     title: Option<String>,
     model_id: Option<String>,
     provider: Option<String>,
+    approval_mode: Option<String>,
 ) -> AppResult<SessionHeader> {
     let client = ApiClient::new();
     let dto = UpdateSessionDto {
         title,
         model_id,
         provider,
+        approval_mode,
     };
     crate::api::sessions::update_session(&client, &id, &dto).await
 }

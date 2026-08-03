@@ -9,7 +9,7 @@ import { SqliteSessionStorage } from "../../../agent/src/session/storage.js";
 import { buildSystemPrompt } from "../../../agent/src/systemprompt/builder.js";
 import { createAntigravityStreamFn } from "../../../providers/src/antigravity/stream-fn.js";
 import { geminiStreamFn } from "../../../providers/src/gemini/stream-fn.js";
-import type { AgentSessionEvent, Model } from "../../../agent/src/types/index.js";
+import type { AgentSessionEvent, ApprovalMode, Model } from "../../../agent/src/types/index.js";
 import type { RunPromptDto } from "../types/index.js";
 
 export class RunService {
@@ -67,7 +67,12 @@ export class RunService {
 
     const provider = dto.provider || session.header.provider || "antigravity";
     const modelId = dto.modelId || session.header.modelId || "gemini-2.5-pro";
-    const approvalMode = dto.approvalMode || "always-ask";
+    // Use the approvalMode from the request; fall back to the persisted session value,
+    // then to "always-ask" as the safe default. Never silently run without a mode.
+    const approvalMode = (dto.approvalMode || session.header.approvalMode || "always-ask") as ApprovalMode;
+
+    // Persist the chosen approvalMode to the DB so it survives reloads.
+    this.sessionStorage.updateApprovalMode(sessionId, approvalMode);
 
     const model: Model = {
       id: modelId,

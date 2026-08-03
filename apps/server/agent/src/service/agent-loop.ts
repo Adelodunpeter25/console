@@ -157,6 +157,16 @@ async function executeTool(
         await onToolResult?.(call, result);
         return result;
       }
+    } else {
+      // No approval handler registered — deny by default to prevent silent bypass.
+      const result: ToolResult = {
+        toolCallId: call.id,
+        toolName: call.name,
+        content: `Execution denied: no approval handler registered for tool '${call.name}' (${approval.tier} tier) in '${approvalMode}' mode.`,
+        isError: true,
+      };
+      await onToolResult?.(call, result);
+      return result;
     }
   }
 

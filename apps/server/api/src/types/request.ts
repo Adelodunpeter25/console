@@ -13,6 +13,7 @@ export interface UpdateSessionDto {
   title?: string;
   modelId?: string;
   provider?: "gemini" | "antigravity";
+  approvalMode?: "always-ask" | "accept-edits" | "plan-mode" | "full-access";
 }
 
 export interface RunPromptDto {

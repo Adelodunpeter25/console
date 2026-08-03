@@ -15,6 +15,7 @@ export interface SessionHeader {
   updatedAt: number;
   messageCount?: number;
   status?: SessionStatus;
+  approvalMode?: string;
 }
 
 export interface SessionContext {

@@ -131,6 +131,10 @@ export class SqliteSessionStorage {
     return Sessions.updateModel(this.state, sessionId, modelId, provider);
   }
 
+  updateApprovalMode(sessionId: string, approvalMode: string): boolean {
+    return Sessions.updateApprovalMode(this.state, sessionId, approvalMode);
+  }
+
   // MARK: - Lifecycle
 
   clearAll(): void {

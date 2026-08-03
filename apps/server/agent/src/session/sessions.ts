@@ -121,6 +121,7 @@ interface CreateSessionOptions {
   projectId?: string;
   modelId: string;
   provider: string;
+  approvalMode?: string;
 }
 
 export function createSession(state: StorageState, options: CreateSessionOptions): SessionHeader {
@@ -129,25 +130,26 @@ export function createSession(state: StorageState, options: CreateSessionOptions
   const now = Date.now();
   const title = options.title?.trim() || "New Session";
   const projectId = options.projectId || "default";
+  const approvalMode = options.approvalMode ?? "always-ask";
 
   // 1. Write header to the global index.
   globalDb
     .prepare(
       `INSERT INTO sessions
-        (id, title, cwd, project_id, model_id, provider, message_count, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+        (id, title, cwd, project_id, model_id, provider, message_count, approval_mode, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
     )
-    .run(id, title, options.cwd, projectId, options.modelId, options.provider, now, now);
+    .run(id, title, options.cwd, projectId, options.modelId, options.provider, approvalMode, now, now);
 
   // 2. Initialize the per-session DB with the authoritative meta row.
   const sessionDb = getSessionDb(state, id, projectId);
   sessionDb
     .prepare(
       `INSERT INTO session_meta
-        (id, title, cwd, project_id, model_id, provider, created_at, updated_at)
-       VALUES (1, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, title, cwd, project_id, model_id, provider, approval_mode, created_at, updated_at)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(title, options.cwd, projectId, options.modelId, options.provider, now, now);
+    .run(title, options.cwd, projectId, options.modelId, options.provider, approvalMode, now, now);
 
   return {
     id,
@@ -155,6 +157,7 @@ export function createSession(state: StorageState, options: CreateSessionOptions
     cwd: options.cwd,
     modelId: options.modelId,
     provider: options.provider,
+    approvalMode,
     createdAt: now,
     updatedAt: now,
     messageCount: 0,
@@ -245,7 +248,7 @@ export function loadSession(
     const sessionDb = getSessionDb(state, sessionId, projectId);
     meta = (sessionDb
       .prepare(
-        `SELECT title, cwd, project_id, model_id, provider, created_at, updated_at FROM session_meta WHERE id = 1`,
+        `SELECT title, cwd, project_id, model_id, provider, approval_mode, created_at, updated_at FROM session_meta WHERE id = 1`,
       )
       .get() as SessionMetaRow | undefined) ?? null;
 
@@ -261,6 +264,7 @@ export function loadSession(
   const resolvedProjectId = meta?.project_id ?? projectId ?? indexRow?.project_id ?? "default";
   const modelId = meta?.model_id ?? indexRow?.model_id ?? "gemini-2.5-pro";
   const provider = meta?.provider ?? indexRow?.provider ?? "antigravity";
+  const approvalMode = meta?.approval_mode ?? indexRow?.approval_mode ?? "always-ask";
   const createdAt = meta?.created_at ?? indexRow?.created_at ?? Date.now();
   const updatedAt = meta?.updated_at ?? indexRow?.updated_at ?? createdAt;
 
@@ -292,6 +296,7 @@ export function loadSession(
       cwd,
       modelId,
       provider,
+      approvalMode,
       createdAt,
       updatedAt,
       messageCount: messages.length,
@@ -408,6 +413,31 @@ export function updateModel(
   const info = globalDb
     .prepare(`UPDATE sessions SET model_id = ?, provider = ?, updated_at = ? WHERE id = ?`)
     .run(modelId, provider, now, sessionId);
+  return info.changes > 0;
+}
+
+export function updateApprovalMode(
+  state: StorageState,
+  sessionId: string,
+  approvalMode: string,
+): boolean {
+  const { globalDb, storageDir } = state;
+  const projectId = getProjectIdBySessionId(globalDb, sessionId);
+  const now = Date.now();
+
+  if (projectId) {
+    const dbPath = getSessionDbPath(storageDir, projectId, sessionId);
+    if (state.sessionDbs.has(sessionId) || fs.existsSync(dbPath)) {
+      const sessionDb = getSessionDb(state, sessionId, projectId);
+      sessionDb
+        .prepare(`UPDATE session_meta SET approval_mode = ?, updated_at = ? WHERE id = 1`)
+        .run(approvalMode, now);
+    }
+  }
+
+  const info = globalDb
+    .prepare(`UPDATE sessions SET approval_mode = ?, updated_at = ? WHERE id = ?`)
+    .run(approvalMode, now, sessionId);
   return info.changes > 0;
 }
 

@@ -32,6 +32,7 @@ export interface SessionMetaRow {
   project_id: string | null;
   model_id: string;
   provider: string;
+  approval_mode: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -44,6 +45,7 @@ export interface SessionIndexRow {
   project_id: string | null;
   model_id: string;
   provider: string;
+  approval_mode: string | null;
   message_count: number;
   status: string | null;
   created_at: number;

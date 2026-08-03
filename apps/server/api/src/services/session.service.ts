@@ -48,6 +48,9 @@ export class SessionService {
       const provider = dto.provider || current?.header.provider || "antigravity";
       this.storage.updateModel(sessionId, dto.modelId, provider);
     }
+    if (dto.approvalMode) {
+      this.storage.updateApprovalMode(sessionId, dto.approvalMode);
+    }
 
     const updated = this.storage.loadSession(sessionId);
     return updated ? updated.header : null;

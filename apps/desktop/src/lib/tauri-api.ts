@@ -66,6 +66,7 @@ export const tauriApi = {
       title: dto.title,
       modelId: dto.modelId,
       provider: dto.provider,
+      approvalMode: dto.approvalMode,
     }),
   deleteSession: (id: string) => invoke<unknown>("delete_session", { id }),
 

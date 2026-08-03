@@ -15,6 +15,7 @@ pub struct SessionHeader {
     pub updated_at: f64,
     pub message_count: Option<u64>,
     pub status: Option<String>,
+    pub approval_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

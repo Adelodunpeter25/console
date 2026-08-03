@@ -45,7 +45,7 @@ interface ChatState {
    * catalog, updates local state, and persists the change to the backend.
    */
   changeModel: (sessionId: string, projectId: string, modelId: string) => void;
-  /** Set the approval mode for agent runs. */
+  /** Set the approval mode for agent runs. Persists to backend if a session is active. */
   setApprovalMode: (mode: ApprovalMode) => void;
   sendMessage: (sessionId: string) => Promise<void>;
   abort: (sessionId: string) => Promise<void>;
@@ -119,6 +119,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         streamingThinking: "",
         sessionModelId: detail.header.modelId ?? null,
         sessionProvider: detail.header.provider ?? null,
+        // Restore the persisted approvalMode so the UI reflects what's in the DB.
+        approvalMode: (detail.header.approvalMode as ApprovalMode) ?? "always-ask",
       });
       // Sync the server's authoritative status to the sidebar.
       syncSessionStatus(sessionId, detail.header.status ?? "idle");
@@ -150,7 +152,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
   },
 
-  setApprovalMode: (mode) => set({ approvalMode: mode }),
+  setApprovalMode: (mode) => {
+    set({ approvalMode: mode });
+    // Persist to the backend so mode survives reloads (best-effort).
+    const activeSessionId = get().activeSessionId;
+    if (activeSessionId) {
+      tauriApi
+        .updateSession(activeSessionId, { approvalMode: mode })
+        .catch(() => {
+          // Silently ignore — local state is already updated.
+        });
+    }
+  },
 
   sendMessage: async (sessionId: string) => {
     const { input, running, sessionModelId, sessionProvider, approvalMode } = get();
