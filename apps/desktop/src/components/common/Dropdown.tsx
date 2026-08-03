@@ -79,7 +79,7 @@ export function Dropdown({ label, heading, onOpen, width = 256, children }: Drop
                 {heading}
               </span>
             </div>
-            <div>{children}</div>
+            <div className="max-h-80 overflow-y-auto">{children}</div>
           </div>
         </DropdownContext.Provider>
       )}
