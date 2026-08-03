@@ -241,14 +241,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (get().activeSessionId === sessionId) {
         set({ running: false, streamingText: "", streamingThinking: "" });
       }
-      // Reload after a clean run so persisted turns (tools, etc.) match server.
-      // loadSession also syncs the server's authoritative status to the sidebar.
-      // Skip on error so inline error bubbles aren't wiped by a stale session.
-      // Skip if the user has already navigated to a different session.
-      if (!hadError && get().activeSessionId === sessionId) {
-        await get().loadSession(sessionId);
-      } else if (hadError) {
-        syncSessionStatus(sessionId, "needs_attention");
+      // Sync sidebar status based on whether the run succeeded or had an error.
+      // Do NOT call loadSession here — it replaces the entire messages array with
+      // only DB-persisted data, which permanently wipes any in-memory error bubbles
+      // that appeared before this run. All messages are already correct in memory
+      // via handleEvent (modelStreamEnd, toolExecutionEnd, etc.).
+      if (get().activeSessionId === sessionId) {
+        syncSessionStatus(sessionId, hadError ? "needs_attention" : "done");
       }
     }
   },
