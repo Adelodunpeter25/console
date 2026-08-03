@@ -54,25 +54,32 @@ export function Dropdown({ label, heading, onOpen, width = 256, children }: Drop
   return (
     <div ref={ref} className="relative">
       <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
         onClick={handleToggle}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors"
+        className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-foreground-secondary outline-none transition-colors hover:bg-white/[0.06] hover:text-foreground focus-visible:bg-white/[0.08] focus-visible:text-foreground"
       >
         {label}
-        <ChevronDown size={14} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown
+          size={13}
+          className={`text-foreground-muted transition-transform ${open ? "rotate-180" : ""}`}
+        />
       </button>
 
       {open && (
         <DropdownContext.Provider value={{ close }}>
           <div
-            className="absolute bottom-full left-0 mb-2 bg-card border border-border-strong rounded-xl shadow-2xl overflow-hidden z-50"
+            role="menu"
+            className="absolute bottom-full left-0 z-50 mb-1.5 max-h-[var(--available-height)] min-w-32 origin-bottom-left overflow-x-hidden overflow-y-auto rounded-lg border border-white/[0.1] bg-card p-1 text-foreground shadow-lg ring-1 ring-foreground/10"
             style={{ width }}
           >
-            <div className="px-3 py-2 border-b border-border">
-              <span className="text-xs font-semibold text-foreground-muted uppercase tracking-wider">
+            <div className="px-1.5 py-1 text-[10px] font-medium uppercase tracking-wider text-foreground-muted">
+              <span>
                 {heading}
               </span>
             </div>
-            <div className="max-h-64 overflow-y-auto">{children}</div>
+            <div>{children}</div>
           </div>
         </DropdownContext.Provider>
       )}
@@ -94,14 +101,18 @@ export function DropdownItem({ selected, onClick, children }: DropdownItemProps)
   const { close } = React.useContext(DropdownContext);
   return (
     <button
+      type="button"
+      role="menuitem"
       onClick={() => {
         onClick();
         close();
       }}
-      className="w-full flex items-center justify-between px-3 py-2 text-sm text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors text-left"
+      className="group relative flex w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1.5 pr-8 text-left text-xs text-foreground-secondary outline-none transition-colors hover:bg-white/[0.07] hover:text-foreground focus-visible:bg-white/[0.08] focus-visible:text-foreground"
     >
-      <span className="truncate font-mono text-xs">{children}</span>
-      {selected && <Check size={14} className="text-success shrink-0" />}
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      <span className="pointer-events-none absolute right-2 flex items-center justify-center text-success">
+        {selected && <Check size={13} />}
+      </span>
     </button>
   );
 }
@@ -112,7 +123,7 @@ export function DropdownItem({ selected, onClick, children }: DropdownItemProps)
 
 export function DropdownGroupHeading({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-3 py-1.5 text-xs font-semibold text-foreground-muted uppercase tracking-wider bg-white/[0.02]">
+    <div className="px-1.5 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wider text-foreground-muted first:pt-1">
       {children}
     </div>
   );
