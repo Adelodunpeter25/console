@@ -1,6 +1,7 @@
 import React from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useProviderStore } from "../../store";
-import { Dropdown, DropdownItem, DropdownGroupHeading, DropdownSearch } from "./Dropdown";
+import { Dropdown, DropdownItem, DropdownSearch } from "./Dropdown";
 
 interface ModelSelectorProps {
   value: string | null;
@@ -16,6 +17,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
   const { providers, modelsByProvider, loadProviders, loadModels, loadingProviders, loadingModels } =
     useProviderStore();
   const [search, setSearch] = React.useState("");
+  const [collapsedProviders, setCollapsedProviders] = React.useState<Set<string>>(new Set());
   const query = search.trim().toLowerCase();
 
   React.useEffect(() => {
@@ -36,6 +38,15 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
       if (!modelsByProvider[p.name]) {
         loadModels(p.name).catch(() => {});
       }
+    });
+  };
+
+  const toggleProvider = (providerId: string) => {
+    setCollapsedProviders((current) => {
+      const next = new Set(current);
+      if (next.has(providerId)) next.delete(providerId);
+      else next.add(providerId);
+      return next;
     });
   };
 
@@ -60,22 +71,36 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
           (model) => !query || model.id.toLowerCase().includes(query),
         );
         const isLoading = loadingModels[provider.name];
+        if (!isLoading && models.length === 0) return null;
+        const collapsed = collapsedProviders.has(provider.name) && !query;
         return (
           <div key={provider.name}>
-            <DropdownGroupHeading>{provider.displayName}</DropdownGroupHeading>
-            {isLoading ? (
-              <div className="px-3 py-2 text-xs text-foreground-muted">Loading models...</div>
-            ) : (
-              models.map((model) => (
-                <DropdownItem
-                  key={model.id}
-                  selected={value === model.id}
-                  onClick={() => onChange(model.id)}
-                >
-                  {model.id}
-                </DropdownItem>
-              ))
-            )}
+            <button
+              type="button"
+              onClick={() => toggleProvider(provider.name)}
+              aria-expanded={!collapsed}
+              className="flex w-full items-center gap-1.5 rounded-md px-1.5 pb-1 pt-2 text-left text-[10px] font-medium uppercase tracking-wider text-foreground-muted outline-none transition-colors hover:text-foreground-secondary focus-visible:text-foreground"
+            >
+              {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+              <span className="truncate">{provider.displayName}</span>
+              <span className="ml-auto text-[9px] normal-case tracking-normal text-foreground-muted/70">
+                {models.length}
+              </span>
+            </button>
+            {!collapsed &&
+              (isLoading ? (
+                <div className="px-3 py-2 text-xs text-foreground-muted">Loading models...</div>
+              ) : (
+                models.map((model) => (
+                  <DropdownItem
+                    key={model.id}
+                    selected={value === model.id}
+                    onClick={() => onChange(model.id)}
+                  >
+                    {model.id}
+                  </DropdownItem>
+                ))
+              ))}
           </div>
         );
       })}
