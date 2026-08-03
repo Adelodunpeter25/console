@@ -64,8 +64,9 @@ runRoutes.post("/sessions/:id/abort", (c) => {
  * POST /api/sessions/:id/answer — Answer a pending agent question.
  */
 runRoutes.post("/sessions/:id/answer", async (c) => {
+  const sessionId = c.req.param("id");
   const body = await c.req.json<AnswerQuestionDto>();
-  const ok = runService.answerQuestion(body.requestId, body.answer);
+  const ok = runService.answerQuestion(sessionId, body.requestId, body.answer);
   if (!ok) {
     return c.json(
       { success: false, error: `No pending question for requestId '${body.requestId}'.` },
@@ -79,8 +80,9 @@ runRoutes.post("/sessions/:id/answer", async (c) => {
  * POST /api/sessions/:id/approve — Approve or deny a pending tool permission request.
  */
 runRoutes.post("/sessions/:id/approve", async (c) => {
+  const sessionId = c.req.param("id");
   const body = await c.req.json<ApproveToolPermissionDto>();
-  const ok = runService.approvePermission(body.requestId, body.allow);
+  const ok = runService.approvePermission(sessionId, body.requestId, body.allow);
   if (!ok) {
     return c.json(
       { success: false, error: `No pending permission for requestId '${body.requestId}'.` },

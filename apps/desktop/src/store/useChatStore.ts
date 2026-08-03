@@ -36,7 +36,7 @@ interface ChatState {
   /** Pending ask-question request from the agent, if any. */
   pendingQuestion: PendingQuestion | null;
   /** Pending permission request from the agent, if any. */
-  pendingPermission: PendingPermission | null;
+  pendingPermissions: PendingPermission[];
   /** Tool results arriving in real-time via `toolExecutionResult` events.
       Cleared when `toolExecutionEnd` finalises the batch. */
   liveToolResults: ToolResult[];
@@ -107,13 +107,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
   approvalMode: "always-ask",
   activeSessionId: null,
   pendingQuestion: null,
-  pendingPermission: null,
+  pendingPermissions: [],
   liveToolResults: [],
 
   loadSession: async (sessionId: string) => {
     // Mark this as the active session so SSE events from other sessions
     // are dropped instead of contaminating the view.
-    set({ activeSessionId: sessionId, streamingText: "", streamingThinking: "", liveToolResults: [] });
+    set({
+      activeSessionId: sessionId,
+      streamingText: "",
+      streamingThinking: "",
+      liveToolResults: [],
+      pendingQuestion: null,
+      pendingPermissions: [],
+    });
     try {
       const detail = await tauriApi.getSession(sessionId);
       // Guard against a rapid session switch — if the user switched again
@@ -282,7 +289,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } catch {
       // ignore
     }
-    set({ running: false, streamingText: "", streamingThinking: "" });
+    set({
+      running: false,
+      streamingText: "",
+      streamingThinking: "",
+      pendingQuestion: null,
+      pendingPermissions: [],
+    });
     syncSessionStatus(sessionId, "done");
   },
 
@@ -298,10 +311,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   approvePermission: async (sessionId: string, requestId: string, allow: boolean) => {
-    set({ pendingPermission: null });
-    syncSessionStatus(sessionId, "working");
     try {
       await tauriApi.approvePermission(sessionId, requestId, allow);
+      set((s) => ({
+        pendingPermissions: s.pendingPermissions.filter((p) => p.request.requestId !== requestId),
+      }));
+      syncSessionStatus(sessionId, get().pendingPermissions.length > 0 ? "needs_attention" : "working");
     } catch (err) {
       toast.error("Failed to send approval. Please try again.");
       console.error("approvePermission error:", err);
@@ -321,7 +336,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       approvalMode: "always-ask",
       activeSessionId: null,
       pendingQuestion: null,
-      pendingPermission: null,
+      pendingPermissions: [],
       liveToolResults: [],
     }),
 
@@ -383,7 +398,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         set({ pendingQuestion: { request: event.request } });
         break;
       case "permissionRequest":
-        set({ pendingPermission: { request: event.request } });
+        set((s) => ({
+          pendingPermissions: [...s.pendingPermissions, { request: event.request }],
+        }));
         break;
       case "error":
         if (isAbortError(event.error?.message ?? "")) {

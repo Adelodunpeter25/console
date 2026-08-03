@@ -4,7 +4,7 @@
  */
 import { Agent } from "../../../agent/src/service/agent.js";
 import { allTools } from "../../../agent/src/tools/index.js";
-import { setAskQuestionHandler } from "../../../agent/src/tools/ask.js";
+import { createAskTool } from "../../../agent/src/tools/ask.js";
 import { SqliteSessionStorage } from "../../../agent/src/session/storage.js";
 import { buildSystemPrompt } from "../../../agent/src/systemprompt/builder.js";
 import { createAntigravityStreamFn } from "../../../providers/src/antigravity/stream-fn.js";
@@ -18,12 +18,12 @@ export class RunService {
   /** Pending question answers keyed by requestId. */
   private pendingQuestions = new Map<
     string,
-    { resolve: (answer: string | string[]) => void; reject: (err: unknown) => void }
+    { sessionId: string; resolve: (answer: string | string[]) => void; reject: (err: unknown) => void }
   >();
   /** Pending permission approvals keyed by requestId. */
   private pendingApprovals = new Map<
     string,
-    { resolve: (allow: boolean) => void; reject: (err: unknown) => void }
+    { sessionId: string; resolve: (allow: boolean) => void; reject: (err: unknown) => void }
   >();
 
   /**
@@ -34,6 +34,25 @@ export class RunService {
     sessionId: string,
     dto: RunPromptDto,
     onEvent: (event: AgentSessionEvent) => Promise<void> | void,
+  ): Promise<void> {
+    if (this.activeRuns.has(sessionId)) {
+      throw new Error(`Session '${sessionId}' already has an active run.`);
+    }
+
+    const abortController = new AbortController();
+    this.activeRuns.set(sessionId, abortController);
+    try {
+      await this.runAgentStreamInternal(sessionId, dto, onEvent, abortController);
+    } finally {
+      this.activeRuns.delete(sessionId);
+    }
+  }
+
+  private async runAgentStreamInternal(
+    sessionId: string,
+    dto: RunPromptDto,
+    onEvent: (event: AgentSessionEvent) => Promise<void> | void,
+    abortController: AbortController,
   ): Promise<void> {
     const prompt = dto.prompt.trim();
 
@@ -91,16 +110,18 @@ export class RunService {
     // Wire the ask-question handler so the ask tool pauses for user input
     // instead of auto-selecting the first option. The handler emits the
     // askQuestion event through onEvent and waits for answerQuestion().
-    setAskQuestionHandler((request) => {
+    const askTool = createAskTool((request) => {
       return new Promise<string | string[]>((resolve, reject) => {
-        this.pendingQuestions.set(request.requestId, { resolve, reject });
+        this.pendingQuestions.set(request.requestId, { sessionId, resolve, reject });
         onEvent({ type: "askQuestion", request });
       });
     });
 
+    const tools = allTools.map((tool) => (tool.name === "ask" ? askTool : tool));
+
     const agent = new Agent({
       model,
-      tools: [...allTools] as any,
+      tools: tools as any,
       systemPrompt,
       streamFn,
       approvalMode,
@@ -108,7 +129,7 @@ export class RunService {
         // executeTool already emitted the permissionRequest event;
         // we just need to wait for the user's decision.
         return new Promise<boolean>((resolve, reject) => {
-          this.pendingApprovals.set(req.requestId, { resolve, reject });
+          this.pendingApprovals.set(req.requestId, { sessionId, resolve, reject });
         });
       },
     });
@@ -119,9 +140,6 @@ export class RunService {
     this.sessionStorage.appendMessage(sessionId, { role: "user", content: prompt });
 
     agent.loadHistory(session.messages);
-
-    const abortController = new AbortController();
-    this.activeRuns.set(sessionId, abortController);
 
     this.sessionStorage.updateSessionStatus(sessionId, "working");
 
@@ -184,24 +202,27 @@ export class RunService {
         throw err;
       }
     } finally {
-      this.activeRuns.delete(sessionId);
       // Reject any unresolved pending questions/approvals so the agent
       // loop doesn't hang forever after the run ends.
-      for (const [, { reject }] of this.pendingQuestions) reject(new Error("Run ended"));
-      this.pendingQuestions.clear();
-      for (const [, { reject }] of this.pendingApprovals) reject(new Error("Run ended"));
-      this.pendingApprovals.clear();
-      // Unset the global ask handler so a stale closure doesn't linger.
-      setAskQuestionHandler(undefined);
+      for (const [requestId, pending] of this.pendingQuestions) {
+        if (pending.sessionId !== sessionId) continue;
+        this.pendingQuestions.delete(requestId);
+        pending.reject(new Error("Run ended"));
+      }
+      for (const [requestId, pending] of this.pendingApprovals) {
+        if (pending.sessionId !== sessionId) continue;
+        this.pendingApprovals.delete(requestId);
+        pending.reject(new Error("Run ended"));
+      }
     }
   }
 
   /**
    * Answer a pending question from the ask tool.
    */
-  answerQuestion(requestId: string, answer: string | string[]): boolean {
+  answerQuestion(sessionId: string, requestId: string, answer: string | string[]): boolean {
     const pending = this.pendingQuestions.get(requestId);
-    if (!pending) return false;
+    if (!pending || pending.sessionId !== sessionId) return false;
     this.pendingQuestions.delete(requestId);
     pending.resolve(answer);
     return true;
@@ -210,9 +231,9 @@ export class RunService {
   /**
    * Approve or deny a pending tool permission request.
    */
-  approvePermission(requestId: string, allow: boolean): boolean {
+  approvePermission(sessionId: string, requestId: string, allow: boolean): boolean {
     const pending = this.pendingApprovals.get(requestId);
-    if (!pending) return false;
+    if (!pending || pending.sessionId !== sessionId) return false;
     this.pendingApprovals.delete(requestId);
     pending.resolve(allow);
     return true;
@@ -226,7 +247,6 @@ export class RunService {
     if (!controller) return false;
 
     controller.abort();
-    this.activeRuns.delete(sessionId);
     return true;
   }
 }

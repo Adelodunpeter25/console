@@ -9,12 +9,6 @@ import type { AgentTool, AskQuestionRequest } from "../types/index.js";
 
 export type AskQuestionHandler = (request: AskQuestionRequest) => Promise<string | string[]>;
 
-let activeAskHandler: AskQuestionHandler | undefined;
-
-export function setAskQuestionHandler(handler?: AskQuestionHandler): void {
-  activeAskHandler = handler;
-}
-
 const inputSchema = z.object({
   question: z.string().describe("The question to ask the user"),
   options: z
@@ -30,45 +24,51 @@ const inputSchema = z.object({
 
 type Input = z.infer<typeof inputSchema>;
 
-export const askTool: AgentTool<typeof inputSchema> = {
-  name: "ask",
-  description: `Ask the user a structured multiple-choice question to clarify ambiguous requirements, architecture options, or preferences.
-Provide a clear question and at least 2 distinct option choices.`,
-  tier: "read",
-  inputSchema,
-  execute: async (args: Input): Promise<unknown> => {
-    const { question, options, isMultiSelect = false } = args;
+const description = `Ask the user a structured multiple-choice question to clarify ambiguous requirements, architecture options, or preferences.
+Provide a clear question and at least 2 distinct option choices.`;
 
-    const request: AskQuestionRequest = {
-      requestId: randomUUID(),
-      question,
-      options,
-      isMultiSelect,
-    };
+export function createAskTool(handler?: AskQuestionHandler): AgentTool<typeof inputSchema> {
+  return {
+    name: "ask",
+    description,
+    tier: "read",
+    inputSchema,
+    execute: async (args: Input): Promise<unknown> => {
+      const { question, options, isMultiSelect = false } = args;
 
-    if (!activeAskHandler) {
-      // Default fallback when running headless or unattached
-      const defaultAnswer = options[0]!;
+      const request: AskQuestionRequest = {
+        requestId: randomUUID(),
+        question,
+        options,
+        isMultiSelect,
+      };
+
+      if (!handler) {
+        // Default fallback when running headless or unattached
+        const defaultAnswer = options[0]!;
+        return {
+          content: [
+            {
+              type: "text",
+              text: `[Asked User]: "${question}"\nSelected default option: "${defaultAnswer}"`,
+            },
+          ],
+        };
+      }
+
+      const answer = await handler(request);
+      const answerText = Array.isArray(answer) ? answer.join(", ") : answer;
+
       return {
         content: [
           {
             type: "text",
-            text: `[Asked User]: "${question}"\nSelected default option: "${defaultAnswer}"`,
+            text: `[User Answer]: "${answerText}"`,
           },
         ],
       };
-    }
+    },
+  };
+}
 
-    const answer = await activeAskHandler(request);
-    const answerText = Array.isArray(answer) ? answer.join(", ") : answer;
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `[User Answer]: "${answerText}"`,
-        },
-      ],
-    };
-  },
-};
+export const askTool = createAskTool();

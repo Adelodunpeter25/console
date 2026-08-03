@@ -131,7 +131,7 @@ const testModel: Model = {
     approvalMode: "plan-mode",
   });
 
-  assert.ok(promptRes.systemPrompt.includes("# Plan Mode Active"));
+  assert.ok(promptRes.systemPrompt.includes("# Approval Mode Active"));
   assert.ok(promptRes.systemPrompt.includes("READ-ONLY exploration and research"));
   assert.ok(promptRes.systemPrompt.includes("You MUST NOT write, edit, or delete any files"));
   console.log("  ✅ Plan Mode system prompt injection");

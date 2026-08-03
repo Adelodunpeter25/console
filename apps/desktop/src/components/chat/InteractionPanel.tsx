@@ -19,7 +19,7 @@ function PermissionPanel({ request, sessionId }: PermissionPanelProps) {
   const handleApprove = async (allow: boolean) => {
     setSubmitting(true);
     await approvePermission(sessionId, request.requestId, allow);
-    // Store clears pendingPermission; no need to reset local state.
+    // The store removes this request after the server confirms the decision.
   };
 
   return (
@@ -155,10 +155,16 @@ interface InteractionPanelProps {
  */
 export function InteractionPanel({ sessionId }: InteractionPanelProps) {
   const pendingQuestion = useChatStore((s) => s.pendingQuestion);
-  const pendingPermission = useChatStore((s) => s.pendingPermission);
+  const pendingPermissions = useChatStore((s) => s.pendingPermissions);
 
-  if (pendingPermission) {
-    return <PermissionPanel request={pendingPermission.request} sessionId={sessionId} />;
+  if (pendingPermissions.length > 0) {
+    return (
+      <PermissionPanel
+        key={pendingPermissions[0].request.requestId}
+        request={pendingPermissions[0].request}
+        sessionId={sessionId}
+      />
+    );
   }
   if (pendingQuestion) {
     return <QuestionPanel request={pendingQuestion.request} sessionId={sessionId} />;

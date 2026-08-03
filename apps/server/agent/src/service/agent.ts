@@ -6,7 +6,7 @@ import type {
   Model,
   PermissionRequest,
 } from "../types/index.js";
-import { setTaskToolContext } from "../tools/task.js";
+import { createTaskTool } from "../tools/task.js";
 import { agentLoop, agentLoopContinue, type AgentLoopConfig, type StreamFn } from "./agent-loop.js";
 import type { EventStream } from "./event-stream.js";
 
@@ -155,17 +155,21 @@ export class Agent {
       signal.addEventListener("abort", () => this._abortController?.abort());
     }
 
-    setTaskToolContext({
-      model: this._model,
-      streamFn: this._streamFn,
-      tools: this._tools,
-      systemPrompt: this._systemPrompt,
-    });
+    const tools = this._tools.map((tool) =>
+      tool.name === "task"
+        ? createTaskTool({
+            model: this._model,
+            streamFn: this._streamFn,
+            tools: this._tools,
+            systemPrompt: this._systemPrompt,
+          })
+        : tool,
+    );
 
     const config: AgentLoopConfig = {
       model: this._model,
       systemPrompt: this._systemPrompt,
-      tools: this._tools,
+      tools,
       streamFn: this._streamFn,
       approvalMode: this._approvalMode,
       onApproval: this._onApproval,
