@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronDown, Check } from "lucide-react";
+import { Check, ChevronDown, Search } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
 /* Reusable dropdown primitives — shared visual language for           */
@@ -115,6 +115,54 @@ export function DropdownItem({ selected, onClick, children }: DropdownItemProps)
       </span>
     </button>
   );
+}
+
+/** Search field placed at the top of a dropdown's menu. */
+export function DropdownSearch({
+  value,
+  onChange,
+  placeholder = "Search...",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div className="relative px-1.5 pb-1.5">
+      <Search
+        size={13}
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted"
+      />
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="h-8 w-full rounded-md border border-white/[0.08] bg-black/20 pl-8 pr-2 text-xs text-foreground outline-none placeholder:text-foreground-muted focus:border-white/[0.18] focus:bg-black/30"
+      />
+    </div>
+  );
+}
+
+/** Non-selecting action row for menu operations such as opening a folder. */
+export function DropdownAction({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  const { close } = React.useContext(DropdownContext);
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={() => {
+        onClick();
+        close();
+      }}
+      className="flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-xs text-foreground-secondary outline-none transition-colors hover:bg-white/[0.07] hover:text-foreground focus-visible:bg-white/[0.08] focus-visible:text-foreground"
+    >
+      {children}
+    </button>
+  );
+}
+
+export function DropdownSeparator() {
+  return <div className="-mx-1 my-1 h-px bg-white/[0.08]" role="separator" />;
 }
 
 /* ------------------------------------------------------------------ */

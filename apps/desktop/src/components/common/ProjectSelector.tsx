@@ -1,6 +1,10 @@
 import React from "react";
+import { FolderOpen } from "lucide-react";
 import type { ProjectInfo } from "@console/types";
-import { Dropdown, DropdownItem } from "./Dropdown";
+import { toast } from "sonner";
+import { useProjectStore } from "../../store";
+import { tauriApi } from "../../lib/tauri-api";
+import { Dropdown, DropdownAction, DropdownItem, DropdownSearch, DropdownSeparator } from "./Dropdown";
 
 interface ProjectSelectorProps {
   /** Backend projects to choose from. */
@@ -18,15 +22,36 @@ interface ProjectSelectorProps {
  */
 export function ProjectSelector({ projects, selectedId, fallbackLabel, onSelect }: ProjectSelectorProps) {
   const selected = projects.find((p) => p.id === selectedId) ?? null;
+  const addProject = useProjectStore((state) => state.addProject);
+  const [search, setSearch] = React.useState("");
+  const query = search.trim().toLowerCase();
+  const filteredProjects = projects.filter(
+    (project) =>
+      !query ||
+      project.name.toLowerCase().includes(query) ||
+      project.path.toLowerCase().includes(query),
+  );
+
+  const handleOpenFolder = async () => {
+    try {
+      const picked = await tauriApi.pickFolder();
+      if (!picked.path) return;
+      const project = await addProject(picked.path);
+      onSelect(project);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to open folder");
+    }
+  };
 
   return (
     <Dropdown label={selected ? selected.name : fallbackLabel} heading="Project" width={280}>
-      {projects.length === 0 ? (
+      <DropdownSearch value={search} onChange={setSearch} placeholder="Search folders..." />
+      {filteredProjects.length === 0 ? (
         <div className="px-3 py-4 text-center text-xs text-foreground-muted">
-          No projects yet — add one from the sidebar.
+          {projects.length === 0 ? "No projects yet" : "No matching folders"}
         </div>
       ) : (
-        projects.map((project) => (
+        filteredProjects.map((project) => (
           <DropdownItem
             key={project.id}
             selected={selectedId === project.id}
@@ -36,6 +61,11 @@ export function ProjectSelector({ projects, selectedId, fallbackLabel, onSelect 
           </DropdownItem>
         ))
       )}
+      <DropdownSeparator />
+      <DropdownAction onClick={handleOpenFolder}>
+        <FolderOpen size={14} />
+        <span>Open folder...</span>
+      </DropdownAction>
     </Dropdown>
   );
 }

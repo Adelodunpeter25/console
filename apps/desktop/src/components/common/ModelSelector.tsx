@@ -1,6 +1,6 @@
 import React from "react";
 import { useProviderStore } from "../../store";
-import { Dropdown, DropdownItem, DropdownGroupHeading } from "./Dropdown";
+import { Dropdown, DropdownItem, DropdownGroupHeading, DropdownSearch } from "./Dropdown";
 
 interface ModelSelectorProps {
   value: string | null;
@@ -15,6 +15,8 @@ interface ModelSelectorProps {
 export function ModelSelector({ value, onChange }: ModelSelectorProps) {
   const { providers, modelsByProvider, loadProviders, loadModels, loadingProviders, loadingModels } =
     useProviderStore();
+  const [search, setSearch] = React.useState("");
+  const query = search.trim().toLowerCase();
 
   React.useEffect(() => {
     loadProviders();
@@ -23,9 +25,11 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
   const allModels = React.useMemo(() => {
     return providers.flatMap((p) => {
       const models = modelsByProvider[p.name] ?? [];
-      return models.map((m) => ({ ...m, providerName: p.displayName }));
+      return models
+        .filter((m) => !query || m.id.toLowerCase().includes(query))
+        .map((m) => ({ ...m, providerName: p.displayName }));
     });
-  }, [providers, modelsByProvider]);
+  }, [providers, modelsByProvider, query]);
 
   const handleOpen = () => {
     providers.forEach((p) => {
@@ -42,6 +46,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
       onOpen={handleOpen}
       width={264}
     >
+      <DropdownSearch value={search} onChange={setSearch} placeholder="Search models..." />
       {loadingProviders && (
         <div className="px-3 py-4 text-center text-xs text-foreground-muted">Loading...</div>
       )}
@@ -51,7 +56,9 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
         </div>
       )}
       {providers.map((provider) => {
-        const models = modelsByProvider[provider.name] ?? [];
+        const models = (modelsByProvider[provider.name] ?? []).filter(
+          (model) => !query || model.id.toLowerCase().includes(query),
+        );
         const isLoading = loadingModels[provider.name];
         return (
           <div key={provider.name}>
