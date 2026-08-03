@@ -2,6 +2,7 @@ export { GlassSurface } from "./GlassSurface";
 export { MarkdownRenderer } from "./MarkdownRenderer";
 export { ModelSelector } from "./ModelSelector";
 export { ApprovalModeSelector } from "./ApprovalModeSelector";
+export { ProjectSelector } from "./ProjectSelector";
 export { Dropdown, DropdownItem, DropdownGroupHeading } from "./Dropdown";
 export { ToolCallBlock } from "./ToolCallBlock";
 export { ToolResultContent } from "./ToolResultContent";

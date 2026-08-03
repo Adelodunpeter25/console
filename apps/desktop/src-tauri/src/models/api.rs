@@ -24,6 +24,7 @@ pub struct CreateSessionDto {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSessionDto {
     pub title: Option<String>,
+    pub cwd: Option<String>,
     pub model_id: Option<String>,
     pub provider: Option<String>,
     pub approval_mode: Option<String>,

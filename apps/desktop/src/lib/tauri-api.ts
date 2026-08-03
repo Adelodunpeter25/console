@@ -64,6 +64,7 @@ export const tauriApi = {
     invoke<SessionHeader>("update_session", {
       id,
       title: dto.title,
+      cwd: dto.cwd,
       modelId: dto.modelId,
       provider: dto.provider,
       approvalMode: dto.approvalMode,

@@ -2,20 +2,23 @@ import React from "react";
 import { FolderOpen, Plus, SquarePen } from "lucide-react";
 import { toast } from "sonner";
 import { useAppStore, useProjectStore } from "../../store";
-import { ProjectSection } from "./ProjectSection";
+import { SessionItem } from "./SessionItem";
 
 /**
- * Left sidebar — project navigator.
- * PROJECTS header, tree view, and bottom + New Project stub button.
+ * Left sidebar — flat session list with New Chat action.
  */
 export function Sidebar() {
-  const { sidebarOpen, expandedProjects, setSelectedProjectId, setSelectedSessionId, toggleProjectExpanded } =
-    useAppStore();
-  const { projects, loading, loadProjects, sessionsByProject, createSession, addProject } = useProjectStore();
+  const { sidebarOpen, selectedSessionId, setSelectedProjectId, setSelectedSessionId } = useAppStore();
+  const { projects, loading, loadProjects, sessions, sessionsLoading, loadSessions, createSession, addProject } =
+    useProjectStore();
 
   React.useEffect(() => {
     loadProjects();
   }, [loadProjects]);
+
+  React.useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
 
   if (!sidebarOpen) return null;
 
@@ -24,9 +27,6 @@ export function Sidebar() {
     if (!targetProject) {
       toast.error("Please add a project first.");
       return;
-    }
-    if (!expandedProjects.has(targetProject.id)) {
-      toggleProjectExpanded(targetProject.id);
     }
     const session = await createSession(targetProject.path, targetProject.id, "New Chat");
     setSelectedProjectId(targetProject.id);
@@ -39,7 +39,6 @@ export function Sidebar() {
     try {
       const newProj = await addProject(pathInput);
       toast.success(`Project '${newProj.name}' added!`);
-      toggleProjectExpanded(newProj.id);
     } catch {
       toast("New Project action triggered (stub).");
     }
@@ -61,29 +60,24 @@ export function Sidebar() {
       {/* Category Header */}
       <div className="px-4 pt-2 pb-1">
         <span className="text-[11px] font-bold tracking-wider text-foreground-muted uppercase">
-          PROJECTS
+          CHATS
         </span>
       </div>
 
-      {/* Project Sections List */}
-      <div className="flex-1 overflow-y-auto px-2 py-1 space-y-1">
-        {loading ? (
+      {/* Session List */}
+      <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
+        {loading || sessionsLoading ? (
           <div className="flex items-center justify-center py-8">
-            <span className="text-xs text-foreground-muted">Loading projects...</span>
+            <span className="text-xs text-foreground-muted">Loading...</span>
           </div>
-        ) : projects.length === 0 ? (
+        ) : sessions.length === 0 ? (
           <div className="px-2 py-8 text-center">
             <FolderOpen size={24} className="mx-auto text-foreground-muted mb-2" />
-            <p className="text-xs text-foreground-muted">No projects yet.</p>
+            <p className="text-xs text-foreground-muted">No chats yet.</p>
           </div>
         ) : (
-          projects.map((project) => (
-            <ProjectSection
-              key={project.id}
-              project={project}
-              sessions={sessionsByProject[project.id] ?? []}
-              isExpanded={expandedProjects.has(project.id)}
-            />
+          sessions.map((session) => (
+            <SessionItem key={session.id} session={session} isActive={session.id === selectedSessionId} />
           ))
         )}
       </div>

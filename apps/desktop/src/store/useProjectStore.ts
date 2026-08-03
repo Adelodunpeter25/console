@@ -5,10 +5,12 @@ import { tauriApi } from "../lib/tauri-api";
 interface ProjectState {
   projects: ProjectInfo[];
   loading: boolean;
-  sessionsByProject: Record<string, SessionHeader[]>;
+  /** Flat list of all sessions across projects, newest first. */
+  sessions: SessionHeader[];
+  sessionsLoading: boolean;
   loadProjects: () => Promise<void>;
   addProject: (path: string) => Promise<ProjectInfo>;
-  loadSessions: (projectId: string) => Promise<void>;
+  loadSessions: () => Promise<void>;
   createSession: (
     cwd: string,
     projectId: string,
@@ -16,20 +18,20 @@ interface ProjectState {
   ) => Promise<SessionHeader>;
   updateSession: (
     id: string,
-    projectId: string,
     dto: UpdateSessionDto,
   ) => Promise<SessionHeader>;
-  deleteSession: (id: string, projectId: string) => Promise<void>;
-  /** Update a session's status in-place across all project buckets. */
+  deleteSession: (id: string) => Promise<void>;
+  /** Update a session's status in-place. */
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
   /** Re-fetch a session header from the backend and patch it in-place (e.g. after an auto-renamed title). */
   refreshSessionHeader: (sessionId: string) => Promise<void>;
 }
 
-export const useProjectStore = create<ProjectState>((set, get) => ({
+export const useProjectStore = create<ProjectState>((set) => ({
   projects: [],
   loading: false,
-  sessionsByProject: {},
+  sessions: [],
+  sessionsLoading: false,
 
   loadProjects: async () => {
     set({ loading: true });
@@ -47,17 +49,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     return project;
   },
 
-  loadSessions: async (projectId: string) => {
+  loadSessions: async () => {
+    set({ sessionsLoading: true });
     try {
-      const sessions = await tauriApi.listSessions(undefined, projectId);
-      set((s) => ({
-        sessionsByProject: {
-          ...s.sessionsByProject,
-          [projectId]: sessions,
-        },
-      }));
+      const sessions = await tauriApi.listSessions();
+      set({ sessions, sessionsLoading: false });
     } catch {
-      // ignore
+      set({ sessionsLoading: false });
     }
   },
 
@@ -67,56 +65,31 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       projectId,
       title: title ?? "New Chat",
     });
-    set((s) => ({
-      sessionsByProject: {
-        ...s.sessionsByProject,
-        [projectId]: [session, ...(s.sessionsByProject[projectId] ?? [])],
-      },
-    }));
+    set((s) => ({ sessions: [session, ...s.sessions] }));
     return session;
   },
 
-  updateSession: async (id, projectId, dto) => {
+  updateSession: async (id, dto) => {
     const updated = await tauriApi.updateSession(id, dto);
     set((s) => ({
-      sessionsByProject: {
-        ...s.sessionsByProject,
-        [projectId]: (s.sessionsByProject[projectId] ?? []).map((sess) =>
-          sess.id === id ? updated : sess,
-        ),
-      },
+      sessions: s.sessions.map((sess) => (sess.id === id ? { ...sess, ...updated } : sess)),
     }));
     return updated;
   },
 
-  deleteSession: async (id: string, projectId: string) => {
+  deleteSession: async (id: string) => {
     await tauriApi.deleteSession(id);
-    set((s) => ({
-      sessionsByProject: {
-        ...s.sessionsByProject,
-        [projectId]: (s.sessionsByProject[projectId] ?? []).filter(
-          (sess) => sess.id !== id,
-        ),
-      },
-    }));
+    set((s) => ({ sessions: s.sessions.filter((sess) => sess.id !== id) }));
   },
 
   updateSessionStatus: (sessionId, status) => {
     set((s) => {
-      const updated: Record<string, SessionHeader[]> = {};
-      let changed = false;
-      for (const [pid, sessions] of Object.entries(s.sessionsByProject)) {
-        const idx = sessions.findIndex((sess) => sess.id === sessionId);
-        if (idx >= 0) {
-          changed = true;
-          updated[pid] = sessions.map((sess) =>
-            sess.id === sessionId ? { ...sess, status } : sess,
-          );
-        }
-      }
-      return changed
-        ? { sessionsByProject: { ...s.sessionsByProject, ...updated } }
-        : s;
+      if (!s.sessions.some((sess) => sess.id === sessionId)) return s;
+      return {
+        sessions: s.sessions.map((sess) =>
+          sess.id === sessionId ? { ...sess, status } : sess,
+        ),
+      };
     });
   },
 
@@ -124,21 +97,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     try {
       const detail = await tauriApi.getSession(sessionId);
       const header = detail.header;
-      set((s) => {
-        const updated: Record<string, SessionHeader[]> = {};
-        let changed = false;
-        for (const [pid, sessions] of Object.entries(s.sessionsByProject)) {
-          if (sessions.some((sess) => sess.id === sessionId)) {
-            changed = true;
-            updated[pid] = sessions.map((sess) =>
-              sess.id === sessionId ? { ...sess, ...header } : sess,
-            );
-          }
-        }
-        return changed
-          ? { sessionsByProject: { ...s.sessionsByProject, ...updated } }
-          : s;
-      });
+      set((s) => ({
+        sessions: s.sessions.map((sess) =>
+          sess.id === sessionId ? { ...sess, ...header } : sess,
+        ),
+      }));
     } catch {
       // Ignore refresh failures — the header will update on next load.
     }

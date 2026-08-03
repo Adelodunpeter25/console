@@ -1,9 +1,10 @@
 import { create } from "zustand";
 import { toast } from "sonner";
-import type { AgentMessage, AgentSessionEvent, AskQuestionRequest, PermissionRequest, ApprovalMode, ToolResult } from "@console/types";
+import type { AgentMessage, AgentSessionEvent, AskQuestionRequest, PermissionRequest, ApprovalMode, ToolResult, ProjectInfo } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 import { useProviderStore } from "./useProviderStore";
 import { useProjectStore } from "./useProjectStore";
+import { useAppStore } from "./useAppStore";
 
 /** A pending question from the agent's ask tool, awaiting user input. */
 export interface PendingQuestion {
@@ -25,6 +26,8 @@ interface ChatState {
   sessionModelId: string | null;
   /** Provider for the active session (persisted per-session). */
   sessionProvider: string | null;
+  /** Working directory for the active session (persisted per-session). */
+  sessionCwd: string | null;
   /** Approval mode for the agent (always-ask, accept-edits, plan-mode, full-access). */
   approvalMode: ApprovalMode;
   /** The session currently displayed in the chat view. SSE events from
@@ -45,6 +48,8 @@ interface ChatState {
    * catalog, updates local state, and persists the change to the backend.
    */
   changeModel: (sessionId: string, projectId: string, modelId: string) => void;
+  /** Set the working folder for the active session from a backend project. */
+  changeProject: (sessionId: string, project: ProjectInfo) => void;
   /** Set the approval mode for agent runs. Persists to backend if a session is active. */
   setApprovalMode: (mode: ApprovalMode) => void;
   sendMessage: (sessionId: string) => Promise<void>;
@@ -98,6 +103,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   streamingThinking: "",
   sessionModelId: null,
   sessionProvider: null,
+  sessionCwd: null,
   approvalMode: "always-ask",
   activeSessionId: null,
   pendingQuestion: null,
@@ -119,6 +125,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         streamingThinking: "",
         sessionModelId: detail.header.modelId ?? null,
         sessionProvider: detail.header.provider ?? null,
+        sessionCwd: detail.header.cwd ?? null,
         // Restore the persisted approvalMode so the UI reflects what's in the DB.
         approvalMode: (detail.header.approvalMode as ApprovalMode) ?? "always-ask",
       });
@@ -131,6 +138,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         streamingThinking: "",
         sessionModelId: null,
         sessionProvider: null,
+        sessionCwd: null,
       });
     }
   },
@@ -163,6 +171,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
           // Silently ignore — local state is already updated.
         });
     }
+  },
+
+  changeProject: (sessionId, project) => {
+    set({ sessionCwd: project.path });
+    useAppStore.getState().setSelectedProjectId(project.id);
+
+    // Persist the working folder to the backend so it survives reloads.
+    tauriApi
+      .updateSession(sessionId, { cwd: project.path })
+      .then(() => useProjectStore.getState().refreshSessionHeader(sessionId))
+      .catch(() => {
+        // Silently ignore — local state is already updated.
+      });
   },
 
   sendMessage: async (sessionId: string) => {
@@ -296,6 +317,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       streamingThinking: "",
       sessionModelId: null,
       sessionProvider: null,
+      sessionCwd: null,
       approvalMode: "always-ask",
       activeSessionId: null,
       pendingQuestion: null,

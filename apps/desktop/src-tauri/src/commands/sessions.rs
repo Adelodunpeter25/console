@@ -42,6 +42,7 @@ pub async fn get_session(id: String) -> AppResult<SessionDetailResponse> {
 pub async fn update_session(
     id: String,
     title: Option<String>,
+    cwd: Option<String>,
     model_id: Option<String>,
     provider: Option<String>,
     approval_mode: Option<String>,
@@ -49,6 +50,7 @@ pub async fn update_session(
     let client = ApiClient::new();
     let dto = UpdateSessionDto {
         title,
+        cwd,
         model_id,
         provider,
         approval_mode,

@@ -43,6 +43,9 @@ export class SessionService {
     if (dto.title) {
       this.storage.updateTitle(sessionId, dto.title);
     }
+    if (dto.cwd) {
+      this.storage.updateCwd(sessionId, dto.cwd);
+    }
     if (dto.modelId) {
       const current = this.storage.loadSession(sessionId);
       const provider = dto.provider || current?.header.provider || "antigravity";

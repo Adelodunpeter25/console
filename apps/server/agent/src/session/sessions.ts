@@ -416,6 +416,28 @@ export function updateModel(
   return info.changes > 0;
 }
 
+export function updateCwd(state: StorageState, sessionId: string, cwd: string): boolean {
+  const { globalDb, storageDir } = state;
+  const projectId = getProjectIdBySessionId(globalDb, sessionId);
+  const now = Date.now();
+  const trimmed = cwd.trim();
+
+  if (projectId) {
+    const dbPath = getSessionDbPath(storageDir, projectId, sessionId);
+    if (state.sessionDbs.has(sessionId) || fs.existsSync(dbPath)) {
+      const sessionDb = getSessionDb(state, sessionId, projectId);
+      sessionDb
+        .prepare(`UPDATE session_meta SET cwd = ?, updated_at = ? WHERE id = 1`)
+        .run(trimmed, now);
+    }
+  }
+
+  const info = globalDb
+    .prepare(`UPDATE sessions SET cwd = ?, updated_at = ? WHERE id = ?`)
+    .run(trimmed, now, sessionId);
+  return info.changes > 0;
+}
+
 export function updateApprovalMode(
   state: StorageState,
   sessionId: string,

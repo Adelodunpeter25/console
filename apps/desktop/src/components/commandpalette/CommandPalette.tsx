@@ -34,7 +34,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
   const { browse, browsing, browseDirectory } = useFsStore();
   const { addProject } = useProjectStore();
-  const { setSelectedProjectId, setSelectedSessionId, toggleProjectExpanded } = useAppStore();
+  const { setSelectedProjectId, setSelectedSessionId } = useAppStore();
 
   // Load root directory listing when entering browse view
   React.useEffect(() => {
@@ -59,7 +59,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     try {
       const project = await addProject(path);
       setSelectedProjectId(project.id);
-      toggleProjectExpanded(project.id);
       onOpenChange(false);
     } catch {
       // error is surfaced via store

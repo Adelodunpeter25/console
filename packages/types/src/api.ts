@@ -17,6 +17,7 @@ export interface CreateSessionDto {
 
 export interface UpdateSessionDto {
   title?: string;
+  cwd?: string;
   modelId?: string;
   provider?: "gemini" | "antigravity";
   approvalMode?: "always-ask" | "accept-edits" | "plan-mode" | "full-access";

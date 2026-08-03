@@ -1,6 +1,7 @@
 import React from "react";
 import { useAppStore, useChatStore, useProjectStore, useProviderStore } from "../store";
 import { MessageList, Composer, InteractionPanel } from "../components/chat";
+import { basename } from "../utils/format";
 
 /**
  * Chat view component — thin orchestrator inside pages/.
@@ -15,16 +16,18 @@ export function ChatScreen() {
     streamingText,
     streamingThinking,
     sessionModelId,
+    sessionCwd,
     approvalMode,
     liveToolResults,
     setInput,
     changeModel,
+    changeProject,
     setApprovalMode,
     sendMessage,
     abort,
     loadSession,
   } = useChatStore();
-  const { projects } = useProjectStore();
+  const { projects, loadProjects } = useProjectStore();
   const { loadProviders } = useProviderStore();
 
   React.useEffect(() => {
@@ -32,12 +35,20 @@ export function ChatScreen() {
   }, [loadProviders]);
 
   React.useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
+
+  React.useEffect(() => {
     if (selectedSessionId) {
       loadSession(selectedSessionId);
     }
   }, [selectedSessionId, loadSession]);
 
-  const projectName = projects.find((p) => p.id === selectedProjectId)?.name;
+  // Resolve the selected project: match by the session's working directory
+  // first, then fall back to the app-level selection.
+  const sessionProject = projects.find((p) => p.path === sessionCwd) ?? null;
+  const resolvedProjectId = sessionProject?.id ?? selectedProjectId;
+  const projectFallbackLabel = sessionCwd ? basename(sessionCwd) : "Select folder";
 
   return (
     <div className="flex-1 flex flex-col h-full bg-screen">
@@ -65,12 +76,17 @@ export function ChatScreen() {
         selectedModel={sessionModelId}
         onModelChange={(modelId) =>
           selectedSessionId &&
-          selectedProjectId &&
-          changeModel(selectedSessionId, selectedProjectId, modelId)
+          resolvedProjectId &&
+          changeModel(selectedSessionId, resolvedProjectId, modelId)
         }
         approvalMode={approvalMode}
         onApprovalModeChange={setApprovalMode}
-        projectName={projectName}
+        projects={projects}
+        selectedProjectId={resolvedProjectId}
+        projectFallbackLabel={projectFallbackLabel}
+        onProjectChange={(project) =>
+          selectedSessionId && changeProject(selectedSessionId, project)
+        }
       />
     </div>
   );

@@ -1,7 +1,7 @@
 import React from "react";
 import { ArrowUp, Square, Paperclip } from "lucide-react";
-import type { ApprovalMode } from "@console/types";
-import { ModelSelector, ApprovalModeSelector } from "../common";
+import type { ApprovalMode, ProjectInfo } from "@console/types";
+import { ModelSelector, ApprovalModeSelector, ProjectSelector } from "../common";
 
 interface ComposerProps {
   value: string;
@@ -14,13 +14,15 @@ interface ComposerProps {
   onModelChange: (modelId: string) => void;
   approvalMode: ApprovalMode;
   onApprovalModeChange: (mode: ApprovalMode) => void;
-  projectName?: string;
+  projects: ProjectInfo[];
+  selectedProjectId: string | null;
+  projectFallbackLabel: string;
+  onProjectChange: (project: ProjectInfo) => void;
 }
 
 /**
- * Conductor-style composer: auto-growing textarea, model selector,
- * approval mode selector, attachment button, circular send/stop button,
- * and keyboard hints.
+ * Conductor-style composer: auto-growing textarea, send/stop button, and a
+ * selector layer below it for model, approval mode, and working folder.
  */
 export function Composer({
   value,
@@ -33,7 +35,10 @@ export function Composer({
   onModelChange,
   approvalMode,
   onApprovalModeChange,
-  projectName,
+  projects,
+  selectedProjectId,
+  projectFallbackLabel,
+  onProjectChange,
 }: ComposerProps) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
@@ -67,9 +72,6 @@ export function Composer({
 
           {/* Toolbar */}
           <div className="flex items-center gap-1 px-3 pb-2.5">
-            <ModelSelector value={selectedModel} onChange={onModelChange} />
-            <ApprovalModeSelector value={approvalMode} onChange={onApprovalModeChange} />
-
             <button
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-foreground-muted hover:text-foreground-secondary hover:bg-white/5 transition-colors"
               title="Attach file (coming soon)"
@@ -78,12 +80,6 @@ export function Composer({
             </button>
 
             <div className="flex-1" />
-
-            {projectName && (
-              <span className="text-xs text-foreground-muted font-mono mr-1 hidden sm:inline">
-                {projectName}
-              </span>
-            )}
 
             {running ? (
               <button
@@ -105,6 +101,19 @@ export function Composer({
             )}
           </div>
         </div>
+
+        {/* Selector Layer: project, model, approval mode */}
+        <div className="mt-2 flex items-center gap-1">
+          <ProjectSelector
+            projects={projects}
+            selectedId={selectedProjectId}
+            fallbackLabel={projectFallbackLabel}
+            onSelect={onProjectChange}
+          />
+          <ModelSelector value={selectedModel} onChange={onModelChange} />
+          <ApprovalModeSelector value={approvalMode} onChange={onApprovalModeChange} />
+        </div>
+
         <p className="text-xs text-foreground-muted text-center mt-2">
           <kbd className="font-mono">Enter</kbd> to send ·{" "}
           <kbd className="font-mono">Shift+Enter</kbd> for newline
