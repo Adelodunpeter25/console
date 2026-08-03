@@ -51,28 +51,28 @@ export function SessionItem({ session, isActive }: SessionItemProps) {
         <span className="text-[11px] text-foreground-muted shrink-0">
           {formatRelativeTime(session.createdAt, true)}
         </span>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            deleteSession(session.id);
+            if (isActive) setSelectedSessionId(null);
+          }}
+          className="w-4 h-4 shrink-0 flex items-center justify-center text-foreground-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          title="Delete session"
+          aria-label={`Delete ${session.title || "session"}`}
+        >
+          <Trash2 size={13} />
+        </button>
       </div>
 
       {/* Line 2: Working Folder */}
-      <div className="flex items-center gap-1.5 mt-0.5 pl-[18px] min-w-0">
+      <div className="flex items-center gap-1.5 mt-0.5 pl-[18px] pr-5 min-w-0">
         <Folder size={11} className="text-foreground-muted shrink-0" />
         <span className="text-[11px] text-foreground-muted truncate min-w-0">
           {basename(session.cwd)}
         </span>
       </div>
-
-      {/* Hover Delete Button */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          deleteSession(session.id);
-          if (isActive) setSelectedSessionId(null);
-        }}
-        className="absolute top-2.5 right-2 text-foreground-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-        title="Delete session"
-      >
-        <Trash2 size={13} />
-      </button>
     </div>
   );
 }

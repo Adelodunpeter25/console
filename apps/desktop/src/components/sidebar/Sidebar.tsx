@@ -47,13 +47,14 @@ export function Sidebar() {
   return (
     <div className="w-72 bg-sidebar border-r border-border flex flex-col h-full shrink-0 select-none">
       {/* Top Actions Bar */}
-      <div className="px-3 pt-3 pb-2 flex items-center justify-end shrink-0">
+      <div className="px-3 pt-3 pb-2 shrink-0">
         <button
           onClick={handleGlobalNewChat}
-          className="p-1.5 text-foreground-muted hover:text-foreground rounded-lg shrink-0 cursor-pointer"
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.06] text-foreground-secondary hover:bg-white/[0.1] hover:text-foreground transition-colors cursor-pointer"
           title="New Chat"
         >
-          <SquarePen size={16} />
+          <SquarePen size={15} />
+          <span className="text-xs font-medium">New chat</span>
         </button>
       </div>
 
