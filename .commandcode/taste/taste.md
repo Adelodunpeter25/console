@@ -1,2 +1,19 @@
 # Taste
-See [taste/taste.md](taste/taste.md)
+- Prefers to commit the current working changes before diagnosing or fixing unrelated issues (e.g., asked to "commit first" before discussing what's wrong). Confidence: 0.9
+- Prefers to use bun for running scripts such as typecheck and build. Confidence: 0.9
+- Prefers to verify typecheck/build passes before pushing. Confidence: 0.7
+- When a lockfile is out of sync, prefers to regenerate it with the package manager (e.g., `bun install`) rather than skip or manually inspect. Confidence: 0.8
+- Prefers a direct, action-first approach over extended diagnostic explanations; expects requested actions (e.g., `git push`) to be executed without repeated confirmation (again confirmed with a bare "push" command, executed immediately). Confidence: 0.85
+- Communicates in terse, typo-heavy shorthand; expects the assistant to infer intent and act without asking for clarification (e.g., "file attachments images fileobly for now I need it too" → implement image attachments without clarifying). Confidence: 0.8
+- When adopting a new library/tool, prefers a full uniform replacement over a scoped or hybrid adoption (e.g., chose to replace react-markdown everywhere rather than only in the streaming bubble). Confidence: 0.5
+- When asked to "check out" or investigate an issue, wants a diagnosis first; implement fixes only after approval. Confidence: 0.7
+- Commits completed fixes/changes by default, but pushes only when explicitly told to — an explicit "push only when I tell you" overrides any earlier "commit and push when done" instruction. Confidence: 0.9
+- Opposed to language/framework rewrites or adoptions driven by trend; wants technical decisions justified by genuine need and measured impact (explicitly framed Rust rewrite as "not because of trend or because I actually need it"). Confidence: 0.8
+- Treats low runtime memory/resource footprint as a real project constraint for the server (designed as a remote server where "every megabyte counts"); expects architecture discussions to weigh that constraint against actual costs. Confidence: 0.7
+- Prefers a clean working tree — when asked to "commit every single thing that is not committed", expects all outstanding files (including auto-managed config and lockfiles) to be committed rather than a curated subset. Confidence: 0.8
+- Prefers fast, native-backed fuzzy search for file search features — explicitly chose FFF (`@ff-labs/fff-node`, already in the deps) for the @ file picker because it is "very very fast search". Confidence: 0.65
+- Will explicitly opt out of verification steps (e.g., "don't type check just fix commit") when they want speed; such explicit instructions are authoritative over the default verify-before-push habit. Confidence: 0.6
+- Expects server-side features to be exposed and working across all clients (desktop parity) — flagged slash commands not working on the desktop because the server didn't expose them as a defect to fix. Confidence: 0.55
+- Wants image/multimodal attachments in the chat composer — file attachments (images especially) are an expected core capability, not an optional extra ("file attachments images ... for now I need it too"). Confidence: 0.6
+- Cares about clean architecture/layering — questions why feature logic lives on the client side (e.g., asked why image attachment handling was in Rust rather than a backend API), but defers to the assistant's reasoned justification and agrees to keep it as-is once the rationale is clear. Confidence: 0.5
+- Prefers session/history lists to be sorted and grouped by last-updated time (not creation date) when the server already orders by updated_at — reversed an earlier creation-date grouping request, agreeing that using the same time field ("time updated") for sorting everywhere is better; a session touched today should surface under Today even if created earlier. Confidence: 0.7
