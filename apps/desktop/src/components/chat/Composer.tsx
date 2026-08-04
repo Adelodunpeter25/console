@@ -1,6 +1,6 @@
 import React from "react";
-import { ArrowUp, Square, Paperclip } from "lucide-react";
-import type { ApprovalMode, ProjectInfo } from "@console/types";
+import { ArrowUp, Square, Paperclip, X } from "lucide-react";
+import type { ApprovalMode, ImageAttachment, ProjectInfo } from "@console/types";
 import { ModelSelector, ApprovalModeSelector, ProjectSelector } from "../common";
 import { ComposerAutocomplete } from "./ComposerAutocomplete";
 
@@ -21,6 +21,10 @@ interface ComposerProps {
   onProjectChange: (project: ProjectInfo) => void;
   /** Active session id — scopes slash-command + @-file autocomplete. */
   sessionId?: string | null;
+  /** Pending image attachments to show as thumbnails above the textarea. */
+  attachments?: ImageAttachment[];
+  onPickImages?: () => void;
+  onRemoveAttachment?: (index: number) => void;
 }
 
 /**
@@ -44,6 +48,9 @@ export function Composer({
   projectFallbackLabel,
   onProjectChange,
   sessionId,
+  attachments = [],
+  onPickImages,
+  onRemoveAttachment,
 }: ComposerProps) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
@@ -66,6 +73,26 @@ export function Composer({
             textareaRef={textareaRef}
           />
           <div className="bg-card border border-border rounded-2xl focus-within:border-border-strong transition-colors">
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 px-3 pt-3">
+                {attachments.map((att, i) => (
+                  <div key={i} className="relative group">
+                    <img
+                      src={`data:${att.mimeType};base64,${att.data}`}
+                      alt={`attachment ${i + 1}`}
+                      className="h-16 w-16 object-cover rounded-lg border border-border"
+                    />
+                    <button
+                      onClick={() => onRemoveAttachment?.(i)}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-black/70 border border-border text-foreground-muted hover:text-foreground flex items-center justify-center"
+                      title="Remove"
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <textarea
               ref={textareaRef}
               value={value}
@@ -86,8 +113,11 @@ export function Composer({
             <div className="flex items-center gap-1 px-3 pb-2.5">
               <button
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-foreground-muted hover:text-foreground-secondary hover:bg-white/5 transition-colors"
-                title="Attach file — type @ to search"
-                onClick={() => textareaRef.current?.focus()}
+                title="Attach image(s)"
+                onClick={() => {
+                  onPickImages?.();
+                  textareaRef.current?.focus();
+                }}
               >
                 <Paperclip size={14} />
               </button>

@@ -14,12 +14,17 @@ import type {
   GeminiFunctionResponseBody,
   GeminiFunctionResponsePart,
   GeminiFunctionResponseRef,
+  GeminiInlineDataPart,
   GeminiOutgoingPart,
   GeminiTextPart,
 } from "../types/index.js";
 
 function makeTextPart(text: string): GeminiTextPart {
   return { text };
+}
+
+function makeInlineDataPart(data: string, mimeType: string): GeminiInlineDataPart {
+  return { inlineData: { mimeType, data } };
 }
 
 function makeFunctionCallPart(
@@ -58,11 +63,12 @@ export function convertMessages(messages: AgentMessage[]): GeminiContent[] {
       if (!msg.content || msg.content.trim() === "") {
         continue;
       }
-      const content: GeminiContent = {
-        role: "user",
-        parts: [makeTextPart(msg.content)],
-      };
-      contents.push(content);
+      const parts: GeminiOutgoingPart[] = [makeTextPart(msg.content)];
+      // Inline image attachments become Gemini inlineData parts.
+      for (const att of msg.attachments ?? []) {
+        parts.push(makeInlineDataPart(att.data, att.mimeType));
+      }
+      contents.push({ role: "user", parts });
       continue;
     }
 

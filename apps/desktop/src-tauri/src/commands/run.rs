@@ -2,7 +2,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::api::ApiClient;
 use crate::error::AppResult;
-use crate::models::RunPromptDto;
+use crate::models::{ImageAttachment, RunPromptDto};
 
 #[tauri::command]
 pub async fn run_agent(
@@ -12,6 +12,7 @@ pub async fn run_agent(
     model_id: Option<String>,
     provider: Option<String>,
     approval_mode: Option<String>,
+    attachments: Option<Vec<ImageAttachment>>,
 ) -> AppResult<()> {
     let client = ApiClient::new();
     let dto = RunPromptDto {
@@ -19,6 +20,7 @@ pub async fn run_agent(
         model_id,
         provider,
         approval_mode,
+        attachments,
     };
 
     // Emit on a per-session channel so concurrent/switched sessions can't

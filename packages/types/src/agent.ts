@@ -15,11 +15,21 @@ export interface ToolCallPart {
   call: ToolCall;
 }
 
+export interface ImagePart {
+  type: "image";
+  /** Base64-encoded image data (no data: prefix). */
+  data: string;
+  /** MIME type, e.g. "image/png". */
+  mimeType: string;
+}
+
 export type AssistantMessageContent = TextPart | ThinkingPart | ToolCallPart;
 
 export interface UserMessage {
   role: "user";
   content: string;
+  /** Inline image attachments sent with the prompt (base64-encoded). */
+  attachments?: ImagePart[];
 }
 
 export interface AssistantMessage {

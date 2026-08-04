@@ -19,6 +19,7 @@ export function ChatScreen() {
     sessionCwd,
     approvalMode,
     liveToolResults,
+    attachments,
     setInput,
     changeModel,
     changeProject,
@@ -26,6 +27,8 @@ export function ChatScreen() {
     sendMessage,
     abort,
     loadSession,
+    pickImages,
+    removeAttachment,
   } = useChatStore();
   const { projects, loadProjects } = useProjectStore();
   const { loadProviders } = useProviderStore();
@@ -88,6 +91,9 @@ export function ChatScreen() {
           selectedSessionId && changeProject(selectedSessionId, project)
         }
         sessionId={selectedSessionId}
+        attachments={attachments}
+        onPickImages={pickImages}
+        onRemoveAttachment={removeAttachment}
       />
     </div>
   );

@@ -28,7 +28,7 @@ export const MessageBubble = React.memo(function MessageBubble({
   liveToolResults = [],
 }: MessageBubbleProps) {
   if (message.role === "user") {
-    return <UserBubble content={message.content} />;
+    return <UserBubble content={message.content} attachments={message.attachments} />;
   }
 
   if (message.role === "toolResult") {

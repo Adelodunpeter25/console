@@ -6,6 +6,7 @@ import type {
   AuthStatusResponse,
   CreateSessionDto,
   FileSearchResponse,
+  ImageAttachment,
   ProjectInfo,
   ProviderCatalogEntry,
   SessionDetailResponse,
@@ -26,6 +27,7 @@ import type {
   ReadFileResult,
   WriteFileResult,
 } from "../types";
+import type { PickedImage } from "../types";
 
 /**
  * Thin Tauri IPC bridge. Every method maps to a `#[tauri::command]` in
@@ -109,6 +111,7 @@ export const tauriApi = {
     modelId?: string,
     provider?: string,
     approvalMode?: string,
+    attachments?: ImageAttachment[],
   ) =>
     invoke<void>("run_agent", {
       sessionId,
@@ -116,6 +119,7 @@ export const tauriApi = {
       modelId,
       provider,
       approvalMode,
+      attachments,
     }),
   abortRun: (sessionId: string) =>
     invoke<unknown>("abort_run", { sessionId }),
@@ -146,4 +150,7 @@ export const tauriApi = {
     invoke<SlashCommandInfo[]>("list_slash_commands", { sessionId }),
   searchFiles: (sessionId: string, query: string) =>
     invoke<FileSearchResponse>("search_files", { sessionId, query }),
+
+  // --- image attachments ----------------------------------------------------
+  pickImages: () => invoke<PickedImage[]>("pick_images"),
 };

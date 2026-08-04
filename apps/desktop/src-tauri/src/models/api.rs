@@ -37,6 +37,14 @@ pub struct RunPromptDto {
     pub model_id: Option<String>,
     pub provider: Option<String>,
     pub approval_mode: Option<String>,
+    pub attachments: Option<Vec<ImageAttachment>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageAttachment {
+    pub data: String,
+    pub mime_type: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

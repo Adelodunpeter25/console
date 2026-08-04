@@ -28,6 +28,16 @@ export interface RunPromptDto {
   modelId?: string;
   provider?: "gemini" | "antigravity";
   approvalMode?: "always-ask" | "accept-edits" | "plan-mode" | "full-access";
+  /** Image attachments to include with the prompt (base64-encoded). */
+  attachments?: ImageAttachment[];
+}
+
+/** An image sent with a run prompt. */
+export interface ImageAttachment {
+  /** Base64-encoded image data (no data: prefix). */
+  data: string;
+  /** MIME type, e.g. "image/png". */
+  mimeType: string;
 }
 
 export interface OAuthLoginUrlDto {

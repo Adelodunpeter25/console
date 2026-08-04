@@ -9,7 +9,7 @@ import { SqliteSessionStorage } from "../../../agent/src/session/storage.js";
 import { buildSystemPrompt } from "../../../agent/src/systemprompt/builder.js";
 import { createAntigravityStreamFn } from "../../../providers/src/antigravity/stream-fn.js";
 import { geminiStreamFn } from "../../../providers/src/gemini/stream-fn.js";
-import type { AgentSessionEvent, ApprovalMode, Model } from "../../../agent/src/types/index.js";
+import type { AgentSessionEvent, ApprovalMode, Model, UserMessage } from "../../../agent/src/types/index.js";
 import type { RunPromptDto } from "../types/index.js";
 import { expandPromptRefs } from "./assist.service.js";
 
@@ -146,14 +146,19 @@ export class RunService {
     // Persist the user message immediately so it survives crashes, errors, and
     // session switches even if the run never completes. The agent also appends
     // this prompt to its internal history; we skip the duplicate at the end.
-    this.sessionStorage.appendMessage(sessionId, { role: "user", content: prompt });
+    const userMessage: UserMessage = {
+      role: "user",
+      content: prompt,
+      ...(dto.attachments && dto.attachments.length > 0 ? { attachments: dto.attachments } : {}),
+    };
+    this.sessionStorage.appendMessage(sessionId, userMessage);
 
     agent.loadHistory(session.messages);
 
     this.sessionStorage.updateSessionStatus(sessionId, "working");
 
     try {
-      const eventStream = agent.run(prompt, abortController.signal);
+      const eventStream = agent.run(prompt, abortController.signal, dto.attachments);
 
       // Track run failures reported by the agent loop (stream errors, max
       // turns, provider failures) so they can be persisted as error messages.

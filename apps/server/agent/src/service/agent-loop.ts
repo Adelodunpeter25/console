@@ -21,6 +21,7 @@ import type {
   AgentTool,
   ApprovalMode,
   AssistantMessage,
+  ImagePart,
   Model,
   PermissionRequest,
   ToolCall,
@@ -285,6 +286,7 @@ function runAgentLoop(
   prompt: string,
   config: AgentLoopConfig,
   initialMessages: AgentMessage[] = [],
+  attachments: ImagePart[] = [],
 ): EventStream<AgentSessionEvent, AgentMessage[]> {
   const {
     model,
@@ -318,7 +320,10 @@ function runAgentLoop(
       emit({ type: "sessionStart" });
       emit({ type: "turnStart", prompt });
 
-      const userMessage: UserMessage = { role: "user", content: prompt };
+      const userMessage: UserMessage =
+        attachments.length > 0
+          ? { role: "user", content: prompt, attachments }
+          : { role: "user", content: prompt };
       messages.push(userMessage);
 
       let turnCount = 0;
@@ -416,8 +421,9 @@ function runAgentLoop(
 export function agentLoop(
   prompt: string,
   config: AgentLoopConfig,
+  attachments?: ImagePart[],
 ): EventStream<AgentSessionEvent, AgentMessage[]> {
-  return runAgentLoop(prompt, config, []);
+  return runAgentLoop(prompt, config, [], attachments);
 }
 
 /**
@@ -427,6 +433,7 @@ export function agentLoopContinue(
   priorMessages: AgentMessage[],
   prompt: string,
   config: AgentLoopConfig,
+  attachments?: ImagePart[],
 ): EventStream<AgentSessionEvent, AgentMessage[]> {
-  return runAgentLoop(prompt, config, priorMessages);
+  return runAgentLoop(prompt, config, priorMessages, attachments);
 }

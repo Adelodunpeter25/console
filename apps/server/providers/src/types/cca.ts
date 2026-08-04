@@ -17,6 +17,14 @@ export interface GeminiTextPart {
   text: string;
 }
 
+/** Inline (base64) media part for multimodal input. */
+export interface GeminiInlineDataPart {
+  inlineData: {
+    mimeType: string;
+    data: string;
+  };
+}
+
 /** A function call reference stored inside a model turn */
 export interface GeminiFunctionCallRef {
   name: string;
@@ -49,6 +57,7 @@ export interface GeminiFunctionResponsePart {
 /** Discriminated union of parts we produce for outgoing Content turns */
 export type GeminiOutgoingPart =
   | GeminiTextPart
+  | GeminiInlineDataPart
   | GeminiFunctionCallPart
   | GeminiFunctionResponsePart;
 

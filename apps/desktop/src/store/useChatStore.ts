@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { toast } from "sonner";
-import type { AgentMessage, AgentSessionEvent, AskQuestionRequest, PermissionRequest, ApprovalMode, ToolResult, ProjectInfo } from "@console/types";
+import type { AgentMessage, AgentSessionEvent, AskQuestionRequest, PermissionRequest, ApprovalMode, ToolResult, ProjectInfo, ImageAttachment } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 import { useProviderStore } from "./useProviderStore";
 import { useProjectStore } from "./useProjectStore";
@@ -40,9 +40,15 @@ interface ChatState {
   /** Tool results arriving in real-time via `toolExecutionResult` events.
       Cleared when `toolExecutionEnd` finalises the batch. */
   liveToolResults: ToolResult[];
+  /** Images picked via the native dialog, awaiting send. */
+  attachments: ImageAttachment[];
 
   loadSession: (sessionId: string) => Promise<void>;
   setInput: (val: string) => void;
+  /** Open the native image picker and append the chosen images. */
+  pickImages: () => Promise<void>;
+  /** Remove a pending attachment by index. */
+  removeAttachment: (index: number) => void;
   /**
    * Change the model for the active session. Resolves the provider from the
    * catalog, updates local state, and persists the change to the backend.
@@ -109,6 +115,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   pendingQuestion: null,
   pendingPermissions: [],
   liveToolResults: [],
+  attachments: [],
 
   loadSession: async (sessionId: string) => {
     // Mark this as the active session so SSE events from other sessions
@@ -120,6 +127,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       liveToolResults: [],
       pendingQuestion: null,
       pendingPermissions: [],
+      attachments: [],
     });
     try {
       const detail = await tauriApi.getSession(sessionId);
@@ -151,6 +159,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   setInput: (input) => set({ input }),
+
+  pickImages: async () => {
+    try {
+      const picked = await tauriApi.pickImages();
+      if (picked.length > 0) {
+        const attachments: ImageAttachment[] = picked.map((p) => ({
+          data: p.data,
+          mimeType: p.mimeType,
+        }));
+        set((s) => ({ attachments: [...s.attachments, ...attachments] }));
+      }
+    } catch (err) {
+      toast.error("Failed to pick images.");
+      console.error("pickImages error:", err);
+    }
+  },
+
+  removeAttachment: (index) =>
+    set((s) => ({
+      attachments: s.attachments.filter((_, i) => i !== index),
+    })),
 
   changeModel: (sessionId, projectId, modelId) => {
     const provider = resolveProvider(modelId, get().sessionProvider);
@@ -194,17 +223,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   sendMessage: async (sessionId: string) => {
-    const { input, running, sessionModelId, sessionProvider, approvalMode } = get();
+    const { input, running, sessionModelId, sessionProvider, approvalMode, attachments } = get();
     const prompt = input.trim();
     if (!prompt || running) return;
 
     set((s) => ({
       input: "",
       running: true,
-      messages: [...s.messages, { role: "user", content: prompt }],
+      messages: [
+        ...s.messages,
+        {
+          role: "user",
+          content: prompt,
+          ...(attachments.length > 0
+            ? {
+                attachments: attachments.map((a) => ({ type: "image" as const, ...a })),
+              }
+            : {}),
+        },
+      ],
       streamingText: "",
       streamingThinking: "",
       liveToolResults: [],
+      attachments: [],
     }));
     syncSessionStatus(sessionId, "working");
 
@@ -251,6 +292,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         sessionModelId ?? undefined,
         sessionProvider ?? undefined,
         approvalMode,
+        attachments,
       );
     } catch (err) {
       const msg =
@@ -350,6 +392,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       pendingQuestion: null,
       pendingPermissions: [],
       liveToolResults: [],
+      attachments: [],
     }),
 
   handleEvent: (event: AgentSessionEvent) => {

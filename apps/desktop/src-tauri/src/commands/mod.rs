@@ -1,4 +1,5 @@
 pub mod assist;
+pub mod attach;
 pub mod auth;
 pub mod config;
 pub mod fs;
@@ -9,6 +10,7 @@ pub mod sessions;
 pub mod server;
 
 pub use assist::*;
+pub use attach::*;
 pub use auth::*;
 pub use config::*;
 pub use fs::*;

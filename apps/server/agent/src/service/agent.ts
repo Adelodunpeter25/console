@@ -3,6 +3,7 @@ import type {
   AgentSessionEvent,
   AgentTool,
   ApprovalMode,
+  ImagePart,
   Model,
   PermissionRequest,
 } from "../types/index.js";
@@ -142,7 +143,11 @@ export class Agent {
    * Returns an EventStream you can subscribe to with for-await-of.
    * New messages are appended to this.messages when the run completes.
    */
-  run(prompt: string, signal?: AbortSignal): EventStream<AgentSessionEvent, AgentMessage[]> {
+  run(
+    prompt: string,
+    signal?: AbortSignal,
+    attachments?: ImagePart[],
+  ): EventStream<AgentSessionEvent, AgentMessage[]> {
     if (this._running) {
       throw new AgentBusyError();
     }
@@ -182,8 +187,8 @@ export class Agent {
     // Continue runs: use agentLoopContinue (injects prior history)
     const eventStream =
       this._messages.length === 0
-        ? agentLoop(prompt, config)
-        : agentLoopContinue(this._messages, prompt, config);
+        ? agentLoop(prompt, config, attachments)
+        : agentLoopContinue(this._messages, prompt, config, attachments);
 
     // When the run finishes, collect new messages and mark as idle
     eventStream.result().then(

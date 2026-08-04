@@ -36,9 +36,20 @@ pub enum AssistantMessageContent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ImagePart {
+    #[serde(rename = "type")]
+    pub part_type: String,
+    pub data: String,
+    pub mime_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UserMessage {
     pub role: String,
     pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachments: Option<Vec<ImagePart>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,6 +75,8 @@ pub enum AgentMessage {
     #[serde(rename = "user")]
     User {
         content: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attachments: Option<Vec<ImagePart>>,
     },
     #[serde(rename = "assistant")]
     Assistant {
