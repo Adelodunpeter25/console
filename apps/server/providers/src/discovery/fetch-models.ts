@@ -14,7 +14,7 @@ import {
   getGeminiCliUserAgent,
 } from "../constants.js";
 
-const DENYLIST = new Set(["chat_20706", "chat_23310", "gemini-2.5-pro"]);
+const DENYLIST = new Set(["chat_20706", "chat_23310"]);
 
 export interface FetchAvailableModelsOptions {
   accessToken: string;
