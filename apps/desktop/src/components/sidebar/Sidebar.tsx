@@ -1,5 +1,5 @@
 import React from "react";
-import { FolderOpen, Plus, SquarePen } from "lucide-react";
+import { FolderOpen, SquarePen } from "lucide-react";
 import { toast } from "sonner";
 import { useAppStore, useProjectStore } from "../../store";
 import { SessionItem } from "./SessionItem";
@@ -31,7 +31,7 @@ function groupSessionsByDate(sessions: SessionHeader[]): Array<{ label: string; 
  */
 export function Sidebar({ width = 288 }: { width?: number }) {
   const { sidebarOpen, selectedSessionId, setSelectedProjectId, setSelectedSessionId } = useAppStore();
-  const { projects, loading, loadProjects, sessions, sessionsLoading, loadSessions, createSession, addProject } =
+  const { projects, loading, loadProjects, sessions, sessionsLoading, loadSessions, createSession } =
     useProjectStore();
 
   React.useEffect(() => {
@@ -53,17 +53,6 @@ export function Sidebar({ width = 288 }: { width?: number }) {
     const session = await createSession(targetProject.path, targetProject.id, "New Chat");
     setSelectedProjectId(targetProject.id);
     setSelectedSessionId(session.id);
-  };
-
-  const handleNewProjectStub = async () => {
-    const pathInput = window.prompt("Enter project directory path:", "~/Documents/projects/new-project");
-    if (!pathInput) return;
-    try {
-      const newProj = await addProject(pathInput);
-      toast.success(`Project '${newProj.name}' added!`);
-    } catch {
-      toast("New Project action triggered (stub).");
-    }
   };
 
   return (
@@ -116,17 +105,6 @@ export function Sidebar({ width = 288 }: { width?: number }) {
             </div>
           ))
         )}
-      </div>
-
-      {/* Bottom Footer Bar */}
-      <div className="border-t border-border/80 p-3 flex items-center justify-between shrink-0">
-        <button
-          onClick={handleNewProjectStub}
-          className="flex items-center gap-2 text-xs font-medium text-foreground-secondary hover:text-foreground transition-colors"
-        >
-          <Plus size={14} />
-          <span>New Project</span>
-        </button>
       </div>
     </div>
   );

@@ -1,9 +1,10 @@
 import React from "react";
-import { PanelLeft, PanelLeftClose } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { SidebarLeftIcon } from "@hugeicons/core-free-icons";
 import { useAppStore } from "../store";
 
 interface TitleBarProps {
-  /** Right-side action button (e.g. settings gear or back-to-app). */
+  /** Right-side action button (e.g. back-to-app). */
   rightAction?: {
     icon: React.ReactNode;
     label: string;
@@ -41,7 +42,7 @@ export function TitleBar({ rightAction, title }: TitleBarProps) {
           className="p-1.5 rounded-lg text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors"
           title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
         >
-          {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeft size={16} />}
+          <HugeiconsIcon icon={SidebarLeftIcon} size={16} />
         </button>
       </div>
 

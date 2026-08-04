@@ -1,6 +1,4 @@
 import React from "react";
-import { Settings as SettingsIcon } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
 import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
 import { TitleBar } from "../components/TitleBar";
 import { Sidebar } from "../components/sidebar";
@@ -17,12 +15,11 @@ const SIDEBAR_DEFAULT = 288;
 /**
  * Main chat page — the app's primary view.
  *
- * Layout: custom titlebar (with settings gear) | sidebar | chat content.
+ * Layout: custom titlebar (with sidebar toggle) | sidebar | chat content.
  * Command palette (⌘K / Ctrl+K) overlays the entire page.
  * When no session is selected, an empty state is shown.
  */
 export function ChatPage() {
-  const navigate = useNavigate();
   const { selectedSessionId } = useAppStore();
   const { init } = useServerStore();
   const [paletteOpen, setPaletteOpen] = React.useState(false);
@@ -83,13 +80,7 @@ export function ChatPage() {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-screen overflow-hidden">
-      <TitleBar
-        rightAction={{
-          icon: <SettingsIcon size={16} />,
-          label: "Settings",
-          onClick: () => navigate({ to: "/settings" }),
-        }}
-      />
+      <TitleBar />
       <div className="flex flex-1 overflow-hidden">
         <ResizablePanel
           width={sidebarWidth}
