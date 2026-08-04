@@ -20,7 +20,7 @@ export function StreamingBubble({ text, thinking }: StreamingBubbleProps) {
 
       {text && (
         <div className="px-1">
-          <MarkdownRenderer content={text} />
+          <MarkdownRenderer content={text} streaming />
         </div>
       )}
 
