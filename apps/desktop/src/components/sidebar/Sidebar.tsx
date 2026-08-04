@@ -1,5 +1,5 @@
 import React from "react";
-import { FolderOpen, Plus, SquarePen } from "lucide-react";
+import { FolderOpen, Settings, SquarePen } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useAppStore, useProjectStore } from "../../store";
@@ -109,14 +109,14 @@ export function Sidebar({ width = 288 }: { width?: number }) {
         )}
       </div>
 
-      {/* Bottom Footer Bar — New Project opens the settings page */}
+      {/* Bottom Footer Bar — Settings opens the settings page */}
       <div className="border-t border-border/80 p-3 flex items-center justify-between shrink-0">
         <button
           onClick={() => navigate({ to: "/settings" })}
           className="flex items-center gap-2 text-xs font-medium text-foreground-secondary hover:text-foreground transition-colors"
         >
-          <Plus size={14} />
-          <span>New Project</span>
+          <Settings size={14} />
+          <span>Settings</span>
         </button>
       </div>
     </div>
