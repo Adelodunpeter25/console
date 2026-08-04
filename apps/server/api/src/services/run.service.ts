@@ -15,6 +15,10 @@ import type { RunPromptDto } from "../types/index.js";
 export class RunService {
   private sessionStorage = new SqliteSessionStorage();
   private activeRuns = new Map<string, AbortController>();
+  /** How long a pending question or permission decision may sit unresolved
+      before it is rejected. Prevents the agent loop from hanging forever if
+      the client disconnects or never answers. */
+  private static readonly DECISION_TIMEOUT_MS = 10 * 60 * 1000;
   /** Pending question answers keyed by requestId. */
   private pendingQuestions = new Map<
     string,
@@ -114,6 +118,7 @@ export class RunService {
       return new Promise<string | string[]>((resolve, reject) => {
         this.pendingQuestions.set(request.requestId, { sessionId, resolve, reject });
         onEvent({ type: "askQuestion", request });
+        this.startDecisionTimeout(request.requestId, sessionId, "question");
       });
     });
 
@@ -130,6 +135,7 @@ export class RunService {
         // we just need to wait for the user's decision.
         return new Promise<boolean>((resolve, reject) => {
           this.pendingApprovals.set(req.requestId, { sessionId, resolve, reject });
+          this.startDecisionTimeout(req.requestId, sessionId, "permission");
         });
       },
     });
@@ -237,6 +243,33 @@ export class RunService {
     this.pendingApprovals.delete(requestId);
     pending.resolve(allow);
     return true;
+  }
+
+  /**
+   * Arm a timeout for a pending question or permission decision. If the client
+   * never answers, the pending promise rejects so the agent loop can surface an
+   * error instead of hanging forever.
+   */
+  private startDecisionTimeout(
+    requestId: string,
+    sessionId: string,
+    kind: "question" | "permission",
+  ): void {
+    setTimeout(() => {
+      const pending =
+        kind === "question" ? this.pendingQuestions.get(requestId) : this.pendingApprovals.get(requestId);
+      if (!pending || pending.sessionId !== sessionId) return;
+      if (kind === "question") {
+        this.pendingQuestions.delete(requestId);
+      } else {
+        this.pendingApprovals.delete(requestId);
+      }
+      pending.reject(
+        new Error(
+          `${kind === "question" ? "Question" : "Permission request"} timed out waiting for a decision.`,
+        ),
+      );
+    }, RunService.DECISION_TIMEOUT_MS).unref?.();
   }
 
   /**

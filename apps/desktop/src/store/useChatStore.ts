@@ -300,26 +300,38 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   answerQuestion: async (sessionId: string, requestId: string, answer: string | string[]) => {
-    set({ pendingQuestion: null });
-    syncSessionStatus(sessionId, "working");
     try {
       await tauriApi.answerQuestion(sessionId, requestId, answer);
     } catch (err) {
       toast.error("Failed to send answer. Please try again.");
       console.error("answerQuestion error:", err);
+    } finally {
+      // The server consumes each pending request exactly once. Whether the
+      // answer was delivered or not, clear it from the UI so the panel can't
+      // get stuck on an already-consumed (or failed) request.
+      set((s) => ({
+        pendingQuestion: s.pendingQuestion?.request.requestId === requestId ? null : s.pendingQuestion,
+      }));
+      syncSessionStatus(sessionId, get().pendingQuestion ? "needs_attention" : "working");
     }
   },
 
   approvePermission: async (sessionId: string, requestId: string, allow: boolean) => {
     try {
       await tauriApi.approvePermission(sessionId, requestId, allow);
-      set((s) => ({
-        pendingPermissions: s.pendingPermissions.filter((p) => p.request.requestId !== requestId),
-      }));
-      syncSessionStatus(sessionId, get().pendingPermissions.length > 0 ? "needs_attention" : "working");
     } catch (err) {
       toast.error("Failed to send approval. Please try again.");
       console.error("approvePermission error:", err);
+    } finally {
+      // The server consumes each pending request exactly once. Whether the
+      // decision was delivered or not, remove it from the UI so a failed or
+      // already-consumed request can't wedge the permission panel.
+      set((s) => ({
+        pendingPermissions: s.pendingPermissions.filter(
+          (p) => p.request.requestId !== requestId,
+        ),
+      }));
+      syncSessionStatus(sessionId, get().pendingPermissions.length > 0 ? "needs_attention" : "working");
     }
   },
 
