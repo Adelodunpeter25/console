@@ -3,6 +3,7 @@ apps/console-macos/.build
 /node_modules
 packages/types/node_modules
 apps/cli/node_modules
+apps/web/node_modules
 # Logs
 logs
 *.log
