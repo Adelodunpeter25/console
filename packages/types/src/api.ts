@@ -50,6 +50,30 @@ export interface ApproveToolPermissionDto {
   allow: boolean;
 }
 
+/** A slash command exposed to the desktop for autocomplete + execution. */
+export interface SlashCommandInfo {
+  name: string;
+  description: string;
+  /** true for built-ins like /model; false for discovered custom commands/skills. */
+  builtin: boolean;
+}
+
+/** One file result from the FFF-backed fuzzy search. */
+export interface FileSearchResult {
+  /** Path relative to the search root (the session's working directory). */
+  relativePath: string;
+  /** Absolute path to the file. */
+  absolutePath: string;
+  isDir: boolean;
+  score: number;
+}
+
+export interface FileSearchResponse {
+  root: string;
+  query: string;
+  items: FileSearchResult[];
+}
+
 export interface ProjectInfo {
   id: string;
   name: string;

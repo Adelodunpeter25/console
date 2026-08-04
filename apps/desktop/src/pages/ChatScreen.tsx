@@ -87,6 +87,7 @@ export function ChatScreen() {
         onProjectChange={(project) =>
           selectedSessionId && changeProject(selectedSessionId, project)
         }
+        sessionId={selectedSessionId}
       />
     </div>
   );

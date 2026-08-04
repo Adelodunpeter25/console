@@ -1,3 +1,4 @@
+export * from "./assist.service.js";
 export * from "./auth.service.js";
 export * from "./fs.service.js";
 export * from "./project.service.js";

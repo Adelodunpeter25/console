@@ -5,6 +5,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { authRoutes } from "./routes/auth.js";
+import { assistRoutes } from "./routes/assist.js";
 import { configRoutes } from "./routes/config.js";
 import { fsRoutes } from "./routes/fs.js";
 import { projectRoutes } from "./routes/projects.js";
@@ -27,6 +28,7 @@ export function createApiApp(): Hono {
   // Mount API Sub-routers under /api
   const api = new Hono();
   api.route("/auth", authRoutes);
+  api.route("/", assistRoutes);
   api.route("/", configRoutes);
   api.route("/fs", fsRoutes);
   api.route("/", projectRoutes);

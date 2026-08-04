@@ -10,4 +10,5 @@ export { AssistantBubble } from "./AssistantBubble";
 export { StreamingBubble } from "./StreamingBubble";
 export { ScrollToBottom } from "./ScrollToBottom";
 export { Composer } from "./Composer";
+export { ComposerAutocomplete } from "./ComposerAutocomplete";
 export { InteractionPanel } from "./InteractionPanel";

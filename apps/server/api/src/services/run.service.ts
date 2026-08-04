@@ -11,6 +11,7 @@ import { createAntigravityStreamFn } from "../../../providers/src/antigravity/st
 import { geminiStreamFn } from "../../../providers/src/gemini/stream-fn.js";
 import type { AgentSessionEvent, ApprovalMode, Model } from "../../../agent/src/types/index.js";
 import type { RunPromptDto } from "../types/index.js";
+import { expandPromptRefs } from "./assist.service.js";
 
 export class RunService {
   private sessionStorage = new SqliteSessionStorage();
@@ -58,9 +59,11 @@ export class RunService {
     onEvent: (event: AgentSessionEvent) => Promise<void> | void,
     abortController: AbortController,
   ): Promise<void> {
-    const prompt = dto.prompt.trim();
-
+    // Resolve @path file mentions against the session's working directory so
+    // the agent can read referenced files directly. Applied once up-front so
+    // the expanded prompt feeds both the auto-title and the agent run.
     let session = this.sessionStorage.loadSession(sessionId);
+    const prompt = expandPromptRefs(dto.prompt.trim(), session?.header.cwd ?? process.cwd());
     if (!session) {
       const cwd = process.cwd();
       const autoTitle = prompt.length > 35 ? `${prompt.slice(0, 35)}...` : prompt;

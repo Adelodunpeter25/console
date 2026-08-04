@@ -5,10 +5,12 @@ import type {
   ApprovalModeOption,
   AuthStatusResponse,
   CreateSessionDto,
+  FileSearchResponse,
   ProjectInfo,
   ProviderCatalogEntry,
   SessionDetailResponse,
   SessionHeader,
+  SlashCommandInfo,
   UpdateSessionDto,
 } from "@console/types";
 import type {
@@ -138,4 +140,10 @@ export const tauriApi = {
       `agent-event:${sessionId}`,
       (e) => callback(e.payload),
     ),
+
+  // --- desktop assistant (slash commands + @ file refs) --------------------
+  listSlashCommands: (sessionId: string) =>
+    invoke<SlashCommandInfo[]>("list_slash_commands", { sessionId }),
+  searchFiles: (sessionId: string, query: string) =>
+    invoke<FileSearchResponse>("search_files", { sessionId, query }),
 };

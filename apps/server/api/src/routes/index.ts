@@ -1,3 +1,4 @@
+export * from "./assist.js";
 export * from "./auth.js";
 export * from "./config.js";
 export * from "./fs.js";

@@ -7,6 +7,7 @@
  * all come from there).
  */
 
+export * from "./assist";
 export * from "./auth";
 export * from "./fs";
 export * from "./providers";

@@ -1,3 +1,4 @@
+pub mod assist;
 pub mod auth;
 pub mod config;
 pub mod fs;
@@ -7,6 +8,7 @@ pub mod run;
 pub mod sessions;
 pub mod server;
 
+pub use assist::*;
 pub use auth::*;
 pub use config::*;
 pub use fs::*;

@@ -112,3 +112,28 @@ pub type SessionListResponse = ApiResponse<Vec<SessionHeader>>;
 pub type SessionDetailApiResponse = ApiResponse<SessionDetailResponse>;
 pub type ProjectListResponse = ApiResponse<Vec<ProjectInfo>>;
 pub type AuthStatusApiResponse = ApiResponse<AuthStatusResponse>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlashCommandInfo {
+    pub name: String,
+    pub description: String,
+    pub builtin: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileSearchResult {
+    pub relative_path: String,
+    pub absolute_path: String,
+    pub is_dir: bool,
+    pub score: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileSearchResponse {
+    pub root: String,
+    pub query: String,
+    pub items: Vec<FileSearchResult>,
+}
