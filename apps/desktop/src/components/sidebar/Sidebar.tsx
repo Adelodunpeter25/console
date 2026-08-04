@@ -3,6 +3,26 @@ import { FolderOpen, Plus, SquarePen } from "lucide-react";
 import { toast } from "sonner";
 import { useAppStore, useProjectStore } from "../../store";
 import { SessionItem } from "./SessionItem";
+import { dayBucket, formatDayGroup } from "../../utils/time";
+import type { SessionHeader } from "@console/types";
+
+/** Group sessions into labeled date buckets, newest-first by last-updated. */
+function groupSessionsByDate(sessions: SessionHeader[]): Array<{ label: string; items: SessionHeader[] }> {
+  // The server already returns sessions ordered by updated_at DESC, so group
+  // the incoming order directly — a session touched today surfaces under Today
+  // even if it was created earlier.
+  const buckets = new Map<number, SessionHeader[]>();
+  for (const session of sessions) {
+    const bucket = dayBucket(session.updatedAt);
+    const list = buckets.get(bucket) ?? [];
+    list.push(session);
+    buckets.set(bucket, list);
+  }
+  // Sort buckets by recency (today first), sessions stay newest-first.
+  return Array.from(buckets.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([bucket, items]) => ({ label: formatDayGroup(bucket), items }));
+}
 
 /**
  * Left sidebar — flat session list with New Chat action.
@@ -77,8 +97,21 @@ export function Sidebar() {
             <p className="text-xs text-foreground-muted">No chats yet.</p>
           </div>
         ) : (
-          sessions.map((session) => (
-            <SessionItem key={session.id} session={session} isActive={session.id === selectedSessionId} />
+          groupSessionsByDate(sessions).map((group) => (
+            <div key={group.label} className="space-y-0.5">
+              <div className="px-2 pt-3 pb-1">
+                <span className="text-[10px] font-bold tracking-wider text-foreground-muted uppercase">
+                  {group.label}
+                </span>
+              </div>
+              {group.items.map((session) => (
+                <SessionItem
+                  key={session.id}
+                  session={session}
+                  isActive={session.id === selectedSessionId}
+                />
+              ))}
+            </div>
           ))
         )}
       </div>

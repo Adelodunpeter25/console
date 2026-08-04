@@ -49,7 +49,7 @@ export function SessionItem({ session, isActive }: SessionItemProps) {
         </span>
 
         <span className="text-[11px] text-foreground-muted shrink-0">
-          {formatRelativeTime(session.createdAt, true)}
+          {formatRelativeTime(session.updatedAt, true)}
         </span>
 
         <button
