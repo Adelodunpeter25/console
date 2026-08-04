@@ -1,5 +1,6 @@
 import React from "react";
-import { FolderOpen, SquarePen } from "lucide-react";
+import { FolderOpen, Plus, SquarePen } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useAppStore, useProjectStore } from "../../store";
 import { SessionItem } from "./SessionItem";
@@ -30,6 +31,7 @@ function groupSessionsByDate(sessions: SessionHeader[]): Array<{ label: string; 
  * internal container matches the panel (default 288px = w-72).
  */
 export function Sidebar({ width = 288 }: { width?: number }) {
+  const navigate = useNavigate();
   const { sidebarOpen, selectedSessionId, setSelectedProjectId, setSelectedSessionId } = useAppStore();
   const { projects, loading, loadProjects, sessions, sessionsLoading, loadSessions, createSession } =
     useProjectStore();
@@ -105,6 +107,17 @@ export function Sidebar({ width = 288 }: { width?: number }) {
             </div>
           ))
         )}
+      </div>
+
+      {/* Bottom Footer Bar — New Project opens the settings page */}
+      <div className="border-t border-border/80 p-3 flex items-center justify-between shrink-0">
+        <button
+          onClick={() => navigate({ to: "/settings" })}
+          className="flex items-center gap-2 text-xs font-medium text-foreground-secondary hover:text-foreground transition-colors"
+        >
+          <Plus size={14} />
+          <span>New Project</span>
+        </button>
       </div>
     </div>
   );

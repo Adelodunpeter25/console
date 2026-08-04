@@ -6,6 +6,7 @@ import {
   Outlet,
 } from "@tanstack/react-router";
 import { ChatPage } from "./pages/ChatPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -17,7 +18,13 @@ const chatRoute = createRoute({
   component: ChatPage,
 });
 
-const routeTree = rootRoute.addChildren([chatRoute]);
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings",
+  component: SettingsPage,
+});
+
+const routeTree = rootRoute.addChildren([chatRoute, settingsRoute]);
 
 /**
  * Memory-based router — appropriate for a Tauri desktop app where there is
