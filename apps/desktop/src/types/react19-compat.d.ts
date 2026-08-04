@@ -5,6 +5,11 @@
  * satisfy React 19's stricter JSX element type. These overrides relax the
  * component types so they can be used in JSX without error.
  */
+
+// Side-effect imports of stylesheets (Vite injects these; declare here so tsc
+// doesn't error on `import "./index.css"` when Vite's client types aren't in scope).
+declare module "*.css";
+
 declare module "sonner" {
   import type { ComponentType } from "react";
   export const Toaster: ComponentType<Record<string, unknown>>;

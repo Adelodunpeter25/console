@@ -26,8 +26,10 @@ function groupSessionsByDate(sessions: SessionHeader[]): Array<{ label: string; 
 
 /**
  * Left sidebar — flat session list with New Chat action.
+ * Rendered inside a ResizablePanel by ChatPage; width is passed in so the
+ * internal container matches the panel (default 288px = w-72).
  */
-export function Sidebar() {
+export function Sidebar({ width = 288 }: { width?: number }) {
   const { sidebarOpen, selectedSessionId, setSelectedProjectId, setSelectedSessionId } = useAppStore();
   const { projects, loading, loadProjects, sessions, sessionsLoading, loadSessions, createSession, addProject } =
     useProjectStore();
@@ -65,7 +67,7 @@ export function Sidebar() {
   };
 
   return (
-    <div className="w-72 bg-sidebar border-r border-border flex flex-col h-full shrink-0 select-none">
+    <div className="bg-sidebar border-r border-border flex flex-col h-full shrink-0 select-none" style={{ width }}>
       {/* Top Actions Bar */}
       <div className="px-3 pt-3 pb-2 shrink-0">
         <button

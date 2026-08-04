@@ -19,6 +19,7 @@
     "@tanstack/store": "^0.9.3",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-store": "^2.4.4",
     "cmdk": "^1.1.1",
     "isbot": "^5.2.1",
     "lucide-react": "^0.474.0",
