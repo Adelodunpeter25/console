@@ -3,7 +3,8 @@
     "allow": [
       "Shell(git add -A && git commit -F - <<'EOF' feat(mobile): redesign home screen, remove bottom nav, extract header, fix package import extensions Co-authored-by: CommandCodeBot <noreply@commandcode.ai> EOF)",
       "Shell(node /private/tmp/commandcode-502/-Users-techclub-Documents-projects-console/03839dfb-7d89-4ecb-be17-c376ae58de3f/scratchpad/fix-imports.mjs)",
-      "Shell(node -p require('./node_modules/streamdown/package.json').version)"
+      "Shell(node -p require('./node_modules/streamdown/package.json').version)",
+      "Shell(git add apps/desktop/src/store/useChatStore.ts apps/server/api/src/services/run.service.ts && git commit -F - <<'EOF' fix: permission approval hang and stuck permission panel Two related issues in the tool permission approval flow: Server (run.service.ts): pending question/approval promises were stored with no timeout, so if the client never answered, the agent loop blocked forever awaiting onApproval. Add a 10-minute decision timeout that rejects the pending promise so the loop surfaces an error instead of hanging. Desktop (useChatStore.ts): approvePermission/answerQuestion only removed the pending request from the UI on success. If the server call failed (e.g. \"No pending permission\" 404) the panel stayed wedged with no retry. Move the UI removal into a finally block so the request is cleared whether the decision was delivered or not — the server consumes each pending request exactly once. Co-authored-by: CommandCodeBot <noreply@commandcode.ai> EOF)"
     ],
     "deny": [],
     "defaultMode": "default"
