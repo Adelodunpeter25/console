@@ -34,12 +34,12 @@ export const AssistantBubble = React.memo(function AssistantBubble({
 
   if (isError) {
     return (
-      <div className="rounded-xl bg-danger-muted border border-danger/30 px-4 py-3">
-        <div className="flex items-start gap-2.5">
+      <div className="rounded-xl bg-danger-muted border border-danger/30 px-4 py-3 max-w-full overflow-hidden">
+        <div className="flex items-start gap-2.5 min-w-0">
           <AlertCircle size={16} className="text-danger shrink-0 mt-0.5" />
-          <div className="text-sm text-danger selectable-text">
+          <div className="text-sm text-danger selectable-text min-w-0 flex-1">
             {textParts.map((c, i) => (
-              <p key={i} className="font-mono">
+              <p key={i} className="font-mono break-all whitespace-pre-wrap">
                 {c.type === "text" && c.text}
               </p>
             ))}

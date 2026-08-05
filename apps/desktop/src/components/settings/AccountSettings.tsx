@@ -147,8 +147,8 @@ export function AccountSettings() {
       )}
 
       {error && (
-        <div className="mt-4 rounded-xl bg-danger-muted border border-danger/30 px-4 py-3">
-          <p className="text-sm text-danger">{error}</p>
+        <div className="mt-4 rounded-xl bg-danger-muted border border-danger/30 px-4 py-3 max-w-full overflow-hidden">
+          <p className="text-sm text-danger break-all whitespace-pre-wrap">{error}</p>
         </div>
       )}
     </div>
