@@ -54,23 +54,23 @@ export function ChatScreen() {
               <View
                 className={`p-4 rounded-xl mb-3.5 ${
                   isUser
-                    ? "bg-white/10 border border-white/20 self-end max-w-[85%]"
-                    : "bg-[#121316] border border-white/10 self-start w-full max-w-[92%]"
+                    ? "bg-foreground/10 border border-border self-end max-w-[85%]"
+                    : "bg-card border border-border self-start w-full max-w-[92%]"
                 }`}
               >
-                <Text className="text-xs font-bold text-zinc-400 uppercase mb-1.5">
+                <Text className="text-xs font-bold text-foreground-secondary uppercase mb-1.5">
                   {isUser ? "You" : "Agent"}
                 </Text>
-                <Text className="text-white text-sm leading-6">{text}</Text>
+                <Text className="text-foreground text-sm leading-6">{text}</Text>
               </View>
             );
           }}
         />
       )}
 
-      <View className="flex-row gap-2.5 p-3.5 bg-[#0d0d0e] border-t border-white/10 items-center">
+      <View className="flex-row gap-2.5 p-3.5 bg-screen border-t border-border items-center">
         <TextInput
-          className="flex-1 min-h-11 max-h-28 bg-[#16171a] border border-white/20 rounded-xl px-4 py-2.5 text-white text-sm"
+          className="flex-1 min-h-11 max-h-28 bg-card border border-border rounded-xl px-4 py-2.5 text-foreground text-sm"
           value={inputVal}
           onChangeText={setInputVal}
           placeholder="Ask agent to write code..."
@@ -78,7 +78,7 @@ export function ChatScreen() {
           multiline
         />
         <TouchableOpacity
-          className={`h-11 bg-white rounded-xl px-5 items-center justify-center ${
+          className={`h-11 bg-foreground rounded-xl px-5 items-center justify-center ${
             !inputVal.trim() || running ? "opacity-30" : ""
           }`}
           onPress={sendMessage}
