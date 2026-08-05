@@ -1,5 +1,6 @@
 import React from "react";
 import { ArrowUp, Square, Paperclip, X } from "lucide-react";
+import { toast } from "sonner";
 import type { ApprovalMode, ImageAttachment, ProjectInfo } from "@console/types";
 import { ImageViewerModal, ModelSelector, ApprovalModeSelector, ProjectSelector } from "../common";
 import { ComposerAutocomplete } from "./ComposerAutocomplete";
@@ -25,6 +26,7 @@ interface ComposerProps {
   /** Pending image attachments to show as thumbnails above the textarea. */
   attachments?: ImageAttachment[];
   onPickImages?: () => void;
+  onAddAttachments?: (attachments: ImageAttachment[]) => void;
   onRemoveAttachment?: (index: number) => void;
 }
 
@@ -52,10 +54,47 @@ export function Composer({
   sessionId,
   attachments = [],
   onPickImages,
+  onAddAttachments,
   onRemoveAttachment,
 }: ComposerProps) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const [previewAttachment, setPreviewAttachment] = React.useState<ImageAttachment | null>(null);
+  const [isDragging, setIsDragging] = React.useState(false);
+
+  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+
+    const imageFiles = Array.from(event.dataTransfer.files).filter((file) =>
+      file.type.startsWith("image/"),
+    );
+    if (imageFiles.length === 0) return;
+
+    try {
+      const droppedAttachments = await Promise.all(
+        imageFiles.map(
+          (file) =>
+            new Promise<ImageAttachment>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const dataUrl = String(reader.result ?? "");
+                const separator = dataUrl.indexOf(",");
+                if (separator === -1) {
+                  reject(new Error("Invalid image data"));
+                  return;
+                }
+                resolve({ data: dataUrl.slice(separator + 1), mimeType: file.type });
+              };
+              reader.onerror = () => reject(reader.error ?? new Error("Unable to read image"));
+              reader.readAsDataURL(file);
+            }),
+        ),
+      );
+      onAddAttachments?.(droppedAttachments);
+    } catch {
+      toast.error("Unable to add dropped image.");
+    }
+  };
 
   // Auto-grow textarea height up to a max.
   React.useEffect(() => {
@@ -76,7 +115,17 @@ export function Composer({
             onPick={onChange}
             textareaRef={textareaRef}
           />
-          <div className="bg-card border border-border rounded-2xl focus-within:border-border-strong transition-colors">
+          <div
+            className={`bg-card border rounded-2xl focus-within:border-border-strong transition-colors ${
+              isDragging ? "border-foreground/50 bg-white/[0.04]" : "border-border"
+            }`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+          >
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-2 px-3 pt-3">
                 {attachments.map((att, i) => (
@@ -95,7 +144,7 @@ export function Composer({
                     </button>
                     <button
                       onClick={() => onRemoveAttachment?.(i)}
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-black/70 border border-border text-foreground-muted hover:text-foreground flex items-center justify-center"
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-black/70 border border-border text-foreground-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground flex items-center justify-center transition-opacity"
                       title="Remove"
                     >
                       <X size={11} />

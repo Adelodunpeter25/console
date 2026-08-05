@@ -28,6 +28,7 @@ export function ChatScreen() {
     abort,
     loadMessages,
     pickImages,
+    addAttachments,
     removeAttachment,
   } = useChatStore();
   const {
@@ -117,6 +118,7 @@ export function ChatScreen() {
         sessionId={selectedSessionId}
         attachments={attachments}
         onPickImages={pickImages}
+        onAddAttachments={addAttachments}
         onRemoveAttachment={removeAttachment}
       />
     </div>

@@ -40,6 +40,8 @@ interface ChatState {
   pickImages: () => Promise<void>;
   /** Remove a pending attachment by index. */
   removeAttachment: (index: number) => void;
+  /** Add image attachments from drag-and-drop or another input source. */
+  addAttachments: (attachments: ImageAttachment[]) => void;
   sendMessage: (sessionId: string) => Promise<void>;
   abort: (sessionId: string) => Promise<void>;
   /** Answer a pending question from the agent. */
@@ -114,6 +116,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => ({
       attachments: s.attachments.filter((_, i) => i !== index),
     })),
+
+  addAttachments: (attachments) => {
+    if (attachments.length === 0) return;
+    set((s) => ({ attachments: [...s.attachments, ...attachments] }));
+  },
 
   sendMessage: async (sessionId: string) => {
     const { input, running, attachments } = get();
