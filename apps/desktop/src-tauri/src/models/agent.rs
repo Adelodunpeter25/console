@@ -77,6 +77,8 @@ pub enum AgentMessage {
         content: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         attachments: Option<Vec<ImagePart>>,
+        #[serde(rename = "createdAt", default, skip_serializing_if = "Option::is_none")]
+        created_at: Option<f64>,
     },
     #[serde(rename = "assistant")]
     Assistant {
@@ -84,9 +86,13 @@ pub enum AgentMessage {
         content: Vec<AssistantMessageContent>,
         #[serde(rename = "stopReason")]
         stop_reason: Option<String>,
+        #[serde(rename = "createdAt", default, skip_serializing_if = "Option::is_none")]
+        created_at: Option<f64>,
     },
     #[serde(rename = "toolResult")]
     ToolResult {
         results: Vec<ToolResult>,
+        #[serde(rename = "createdAt", default, skip_serializing_if = "Option::is_none")]
+        created_at: Option<f64>,
     },
 }
