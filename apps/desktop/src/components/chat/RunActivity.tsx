@@ -2,7 +2,7 @@ import React from "react";
 import { ChevronRight, ChevronUp, Loader2 } from "lucide-react";
 import type { ActivityEvent, RunActivityState } from "../../types/chat";
 import type { ToolCall, ToolResult } from "@console/types";
-import { ToolCallBlock } from "../common/ToolCallBlock";
+import { ToolCallBlock, MarkdownRenderer } from "../common";
 
 interface RunActivityProps {
   activity: RunActivityState;
@@ -64,7 +64,10 @@ export function RunActivity({ activity, running }: RunActivityProps) {
     return () => window.clearInterval(timer);
   }, [running]);
 
-  if (!activity.startedAt && activity.events.length === 0) return null;
+  // Don't render the activity block at all if there are no tool calls.
+  // A simple question/answer with no tool usage should not show "Worked for 0s".
+  const hasToolCalls = activity.events.some((e) => e.type === "toolCall");
+  if (!hasToolCalls) return null;
 
   const isWorking = running || activity.status === "working";
   const elapsed = isWorking && activity.startedAt ? now - activity.startedAt : activity.elapsedMs;
@@ -92,16 +95,13 @@ export function RunActivity({ activity, running }: RunActivityProps) {
         {expanded ? <ChevronUp size={14} /> : <ChevronRight size={14} />}
       </button>
       {expanded && groups.length > 0 && (
-        <div className="mt-1 space-y-1.5">
+        <div className="mt-1 space-y-2">
           {groups.map((group, i) => {
             if (group.kind === "text") {
               return (
-                <p
-                  key={`text-${i}`}
-                  className="text-xs text-foreground-secondary px-1 py-0.5 leading-relaxed"
-                >
-                  {group.text}
-                </p>
+                <div key={`text-${i}`} className="px-1">
+                  <MarkdownRenderer content={group.text} />
+                </div>
               );
             }
             return (
