@@ -1,11 +1,13 @@
 import React from "react";
 import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
 import { TitleBar } from "../components/TitleBar";
-import { Sidebar } from "../components/sidebar";
+import { Sidebar } from "../components/sidebar/Sidebar";
 import { ChatScreen } from "./ChatScreen";
-import { EmptyState, ResizablePanel } from "../components/common";
-import { CommandPalette } from "../components/commandpalette";
-import { useAppStore, useServerStore } from "../store";
+import { EmptyState } from "../components/common/EmptyState";
+import { ResizablePanel } from "../components/common/ResizablePanel";
+import { CommandPalette } from "../components/commandpalette/CommandPalette";
+import { useAppStore } from "../store/useAppStore";
+import { useServerStore } from "../store/useServerStore";
 import { getSidebarWidth, setSidebarWidth, getWindowSize, setWindowSize } from "../lib/ui-store";
 
 const SIDEBAR_MIN = 200;

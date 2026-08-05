@@ -1,10 +1,12 @@
 import React from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { TitleBar } from "../components/TitleBar";
-import { SettingsSidebar, ConnectionSettings, AccountSettings } from "../components/settings";
-import { ResizablePanel } from "../components/common";
+import { SettingsSidebar } from "../components/settings/SettingsSidebar";
+import { ConnectionSettings } from "../components/settings/ConnectionSettings";
+import { AccountSettings } from "../components/settings/AccountSettings";
+import { ResizablePanel } from "../components/common/ResizablePanel";
 import { getSidebarWidth, setSidebarWidth } from "../lib/ui-store";
-import type { SettingsSection } from "../components/settings";
+import type { SettingsSection } from "../components/settings/SettingsSidebar";
 
 const SIDEBAR_MIN = 200;
 const SIDEBAR_MAX = 480;

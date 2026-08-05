@@ -1,6 +1,6 @@
 import React from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useProviderStore } from "../../store";
+import { useProviderStore } from "../../store/useProviderStore";
 import { Dropdown, DropdownItem, DropdownSearch } from "./Dropdown";
 
 interface ModelSelectorProps {

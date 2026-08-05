@@ -10,7 +10,9 @@ import {
   CornerDownLeft,
   Search,
 } from "lucide-react";
-import { useAppStore, useProjectStore, useFsStore } from "../../store";
+import { useAppStore } from "../../store/useAppStore";
+import { useProjectStore } from "../../store/useProjectStore";
+import { useFsStore } from "../../store/useFsStore";
 
 interface CommandPaletteProps {
   open: boolean;

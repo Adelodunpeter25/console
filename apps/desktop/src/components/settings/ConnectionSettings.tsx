@@ -1,7 +1,7 @@
 import React from "react";
 import { Wifi, WifiOff } from "lucide-react";
-import { useServerStore } from "../../store";
-import { GlassSurface } from "../common";
+import { useServerStore } from "../../store/useServerStore";
+import { GlassSurface } from "../common/GlassSurface";
 
 /**
  * Connection settings panel — backend server endpoint configuration,

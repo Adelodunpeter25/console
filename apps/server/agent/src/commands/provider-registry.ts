@@ -21,6 +21,19 @@ export interface ProviderEntry extends ProviderCatalogEntry {
 
 export type { ProviderCatalogEntry } from "../types/index.js";
 
+export const DEFAULT_FALLBACK_MODEL = "gemini-3-flash";
+
+export const AVAILABLE_MODELS = [
+  "claude-opus-4-6-thinking",
+  "claude-sonnet-4-6",
+  "gemini-3.1-pro-high",
+  "gemini-3.1-pro-low",
+  "gemini-3-flash",
+  "gemini-3-flash-agent",
+  "gemini-3.5-flash-low",
+  "gpt-oss-120b-medium",
+] as const;
+
 export const DEFAULT_GEMINI_MODELS: Model[] = [
   { id: "gemini-3.1-pro-preview", provider: "gemini", contextWindow: 1_048_576 },
   { id: "gemini-3-pro-preview", provider: "gemini", contextWindow: 1_048_576 },
@@ -28,17 +41,11 @@ export const DEFAULT_GEMINI_MODELS: Model[] = [
   { id: "gemini-2.5-flash", provider: "gemini", contextWindow: 1_048_576 },
 ];
 
-export const DEFAULT_ANTIGRAVITY_MODELS: Model[] = [
-  { id: "gemini-2.5-flash", provider: "antigravity", contextWindow: 1_048_576 },
-  { id: "gemini-2.5-pro", provider: "antigravity", contextWindow: 1_048_576 },
-  { id: "gemini-3-flash", provider: "antigravity", contextWindow: 1_048_576 },
-  { id: "gemini-3.1-pro-low", provider: "antigravity", contextWindow: 1_048_576 },
-  { id: "gemini-3.1-pro-high", provider: "antigravity", contextWindow: 1_048_576 },
-  { id: "gemini-3.5-flash-low", provider: "antigravity", contextWindow: 1_048_576 },
-  { id: "gemini-3.6-flash-medium", provider: "antigravity", contextWindow: 1_048_576 },
-  { id: "claude-sonnet-4-6", provider: "antigravity", contextWindow: 250_000 },
-  { id: "claude-opus-4-6-thinking", provider: "antigravity", contextWindow: 250_000 },
-];
+export const DEFAULT_ANTIGRAVITY_MODELS: Model[] = AVAILABLE_MODELS.map((id) => ({
+  id,
+  provider: "antigravity",
+  contextWindow: id.startsWith("claude-") ? 250_000 : 1_048_576,
+}));
 
 export const PROVIDER_CATALOG: Record<"gemini" | "antigravity", ProviderEntry> = {
   gemini: {

@@ -1,5 +1,6 @@
 import React from "react";
-import { MarkdownRenderer, ThinkingBlock } from "../common";
+import { MarkdownRenderer } from "../common/MarkdownRenderer";
+import { ThinkingBlock } from "../common/ThinkingBlock";
 
 interface StreamingBubbleProps {
   text: string;

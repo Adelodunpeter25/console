@@ -1,12 +1,13 @@
 import React from "react";
-import {
-  useAppStore,
-  useChatStore,
-  useProjectStore,
-  useProviderStore,
-  useSessionStore,
-} from "../store";
-import { MessageList, Composer, InteractionPanel, TodoList } from "../components/chat";
+import { useAppStore } from "../store/useAppStore";
+import { useChatStore } from "../store/useChatStore";
+import { useProjectStore } from "../store/useProjectStore";
+import { useProviderStore } from "../store/useProviderStore";
+import { useSessionStore } from "../store/useSessionStore";
+import { MessageList } from "../components/chat/MessageList";
+import { Composer } from "../components/chat/Composer";
+import { InteractionPanel } from "../components/chat/InteractionPanel";
+import { TodoList } from "../components/chat/TodoList";
 import { basename } from "../utils/format";
 import { EMPTY_CHAT_SESSION } from "../store/useChatStore";
 

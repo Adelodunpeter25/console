@@ -1,6 +1,6 @@
 import React from "react";
 import type { ImageAttachment } from "@console/types";
-import { ImageViewerModal } from "../common";
+import { ImageViewerModal } from "../common/ImageViewerModal";
 
 interface UserBubbleProps {
   content: string;
@@ -16,27 +16,33 @@ export const UserBubble = React.memo(function UserBubble({
   attachments = [],
 }: UserBubbleProps) {
   const [previewAttachment, setPreviewAttachment] = React.useState<ImageAttachment | null>(null);
+  const attachmentKeyOccurrences = new Map<string, number>();
 
   return (
     <div className="flex justify-end">
       <div className="max-w-[80%] rounded-2xl bg-user-bubble border border-user-bubble-border px-4 py-3">
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
-            {attachments.map((att, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setPreviewAttachment(att)}
-                className="h-16 w-16 overflow-hidden rounded-lg border border-user-bubble-border"
-                title={`Preview attachment ${i + 1}`}
-              >
-                <img
-                  src={`data:${att.mimeType};base64,${att.data}`}
-                  alt={`attachment ${i + 1}`}
-                  className="h-full w-full object-cover"
-                />
-              </button>
-            ))}
+            {attachments.map((att, i) => {
+              const base = `${att.mimeType}:${att.data}`;
+              const occurrence = attachmentKeyOccurrences.get(base) ?? 0;
+              attachmentKeyOccurrences.set(base, occurrence + 1);
+              return (
+                <button
+                  key={`${base}:${occurrence}`}
+                  type="button"
+                  onClick={() => setPreviewAttachment(att)}
+                  className="h-16 w-16 overflow-hidden rounded-lg border border-user-bubble-border"
+                  title={`Preview attachment ${i + 1}`}
+                >
+                  <img
+                    src={`data:${att.mimeType};base64,${att.data}`}
+                    alt={`attachment ${i + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                </button>
+              );
+            })}
           </div>
         )}
         {content && (

@@ -1,7 +1,7 @@
 import React from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { SidebarLeftIcon } from "@hugeicons/core-free-icons";
-import { useAppStore } from "../store";
+import { useAppStore } from "../store/useAppStore";
 
 interface TitleBarProps {
   /** Right-side action button (e.g. back-to-app). */

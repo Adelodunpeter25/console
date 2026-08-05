@@ -1,6 +1,8 @@
 import type { SessionHeader, SessionStatus } from "@console/types";
 import { FolderClosed, Trash2 } from "lucide-react";
-import { useAppStore, useProjectStore, useSessionStatusStore } from "../../store";
+import { useAppStore } from "../../store/useAppStore";
+import { useProjectStore } from "../../store/useProjectStore";
+import { useSessionStatusStore } from "../../store/useSessionStatusStore";
 import { formatRelativeTime } from "../../utils/time";
 import { basename } from "../../utils/format";
 

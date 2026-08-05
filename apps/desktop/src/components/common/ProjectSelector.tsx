@@ -2,7 +2,7 @@ import React from "react";
 import { FolderOpen } from "lucide-react";
 import type { ProjectInfo } from "@console/types";
 import { toast } from "sonner";
-import { useProjectStore } from "../../store";
+import { useProjectStore } from "../../store/useProjectStore";
 import { tauriApi } from "../../lib/tauri-api";
 import {
   Dropdown,

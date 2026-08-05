@@ -1,8 +1,8 @@
 import React from "react";
 import { CheckCircle2, Circle, Loader2, LogIn, RefreshCw, Save } from "lucide-react";
-import { useAuthStore } from "../../store";
-import type { ProviderId } from "../../store";
-import { GlassSurface } from "../common";
+import { useAuthStore } from "../../store/useAuthStore";
+import type { ProviderId } from "../../store/useAuthStore";
+import { GlassSurface } from "../common/GlassSurface";
 
 /**
  * Account settings panel — shows per-provider OAuth login status and

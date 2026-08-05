@@ -1,9 +1,21 @@
 import React from "react";
 import { AlertCircle } from "lucide-react";
 import type { AgentMessage } from "@console/types";
-import { MarkdownRenderer, ThinkingBlock } from "../common";
+import { MarkdownRenderer } from "../common/MarkdownRenderer";
+import { ThinkingBlock } from "../common/ThinkingBlock";
 
 type AssistantMessage = Extract<AgentMessage, { role: "assistant" }>;
+
+function contentKey(
+  part: AssistantMessage["content"][number],
+  occurrences: Map<string, number>,
+): string {
+  const base =
+    part.type === "toolCall" ? `${part.type}:${part.call.id}` : `${part.type}:${part.text}`;
+  const occurrence = occurrences.get(base) ?? 0;
+  occurrences.set(base, occurrence + 1);
+  return `${base}:${occurrence}`;
+}
 
 interface AssistantBubbleProps {
   message: AssistantMessage;
@@ -31,6 +43,7 @@ export const AssistantBubble = React.memo(function AssistantBubble({
   const thinkingParts = message.content.filter((c) => c.type === "thinking");
   const hasToolCalls = message.content.some((c) => c.type === "toolCall");
   const isError = textParts.some((c) => c.type === "text" && c.text.startsWith("Error:"));
+  const contentKeyOccurrences = new Map<string, number>();
 
   if (isError) {
     return (
@@ -38,8 +51,11 @@ export const AssistantBubble = React.memo(function AssistantBubble({
         <div className="flex items-start gap-2.5 min-w-0">
           <AlertCircle size={16} className="text-danger shrink-0 mt-0.5" />
           <div className="text-sm text-danger selectable-text min-w-0 flex-1">
-            {textParts.map((c, i) => (
-              <p key={i} className="font-mono break-all whitespace-pre-wrap">
+            {textParts.map((c) => (
+              <p
+                key={contentKey(c, contentKeyOccurrences)}
+                className="font-mono break-all whitespace-pre-wrap"
+              >
                 {c.type === "text" && c.text}
               </p>
             ))}
@@ -56,8 +72,11 @@ export const AssistantBubble = React.memo(function AssistantBubble({
     if (thinkingParts.length === 0) return null;
     return (
       <div className="space-y-2">
-        {thinkingParts.map((part, i) => (
-          <ThinkingBlock key={`thinking-${i}`} text={part.type === "thinking" ? part.text : ""} />
+        {thinkingParts.map((part) => (
+          <ThinkingBlock
+            key={contentKey(part, contentKeyOccurrences)}
+            text={part.type === "thinking" ? part.text : ""}
+          />
         ))}
       </div>
     );
@@ -65,8 +84,11 @@ export const AssistantBubble = React.memo(function AssistantBubble({
 
   return (
     <div className="space-y-2">
-      {thinkingParts.map((part, i) => (
-        <ThinkingBlock key={`thinking-${i}`} text={part.type === "thinking" ? part.text : ""} />
+      {thinkingParts.map((part) => (
+        <ThinkingBlock
+          key={contentKey(part, contentKeyOccurrences)}
+          text={part.type === "thinking" ? part.text : ""}
+        />
       ))}
 
       {textParts.length > 0 && (

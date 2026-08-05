@@ -2,13 +2,11 @@ import React from "react";
 import { ArrowUp, Square, Paperclip, X } from "lucide-react";
 import { toast } from "sonner";
 import type { ApprovalMode, ImageAttachment, ProjectInfo } from "@console/types";
-import {
-  DragDropZone,
-  ImageViewerModal,
-  ModelSelector,
-  ApprovalModeSelector,
-  ProjectSelector,
-} from "../common";
+import { DragDropZone } from "../common/DragDropZone";
+import { ImageViewerModal } from "../common/ImageViewerModal";
+import { ModelSelector } from "../common/ModelSelector";
+import { ApprovalModeSelector } from "../common/ApprovalModeSelector";
+import { ProjectSelector } from "../common/ProjectSelector";
 import { ComposerAutocomplete } from "./ComposerAutocomplete";
 import { tauriApi } from "../../lib/tauri-api";
 import { useMessageHistory } from "../../utils/useMessageHistory";
@@ -70,6 +68,7 @@ export function Composer({
 }: ComposerProps) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const [previewAttachment, setPreviewAttachment] = React.useState<ImageAttachment | null>(null);
+  const attachmentKeyOccurrences = new Map<string, number>();
   const { navigate: navigateHistory, reset: resetHistory } = useMessageHistory({
     history: messageHistory,
     value,
@@ -142,29 +141,34 @@ export function Composer({
             >
               {attachments.length > 0 && (
                 <div className="flex flex-wrap gap-2 px-3 pt-3">
-                  {attachments.map((att, i) => (
-                    <div key={i} className="relative group">
-                      <button
-                        type="button"
-                        onClick={() => setPreviewAttachment(att)}
-                        className="block h-16 w-16 overflow-hidden rounded-lg border border-border"
-                        title={`Preview attachment ${i + 1}`}
-                      >
-                        <img
-                          src={`data:${att.mimeType};base64,${att.data}`}
-                          alt={`attachment ${i + 1}`}
-                          className="h-full w-full object-cover"
-                        />
-                      </button>
-                      <button
-                        onClick={() => onRemoveAttachment?.(i)}
-                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-black/70 border border-border text-foreground-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground flex items-center justify-center transition-opacity"
-                        title="Remove"
-                      >
-                        <X size={11} />
-                      </button>
-                    </div>
-                  ))}
+                  {attachments.map((att, i) => {
+                    const base = `${att.mimeType}:${att.data}`;
+                    const occurrence = attachmentKeyOccurrences.get(base) ?? 0;
+                    attachmentKeyOccurrences.set(base, occurrence + 1);
+                    return (
+                      <div key={`${base}:${occurrence}`} className="relative group">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewAttachment(att)}
+                          className="block h-16 w-16 overflow-hidden rounded-lg border border-border"
+                          title={`Preview attachment ${i + 1}`}
+                        >
+                          <img
+                            src={`data:${att.mimeType};base64,${att.data}`}
+                            alt={`attachment ${i + 1}`}
+                            className="h-full w-full object-cover"
+                          />
+                        </button>
+                        <button
+                          onClick={() => onRemoveAttachment?.(i)}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-black/70 border border-border text-foreground-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground flex items-center justify-center transition-opacity"
+                          title="Remove"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               <textarea

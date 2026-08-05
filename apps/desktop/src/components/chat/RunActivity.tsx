@@ -2,7 +2,8 @@ import React from "react";
 import { ChevronRight, ChevronUp, Loader2 } from "lucide-react";
 import type { ActivityEvent, RunActivityState } from "../../types/chat";
 import type { ToolCall, ToolResult } from "@console/types";
-import { ToolCallBlock, MarkdownRenderer } from "../common";
+import { ToolCallBlock } from "../common/ToolCallBlock";
+import { MarkdownRenderer } from "../common/MarkdownRenderer";
 
 interface RunActivityProps {
   activity: RunActivityState;
@@ -19,8 +20,8 @@ function formatDuration(milliseconds: number): string {
 
 /** A group of consecutive events for rendering. */
 type RenderGroup =
-  | { kind: "text"; text: string }
-  | { kind: "tools"; calls: ToolCall[]; results: ToolResult[] };
+  | { kind: "text"; id: string; text: string }
+  | { kind: "tools"; id: string; calls: ToolCall[]; results: ToolResult[] };
 
 /**
  * Group consecutive events: text events render individually, consecutive
@@ -30,7 +31,7 @@ function groupEvents(events: ActivityEvent[]): RenderGroup[] {
   const groups: RenderGroup[] = [];
   for (const event of events) {
     if (event.type === "text") {
-      groups.push({ kind: "text", text: event.text });
+      groups.push({ kind: "text", id: event.id, text: event.text });
     } else {
       // toolCall event
       const last = groups[groups.length - 1];
@@ -44,6 +45,7 @@ function groupEvents(events: ActivityEvent[]): RenderGroup[] {
       } else {
         groups.push({
           kind: "tools",
+          id: event.call.id,
           calls: [event.call],
           results: event.result ? [event.result] : [],
         });
@@ -96,17 +98,17 @@ export function RunActivity({ activity, running }: RunActivityProps) {
       </button>
       {expanded && groups.length > 0 && (
         <div className="mt-1 space-y-2">
-          {groups.map((group, i) => {
+          {groups.map((group) => {
             if (group.kind === "text") {
               return (
-                <div key={`text-${i}`} className="px-1">
+                <div key={`${group.kind}-${group.id}`} className="px-1">
                   <MarkdownRenderer content={group.text} />
                 </div>
               );
             }
             return (
               <ToolCallBlock
-                key={`tools-${i}`}
+                key={`${group.kind}-${group.id}`}
                 calls={group.calls}
                 results={group.results}
               />
