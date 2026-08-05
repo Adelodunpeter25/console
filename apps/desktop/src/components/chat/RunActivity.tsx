@@ -26,7 +26,7 @@ export function RunActivity({ activity, running }: RunActivityProps) {
     return () => window.clearInterval(timer);
   }, [running]);
 
-  if (!running && activity.calls.length === 0) return null;
+  if (!activity.startedAt) return null;
 
   const elapsed = running && activity.startedAt ? now - activity.startedAt : activity.elapsedMs;
   return (

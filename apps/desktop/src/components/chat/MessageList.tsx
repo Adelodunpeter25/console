@@ -56,7 +56,7 @@ export function MessageList({
     if (autoScroll && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, streamingText, streamingThinking, autoScroll, liveToolResults]);
+  }, [messages, streamingText, streamingThinking, autoScroll, liveToolResults, runActivity]);
 
   const handleScroll = React.useCallback(() => {
     if (!scrollRef.current) return;
@@ -75,6 +75,10 @@ export function MessageList({
   // "Agent is thinking..." state — not only after the first delta arrives.
   const showStreamingBubble = running || isStreaming;
   const showEmpty = messages.length === 0 && !showStreamingBubble;
+  const latestUserIndex = React.useMemo(
+    () => messages.findLastIndex((message) => message.role === "user"),
+    [messages],
+  );
 
   const showScrollButton = !autoScroll;
 
@@ -90,22 +94,22 @@ export function MessageList({
         ) : (
           <div className="max-w-3xl mx-auto px-6 py-6 space-y-4">
             {messages.map((msg, i) => (
-              <MessageBubble
-                key={messageKey(msg, i)}
-                message={msg}
-                prevMessage={messages[i - 1]}
-                nextMessage={messages[i + 1]}
-                liveToolResults={liveToolResults}
-                activeRunCallIds={runActivity.calls.map((call) => call.id)}
-              />
+              <React.Fragment key={messageKey(msg, i)}>
+                <MessageBubble
+                  message={msg}
+                  prevMessage={messages[i - 1]}
+                  nextMessage={messages[i + 1]}
+                  liveToolResults={liveToolResults}
+                  activeRunCallIds={runActivity.calls.map((call) => call.id)}
+                />
+                {i === latestUserIndex && (
+                  <RunActivity activity={runActivity} running={running} />
+                )}
+              </React.Fragment>
             ))}
             {showStreamingBubble && (
-              <>
-                <RunActivity activity={runActivity} running={running} />
-                <StreamingBubble text={streamingText} thinking={streamingThinking} />
-              </>
+              <StreamingBubble text={streamingText} thinking={streamingThinking} />
             )}
-            {!showStreamingBubble && <RunActivity activity={runActivity} running={false} />}
           </div>
         )}
       </div>
