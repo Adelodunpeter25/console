@@ -153,4 +153,6 @@ export const tauriApi = {
 
   // --- image attachments ----------------------------------------------------
   pickImages: () => invoke<PickedImage[]>("pick_images"),
+  readDroppedImages: (paths: string[]) =>
+    invoke<PickedImage[]>("read_dropped_images", { paths }),
 };

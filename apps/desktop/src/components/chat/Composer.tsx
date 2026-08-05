@@ -10,6 +10,7 @@ import {
   ProjectSelector,
 } from "../common";
 import { ComposerAutocomplete } from "./ComposerAutocomplete";
+import { tauriApi } from "../../lib/tauri-api";
 
 interface ComposerProps {
   value: string;
@@ -91,6 +92,14 @@ export function Composer({
       toast.error("Unable to add dropped image.");
     }
   };
+  const handleDropPaths = React.useCallback(async (paths: string[]) => {
+    try {
+      const dropped = await tauriApi.readDroppedImages(paths);
+      onAddAttachments?.(dropped.map((image) => ({ data: image.data, mimeType: image.mimeType })));
+    } catch {
+      toast.error("Unable to add dropped image.");
+    }
+  }, [onAddAttachments]);
 
   // Auto-grow textarea height up to a max.
   React.useEffect(() => {
@@ -115,6 +124,7 @@ export function Composer({
             className="bg-card border border-border rounded-2xl focus-within:border-border-strong"
             accept={(file) => file.type.startsWith("image/")}
             onDropFiles={handleDropFiles}
+            onDropPaths={handleDropPaths}
           >
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-2 px-3 pt-3">
