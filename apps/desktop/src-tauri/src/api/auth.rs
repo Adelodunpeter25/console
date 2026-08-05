@@ -18,6 +18,7 @@ pub async fn handle_callback(client: &ApiClient, dto: &OAuthCallbackDto) -> AppR
 #[derive(Debug, Serialize)]
 pub struct ProjectIdDto {
     pub provider: String,
+    #[serde(rename = "projectId")]
     pub project_id: Option<String>,
 }
 

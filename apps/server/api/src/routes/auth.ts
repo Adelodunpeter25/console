@@ -74,6 +74,7 @@ authRoutes.get("/project-id/:provider", async (c) => {
  */
 authRoutes.post("/project-id", async (c) => {
   const body = await c.req.json<ProjectIdDto>();
+  console.log("POST /project-id body:", body);
   const { provider, projectId } = body;
   if (provider !== "gemini" && provider !== "antigravity") {
     return c.json({ success: false, error: "Invalid provider." }, 400);

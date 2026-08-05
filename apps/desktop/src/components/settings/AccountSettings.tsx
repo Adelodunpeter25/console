@@ -23,9 +23,15 @@ export function AccountSettings() {
   const { status, loading, loggingIn, error, projectIds, savingProjectId, loadStatus, loginWithBrowser, saveProjectId } =
     useAuthStore();
 
+  const [geminiProjectId, setGeminiProjectId] = React.useState("");
+
   React.useEffect(() => {
     loadStatus();
   }, [loadStatus]);
+
+  React.useEffect(() => {
+    setGeminiProjectId(projectIds.gemini ?? "");
+  }, [projectIds.gemini]);
 
   const handleLogin = async (provider: ProviderId) => {
     try {
@@ -111,16 +117,14 @@ export function AccountSettings() {
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
-                          defaultValue={configuredProjectId ?? ""}
-                          key={configuredProjectId}
+                          value={geminiProjectId}
+                          onChange={(e) => setGeminiProjectId(e.target.value)}
                           placeholder="my-project-id"
                           className="flex-1 px-3 py-1.5 rounded-lg text-sm bg-black/20 border border-border text-foreground placeholder:text-foreground-muted focus:outline-none focus:border-primary/50"
                         />
                         <button
-                          onClick={(e) => {
-                            const input = e.currentTarget.parentElement?.querySelector("input");
-                            const value = input?.value.trim() || undefined;
-                            saveProjectId("gemini", value).catch(() => {});
+                          onClick={() => {
+                            saveProjectId("gemini", geminiProjectId || undefined).catch(() => {});
                           }}
                           disabled={savingProjectId}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border text-foreground hover:bg-white/10 transition-colors shrink-0 disabled:opacity-50"
