@@ -444,10 +444,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }));
         break;
       case "toolExecutionEnd":
-        set((s) => ({
-          messages: [...s.messages, { role: "toolResult", results: event.results }],
-          liveToolResults: [],
-        }));
+        set((s) => {
+          // Some backends emit the completion event without repeating every
+          // result. Preserve the results already received live so completed
+          // tool rows do not regress to a spinner on the next render.
+          const results = [...event.results];
+          for (const live of s.liveToolResults) {
+            if (!results.some((result) => result.toolCallId === live.toolCallId)) {
+              results.push(live);
+            }
+          }
+          return {
+            messages: [...s.messages, { role: "toolResult", results }],
+            liveToolResults: [],
+          };
+        });
         break;
       case "askQuestion":
         set({ pendingQuestion: { request: event.request } });
