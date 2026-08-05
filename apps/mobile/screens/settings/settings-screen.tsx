@@ -26,7 +26,7 @@ export function SettingsScreen() {
   const setActiveTab = useAppStore((state) => state.setActiveTab);
 
   return (
-    <ScrollView className="flex-1 bg-[#0d0d0e] px-4 pt-4">
+    <ScrollView className="flex-1 bg-[#0d0d0e] px-4 pt-4" style={{ flex: 1 }}>
       <View className="mb-5">
         <ScreenHeader title="Console Settings" onBack={() => setActiveTab("home")} />
         <Text className="text-sm text-zinc-400 mt-1 ml-4">

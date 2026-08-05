@@ -23,6 +23,7 @@ export function ChatScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       className="flex-1 pt-4"
+      style={{ flex: 1 }}
     >
       <ScreenHeader title="Console Chat" onBack={() => setActiveTab("home")} />
 

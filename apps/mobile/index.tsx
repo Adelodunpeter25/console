@@ -28,14 +28,14 @@ function OnboardingScreen() {
   const { inputUrl, setInputUrl, saveConnection, isSaving } = useServerConnection();
 
   return (
-    <SafeAreaView className="flex-1 bg-[#0a0a0b] justify-center p-6">
-      <Text className="text-white text-2xl font-bold mb-2 tracking-tight">Console Mobile</Text>
-      <Text className="text-zinc-400 text-sm mb-8 leading-6">
+    <SafeAreaView className="flex-1 bg-screen justify-center p-6">
+      <Text className="text-foreground text-2xl font-bold mb-2 tracking-tight">Console Mobile</Text>
+      <Text className="text-foreground-secondary text-sm mb-8 leading-6">
         Enter your Console backend server URL to get started.
       </Text>
 
       <TextInput
-        className="h-12 bg-[#16171a] border border-white/20 rounded-xl px-4 text-white text-sm font-mono mb-4"
+        className="h-12 bg-card border border-border rounded-xl px-4 text-foreground text-sm font-mono mb-4"
         value={inputUrl}
         onChangeText={setInputUrl}
         placeholder="http://192.168.1.X:3000"
@@ -46,7 +46,7 @@ function OnboardingScreen() {
       />
 
       <TouchableOpacity
-        className="bg-white py-3.5 px-6 rounded-full items-center"
+        className="bg-foreground py-3.5 px-6 rounded-full items-center"
         onPress={saveConnection}
         disabled={isSaving}
       >
@@ -72,7 +72,7 @@ function AppRoot() {
 
   if (loading || !fontsLoaded) {
     return (
-      <View className="flex-1 bg-[#0a0a0b] items-center justify-center">
+      <View className="flex-1 bg-screen items-center justify-center">
         <ActivityIndicator size="large" color="#ffffff" />
       </View>
     );
@@ -80,7 +80,7 @@ function AppRoot() {
 
   return (
     <SafeAreaProvider>
-      <View className="flex-1 bg-[#0a0a0b]">
+      <View className="flex-1 bg-screen" style={{ flex: 1 }}>
         <StatusBar style="light" />
 
         {backendUrl ? (

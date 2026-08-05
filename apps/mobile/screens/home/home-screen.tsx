@@ -69,7 +69,7 @@ export function HomeScreen() {
   };
 
   return (
-    <View className="flex-1 bg-[#0d0d0e]">
+    <View className="flex-1 bg-[#0d0d0e]" style={{ flex: 1 }}>
       <ScreenHeader
         title="Console"
         subtitle="Alpha"
@@ -133,7 +133,7 @@ export function HomeScreen() {
       />
 
       {/* Search Bar */}
-      <View className="absolute bottom-0 left-0 right-0 px-4 pb-8 pt-3 bg-[#0d0d0e]/95 border-t border-white/10">
+      <View className="absolute bottom-0 left-0 right-0 px-4 pb-4 pt-3 bg-[#0d0d0e]/95 border-t border-white/10">
         <View className="flex-row items-center bg-[#16171a] border border-white/10 rounded-xl px-4 h-12">
           <Search size={18} color="#71717a" />
           <TextInput
