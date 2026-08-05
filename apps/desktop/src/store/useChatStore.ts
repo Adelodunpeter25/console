@@ -218,7 +218,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         markError(msg);
       }
     } finally {
-      if (unlisten) unlisten();
+      if (unlisten) {
+        const fn = unlisten;
+        setTimeout(() => {
+          try {
+            fn();
+          } catch (err) {
+            console.error("Failed to unlisten agent events:", err);
+          }
+        }, 100);
+      }
       set((state) => ({
         sessions: updateChatSession(state.sessions, sessionId, (session) => {
           // Finalize the latest run: compute elapsed time and mark as
