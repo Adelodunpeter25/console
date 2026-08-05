@@ -22,18 +22,10 @@ export interface ProviderEntry extends ProviderCatalogEntry {
 export type { ProviderCatalogEntry } from "../types/index.js";
 
 export const DEFAULT_GEMINI_MODELS: Model[] = [
-  { id: "gemini-2.5-flash", provider: "gemini", contextWindow: 1_048_576 },
-  { id: "gemini-2.5-flash-lite", provider: "gemini", contextWindow: 1_048_576 },
-  { id: "gemini-2.5-pro", provider: "gemini", contextWindow: 1_048_576 },
-  { id: "gemini-3-flash", provider: "gemini", contextWindow: 1_048_576 },
-  { id: "gemini-3-flash-preview", provider: "gemini", contextWindow: 1_048_576 },
+  { id: "gemini-3.1-pro-preview", provider: "gemini", contextWindow: 1_048_576 },
   { id: "gemini-3-pro-preview", provider: "gemini", contextWindow: 1_048_576 },
-  { id: "gemini-3.1-pro-low", provider: "gemini", contextWindow: 1_048_576 },
-  { id: "gemini-3.1-pro-high", provider: "gemini", contextWindow: 1_048_576 },
-  { id: "gemini-3.5-flash", provider: "gemini", contextWindow: 1_048_576 },
-  { id: "gemini-3.5-flash-lite", provider: "gemini", contextWindow: 1_048_576 },
-  { id: "gemini-3.6-flash", provider: "gemini", contextWindow: 1_048_576 },
-  { id: "gemini-3.6-flash-medium", provider: "gemini", contextWindow: 1_048_576 },
+  { id: "gemini-2.5-pro", provider: "gemini", contextWindow: 1_048_576 },
+  { id: "gemini-2.5-flash", provider: "gemini", contextWindow: 1_048_576 },
 ];
 
 export const DEFAULT_ANTIGRAVITY_MODELS: Model[] = [
