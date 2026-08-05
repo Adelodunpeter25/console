@@ -1,9 +1,6 @@
 # Taste
 - Prefers to commit the current working changes before diagnosing or fixing unrelated issues (e.g., asked to "commit first" before discussing what's wrong). Confidence: 0.9
-- Prefers to use bun for running scripts such as typecheck and build. Confidence: 0.9
 - Prefers to verify typecheck/build passes before pushing. Confidence: 0.7
-- When a lockfile is out of sync, prefers to regenerate it with the package manager (e.g., `bun install`) rather than skip or manually inspect. Confidence: 0.8
-- Prefers a direct, action-first approach over extended diagnostic explanations; expects requested actions (e.g., `git push`) to be executed without repeated confirmation (again confirmed with a bare "push" command, executed immediately). Confidence: 0.85
 - Communicates in terse, typo-heavy shorthand; expects the assistant to infer intent and act without asking for clarification (e.g., "file attachments images fileobly for now I need it too" → implement image attachments without clarifying). Confidence: 0.8
 - When adopting a new library/tool, prefers a full uniform replacement over a scoped or hybrid adoption (e.g., chose to replace react-markdown everywhere rather than only in the streaming bubble). Confidence: 0.5
 - When asked to "check out" or investigate an issue, wants a diagnosis first; implement fixes only after approval. Confidence: 0.7
