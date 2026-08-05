@@ -93,38 +93,6 @@ export function ConnectionSettings() {
           </button>
         </div>
       </GlassSurface>
-
-      {/* App Environment Info Card */}
-      <GlassSurface className="mb-4 p-4">
-        <p className="text-sm font-semibold text-foreground mb-2">App Info & Diagnostics</p>
-
-        <InfoRow label="Console Desktop Version" value="0.1.0" />
-        <InfoRow label="Framework" value="Tauri v2" />
-        <InfoRow label="Frontend" value="React 19 + Vite 6" />
-        <InfoRow label="Styling" value="Tailwind CSS v4" />
-        <InfoRow label="State Management" value="Zustand v5" />
-        <InfoRow label="Routing" value="TanStack Router" last />
-      </GlassSurface>
-
-      {/* About Card */}
-      <GlassSurface className="mb-8 p-4">
-        <p className="text-sm font-semibold text-foreground mb-2">About Console Desktop</p>
-        <p className="text-xs text-foreground-secondary leading-5">
-          Console Desktop is a Tauri v2 application that connects to the Console agent server. It
-          provides a native desktop experience for managing projects, chat sessions, and AI-powered
-          coding agents. The Rust backend handles all network communication and filesystem
-          operations, while the React frontend delivers a fast, responsive UI.
-        </p>
-      </GlassSurface>
-    </div>
-  );
-}
-
-function InfoRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
-  return (
-    <div className={`flex justify-between py-2 ${last ? "" : "border-b border-border"}`}>
-      <span className="text-xs text-foreground-secondary">{label}</span>
-      <span className="text-xs font-mono text-foreground">{value}</span>
     </div>
   );
 }

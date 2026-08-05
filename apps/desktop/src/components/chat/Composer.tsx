@@ -134,7 +134,7 @@ export function Composer({
               textareaRef={textareaRef}
             />
             <DragDropZone
-              className="bg-card border border-border rounded-2xl focus-within:border-border-strong"
+              className="bg-card border border-border rounded-xl focus-within:border-border-strong"
               accept={(file) => file.type.startsWith("image/")}
               onDropFiles={handleDropFiles}
               onDropPaths={handleDropPaths}
