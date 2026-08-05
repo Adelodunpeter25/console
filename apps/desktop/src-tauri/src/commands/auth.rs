@@ -172,7 +172,9 @@ pub async fn login_with_browser(
     // 1. Get the login URL from the backend.
     let client = ApiClient::new();
     let dto = OAuthLoginUrlDto { provider: provider.clone() };
-    let login_url_resp: LoginUrlResponse = crate::api::auth::get_login_url(&client, &dto).await?;
+    let login_url_value = crate::api::auth::get_login_url(&client, &dto).await?;
+    let login_url_resp: LoginUrlResponse = serde_json::from_value(login_url_value)
+        .map_err(|e| AppError::Other(format!("Failed to parse login URL response: {e}")))?;
 
     // 2. Parse the redirect URI to get the port and callback path.
     let (port, callback_path) = parse_redirect_uri(&login_url_resp.redirect_uri)?;
