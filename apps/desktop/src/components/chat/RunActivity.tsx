@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { ChevronRight, ChevronUp, Loader2 } from "lucide-react";
 import type { RunActivityState } from "../../types/chat";
 import { ToolCallBlock } from "../common/ToolCallBlock";
 
@@ -39,7 +39,7 @@ export function RunActivity({ activity, running }: RunActivityProps) {
       >
         {running ? <Loader2 size={13} className="animate-spin" /> : null}
         <span>Worked for {formatDuration(elapsed)}</span>
-        {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        {expanded ? <ChevronUp size={14} /> : <ChevronRight size={14} />}
       </button>
       {expanded && activity.calls.length > 0 && (
         <div className="mt-1">
