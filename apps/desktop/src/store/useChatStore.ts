@@ -1,12 +1,12 @@
 import { create } from "zustand";
 import { toast } from "sonner";
-import type { ImageAttachment } from "@console/types";
+import type { ImageAttachment, AgentMessage, ToolCall, ToolResult } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 import { useProviderStore } from "./useProviderStore";
 import { useProjectStore } from "./useProjectStore";
 import { useSessionStore } from "./useSessionStore";
 import { useSessionStatusStore } from "./useSessionStatusStore";
-import type { ChatStoreState } from "../types/chat";
+import type { ChatStoreState, RunActivityState } from "../types/chat";
 import {
   createChatSessionState,
   getChatSessionState,
@@ -36,6 +36,35 @@ function syncSessionStatus(sessionId: string, status: "idle" | "working" | "done
   useSessionStatusStore.getState().setStatus(sessionId, status);
 }
 
+function reconstructRunActivity(messages: AgentMessage[]): RunActivityState {
+  const latestUserIndex = messages.findLastIndex((msg) => msg.role === "user");
+  if (latestUserIndex === -1) {
+    return { startedAt: null, elapsedMs: 0, calls: [], results: [] };
+  }
+
+  const calls: ToolCall[] = [];
+  const results: ToolResult[] = [];
+
+  for (let i = latestUserIndex + 1; i < messages.length; i++) {
+    const msg = messages[i]!;
+    if (msg.role === "assistant") {
+      const msgCalls = msg.content
+        .filter((c): c is Extract<typeof c, { type: "toolCall" }> => c.type === "toolCall")
+        .map((c) => c.call);
+      calls.push(...msgCalls);
+    } else if (msg.role === "toolResult") {
+      results.push(...msg.results);
+    }
+  }
+
+  return {
+    startedAt: null,
+    elapsedMs: 0,
+    calls,
+    results,
+  };
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   sessions: {},
 
@@ -55,6 +84,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           activeToolCalls: [],
           pendingQuestion: null,
           pendingPermissions: [],
+          runActivity: reconstructRunActivity(messages),
           attachments: [],
         };
       }),
