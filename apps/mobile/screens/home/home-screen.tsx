@@ -69,7 +69,7 @@ export function HomeScreen() {
   };
 
   return (
-    <View className="flex-1 bg-[#0d0d0e]" style={{ flex: 1 }}>
+    <View className="flex-1 bg-screen" style={{ flex: 1 }}>
       <ScreenHeader
         title="Console"
         subtitle="Alpha"
@@ -84,11 +84,11 @@ export function HomeScreen() {
         contentContainerStyle={{ paddingBottom: 96 }}
         stickySectionHeadersEnabled={false}
         renderSectionHeader={({ section }: { section: GroupedSection }) => (
-          <View className="flex-row justify-between items-center px-4 py-2.5 bg-[#0d0d0e]">
-            <Text className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+          <View className="flex-row justify-between items-center px-4 py-2.5 bg-screen">
+            <Text className="text-xs font-bold text-foreground-secondary uppercase tracking-wider">
               {section.projectName}
             </Text>
-            <Text className="text-xs text-zinc-600">{section.data.length} more</Text>
+            <Text className="text-xs text-foreground-secondary/70">{section.data.length} more</Text>
           </View>
         )}
         renderItem={({ item: session }: { item: SessionHeader }) => {
@@ -98,27 +98,27 @@ export function HomeScreen() {
 
           return (
             <TouchableOpacity
-              className="flex-row items-center px-4 py-3.5 border-b border-white/5 active:bg-white/5"
+              className="flex-row items-center px-4 py-3.5 border-b border-border/40 active:bg-card-alt/30"
               onPress={() => openSession(session.id)}
             >
-              <View className="w-8 h-8 rounded-full bg-zinc-800 items-center justify-center mr-3">
+              <View className="w-8 h-8 rounded-full bg-card-alt items-center justify-center mr-3">
                 <MessageSquare size={16} color="#a1a1aa" />
               </View>
               <View className="flex-1 pr-3">
-                <Text className="text-sm font-semibold text-white" numberOfLines={1}>
+                <Text className="text-sm font-semibold text-foreground" numberOfLines={1}>
                   {session.title || "Untitled Session"}
                 </Text>
                 <View className="flex-row items-center mt-0.5">
-                  <Text className="text-xs text-zinc-500 mr-1.5">{projectName}</Text>
+                  <Text className="text-xs text-foreground-secondary mr-1.5">{projectName}</Text>
                   <GitBranch size={10} color="#71717a" />
-                  <Text className="text-xs text-zinc-500 ml-1">main</Text>
+                  <Text className="text-xs text-foreground-secondary ml-1">main</Text>
                 </View>
               </View>
               <View className="items-end">
                 <View className={`px-2 py-0.5 rounded-full ${status.bgColor}`}>
                   <Text className={`text-[10px] font-semibold ${status.textColor}`}>{status.label}</Text>
                 </View>
-                <Text className="text-[10px] text-zinc-500 mt-1">
+                <Text className="text-[10px] text-foreground-secondary mt-1">
                   {shortRelativeTime(session.updatedAt || session.createdAt)}
                 </Text>
               </View>
@@ -127,17 +127,17 @@ export function HomeScreen() {
         }}
         ListEmptyComponent={
           <View className="items-center justify-center py-20">
-            <Text className="text-zinc-500 text-sm">No sessions yet</Text>
+            <Text className="text-foreground-secondary text-sm">No sessions yet</Text>
           </View>
         }
       />
 
       {/* Search Bar */}
-      <View className="absolute bottom-0 left-0 right-0 px-4 pb-4 pt-3 bg-[#0d0d0e]/95 border-t border-white/10">
-        <View className="flex-row items-center bg-[#16171a] border border-white/10 rounded-xl px-4 h-12">
+      <View className="absolute bottom-0 left-0 right-0 px-4 pb-4 pt-3 bg-screen/95 border-t border-border">
+        <View className="flex-row items-center bg-card border border-border rounded-xl px-4 h-12">
           <Search size={18} color="#71717a" />
           <TextInput
-            className="flex-1 ml-3 text-white text-sm"
+            className="flex-1 ml-3 text-foreground text-sm"
             placeholder="Search threads"
             placeholderTextColor="#71717a"
             value={searchQuery}
