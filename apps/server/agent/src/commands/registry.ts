@@ -81,7 +81,7 @@ export class SlashCommandRegistry {
 
         const skillCommands = (ctx.discoveredSkills ?? [])
           .filter((s) => !s.hide)
-          .map((s) => `  /skill:${s.name.padEnd(6)} - ${s.description || "load skill context"}`);
+          .map((s) => `  /${s.name.padEnd(12)} - ${s.description || "load skill context"}`);
 
         const sections = ["Available Slash Commands:", ...builtinList];
 

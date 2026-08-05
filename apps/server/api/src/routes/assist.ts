@@ -40,8 +40,12 @@ assistRoutes.get("/assist/:sessionId/commands", async (c) => {
   for (const cmd of discovered) {
     commands.push({ name: cmd.name, description: cmd.description ?? "", builtin: false });
   }
+  // Skills are invokable as bare /<name>. Skip any whose name collides with a
+  // built-in or custom command so the autocomplete doesn't show duplicates.
+  const existing = new Set(commands.map((c) => c.name));
   for (const skill of skills.filter((s) => !s.hide)) {
-    commands.push({ name: `skill:${skill.name}`, description: skill.description ?? "", builtin: false });
+    if (existing.has(skill.name)) continue;
+    commands.push({ name: skill.name, description: skill.description ?? "", builtin: false });
   }
 
   return c.json({ success: true, data: commands });

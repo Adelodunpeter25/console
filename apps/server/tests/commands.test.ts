@@ -75,7 +75,7 @@ function buildContext(): SlashCommandContext {
   assert.ok(res.message?.includes("/model"));
   assert.ok(res.message?.includes("/provider"));
   assert.ok(res.message?.includes("/test-cmd"));
-  assert.ok(res.message?.includes("/skill:code-review"));
+  assert.ok(res.message?.includes("/code-review"));
   console.log("  ✅ /help command");
 }
 
