@@ -34,31 +34,31 @@ export function ConnectionSettings() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 bg-screen">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-foreground tracking-tight">Connection</h2>
-        <p className="text-sm text-foreground-secondary mt-1">
+    <div className="flex-1 overflow-y-auto px-5 py-5 bg-screen">
+      <div className="mb-5">
+        <h2 className="text-base font-semibold text-foreground tracking-tight">Connection</h2>
+        <p className="text-xs text-foreground-secondary mt-0.5">
           Configure your Console backend server connection
         </p>
       </div>
 
       {/* Connection Endpoint Card */}
-      <GlassSurface className="mb-4">
+      <GlassSurface className="mb-4 p-4">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-base font-semibold text-foreground">Backend Server Endpoint</span>
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-border">
+          <span className="text-sm font-semibold text-foreground">Backend Server Endpoint</span>
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/10 border border-border">
             {connected ? (
-              <Wifi size={12} className="text-foreground" />
+              <Wifi size={10} className="text-foreground" />
             ) : (
-              <WifiOff size={12} className="text-foreground-secondary" />
+              <WifiOff size={10} className="text-foreground-secondary" />
             )}
-            <span className="text-xs font-bold text-foreground">
+            <span className="text-[10px] font-bold text-foreground">
               {connected ? "Connected" : "Disconnected"}
             </span>
           </div>
         </div>
 
-        <p className="text-sm text-foreground-secondary mb-4">
+        <p className="text-xs text-foreground-secondary mb-3">
           HTTP URL of your running Console backend server instance:
         </p>
 
@@ -67,13 +67,13 @@ export function ConnectionSettings() {
           value={inputUrl}
           onChange={(e) => setInputUrl(e.target.value)}
           placeholder="http://localhost:3000"
-          className="w-full h-12 bg-card-alt border border-border rounded-xl px-4 text-foreground text-sm font-mono mb-4 outline-none focus:border-white/30 transition-colors"
+          className="w-full h-8 bg-card-alt border border-border rounded-md px-2.5 text-foreground text-xs font-mono mb-3 outline-none focus:border-white/30 transition-colors"
         />
 
-        <div className="flex gap-3 justify-end">
+        <div className="flex gap-2 justify-end">
           <button
             onClick={testConnection}
-            className="px-4 py-2.5 rounded-full bg-transparent border border-border text-sm font-semibold text-foreground hover:bg-white/10 transition-colors"
+            className="px-2.5 py-1 rounded-md bg-transparent border border-border text-xs font-normal text-white hover:bg-white/10 transition-colors"
           >
             {testing === "testing"
               ? "Testing..."
@@ -87,7 +87,7 @@ export function ConnectionSettings() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-5 py-2.5 rounded-full bg-white text-sm font-bold text-black hover:bg-white/90 transition-colors disabled:opacity-50"
+            className="px-3 py-1 rounded-md bg-white text-xs font-semibold text-black hover:bg-white/90 transition-colors disabled:opacity-50"
           >
             {saving ? "Saving..." : "Save Changes"}
           </button>
@@ -95,8 +95,8 @@ export function ConnectionSettings() {
       </GlassSurface>
 
       {/* App Environment Info Card */}
-      <GlassSurface className="mb-4">
-        <p className="text-base font-semibold text-foreground mb-3">App Info & Diagnostics</p>
+      <GlassSurface className="mb-4 p-4">
+        <p className="text-sm font-semibold text-foreground mb-2">App Info & Diagnostics</p>
 
         <InfoRow label="Console Desktop Version" value="0.1.0" />
         <InfoRow label="Framework" value="Tauri v2" />
@@ -107,9 +107,9 @@ export function ConnectionSettings() {
       </GlassSurface>
 
       {/* About Card */}
-      <GlassSurface className="mb-8">
-        <p className="text-base font-semibold text-foreground mb-2">About Console Desktop</p>
-        <p className="text-sm text-foreground-secondary leading-6">
+      <GlassSurface className="mb-8 p-4">
+        <p className="text-sm font-semibold text-foreground mb-2">About Console Desktop</p>
+        <p className="text-xs text-foreground-secondary leading-5">
           Console Desktop is a Tauri v2 application that connects to the Console agent server. It
           provides a native desktop experience for managing projects, chat sessions, and AI-powered
           coding agents. The Rust backend handles all network communication and filesystem
@@ -122,9 +122,9 @@ export function ConnectionSettings() {
 
 function InfoRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
   return (
-    <div className={`flex justify-between py-2.5 ${last ? "" : "border-b border-border"}`}>
-      <span className="text-sm text-foreground-secondary">{label}</span>
-      <span className="text-sm font-mono text-foreground">{value}</span>
+    <div className={`flex justify-between py-2 ${last ? "" : "border-b border-border"}`}>
+      <span className="text-xs text-foreground-secondary">{label}</span>
+      <span className="text-xs font-mono text-foreground">{value}</span>
     </div>
   );
 }
