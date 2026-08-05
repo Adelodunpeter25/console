@@ -49,6 +49,8 @@ export const tauriApi = {
       code,
       state,
     }),
+  loginWithBrowser: (provider: string) =>
+    invoke<OAuthCallbackResult>("login_with_browser", { provider }),
 
   // --- sessions ------------------------------------------------------------
   listSessions: (cwd?: string, projectId?: string) =>

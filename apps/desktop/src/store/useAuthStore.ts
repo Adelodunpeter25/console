@@ -1,28 +1,19 @@
 import { create } from "zustand";
 import type { AuthStatusResponse } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
-import type { LoginUrlResult, OAuthCallbackResult } from "../types";
 
 export type ProviderId = "gemini" | "antigravity";
 
 interface AuthState {
   status: AuthStatusResponse | null;
   loading: boolean;
-  /** The provider the user started a login flow for (null when idle). */
-  pendingProvider: ProviderId | null;
-  /** Last obtained OAuth login URL for `pendingProvider`. */
-  loginUrl: LoginUrlResult | null;
-  /** Result of the most recent OAuth callback exchange. */
-  callbackResult: OAuthCallbackResult | null;
+  /** The provider currently going through the browser login flow (null when idle). */
+  loggingIn: ProviderId | null;
   error: string | null;
 
   loadStatus: () => Promise<void>;
-  startLogin: (provider: ProviderId) => Promise<LoginUrlResult>;
-  completeLogin: (
-    provider: ProviderId,
-    code: string,
-    state?: string,
-  ) => Promise<OAuthCallbackResult>;
+  /** Full automatic OAuth flow: opens browser, catches redirect, exchanges code. */
+  loginWithBrowser: (provider: ProviderId) => Promise<void>;
   reset: () => void;
 }
 
@@ -34,9 +25,7 @@ const INITIAL_STATUS: AuthStatusResponse = {
 export const useAuthStore = create<AuthState>((set, get) => ({
   status: null,
   loading: false,
-  pendingProvider: null,
-  loginUrl: null,
-  callbackResult: null,
+  loggingIn: null,
   error: null,
 
   loadStatus: async () => {
@@ -53,33 +42,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  startLogin: async (provider: ProviderId) => {
-    set({ pendingProvider: provider, error: null });
-    const result = await tauriApi.getLoginUrl(provider);
-    set({ loginUrl: result });
-    return result;
-  },
-
-  completeLogin: async (provider: ProviderId, code: string, state?: string) => {
-    set({ error: null });
+  loginWithBrowser: async (provider: ProviderId) => {
+    set({ loggingIn: provider, error: null });
     try {
-      const result = await tauriApi.handleOAuthCallback(provider, code, state);
-      set({ callbackResult: result, pendingProvider: null });
+      await tauriApi.loginWithBrowser(provider);
       // Refresh status so `loggedIn` reflects the new credential.
       await get().loadStatus();
-      return result;
     } catch (e) {
-      const message = e instanceof Error ? e.message : "OAuth callback failed";
-      set({ error: message, pendingProvider: null });
+      const message = e instanceof Error ? e.message : "Login failed";
+      set({ error: message });
       throw e;
+    } finally {
+      set({ loggingIn: null });
     }
   },
 
   reset: () =>
     set({
-      pendingProvider: null,
-      loginUrl: null,
-      callbackResult: null,
+      loggingIn: null,
       error: null,
     }),
 }));

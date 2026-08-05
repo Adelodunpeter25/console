@@ -25,6 +25,9 @@ pub enum AppError {
 
     #[error("Tauri error: {0}")]
     Tauri(#[from] tauri::Error),
+
+    #[error("{0}")]
+    Other(String),
 }
 
 impl Serialize for AppError {

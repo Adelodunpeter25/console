@@ -1,6 +1,5 @@
 import React from "react";
-import { CheckCircle2, Circle, Loader2, LogIn, RefreshCw, ExternalLink } from "lucide-react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { CheckCircle2, Circle, Loader2, LogIn, RefreshCw } from "lucide-react";
 import { useAuthStore } from "../../store";
 import type { ProviderId } from "../../store";
 import { GlassSurface } from "../common";
@@ -9,48 +8,29 @@ import { GlassSurface } from "../common";
  * Account settings panel — shows per-provider OAuth login status and
  * login/re-login buttons.
  *
- * The OAuth flow:
- *  1. Click "Login" → fetches the OAuth URL from the backend
- *  2. Opens the URL in the system browser
- *  3. User authenticates, browser redirects to localhost:port/callback?code=...
- *  4. User copies the code from the redirect URL and pastes it into the
- *     code input field that appears
- *  5. Click "Complete Login" → submits the code to the backend for token exchange
- *  6. Status refreshes to show "Connected" with the account email
+ * The OAuth flow is fully automatic:
+ *  1. Click "Login" → Tauri starts a local callback server on the OAuth port
+ *  2. Opens the Google auth URL in the system browser
+ *  3. User selects their Google account
+ *  4. Browser redirects to localhost:port/callback?code=...
+ *  5. The local callback server catches the redirect, extracts the code
+ *  6. The code is submitted to the backend for token exchange
+ *  7. Status refreshes to show "Connected" with the account email
+ *
+ * No manual code copying — just click, authenticate, done.
  */
 export function AccountSettings() {
-  const { status, loading, pendingProvider, error, loadStatus, startLogin, completeLogin } =
-    useAuthStore();
-  const [codeInputs, setCodeInputs] = React.useState<Record<ProviderId, string>>({
-    gemini: "",
-    antigravity: "",
-  });
-  const [submitting, setSubmitting] = React.useState<ProviderId | null>(null);
+  const { status, loading, loggingIn, error, loadStatus, loginWithBrowser } = useAuthStore();
 
   React.useEffect(() => {
     loadStatus();
   }, [loadStatus]);
 
-  const handleLoginClick = async (provider: ProviderId) => {
+  const handleLogin = async (provider: ProviderId) => {
     try {
-      const result = await startLogin(provider);
-      await openUrl(result.authUrl);
+      await loginWithBrowser(provider);
     } catch (err) {
-      console.error(`Failed to start ${provider} login:`, err);
-    }
-  };
-
-  const handleCompleteLogin = async (provider: ProviderId) => {
-    const code = codeInputs[provider].trim();
-    if (!code) return;
-    setSubmitting(provider);
-    try {
-      await completeLogin(provider, code);
-      setCodeInputs((prev) => ({ ...prev, [provider]: "" }));
-    } catch (err) {
-      console.error(`Failed to complete ${provider} login:`, err);
-    } finally {
-      setSubmitting(null);
+      console.error(`Failed to login ${provider}:`, err);
     }
   };
 
@@ -82,89 +62,44 @@ export function AccountSettings() {
               const providerStatus = status?.[id];
               const loggedIn = providerStatus?.loggedIn;
               const email = providerStatus?.email;
-              const isPending = pendingProvider === id;
-              const isSubmitting = submitting === id;
+              const isLoggingIn = loggingIn === id;
 
               return (
                 <div
                   key={id}
-                  className="py-3 border-b border-border last:border-b-0"
+                  className="flex items-center justify-between py-3 border-b border-border last:border-b-0"
                 >
-                  {/* Status row */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                      {loggedIn ? (
-                        <CheckCircle2 size={16} className="text-success shrink-0" />
-                      ) : (
-                        <Circle size={16} className="text-foreground-muted shrink-0" />
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-foreground">{label}</p>
-                        <p className="text-xs text-foreground-secondary truncate">
-                          {loggedIn ? email ?? "Logged in" : "Not connected"}
-                        </p>
-                      </div>
+                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                    {loggedIn ? (
+                      <CheckCircle2 size={16} className="text-success shrink-0" />
+                    ) : (
+                      <Circle size={16} className="text-foreground-muted shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground">{label}</p>
+                      <p className="text-xs text-foreground-secondary truncate">
+                        {loggedIn ? email ?? "Logged in" : "Not connected"}
+                      </p>
                     </div>
-
-                    {/* Action button */}
-                    <button
-                      onClick={() => handleLoginClick(id)}
-                      disabled={isPending}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-border text-foreground hover:bg-white/10 transition-colors shrink-0 disabled:opacity-50"
-                    >
-                      {isPending ? (
-                        <Loader2 size={12} className="animate-spin" />
-                      ) : loggedIn ? (
-                        <RefreshCw size={12} />
-                      ) : (
-                        <LogIn size={12} />
-                      )}
-                      {loggedIn ? "Re-login" : "Login"}
-                    </button>
                   </div>
 
-                  {/* Code input — visible when a login flow is pending */}
-                  {isPending && (
-                    <div className="mt-3 flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={codeInputs[id]}
-                        onChange={(e) =>
-                          setCodeInputs((prev) => ({ ...prev, [id]: e.target.value }))
-                        }
-                        placeholder="Paste authorization code..."
-                        className="flex-1 h-9 bg-card-alt border border-border rounded-lg px-3 text-sm font-mono text-foreground outline-none focus:border-white/30 transition-colors"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleCompleteLogin(id);
-                        }}
-                      />
-                      <button
-                        onClick={() => handleCompleteLogin(id)}
-                        disabled={isSubmitting || !codeInputs[id].trim()}
-                        className="px-3 py-1.5 rounded-lg bg-white text-xs font-bold text-black hover:bg-white/90 transition-colors disabled:opacity-50"
-                      >
-                        {isSubmitting ? (
-                          <Loader2 size={12} className="animate-spin" />
-                        ) : (
-                          "Complete"
-                        )}
-                      </button>
-                    </div>
-                  )}
+                  <button
+                    onClick={() => handleLogin(id)}
+                    disabled={isLoggingIn}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-border text-foreground hover:bg-white/10 transition-colors shrink-0 disabled:opacity-50"
+                  >
+                    {isLoggingIn ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : loggedIn ? (
+                      <RefreshCw size={12} />
+                    ) : (
+                      <LogIn size={12} />
+                    )}
+                    {loggedIn ? "Re-login" : "Login"}
+                  </button>
                 </div>
               );
             })}
-          </div>
-
-          {/* Help text */}
-          <div className="mt-4 pt-3 border-t border-border">
-            <p className="text-xs text-foreground-muted leading-relaxed flex items-start gap-1.5">
-              <ExternalLink size={12} className="shrink-0 mt-0.5" />
-              <span>
-                Click "Login" to open your browser and authenticate. After redirecting, copy the
-                authorization code from the URL and paste it above to complete login.
-              </span>
-            </p>
           </div>
         </GlassSurface>
       )}
