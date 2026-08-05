@@ -71,13 +71,15 @@ function argSummary(call: ToolCall): string | null {
 interface ToolCallRowProps {
   call: ToolCall;
   result?: ToolResult;
+  defaultOpen?: boolean;
 }
 
 const ToolCallRow = React.memo(function ToolCallRow({
   call,
   result,
+  defaultOpen = false,
 }: ToolCallRowProps) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(defaultOpen);
   const meta = getToolMeta(call.name);
   const summary = argSummary(call);
   const hasResult = !!result;
@@ -164,9 +166,17 @@ export function ToolCallBlock({ calls, results }: ToolCallBlockProps) {
 
   return (
     <div className="overflow-hidden rounded-md border border-white/[0.08] bg-white/[0.015]">
-      {groups.map((group) => (
-        <ToolCallGroup key={group.name} name={group.name} calls={group.calls} results={results} />
-      ))}
+      {groups.map((group) =>
+        group.calls.length === 1 ? (
+          <ToolCallRow
+            key={group.calls[0]!.id}
+            call={group.calls[0]!}
+            result={results?.find((result) => result.toolCallId === group.calls[0]!.id)}
+          />
+        ) : (
+          <ToolCallGroup key={group.name} name={group.name} calls={group.calls} results={results} />
+        ),
+      )}
     </div>
   );
 }
@@ -216,6 +226,7 @@ function ToolCallGroup({
               key={call.id}
               call={call}
               result={results?.find((result) => result.toolCallId === call.id)}
+              defaultOpen
             />
           ))}
         </div>
