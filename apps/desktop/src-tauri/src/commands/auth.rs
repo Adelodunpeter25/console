@@ -144,6 +144,19 @@ pub async fn handle_oauth_callback(provider: String, code: String, state: Option
     crate::api::auth::handle_callback(&client, &dto).await
 }
 
+#[tauri::command]
+pub async fn get_project_id(provider: String) -> AppResult<serde_json::Value> {
+    let client = ApiClient::new();
+    crate::api::auth::get_project_id(&client, &provider).await
+}
+
+#[tauri::command]
+pub async fn set_project_id(provider: String, project_id: Option<String>) -> AppResult<serde_json::Value> {
+    let client = ApiClient::new();
+    let dto = crate::api::auth::ProjectIdDto { provider, project_id };
+    crate::api::auth::set_project_id(&client, &dto).await
+}
+
 /// Full automatic OAuth login flow:
 /// 1. Get the login URL from the backend
 /// 2. Start a local callback server on the OAuth port

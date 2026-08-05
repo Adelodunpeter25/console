@@ -50,6 +50,11 @@ export interface OAuthCallbackDto {
   state?: string;
 }
 
+export interface ProjectIdDto {
+  provider: "gemini" | "antigravity";
+  projectId?: string;
+}
+
 export interface AnswerQuestionDto {
   requestId: string;
   answer: string | string[];
@@ -93,8 +98,8 @@ export interface ProjectInfo {
 }
 
 export interface AuthStatusResponse {
-  gemini: { loggedIn: boolean; email?: string; projectId?: string };
-  antigravity: { loggedIn: boolean; email?: string; projectId?: string };
+  gemini: { loggedIn: boolean; email?: string; projectId?: string; configuredProjectId?: string };
+  antigravity: { loggedIn: boolean; email?: string; projectId?: string; configuredProjectId?: string };
 }
 
 export interface SessionDetailResponse {

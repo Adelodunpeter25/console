@@ -10,10 +10,15 @@ interface AuthState {
   /** The provider currently going through the browser login flow (null when idle). */
   loggingIn: ProviderId | null;
   error: string | null;
+  /** Per-provider configured project ID (from backend config file). */
+  projectIds: Partial<Record<ProviderId, string | undefined>>;
+  savingProjectId: boolean;
 
   loadStatus: () => Promise<void>;
   /** Full automatic OAuth flow: opens browser, catches redirect, exchanges code. */
   loginWithBrowser: (provider: ProviderId) => Promise<void>;
+  /** Save a configured project ID to the backend for a provider. */
+  saveProjectId: (provider: ProviderId, projectId: string | undefined) => Promise<void>;
   reset: () => void;
 }
 
@@ -27,12 +32,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loading: false,
   loggingIn: null,
   error: null,
+  projectIds: {},
+  savingProjectId: false,
 
   loadStatus: async () => {
     set({ loading: true, error: null });
     try {
       const status = await tauriApi.getAuthStatus();
-      set({ status, loading: false });
+      set({
+        status,
+        loading: false,
+        projectIds: {
+          gemini: status.gemini.configuredProjectId,
+          antigravity: status.antigravity.configuredProjectId,
+        },
+      });
     } catch (e) {
       set({
         status: INITIAL_STATUS,
@@ -54,6 +68,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw e;
     } finally {
       set({ loggingIn: null });
+    }
+  },
+
+  saveProjectId: async (provider: ProviderId, projectId: string | undefined) => {
+    set({ savingProjectId: true, error: null });
+    try {
+      await tauriApi.setProjectId(provider, projectId?.trim() || undefined);
+      set((state) => ({
+        projectIds: { ...state.projectIds, [provider]: projectId?.trim() || undefined },
+        savingProjectId: false,
+      }));
+    } catch (e) {
+      set({
+        savingProjectId: false,
+        error: e instanceof Error ? e.message : "Failed to save project ID",
+      });
+      throw e;
     }
   },
 

@@ -4,7 +4,7 @@
  */
 import { Hono } from "hono";
 import { AuthService } from "../services/auth.service.js";
-import type { OAuthCallbackDto, OAuthLoginUrlDto } from "../types/index.js";
+import type { OAuthCallbackDto, OAuthLoginUrlDto, ProjectIdDto } from "../types/index.js";
 
 export const authRoutes = new Hono();
 const authService = new AuthService();
@@ -55,4 +55,29 @@ authRoutes.post("/login/callback", async (c) => {
     const errorMsg = err instanceof Error ? err.message : String(err);
     return c.json({ success: false, error: errorMsg }, 500);
   }
+});
+
+/**
+ * GET /api/auth/project-id/:provider — Get the configured Google Cloud project ID.
+ */
+authRoutes.get("/project-id/:provider", async (c) => {
+  const provider = c.req.param("provider") as "gemini" | "antigravity";
+  if (provider !== "gemini" && provider !== "antigravity") {
+    return c.json({ success: false, error: "Invalid provider." }, 400);
+  }
+  const projectId = await authService.getProjectId(provider);
+  return c.json({ success: true, data: { projectId } });
+});
+
+/**
+ * POST /api/auth/project-id — Save the configured Google Cloud project ID.
+ */
+authRoutes.post("/project-id", async (c) => {
+  const body = await c.req.json<ProjectIdDto>();
+  const { provider, projectId } = body;
+  if (provider !== "gemini" && provider !== "antigravity") {
+    return c.json({ success: false, error: "Invalid provider." }, 400);
+  }
+  await authService.setProjectId(provider, projectId);
+  return c.json({ success: true });
 });

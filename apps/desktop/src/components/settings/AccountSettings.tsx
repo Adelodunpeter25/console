@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, Circle, Loader2, LogIn, RefreshCw } from "lucide-react";
+import { CheckCircle2, Circle, Loader2, LogIn, RefreshCw, Save } from "lucide-react";
 import { useAuthStore } from "../../store";
 import type { ProviderId } from "../../store";
 import { GlassSurface } from "../common";
@@ -20,7 +20,8 @@ import { GlassSurface } from "../common";
  * No manual code copying — just click, authenticate, done.
  */
 export function AccountSettings() {
-  const { status, loading, loggingIn, error, loadStatus, loginWithBrowser } = useAuthStore();
+  const { status, loading, loggingIn, error, projectIds, savingProjectId, loadStatus, loginWithBrowser, saveProjectId } =
+    useAuthStore();
 
   React.useEffect(() => {
     loadStatus();
@@ -63,40 +64,77 @@ export function AccountSettings() {
               const loggedIn = providerStatus?.loggedIn;
               const email = providerStatus?.email;
               const isLoggingIn = loggingIn === id;
+              const configuredProjectId = projectIds[id];
 
               return (
-                <div
-                  key={id}
-                  className="flex items-center justify-between py-3 border-b border-border last:border-b-0"
-                >
-                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                    {loggedIn ? (
-                      <CheckCircle2 size={16} className="text-success shrink-0" />
-                    ) : (
-                      <Circle size={16} className="text-foreground-muted shrink-0" />
-                    )}
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground">{label}</p>
-                      <p className="text-xs text-foreground-secondary truncate">
-                        {loggedIn ? email ?? "Logged in" : "Not connected"}
-                      </p>
+                <div key={id} className="py-3 border-b border-border last:border-b-0">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                      {loggedIn ? (
+                        <CheckCircle2 size={16} className="text-success shrink-0" />
+                      ) : (
+                        <Circle size={16} className="text-foreground-muted shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{label}</p>
+                        <p className="text-xs text-foreground-secondary truncate">
+                          {loggedIn ? email ?? "Logged in" : "Not connected"}
+                        </p>
+                      </div>
                     </div>
+
+                    <button
+                      onClick={() => handleLogin(id)}
+                      disabled={isLoggingIn}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-border text-foreground hover:bg-white/10 transition-colors shrink-0 disabled:opacity-50"
+                    >
+                      {isLoggingIn ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : loggedIn ? (
+                        <RefreshCw size={12} />
+                      ) : (
+                        <LogIn size={12} />
+                      )}
+                      {loggedIn ? "Re-login" : "Login"}
+                    </button>
                   </div>
 
-                  <button
-                    onClick={() => handleLogin(id)}
-                    disabled={isLoggingIn}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-border text-foreground hover:bg-white/10 transition-colors shrink-0 disabled:opacity-50"
-                  >
-                    {isLoggingIn ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : loggedIn ? (
-                      <RefreshCw size={12} />
-                    ) : (
-                      <LogIn size={12} />
-                    )}
-                    {loggedIn ? "Re-login" : "Login"}
-                  </button>
+                  {id === "gemini" && (
+                    <div className="mt-3 pl-6">
+                      <label className="block text-xs font-medium text-foreground-secondary mb-1">
+                        Google Cloud project ID
+                      </label>
+                      <p className="text-xs text-foreground-muted mb-2">
+                        Used for Gemini authentication when automatic discovery cannot select a
+                        project. Save before logging in if your account requires it.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          defaultValue={configuredProjectId ?? ""}
+                          key={configuredProjectId}
+                          placeholder="my-project-id"
+                          className="flex-1 px-3 py-1.5 rounded-lg text-sm bg-black/20 border border-border text-foreground placeholder:text-foreground-muted focus:outline-none focus:border-primary/50"
+                        />
+                        <button
+                          onClick={(e) => {
+                            const input = e.currentTarget.parentElement?.querySelector("input");
+                            const value = input?.value.trim() || undefined;
+                            saveProjectId("gemini", value).catch(() => {});
+                          }}
+                          disabled={savingProjectId}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border text-foreground hover:bg-white/10 transition-colors shrink-0 disabled:opacity-50"
+                        >
+                          {savingProjectId ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            <Save size={12} />
+                          )}
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

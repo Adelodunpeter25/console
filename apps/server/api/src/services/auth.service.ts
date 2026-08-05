@@ -8,6 +8,10 @@ import {
 } from "../../../providers/src/constants.js";
 import { loadCredential } from "../../../providers/src/auth/token-store.js";
 import { completeAuthFlowWithCode } from "../../../providers/src/auth/login.js";
+import {
+  getConfiguredProjectId,
+  setConfiguredProjectId,
+} from "../../../providers/src/auth/provider-config.js";
 import type { AuthStatusResponse } from "../types/index.js";
 
 /**
@@ -28,16 +32,23 @@ export class AuthService {
     const geminiCred = await tryLoadCredential("gemini");
     const antigravityCred = await tryLoadCredential("antigravity");
 
+    const [geminiConfigured, antigravityConfigured] = await Promise.all([
+      getConfiguredProjectId("gemini"),
+      getConfiguredProjectId("antigravity"),
+    ]);
+
     return {
       gemini: {
         loggedIn: Boolean(geminiCred?.accessToken),
         email: geminiCred?.email,
         projectId: geminiCred?.projectId,
+        configuredProjectId: geminiConfigured,
       },
       antigravity: {
         loggedIn: Boolean(antigravityCred?.accessToken),
         email: antigravityCred?.email,
         projectId: antigravityCred?.projectId,
+        configuredProjectId: antigravityConfigured,
       },
     };
   }
@@ -69,11 +80,25 @@ export class AuthService {
     provider: "gemini" | "antigravity",
     code: string,
   ): Promise<{ provider: string; userEmail?: string; projectId?: string }> {
-    const cred = await completeAuthFlowWithCode(provider, code);
+    // Load the user-configured project ID (if any) so it takes precedence
+    // over env vars during loadCodeAssist.
+    const configuredProjectId = await getConfiguredProjectId(provider);
+    const cred = await completeAuthFlowWithCode(provider, code, configuredProjectId);
     return {
       provider,
       userEmail: cred.email,
       projectId: cred.projectId,
     };
+  }
+
+  async getProjectId(provider: "gemini" | "antigravity"): Promise<string | undefined> {
+    return getConfiguredProjectId(provider);
+  }
+
+  async setProjectId(
+    provider: "gemini" | "antigravity",
+    projectId: string | undefined,
+  ): Promise<void> {
+    await setConfiguredProjectId(provider, projectId);
   }
 }

@@ -51,6 +51,10 @@ export const tauriApi = {
     }),
   loginWithBrowser: (provider: string) =>
     invoke<OAuthCallbackResult>("login_with_browser", { provider }),
+  getProjectId: (provider: string) =>
+    invoke<{ projectId?: string }>("get_project_id", { provider }),
+  setProjectId: (provider: string, projectId?: string) =>
+    invoke<void>("set_project_id", { provider, projectId }),
 
   // --- sessions ------------------------------------------------------------
   listSessions: (cwd?: string, projectId?: string) =>

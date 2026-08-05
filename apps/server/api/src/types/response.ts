@@ -16,8 +16,8 @@ export interface ProjectInfo {
 }
 
 export interface AuthStatusResponse {
-  gemini: { loggedIn: boolean; email?: string; projectId?: string };
-  antigravity: { loggedIn: boolean; email?: string; projectId?: string };
+  gemini: { loggedIn: boolean; email?: string; projectId?: string; configuredProjectId?: string };
+  antigravity: { loggedIn: boolean; email?: string; projectId?: string; configuredProjectId?: string };
 }
 
 export interface SessionDetailResponse {

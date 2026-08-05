@@ -218,8 +218,10 @@ async function getUserEmail(accessToken: string): Promise<string> {
 async function loadCodeAssist(
   accessToken: string,
   ideType: "GEMINI_CLI" | "ANTIGRAVITY",
+  explicitProjectId?: string,
 ): Promise<string> {
-  const envProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID;
+  // Precedence: explicit (from UI/config) > env var
+  const envProjectId = explicitProjectId || process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID;
   const baseEndpoint =
     ideType === "ANTIGRAVITY"
       ? "https://daily-cloudcode-pa.googleapis.com"
@@ -524,13 +526,14 @@ async function loginWithConfig(config: OAuthConfig): Promise<void> {
 export async function completeAuthFlowWithCode(
   provider: "gemini" | "antigravity",
   code: string,
+  explicitProjectId?: string,
 ): Promise<GeminiOAuthCredential> {
   const config = provider === "gemini" ? GEMINI_OAUTH_CONFIG : ANTIGRAVITY_OAUTH_CONFIG;
   const redirectUri = `http://127.0.0.1:${config.port}${config.callbackPath}`;
 
   const tokens = await exchangeCodeForTokens(config, code, redirectUri);
   const email = await getUserEmail(tokens.access_token);
-  const projectId = await loadCodeAssist(tokens.access_token, config.ideType);
+  const projectId = await loadCodeAssist(tokens.access_token, config.ideType, explicitProjectId);
 
   const credential: GeminiOAuthCredential = {
     token: tokens.access_token,
