@@ -122,13 +122,17 @@ export function DropdownSearch({
   value,
   onChange,
   placeholder = "Search...",
+  sticky = true,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  sticky?: boolean;
 }) {
   return (
-    <div className="relative px-1.5 pb-1">
+    <div
+      className={`${sticky ? "sticky top-0 z-10 bg-card" : ""} relative px-1.5 pb-1`}
+    >
       <div className="relative">
         <Search
           size={13}
