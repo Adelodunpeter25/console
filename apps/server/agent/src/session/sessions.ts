@@ -213,6 +213,37 @@ export function appendMessages(
   bumpSessionUpdated(state.globalDb, sessionId, now, inserted);
 }
 
+/** Replace a session history after repairing an interrupted tool turn. */
+export function replaceMessages(
+  state: StorageState,
+  sessionId: string,
+  messages: AgentMessage[],
+): void {
+  const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
+  if (!projectId) return;
+
+  const now = Date.now();
+  const sessionDb = getSessionDb(state, sessionId, projectId);
+  const insert = sessionDb.prepare(
+    `INSERT INTO messages (id, role, content, created_at) VALUES (?, ?, ?, ?)`,
+  );
+  const transaction = sessionDb.transaction(() => {
+    sessionDb.prepare("DELETE FROM messages").run();
+    messages.forEach((message, index) => {
+      const safeMessage = truncateForPersistence(message);
+      const messageId =
+        (safeMessage as any).id ||
+        crypto.createHash("sha256").update(`${index}:${JSON.stringify(safeMessage)}`).digest("hex");
+      insert.run(messageId, safeMessage.role, JSON.stringify(safeMessage), now + index);
+    });
+  });
+  transaction();
+
+  state.globalDb
+    .prepare("UPDATE sessions SET updated_at = ?, message_count = ? WHERE id = ?")
+    .run(now, messages.length, sessionId);
+}
+
 /**
  * Incrementally persist a tool result into one stable tool-result message for
  * the active run. Replayed events are replaced by toolCallId, so persistence

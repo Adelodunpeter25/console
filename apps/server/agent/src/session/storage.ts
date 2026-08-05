@@ -107,6 +107,10 @@ export class SqliteSessionStorage {
     Sessions.appendMessages(this.state, sessionId, messages);
   }
 
+  replaceMessages(sessionId: string, messages: AgentMessage[]): void {
+    Sessions.replaceMessages(this.state, sessionId, messages);
+  }
+
   upsertToolResult(sessionId: string, persistenceId: string, result: ToolResult): void {
     Sessions.upsertToolResult(this.state, sessionId, persistenceId, result);
   }

@@ -156,7 +156,19 @@ async function executeTool(
     emit({ type: "permissionRequest", request: req });
 
     if (onApproval) {
-      const allowed = await onApproval(req);
+      let allowed: boolean;
+      try {
+        allowed = await onApproval(req);
+      } catch (err) {
+        const result: ToolResult = {
+          toolCallId: call.id,
+          toolName: call.name,
+          content: err instanceof Error ? err.message : "Tool execution cancelled before permission was granted.",
+          isError: true,
+        };
+        await onToolResult?.(call, result);
+        return result;
+      }
       if (!allowed) {
         const result: ToolResult = {
           toolCallId: call.id,

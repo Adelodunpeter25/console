@@ -102,6 +102,48 @@ const testModel: Model = {
   console.log("  ✅ agentLoop permissionRequest event & user denial handling");
 }
 
+// 2b. Cancelling a pending permission produces a terminal tool result.
+{
+  const controller = new AbortController();
+  let approvalRequested = false;
+  const stream = agentLoop("Write file", {
+    model: testModel,
+    systemPrompt: "Test",
+    tools: [writeFileTool as unknown as AgentTool],
+    streamFn: async function* () {
+      yield {
+        type: "toolCall",
+        id: "call_cancelled",
+        name: "writeFile",
+        argumentsJson: JSON.stringify({ path: "test.txt", content: "hello" }),
+      };
+    },
+    approvalMode: "always-ask",
+    onApproval: () => {
+      approvalRequested = true;
+      return new Promise<boolean>((_resolve, reject) => {
+        queueMicrotask(() => {
+          controller.abort();
+          reject(new Error("Run aborted while waiting for permission."));
+        });
+      });
+    },
+    signal: controller.signal,
+  });
+
+  for await (const _event of stream) {
+    // Consume the stream until the cancelled tool turn reaches sessionEnd.
+  }
+  const result = await stream.result();
+  assert.equal(approvalRequested, true);
+  assert.equal(result[2]?.role, "toolResult");
+  if (result[2]?.role === "toolResult") {
+    assert.equal(result[2].results[0]?.toolCallId, "call_cancelled");
+    assert.equal(result[2].results[0]?.isError, true);
+  }
+  console.log("  ✅ cancelled permission produces terminal tool result");
+}
+
 // 3. Test /mode slash command
 {
   const agent = new Agent({

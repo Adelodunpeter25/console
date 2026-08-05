@@ -38,6 +38,10 @@ storage.appendMessage(header.id, userMsg);
 storage.appendMessage(header.id, assistantMsg);
 console.log("  ✅ Append individual messages");
 
+storage.replaceMessages(header.id, [userMsg, assistantMsg]);
+assert.equal(storage.loadSession(header.id)?.messages.length, 2);
+console.log("  ✅ Replace ordered session history");
+
 // 2b. Incrementally upsert tool results without duplicating the message row.
 storage.upsertToolResult(header.id, "tool-results:run-1:0", {
   toolCallId: "call-1",

@@ -14,6 +14,7 @@ import type { AgentSessionEvent, ApprovalMode, Model, UserMessage } from "../../
 import type { RunPromptDto } from "../types/index.js";
 import { expandPromptRefs } from "./assist.service.js";
 import { randomUUID } from "node:crypto";
+import { repairToolCallHistory } from "../../../agent/src/utils/tool-history.js";
 
 export class RunService {
   private sessionStorage = new SqliteSessionStorage();
@@ -91,6 +92,12 @@ export class RunService {
         this.sessionStorage.updateTitle(sessionId, autoTitle);
         session.header.title = autoTitle;
       }
+    }
+
+    const repairedHistory = repairToolCallHistory(session.messages);
+    if (repairedHistory.repaired) {
+      session.messages = repairedHistory.messages;
+      this.sessionStorage.replaceMessages(sessionId, session.messages);
     }
 
     const provider = dto.provider || session.header.provider || "antigravity";
@@ -317,6 +324,16 @@ export class RunService {
     if (!controller) return false;
 
     controller.abort();
+    for (const [requestId, pending] of this.pendingQuestions) {
+      if (pending.sessionId !== sessionId) continue;
+      this.pendingQuestions.delete(requestId);
+      pending.reject(new Error("Run aborted while waiting for a question."));
+    }
+    for (const [requestId, pending] of this.pendingApprovals) {
+      if (pending.sessionId !== sessionId) continue;
+      this.pendingApprovals.delete(requestId);
+      pending.reject(new Error("Run aborted while waiting for permission."));
+    }
     return true;
   }
 }
