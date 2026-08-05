@@ -1,5 +1,5 @@
 import { getConsoleApiClient } from "../client";
-import type { RunPromptDto } from "@console/types";
+import type { RunPromptDto, AnswerQuestionDto, ApproveToolPermissionDto } from "@console/types";
 
 export const runService = {
   async abortRun(sessionId: string): Promise<{ success: boolean }> {
@@ -8,6 +8,25 @@ export const runService = {
       throw new Error(res.data?.error || "Failed to abort run");
     }
     return { success: true };
+  },
+
+  async answerQuestion(sessionId: string, payload: AnswerQuestionDto): Promise<{ answered: boolean }> {
+    const res = await getConsoleApiClient().post(`/api/sessions/${sessionId}/answer`, payload);
+    if (res.data?.success === false) {
+      throw new Error(res.data?.error || "Failed to answer question");
+    }
+    return { answered: true };
+  },
+
+  async approvePermission(
+    sessionId: string,
+    payload: ApproveToolPermissionDto,
+  ): Promise<{ approved: boolean }> {
+    const res = await getConsoleApiClient().post(`/api/sessions/${sessionId}/approve`, payload);
+    if (res.data?.success === false) {
+      throw new Error(res.data?.error || "Failed to approve permission");
+    }
+    return { approved: payload.allow };
   },
 
   /**

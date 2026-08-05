@@ -3,7 +3,7 @@ import { Text, View, TouchableOpacity, FlatList, ActivityIndicator, Alert } from
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFsBrowse, useAddProject } from "@console/api";
 import { Folder } from "lucide-react-native";
-import { GlassSurface } from "../../components/common/glass-surface";
+import { GlassSurface } from "../../components/layout/glass-surface";
 
 interface AddProjectScreenProps {
   onClose: () => void;

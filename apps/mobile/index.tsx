@@ -19,7 +19,7 @@ import {
 } from "@expo-google-fonts/jetbrains-mono";
 import { ConsoleApiProvider } from "@console/api";
 import { QueryClient } from "@tanstack/react-query";
-import { MainContent } from "./components/common/main-content";
+import { MainContent } from "./components/layout/main-content";
 import { useServerConnection } from "./hooks";
 
 const queryClient = new QueryClient();

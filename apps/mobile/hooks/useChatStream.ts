@@ -1,208 +1,176 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { AgentMessage, ToolCall, ToolResult } from "@console/types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ImageAttachment } from "@console/types";
 import { useAppStore } from "../stores/useAppStore";
+import { useChatStore } from "../stores/useChatStore";
+import { createSseParser } from "../utils/sse";
+import { applyChatEvent } from "../utils/chat-events";
+import type { ChatSnapshot } from "../types";
 
+/**
+ * Drives a single chat session's SSE stream against the backend.
+ * Events flow through the pure `applyChatEvent` reducer and land in the
+ * zustand chat store, so the UI renders from one snapshot source of truth.
+ */
 export function useChatStream() {
   const backendUrl = useAppStore((state) => state.backendUrl);
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
 
-  const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [inputVal, setInputVal] = useState("");
-  const [running, setRunning] = useState(false);
-  
-  // Real-time streaming states matching desktop page
-  const [streamingText, setStreamingText] = useState("");
-  const [streamingThinking, setStreamingThinking] = useState("");
-  const [activeToolCalls, setActiveToolCalls] = useState<ToolCall[]>([]);
-  const [liveToolResults, setLiveToolResults] = useState<ToolResult[]>([]);
+  const xhrRef = useRef<XMLHttpRequest | null>(null);
 
-  // Use refs to avoid closure stale values in XMLHttpRequest handlers
-  const streamingTextRef = useRef("");
-  const streamingThinkingRef = useRef("");
-  const activeToolCallsRef = useRef<ToolCall[]>([]);
-  const liveToolResultsRef = useRef<ToolResult[]>([]);
+  // Selectors into the shared chat store
+  const messages = useChatStore((state) => state.messages);
+  const streamingText = useChatStore((state) => state.streamingText);
+  const streamingThinking = useChatStore((state) => state.streamingThinking);
+  const activeToolCalls = useChatStore((state) => state.activeToolCalls);
+  const liveToolResults = useChatStore((state) => state.liveToolResults);
+  const pendingPermission = useChatStore((state) => state.pendingPermission);
+  const pendingQuestion = useChatStore((state) => state.pendingQuestion);
+  const running = useChatStore((state) => state.running);
+
+  const setSnapshot = useChatStore((state) => state.setSnapshot);
+  const reset = useChatStore((state) => state.reset);
+
+  /** Merge a partial patch into the current store snapshot. */
+  const commit = useCallback(
+    (patch: Partial<ChatSnapshot>) => {
+      const current = useChatStore.getState();
+      setSnapshot({ ...current, ...patch });
+    },
+    [setSnapshot],
+  );
+
+  /** Apply a batch of streamed events through the reducer, committing once. */
+  const applyEvents = useCallback(
+    (events: Parameters<typeof applyChatEvent>[1][]) => {
+      if (events.length === 0) return;
+      const state = useChatStore.getState();
+      let snapshot: ChatSnapshot = {
+        messages: state.messages,
+        streamingText: state.streamingText,
+        streamingThinking: state.streamingThinking,
+        activeToolCalls: state.activeToolCalls,
+        liveToolResults: state.liveToolResults,
+        pendingPermission: state.pendingPermission,
+        pendingQuestion: state.pendingQuestion,
+        running: state.running,
+      };
+      for (const event of events) {
+        snapshot = applyChatEvent(snapshot, event);
+      }
+      setSnapshot(snapshot);
+    },
+    [setSnapshot],
+  );
 
   const fetchSessionMessages = useCallback(async () => {
     if (!selectedSessionId || !backendUrl) return;
     try {
       const response = await fetch(`${backendUrl}/api/sessions/${selectedSessionId}`);
       const data = await response.json();
-      if (data && data.data && data.data.messages) {
-        setMessages(data.data.messages);
-      } else if (data && data.messages) {
-        setMessages(data.messages);
-      }
+      const history =
+        (data && data.data && data.data.messages) || (data && data.messages) || [];
+      commit({ messages: history });
     } catch (e) {
       console.error("Failed to load session messages:", e);
     }
-  }, [backendUrl, selectedSessionId]);
+  }, [backendUrl, selectedSessionId, commit]);
 
   useEffect(() => {
+    reset();
     if (selectedSessionId) {
       fetchSessionMessages();
-      // Reset streaming states
-      setStreamingText("");
-      setStreamingThinking("");
-      setActiveToolCalls([]);
-      setLiveToolResults([]);
-      streamingTextRef.current = "";
-      streamingThinkingRef.current = "";
-      activeToolCallsRef.current = [];
-      liveToolResultsRef.current = [];
-    } else {
-      setMessages([]);
     }
-  }, [selectedSessionId, fetchSessionMessages]);
+  }, [selectedSessionId, fetchSessionMessages, reset]);
 
-  const sendMessage = useCallback(async () => {
-    if (!inputVal.trim() || !selectedSessionId || !backendUrl || running) return;
+  const sendMessage = useCallback(
+    async (attachments?: ImageAttachment[]) => {
+      if (!inputVal.trim() || !selectedSessionId || !backendUrl || running) return;
 
-    const prompt = inputVal.trim();
-    setInputVal("");
-    setRunning(true);
+      const prompt = inputVal.trim();
+      setInputVal("");
 
-    // Optimistically push user message to UI
-    setMessages((prev) => [...prev, { role: "user", content: prompt }]);
-    
-    // Reset streaming states before starting
-    setStreamingText("");
-    setStreamingThinking("");
-    setActiveToolCalls([]);
-    setLiveToolResults([]);
-    streamingTextRef.current = "";
-    streamingThinkingRef.current = "";
-    activeToolCallsRef.current = [];
-    liveToolResultsRef.current = [];
+      // Optimistically push the user message, clear streaming state.
+      const current = useChatStore.getState();
+      setSnapshot({
+        ...current,
+        messages: [...current.messages, { role: "user", content: prompt }],
+        streamingText: "",
+        streamingThinking: "",
+        activeToolCalls: [],
+        liveToolResults: [],
+        pendingPermission: null,
+        pendingQuestion: null,
+        running: true,
+      });
 
-    let xhr: XMLHttpRequest | null = null;
+      const parser = createSseParser();
+      const xhr = new XMLHttpRequest();
+      xhrRef.current = xhr;
 
-    try {
-      let offset = 0;
-      let buffer = "";
-
-      xhr = new XMLHttpRequest();
       xhr.open("POST", `${backendUrl}/api/sessions/${selectedSessionId}/run`);
       xhr.setRequestHeader("Content-Type", "application/json");
 
-      const handleChunk = (chunk: string) => {
-        buffer += chunk;
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith("data: ")) {
-            try {
-              const eventData = trimmed.slice(6);
-              const event = JSON.parse(eventData);
-
-              switch (event.type) {
-                case "modelStreamPart": {
-                  const text = event.part?.text;
-                  const thinking = event.part?.thinking;
-                  if (text) {
-                    streamingTextRef.current += text;
-                    setStreamingText(streamingTextRef.current);
-                  }
-                  if (thinking) {
-                    streamingThinkingRef.current += thinking;
-                    setStreamingThinking(streamingThinkingRef.current);
-                  }
-                  break;
-                }
-                case "modelStreamEnd": {
-                  const finalMessage: AgentMessage = event.turn || {
-                    role: "assistant",
-                    content: [
-                      ...(streamingThinkingRef.current
-                        ? [{ type: "thinking" as const, text: streamingThinkingRef.current }]
-                        : []),
-                      ...(streamingTextRef.current
-                        ? [{ type: "text" as const, text: streamingTextRef.current }]
-                        : []),
-                    ],
-                  };
-                  setMessages((prev) => [...prev, finalMessage]);
-                  setStreamingText("");
-                  setStreamingThinking("");
-                  streamingTextRef.current = "";
-                  streamingThinkingRef.current = "";
-                  break;
-                }
-                case "toolExecutionStart": {
-                  activeToolCallsRef.current = event.calls;
-                  setActiveToolCalls(event.calls);
-                  setLiveToolResults([]);
-                  liveToolResultsRef.current = [];
-                  break;
-                }
-                case "toolExecutionResult": {
-                  liveToolResultsRef.current.push(event.result);
-                  setLiveToolResults([...liveToolResultsRef.current]);
-                  break;
-                }
-                case "toolExecutionEnd": {
-                  const results = event.results || liveToolResultsRef.current;
-                  setMessages((prev) => [...prev, { role: "toolResult", results }]);
-                  setActiveToolCalls([]);
-                  setLiveToolResults([]);
-                  activeToolCallsRef.current = [];
-                  liveToolResultsRef.current = [];
-                  break;
-                }
-                case "error": {
-                  const msg = event.error?.message || "Unknown run error";
-                  if (!msg.toLowerCase().includes("aborted")) {
-                    setMessages((prev) => [
-                      ...prev,
-                      { role: "assistant", content: [{ type: "text", text: `Error: ${msg}` }] },
-                    ]);
-                  }
-                  break;
-                }
-              }
-            } catch (e) {
-              // Ignore JSON parse errors for incomplete lines
-            }
-          }
-        }
-      };
-
+      let offset = 0;
       xhr.onprogress = () => {
         if (!xhr) return;
         const chunk = xhr.responseText.slice(offset);
         offset = xhr.responseText.length;
-        handleChunk(chunk);
+        applyEvents(parser.push(chunk));
       };
 
       xhr.onload = () => {
-        setRunning(false);
+        parser.flush();
+        commit({ running: false });
         fetchSessionMessages();
       };
 
       xhr.onerror = () => {
-        setRunning(false);
+        parser.flush();
+        commit({ running: false });
         fetchSessionMessages();
       };
 
-      xhr.send(JSON.stringify({ prompt }));
-    } catch (err) {
-      console.error("SSE run error:", err);
-      setRunning(false);
-      fetchSessionMessages();
-    }
-  }, [backendUrl, fetchSessionMessages, inputVal, running, selectedSessionId]);
+      try {
+        xhr.send(JSON.stringify({ prompt, ...(attachments ? { attachments } : {}) }));
+      } catch (err) {
+        console.error("SSE run error:", err);
+        commit({ running: false });
+        fetchSessionMessages();
+      }
+    },
+    [
+      applyEvents,
+      backendUrl,
+      commit,
+      fetchSessionMessages,
+      inputVal,
+      running,
+      selectedSessionId,
+      setSnapshot,
+    ],
+  );
+
+  /** Cut the local stream without touching server state (server abort via useAbort). */
+  const stop = useCallback(() => {
+    xhrRef.current?.abort();
+    xhrRef.current = null;
+    commit({ running: false });
+  }, [commit]);
 
   return {
     messages,
-    inputVal,
-    setInputVal,
-    running,
-    sendMessage,
-    refetchMessages: fetchSessionMessages,
     streamingText,
     streamingThinking,
     activeToolCalls,
     liveToolResults,
+    pendingPermission,
+    pendingQuestion,
+    running,
+    inputVal,
+    setInputVal,
+    sendMessage,
+    stop,
+    refetchMessages: fetchSessionMessages,
   };
 }

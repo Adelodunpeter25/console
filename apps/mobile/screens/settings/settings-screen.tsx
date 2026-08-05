@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Text,
   View,
@@ -7,9 +7,13 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
-import { GlassSurface } from "../../components/common/glass-surface";
-import { ScreenHeader } from "../../components/common/screen-header";
+import * as Linking from "expo-linking";
+import { useProviderModels } from "@console/api";
+import { GlassSurface } from "../../components/layout/glass-surface";
+import { ScreenHeader } from "../../components/layout/screen-header";
 import { useServerConnection } from "../../hooks";
+import { useAuth } from "../../hooks";
+import { useProviderCatalog } from "../../hooks";
 import { useAppStore } from "../../stores";
 
 export function SettingsScreen() {
@@ -24,6 +28,23 @@ export function SettingsScreen() {
     disconnect,
   } = useServerConnection();
   const setActiveTab = useAppStore((state) => state.setActiveTab);
+
+  const auth = useAuth();
+  const catalog = useProviderCatalog();
+  const [selectedProvider, setSelectedProvider] = useState<"gemini" | "antigravity">("antigravity");
+
+  const handleLogin = async () => {
+    try {
+      const url = await auth.getLoginUrlFor(selectedProvider);
+      Linking.openURL(url);
+    } catch (err) {
+      console.error("Failed to open login URL:", err);
+    }
+  };
+
+  const modelsData = useProviderModels(selectedProvider);
+  const models = modelsData.data?.models ?? [];
+  const loadingModels = modelsData.isLoading;
 
   return (
     <ScrollView className="flex-1 bg-screen px-4 pt-4" style={{ flex: 1 }}>
@@ -90,7 +111,87 @@ export function SettingsScreen() {
         </View>
       </GlassSurface>
 
-      {/* App Environment Info Card */}
+      {/* Provider / Model Card */}
+      <GlassSurface className="mb-4 p-5">
+        <Text className="text-base font-semibold text-foreground mb-3">Provider & Model</Text>
+
+        <Text className="text-xs font-bold text-foreground-secondary uppercase tracking-wider mb-2">
+          Provider
+        </Text>
+        <View className="flex-row gap-2 mb-4">
+          {catalog.providers.map((p) => {
+            const active = selectedProvider === p.id;
+            return (
+              <TouchableOpacity
+                key={p.id}
+                className={`flex-1 py-2.5 rounded-full items-center justify-center border ${
+                  active ? "bg-foreground border-foreground" : "bg-transparent border-border"
+                }`}
+                onPress={() => setSelectedProvider(p.id as "gemini" | "antigravity")}
+              >
+                <Text className={`text-sm font-bold ${active ? "text-black" : "text-foreground"}`}>
+                  {p.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <Text className="text-xs font-bold text-foreground-secondary uppercase tracking-wider mb-2">
+          Model
+        </Text>
+        {catalog.loadingProviders || loadingModels ? (
+          <ActivityIndicator size="small" color="#ffffff" />
+        ) : (
+          <View className="gap-1.5">
+            {models.map((m) => (
+              <View key={m.id} className="py-2 px-3 rounded-lg bg-card border border-border">
+                <Text className="text-sm text-foreground">{m.name}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </GlassSurface>
+
+      {/* Account / OAuth Card */}
+      <GlassSurface className="mb-4 p-5">
+        <Text className="text-base font-semibold text-foreground mb-3">Account</Text>
+        {catalog.providers.map((p) => {
+          const provider = p.id as "gemini" | "antigravity";
+          const loggedIn = auth.isLoggedIn(provider);
+          return (
+            <View key={provider} className="flex-row items-center justify-between py-2.5 border-b border-border last:border-b-0">
+              <View className="flex-1 pr-3">
+                <Text className="text-sm font-semibold text-foreground">{p.name}</Text>
+                <Text className="text-xs text-foreground-secondary mt-0.5">
+                  {loggedIn
+                    ? auth.status?.[provider]?.email ?? "Logged in"
+                    : "Not logged in"}
+                </Text>
+              </View>
+              {loggedIn ? (
+                <View className="px-3 py-1 rounded-full bg-foreground/10 border border-border">
+                  <Text className="text-xs font-bold text-foreground">✓ Connected</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  className="px-4 py-2 rounded-full bg-foreground items-center justify-center"
+                  onPress={handleLogin}
+                  disabled={auth.isFetchingLoginUrl}
+                >
+                  {auth.isFetchingLoginUrl ? (
+                    <ActivityIndicator size="small" color="#000000" />
+                  ) : (
+                    <Text className="text-xs font-bold text-black">Log In</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        })}
+      </GlassSurface>
+
+      {/* App Info Card */}
       <GlassSurface className="mb-4 p-5">
         <Text className="text-base font-semibold text-foreground mb-3">App Info & Diagnostics</Text>
 

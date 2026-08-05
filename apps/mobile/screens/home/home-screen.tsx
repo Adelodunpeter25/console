@@ -4,7 +4,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { GitBranch } from "lucide-react-native";
 import { useProjects, useSessions } from "@console/api";
 import { SessionHeader } from "@console/types";
-import { ScreenHeader } from "../../components/common/screen-header";
+import { ScreenHeader } from "../../components/layout/screen-header";
 import { SearchBar } from "../../components/common/search-bar";
 import { useAppStore } from "../../stores";
 import { formatRelativeTime } from "../../utils/time";
