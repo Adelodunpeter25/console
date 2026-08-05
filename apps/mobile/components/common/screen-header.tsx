@@ -1,6 +1,7 @@
 import React from "react";
-import { Text, View, TouchableOpacity } from "react-native";
-import { ChevronLeft, Settings } from "lucide-react-native";
+import { Text, View, TouchableOpacity, StyleSheet } from "react-native";
+import { ChevronLeft, Settings, Menu } from "lucide-react-native";
+import { theme } from "../../styles/theme";
 
 interface ScreenHeaderProps {
   title: string;
@@ -8,6 +9,8 @@ interface ScreenHeaderProps {
   onBack?: () => void;
   showSettings?: boolean;
   onSettingsPress?: () => void;
+  showFilter?: boolean;
+  onFilterPress?: () => void;
 }
 
 export function ScreenHeader({
@@ -16,33 +19,97 @@ export function ScreenHeader({
   onBack,
   showSettings,
   onSettingsPress,
+  showFilter,
+  onFilterPress,
 }: ScreenHeaderProps) {
   return (
-    <View className="flex-row justify-between items-start px-4 pt-4 pb-2">
-      <View className="flex-row items-start flex-1">
+    <View style={styles.headerContainer}>
+      <View style={styles.leftSection}>
         {onBack ? (
-          <TouchableOpacity className="p-1 -ml-1 mr-2" onPress={onBack}>
-            <ChevronLeft size={24} color="#ffffff" />
+          <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
+            <ChevronLeft size={24} color={theme.colors.text.primary} />
           </TouchableOpacity>
         ) : null}
-        <View>
-          <Text className="text-xl font-bold text-white tracking-tight">{title}</Text>
+        <View style={styles.titleWrapper}>
+          <Text style={styles.titleText}>{title}</Text>
           {subtitle ? (
-            <Text className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] mt-0.5">
-              {subtitle}
-            </Text>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{subtitle.toUpperCase()}</Text>
+            </View>
           ) : null}
         </View>
       </View>
 
-      {showSettings ? (
-        <TouchableOpacity
-          className="p-2 rounded-full active:bg-white/10"
-          onPress={onSettingsPress}
-        >
-          <Settings size={22} color="#ffffff" />
-        </TouchableOpacity>
-      ) : null}
+      <View style={styles.rightSection}>
+        {showFilter ? (
+          <TouchableOpacity style={styles.iconButton} onPress={onFilterPress} activeOpacity={0.7}>
+            <Menu size={20} color={theme.colors.text.primary} />
+          </TouchableOpacity>
+        ) : null}
+        {showSettings ? (
+          <TouchableOpacity style={styles.iconButton} onPress={onSettingsPress} activeOpacity={0.7}>
+            <Settings size={20} color={theme.colors.text.primary} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  headerContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  leftSection: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  backButton: {
+    marginRight: 12,
+  },
+  titleWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  titleText: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: theme.colors.text.primary,
+    letterSpacing: -0.5,
+  },
+  badge: {
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderColor: "rgba(255, 255, 255, 0.12)",
+    borderWidth: 1,
+    borderRadius: theme.roundness.full,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginLeft: 10,
+  },
+  badgeText: {
+    fontSize: 9,
+    fontFamily: theme.fonts.monoBold,
+    color: theme.colors.text.secondary,
+    letterSpacing: 1.5,
+  },
+  rightSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.roundness.full,
+    backgroundColor: "rgba(255, 255, 255, 0.06)",
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
