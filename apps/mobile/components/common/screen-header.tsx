@@ -1,115 +1,44 @@
 import React from "react";
-import { Text, View, TouchableOpacity, StyleSheet } from "react-native";
-import { ChevronLeft, Settings, Menu } from "lucide-react-native";
-import { theme } from "../../styles/theme";
+import { Text, View, TouchableOpacity } from "react-native";
+import { ChevronLeft, Settings } from "lucide-react-native";
 
 interface ScreenHeaderProps {
   title: string;
-  subtitle?: string;
   onBack?: () => void;
   showSettings?: boolean;
   onSettingsPress?: () => void;
-  showFilter?: boolean;
-  onFilterPress?: () => void;
 }
 
 export function ScreenHeader({
   title,
-  subtitle,
   onBack,
   showSettings,
   onSettingsPress,
-  showFilter,
-  onFilterPress,
 }: ScreenHeaderProps) {
   return (
-    <View style={styles.headerContainer}>
-      <View style={styles.leftSection}>
+    <View className="flex-row justify-between items-center px-4 pt-4 pb-3">
+      <View className="flex-row items-center flex-1">
         {onBack ? (
-          <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
-            <ChevronLeft size={24} color={theme.colors.text.primary} />
+          <TouchableOpacity
+            className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center mr-3"
+            onPress={onBack}
+            activeOpacity={0.7}
+          >
+            <ChevronLeft size={20} color="#ffffff" />
           </TouchableOpacity>
         ) : null}
-        <View style={styles.titleWrapper}>
-          <Text style={styles.titleText}>{title}</Text>
-          {subtitle ? (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{subtitle.toUpperCase()}</Text>
-            </View>
-          ) : null}
-        </View>
+        <Text className="text-[22px] font-bold text-foreground tracking-tight">{title}</Text>
       </View>
 
-      <View style={styles.rightSection}>
-        {showFilter ? (
-          <TouchableOpacity style={styles.iconButton} onPress={onFilterPress} activeOpacity={0.7}>
-            <Menu size={20} color={theme.colors.text.primary} />
-          </TouchableOpacity>
-        ) : null}
-        {showSettings ? (
-          <TouchableOpacity style={styles.iconButton} onPress={onSettingsPress} activeOpacity={0.7}>
-            <Settings size={20} color={theme.colors.text.primary} />
-          </TouchableOpacity>
-        ) : null}
-      </View>
+      {showSettings ? (
+        <TouchableOpacity
+          className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center"
+          onPress={onSettingsPress}
+          activeOpacity={0.7}
+        >
+          <Settings size={18} color="#ffffff" />
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  headerContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
-  },
-  leftSection: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  backButton: {
-    marginRight: 12,
-  },
-  titleWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  titleText: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: theme.colors.text.primary,
-    letterSpacing: -0.5,
-  },
-  badge: {
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    borderColor: "rgba(255, 255, 255, 0.12)",
-    borderWidth: 1,
-    borderRadius: theme.roundness.full,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginLeft: 10,
-  },
-  badgeText: {
-    fontSize: 9,
-    fontFamily: theme.fonts.monoBold,
-    color: theme.colors.text.secondary,
-    letterSpacing: 1.5,
-  },
-  rightSection: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.roundness.full,
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-    borderColor: "rgba(255, 255, 255, 0.1)",
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});

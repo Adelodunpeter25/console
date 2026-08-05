@@ -1,31 +1,22 @@
 import React from "react";
-import { View, StyleSheet, ViewStyle } from "react-native";
+import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { theme } from "../../styles/theme";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 
 interface AppShellProps {
   children: React.ReactNode;
-  style?: ViewStyle;
 }
 
-export function AppShell({ children, style }: AppShellProps) {
+export function AppShell({ children }: AppShellProps) {
   return (
-    <SafeAreaView style={[styles.safeArea, style]}>
-      <StatusBar style="light" />
-      <View style={styles.content}>
-        {children}
-      </View>
-    </SafeAreaView>
+    <KeyboardProvider>
+      <SafeAreaView className="flex-1 bg-screen">
+        <StatusBar style="light" />
+        <View className="flex-1">
+          {children}
+        </View>
+      </SafeAreaView>
+    </KeyboardProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  content: {
-    flex: 1,
-  },
-});
