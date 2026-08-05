@@ -27,7 +27,8 @@ function PermissionPanel({ request, sessionId }: PermissionPanelProps) {
       <div className="flex items-center gap-2.5">
         <ShieldCheck size={16} className="text-warning shrink-0" />
         <span className="text-sm font-medium text-foreground">
-          Permission required: <span className="font-mono text-warning">{request.toolName}</span>
+          {request.requiresUpgrade ? "Upgrade permission required: " : "Permission required: "}
+          <span className="font-mono text-warning">{request.toolName}</span>
         </span>
       </div>
       {request.reason && (
@@ -45,7 +46,7 @@ function PermissionPanel({ request, sessionId }: PermissionPanelProps) {
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-success/15 hover:bg-success/25 border border-success/30 text-success text-xs font-medium transition-colors disabled:opacity-50"
         >
           {submitting ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
-          Allow
+          {request.requiresUpgrade ? "Allow once" : "Allow"}
         </button>
         <button
           onClick={() => handleApprove(false)}

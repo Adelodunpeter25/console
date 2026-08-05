@@ -54,9 +54,9 @@ export function resolveApproval(
       return { policy: "allow", tier };
     }
     return {
-      policy: "deny",
+      policy: "prompt",
       tier,
-      reason: `Tool '${tool.name}' is blocked in Plan Mode (read-only mode).`,
+      reason: `Tool '${tool.name}' requires upgraded permission because Plan Mode is read-only.`,
     };
   }
 

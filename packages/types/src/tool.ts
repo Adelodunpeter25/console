@@ -20,6 +20,8 @@ export interface PermissionRequest {
   args: unknown;
   tier: ToolTier;
   reason?: string;
+  /** True when the current mode must be escalated for this one action. */
+  requiresUpgrade?: boolean;
 }
 
 export interface ToolCall {

@@ -4,6 +4,7 @@ import type {
   AskQuestionRequest,
   ImageAttachment,
   PermissionRequest,
+  ToolCall,
   ToolResult,
 } from "@console/types";
 
@@ -24,6 +25,7 @@ export interface ChatSessionState {
   pendingQuestion: PendingQuestion | null;
   pendingPermissions: PendingPermission[];
   liveToolResults: ToolResult[];
+  activeToolCalls: ToolCall[];
   attachments: ImageAttachment[];
 }
 

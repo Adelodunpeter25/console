@@ -10,6 +10,7 @@ export function createChatSessionState(): ChatSessionState {
     pendingQuestion: null,
     pendingPermissions: [],
     liveToolResults: [],
+    activeToolCalls: [],
     attachments: [],
   };
 }

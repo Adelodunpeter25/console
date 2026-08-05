@@ -42,6 +42,8 @@ pub struct PermissionRequest {
     pub args: serde_json::Value,
     pub tier: ToolTier,
     pub reason: Option<String>,
+    #[serde(default)]
+    pub requires_upgrade: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -151,6 +151,7 @@ async function executeTool(
       args: parsed.data,
       tier: approval.tier,
       reason: approval.reason,
+      ...(approvalMode === "plan-mode" ? { requiresUpgrade: true } : {}),
     };
     emit({ type: "permissionRequest", request: req });
 

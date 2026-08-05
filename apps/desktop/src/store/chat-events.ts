@@ -52,6 +52,8 @@ export function applyChatEvent(
         ...session,
         liveToolResults: [...session.liveToolResults, event.result],
       };
+    case "toolExecutionStart":
+      return { ...session, activeToolCalls: event.calls, liveToolResults: [] };
     case "toolExecutionEnd": {
       const results = [...event.results];
       for (const live of session.liveToolResults) {
@@ -59,10 +61,21 @@ export function applyChatEvent(
           results.push(live);
         }
       }
+      for (const call of session.activeToolCalls) {
+        if (!results.some((result) => result.toolCallId === call.id)) {
+          results.push({
+            toolCallId: call.id,
+            toolName: call.name,
+            content: "Tool execution ended without a result.",
+            isError: true,
+          });
+        }
+      }
       return {
         ...session,
         messages: [...session.messages, { role: "toolResult", results }],
         liveToolResults: [],
+        activeToolCalls: [],
       };
     }
     case "askQuestion":

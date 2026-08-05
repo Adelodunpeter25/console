@@ -35,13 +35,13 @@ const testModel: Model = {
   // write tool
   assert.equal(resolveApproval(writeFileTool, {}, "always-ask").policy, "prompt");
   assert.equal(resolveApproval(writeFileTool, {}, "accept-edits").policy, "allow");
-  assert.equal(resolveApproval(writeFileTool, {}, "plan-mode").policy, "deny");
+  assert.equal(resolveApproval(writeFileTool, {}, "plan-mode").policy, "prompt");
   assert.equal(resolveApproval(writeFileTool, {}, "full-access").policy, "allow");
 
   // exec tool (bash)
   assert.equal(resolveApproval(bashTool, {}, "always-ask").policy, "prompt");
   assert.equal(resolveApproval(bashTool, {}, "accept-edits").policy, "prompt");
-  assert.equal(resolveApproval(bashTool, {}, "plan-mode").policy, "deny");
+  assert.equal(resolveApproval(bashTool, {}, "plan-mode").policy, "prompt");
   assert.equal(resolveApproval(bashTool, {}, "full-access").policy, "allow");
   console.log("  ✅ resolveApproval mode policy mapping");
 }
@@ -70,10 +70,12 @@ const testModel: Model = {
     systemPrompt: "Test",
     tools: [writeFileTool as unknown as AgentTool],
     streamFn: mockStreamFn,
-    approvalMode: "always-ask",
+    approvalMode: "plan-mode",
     onApproval: async (req) => {
       permissionEventReceived = true;
       assert.equal(req.toolName, "writeFile");
+      assert.equal(req.requiresUpgrade, true);
+      assert.ok(req.reason?.includes("upgraded permission"));
       return false; // Deny permission
     },
   });
@@ -85,6 +87,7 @@ const testModel: Model = {
 
   const result = await stream.result();
   assert.equal(permissionEventReceived, true);
+  assert.equal(events.some((event) => event.type === "permissionRequest"), true);
   // History has user message, assistant toolCall, toolResult with isError
   assert.equal(result.length, 4);
   assert.equal(result[2]?.role, "toolResult");

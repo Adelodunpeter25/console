@@ -52,6 +52,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           streamingText: "",
           streamingThinking: "",
           liveToolResults: [],
+          activeToolCalls: [],
           pendingQuestion: null,
           pendingPermissions: [],
           attachments: [],
@@ -142,6 +143,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         streamingText: "",
         streamingThinking: "",
         liveToolResults: [],
+        activeToolCalls: [],
         attachments: [],
       })),
     }));
@@ -239,6 +241,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         streamingThinking: "",
         pendingQuestion: null,
         pendingPermissions: [],
+        activeToolCalls: [],
       })),
     }));
     syncSessionStatus(sessionId, "done");
