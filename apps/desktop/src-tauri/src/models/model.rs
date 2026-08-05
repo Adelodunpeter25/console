@@ -6,6 +6,7 @@ pub struct Model {
     pub id: String,
     pub provider: String,
     pub context_window: u64,
+    pub supports_images: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

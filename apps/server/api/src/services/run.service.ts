@@ -7,6 +7,7 @@ import { allTools } from "../../../agent/src/tools/index.js";
 import { createAskTool } from "../../../agent/src/tools/ask.js";
 import { SqliteSessionStorage } from "../../../agent/src/session/storage.js";
 import { buildSystemPrompt } from "../../../agent/src/systemprompt/builder.js";
+import { findModelInProvider } from "../../../agent/src/commands/provider-registry.js";
 import { createAntigravityStreamFn } from "../../../providers/src/antigravity/stream-fn.js";
 import { geminiStreamFn } from "../../../providers/src/gemini/stream-fn.js";
 import type { AgentSessionEvent, ApprovalMode, Model, UserMessage } from "../../../agent/src/types/index.js";
@@ -93,6 +94,10 @@ export class RunService {
 
     const provider = dto.provider || session.header.provider || "antigravity";
     const modelId = dto.modelId || session.header.modelId || "gemini-2.5-pro";
+    const catalogModel = findModelInProvider(provider, modelId);
+    if (dto.attachments && dto.attachments.length > 0 && catalogModel?.supportsImages === false) {
+      throw new Error(`The selected model '${modelId}' does not support image attachments.`);
+    }
     // Use the approvalMode from the request; fall back to the persisted session value,
     // then to "always-ask" as the safe default. Never silently run without a mode.
     const approvalMode = (dto.approvalMode || session.header.approvalMode || "always-ask") as ApprovalMode;
@@ -104,6 +109,9 @@ export class RunService {
       id: modelId,
       provider: provider as any,
       contextWindow: 128_000,
+      ...(typeof catalogModel?.supportsImages === "boolean"
+        ? { supportsImages: catalogModel.supportsImages }
+        : {}),
     };
 
     const streamFn = provider === "gemini" ? geminiStreamFn : createAntigravityStreamFn();

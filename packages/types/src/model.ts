@@ -2,6 +2,8 @@ export interface Model {
   id: string;
   provider: "gemini" | "antigravity";
   contextWindow: number;
+  /** Whether the provider explicitly reports support for image input. */
+  supportsImages?: boolean;
 }
 
 export interface ProviderCatalogEntry {

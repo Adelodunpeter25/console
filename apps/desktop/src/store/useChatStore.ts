@@ -227,6 +227,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const prompt = input.trim();
     if (!prompt || running) return;
 
+    if (attachments.length > 0 && sessionModelId && sessionProvider) {
+      const selectedModel =
+        useProviderStore.getState().modelsByProvider[sessionProvider]?.find(
+          (model) => model.id === sessionModelId,
+        );
+      if (selectedModel?.supportsImages === false) {
+        toast.error(`The selected model '${sessionModelId}' does not support image attachments.`);
+        return;
+      }
+    }
+
     set((s) => ({
       input: "",
       running: true,

@@ -14,4 +14,6 @@ export interface Model {
    * The maximum number of tokens (input + output) the model can handle.
    */
   contextWindow: number;
+  /** Whether the provider explicitly reports support for image input. */
+  supportsImages?: boolean;
 }

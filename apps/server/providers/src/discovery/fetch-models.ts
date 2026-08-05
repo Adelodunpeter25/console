@@ -98,6 +98,9 @@ export async function fetchAvailableModels(
       id: modelId,
       provider: options.provider,
       contextWindow,
+      ...(typeof meta.supportsImages === "boolean"
+        ? { supportsImages: meta.supportsImages }
+        : {}),
     });
   }
 

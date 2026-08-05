@@ -16,6 +16,7 @@ export function ChatScreen() {
     streamingText,
     streamingThinking,
     sessionModelId,
+    sessionProvider,
     sessionCwd,
     approvalMode,
     liveToolResults,
@@ -31,7 +32,7 @@ export function ChatScreen() {
     removeAttachment,
   } = useChatStore();
   const { projects, loadProjects } = useProjectStore();
-  const { loadProviders } = useProviderStore();
+  const { loadProviders, modelsByProvider } = useProviderStore();
 
   React.useEffect(() => {
     loadProviders();
@@ -52,6 +53,11 @@ export function ChatScreen() {
   const sessionProject = projects.find((p) => p.path === sessionCwd) ?? null;
   const resolvedProjectId = sessionProject?.id ?? selectedProjectId;
   const projectFallbackLabel = sessionCwd ? basename(sessionCwd) : "Select folder";
+  const selectedModelSupportsImages = React.useMemo(() => {
+    if (!sessionModelId || !sessionProvider) return undefined;
+    return modelsByProvider[sessionProvider]?.find((model) => model.id === sessionModelId)
+      ?.supportsImages;
+  }, [modelsByProvider, sessionModelId, sessionProvider]);
 
   return (
     <div className="flex-1 flex flex-col h-full bg-screen">
@@ -77,6 +83,7 @@ export function ChatScreen() {
         running={running}
         disabled={!input.trim()}
         selectedModel={sessionModelId}
+        selectedModelSupportsImages={selectedModelSupportsImages}
         onModelChange={(modelId) =>
           selectedSessionId &&
           resolvedProjectId &&

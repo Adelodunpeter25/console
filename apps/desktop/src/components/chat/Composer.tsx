@@ -12,6 +12,7 @@ interface ComposerProps {
   running: boolean;
   disabled: boolean;
   selectedModel: string | null;
+  selectedModelSupportsImages?: boolean;
   onModelChange: (modelId: string) => void;
   approvalMode: ApprovalMode;
   onApprovalModeChange: (mode: ApprovalMode) => void;
@@ -40,6 +41,7 @@ export function Composer({
   running,
   disabled,
   selectedModel,
+  selectedModelSupportsImages,
   onModelChange,
   approvalMode,
   onApprovalModeChange,
@@ -112,8 +114,9 @@ export function Composer({
             {/* Toolbar */}
             <div className="flex items-center gap-1 px-3 pb-2.5">
               <button
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-foreground-muted hover:text-foreground-secondary hover:bg-white/5 transition-colors"
-                title="Attach image(s)"
+                disabled={selectedModelSupportsImages === false}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-foreground-muted hover:text-foreground-secondary hover:bg-white/5 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                title={selectedModelSupportsImages === false ? "This model does not support images" : "Attach image(s)"}
                 onClick={() => {
                   onPickImages?.();
                   textareaRef.current?.focus();
