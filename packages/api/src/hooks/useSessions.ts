@@ -39,7 +39,7 @@ export function useUpdateSession() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: UpdateSessionDto }) =>
       sessionService.updateSession(id, payload),
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: sessionKeys.all });
     },
   });

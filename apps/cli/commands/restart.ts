@@ -10,7 +10,7 @@ export async function restartDaemon(options: { port: string; host: string }): Pr
   // Stop if running
   try {
     await stopDaemon();
-  } catch (error) {
+  } catch {
     // Ignore if not running
     console.log("Daemon was not running");
   }

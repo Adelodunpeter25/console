@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  Terminal,
   FolderTree,
   Search,
   Globe,

@@ -14,7 +14,6 @@ export class ProjectService {
    * List all recent and selected project directories on the server.
    */
   async listProjects(): Promise<ProjectInfo[]> {
-    const rootDir = process.cwd();
     const projectsMap = new Map<string, ProjectInfo>();
 
     // Load persistent projects from SQLite database

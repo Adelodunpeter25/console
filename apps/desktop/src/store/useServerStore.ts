@@ -12,7 +12,7 @@ interface ServerState {
   setConnected: (connected: boolean) => void;
 }
 
-export const useServerStore = create<ServerState>((set, get) => ({
+export const useServerStore = create<ServerState>((set) => ({
   backendUrl: "http://localhost:3000",
   connected: false,
   loading: true,

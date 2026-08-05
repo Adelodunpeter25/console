@@ -1,12 +1,12 @@
 import { create } from "zustand";
 import { toast } from "sonner";
-import type { ImageAttachment, AgentMessage, ToolCall, ToolResult } from "@console/types";
+import type { ImageAttachment } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 import { useProviderStore } from "./useProviderStore";
 import { useProjectStore } from "./useProjectStore";
 import { useSessionStore } from "./useSessionStore";
 import { useSessionStatusStore } from "./useSessionStatusStore";
-import type { ChatStoreState, RunActivityState } from "../types/chat";
+import type { ChatStoreState } from "../types/chat";
 import {
   createChatSessionState,
   getChatSessionState,

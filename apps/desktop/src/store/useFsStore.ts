@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import type { FsTreeEntry } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 import type { BrowseResult, DirectoryTreeResult, PickFolderResult, ReadFileResult } from "../types";
 

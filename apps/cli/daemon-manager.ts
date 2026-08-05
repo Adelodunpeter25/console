@@ -18,7 +18,6 @@ const folderName = isDev ? ".console-dev" : ".console";
 export const CONSOLE_DIR = path.join(homeDir, folderName);
 const PID_FILE = path.join(CONSOLE_DIR, "daemon.pid");
 export const LOGS_DIR = path.join(CONSOLE_DIR, "logs");
-const LOG_FILE = path.join(LOGS_DIR, "daemon.log");
 const CONFIG_FILE = path.join(CONSOLE_DIR, "config.json");
 
 /**
@@ -100,7 +99,7 @@ export async function removePidFile(): Promise<void> {
     if (existsSync(PID_FILE)) {
       await fs.unlink(PID_FILE);
     }
-  } catch (error) {
+  } catch {
     console.warn(`Failed to remove PID file: ${error}`);
   }
 }
@@ -113,7 +112,7 @@ export async function isProcessRunning(pid: number): Promise<boolean> {
     // On Unix-like systems, use kill -0 to check if process exists
     process.kill(pid, 0);
     return true;
-  } catch (error) {
+  } catch {
     // Process doesn't exist or we don't have permission
     return false;
   }
@@ -142,7 +141,7 @@ export async function getDaemonStatus(): Promise<DaemonStatus> {
   try {
     const { stdout } = await execAsync(`ps -p ${pid} -o etime=`).catch(() => ({ stdout: "" }));
     uptime = stdout.trim() || undefined;
-  } catch (error) {
+  } catch {
     // Process might have died between checks
     return { running: false };
   }

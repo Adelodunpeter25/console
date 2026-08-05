@@ -35,7 +35,7 @@ fsRoutes.post("/pick-folder", async (c) => {
     const { stdout } = await execAsync(script);
     const selectedPath = stdout.trim().replace(/\/$/, "");
     return c.json({ success: true, data: { path: selectedPath } });
-  } catch (err) {
+  } catch {
     return c.json({ success: false, error: "Folder selection cancelled or failed." }, 400);
   }
 });
