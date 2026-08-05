@@ -44,6 +44,7 @@ function truncateOutput(output: string, maxBytes: number, label: string): string
 
 export const bashTool: AgentTool<typeof inputSchema> = {
   name: "bash",
+  tier: "exec",
   description: `Execute a shell command and return its output.
 Returns stdout, stderr, and exit code.
 The command runs in a shell (/bin/sh -c), so pipes, redirects, and shell builtins all work.
