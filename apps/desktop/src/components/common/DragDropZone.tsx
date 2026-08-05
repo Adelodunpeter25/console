@@ -47,11 +47,16 @@ export function DragDropZone({
           setIsDragging(false);
           return;
         }
+        if (payload.type === "drop") {
+          setIsDragging(false);
+          const inside = isInsideZone(payload.position.x, payload.position.y);
+          if (inside && payload.paths.length > 0) {
+            void onDropPaths(payload.paths);
+          }
+          return;
+        }
         const inside = isInsideZone(payload.position.x, payload.position.y);
         setIsDragging(inside);
-        if (inside && payload.type === "drop" && payload.paths.length > 0) {
-          void onDropPaths(payload.paths);
-        }
       })
       .then((cleanup) => {
         if (disposed) cleanup();
