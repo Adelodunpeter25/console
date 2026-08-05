@@ -480,7 +480,7 @@ async function onboardUser(
  */
 async function loginWithConfig(config: OAuthConfig): Promise<void> {
   const state = crypto.randomBytes(16).toString("hex");
-  const redirectUri = `http://127.0.0.1:${config.port}${config.callbackPath}`;
+  const redirectUri = `http://localhost:${config.port}${config.callbackPath}`;
 
   const authUrl = new URL(OAUTH_AUTH_URL);
   authUrl.searchParams.set("client_id", config.clientId);
@@ -529,7 +529,7 @@ export async function completeAuthFlowWithCode(
   explicitProjectId?: string,
 ): Promise<GeminiOAuthCredential> {
   const config = provider === "gemini" ? GEMINI_OAUTH_CONFIG : ANTIGRAVITY_OAUTH_CONFIG;
-  const redirectUri = `http://127.0.0.1:${config.port}${config.callbackPath}`;
+  const redirectUri = `http://localhost:${config.port}${config.callbackPath}`;
 
   const tokens = await exchangeCodeForTokens(config, code, redirectUri);
   const email = await getUserEmail(tokens.access_token);

@@ -96,6 +96,7 @@ pub struct ProviderAuthStatus {
     pub logged_in: bool,
     pub email: Option<String>,
     pub project_id: Option<String>,
+    pub configured_project_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
