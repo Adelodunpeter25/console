@@ -64,6 +64,8 @@ export function RunActivity({ activity, running }: RunActivityProps) {
     return () => window.clearInterval(timer);
   }, [running]);
 
+  const groups = React.useMemo(() => groupEvents(activity.events), [activity.events]);
+
   // Don't render the activity block at all if there are no tool calls.
   // A simple question/answer with no tool usage should not show "Worked for 0s".
   const hasToolCalls = activity.events.some((e) => e.type === "toolCall");
@@ -79,8 +81,6 @@ export function RunActivity({ activity, running }: RunActivityProps) {
       : activity.status === "failed"
         ? `Failed after ${formatDuration(elapsed)}`
         : `Worked for ${formatDuration(elapsed)}`;
-
-  const groups = React.useMemo(() => groupEvents(activity.events), [activity.events]);
 
   return (
     <div className="border-b border-white/[0.06] pb-2">

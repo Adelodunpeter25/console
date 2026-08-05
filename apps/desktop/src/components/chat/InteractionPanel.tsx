@@ -148,13 +148,15 @@ interface InteractionPanelProps {
   sessionId: string;
 }
 
+const EMPTY_PERMISSIONS: any[] = [];
+
 /**
  * Renders the pending agent interaction (question or permission request)
  * above the composer. Returns null when nothing is pending.
  */
 export function InteractionPanel({ sessionId }: InteractionPanelProps) {
   const pendingQuestion = useChatStore((s) => s.sessions[sessionId]?.pendingQuestion ?? null);
-  const pendingPermissions = useChatStore((s) => s.sessions[sessionId]?.pendingPermissions ?? []);
+  const pendingPermissions = useChatStore((s) => s.sessions[sessionId]?.pendingPermissions ?? EMPTY_PERMISSIONS);
 
   if (pendingPermissions.length > 0) {
     return (
