@@ -144,6 +144,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         streamingThinking: "",
         liveToolResults: [],
         activeToolCalls: [],
+        runActivity: { startedAt: Date.now(), elapsedMs: 0, calls: [], results: [] },
         attachments: [],
       })),
     }));
@@ -213,6 +214,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
           running: false,
           streamingText: "",
           streamingThinking: "",
+          runActivity: {
+            ...session.runActivity,
+            elapsedMs: session.runActivity.startedAt
+              ? Date.now() - session.runActivity.startedAt
+              : session.runActivity.elapsedMs,
+          },
         })),
       }));
       // Sync sidebar status based on whether the run succeeded or had an error.

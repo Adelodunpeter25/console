@@ -3,6 +3,8 @@ import type { AgentMessage, ToolResult } from "@console/types";
 import { MessageBubble } from "./MessageBubble";
 import { StreamingBubble } from "./StreamingBubble";
 import { ScrollToBottom } from "./ScrollToBottom";
+import { RunActivity } from "./RunActivity";
+import type { RunActivityState } from "../../types/chat";
 
 interface MessageListProps {
   messages: AgentMessage[];
@@ -11,6 +13,7 @@ interface MessageListProps {
   running: boolean;
   /** Tool results arriving in real-time via `toolExecutionResult` events. */
   liveToolResults: ToolResult[];
+  runActivity: RunActivityState;
 }
 
 /**
@@ -43,6 +46,7 @@ export function MessageList({
   streamingThinking,
   running,
   liveToolResults,
+  runActivity,
 }: MessageListProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = React.useState(true);
@@ -92,11 +96,16 @@ export function MessageList({
                 prevMessage={messages[i - 1]}
                 nextMessage={messages[i + 1]}
                 liveToolResults={liveToolResults}
+                activeRunCallIds={runActivity.calls.map((call) => call.id)}
               />
             ))}
             {showStreamingBubble && (
-              <StreamingBubble text={streamingText} thinking={streamingThinking} />
+              <>
+                <RunActivity activity={runActivity} running={running} />
+                <StreamingBubble text={streamingText} thinking={streamingThinking} />
+              </>
             )}
+            {!showStreamingBubble && <RunActivity activity={runActivity} running={false} />}
           </div>
         )}
       </div>

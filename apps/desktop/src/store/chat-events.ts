@@ -51,9 +51,27 @@ export function applyChatEvent(
       return {
         ...session,
         liveToolResults: [...session.liveToolResults, event.result],
+        runActivity: {
+          ...session.runActivity,
+          results: session.runActivity.results.some((result) => result.toolCallId === event.result.toolCallId)
+            ? session.runActivity.results.map((result) =>
+                result.toolCallId === event.result.toolCallId ? event.result : result,
+              )
+            : [...session.runActivity.results, event.result],
+        },
       };
-    case "toolExecutionStart":
-      return { ...session, activeToolCalls: event.calls, liveToolResults: [] };
+    case "toolExecutionStart": {
+      const calls = [...session.runActivity.calls];
+      for (const call of event.calls) {
+        if (!calls.some((existing) => existing.id === call.id)) calls.push(call);
+      }
+      return {
+        ...session,
+        activeToolCalls: event.calls,
+        liveToolResults: [],
+        runActivity: { ...session.runActivity, calls },
+      };
+    }
     case "toolExecutionEnd": {
       const results = [...event.results];
       for (const live of session.liveToolResults) {
@@ -76,6 +94,16 @@ export function applyChatEvent(
         messages: [...session.messages, { role: "toolResult", results }],
         liveToolResults: [],
         activeToolCalls: [],
+        runActivity: {
+          ...session.runActivity,
+          results: results.reduce((current, result) => {
+            const existing = current.findIndex((item) => item.toolCallId === result.toolCallId);
+            if (existing === -1) return [...current, result];
+            const next = [...current];
+            next[existing] = result;
+            return next;
+          }, session.runActivity.results),
+        },
       };
     }
     case "askQuestion":

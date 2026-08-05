@@ -13,3 +13,4 @@ export { Composer } from "./Composer";
 export { ComposerAutocomplete } from "./ComposerAutocomplete";
 export { InteractionPanel } from "./InteractionPanel";
 export { TodoList } from "./TodoList";
+export { RunActivity } from "./RunActivity";

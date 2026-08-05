@@ -12,6 +12,7 @@ export function createChatSessionState(): ChatSessionState {
     liveToolResults: [],
     activeToolCalls: [],
     todoItems: [],
+    runActivity: { startedAt: null, elapsedMs: 0, calls: [], results: [] },
     attachments: [],
   };
 }

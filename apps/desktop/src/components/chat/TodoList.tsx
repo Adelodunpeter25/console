@@ -27,7 +27,7 @@ export function TodoList({ items }: TodoListProps) {
           onClick={() => setCollapsed((current) => !current)}
           className="rounded p-0.5 text-foreground-muted transition-colors hover:bg-white/[0.08] hover:text-foreground"
         >
-          <ChevronDown size={15} className={collapsed ? "" : "rotate-180"} />
+          <ChevronDown size={15} className={collapsed ? "rotate-180" : ""} />
         </button>
       </div>
       <div className="space-y-1">

@@ -17,6 +17,13 @@ export interface PendingPermission {
   request: PermissionRequest;
 }
 
+export interface RunActivityState {
+  startedAt: number | null;
+  elapsedMs: number;
+  calls: ToolCall[];
+  results: ToolResult[];
+}
+
 export interface ChatSessionState {
   messages: AgentMessage[];
   input: string;
@@ -28,6 +35,7 @@ export interface ChatSessionState {
   liveToolResults: ToolResult[];
   activeToolCalls: ToolCall[];
   todoItems: TodoItem[];
+  runActivity: RunActivityState;
   attachments: ImageAttachment[];
 }
 

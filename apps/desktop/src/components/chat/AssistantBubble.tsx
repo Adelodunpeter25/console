@@ -8,6 +8,7 @@ type AssistantMessage = Extract<AgentMessage, { role: "assistant" }>;
 interface AssistantBubbleProps {
   message: AssistantMessage;
   toolResults?: ToolResult[];
+  hideToolCalls?: boolean;
 }
 
 /**
@@ -21,6 +22,7 @@ interface AssistantBubbleProps {
 export const AssistantBubble = React.memo(function AssistantBubble({
   message,
   toolResults = [],
+  hideToolCalls = false,
 }: AssistantBubbleProps) {
   const textParts = message.content.filter((c) => c.type === "text");
   const thinkingParts = message.content.filter((c) => c.type === "thinking");
@@ -63,7 +65,7 @@ export const AssistantBubble = React.memo(function AssistantBubble({
         </div>
       )}
 
-      {toolCallParts.length > 0 && (
+      {toolCallParts.length > 0 && !hideToolCalls && (
         <ToolCallBlock
           calls={toolCallParts
             .map((c) => (c.type === "toolCall" ? c.call : null))

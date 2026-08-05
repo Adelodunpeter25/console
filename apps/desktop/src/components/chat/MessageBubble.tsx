@@ -11,6 +11,7 @@ interface MessageBubbleProps {
   /** Real-time tool results from `toolExecutionResult` events, used to
       update tool call status before `toolExecutionEnd` finalises the batch. */
   liveToolResults?: ToolResult[];
+  activeRunCallIds?: string[];
 }
 
 /**
@@ -26,7 +27,9 @@ export const MessageBubble = React.memo(function MessageBubble({
   prevMessage,
   nextMessage,
   liveToolResults = [],
+  activeRunCallIds = [],
 }: MessageBubbleProps) {
+  const activeCallIds = new Set(activeRunCallIds);
   if (message.role === "user") {
     return <UserBubble content={message.content} attachments={message.attachments} />;
   }
@@ -44,6 +47,7 @@ export const MessageBubble = React.memo(function MessageBubble({
             )
             .map((c) => c.call)
         : [];
+    if (prevCalls.some((call) => activeCallIds.has(call.id))) return null;
     return <ToolCallBlock calls={prevCalls} results={message.results} />;
   }
 
@@ -62,5 +66,14 @@ export const MessageBubble = React.memo(function MessageBubble({
     }
   }
 
-  return <AssistantBubble message={message} toolResults={mergedResults} />;
+  const hasActiveToolCall = message.content.some(
+    (part) => part.type === "toolCall" && activeCallIds.has(part.call.id),
+  );
+  return (
+    <AssistantBubble
+      message={message}
+      toolResults={mergedResults}
+      hideToolCalls={hasActiveToolCall}
+    />
+  );
 });
