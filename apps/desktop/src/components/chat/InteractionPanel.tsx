@@ -158,6 +158,19 @@ export function InteractionPanel({ sessionId }: InteractionPanelProps) {
   const pendingQuestion = useChatStore((s) => s.sessions[sessionId]?.pendingQuestion ?? null);
   const pendingPermissions = useChatStore((s) => s.sessions[sessionId]?.pendingPermissions ?? EMPTY_PERMISSIONS);
 
+  React.useEffect(() => {
+    const request = pendingPermissions[0]?.request;
+    if (request) {
+      console.info("[permission] panel rendering request", {
+        sessionId,
+        requestId: request.requestId,
+        toolName: request.toolName,
+        tier: request.tier,
+        requiresUpgrade: request.requiresUpgrade,
+      });
+    }
+  }, [pendingPermissions, sessionId]);
+
   if (pendingPermissions.length > 0) {
     return (
       <PermissionPanel

@@ -185,6 +185,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       // Subscribe before invoking so early SSE frames aren't dropped.
       unlisten = await tauriApi.listenAgentEvents(sessionId, (event) => {
+        if (event.type === "permissionRequest") {
+          console.info("[permission] desktop event received", {
+            sessionId,
+            requestId: event.request.requestId,
+            toolName: event.request.toolName,
+            tier: event.request.tier,
+            requiresUpgrade: event.request.requiresUpgrade,
+          });
+        }
         if (event.type === "error") {
           if (isAbortError(event.error.message)) {
             hadError = true; // prevent reload, but don't toast or show inline error
@@ -220,12 +229,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } finally {
       if (unlisten) {
         const fn = unlisten;
+        unlisten = null;
         setTimeout(() => {
-          try {
-            fn();
-          } catch (err) {
-            console.error("Failed to unlisten agent events:", err);
-          }
+          void (async () => {
+            try {
+              await fn();
+            } catch (err) {
+              // The listener may already have been removed while aborting the
+              // run. Cleanup must not create an unhandled rejection.
+              console.warn("Agent event listener was already unavailable during cleanup:", err);
+            }
+          })();
         }, 100);
       }
       set((state) => ({

@@ -139,7 +139,18 @@ export const tauriApi = {
     sessionId: string,
     callback: (event: AgentSessionEvent) => void,
   ): Promise<UnlistenFn> =>
-    listen<AgentSessionEvent>(`agent-event:${sessionId}`, (e) => callback(e.payload)),
+    listen<AgentSessionEvent>(`agent-event:${sessionId}`, (e) => {
+      if (e.payload.type === "permissionRequest") {
+        console.info("[permission] Tauri event received", {
+          sessionId,
+          requestId: e.payload.request.requestId,
+          toolName: e.payload.request.toolName,
+          tier: e.payload.request.tier,
+          requiresUpgrade: e.payload.request.requiresUpgrade,
+        });
+      }
+      callback(e.payload);
+    }),
 
   // --- desktop assistant (slash commands + @ file refs) --------------------
   listSlashCommands: (sessionId: string) =>
