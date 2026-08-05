@@ -25,8 +25,7 @@ export function ChatScreen() {
     running,
     streamingText,
     streamingThinking,
-    liveToolResults,
-    runActivity,
+    runs,
     todoItems,
     attachments,
   } = chatSession ?? EMPTY_CHAT_SESSION;
@@ -92,8 +91,7 @@ export function ChatScreen() {
         streamingText={streamingText}
         streamingThinking={streamingThinking}
         running={running}
-        liveToolResults={liveToolResults}
-        runActivity={runActivity}
+        runs={runs}
       />
       {selectedSessionId && (
         <div className="px-6 pb-1">

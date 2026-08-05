@@ -1,5 +1,5 @@
 import React from "react";
-import type { AgentMessage, ToolCall, ToolResult } from "@console/types";
+import type { AgentMessage } from "@console/types";
 import type { RunActivityState } from "../types/chat.js";
 
 interface UseMessageHistoryOptions {
@@ -50,42 +50,62 @@ export function useMessageHistory({ history, value, onChange }: UseMessageHistor
   return { navigate, reset };
 }
 
-export function reconstructRunActivity(messages: AgentMessage[]): RunActivityState {
-  const latestUserIndex = messages.findLastIndex((msg) => msg.role === "user");
-  if (latestUserIndex === -1) {
-    return { startedAt: null, elapsedMs: 0, calls: [], results: [] };
-  }
+export function reconstructRuns(messages: AgentMessage[]): RunActivityState[] {
+  const runs: RunActivityState[] = [];
 
-  const calls: ToolCall[] = [];
-  const results: ToolResult[] = [];
+  // Walk the message list and split into runs at each user message.
+  // Each run contains all assistant turns, tool calls, and tool results
+  // until the next user message.
+  let currentRun: RunActivityState | null = null;
+  let runIndex = 0;
 
-  for (let i = latestUserIndex + 1; i < messages.length; i++) {
+  for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]!;
-    if (msg.role === "assistant") {
-      const msgCalls = msg.content
-        .filter((c): c is Extract<typeof c, { type: "toolCall" }> => c.type === "toolCall")
-        .map((c) => c.call);
-      calls.push(...msgCalls);
-    } else if (msg.role === "toolResult") {
-      results.push(...msg.results);
+
+    if (msg.role === "user") {
+      // Finalize the previous run.
+      if (currentRun) {
+        finalizeReconstructedRun(currentRun, messages, i - 1);
+        runs.push(currentRun);
+      }
+      // Start a new run.
+      currentRun = {
+        runId: `reconstructed-${runIndex++}`,
+        startedAt: msg.createdAt ?? null,
+        elapsedMs: 0,
+        calls: [],
+        results: [],
+        status: "completed",
+      };
+    } else if (currentRun) {
+      if (msg.role === "assistant") {
+        const msgCalls = msg.content
+          .filter((c): c is Extract<typeof c, { type: "toolCall" }> => c.type === "toolCall")
+          .map((c) => c.call);
+        currentRun.calls.push(...msgCalls);
+      } else if (msg.role === "toolResult") {
+        currentRun.results.push(...msg.results);
+      }
     }
   }
 
-  const userMessage = messages[latestUserIndex]!;
-  const lastMessage = messages[messages.length - 1]!;
-  let elapsedMs = 0;
-  if (
-    userMessage.createdAt &&
-    lastMessage.createdAt &&
-    lastMessage.createdAt > userMessage.createdAt
-  ) {
-    elapsedMs = lastMessage.createdAt - userMessage.createdAt;
+  // Finalize the last run.
+  if (currentRun) {
+    finalizeReconstructedRun(currentRun, messages, messages.length - 1);
+    runs.push(currentRun);
   }
 
-  return {
-    startedAt: null,
-    elapsedMs,
-    calls,
-    results,
-  };
+  return runs;
+}
+
+/** Compute elapsed time from the run's startedAt to the last message. */
+function finalizeReconstructedRun(
+  run: RunActivityState,
+  messages: AgentMessage[],
+  lastIndex: number,
+): void {
+  const lastMessage = messages[lastIndex];
+  if (run.startedAt && lastMessage?.createdAt && lastMessage.createdAt > run.startedAt) {
+    run.elapsedMs = lastMessage.createdAt - run.startedAt;
+  }
 }

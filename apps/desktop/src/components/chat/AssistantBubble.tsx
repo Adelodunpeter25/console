@@ -1,19 +1,18 @@
 import React from "react";
 import { AlertCircle } from "lucide-react";
-import type { AgentMessage, ToolResult } from "@console/types";
-import { MarkdownRenderer, ThinkingBlock, ToolCallBlock } from "../common";
+import type { AgentMessage } from "@console/types";
+import { MarkdownRenderer, ThinkingBlock } from "../common";
 
 type AssistantMessage = Extract<AgentMessage, { role: "assistant" }>;
 
 interface AssistantBubbleProps {
   message: AssistantMessage;
-  toolResults?: ToolResult[];
-  hideToolCalls?: boolean;
 }
 
 /**
- * Renders an assistant message: thinking blocks, markdown text, tool calls,
- * and error states. Memoized so a streaming token re-renders only the
+ * Renders an assistant message: thinking blocks, markdown text, and error
+ * states. Tool calls are NOT rendered here — they appear in per-run
+ * `RunActivity` blocks. Memoized so a streaming token re-renders only the
  * active streaming bubble, not every persisted assistant message above it.
  *
  * (Conductor rewrite lesson: wrap each message row in React.memo with a
@@ -21,12 +20,9 @@ interface AssistantBubbleProps {
  */
 export const AssistantBubble = React.memo(function AssistantBubble({
   message,
-  toolResults = [],
-  hideToolCalls = false,
 }: AssistantBubbleProps) {
   const textParts = message.content.filter((c) => c.type === "text");
   const thinkingParts = message.content.filter((c) => c.type === "thinking");
-  const toolCallParts = message.content.filter((c) => c.type === "toolCall");
   const isError = textParts.some((c) => c.type === "text" && c.text.startsWith("Error:"));
 
   if (isError) {
@@ -58,15 +54,6 @@ export const AssistantBubble = React.memo(function AssistantBubble({
             content={textParts.map((c) => (c.type === "text" ? c.text : "")).join("\n\n")}
           />
         </div>
-      )}
-
-      {toolCallParts.length > 0 && !hideToolCalls && (
-        <ToolCallBlock
-          calls={toolCallParts
-            .map((c) => (c.type === "toolCall" ? c.call : null))
-            .filter((c): c is NonNullable<typeof c> => c !== null)}
-          results={toolResults}
-        />
       )}
     </div>
   );

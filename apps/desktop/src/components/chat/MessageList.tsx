@@ -1,5 +1,5 @@
 import React from "react";
-import type { AgentMessage, ToolResult } from "@console/types";
+import type { AgentMessage } from "@console/types";
 import { MessageBubble } from "./MessageBubble";
 import { StreamingBubble } from "./StreamingBubble";
 import { ScrollToBottom } from "./ScrollToBottom";
@@ -11,9 +11,7 @@ interface MessageListProps {
   streamingText: string;
   streamingThinking: string;
   running: boolean;
-  /** Tool results arriving in real-time via `toolExecutionResult` events. */
-  liveToolResults: ToolResult[];
-  runActivity: RunActivityState;
+  runs: RunActivityState[];
 }
 
 /**
@@ -36,17 +34,16 @@ function messageKey(msg: AgentMessage, index: number): string {
  *    re-render the hundreds of messages above it.
  *  - The single `StreamingBubble` is rendered separately and intentionally
  *    not memoized — it is the only row that updates per token.
- *  - The list is data-driven (`messages` + streaming props) so it can be
- *    dropped into `react-virtuoso` later with stable item keys + `followOutput`
- *    without changing call sites. See the Conductor findings artifact.
+ *  - Tool calls are rendered exclusively inside per-run `RunActivity`
+ *    blocks, never inline in assistant bubbles. This means starting a new
+ *    prompt never invalidates the completion state of earlier runs.
  */
 export function MessageList({
   messages,
   streamingText,
   streamingThinking,
   running,
-  liveToolResults,
-  runActivity,
+  runs,
 }: MessageListProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = React.useState(true);
@@ -56,7 +53,7 @@ export function MessageList({
     if (autoScroll && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, streamingText, streamingThinking, autoScroll, liveToolResults, runActivity]);
+  }, [messages, streamingText, streamingThinking, autoScroll, runs]);
 
   const handleScroll = React.useCallback(() => {
     if (!scrollRef.current) return;
@@ -71,10 +68,24 @@ export function MessageList({
   }, []);
 
   const isStreaming = Boolean(streamingText || streamingThinking);
-  // Show the live bubble for the whole run — including the pre-token
-  // "Agent is thinking..." state — not only after the first delta arrives.
   const showStreamingBubble = running || isStreaming;
   const showEmpty = messages.length === 0 && !showStreamingBubble;
+
+  // Map each user message to its corresponding run. runs[k] corresponds to
+  // the k-th user message (0-indexed).
+  const userMessageRunMap = React.useMemo(() => {
+    const map = new Map<number, RunActivityState>();
+    let userCount = 0;
+    for (let i = 0; i < messages.length; i++) {
+      if (messages[i]!.role === "user") {
+        const run = runs[userCount];
+        if (run) map.set(i, run);
+        userCount++;
+      }
+    }
+    return map;
+  }, [messages, runs]);
+
   const latestUserIndex = React.useMemo(
     () => messages.findLastIndex((message) => message.role === "user"),
     [messages],
@@ -93,14 +104,13 @@ export function MessageList({
           <div className="max-w-3xl mx-auto px-6 py-6 space-y-4">
             {messages.map((msg, i) => (
               <React.Fragment key={messageKey(msg, i)}>
-                <MessageBubble
-                  message={msg}
-                  prevMessage={messages[i - 1]}
-                  nextMessage={messages[i + 1]}
-                  liveToolResults={liveToolResults}
-                  activeRunCallIds={runActivity.calls.map((call) => call.id)}
-                />
-                {i === latestUserIndex && <RunActivity activity={runActivity} running={running} />}
+                <MessageBubble message={msg} />
+                {userMessageRunMap.has(i) && (
+                  <RunActivity
+                    activity={userMessageRunMap.get(i)!}
+                    running={running && i === latestUserIndex}
+                  />
+                )}
               </React.Fragment>
             ))}
             {showStreamingBubble && (

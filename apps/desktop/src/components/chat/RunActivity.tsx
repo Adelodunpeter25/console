@@ -5,6 +5,7 @@ import { ToolCallBlock } from "../common/ToolCallBlock";
 
 interface RunActivityProps {
   activity: RunActivityState;
+  /** True only for the latest run while the session is actively running. */
   running: boolean;
 }
 
@@ -28,7 +29,17 @@ export function RunActivity({ activity, running }: RunActivityProps) {
 
   if (!activity.startedAt && activity.calls.length === 0) return null;
 
-  const elapsed = running && activity.startedAt ? now - activity.startedAt : activity.elapsedMs;
+  const isWorking = running || activity.status === "working";
+  const elapsed = isWorking && activity.startedAt ? now - activity.startedAt : activity.elapsedMs;
+
+  const summaryLabel = isWorking
+    ? "Working..."
+    : activity.status === "aborted"
+      ? `Aborted after ${formatDuration(elapsed)}`
+      : activity.status === "failed"
+        ? `Failed after ${formatDuration(elapsed)}`
+        : `Worked for ${formatDuration(elapsed)}`;
+
   return (
     <div className="border-b border-white/[0.06] pb-2">
       <button
@@ -37,8 +48,8 @@ export function RunActivity({ activity, running }: RunActivityProps) {
         onClick={() => setExpanded((current) => !current)}
         className="flex w-full items-center gap-2 px-1 py-1 text-left text-xs text-foreground-muted hover:text-foreground-secondary"
       >
-        {running ? <Loader2 size={13} className="animate-spin" /> : null}
-        <span>{running ? "Working..." : `Worked for ${formatDuration(elapsed)}`}</span>
+        {isWorking ? <Loader2 size={13} className="animate-spin" /> : null}
+        <span>{summaryLabel}</span>
         {expanded ? <ChevronUp size={14} /> : <ChevronRight size={14} />}
       </button>
       {expanded && activity.calls.length > 0 && (

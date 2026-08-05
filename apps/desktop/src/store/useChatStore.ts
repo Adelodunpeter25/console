@@ -13,7 +13,7 @@ import {
   updateChatSession,
 } from "../types/chat-state";
 import { applyChatEvent } from "./chat-events";
-import { reconstructRunActivity } from "../utils/useMessageHistory.js";
+import { reconstructRuns } from "../utils/useMessageHistory.js";
 
 type ChatState = ChatStoreState;
 
@@ -55,11 +55,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           messages,
           streamingText: "",
           streamingThinking: "",
-          liveToolResults: [],
           activeToolCalls: [],
           pendingQuestion: null,
           pendingPermissions: [],
-          runActivity: reconstructRunActivity(messages),
+          runs: reconstructRuns(messages),
           attachments: [],
         };
       }),
@@ -146,9 +145,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ],
         streamingText: "",
         streamingThinking: "",
-        liveToolResults: [],
         activeToolCalls: [],
-        runActivity: { startedAt: Date.now(), elapsedMs: 0, calls: [], results: [] },
+        runs: [
+          ...session.runs,
+          {
+            runId: crypto.randomUUID(),
+            startedAt: Date.now(),
+            elapsedMs: 0,
+            calls: [],
+            results: [],
+            status: "working" as const,
+          },
+        ],
         attachments: [],
       })),
     }));
@@ -213,18 +221,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } finally {
       if (unlisten) unlisten();
       set((state) => ({
-        sessions: updateChatSession(state.sessions, sessionId, (session) => ({
-          ...session,
-          running: false,
-          streamingText: "",
-          streamingThinking: "",
-          runActivity: {
-            ...session.runActivity,
-            elapsedMs: session.runActivity.startedAt
-              ? Date.now() - session.runActivity.startedAt
-              : session.runActivity.elapsedMs,
-          },
-        })),
+        sessions: updateChatSession(state.sessions, sessionId, (session) => {
+          // Finalize the latest run: compute elapsed time and mark as
+          // completed if still working (sessionEnd may not have fired).
+          const runs = session.runs.length > 0 ? [...session.runs] : [];
+          if (runs.length > 0) {
+            const latest = runs[runs.length - 1]!;
+            if (latest.status === "working") {
+              runs[runs.length - 1] = {
+                ...latest,
+                status: hadError ? "failed" : "completed",
+                elapsedMs: latest.startedAt
+                  ? Date.now() - latest.startedAt
+                  : latest.elapsedMs,
+              };
+            }
+          }
+          return {
+            ...session,
+            running: false,
+            streamingText: "",
+            streamingThinking: "",
+            activeToolCalls: [],
+            runs,
+          };
+        }),
       }));
       // Sync sidebar status based on whether the run succeeded or had an error.
       // Do NOT reload the session here — it replaces the entire messages array with
@@ -245,15 +266,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // ignore
     }
     set((state) => ({
-      sessions: updateChatSession(state.sessions, sessionId, (session) => ({
-        ...session,
-        running: false,
-        streamingText: "",
-        streamingThinking: "",
-        pendingQuestion: null,
-        pendingPermissions: [],
-        activeToolCalls: [],
-      })),
+      sessions: updateChatSession(state.sessions, sessionId, (session) => {
+        const runs = session.runs.length > 0 ? [...session.runs] : [];
+        if (runs.length > 0) {
+          const latest = runs[runs.length - 1]!;
+          if (latest.status === "working") {
+            runs[runs.length - 1] = {
+              ...latest,
+              status: "aborted",
+              elapsedMs: latest.startedAt
+                ? Date.now() - latest.startedAt
+                : latest.elapsedMs,
+            };
+          }
+        }
+        return {
+          ...session,
+          running: false,
+          streamingText: "",
+          streamingThinking: "",
+          pendingQuestion: null,
+          pendingPermissions: [],
+          activeToolCalls: [],
+          runs,
+        };
+      }),
     }));
     syncSessionStatus(sessionId, "done");
   },

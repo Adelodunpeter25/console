@@ -9,10 +9,9 @@ export function createChatSessionState(): ChatSessionState {
     streamingThinking: "",
     pendingQuestion: null,
     pendingPermissions: [],
-    liveToolResults: [],
     activeToolCalls: [],
     todoItems: [],
-    runActivity: { startedAt: null, elapsedMs: 0, calls: [], results: [] },
+    runs: [],
     attachments: [],
   };
 }

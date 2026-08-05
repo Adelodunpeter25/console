@@ -17,11 +17,15 @@ export interface PendingPermission {
   request: PermissionRequest;
 }
 
+export type RunStatus = "working" | "completed" | "aborted" | "failed";
+
 export interface RunActivityState {
+  runId: string;
   startedAt: number | null;
   elapsedMs: number;
   calls: ToolCall[];
   results: ToolResult[];
+  status: RunStatus;
 }
 
 export interface ChatSessionState {
@@ -32,10 +36,9 @@ export interface ChatSessionState {
   streamingThinking: string;
   pendingQuestion: PendingQuestion | null;
   pendingPermissions: PendingPermission[];
-  liveToolResults: ToolResult[];
   activeToolCalls: ToolCall[];
   todoItems: TodoItem[];
-  runActivity: RunActivityState;
+  runs: RunActivityState[];
   attachments: ImageAttachment[];
 }
 
