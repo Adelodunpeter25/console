@@ -32,6 +32,7 @@ export function ResizablePanel({
 }: ResizablePanelProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const draggingRef = React.useRef(false);
+  const widthRef = React.useRef(width);
 
   const clamp = (v: number) => Math.min(Math.max(v, minWidth), maxWidth);
 
@@ -48,14 +49,15 @@ export function ResizablePanel({
       const dx = ev.clientX - startX;
       // If the handle is on the panel's right edge, dragging right grows it.
       const delta = handleSide === "right" ? dx : -dx;
-      onWidthChange(clamp(startWidth + delta));
+      widthRef.current = clamp(startWidth + delta);
+      onWidthChange(widthRef.current);
     };
 
     const onUp = () => {
       draggingRef.current = false;
       document.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerup", onUp);
-      onResizeEnd?.(width);
+      onResizeEnd?.(widthRef.current);
     };
 
     document.addEventListener("pointermove", onMove);

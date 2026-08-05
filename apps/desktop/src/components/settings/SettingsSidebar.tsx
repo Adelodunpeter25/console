@@ -6,6 +6,8 @@ interface SettingsSidebarProps {
   active: SettingsSection;
   onSelect: (section: SettingsSection) => void;
   onBack: () => void;
+  /** Current sidebar width (px) — set from the parent's resizable panel. */
+  width: number;
 }
 
 /**
@@ -15,13 +17,13 @@ interface SettingsSidebarProps {
  * sections. Currently only "Connection" is available; the structure is
  * ready for more sections (appearance, models, etc.) to be added.
  */
-export function SettingsSidebar({ active, onSelect, onBack }: SettingsSidebarProps) {
+export function SettingsSidebar({ active, onSelect, onBack, width }: SettingsSidebarProps) {
   const sections: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
     { id: "connection", label: "Connection", icon: <Wifi size={16} /> },
   ];
 
   return (
-    <div className="w-60 bg-sidebar border-r border-border flex flex-col h-full shrink-0">
+    <div style={{ width }} className="bg-sidebar border-r border-border flex flex-col h-full shrink-0">
       {/* Back button */}
       <div className="px-3 h-12 flex items-center border-b border-border shrink-0">
         <button
