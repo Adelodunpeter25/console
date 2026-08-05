@@ -13,6 +13,7 @@ import {
   updateChatSession,
 } from "../types/chat-state";
 import { applyChatEvent } from "./chat-events";
+import { reconstructRunActivity } from "../utils/useMessageHistory.js";
 
 type ChatState = ChatStoreState;
 
@@ -34,35 +35,6 @@ function isAbortError(msg: string): boolean {
 /** Push a status update to the project store so the sidebar reflects it. */
 function syncSessionStatus(sessionId: string, status: "idle" | "working" | "done" | "needs_attention") {
   useSessionStatusStore.getState().setStatus(sessionId, status);
-}
-
-function reconstructRunActivity(messages: AgentMessage[]): RunActivityState {
-  const latestUserIndex = messages.findLastIndex((msg) => msg.role === "user");
-  if (latestUserIndex === -1) {
-    return { startedAt: null, elapsedMs: 0, calls: [], results: [] };
-  }
-
-  const calls: ToolCall[] = [];
-  const results: ToolResult[] = [];
-
-  for (let i = latestUserIndex + 1; i < messages.length; i++) {
-    const msg = messages[i]!;
-    if (msg.role === "assistant") {
-      const msgCalls = msg.content
-        .filter((c): c is Extract<typeof c, { type: "toolCall" }> => c.type === "toolCall")
-        .map((c) => c.call);
-      calls.push(...msgCalls);
-    } else if (msg.role === "toolResult") {
-      results.push(...msg.results);
-    }
-  }
-
-  return {
-    startedAt: null,
-    elapsedMs: 0,
-    calls,
-    results,
-  };
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({

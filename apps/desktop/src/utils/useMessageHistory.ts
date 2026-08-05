@@ -1,4 +1,6 @@
 import React from "react";
+import type { AgentMessage, ToolCall, ToolResult } from "@console/types";
+import type { RunActivityState } from "../types/chat.js";
 
 interface UseMessageHistoryOptions {
   history: string[];
@@ -52,4 +54,33 @@ export function useMessageHistory({
   );
 
   return { navigate, reset };
+}
+
+export function reconstructRunActivity(messages: AgentMessage[]): RunActivityState {
+  const latestUserIndex = messages.findLastIndex((msg) => msg.role === "user");
+  if (latestUserIndex === -1) {
+    return { startedAt: null, elapsedMs: 0, calls: [], results: [] };
+  }
+
+  const calls: ToolCall[] = [];
+  const results: ToolResult[] = [];
+
+  for (let i = latestUserIndex + 1; i < messages.length; i++) {
+    const msg = messages[i]!;
+    if (msg.role === "assistant") {
+      const msgCalls = msg.content
+        .filter((c): c is Extract<typeof c, { type: "toolCall" }> => c.type === "toolCall")
+        .map((c) => c.call);
+      calls.push(...msgCalls);
+    } else if (msg.role === "toolResult") {
+      results.push(...msg.results);
+    }
+  }
+
+  return {
+    startedAt: null,
+    elapsedMs: 0,
+    calls,
+    results,
+  };
 }
