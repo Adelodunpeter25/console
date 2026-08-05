@@ -104,7 +104,7 @@ function buildContext(): SlashCommandContext {
   assert.equal(switchRes.action, "switch_provider");
   assert.equal(currentProvider, "gemini");
   assert.equal(agent.model.provider, "gemini");
-  assert.equal(agent.model.id, "gemini-3.1-pro");
+  assert.equal(agent.model.id, "gemini-2.5-flash");
   console.log("  ✅ /provider command (switch provider & default model)");
 }
 
