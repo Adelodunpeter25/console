@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  FileText,
   Terminal,
   FolderTree,
   Search,
@@ -21,8 +20,19 @@ import { formatUnknown } from "../../utils/format";
 
 /** Extract text from a ToolResult's content array. */
 function resultText(result: ToolResult): string {
-  const content = result.content;
+  let content = result.content;
+
+  // Older persisted results may still contain the tool's transport envelope.
+  // Unwrap it defensively so history remains readable after the backend fix.
+  while (content && typeof content === "object" && !Array.isArray(content) && "content" in content) {
+    content = (content as { content: unknown }).content;
+  }
+
   if (typeof content === "string") return content;
+  if (content && typeof content === "object" && !Array.isArray(content) && "text" in content) {
+    const text = (content as { text: unknown }).text;
+    if (typeof text === "string") return text;
+  }
   if (Array.isArray(content)) {
     return content
       .map((c) => {
@@ -86,7 +96,7 @@ function StatusLine({
 }
 
 /* ------------------------------------------------------------------ */
-/* readFile — header metadata + syntax-highlighted code                */
+/* readFile — syntax-highlighted code                                  */
 /* ------------------------------------------------------------------ */
 
 function ReadFileResult({ text, filePath }: { text: string; filePath?: string }) {
@@ -101,11 +111,9 @@ function ReadFileResult({ text, filePath }: { text: string; filePath?: string })
   const headerLines = lines.slice(0, headerEnd);
   const codeLines = lines.slice(headerEnd + 1);
 
-  // Extract metadata
+  // Use the metadata only to determine the language; successful results show
+  // the file contents without repeating the transport/header details.
   const fileMatch = headerLines.find((l) => l.startsWith("File:"));
-  const showingMatch = headerLines.find((l) => l.startsWith("Showing:"));
-  const sizeMatch = headerLines.find((l) => l.startsWith("Size:"));
-
   const path = fileMatch?.replace(/^File:\s*/, "") ?? filePath ?? "";
   const lang = langFromPath(path);
 
@@ -114,24 +122,8 @@ function ReadFileResult({ text, filePath }: { text: string; filePath?: string })
   const markdown = `${fence}${lang ?? ""}\n${codeLines.join("\n")}\n${fence}`;
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <FileText size={11} className="text-foreground-muted" />
-        <span className="text-[10px] font-mono text-foreground-muted">{path}</span>
-        {showingMatch && (
-          <span className="text-[10px] text-foreground-muted/70">
-            · {showingMatch.replace(/^Showing:\s*/, "")}
-          </span>
-        )}
-        {sizeMatch && (
-          <span className="text-[10px] text-foreground-muted/70">
-            · {sizeMatch.replace(/^Size:\s*/, "")}
-          </span>
-        )}
-      </div>
-      <div className="max-h-80 overflow-y-auto rounded bg-black/30">
-        <MarkdownRenderer content={markdown} />
-      </div>
+    <div className="max-h-80 overflow-y-auto rounded bg-black/30">
+      <MarkdownRenderer content={markdown} />
     </div>
   );
 }

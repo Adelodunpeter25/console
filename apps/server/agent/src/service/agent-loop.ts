@@ -82,6 +82,22 @@ interface StreamParams {
 }
 
 /**
+ * Tool implementations return MCP-style envelopes such as
+ * `{ content: [{ type: "text", text: "..." }] }`. Keep that transport
+ * envelope out of the session history and UI-facing events.
+ */
+function normalizeToolOutput(output: unknown): { content: unknown; isError?: boolean } {
+  if (output && typeof output === "object" && !Array.isArray(output) && "content" in output) {
+    const envelope = output as { content: unknown; isError?: unknown };
+    return {
+      content: envelope.content,
+      ...(envelope.isError === true ? { isError: true } : {}),
+    };
+  }
+  return { content: output };
+}
+
+/**
  * Execute a single tool call with Zod parsing, Permission resolution, & error handling.
  */
 async function executeTool(
@@ -174,10 +190,11 @@ async function executeTool(
   try {
     await onToolCall?.(call);
     const output = await tool.execute(parsed.data);
+    const normalized = normalizeToolOutput(output);
     const result: ToolResult = {
       toolCallId: call.id,
       toolName: call.name,
-      content: output,
+      ...normalized,
     };
     await onToolResult?.(call, result);
     return result;
