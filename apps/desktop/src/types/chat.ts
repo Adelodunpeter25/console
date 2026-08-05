@@ -19,12 +19,16 @@ export interface PendingPermission {
 
 export type RunStatus = "working" | "completed" | "aborted" | "failed";
 
+/** A single entry in the run activity timeline. */
+export type ActivityEvent =
+  | { type: "text"; id: string; text: string }
+  | { type: "toolCall"; id: string; call: ToolCall; result?: ToolResult };
+
 export interface RunActivityState {
   runId: string;
   startedAt: number | null;
   elapsedMs: number;
-  calls: ToolCall[];
-  results: ToolResult[];
+  events: ActivityEvent[];
   status: RunStatus;
 }
 

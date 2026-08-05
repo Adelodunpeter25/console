@@ -1,5 +1,5 @@
 import React from "react";
-import type { AgentMessage } from "@console/types";
+import type { AgentMessage, ToolResult } from "@console/types";
 import type { RunActivityState } from "../types/chat.js";
 
 interface UseMessageHistoryOptions {
@@ -55,9 +55,14 @@ export function reconstructRuns(messages: AgentMessage[]): RunActivityState[] {
 
   // Walk the message list and split into runs at each user message.
   // Each run contains all assistant turns, tool calls, and tool results
-  // until the next user message.
+  // until the next user message, rebuilt as an ordered event timeline.
   let currentRun: RunActivityState | null = null;
   let runIndex = 0;
+
+  // Track results from toolResult messages and match them to tool call events
+  // by toolCallId. Results may arrive in a separate message after the assistant
+  // turn, so we collect them and apply them after building the events.
+  const pendingResults: Map<string, ToolResult> = new Map();
 
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]!;
@@ -66,25 +71,45 @@ export function reconstructRuns(messages: AgentMessage[]): RunActivityState[] {
       // Finalize the previous run.
       if (currentRun) {
         finalizeReconstructedRun(currentRun, messages, i - 1);
+        applyPendingResults(currentRun, pendingResults);
         runs.push(currentRun);
+        pendingResults.clear();
       }
       // Start a new run.
       currentRun = {
         runId: `reconstructed-${runIndex++}`,
         startedAt: msg.createdAt ?? null,
         elapsedMs: 0,
-        calls: [],
-        results: [],
+        events: [],
         status: "completed",
       };
     } else if (currentRun) {
       if (msg.role === "assistant") {
-        const msgCalls = msg.content
-          .filter((c): c is Extract<typeof c, { type: "toolCall" }> => c.type === "toolCall")
-          .map((c) => c.call);
-        currentRun.calls.push(...msgCalls);
+        const hasToolCalls = msg.content.some((c) => c.type === "toolCall");
+        if (!hasToolCalls) continue; // final response — not part of the timeline
+
+        // Build events in content order: text → text events, toolCall → toolCall events.
+        for (const part of msg.content) {
+          if (part.type === "text" && part.text.trim()) {
+            currentRun.events.push({
+              type: "text",
+              id: `reconstructed-text-${runIndex}-${currentRun.events.length}`,
+              text: part.text,
+            });
+          } else if (part.type === "toolCall") {
+            currentRun.events.push({
+              type: "toolCall",
+              id: part.call.id,
+              call: part.call,
+            });
+          }
+        }
       } else if (msg.role === "toolResult") {
-        currentRun.results.push(...msg.results);
+        // Collect results — they'll be matched to tool call events after the
+        // run is fully built.
+        for (const result of msg.results) {
+          pendingResults.set(result.toolCallId, result);
+        }
       }
     }
   }
@@ -92,10 +117,20 @@ export function reconstructRuns(messages: AgentMessage[]): RunActivityState[] {
   // Finalize the last run.
   if (currentRun) {
     finalizeReconstructedRun(currentRun, messages, messages.length - 1);
+    applyPendingResults(currentRun, pendingResults);
     runs.push(currentRun);
   }
 
   return runs;
+}
+
+/** Match collected results to tool call events by toolCallId. */
+function applyPendingResults(run: RunActivityState, results: Map<string, ToolResult>): void {
+  run.events = run.events.map((event) =>
+    event.type === "toolCall" && results.has(event.call.id)
+      ? { ...event, result: results.get(event.call.id) }
+      : event,
+  );
 }
 
 /** Compute elapsed time from the run's startedAt to the last message. */

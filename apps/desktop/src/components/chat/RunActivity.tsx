@@ -1,6 +1,7 @@
 import React from "react";
 import { ChevronRight, ChevronUp, Loader2 } from "lucide-react";
-import type { RunActivityState } from "../../types/chat";
+import type { ActivityEvent, RunActivityState } from "../../types/chat";
+import type { ToolCall, ToolResult } from "@console/types";
 import { ToolCallBlock } from "../common/ToolCallBlock";
 
 interface RunActivityProps {
@@ -16,6 +17,42 @@ function formatDuration(milliseconds: number): string {
   return `${minutes}m ${String(seconds % 60).padStart(2, "0")}s`;
 }
 
+/** A group of consecutive events for rendering. */
+type RenderGroup =
+  | { kind: "text"; text: string }
+  | { kind: "tools"; calls: ToolCall[]; results: ToolResult[] };
+
+/**
+ * Group consecutive events: text events render individually, consecutive
+ * tool call events of the same tool name render as a single ToolCallBlock.
+ */
+function groupEvents(events: ActivityEvent[]): RenderGroup[] {
+  const groups: RenderGroup[] = [];
+  for (const event of events) {
+    if (event.type === "text") {
+      groups.push({ kind: "text", text: event.text });
+    } else {
+      // toolCall event
+      const last = groups[groups.length - 1];
+      if (
+        last?.kind === "tools" &&
+        last.calls.length > 0 &&
+        last.calls[last.calls.length - 1]!.name === event.call.name
+      ) {
+        last.calls.push(event.call);
+        if (event.result) last.results.push(event.result);
+      } else {
+        groups.push({
+          kind: "tools",
+          calls: [event.call],
+          results: event.result ? [event.result] : [],
+        });
+      }
+    }
+  }
+  return groups;
+}
+
 export function RunActivity({ activity, running }: RunActivityProps) {
   const [expanded, setExpanded] = React.useState(running);
   const [now, setNow] = React.useState(Date.now());
@@ -27,7 +64,7 @@ export function RunActivity({ activity, running }: RunActivityProps) {
     return () => window.clearInterval(timer);
   }, [running]);
 
-  if (!activity.startedAt && activity.calls.length === 0) return null;
+  if (!activity.startedAt && activity.events.length === 0) return null;
 
   const isWorking = running || activity.status === "working";
   const elapsed = isWorking && activity.startedAt ? now - activity.startedAt : activity.elapsedMs;
@@ -39,6 +76,8 @@ export function RunActivity({ activity, running }: RunActivityProps) {
       : activity.status === "failed"
         ? `Failed after ${formatDuration(elapsed)}`
         : `Worked for ${formatDuration(elapsed)}`;
+
+  const groups = React.useMemo(() => groupEvents(activity.events), [activity.events]);
 
   return (
     <div className="border-b border-white/[0.06] pb-2">
@@ -52,9 +91,27 @@ export function RunActivity({ activity, running }: RunActivityProps) {
         <span>{summaryLabel}</span>
         {expanded ? <ChevronUp size={14} /> : <ChevronRight size={14} />}
       </button>
-      {expanded && activity.calls.length > 0 && (
-        <div className="mt-1">
-          <ToolCallBlock calls={activity.calls} results={activity.results} />
+      {expanded && groups.length > 0 && (
+        <div className="mt-1 space-y-1.5">
+          {groups.map((group, i) => {
+            if (group.kind === "text") {
+              return (
+                <p
+                  key={`text-${i}`}
+                  className="text-xs text-foreground-secondary px-1 py-0.5 leading-relaxed"
+                >
+                  {group.text}
+                </p>
+              );
+            }
+            return (
+              <ToolCallBlock
+                key={`tools-${i}`}
+                calls={group.calls}
+                results={group.results}
+              />
+            );
+          })}
         </div>
       )}
     </div>

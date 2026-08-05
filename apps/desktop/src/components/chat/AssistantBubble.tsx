@@ -12,8 +12,14 @@ interface AssistantBubbleProps {
 /**
  * Renders an assistant message: thinking blocks, markdown text, and error
  * states. Tool calls are NOT rendered here — they appear in per-run
- * `RunActivity` blocks. Memoized so a streaming token re-renders only the
- * active streaming bubble, not every persisted assistant message above it.
+ * `RunActivity` blocks.
+ *
+ * If the message contains tool calls, text is suppressed entirely — it
+ * becomes "progress text" inside the run activity timeline instead. Only
+ * the final response (a turn with no tool calls) renders text here.
+ *
+ * Memoized so a streaming token re-renders only the active streaming bubble,
+ * not every persisted assistant message above it.
  *
  * (Conductor rewrite lesson: wrap each message row in React.memo with a
  * stable key so a token landing in one message leaves the rest untouched.)
@@ -23,6 +29,7 @@ export const AssistantBubble = React.memo(function AssistantBubble({
 }: AssistantBubbleProps) {
   const textParts = message.content.filter((c) => c.type === "text");
   const thinkingParts = message.content.filter((c) => c.type === "thinking");
+  const hasToolCalls = message.content.some((c) => c.type === "toolCall");
   const isError = textParts.some((c) => c.type === "text" && c.text.startsWith("Error:"));
 
   if (isError) {
@@ -38,6 +45,20 @@ export const AssistantBubble = React.memo(function AssistantBubble({
             ))}
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // If this turn has tool calls, suppress text — it's rendered as progress
+  // text inside the run activity timeline. Thinking blocks are still shown
+  // since they provide useful context without being "progress narration".
+  if (hasToolCalls) {
+    if (thinkingParts.length === 0) return null;
+    return (
+      <div className="space-y-2">
+        {thinkingParts.map((part, i) => (
+          <ThinkingBlock key={`thinking-${i}`} text={part.type === "thinking" ? part.text : ""} />
+        ))}
       </div>
     );
   }

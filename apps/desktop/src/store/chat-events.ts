@@ -1,5 +1,5 @@
 import type { AgentSessionEvent, ToolResult } from "@console/types";
-import type { ChatSessionState, RunActivityState } from "../types/chat";
+import type { ActivityEvent, ChatSessionState, RunActivityState } from "../types/chat";
 
 /** Update the latest run in the session's runs array. */
 function updateLatestRun(
@@ -12,13 +12,33 @@ function updateLatestRun(
   return { ...session, runs };
 }
 
-/** Merge a result into a results array by toolCallId (idempotent). */
-function mergeResult(results: ToolResult[], result: ToolResult): ToolResult[] {
-  const index = results.findIndex((r) => r.toolCallId === result.toolCallId);
-  if (index === -1) return [...results, result];
-  const next = [...results];
-  next[index] = result;
-  return next;
+/** Update a specific tool call event's result by toolCallId. */
+function setToolCallResult(
+  events: ActivityEvent[],
+  result: ToolResult,
+): ActivityEvent[] {
+  return events.map((event) =>
+    event.type === "toolCall" && event.call.id === result.toolCallId
+      ? { ...event, result }
+      : event,
+  );
+}
+
+/** Finalize any tool call events that never received a result. */
+function finalizePendingToolCalls(events: ActivityEvent[]): ActivityEvent[] {
+  return events.map((event) =>
+    event.type === "toolCall" && !event.result
+      ? {
+          ...event,
+          result: {
+            toolCallId: event.call.id,
+            toolName: event.call.name,
+            content: "Run ended before this tool call completed.",
+            isError: true,
+          },
+        }
+      : event,
+  );
 }
 
 export function applyChatEvent(
@@ -38,48 +58,84 @@ export function applyChatEvent(
           : session.streamingThinking,
       };
     }
-    case "modelStreamEnd":
-      if (event.turn) {
+    case "modelStreamEnd": {
+      const turn = event.turn;
+      if (!turn) {
+        // Fallback: construct from streaming buffers if no turn was provided.
+        if (!session.streamingText && !session.streamingThinking) return session;
         return {
           ...session,
-          messages: [...session.messages, event.turn],
+          messages: [
+            ...session.messages,
+            {
+              role: "assistant",
+              content: [
+                ...(session.streamingThinking
+                  ? [{ type: "thinking" as const, text: session.streamingThinking }]
+                  : []),
+                ...(session.streamingText
+                  ? [{ type: "text" as const, text: session.streamingText }]
+                  : []),
+              ],
+            },
+          ],
           streamingText: "",
           streamingThinking: "",
         };
       }
-      if (!session.streamingText && !session.streamingThinking) return session;
-      return {
+
+      // Always append the turn to messages for persistence.
+      const baseResult: ChatSessionState = {
         ...session,
-        messages: [
-          ...session.messages,
-          {
-            role: "assistant",
-            content: [
-              ...(session.streamingThinking
-                ? [{ type: "thinking" as const, text: session.streamingThinking }]
-                : []),
-              ...(session.streamingText
-                ? [{ type: "text" as const, text: session.streamingText }]
-                : []),
-            ],
-          },
-        ],
+        messages: [...session.messages, turn],
         streamingText: "",
         streamingThinking: "",
       };
+
+      // If the turn has tool calls, extract text and tool call parts as
+      // timeline events in the latest run. The text becomes "progress text"
+      // inside the run activity, not a standalone message bubble.
+      const toolCallParts = turn.content.filter(
+        (c): c is Extract<typeof c, { type: "toolCall" }> => c.type === "toolCall",
+      );
+
+      if (toolCallParts.length === 0) {
+        // No tool calls — this is the final response, not part of the timeline.
+        return baseResult;
+      }
+
+      // Build timeline events in content order: text parts become text events,
+      // tool call parts become toolCall events (with no result yet).
+      const newEvents: ActivityEvent[] = [];
+      for (const part of turn.content) {
+        if (part.type === "text" && part.text.trim()) {
+          newEvents.push({
+            type: "text",
+            id: `text-${part.text.slice(0, 16)}-${Date.now()}`,
+            text: part.text,
+          });
+        } else if (part.type === "toolCall") {
+          newEvents.push({ type: "toolCall", id: part.call.id, call: part.call });
+        }
+      }
+
+      // Set active tool calls for toolExecutionEnd error finalization.
+      baseResult.activeToolCalls = toolCallParts.map((c) => c.call);
+
+      return updateLatestRun(baseResult, (run) => ({
+        ...run,
+        events: [...run.events, ...newEvents],
+      }));
+    }
     case "toolExecutionResult":
       return updateLatestRun(session, (run) => ({
         ...run,
-        results: mergeResult(run.results, event.result),
+        events: setToolCallResult(run.events, event.result),
       }));
     case "toolExecutionStart": {
-      return updateLatestRun(session, (run) => {
-        const calls = [...run.calls];
-        for (const call of event.calls) {
-          if (!calls.some((existing) => existing.id === call.id)) calls.push(call);
-        }
-        return { ...run, calls };
-      });
+      // Tool calls were already added as events in modelStreamEnd.
+      // Just track active calls for toolExecutionEnd finalization.
+      return { ...session, activeToolCalls: event.calls };
     }
     case "toolExecutionEnd": {
       // Build the complete results list for this batch.
@@ -96,19 +152,21 @@ export function applyChatEvent(
         }
       }
 
-      // Merge results into the latest run.
-      const updated = updateLatestRun(session, (run) => ({
+      // Update each tool call event with its result.
+      let updated = updateLatestRun(session, (run) => ({
         ...run,
-        results: eventResults.reduce(mergeResult, run.results),
+        events: eventResults.reduce(setToolCallResult, run.events),
       }));
 
       // Append the toolResult message to messages for persistence transport.
       // It renders as null in the UI — results are shown via RunActivity.
-      return {
+      updated = {
         ...updated,
         messages: [...updated.messages, { role: "toolResult", results: eventResults }],
         activeToolCalls: [],
       };
+
+      return updated;
     }
     case "askQuestion":
       return { ...session, pendingQuestion: { request: event.request } };
@@ -121,24 +179,13 @@ export function applyChatEvent(
       return { ...session, todoItems: event.items };
     case "sessionEnd":
       // Finalize the latest run: mark as completed if still working, and
-      // add error results for any calls that never received a result.
+      // add error results for any tool calls that never received a result.
       return updateLatestRun(session, (run) => {
         if (run.status !== "working") return run;
-        let results = run.results;
-        for (const call of run.calls) {
-          if (!results.some((r) => r.toolCallId === call.id)) {
-            results = mergeResult(results, {
-              toolCallId: call.id,
-              toolName: call.name,
-              content: "Run ended before this tool call completed.",
-              isError: true,
-            });
-          }
-        }
         return {
           ...run,
           status: "completed",
-          results,
+          events: finalizePendingToolCalls(run.events),
           elapsedMs: run.startedAt ? Date.now() - run.startedAt : run.elapsedMs,
         };
       });
@@ -147,12 +194,14 @@ export function applyChatEvent(
         return updateLatestRun(session, (run) => ({
           ...run,
           status: run.status === "working" ? "aborted" : run.status,
+          events: finalizePendingToolCalls(run.events),
         }));
       }
       return {
         ...updateLatestRun(session, (run) => ({
           ...run,
           status: run.status === "working" ? "failed" : run.status,
+          events: finalizePendingToolCalls(run.events),
         })),
         messages: [
           ...session.messages,
