@@ -30,8 +30,15 @@ export function ChatScreen() {
     todoItems,
     attachments,
   } = chatSession ?? EMPTY_CHAT_SESSION;
-  const { setInput, sendMessage, abort, loadMessages, pickImages, addAttachments, removeAttachment } =
-    useChatStore();
+  const {
+    setInput,
+    sendMessage,
+    abort,
+    loadMessages,
+    pickImages,
+    addAttachments,
+    removeAttachment,
+  } = useChatStore();
   const {
     sessionModelId,
     sessionProvider,
@@ -112,9 +119,7 @@ export function ChatScreen() {
         selectedModel={sessionModelId}
         selectedModelSupportsImages={selectedModelSupportsImages}
         onModelChange={(modelId) =>
-          selectedSessionId &&
-          resolvedProjectId &&
-          changeModel(selectedSessionId, modelId)
+          selectedSessionId && resolvedProjectId && changeModel(selectedSessionId, modelId)
         }
         approvalMode={approvalMode}
         onApprovalModeChange={setApprovalMode}
@@ -131,7 +136,9 @@ export function ChatScreen() {
           .map((message) => message.content)}
         onPickImages={() => selectedSessionId && pickImages(selectedSessionId)}
         onAddAttachments={(items) => selectedSessionId && addAttachments(selectedSessionId, items)}
-        onRemoveAttachment={(index) => selectedSessionId && removeAttachment(selectedSessionId, index)}
+        onRemoveAttachment={(index) =>
+          selectedSessionId && removeAttachment(selectedSessionId, index)
+        }
       />
     </div>
   );

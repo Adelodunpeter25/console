@@ -33,7 +33,10 @@ function isAbortError(msg: string): boolean {
 }
 
 /** Push a status update to the project store so the sidebar reflects it. */
-function syncSessionStatus(sessionId: string, status: "idle" | "working" | "done" | "needs_attention") {
+function syncSessionStatus(
+  sessionId: string,
+  status: "idle" | "working" | "done" | "needs_attention",
+) {
   useSessionStatusStore.getState().setStatus(sessionId, status);
 }
 
@@ -115,10 +118,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!prompt || running) return;
 
     if (attachments.length > 0 && sessionModelId && sessionProvider) {
-      const selectedModel =
-        useProviderStore.getState().modelsByProvider[sessionProvider]?.find(
-          (model) => model.id === sessionModelId,
-        );
+      const selectedModel = useProviderStore
+        .getState()
+        .modelsByProvider[sessionProvider]?.find((model) => model.id === sessionModelId);
       if (selectedModel?.supportsImages === false) {
         toast.error(`The selected model '${sessionModelId}' does not support image attachments.`);
         return;

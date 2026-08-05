@@ -110,18 +110,21 @@ export function ComposerAutocomplete({
   const suggestionsRef = React.useRef<Suggestion[]>([]);
   suggestionsRef.current = rendered;
 
-  const pickAt = React.useCallback((index: number) => {
-    const trig = triggerRef.current;
-    const list = suggestionsRef.current;
-    const s = list[index];
-    if (!trig || !s) return;
-    const v = valueRef.current;
-    const before = v.slice(0, trig.start);
-    const after = v.slice(trig.start + 1 + trig.query.length);
-    const text = s.kind === "slash" ? `/${s.name} ` : `@${s.item.relativePath} `;
-    onPick(`${before}${text}${after}`);
-    setTrigger(null);
-  }, [onPick]);
+  const pickAt = React.useCallback(
+    (index: number) => {
+      const trig = triggerRef.current;
+      const list = suggestionsRef.current;
+      const s = list[index];
+      if (!trig || !s) return;
+      const v = valueRef.current;
+      const before = v.slice(0, trig.start);
+      const after = v.slice(trig.start + 1 + trig.query.length);
+      const text = s.kind === "slash" ? `/${s.name} ` : `@${s.item.relativePath} `;
+      onPick(`${before}${text}${after}`);
+      setTrigger(null);
+    },
+    [onPick],
+  );
 
   // Load slash commands once per session.
   React.useEffect(() => {

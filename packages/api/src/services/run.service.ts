@@ -10,7 +10,10 @@ export const runService = {
     return { success: true };
   },
 
-  async answerQuestion(sessionId: string, payload: AnswerQuestionDto): Promise<{ answered: boolean }> {
+  async answerQuestion(
+    sessionId: string,
+    payload: AnswerQuestionDto,
+  ): Promise<{ answered: boolean }> {
     const res = await getConsoleApiClient().post(`/api/sessions/${sessionId}/answer`, payload);
     if (res.data?.success === false) {
       throw new Error(res.data?.error || "Failed to answer question");

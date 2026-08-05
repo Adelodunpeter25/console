@@ -31,9 +31,7 @@ function PermissionPanel({ request, sessionId }: PermissionPanelProps) {
           <span className="font-mono text-warning">{request.toolName}</span>
         </span>
       </div>
-      {request.reason && (
-        <p className="text-xs text-foreground-secondary pl-6">{request.reason}</p>
-      )}
+      {request.reason && <p className="text-xs text-foreground-secondary pl-6">{request.reason}</p>}
       {request.args != null && (
         <pre className="text-xs font-mono text-foreground-muted whitespace-pre-wrap break-all bg-black/30 rounded p-2 max-h-40 overflow-y-auto ml-6">
           {JSON.stringify(request.args, null, 2)}
@@ -156,9 +154,7 @@ interface InteractionPanelProps {
  */
 export function InteractionPanel({ sessionId }: InteractionPanelProps) {
   const pendingQuestion = useChatStore((s) => s.sessions[sessionId]?.pendingQuestion ?? null);
-  const pendingPermissions = useChatStore(
-    (s) => s.sessions[sessionId]?.pendingPermissions ?? [],
-  );
+  const pendingPermissions = useChatStore((s) => s.sessions[sessionId]?.pendingPermissions ?? []);
 
   if (pendingPermissions.length > 0) {
     return (

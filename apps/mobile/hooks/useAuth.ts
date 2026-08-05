@@ -8,8 +8,7 @@ export function useAuth() {
   const handleCallback = useHandleOAuthCallback();
 
   const isLoggedIn = useCallback(
-    (provider: "gemini" | "antigravity") =>
-      Boolean(status?.[provider]?.loggedIn),
+    (provider: "gemini" | "antigravity") => Boolean(status?.[provider]?.loggedIn),
     [status],
   );
 

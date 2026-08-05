@@ -24,7 +24,12 @@ function resultText(result: ToolResult): string {
 
   // Older persisted results may still contain the tool's transport envelope.
   // Unwrap it defensively so history remains readable after the backend fix.
-  while (content && typeof content === "object" && !Array.isArray(content) && "content" in content) {
+  while (
+    content &&
+    typeof content === "object" &&
+    !Array.isArray(content) &&
+    "content" in content
+  ) {
     content = (content as { content: unknown }).content;
   }
 
@@ -48,15 +53,46 @@ function resultText(result: ToolResult): string {
 
 /** Map file extension to a language string for syntax highlighting. */
 const EXT_LANG_MAP: Record<string, string> = {
-  ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
-  mjs: "javascript", cjs: "javascript", json: "json", html: "html",
-  css: "css", scss: "scss", py: "python", rb: "ruby", go: "go",
-  rs: "rust", java: "java", kt: "kotlin", swift: "swift", c: "c",
-  h: "c", cpp: "cpp", hpp: "cpp", cs: "csharp", php: "php",
-  sh: "bash", bash: "bash", zsh: "bash", yml: "yaml", yaml: "yaml",
-  toml: "toml", xml: "xml", md: "markdown", markdown: "markdown",
-  sql: "sql", lua: "lua", r: "r", dart: "dart", vue: "html",
-  svelte: "html", graphql: "graphql", dockerfile: "dockerfile",
+  ts: "typescript",
+  tsx: "typescript",
+  js: "javascript",
+  jsx: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  json: "json",
+  html: "html",
+  css: "css",
+  scss: "scss",
+  py: "python",
+  rb: "ruby",
+  go: "go",
+  rs: "rust",
+  java: "java",
+  kt: "kotlin",
+  swift: "swift",
+  c: "c",
+  h: "c",
+  cpp: "cpp",
+  hpp: "cpp",
+  cs: "csharp",
+  php: "php",
+  sh: "bash",
+  bash: "bash",
+  zsh: "bash",
+  yml: "yaml",
+  yaml: "yaml",
+  toml: "toml",
+  xml: "xml",
+  md: "markdown",
+  markdown: "markdown",
+  sql: "sql",
+  lua: "lua",
+  r: "r",
+  dart: "dart",
+  vue: "html",
+  svelte: "html",
+  graphql: "graphql",
+  dockerfile: "dockerfile",
 };
 
 function langFromPath(filePath: string): string | undefined {
@@ -149,10 +185,7 @@ function BashResult({ text, isError }: { text: string; isError?: boolean }) {
   const stdoutEnd = stderrIdx > stdoutStart ? stderrIdx : text.length;
   const stdoutText = text.slice(stdoutStart, stdoutEnd).trim();
 
-  const stderrText =
-    stderrIdx > -1
-      ? text.slice(stderrIdx + "stderr:".length).trim()
-      : "";
+  const stderrText = stderrIdx > -1 ? text.slice(stderrIdx + "stderr:".length).trim() : "";
 
   return (
     <div className="space-y-1.5">
@@ -160,26 +193,18 @@ function BashResult({ text, isError }: { text: string; isError?: boolean }) {
         {exitCode !== undefined && (
           <span
             className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono ${
-              exitCode === 0
-                ? "bg-success/15 text-success"
-                : "bg-danger/15 text-danger"
+              exitCode === 0 ? "bg-success/15 text-success" : "bg-danger/15 text-danger"
             }`}
           >
             {exitCode === 0 ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
             Exit {exitCode}
           </span>
         )}
-        {cwd && (
-          <span className="text-[10px] font-mono text-foreground-muted truncate">
-            {cwd}
-          </span>
-        )}
+        {cwd && <span className="text-[10px] font-mono text-foreground-muted truncate">{cwd}</span>}
       </div>
       {stdoutText && (
         <div>
-          <p className="text-[10px] uppercase tracking-wide text-foreground-muted mb-0.5">
-            stdout
-          </p>
+          <p className="text-[10px] uppercase tracking-wide text-foreground-muted mb-0.5">stdout</p>
           <pre className="text-xs font-mono text-foreground-secondary whitespace-pre-wrap break-all bg-black/30 rounded p-2 max-h-48 overflow-y-auto selectable-text">
             {stdoutText}
           </pre>
@@ -187,9 +212,7 @@ function BashResult({ text, isError }: { text: string; isError?: boolean }) {
       )}
       {stderrText && (
         <div>
-          <p className="text-[10px] uppercase tracking-wide text-foreground-muted mb-0.5">
-            stderr
-          </p>
+          <p className="text-[10px] uppercase tracking-wide text-foreground-muted mb-0.5">stderr</p>
           <pre
             className={`text-xs font-mono whitespace-pre-wrap break-all bg-danger/5 rounded p-2 max-h-48 overflow-y-auto selectable-text ${
               isError ? "text-danger" : "text-foreground-secondary"
@@ -218,9 +241,7 @@ function ListDirResult({ text }: { text: string }) {
     <div className="space-y-1.5">
       <div className="flex items-center gap-1.5">
         <FolderTree size={11} className="text-foreground-muted" />
-        <span className="text-[10px] font-mono text-foreground-muted truncate">
-          {dirPath}
-        </span>
+        <span className="text-[10px] font-mono text-foreground-muted truncate">{dirPath}</span>
       </div>
       <pre className="text-xs font-mono text-foreground-secondary whitespace-pre-wrap bg-black/30 rounded p-2 max-h-64 overflow-y-auto selectable-text">
         {treeLines.join("\n")}
@@ -319,9 +340,7 @@ function FetchResult({ text }: { text: string }) {
 
   // Try to render body as markdown (works for HTML-converted text and JSON)
   const bodyIsJson = bodyText.trim().startsWith("{") || bodyText.trim().startsWith("[");
-  const renderedBody = bodyIsJson
-    ? "```json\n" + bodyText + "\n```"
-    : bodyText;
+  const renderedBody = bodyIsJson ? "```json\n" + bodyText + "\n```" : bodyText;
 
   return (
     <div className="space-y-1.5">
@@ -358,9 +377,7 @@ function FetchResult({ text }: { text: string }) {
 function WriteFileResult({ text, isError }: { text: string; isError?: boolean }) {
   // "Written: /path\n  Bytes: 123\n  Lines: 42"
   const firstLine = text.split("\n")[0] ?? text;
-  return (
-    <StatusLine icon={isError ? XCircle : FilePlus} text={firstLine} isError={isError} />
-  );
+  return <StatusLine icon={isError ? XCircle : FilePlus} text={firstLine} isError={isError} />;
 }
 
 function EditFileResult({ text, isError }: { text: string; isError?: boolean }) {
@@ -368,9 +385,7 @@ function EditFileResult({ text, isError }: { text: string; isError?: boolean }) 
   const firstLine = text.split("\n")[0] ?? text;
   const summary = text.split("\n")[1]?.trim();
   const fullText = summary ? `${firstLine} — ${summary}` : firstLine;
-  return (
-    <StatusLine icon={isError ? XCircle : SquarePen} text={fullText} isError={isError} />
-  );
+  return <StatusLine icon={isError ? XCircle : SquarePen} text={fullText} isError={isError} />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -409,11 +424,7 @@ interface ToolResultContentProps {
   callFilePath?: string;
 }
 
-export function ToolResultContent({
-  toolName,
-  result,
-  callFilePath,
-}: ToolResultContentProps) {
+export function ToolResultContent({ toolName, result, callFilePath }: ToolResultContentProps) {
   const text = resultText(result);
   const isError = result.isError;
 

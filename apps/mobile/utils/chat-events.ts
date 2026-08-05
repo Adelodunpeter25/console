@@ -112,7 +112,9 @@ export function applyChatEvent(snapshot: ChatSnapshot, event: AgentSessionEvent)
           ...snapshot.messages,
           {
             role: "assistant",
-            content: [{ type: "text", text: `Error: ${event.error?.message ?? "Unknown agent error"}` }],
+            content: [
+              { type: "text", text: `Error: ${event.error?.message ?? "Unknown agent error"}` },
+            ],
           },
         ],
         streamingText: "",

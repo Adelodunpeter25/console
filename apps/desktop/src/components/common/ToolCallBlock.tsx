@@ -93,13 +93,9 @@ const ToolCallRow = React.memo(function ToolCallRow({
         onClick={() => setOpen(!open)}
         className="flex w-full items-center gap-2 bg-white/[0.02] px-3 py-1.5 text-left transition-colors hover:bg-white/[0.06]"
       >
-        <span className="text-xs font-medium text-foreground-secondary shrink-0">
-          {meta.label}
-        </span>
+        <span className="text-xs font-medium text-foreground-secondary shrink-0">{meta.label}</span>
         {summary && (
-          <span className="text-xs font-mono text-foreground-muted truncate">
-            {summary}
-          </span>
+          <span className="text-xs font-mono text-foreground-muted truncate">{summary}</span>
         )}
         <span className="ml-auto shrink-0">
           {isError ? (
@@ -137,7 +133,7 @@ const ToolCallRow = React.memo(function ToolCallRow({
                   typeof call.arguments === "object" &&
                   "path" in (call.arguments as Record<string, unknown>) &&
                   typeof (call.arguments as Record<string, unknown>).path === "string"
-                    ? (call.arguments as Record<string, unknown>).path as string
+                    ? ((call.arguments as Record<string, unknown>).path as string)
                     : undefined
                 }
               />
@@ -208,7 +204,9 @@ function ToolCallGroup({
         className="flex w-full items-center gap-2 bg-white/[0.02] px-3 py-1.5 text-left transition-colors hover:bg-white/[0.06]"
       >
         <span className="text-xs font-medium text-foreground-secondary">{meta.label}</span>
-        {summary && <span className="truncate text-xs font-mono text-foreground-muted">{summary}</span>}
+        {summary && (
+          <span className="truncate text-xs font-mono text-foreground-muted">{summary}</span>
+        )}
         <span className="ml-auto shrink-0">
           {hasError ? (
             <AlertCircle size={12} className="text-danger" />

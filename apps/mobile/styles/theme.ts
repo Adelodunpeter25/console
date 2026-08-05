@@ -6,7 +6,7 @@ export const theme = {
     surfaceElevated: "#1f2024",
     border: "rgba(255, 255, 255, 0.1)",
     borderSubtle: "rgba(255, 255, 255, 0.05)",
-    
+
     // Text colors
     text: {
       primary: "#ffffff",
@@ -27,21 +27,21 @@ export const theme = {
       idleBg: "rgba(161, 161, 170, 0.1)",
     },
   },
-  
+
   fonts: {
     mono: "JetBrainsMono",
     monoMedium: "JetBrainsMono-Medium",
     monoSemiBold: "JetBrainsMono-SemiBold",
     monoBold: "JetBrainsMono-Bold",
   },
-  
+
   roundness: {
     sm: 8,
     md: 12,
     lg: 16,
     full: 9999,
   },
-  
+
   spacing: {
     xs: 4,
     sm: 8,

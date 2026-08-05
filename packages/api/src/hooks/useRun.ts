@@ -17,7 +17,12 @@ export function useAnswerQuestion() {
 
 export function useApprovePermission() {
   return useMutation({
-    mutationFn: ({ sessionId, payload }: { sessionId: string; payload: ApproveToolPermissionDto }) =>
-      runService.approvePermission(sessionId, payload),
+    mutationFn: ({
+      sessionId,
+      payload,
+    }: {
+      sessionId: string;
+      payload: ApproveToolPermissionDto;
+    }) => runService.approvePermission(sessionId, payload),
   });
 }

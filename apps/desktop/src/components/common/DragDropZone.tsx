@@ -27,7 +27,12 @@ export function DragDropZone({
     const scale = window.devicePixelRatio || 1;
     const logicalX = x / scale;
     const logicalY = y / scale;
-    return logicalX >= rect.left && logicalX <= rect.right && logicalY >= rect.top && logicalY <= rect.bottom;
+    return (
+      logicalX >= rect.left &&
+      logicalX <= rect.right &&
+      logicalY >= rect.top &&
+      logicalY <= rect.bottom
+    );
   }, []);
 
   React.useEffect(() => {

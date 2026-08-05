@@ -60,9 +60,9 @@ export function findSessionDbPath(storageDir: string, sessionId: string): string
 }
 
 export function getProjectIdBySessionId(globalDb: DatabaseType, sessionId: string): string | null {
-  const row = globalDb
-    .prepare("SELECT project_id FROM sessions WHERE id = ?")
-    .get(sessionId) as { project_id: string } | undefined;
+  const row = globalDb.prepare("SELECT project_id FROM sessions WHERE id = ?").get(sessionId) as
+    | { project_id: string }
+    | undefined;
   return row ? row.project_id : null;
 }
 

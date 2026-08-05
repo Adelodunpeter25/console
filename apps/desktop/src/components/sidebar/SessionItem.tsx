@@ -42,7 +42,9 @@ export function SessionItem({ session, isActive }: SessionItemProps) {
             <div className="w-3 h-3 border-[1.5px] border-blue-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
-          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[status] ?? STATUS_DOT.idle}`} />
+          <div
+            className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[status] ?? STATUS_DOT.idle}`}
+          />
         )}
 
         <span className={`text-xs truncate flex-1 min-w-0 ${isActive ? "font-medium" : ""}`}>

@@ -11,11 +11,7 @@ interface EmptyStateProps {
  * Centered empty-state placeholder with an icon, heading, and subtext.
  * Used for the "No Session Selected" state and other empty views.
  */
-export function EmptyState({
-  icon: Icon = Brain,
-  title,
-  description,
-}: EmptyStateProps) {
+export function EmptyState({ icon: Icon = Brain, title, description }: EmptyStateProps) {
   return (
     <div className="flex-1 flex items-center justify-center bg-screen">
       <div className="text-center max-w-sm">

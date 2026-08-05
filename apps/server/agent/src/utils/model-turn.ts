@@ -7,4 +7,3 @@ export function parseToolCallArguments(argumentsJson: string): unknown {
     return {};
   }
 }
-

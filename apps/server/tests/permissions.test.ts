@@ -87,7 +87,10 @@ const testModel: Model = {
 
   const result = await stream.result();
   assert.equal(permissionEventReceived, true);
-  assert.equal(events.some((event) => event.type === "permissionRequest"), true);
+  assert.equal(
+    events.some((event) => event.type === "permissionRequest"),
+    true,
+  );
   // History has user message, assistant toolCall, toolResult with isError
   assert.equal(result.length, 4);
   assert.equal(result[2]?.role, "toolResult");

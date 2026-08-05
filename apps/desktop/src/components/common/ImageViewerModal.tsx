@@ -42,4 +42,3 @@ export function ImageViewerModal({ src, alt, onClose }: ImageViewerModalProps) {
     </div>
   );
 }
-

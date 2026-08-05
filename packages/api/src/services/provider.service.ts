@@ -14,9 +14,7 @@ export const providerService = {
     return unwrapData(res.data, "list providers");
   },
 
-  async getProviderModels(
-    providerId: string,
-  ): Promise<{ provider: string; models: Model[] }> {
+  async getProviderModels(providerId: string): Promise<{ provider: string; models: Model[] }> {
     const res = await getConsoleApiClient().get(`/api/providers/${providerId}/models`);
     return unwrapData(res.data, "list provider models");
   },

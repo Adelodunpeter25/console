@@ -11,7 +11,12 @@ import { buildSystemPrompt } from "../../../agent/src/systemprompt/builder.js";
 import { findModelInProvider } from "../../../agent/src/commands/provider-registry.js";
 import { createAntigravityStreamFn } from "../../../providers/src/antigravity/stream-fn.js";
 import { geminiStreamFn } from "../../../providers/src/gemini/stream-fn.js";
-import type { AgentSessionEvent, ApprovalMode, Model, UserMessage } from "../../../agent/src/types/index.js";
+import type {
+  AgentSessionEvent,
+  ApprovalMode,
+  Model,
+  UserMessage,
+} from "../../../agent/src/types/index.js";
 import type { RunPromptDto } from "../types/index.js";
 import { expandPromptRefs } from "./assist.service.js";
 import { randomUUID } from "node:crypto";
@@ -32,7 +37,11 @@ export class RunService {
   /** Pending question answers keyed by requestId. */
   private pendingQuestions = new Map<
     string,
-    { sessionId: string; resolve: (answer: string | string[]) => void; reject: (err: unknown) => void }
+    {
+      sessionId: string;
+      resolve: (answer: string | string[]) => void;
+      reject: (err: unknown) => void;
+    }
   >();
   /** Pending permission approvals keyed by requestId. */
   private pendingApprovals = new Map<
@@ -114,7 +123,9 @@ export class RunService {
     }
     // Use the approvalMode from the request; fall back to the persisted session value,
     // then to "always-ask" as the safe default. Never silently run without a mode.
-    const approvalMode = (dto.approvalMode || session.header.approvalMode || "always-ask") as ApprovalMode;
+    const approvalMode = (dto.approvalMode ||
+      session.header.approvalMode ||
+      "always-ask") as ApprovalMode;
 
     // Persist the chosen approvalMode to the DB so it survives reloads.
     this.sessionStorage.updateApprovalMode(sessionId, approvalMode);
@@ -207,20 +218,12 @@ export class RunService {
           this.sessionStorage.appendMessage(sessionId, event.turn);
         }
         if (event.type === "toolExecutionResult" && toolResultsPersistenceId) {
-          this.sessionStorage.upsertToolResult(
-            sessionId,
-            toolResultsPersistenceId,
-            event.result,
-          );
+          this.sessionStorage.upsertToolResult(sessionId, toolResultsPersistenceId, event.result);
         }
         if (event.type === "toolExecutionEnd") {
           for (const result of event.results) {
             if (!toolResultsPersistenceId) continue;
-            this.sessionStorage.upsertToolResult(
-              sessionId,
-              toolResultsPersistenceId,
-              result,
-            );
+            this.sessionStorage.upsertToolResult(sessionId, toolResultsPersistenceId, result);
           }
           toolResultsPersistenceId = null;
         }
@@ -315,7 +318,9 @@ export class RunService {
   ): void {
     setTimeout(() => {
       const pending =
-        kind === "question" ? this.pendingQuestions.get(requestId) : this.pendingApprovals.get(requestId);
+        kind === "question"
+          ? this.pendingQuestions.get(requestId)
+          : this.pendingApprovals.get(requestId);
       if (!pending || pending.sessionId !== sessionId) return;
       if (kind === "question") {
         this.pendingQuestions.delete(requestId);

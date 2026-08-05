@@ -75,10 +75,7 @@ console.log("Running Provider Wire Converter tests...");
     },
   ]);
 
-  assert.equal(
-    (wireContent[0]!.parts[0] as any).thoughtSignature,
-    LEGACY_THOUGHT_SIGNATURE,
-  );
+  assert.equal((wireContent[0]!.parts[0] as any).thoughtSignature, LEGACY_THOUGHT_SIGNATURE);
   console.log("  ✅ Legacy thought-signature fallback");
 }
 

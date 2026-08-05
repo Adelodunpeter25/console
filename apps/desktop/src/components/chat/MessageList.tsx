@@ -87,9 +87,7 @@ export function MessageList({
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
         {showEmpty ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-foreground-muted text-sm">
-              Type a prompt below to start the agent.
-            </p>
+            <p className="text-foreground-muted text-sm">Type a prompt below to start the agent.</p>
           </div>
         ) : (
           <div className="max-w-3xl mx-auto px-6 py-6 space-y-4">
@@ -102,9 +100,7 @@ export function MessageList({
                   liveToolResults={liveToolResults}
                   activeRunCallIds={runActivity.calls.map((call) => call.id)}
                 />
-                {i === latestUserIndex && (
-                  <RunActivity activity={runActivity} running={running} />
-                )}
+                {i === latestUserIndex && <RunActivity activity={runActivity} running={running} />}
               </React.Fragment>
             ))}
             {showStreamingBubble && (

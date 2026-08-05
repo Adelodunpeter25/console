@@ -9,11 +9,7 @@ interface UseMessageHistoryOptions {
 }
 
 /** Provides shell-style Up/Down navigation through previous chat prompts. */
-export function useMessageHistory({
-  history,
-  value,
-  onChange,
-}: UseMessageHistoryOptions) {
+export function useMessageHistory({ history, value, onChange }: UseMessageHistoryOptions) {
   const indexRef = React.useRef<number | null>(null);
   const draftRef = React.useRef("");
 
@@ -32,9 +28,7 @@ export function useMessageHistory({
       if (direction < 0) {
         if (indexRef.current === null) draftRef.current = value;
         const next =
-          indexRef.current === null
-            ? history.length - 1
-            : Math.max(0, indexRef.current - 1);
+          indexRef.current === null ? history.length - 1 : Math.max(0, indexRef.current - 1);
         indexRef.current = next;
         onChange(history[next] ?? "");
         return;
@@ -80,7 +74,11 @@ export function reconstructRunActivity(messages: AgentMessage[]): RunActivitySta
   const userMessage = messages[latestUserIndex]!;
   const lastMessage = messages[messages.length - 1]!;
   let elapsedMs = 0;
-  if (userMessage.createdAt && lastMessage.createdAt && lastMessage.createdAt > userMessage.createdAt) {
+  if (
+    userMessage.createdAt &&
+    lastMessage.createdAt &&
+    lastMessage.createdAt > userMessage.createdAt
+  ) {
     elapsedMs = lastMessage.createdAt - userMessage.createdAt;
   }
 

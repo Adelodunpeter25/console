@@ -48,7 +48,11 @@ export interface ChatStoreState {
   addAttachments: (sessionId: string, attachments: ImageAttachment[]) => void;
   sendMessage: (sessionId: string) => Promise<void>;
   abort: (sessionId: string) => Promise<void>;
-  answerQuestion: (sessionId: string, requestId: string, answer: string | string[]) => Promise<void>;
+  answerQuestion: (
+    sessionId: string,
+    requestId: string,
+    answer: string | string[],
+  ) => Promise<void>;
   approvePermission: (sessionId: string, requestId: string, allow: boolean) => Promise<void>;
   clear: (sessionId: string) => void;
   handleEvent: (sessionId: string, event: AgentSessionEvent) => void;

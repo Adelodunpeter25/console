@@ -22,13 +22,29 @@ function getStatusStyle(status?: string): {
 } {
   switch (status) {
     case "working":
-      return { label: "Running", color: theme.colors.status.running, bgColor: theme.colors.status.runningBg };
+      return {
+        label: "Running",
+        color: theme.colors.status.running,
+        bgColor: theme.colors.status.runningBg,
+      };
     case "done":
-      return { label: "Ready", color: theme.colors.status.ready, bgColor: theme.colors.status.readyBg };
+      return {
+        label: "Ready",
+        color: theme.colors.status.ready,
+        bgColor: theme.colors.status.readyBg,
+      };
     case "needs_attention":
-      return { label: "Attention", color: theme.colors.status.attention, bgColor: theme.colors.status.attentionBg };
+      return {
+        label: "Attention",
+        color: theme.colors.status.attention,
+        bgColor: theme.colors.status.attentionBg,
+      };
     default:
-      return { label: "Idle", color: theme.colors.status.idle, bgColor: theme.colors.status.idleBg };
+      return {
+        label: "Idle",
+        color: theme.colors.status.idle,
+        bgColor: theme.colors.status.idleBg,
+      };
   }
 }
 
@@ -101,11 +117,7 @@ export function HomeScreen() {
 
   return (
     <View className="flex-1 bg-screen">
-      <ScreenHeader
-        title="Console"
-        showSettings
-        onSettingsPress={() => setActiveTab("settings")}
-      />
+      <ScreenHeader title="Console" showSettings onSettingsPress={() => setActiveTab("settings")} />
 
       <ScrollView
         className="flex-1"
@@ -157,7 +169,10 @@ export function HomeScreen() {
 
                       {/* Title + project/branch */}
                       <View className="flex-1 mr-2">
-                        <Text className="text-sm font-semibold text-foreground mb-0.5" numberOfLines={1}>
+                        <Text
+                          className="text-sm font-semibold text-foreground mb-0.5"
+                          numberOfLines={1}
+                        >
                           {session.title || "Untitled Session"}
                         </Text>
                         <View className="flex-row items-center gap-1">

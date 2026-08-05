@@ -9,12 +9,7 @@ interface ScreenHeaderProps {
   onSettingsPress?: () => void;
 }
 
-export function ScreenHeader({
-  title,
-  onBack,
-  showSettings,
-  onSettingsPress,
-}: ScreenHeaderProps) {
+export function ScreenHeader({ title, onBack, showSettings, onSettingsPress }: ScreenHeaderProps) {
   return (
     <View className="flex-row justify-between items-center px-4 pt-4 pb-3">
       <View className="flex-row items-center flex-1">

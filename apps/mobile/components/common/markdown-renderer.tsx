@@ -59,7 +59,10 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
           );
         },
         code_inline: (node) => (
-          <Text key={node.key} className="font-mono text-xs bg-card-alt text-orange-400 px-1 py-0.5 rounded">
+          <Text
+            key={node.key}
+            className="font-mono text-xs bg-card-alt text-orange-400 px-1 py-0.5 rounded"
+          >
             {node.content}
           </Text>
         ),
@@ -96,9 +99,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
             {children}
           </View>
         ),
-        hr: (node) => (
-          <View key={node.key} className="border-b border-border my-3" />
-        ),
+        hr: (node) => <View key={node.key} className="border-b border-border my-3" />,
       }}
     >
       {content}

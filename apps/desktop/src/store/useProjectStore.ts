@@ -12,15 +12,8 @@ interface ProjectState {
   loadProjects: () => Promise<void>;
   addProject: (path: string) => Promise<ProjectInfo>;
   loadSessions: () => Promise<void>;
-  createSession: (
-    cwd: string,
-    projectId: string,
-    title?: string,
-  ) => Promise<SessionHeader>;
-  updateSession: (
-    id: string,
-    dto: UpdateSessionDto,
-  ) => Promise<SessionHeader>;
+  createSession: (cwd: string, projectId: string, title?: string) => Promise<SessionHeader>;
+  updateSession: (id: string, dto: UpdateSessionDto) => Promise<SessionHeader>;
   deleteSession: (id: string) => Promise<void>;
   /** Re-fetch a session header from the backend and patch it in-place (e.g. after an auto-renamed title). */
   refreshSessionHeader: (sessionId: string) => Promise<void>;
@@ -89,9 +82,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const detail = await tauriApi.getSession(sessionId);
       const header = detail.header;
       set((s) => ({
-        sessions: s.sessions.map((sess) =>
-          sess.id === sessionId ? { ...sess, ...header } : sess,
-        ),
+        sessions: s.sessions.map((sess) => (sess.id === sessionId ? { ...sess, ...header } : sess)),
       }));
       if (header.status) useSessionStatusStore.getState().setStatus(sessionId, header.status);
     } catch {

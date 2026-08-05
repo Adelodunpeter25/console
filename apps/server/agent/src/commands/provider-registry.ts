@@ -114,7 +114,8 @@ export async function fetchModelsForProvider(
   }
 
   // If dynamic fetch failed or yielded no models, return static/cached models
-  const staticFallback = providerName === "gemini" ? DEFAULT_GEMINI_MODELS : DEFAULT_ANTIGRAVITY_MODELS;
+  const staticFallback =
+    providerName === "gemini" ? DEFAULT_GEMINI_MODELS : DEFAULT_ANTIGRAVITY_MODELS;
   if (!provider.models || provider.models.length === 0) {
     provider.models = staticFallback;
   }

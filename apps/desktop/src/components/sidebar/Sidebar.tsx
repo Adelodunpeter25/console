@@ -8,7 +8,9 @@ import { dayBucket, formatDayGroup } from "../../utils/time";
 import type { SessionHeader } from "@console/types";
 
 /** Group sessions into labeled date buckets, newest-first by last-updated. */
-function groupSessionsByDate(sessions: SessionHeader[]): Array<{ label: string; items: SessionHeader[] }> {
+function groupSessionsByDate(
+  sessions: SessionHeader[],
+): Array<{ label: string; items: SessionHeader[] }> {
   // The server already returns sessions ordered by updated_at DESC, so group
   // the incoming order directly — a session touched today surfaces under Today
   // even if it was created earlier.
@@ -32,7 +34,8 @@ function groupSessionsByDate(sessions: SessionHeader[]): Array<{ label: string; 
  */
 export function Sidebar({ width = 288 }: { width?: number }) {
   const navigate = useNavigate();
-  const { sidebarOpen, selectedSessionId, setSelectedProjectId, setSelectedSessionId } = useAppStore();
+  const { sidebarOpen, selectedSessionId, setSelectedProjectId, setSelectedSessionId } =
+    useAppStore();
   const { projects, loadProjects, sessions, sessionsLoading, loadSessions, createSession } =
     useProjectStore();
 
@@ -58,7 +61,10 @@ export function Sidebar({ width = 288 }: { width?: number }) {
   };
 
   return (
-    <div className="bg-sidebar border-r border-border flex flex-col h-full shrink-0 select-none" style={{ width }}>
+    <div
+      className="bg-sidebar border-r border-border flex flex-col h-full shrink-0 select-none"
+      style={{ width }}
+    >
       {/* Top Actions Bar */}
       <div className="px-3 pt-3 pb-2 shrink-0">
         <button

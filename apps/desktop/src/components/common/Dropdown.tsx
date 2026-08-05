@@ -75,9 +75,7 @@ export function Dropdown({ label, heading, onOpen, width = 256, children }: Drop
             style={{ width }}
           >
             <div className="px-1.5 py-1 text-[10px] font-medium uppercase tracking-wider text-foreground-muted">
-              <span>
-                {heading}
-              </span>
+              <span>{heading}</span>
             </div>
             <div className="max-h-80 overflow-y-auto">{children}</div>
           </div>
@@ -130,9 +128,7 @@ export function DropdownSearch({
   sticky?: boolean;
 }) {
   return (
-    <div
-      className={`${sticky ? "sticky top-0 z-10 bg-card" : ""} relative px-1.5 pb-1`}
-    >
+    <div className={`${sticky ? "sticky top-0 z-10 bg-card" : ""} relative px-1.5 pb-1`}>
       <div className="relative">
         <Search
           size={13}
@@ -150,7 +146,13 @@ export function DropdownSearch({
 }
 
 /** Non-selecting action row for menu operations such as opening a folder. */
-export function DropdownAction({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+export function DropdownAction({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   const { close } = React.useContext(DropdownContext);
   return (
     <button

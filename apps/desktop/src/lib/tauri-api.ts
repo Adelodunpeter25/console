@@ -42,8 +42,7 @@ export const tauriApi = {
 
   // --- auth ----------------------------------------------------------------
   getAuthStatus: () => invoke<AuthStatusResponse>("get_auth_status"),
-  getLoginUrl: (provider: string) =>
-    invoke<LoginUrlResult>("get_login_url", { provider }),
+  getLoginUrl: (provider: string) => invoke<LoginUrlResult>("get_login_url", { provider }),
   handleOAuthCallback: (provider: string, code: string, state?: string) =>
     invoke<OAuthCallbackResult>("handle_oauth_callback", {
       provider,
@@ -62,8 +61,7 @@ export const tauriApi = {
       provider: dto.provider,
       title: dto.title,
     }),
-  getSession: (id: string) =>
-    invoke<SessionDetailResponse>("get_session", { id }),
+  getSession: (id: string) => invoke<SessionDetailResponse>("get_session", { id }),
   updateSession: (id: string, dto: UpdateSessionDto) =>
     invoke<SessionHeader>("update_session", {
       id,
@@ -88,8 +86,7 @@ export const tauriApi = {
   getApprovalModes: () => invoke<ApprovalModeOption[]>("get_approval_modes"),
 
   // --- filesystem ----------------------------------------------------------
-  browseDirectory: (path?: string) =>
-    invoke<BrowseResult>("browse_directory", { path }),
+  browseDirectory: (path?: string) => invoke<BrowseResult>("browse_directory", { path }),
   pickFolder: () => invoke<PickFolderResult>("pick_folder"),
   getDirectoryTree: (path?: string, depth?: number) =>
     invoke<DirectoryTreeResult>("get_directory_tree", { path, depth }),
@@ -97,12 +94,9 @@ export const tauriApi = {
     invoke<ReadFileResult>("read_file", { path, startLine, endLine }),
   writeFile: (path: string, content: string) =>
     invoke<WriteFileResult>("write_file", { path, content }),
-  deleteFile: (path: string) =>
-    invoke<DeleteFileResult>("delete_file", { path }),
-  createDirectory: (path: string) =>
-    invoke<CreateDirectoryResult>("create_directory", { path }),
-  deleteDirectory: (path: string) =>
-    invoke<DeleteDirectoryResult>("delete_directory", { path }),
+  deleteFile: (path: string) => invoke<DeleteFileResult>("delete_file", { path }),
+  createDirectory: (path: string) => invoke<CreateDirectoryResult>("create_directory", { path }),
+  deleteDirectory: (path: string) => invoke<DeleteDirectoryResult>("delete_directory", { path }),
 
   // --- agent run / streaming -----------------------------------------------
   runAgent: (
@@ -121,8 +115,7 @@ export const tauriApi = {
       approvalMode,
       attachments,
     }),
-  abortRun: (sessionId: string) =>
-    invoke<unknown>("abort_run", { sessionId }),
+  abortRun: (sessionId: string) => invoke<unknown>("abort_run", { sessionId }),
   answerQuestion: (sessionId: string, requestId: string, answer: string | string[]) =>
     invoke<unknown>("answer_question", {
       sessionId,
@@ -140,10 +133,7 @@ export const tauriApi = {
     sessionId: string,
     callback: (event: AgentSessionEvent) => void,
   ): Promise<UnlistenFn> =>
-    listen<AgentSessionEvent>(
-      `agent-event:${sessionId}`,
-      (e) => callback(e.payload),
-    ),
+    listen<AgentSessionEvent>(`agent-event:${sessionId}`, (e) => callback(e.payload)),
 
   // --- desktop assistant (slash commands + @ file refs) --------------------
   listSlashCommands: (sessionId: string) =>
@@ -153,6 +143,5 @@ export const tauriApi = {
 
   // --- image attachments ----------------------------------------------------
   pickImages: () => invoke<PickedImage[]>("pick_images"),
-  readDroppedImages: (paths: string[]) =>
-    invoke<PickedImage[]>("read_dropped_images", { paths }),
+  readDroppedImages: (paths: string[]) => invoke<PickedImage[]>("read_dropped_images", { paths }),
 };

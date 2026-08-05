@@ -55,8 +55,7 @@ export const MessageBubble = React.memo(function MessageBubble({
   // with any live results that arrived before the batch finalised. This
   // ensures tool call spinners flip to checkmarks in real-time as each
   // tool completes, not only after all tools finish.
-  const toolResults: ToolResult[] =
-    nextMessage?.role === "toolResult" ? nextMessage.results : [];
+  const toolResults: ToolResult[] = nextMessage?.role === "toolResult" ? nextMessage.results : [];
 
   // Merge: prefer finalised results, add any live results not yet in the list.
   const mergedResults: ToolResult[] = [...toolResults];

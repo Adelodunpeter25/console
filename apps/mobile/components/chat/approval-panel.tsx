@@ -45,7 +45,7 @@ export function ApprovalPanel({
   };
 
   const args = isPermission
-    ? JSON.stringify((pendingPermission?.request.args ?? {}), null, 2).slice(0, 400)
+    ? JSON.stringify(pendingPermission?.request.args ?? {}, null, 2).slice(0, 400)
     : "";
 
   return (
@@ -57,7 +57,7 @@ export function ApprovalPanel({
       <View>
         <Text className="text-sm font-semibold text-foreground">
           {isPermission
-            ? `Run ${(pendingPermission?.request.toolName ?? "tool")}?`
+            ? `Run ${pendingPermission?.request.toolName ?? "tool"}?`
             : pendingQuestion?.request.question}
         </Text>
         {isPermission && pendingPermission?.request.reason ? (
@@ -66,7 +66,10 @@ export function ApprovalPanel({
           </Text>
         ) : null}
         {args ? (
-          <Text className="text-[10px] font-mono text-foreground-secondary leading-4 mt-1.5" numberOfLines={4}>
+          <Text
+            className="text-[10px] font-mono text-foreground-secondary leading-4 mt-1.5"
+            numberOfLines={4}
+          >
             {args}
           </Text>
         ) : null}

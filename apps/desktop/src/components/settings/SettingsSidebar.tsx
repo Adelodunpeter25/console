@@ -23,7 +23,10 @@ export function SettingsSidebar({ active, onSelect, onBack, width }: SettingsSid
   ];
 
   return (
-    <div style={{ width }} className="bg-sidebar border-r border-border flex flex-col h-full shrink-0">
+    <div
+      style={{ width }}
+      className="bg-sidebar border-r border-border flex flex-col h-full shrink-0"
+    >
       {/* Back button */}
       <div className="px-3 h-12 flex items-center border-b border-border shrink-0">
         <button

@@ -1,12 +1,7 @@
 import { create } from "zustand";
 import type { FsTreeEntry } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
-import type {
-  BrowseResult,
-  DirectoryTreeResult,
-  PickFolderResult,
-  ReadFileResult,
-} from "../types";
+import type { BrowseResult, DirectoryTreeResult, PickFolderResult, ReadFileResult } from "../types";
 
 interface FsState {
   /** Current browse location and its entries (file-picker navigation). */

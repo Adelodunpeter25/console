@@ -15,9 +15,7 @@ import type { AuthStatusResponse } from "../types/index.js";
  * logged in (no credential file, invalid JSON, missing token, etc.) instead of
  * throwing — so getAuthStatus() can report "not logged in" gracefully.
  */
-async function tryLoadCredential(
-  type: "gemini" | "antigravity",
-) {
+async function tryLoadCredential(type: "gemini" | "antigravity") {
   try {
     return await loadCredential(type);
   } catch {

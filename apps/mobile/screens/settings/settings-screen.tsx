@@ -160,13 +160,14 @@ export function SettingsScreen() {
           const provider = p.name;
           const loggedIn = auth.isLoggedIn(provider);
           return (
-            <View key={provider} className="flex-row items-center justify-between py-2.5 border-b border-border last:border-b-0">
+            <View
+              key={provider}
+              className="flex-row items-center justify-between py-2.5 border-b border-border last:border-b-0"
+            >
               <View className="flex-1 pr-3">
                 <Text className="text-sm font-semibold text-foreground">{p.name}</Text>
                 <Text className="text-xs text-foreground-secondary mt-0.5">
-                  {loggedIn
-                    ? auth.status?.[provider]?.email ?? "Logged in"
-                    : "Not logged in"}
+                  {loggedIn ? (auth.status?.[provider]?.email ?? "Logged in") : "Not logged in"}
                 </Text>
               </View>
               {loggedIn ? (

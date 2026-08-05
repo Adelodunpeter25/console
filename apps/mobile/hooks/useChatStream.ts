@@ -68,8 +68,7 @@ export function useChatStream() {
     try {
       const response = await fetch(`${backendUrl}/api/sessions/${selectedSessionId}`);
       const data = await response.json();
-      const history =
-        (data && data.data && data.data.messages) || (data && data.messages) || [];
+      const history = (data && data.data && data.data.messages) || (data && data.messages) || [];
       commit({ messages: history });
     } catch (e) {
       console.error("Failed to load session messages:", e);

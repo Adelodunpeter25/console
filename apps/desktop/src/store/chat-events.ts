@@ -53,7 +53,9 @@ export function applyChatEvent(
         liveToolResults: [...session.liveToolResults, event.result],
         runActivity: {
           ...session.runActivity,
-          results: session.runActivity.results.some((result) => result.toolCallId === event.result.toolCallId)
+          results: session.runActivity.results.some(
+            (result) => result.toolCallId === event.result.toolCallId,
+          )
             ? session.runActivity.results.map((result) =>
                 result.toolCallId === event.result.toolCallId ? event.result : result,
               )
@@ -125,7 +127,9 @@ export function applyChatEvent(
           ...session.messages,
           {
             role: "assistant",
-            content: [{ type: "text", text: `Error: ${event.error?.message ?? "Unknown agent error"}` }],
+            content: [
+              { type: "text", text: `Error: ${event.error?.message ?? "Unknown agent error"}` },
+            ],
           },
         ],
         streamingText: "",

@@ -37,7 +37,17 @@ export function createSession(state: StorageState, options: CreateSessionOptions
         (id, title, cwd, project_id, model_id, provider, message_count, approval_mode, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
     )
-    .run(id, title, options.cwd, projectId, options.modelId, options.provider, approvalMode, now, now);
+    .run(
+      id,
+      title,
+      options.cwd,
+      projectId,
+      options.modelId,
+      options.provider,
+      approvalMode,
+      now,
+      now,
+    );
 
   // 2. Initialize the per-session DB with the authoritative meta row.
   const sessionDb = getSessionDb(state, id, projectId);
@@ -68,9 +78,9 @@ export function loadSession(
   sessionId: string,
 ): { header: SessionHeader; messages: AgentMessage[] } | null {
   const { globalDb, storageDir } = state;
-  const indexRow = globalDb
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
-    .get(sessionId) as SessionIndexRow | undefined;
+  const indexRow = globalDb.prepare(`SELECT * FROM sessions WHERE id = ?`).get(sessionId) as
+    | SessionIndexRow
+    | undefined;
 
   let projectId: string | null = indexRow?.project_id ?? null;
   let dbPath: string | undefined;
@@ -95,11 +105,12 @@ export function loadSession(
 
   if (hasDbFile && projectId) {
     const sessionDb = getSessionDb(state, sessionId, projectId);
-    meta = (sessionDb
-      .prepare(
-        `SELECT title, cwd, project_id, model_id, provider, approval_mode, created_at, updated_at FROM session_meta WHERE id = 1`,
-      )
-      .get() as SessionMetaRow | undefined) ?? null;
+    meta =
+      (sessionDb
+        .prepare(
+          `SELECT title, cwd, project_id, model_id, provider, approval_mode, created_at, updated_at FROM session_meta WHERE id = 1`,
+        )
+        .get() as SessionMetaRow | undefined) ?? null;
 
     const messageRows = sessionDb
       .prepare(`SELECT content, created_at FROM messages ORDER BY rowid ASC`)
@@ -173,9 +184,7 @@ export function listSessions(
       .prepare(`SELECT * FROM sessions WHERE project_id = ? ORDER BY updated_at DESC LIMIT ?`)
       .all(options.projectId, limit);
   } else {
-    rows = globalDb
-      .prepare(`SELECT * FROM sessions ORDER BY updated_at DESC LIMIT ?`)
-      .all(limit);
+    rows = globalDb.prepare(`SELECT * FROM sessions ORDER BY updated_at DESC LIMIT ?`).all(limit);
   }
 
   return rows.map((r) => ({

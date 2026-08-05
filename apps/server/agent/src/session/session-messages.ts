@@ -1,10 +1,6 @@
 import crypto from "node:crypto";
 import type { AgentMessage, ToolResult } from "../types/index.js";
-import {
-  bumpSessionUpdated,
-  getProjectIdBySessionId,
-  getSessionDb,
-} from "./session-helpers.js";
+import { bumpSessionUpdated, getProjectIdBySessionId, getSessionDb } from "./session-helpers.js";
 import { truncateForPersistence, type StorageState } from "./utils.js";
 
 export function appendMessage(state: StorageState, sessionId: string, message: AgentMessage): void {
@@ -75,8 +71,16 @@ export function replaceMessages(
       const safeMessage = truncateForPersistence(message);
       const messageId =
         (safeMessage as any).id ||
-        crypto.createHash("sha256").update(`${index}:${JSON.stringify(safeMessage)}`).digest("hex");
-      insert.run(messageId, safeMessage.role, JSON.stringify(safeMessage), (safeMessage as any).createdAt ?? (now + index));
+        crypto
+          .createHash("sha256")
+          .update(`${index}:${JSON.stringify(safeMessage)}`)
+          .digest("hex");
+      insert.run(
+        messageId,
+        safeMessage.role,
+        JSON.stringify(safeMessage),
+        (safeMessage as any).createdAt ?? now + index,
+      );
     });
   });
   transaction();

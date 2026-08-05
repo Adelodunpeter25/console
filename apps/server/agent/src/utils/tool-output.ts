@@ -13,4 +13,3 @@ export function normalizeToolOutput(output: unknown): { content: unknown; isErro
 
   return { content: output };
 }
-

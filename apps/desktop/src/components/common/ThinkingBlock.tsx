@@ -11,7 +11,11 @@ interface ThinkingBlockProps {
  * Purple-tinted collapsible panel for displaying agent reasoning / thinking content.
  * Collapsed by default with a clean expand/collapse header toggle.
  */
-export function ThinkingBlock({ text, defaultExpanded = false, isStreaming = false }: ThinkingBlockProps) {
+export function ThinkingBlock({
+  text,
+  defaultExpanded = false,
+  isStreaming = false,
+}: ThinkingBlockProps) {
   const [isExpanded, setIsExpanded] = React.useState(defaultExpanded || isStreaming);
 
   if (!text) return null;

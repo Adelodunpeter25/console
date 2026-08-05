@@ -29,13 +29,13 @@ export function formatDayGroup(bucket: number): string {
   if (bucket <= 0) return "Today";
   if (bucket === 1) return "Yesterday";
   // The third distinct day shows its date (e.g. "Aug 2"), then rolls up.
-  if (bucket === 2) return new Date(Date.now() - bucket * DAYS_MS).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
+  if (bucket === 2)
+    return new Date(Date.now() - bucket * DAYS_MS).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
   if (bucket < 7) return "3 days ago";
   if (bucket < 30) return "1 week ago";
   if (bucket < 365) return "1 month ago";
   return "1 year ago";
 }
-

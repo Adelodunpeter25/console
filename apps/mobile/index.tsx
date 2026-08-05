@@ -2,13 +2,7 @@ import "./global.css";
 import React from "react";
 import { registerRootComponent } from "expo";
 import { StatusBar } from "expo-status-bar";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-} from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import {
   useFonts,

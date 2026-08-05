@@ -49,18 +49,13 @@ export const AssistantBubble = React.memo(function AssistantBubble({
   return (
     <div className="space-y-2">
       {thinkingParts.map((part, i) => (
-        <ThinkingBlock
-          key={`thinking-${i}`}
-          text={part.type === "thinking" ? part.text : ""}
-        />
+        <ThinkingBlock key={`thinking-${i}`} text={part.type === "thinking" ? part.text : ""} />
       ))}
 
       {textParts.length > 0 && (
         <div className="px-1">
           <MarkdownRenderer
-            content={textParts
-              .map((c) => (c.type === "text" ? c.text : ""))
-              .join("\n\n")}
+            content={textParts.map((c) => (c.type === "text" ? c.text : "")).join("\n\n")}
           />
         </div>
       )}

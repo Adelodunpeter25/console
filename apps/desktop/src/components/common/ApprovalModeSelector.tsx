@@ -36,16 +36,11 @@ export function ApprovalModeSelector({ value, onChange }: ApprovalModeSelectorPr
   return (
     <Dropdown label={currentLabel} heading="Permissions" width={264}>
       {loadingApprovalModes && modes.length === 0 ? (
-        <div className="px-3 py-2 font-sans text-xs text-foreground-muted">
-          Loading…
-        </div>
+        <div className="px-3 py-2 font-sans text-xs text-foreground-muted">Loading…</div>
       ) : (
         modes.map((mode) => (
           <div key={mode.value}>
-            <DropdownItem
-              selected={value === mode.value}
-              onClick={() => onChange(mode.value)}
-            >
+            <DropdownItem selected={value === mode.value} onClick={() => onChange(mode.value)}>
               <span className="flex flex-col gap-0.5">
                 <span className="font-sans text-xs font-medium">{mode.label}</span>
                 <span className="font-sans text-[10px] text-foreground-muted">

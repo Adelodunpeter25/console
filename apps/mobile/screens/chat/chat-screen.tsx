@@ -25,9 +25,13 @@ export function ChatScreen() {
     abort();
   };
 
-  const renderItem = ({ item, index }: { item: (typeof stream.messages)[number]; index: number }) => (
-    <MessageBubble key={index} item={item} />
-  );
+  const renderItem = ({
+    item,
+    index,
+  }: {
+    item: (typeof stream.messages)[number];
+    index: number;
+  }) => <MessageBubble key={index} item={item} />;
 
   return (
     <KeyboardAvoidingView className="flex-1" behavior="padding">

@@ -13,9 +13,7 @@ export function AppShell({ children }: AppShellProps) {
     <KeyboardProvider>
       <SafeAreaView className="flex-1 bg-screen">
         <StatusBar style="light" />
-        <View className="flex-1">
-          {children}
-        </View>
+        <View className="flex-1">{children}</View>
       </SafeAreaView>
     </KeyboardProvider>
   );

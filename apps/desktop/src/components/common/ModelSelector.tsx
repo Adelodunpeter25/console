@@ -14,8 +14,14 @@ interface ModelSelectorProps {
  * primitives so it shares the same visual language as other selectors.
  */
 export function ModelSelector({ value, onChange }: ModelSelectorProps) {
-  const { providers, modelsByProvider, loadProviders, loadModels, loadingProviders, loadingModels } =
-    useProviderStore();
+  const {
+    providers,
+    modelsByProvider,
+    loadProviders,
+    loadModels,
+    loadingProviders,
+    loadingModels,
+  } = useProviderStore();
   const [search, setSearch] = React.useState("");
   const [collapsedProviders, setCollapsedProviders] = React.useState<Set<string>>(new Set());
   const query = search.trim().toLowerCase();
@@ -51,12 +57,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
   };
 
   return (
-    <Dropdown
-      label={value ?? "Default"}
-      heading="Models"
-      onOpen={handleOpen}
-      width={264}
-    >
+    <Dropdown label={value ?? "Default"} heading="Models" onOpen={handleOpen} width={264}>
       <DropdownSearch value={search} onChange={setSearch} placeholder="Search models..." />
       {loadingProviders && (
         <div className="px-3 py-4 text-center text-xs text-foreground-muted">Loading...</div>

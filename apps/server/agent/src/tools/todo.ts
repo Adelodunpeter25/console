@@ -49,7 +49,10 @@ export function createTodoTool(
   let items = initialItems.map((item) => ({ ...item }));
 
   const publish = async (action: TodoUpdateAction) => {
-    await onUpdate?.(items.map((item) => ({ ...item })), action);
+    await onUpdate?.(
+      items.map((item) => ({ ...item })),
+      action,
+    );
   };
 
   const render = (title: string) => {
@@ -58,7 +61,8 @@ export function createTodoTool(
     }
 
     const lines = items.map((item) => {
-      const icon = item.status === "completed" ? "[x]" : item.status === "in_progress" ? "[>]" : "[ ]";
+      const icon =
+        item.status === "completed" ? "[x]" : item.status === "in_progress" ? "[>]" : "[ ]";
       return `${icon} #${item.id}: ${item.content} (${item.status})`;
     });
     return { content: [{ type: "text", text: `${title}:\n${lines.join("\n")}` }] };
@@ -80,7 +84,9 @@ Use 'view' to render the current task list status.`,
       if (op === "init") {
         if (!tasks || tasks.length === 0) {
           return {
-            content: [{ type: "text", text: "Error: 'init' operation requires a non-empty 'tasks' array." }],
+            content: [
+              { type: "text", text: "Error: 'init' operation requires a non-empty 'tasks' array." },
+            ],
             isError: true,
           };
         }
@@ -92,12 +98,23 @@ Use 'view' to render the current task list status.`,
       if (op === "append") {
         if (!tasks || tasks.length === 0) {
           return {
-            content: [{ type: "text", text: "Error: 'append' operation requires a non-empty 'tasks' array." }],
+            content: [
+              {
+                type: "text",
+                text: "Error: 'append' operation requires a non-empty 'tasks' array.",
+              },
+            ],
             isError: true,
           };
         }
         const startId = items.length + 1;
-        items.push(...tasks.map((content, idx) => ({ id: startId + idx, content, status: "pending" as const })));
+        items.push(
+          ...tasks.map((content, idx) => ({
+            id: startId + idx,
+            content,
+            status: "pending" as const,
+          })),
+        );
         await publish("created");
         return render("Appended tasks");
       }
@@ -111,7 +128,10 @@ Use 'view' to render the current task list status.`,
         }
         const item = items.find((task) => task.id === index);
         if (!item) {
-          return { content: [{ type: "text", text: `Error: Task index ${index} not found.` }], isError: true };
+          return {
+            content: [{ type: "text", text: `Error: Task index ${index} not found.` }],
+            isError: true,
+          };
         }
         item.status = op === "done" ? "completed" : "in_progress";
         await publish("updated");

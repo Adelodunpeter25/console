@@ -110,10 +110,10 @@ export function ConnectionSettings() {
       <GlassSurface className="mb-8">
         <p className="text-base font-semibold text-foreground mb-2">About Console Desktop</p>
         <p className="text-sm text-foreground-secondary leading-6">
-          Console Desktop is a Tauri v2 application that connects to the Console agent server.
-          It provides a native desktop experience for managing projects, chat sessions, and
-          AI-powered coding agents. The Rust backend handles all network communication and
-          filesystem operations, while the React frontend delivers a fast, responsive UI.
+          Console Desktop is a Tauri v2 application that connects to the Console agent server. It
+          provides a native desktop experience for managing projects, chat sessions, and AI-powered
+          coding agents. The Rust backend handles all network communication and filesystem
+          operations, while the React frontend delivers a fast, responsive UI.
         </p>
       </GlassSurface>
     </div>

@@ -69,14 +69,19 @@ export function SessionSubList({ projectId, projectPath }: SessionSubListProps) 
                 >
                   {sess.title || "Untitled Session"}
                 </Text>
-                <Text className="text-xs text-foreground-secondary font-mono mt-0.5" numberOfLines={1}>
+                <Text
+                  className="text-xs text-foreground-secondary font-mono mt-0.5"
+                  numberOfLines={1}
+                >
                   {sess.modelId}
                 </Text>
               </View>
 
               <View className="flex-row items-center gap-3">
                 {displayTime ? (
-                  <Text className="text-xs text-foreground-secondary font-medium">{displayTime}</Text>
+                  <Text className="text-xs text-foreground-secondary font-medium">
+                    {displayTime}
+                  </Text>
                 ) : null}
 
                 <TouchableOpacity className="p-1" onPress={() => deleteSession(sess.id)}>

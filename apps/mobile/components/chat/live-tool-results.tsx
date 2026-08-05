@@ -11,15 +11,23 @@ export function LiveToolResults({ results }: { results: ToolResult[] }) {
       {results.map((result, idx) => (
         <View key={idx} className="bg-card-alt border border-border rounded-lg p-2.5">
           <View className="flex-row justify-between items-center mb-1">
-            <Text className="text-xs font-mono font-bold text-foreground">⚙️ {result.toolName}</Text>
+            <Text className="text-xs font-mono font-bold text-foreground">
+              ⚙️ {result.toolName}
+            </Text>
             <Text
               className="text-[9px] font-bold font-mono tracking-wide"
-              style={{ color: result.isError ? theme.colors.status.attention : theme.colors.status.ready }}
+              style={{
+                color: result.isError ? theme.colors.status.attention : theme.colors.status.ready,
+              }}
             >
               {result.isError ? "FAILED" : "DONE"}
             </Text>
           </View>
-          <Text className="text-xs font-mono text-foreground-secondary leading-4" numberOfLines={3} selectable>
+          <Text
+            className="text-xs font-mono text-foreground-secondary leading-4"
+            numberOfLines={3}
+            selectable
+          >
             {String(result.content || "")}
           </Text>
         </View>

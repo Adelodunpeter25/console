@@ -4,7 +4,13 @@ import type { ProjectInfo } from "@console/types";
 import { toast } from "sonner";
 import { useProjectStore } from "../../store";
 import { tauriApi } from "../../lib/tauri-api";
-import { Dropdown, DropdownAction, DropdownItem, DropdownSearch, DropdownSeparator } from "./Dropdown";
+import {
+  Dropdown,
+  DropdownAction,
+  DropdownItem,
+  DropdownSearch,
+  DropdownSeparator,
+} from "./Dropdown";
 
 interface ProjectSelectorProps {
   /** Backend projects to choose from. */
@@ -20,7 +26,12 @@ interface ProjectSelectorProps {
  * Dropdown for selecting the working folder of a session. The list comes
  * from the backend projects endpoint via the project store.
  */
-export function ProjectSelector({ projects, selectedId, fallbackLabel, onSelect }: ProjectSelectorProps) {
+export function ProjectSelector({
+  projects,
+  selectedId,
+  fallbackLabel,
+  onSelect,
+}: ProjectSelectorProps) {
   const selected = projects.find((p) => p.id === selectedId) ?? null;
   const addProject = useProjectStore((state) => state.addProject);
   const [search, setSearch] = React.useState("");

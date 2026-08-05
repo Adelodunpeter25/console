@@ -163,7 +163,10 @@ async function executeTool(
         const result: ToolResult = {
           toolCallId: call.id,
           toolName: call.name,
-          content: err instanceof Error ? err.message : "Tool execution cancelled before permission was granted.",
+          content:
+            err instanceof Error
+              ? err.message
+              : "Tool execution cancelled before permission was granted.",
           isError: true,
         };
         await onToolResult?.(call, result);
@@ -230,12 +233,15 @@ async function streamOneTurn(
   let textAccumulator = "";
   const textParts: Array<{ text: string; thoughtSignature?: string }> = [];
   let thinkingAccumulator = "";
-  const toolCallMap = new Map<string, {
-    id: string;
-    name: string;
-    argumentsJson: string;
-    thoughtSignature?: string;
-  }>();
+  const toolCallMap = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      argumentsJson: string;
+      thoughtSignature?: string;
+    }
+  >();
   const toolCallOrder: string[] = [];
 
   const stream = streamFn(params);

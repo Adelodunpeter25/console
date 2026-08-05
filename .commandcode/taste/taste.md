@@ -1,4 +1,5 @@
 # Taste
+
 - Prefers to commit the current working changes before diagnosing or fixing unrelated issues (e.g., asked to "commit first" before discussing what's wrong). Confidence: 0.9
 - Prefers to verify typecheck/build passes before pushing. Confidence: 0.7
 - Communicates in terse, typo-heavy shorthand; expects the assistant to infer intent and act without asking for clarification (e.g., "file attachments images fileobly for now I need it too" → implement image attachments without clarifying). Confidence: 0.8

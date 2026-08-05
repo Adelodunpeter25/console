@@ -71,7 +71,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   };
 
   const directories = React.useMemo(
-    () => (browse?.entries ?? []).filter((e) => e.isDir).sort((a, b) => a.name.localeCompare(b.name)),
+    () =>
+      (browse?.entries ?? []).filter((e) => e.isDir).sort((a, b) => a.name.localeCompare(b.name)),
     [browse],
   );
 
@@ -116,7 +117,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
         {/* List */}
         <Command.List className="overflow-y-auto p-2 flex-1 min-h-0">
-          {browsing && <Command.Loading className="px-3 py-4 text-sm text-foreground-muted">Loading...</Command.Loading>}
+          {browsing && (
+            <Command.Loading className="px-3 py-4 text-sm text-foreground-muted">
+              Loading...
+            </Command.Loading>
+          )}
 
           {view === "root" && (
             <>
@@ -124,7 +129,10 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 No results found.
               </Command.Empty>
 
-              <Command.Group heading="Actions" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-foreground-muted [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider">
+              <Command.Group
+                heading="Actions"
+                className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-foreground-muted [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider"
+              >
                 <Command.Item
                   onSelect={() => {
                     setView("browse");
@@ -201,7 +209,10 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                   >
                     <Folder size={16} className="text-foreground-muted shrink-0" />
                     <span className="flex-1 truncate">{dir.name}</span>
-                    <ChevronRight size={14} className="text-foreground-muted shrink-0 opacity-0 aria-selected:opacity-100" />
+                    <ChevronRight
+                      size={14}
+                      className="text-foreground-muted shrink-0 opacity-0 aria-selected:opacity-100"
+                    />
                   </Command.Item>
                 ))}
               </Command.Group>

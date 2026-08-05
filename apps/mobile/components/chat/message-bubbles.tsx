@@ -17,7 +17,11 @@ export function ToolResultItem({ result }: { result: ToolResult }) {
           {isError ? "FAILED" : "DONE"}
         </Text>
       </View>
-      <Text className="text-xs font-mono text-foreground-secondary leading-4" numberOfLines={3} selectable>
+      <Text
+        className="text-xs font-mono text-foreground-secondary leading-4"
+        numberOfLines={3}
+        selectable
+      >
         {String(result.content || "")}
       </Text>
     </View>
@@ -27,8 +31,12 @@ export function ToolResultItem({ result }: { result: ToolResult }) {
 export function UserBubble({ content }: { content: string }) {
   return (
     <View className="bg-foreground/5 border border-border rounded-xl p-3.5 mb-3.5 self-end max-w-[85%]">
-      <Text className="text-[9px] font-mono font-bold text-foreground-secondary mb-2 tracking-widest">YOU</Text>
-      <Text className="text-foreground text-sm leading-5" selectable>{content}</Text>
+      <Text className="text-[9px] font-mono font-bold text-foreground-secondary mb-2 tracking-widest">
+        YOU
+      </Text>
+      <Text className="text-foreground text-sm leading-5" selectable>
+        {content}
+      </Text>
     </View>
   );
 }
@@ -53,7 +61,9 @@ export function AssistantBubble({
       </Text>
       {thinkingContent ? (
         <View className="border-l-2 border-foreground-secondary/30 pl-2.5 mb-3">
-          <Text className="text-[11px] font-mono text-foreground-secondary mb-1">💭 Thinking...</Text>
+          <Text className="text-[11px] font-mono text-foreground-secondary mb-1">
+            💭 Thinking...
+          </Text>
           <Text className="text-[11px] font-mono text-foreground-secondary/70 leading-[18px]">
             {thinkingContent}
           </Text>
@@ -64,7 +74,11 @@ export function AssistantBubble({
         <View className="mt-2 pt-2 border-t border-border">
           {toolCalls.map((call, idx) => (
             <View key={idx} className="flex-row items-center my-1">
-              <ActivityIndicator size="small" color={theme.colors.status.running} style={{ marginRight: 8 }} />
+              <ActivityIndicator
+                size="small"
+                color={theme.colors.status.running}
+                style={{ marginRight: 8 }}
+              />
               <Text className="text-[11px] font-mono text-foreground-secondary">
                 Running {call.name}…
               </Text>
