@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, Circle } from "lucide-react";
+import { Check, ChevronDown, Circle } from "lucide-react";
 import type { TodoItem } from "@console/types";
 import { MarkdownRenderer } from "../common/MarkdownRenderer";
 
@@ -8,9 +8,11 @@ interface TodoListProps {
 }
 
 export function TodoList({ items }: TodoListProps) {
-  if (items.length === 0) return null;
+  const [collapsed, setCollapsed] = React.useState(true);
+  const nextIndex = items.findIndex((item) => item.status !== "completed");
+  if (nextIndex === -1) return null;
 
-  const allCompleted = items.every((item) => item.status === "completed");
+  const visibleItems = collapsed ? [items[nextIndex]!] : items;
 
   return (
     <section className="rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2">
@@ -18,12 +20,18 @@ export function TodoList({ items }: TodoListProps) {
         <span className="text-[11px] font-medium uppercase tracking-wide text-foreground-muted">
           Todos
         </span>
-        <span className={`text-xs ${allCompleted ? "text-success" : "text-foreground-muted"}`}>
-          Mark all as completed
-        </span>
+        <button
+          type="button"
+          aria-label={collapsed ? "Expand todos" : "Collapse todos"}
+          aria-expanded={!collapsed}
+          onClick={() => setCollapsed((current) => !current)}
+          className="rounded p-0.5 text-foreground-muted transition-colors hover:bg-white/[0.08] hover:text-foreground"
+        >
+          <ChevronDown size={15} className={collapsed ? "" : "rotate-180"} />
+        </button>
       </div>
       <div className="space-y-1">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const completed = item.status === "completed";
           return (
             <div key={item.id} className="flex items-start gap-2 text-sm text-foreground-secondary">
