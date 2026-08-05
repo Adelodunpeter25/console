@@ -79,5 +79,5 @@ authRoutes.post("/project-id", async (c) => {
     return c.json({ success: false, error: "Invalid provider." }, 400);
   }
   await authService.setProjectId(provider, projectId);
-  return c.json({ success: true });
+  return c.json({ success: true, data: { provider, projectId: projectId ?? null } });
 });
