@@ -39,8 +39,13 @@ export function ChatScreen() {
   }, [loadProviders]);
 
   React.useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
+    // Don't refetch if projects are already populated — re-running sets the
+    // shared `loading` flag and makes the sidebar flash "Loading..." while a
+    // chat is being opened.
+    if (projects.length === 0) {
+      loadProjects();
+    }
+  }, [projects.length, loadProjects]);
 
   React.useEffect(() => {
     if (selectedSessionId) {

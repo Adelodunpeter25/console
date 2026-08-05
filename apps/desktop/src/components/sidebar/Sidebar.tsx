@@ -33,7 +33,7 @@ function groupSessionsByDate(sessions: SessionHeader[]): Array<{ label: string; 
 export function Sidebar({ width = 288 }: { width?: number }) {
   const navigate = useNavigate();
   const { sidebarOpen, selectedSessionId, setSelectedProjectId, setSelectedSessionId } = useAppStore();
-  const { projects, loading, loadProjects, sessions, sessionsLoading, loadSessions, createSession } =
+  const { projects, loadProjects, sessions, sessionsLoading, loadSessions, createSession } =
     useProjectStore();
 
   React.useEffect(() => {
@@ -73,7 +73,7 @@ export function Sidebar({ width = 288 }: { width?: number }) {
 
       {/* Session List */}
       <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
-        {loading || sessionsLoading ? (
+        {sessionsLoading ? (
           <div className="flex items-center justify-center py-8">
             <span className="text-xs text-foreground-muted">Loading...</span>
           </div>
