@@ -1,5 +1,5 @@
 import type { SessionHeader, SessionStatus } from "@console/types";
-import { Folder, Trash2 } from "lucide-react";
+import { FolderClosed, Trash2 } from "lucide-react";
 import { useAppStore, useProjectStore, useSessionStatusStore } from "../../store";
 import { formatRelativeTime } from "../../utils/time";
 import { basename } from "../../utils/format";
@@ -69,7 +69,7 @@ export function SessionItem({ session, isActive }: SessionItemProps) {
 
       {/* Line 2: Working Folder */}
       <div className="flex items-center gap-1.5 mt-0.5 pl-[18px] pr-5 min-w-0">
-        <Folder size={11} className="text-foreground-muted shrink-0" />
+        <FolderClosed size={11} className="text-foreground-muted shrink-0" />
         <span className="text-[11px] text-foreground-muted truncate min-w-0">
           {basename(session.cwd)}
         </span>
