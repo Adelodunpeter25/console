@@ -4,6 +4,7 @@ import { tauriApi } from "../lib/tauri-api";
 import { useAppStore } from "./useAppStore";
 import { useProjectStore } from "./useProjectStore";
 import { useProviderStore } from "./useProviderStore";
+import { useSessionStatusStore } from "./useSessionStatusStore";
 
 interface SessionState {
   loading: boolean;
@@ -53,7 +54,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         sessionCwd: detail.header.cwd ?? null,
         approvalMode: (detail.header.approvalMode as ApprovalMode) ?? "always-ask",
       });
-      useProjectStore.getState().updateSessionStatus(sessionId, detail.header.status ?? "idle");
+      useSessionStatusStore.getState().setStatus(sessionId, detail.header.status ?? "idle");
       return detail;
     } catch {
       if (useAppStore.getState().selectedSessionId === sessionId) {

@@ -1,6 +1,6 @@
 import type { SessionHeader, SessionStatus } from "@console/types";
 import { Folder, Trash2 } from "lucide-react";
-import { useAppStore, useProjectStore } from "../../store";
+import { useAppStore, useProjectStore, useSessionStatusStore } from "../../store";
 import { formatRelativeTime } from "../../utils/time";
 import { basename } from "../../utils/format";
 
@@ -23,7 +23,8 @@ interface SessionItemProps {
 export function SessionItem({ session, isActive }: SessionItemProps) {
   const { setSelectedSessionId } = useAppStore();
   const { deleteSession } = useProjectStore();
-  const status: SessionStatus = session.status ?? "idle";
+  const liveStatus = useSessionStatusStore((state) => state.statuses[session.id]);
+  const status: SessionStatus = liveStatus ?? session.status ?? "idle";
 
   return (
     <div

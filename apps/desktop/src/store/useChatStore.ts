@@ -6,6 +6,7 @@ import { useProviderStore } from "./useProviderStore";
 import { useProjectStore } from "./useProjectStore";
 import { useAppStore } from "./useAppStore";
 import { useSessionStore } from "./useSessionStore";
+import { useSessionStatusStore } from "./useSessionStatusStore";
 
 /** A pending question from the agent's ask tool, awaiting user input. */
 export interface PendingQuestion {
@@ -64,7 +65,7 @@ function isAbortError(msg: string): boolean {
 
 /** Push a status update to the project store so the sidebar reflects it. */
 function syncSessionStatus(sessionId: string, status: "idle" | "working" | "done" | "needs_attention") {
-  useProjectStore.getState().updateSessionStatus(sessionId, status);
+  useSessionStatusStore.getState().setStatus(sessionId, status);
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({

@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import type { ProjectInfo, SessionHeader, SessionStatus, UpdateSessionDto } from "@console/types";
+import type { ProjectInfo, SessionHeader, UpdateSessionDto } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
+import { useSessionStatusStore } from "./useSessionStatusStore";
 
 interface ProjectState {
   projects: ProjectInfo[];
@@ -21,8 +22,6 @@ interface ProjectState {
     dto: UpdateSessionDto,
   ) => Promise<SessionHeader>;
   deleteSession: (id: string) => Promise<void>;
-  /** Update a session's status in-place. */
-  updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
   /** Re-fetch a session header from the backend and patch it in-place (e.g. after an auto-renamed title). */
   refreshSessionHeader: (sessionId: string) => Promise<void>;
 }
@@ -54,6 +53,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     try {
       const sessions = await tauriApi.listSessions();
       set({ sessions, sessionsLoading: false });
+      useSessionStatusStore.getState().setStatuses(sessions);
     } catch {
       set({ sessionsLoading: false });
     }
@@ -66,6 +66,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
       title: title ?? "New Chat",
     });
     set((s) => ({ sessions: [session, ...s.sessions] }));
+    useSessionStatusStore.getState().setStatus(session.id, session.status ?? "idle");
     return session;
   },
 
@@ -80,17 +81,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   deleteSession: async (id: string) => {
     await tauriApi.deleteSession(id);
     set((s) => ({ sessions: s.sessions.filter((sess) => sess.id !== id) }));
-  },
-
-  updateSessionStatus: (sessionId, status) => {
-    set((s) => {
-      if (!s.sessions.some((sess) => sess.id === sessionId)) return s;
-      return {
-        sessions: s.sessions.map((sess) =>
-          sess.id === sessionId ? { ...sess, status } : sess,
-        ),
-      };
-    });
+    useSessionStatusStore.getState().clearStatus(id);
   },
 
   refreshSessionHeader: async (sessionId) => {
@@ -102,6 +93,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
           sess.id === sessionId ? { ...sess, ...header } : sess,
         ),
       }));
+      if (header.status) useSessionStatusStore.getState().setStatus(sessionId, header.status);
     } catch {
       // Ignore refresh failures — the header will update on next load.
     }
