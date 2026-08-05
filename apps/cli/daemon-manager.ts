@@ -99,7 +99,7 @@ export async function removePidFile(): Promise<void> {
     if (existsSync(PID_FILE)) {
       await fs.unlink(PID_FILE);
     }
-  } catch {
+  } catch (error) {
     console.warn(`Failed to remove PID file: ${error}`);
   }
 }

@@ -23,19 +23,35 @@ runRoutes.post("/sessions/:id/run", async (c) => {
   }
 
   return streamSSE(c, async (sseStream) => {
+    // The agent run must outlive the desktop/mobile client. If a window is
+    // closed while a tool is running, writing to the disconnected SSE stream
+    // can fail; that must not cancel the server-side run before its completed
+    // tool results are persisted.
+    let clientConnected = true;
     try {
       await runService.runAgentStream(sessionId, body, async (event) => {
-        await sseStream.writeSSE({
-          event: event.type,
-          data: JSON.stringify(event),
-        });
+        if (!clientConnected) return;
+        try {
+          await sseStream.writeSSE({
+            event: event.type,
+            data: JSON.stringify(event),
+          });
+        } catch {
+          clientConnected = false;
+        }
       });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      await sseStream.writeSSE({
-        event: "error",
-        data: JSON.stringify({ type: "error", error: { message: errorMsg } }),
-      });
+      if (clientConnected) {
+        try {
+          await sseStream.writeSSE({
+            event: "error",
+            data: JSON.stringify({ type: "error", error: { message: errorMsg } }),
+          });
+        } catch {
+          // The client may have disconnected while the run was failing.
+        }
+      }
     }
   });
 });
