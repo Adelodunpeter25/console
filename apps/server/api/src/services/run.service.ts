@@ -19,8 +19,12 @@ import { repairToolCallHistory } from "../../../agent/src/utils/tool-history.js"
 
 export class RunService {
   private sessionStorage = new SqliteSessionStorage();
-  private activeRuns = new Map<string, AbortController>();
+  private static activeRuns = new Map<string, AbortController>();
   private todoLists = new Map<string, TodoItem[]>();
+
+  public static isRunActive(sessionId: string): boolean {
+    return RunService.activeRuns.has(sessionId);
+  }
   /** How long a pending question or permission decision may sit unresolved
       before it is rejected. Prevents the agent loop from hanging forever if
       the client disconnects or never answers. */
@@ -45,16 +49,16 @@ export class RunService {
     dto: RunPromptDto,
     onEvent: (event: AgentSessionEvent) => Promise<void> | void,
   ): Promise<void> {
-    if (this.activeRuns.has(sessionId)) {
+    if (RunService.activeRuns.has(sessionId)) {
       throw new Error(`Session '${sessionId}' already has an active run.`);
     }
 
     const abortController = new AbortController();
-    this.activeRuns.set(sessionId, abortController);
+    RunService.activeRuns.set(sessionId, abortController);
     try {
       await this.runAgentStreamInternal(sessionId, dto, onEvent, abortController);
     } finally {
-      this.activeRuns.delete(sessionId);
+      RunService.activeRuns.delete(sessionId);
     }
   }
 
@@ -330,7 +334,7 @@ export class RunService {
    * Abort an active run for a session.
    */
   abortRun(sessionId: string): boolean {
-    const controller = this.activeRuns.get(sessionId);
+    const controller = RunService.activeRuns.get(sessionId);
     if (!controller) return false;
 
     controller.abort();

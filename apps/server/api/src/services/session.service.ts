@@ -4,6 +4,8 @@
 import { SqliteSessionStorage } from "../../../agent/src/session/storage.js";
 import type { SessionHeader } from "../../../agent/src/types/index.js";
 import type { CreateSessionDto, SessionDetailResponse, UpdateSessionDto } from "../types/index.js";
+import { RunService } from "./run.service.js";
+import { repairToolCallHistory } from "../../../agent/src/utils/tool-history.js";
 
 export class SessionService {
   private storage = new SqliteSessionStorage();
@@ -36,7 +38,23 @@ export class SessionService {
   }
 
   getSession(sessionId: string): SessionDetailResponse | null {
-    return this.storage.loadSession(sessionId);
+    const session = this.storage.loadSession(sessionId);
+    if (!session) return null;
+
+    if (!RunService.isRunActive(sessionId)) {
+      const repaired = repairToolCallHistory(session.messages);
+      if (repaired.repaired) {
+        session.messages = repaired.messages;
+        this.storage.replaceMessages(sessionId, session.messages);
+      }
+
+      if (session.header.status === "working" || session.header.status === "needs_attention") {
+        this.storage.updateSessionStatus(sessionId, "done");
+        session.header.status = "done";
+      }
+    }
+
+    return session;
   }
 
   updateSession(sessionId: string, dto: UpdateSessionDto): SessionHeader | null {
