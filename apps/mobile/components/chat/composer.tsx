@@ -35,7 +35,7 @@ export function Composer({ value, onChangeText, onSend, onStop, running }: Compo
             !value.trim() ? "opacity-30" : ""
           }`}
           onPress={onSend}
-          disabled={!value.trim()}
+          disabled={!value.trim() || Boolean(running)}
         >
           {running ? (
             <ActivityIndicator size="small" color="#000000" />

@@ -6,6 +6,7 @@ interface SearchBarProps {
   value: string;
   onChangeText: (text: string) => void;
   onComposePress?: () => void;
+  disabled?: boolean;
   placeholder?: string;
 }
 
@@ -13,6 +14,7 @@ export function SearchBar({
   value,
   onChangeText,
   onComposePress,
+  disabled = false,
   placeholder = "Search threads",
 }: SearchBarProps) {
   return (
@@ -30,8 +32,9 @@ export function SearchBar({
         />
       </View>
       <TouchableOpacity
-        className="w-12 h-12 rounded-full bg-foreground items-center justify-center"
+        className={`w-12 h-12 rounded-full bg-foreground items-center justify-center ${disabled ? "opacity-50" : ""}`}
         onPress={onComposePress}
+        disabled={disabled}
         activeOpacity={0.8}
       >
         <Plus size={20} color="#000000" />

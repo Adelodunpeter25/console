@@ -45,6 +45,8 @@ export function ChatScreen() {
           data={stream.messages}
           keyExtractor={(_, i) => i.toString()}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
           renderItem={renderItem}
           ListFooterComponent={

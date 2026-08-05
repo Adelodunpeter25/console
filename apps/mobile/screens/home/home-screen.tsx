@@ -1,8 +1,7 @@
 import React, { useMemo, useState } from "react";
-import { Text, View, TouchableOpacity } from "react-native";
-import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import { Alert, Text, View, TouchableOpacity, ScrollView } from "react-native";
 import { GitBranch } from "lucide-react-native";
-import { useProjects, useSessions } from "@console/api";
+import { useCreateSession, useProjects, useSessions } from "@console/api";
 import { SessionHeader } from "@console/types";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { SearchBar } from "../../components/common/search-bar";
@@ -41,6 +40,7 @@ function shortRelativeTime(dateInput?: number): string {
 export function HomeScreen() {
   const { data: projects = [] } = useProjects();
   const { data: sessions = [] } = useSessions();
+  const createSession = useCreateSession();
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
   const [searchQuery, setSearchQuery] = useState("");
@@ -79,6 +79,26 @@ export function HomeScreen() {
     setActiveTab("chat");
   };
 
+  const composeSession = async () => {
+    if (createSession.isPending) return;
+
+    // Prefer the first configured project. The server accepts an empty cwd and
+    // falls back to its own working directory when no project exists yet.
+    const project = projects[0];
+    try {
+      const session = await createSession.mutateAsync({
+        cwd: project?.path ?? "",
+        ...(project ? { projectId: project.id } : {}),
+        title: "New Chat",
+      });
+      setSelectedSessionId(session.id);
+      setActiveTab("chat");
+    } catch (error) {
+      console.error("Failed to create session:", error);
+      Alert.alert("Unable to start chat", "Check the backend connection and try again.");
+    }
+  };
+
   return (
     <View className="flex-1 bg-screen">
       <ScreenHeader
@@ -87,7 +107,7 @@ export function HomeScreen() {
         onSettingsPress={() => setActiveTab("settings")}
       />
 
-      <KeyboardAwareScrollView
+      <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
@@ -171,16 +191,14 @@ export function HomeScreen() {
             </View>
           ))
         )}
-      </KeyboardAwareScrollView>
+      </ScrollView>
 
-      {/* Search bar — stays at bottom, keyboard aware via KeyboardAwareScrollView */}
+      {/* Keep the composer outside the list so it stays anchored to the resized window. */}
       <SearchBar
         value={searchQuery}
         onChangeText={setSearchQuery}
-        onComposePress={() => {
-          setSelectedSessionId(null);
-          setActiveTab("chat");
-        }}
+        onComposePress={composeSession}
+        disabled={createSession.isPending}
       />
     </View>
   );
