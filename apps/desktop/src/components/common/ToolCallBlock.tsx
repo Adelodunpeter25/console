@@ -1,21 +1,5 @@
 import React from "react";
-import {
-  Wrench,
-  AlertCircle,
-  CheckCircle2,
-  Loader2,
-  FileText,
-  FilePlus,
-  Files,
-  SquarePen,
-  Terminal,
-  Search,
-  FolderTree,
-  Globe,
-  HelpCircle,
-  ListTodo,
-  Sparkles,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import type { ToolCall, ToolResult } from "@console/types";
 import { formatUnknown } from "../../utils/format";
 import { ToolResultContent } from "./ToolResultContent";
@@ -29,24 +13,24 @@ interface ToolCallBlockProps {
 /* Tool metadata: human-readable label + icon per tool name            */
 /* ------------------------------------------------------------------ */
 
-const TOOL_META: Record<string, { label: string; icon: React.ElementType }> = {
-  readFile: { label: "Read File", icon: FileText },
-  writeFile: { label: "Write File", icon: FilePlus },
-  batchWrite: { label: "Batch Write", icon: Files },
-  editFile: { label: "Edit File", icon: SquarePen },
-  bash: { label: "Run Command", icon: Terminal },
-  grep: { label: "Search Code", icon: Search },
-  glob: { label: "Find Files", icon: FolderTree },
-  listDir: { label: "List Directory", icon: FolderTree },
-  fetch: { label: "Fetch URL", icon: Globe },
-  webSearch: { label: "Web Search", icon: Globe },
-  subagent: { label: "Subagent", icon: Sparkles },
-  ask: { label: "Ask Question", icon: HelpCircle },
-  todo: { label: "Todo", icon: ListTodo },
+const TOOL_META: Record<string, { label: string }> = {
+  readFile: { label: "Read File" },
+  writeFile: { label: "Write File" },
+  batchWrite: { label: "Batch Write" },
+  editFile: { label: "Edit File" },
+  bash: { label: "Run Command" },
+  grep: { label: "Search Code" },
+  glob: { label: "Find Files" },
+  listDir: { label: "List Directory" },
+  fetch: { label: "Fetch URL" },
+  webSearch: { label: "Web Search" },
+  subagent: { label: "Subagent" },
+  ask: { label: "Ask Question" },
+  todo: { label: "Todo" },
 };
 
 function getToolMeta(name: string) {
-  return TOOL_META[name] ?? { label: name, icon: Wrench };
+  return TOOL_META[name] ?? { label: name };
 }
 
 /** Extract a short summary string from the tool arguments (e.g. file path). */
@@ -87,17 +71,14 @@ function argSummary(call: ToolCall): string | null {
 interface ToolCallRowProps {
   call: ToolCall;
   result?: ToolResult;
-  defaultOpen?: boolean;
 }
 
 const ToolCallRow = React.memo(function ToolCallRow({
   call,
   result,
-  defaultOpen = false,
 }: ToolCallRowProps) {
-  const [open, setOpen] = React.useState(defaultOpen);
+  const [open, setOpen] = React.useState(false);
   const meta = getToolMeta(call.name);
-  const Icon = meta.icon;
   const summary = argSummary(call);
   const hasResult = !!result;
   const isError = result?.isError;
@@ -108,9 +89,8 @@ const ToolCallRow = React.memo(function ToolCallRow({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 bg-white/[0.02] px-3 py-2 text-left transition-colors hover:bg-white/[0.06]"
+        className="flex w-full items-center gap-2 bg-white/[0.02] px-3 py-1.5 text-left transition-colors hover:bg-white/[0.06]"
       >
-        <Icon size={14} className="text-blue-400 shrink-0" />
         <span className="text-xs font-medium text-foreground-secondary shrink-0">
           {meta.label}
         </span>
@@ -131,13 +111,13 @@ const ToolCallRow = React.memo(function ToolCallRow({
       </button>
 
       {open && (
-        <div className="px-3 pb-2.5 space-y-1.5">
+        <div className="px-3 pb-2 space-y-1">
           {call.arguments != null && (
             <div>
               <p className="text-[10px] uppercase tracking-wide text-foreground-muted mb-1">
                 Arguments
               </p>
-              <pre className="text-xs font-mono text-foreground-secondary whitespace-pre-wrap break-all bg-black/30 rounded p-2 max-h-48 overflow-y-auto selectable-text">
+              <pre className="text-xs font-mono text-foreground-secondary whitespace-pre-wrap break-all bg-black/30 rounded p-1.5 max-h-32 overflow-y-auto selectable-text">
                 {formatUnknown(call.arguments)}
               </pre>
             </div>
@@ -172,20 +152,74 @@ const ToolCallRow = React.memo(function ToolCallRow({
 /* ------------------------------------------------------------------ */
 
 export function ToolCallBlock({ calls, results }: ToolCallBlockProps) {
-  // Tool calls are collapsed by default — the user clicks to expand.
+  const groups = React.useMemo(() => {
+    const grouped = new Map<string, ToolCall[]>();
+    for (const call of calls) {
+      const group = grouped.get(call.name) ?? [];
+      group.push(call);
+      grouped.set(call.name, group);
+    }
+    return [...grouped.entries()].map(([name, groupCalls]) => ({ name, calls: groupCalls }));
+  }, [calls]);
+
   return (
-    <div className="overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.015]">
-      {calls.map((call, i) => {
-        const result = results?.find((r) => r.toolCallId === call.id);
-        return (
-          <ToolCallRow
-            key={call.id ?? i}
-            call={call}
-            result={result}
-            defaultOpen={false}
-          />
-        );
-      })}
+    <div className="overflow-hidden rounded-md border border-white/[0.08] bg-white/[0.015]">
+      {groups.map((group) => (
+        <ToolCallGroup key={group.name} name={group.name} calls={group.calls} results={results} />
+      ))}
+    </div>
+  );
+}
+
+function ToolCallGroup({
+  name,
+  calls,
+  results,
+}: {
+  name: string;
+  calls: ToolCall[];
+  results?: ToolResult[];
+}) {
+  const [open, setOpen] = React.useState(false);
+  const groupResults = calls
+    .map((call) => results?.find((result) => result.toolCallId === call.id))
+    .filter((result): result is ToolResult => Boolean(result));
+  const hasError = groupResults.some((result) => result.isError);
+  const complete = groupResults.length === calls.length;
+  const meta = getToolMeta(name);
+  const summary = calls.length === 1 ? argSummary(calls[0]!) : `${calls.length} calls`;
+
+  return (
+    <div className="border-b border-border last:border-b-0">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center gap-2 bg-white/[0.02] px-3 py-1.5 text-left transition-colors hover:bg-white/[0.06]"
+      >
+        <span className="text-xs font-medium text-foreground-secondary">{meta.label}</span>
+        {summary && <span className="truncate text-xs font-mono text-foreground-muted">{summary}</span>}
+        <span className="ml-auto shrink-0">
+          {hasError ? (
+            <AlertCircle size={12} className="text-danger" />
+          ) : complete ? (
+            <CheckCircle2 size={12} className="text-success" />
+          ) : (
+            <Loader2 size={12} className="text-foreground-muted animate-spin" />
+          )}
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-white/[0.06]">
+          {calls.map((call) => (
+            <ToolCallRow
+              key={call.id}
+              call={call}
+              result={results?.find((result) => result.toolCallId === call.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -116,6 +116,9 @@ export function ChatScreen() {
         }
         sessionId={selectedSessionId}
         attachments={attachments}
+        messageHistory={messages
+          .filter((message) => message.role === "user")
+          .map((message) => message.content)}
         onPickImages={() => selectedSessionId && pickImages(selectedSessionId)}
         onAddAttachments={(items) => selectedSessionId && addAttachments(selectedSessionId, items)}
         onRemoveAttachment={(index) => selectedSessionId && removeAttachment(selectedSessionId, index)}

@@ -100,22 +100,21 @@ function StatusLine({
 /* ------------------------------------------------------------------ */
 
 function ReadFileResult({ text, filePath }: { text: string; filePath?: string }) {
-  // Parse header: "File: <path>\nShowing: <range>\nSize: <bytes>\n\n<code>"
+  // Parse the normal header, but still highlight raw content when an older
+  // backend/persisted result omitted or changed the metadata lines.
   const lines = text.split("\n");
   const headerEnd = lines.findIndex((l, i) => i > 0 && l === "");
-  if (headerEnd === -1 || headerEnd > 5) {
-    // Doesn't match expected format — fall back to raw
-    return <RawResult text={text} />;
-  }
-
-  const headerLines = lines.slice(0, headerEnd);
-  const codeLines = lines.slice(headerEnd + 1);
+  const hasHeader = headerEnd > 0 && headerEnd <= 6 && lines[0]?.startsWith("File:");
+  const headerLines = hasHeader ? lines.slice(0, headerEnd) : [];
+  const codeLines = hasHeader ? lines.slice(headerEnd + 1) : lines;
 
   // Use the metadata only to determine the language; successful results show
   // the file contents without repeating the transport/header details.
   const fileMatch = headerLines.find((l) => l.startsWith("File:"));
   const path = fileMatch?.replace(/^File:\s*/, "") ?? filePath ?? "";
   const lang = langFromPath(path);
+
+  if (!lang) return <RawResult text={text} />;
 
   // Build markdown code block for highlighting
   const fence = "```";
