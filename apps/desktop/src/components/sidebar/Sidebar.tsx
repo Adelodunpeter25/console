@@ -71,13 +71,6 @@ export function Sidebar({ width = 288 }: { width?: number }) {
         </button>
       </div>
 
-      {/* Category Header */}
-      <div className="px-4 pt-2 pb-1">
-        <span className="text-[11px] font-bold tracking-wider text-foreground-muted uppercase">
-          CHATS
-        </span>
-      </div>
-
       {/* Session List */}
       <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
         {loading || sessionsLoading ? (

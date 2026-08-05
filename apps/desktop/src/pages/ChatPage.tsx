@@ -20,7 +20,7 @@ const SIDEBAR_DEFAULT = 288;
  * When no session is selected, an empty state is shown.
  */
 export function ChatPage() {
-  const { selectedSessionId } = useAppStore();
+  const { selectedSessionId, sidebarOpen } = useAppStore();
   const { init } = useServerStore();
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [sidebarWidth, setSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
@@ -82,16 +82,18 @@ export function ChatPage() {
     <div className="flex flex-col h-screen w-screen bg-screen overflow-hidden">
       <TitleBar />
       <div className="flex flex-1 overflow-hidden">
-        <ResizablePanel
-          width={sidebarWidth}
-          onWidthChange={setSidebarWidthState}
-          minWidth={SIDEBAR_MIN}
-          maxWidth={SIDEBAR_MAX}
-          onResizeEnd={handleSidebarResizeEnd}
-          handleSide="right"
-        >
-          <Sidebar width={sidebarWidth} />
-        </ResizablePanel>
+        {sidebarOpen && (
+          <ResizablePanel
+            width={sidebarWidth}
+            onWidthChange={setSidebarWidthState}
+            minWidth={SIDEBAR_MIN}
+            maxWidth={SIDEBAR_MAX}
+            onResizeEnd={handleSidebarResizeEnd}
+            handleSide="right"
+          >
+            <Sidebar width={sidebarWidth} />
+          </ResizablePanel>
+        )}
         <div className="flex-1 flex flex-col h-full overflow-hidden">
           {selectedSessionId ? (
             <ChatScreen />
