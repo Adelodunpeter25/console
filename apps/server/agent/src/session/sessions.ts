@@ -329,9 +329,13 @@ export function loadSession(
       .get() as SessionMetaRow | undefined) ?? null;
 
     const messageRows = sessionDb
-      .prepare(`SELECT content FROM messages ORDER BY created_at ASC, rowid ASC`)
-      .all() as Array<{ content: string }>;
-    messages = messageRows.map((r) => JSON.parse(r.content) as AgentMessage);
+      .prepare(`SELECT content, created_at FROM messages ORDER BY created_at ASC, rowid ASC`)
+      .all() as Array<{ content: string; created_at: number }>;
+    messages = messageRows.map((r) => {
+      const msg = JSON.parse(r.content) as AgentMessage;
+      msg.createdAt = r.created_at;
+      return msg;
+    });
   }
 
   // Reconcile: prefer session DB meta, fall back to global index.

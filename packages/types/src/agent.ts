@@ -46,4 +46,6 @@ export interface ToolResultMessage {
   results: import("./tool").ToolResult[];
 }
 
-export type AgentMessage = UserMessage | AssistantMessage | ToolResultMessage;
+export type AgentMessage = (UserMessage | AssistantMessage | ToolResultMessage) & {
+  createdAt?: number;
+};

@@ -77,9 +77,16 @@ export function reconstructRunActivity(messages: AgentMessage[]): RunActivitySta
     }
   }
 
+  const userMessage = messages[latestUserIndex]!;
+  const lastMessage = messages[messages.length - 1]!;
+  let elapsedMs = 0;
+  if (userMessage.createdAt && lastMessage.createdAt && lastMessage.createdAt > userMessage.createdAt) {
+    elapsedMs = lastMessage.createdAt - userMessage.createdAt;
+  }
+
   return {
     startedAt: null,
-    elapsedMs: 0,
+    elapsedMs,
     calls,
     results,
   };

@@ -38,7 +38,7 @@ export function RunActivity({ activity, running }: RunActivityProps) {
         className="flex w-full items-center gap-2 px-1 py-1 text-left text-xs text-foreground-muted hover:text-foreground-secondary"
       >
         {running ? <Loader2 size={13} className="animate-spin" /> : null}
-        <span>{elapsed > 0 ? `Worked for ${formatDuration(elapsed)}` : "Run Activity"}</span>
+        <span>Worked for {formatDuration(elapsed)}</span>
         <ChevronDown size={14} className={expanded ? "" : "rotate-180"} />
       </button>
       {expanded && activity.calls.length > 0 && (
