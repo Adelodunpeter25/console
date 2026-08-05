@@ -1,5 +1,11 @@
 import React from "react";
-import { useAppStore, useChatStore, useProjectStore, useProviderStore } from "../store";
+import {
+  useAppStore,
+  useChatStore,
+  useProjectStore,
+  useProviderStore,
+  useSessionStore,
+} from "../store";
 import { MessageList, Composer, InteractionPanel } from "../components/chat";
 import { basename } from "../utils/format";
 
@@ -15,22 +21,25 @@ export function ChatScreen() {
     running,
     streamingText,
     streamingThinking,
+    liveToolResults,
+    attachments,
+    setInput,
+    sendMessage,
+    abort,
+    loadMessages,
+    pickImages,
+    removeAttachment,
+  } = useChatStore();
+  const {
     sessionModelId,
     sessionProvider,
     sessionCwd,
     approvalMode,
-    liveToolResults,
-    attachments,
-    setInput,
+    loadSession,
     changeModel,
     changeProject,
     setApprovalMode,
-    sendMessage,
-    abort,
-    loadSession,
-    pickImages,
-    removeAttachment,
-  } = useChatStore();
+  } = useSessionStore();
   const { projects, loadProjects } = useProjectStore();
   const { loadProviders, modelsByProvider } = useProviderStore();
 
@@ -49,9 +58,12 @@ export function ChatScreen() {
 
   React.useEffect(() => {
     if (selectedSessionId) {
-      loadSession(selectedSessionId);
+      loadMessages(selectedSessionId, []);
+      loadSession(selectedSessionId).then((detail) => {
+        if (detail) loadMessages(selectedSessionId, detail.messages);
+      });
     }
-  }, [selectedSessionId, loadSession]);
+  }, [selectedSessionId, loadMessages, loadSession]);
 
   // Resolve the selected project: match by the session's working directory
   // first, then fall back to the app-level selection.
@@ -92,7 +104,7 @@ export function ChatScreen() {
         onModelChange={(modelId) =>
           selectedSessionId &&
           resolvedProjectId &&
-          changeModel(selectedSessionId, resolvedProjectId, modelId)
+          changeModel(selectedSessionId, modelId)
         }
         approvalMode={approvalMode}
         onApprovalModeChange={setApprovalMode}

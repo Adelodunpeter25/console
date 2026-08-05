@@ -1,6 +1,7 @@
 export { useAppStore } from "./useAppStore";
 export { useServerStore } from "./useServerStore";
 export { useChatStore } from "./useChatStore";
+export { useSessionStore } from "./useSessionStore";
 export { useProjectStore } from "./useProjectStore";
 export { useAuthStore } from "./useAuthStore";
 export type { ProviderId } from "./useAuthStore";

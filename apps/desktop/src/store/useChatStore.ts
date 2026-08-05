@@ -1,10 +1,11 @@
 import { create } from "zustand";
 import { toast } from "sonner";
-import type { AgentMessage, AgentSessionEvent, AskQuestionRequest, PermissionRequest, ApprovalMode, ToolResult, ProjectInfo, ImageAttachment } from "@console/types";
+import type { AgentMessage, AgentSessionEvent, AskQuestionRequest, PermissionRequest, ToolResult, ImageAttachment } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 import { useProviderStore } from "./useProviderStore";
 import { useProjectStore } from "./useProjectStore";
 import { useAppStore } from "./useAppStore";
+import { useSessionStore } from "./useSessionStore";
 
 /** A pending question from the agent's ask tool, awaiting user input. */
 export interface PendingQuestion {
@@ -22,17 +23,6 @@ interface ChatState {
   running: boolean;
   streamingText: string;
   streamingThinking: string;
-  /** Model ID for the active session (persisted per-session). */
-  sessionModelId: string | null;
-  /** Provider for the active session (persisted per-session). */
-  sessionProvider: string | null;
-  /** Working directory for the active session (persisted per-session). */
-  sessionCwd: string | null;
-  /** Approval mode for the agent (always-ask, accept-edits, plan-mode, full-access). */
-  approvalMode: ApprovalMode;
-  /** The session currently displayed in the chat view. SSE events from
-      other sessions are dropped so they don't contaminate the active view. */
-  activeSessionId: string | null;
   /** Pending ask-question request from the agent, if any. */
   pendingQuestion: PendingQuestion | null;
   /** Pending permission request from the agent, if any. */
@@ -43,21 +33,12 @@ interface ChatState {
   /** Images picked via the native dialog, awaiting send. */
   attachments: ImageAttachment[];
 
-  loadSession: (sessionId: string) => Promise<void>;
+  loadMessages: (sessionId: string, messages: AgentMessage[]) => void;
   setInput: (val: string) => void;
   /** Open the native image picker and append the chosen images. */
   pickImages: () => Promise<void>;
   /** Remove a pending attachment by index. */
   removeAttachment: (index: number) => void;
-  /**
-   * Change the model for the active session. Resolves the provider from the
-   * catalog, updates local state, and persists the change to the backend.
-   */
-  changeModel: (sessionId: string, projectId: string, modelId: string) => void;
-  /** Set the working folder for the active session from a backend project. */
-  changeProject: (sessionId: string, project: ProjectInfo) => void;
-  /** Set the approval mode for agent runs. Persists to backend if a session is active. */
-  setApprovalMode: (mode: ApprovalMode) => void;
   sendMessage: (sessionId: string) => Promise<void>;
   abort: (sessionId: string) => Promise<void>;
   /** Answer a pending question from the agent. */
@@ -66,21 +47,6 @@ interface ChatState {
   approvePermission: (sessionId: string, requestId: string, allow: boolean) => Promise<void>;
   clear: () => void;
   handleEvent: (event: AgentSessionEvent) => void;
-}
-
-/**
- * Resolve the provider for a given model ID by scanning the provider catalog.
- * Falls back to the supplied default if no match is found.
- */
-function resolveProvider(modelId: string, fallback: string | null): string | null {
-  const { providers, modelsByProvider } = useProviderStore.getState();
-  for (const provider of providers) {
-    const models = modelsByProvider[provider.name] ?? [];
-    if (models.some((m) => m.id === modelId)) {
-      return provider.name;
-    }
-  }
-  return fallback;
 }
 
 /** Abort-related error messages that should not be surfaced to the user. */
@@ -107,21 +73,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
   running: false,
   streamingText: "",
   streamingThinking: "",
-  sessionModelId: null,
-  sessionProvider: null,
-  sessionCwd: null,
-  approvalMode: "always-ask",
-  activeSessionId: null,
   pendingQuestion: null,
   pendingPermissions: [],
   liveToolResults: [],
   attachments: [],
 
-  loadSession: async (sessionId: string) => {
-    // Mark this as the active session so SSE events from other sessions
-    // are dropped instead of contaminating the view.
+  loadMessages: (sessionId, messages) => {
+    if (useAppStore.getState().selectedSessionId !== sessionId) return;
     set({
-      activeSessionId: sessionId,
+      messages,
       streamingText: "",
       streamingThinking: "",
       liveToolResults: [],
@@ -129,33 +89,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       pendingPermissions: [],
       attachments: [],
     });
-    try {
-      const detail = await tauriApi.getSession(sessionId);
-      // Guard against a rapid session switch — if the user switched again
-      // while this fetch was in flight, don't overwrite the new session's state.
-      if (get().activeSessionId !== sessionId) return;
-      set({
-        messages: detail.messages,
-        streamingText: "",
-        streamingThinking: "",
-        sessionModelId: detail.header.modelId ?? null,
-        sessionProvider: detail.header.provider ?? null,
-        sessionCwd: detail.header.cwd ?? null,
-        // Restore the persisted approvalMode so the UI reflects what's in the DB.
-        approvalMode: (detail.header.approvalMode as ApprovalMode) ?? "always-ask",
-      });
-      // Sync the server's authoritative status to the sidebar.
-      syncSessionStatus(sessionId, detail.header.status ?? "idle");
-    } catch {
-      set({
-        messages: [],
-        streamingText: "",
-        streamingThinking: "",
-        sessionModelId: null,
-        sessionProvider: null,
-        sessionCwd: null,
-      });
-    }
   },
 
   setInput: (input) => set({ input }),
@@ -181,49 +114,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       attachments: s.attachments.filter((_, i) => i !== index),
     })),
 
-  changeModel: (sessionId, projectId, modelId) => {
-    const provider = resolveProvider(modelId, get().sessionProvider);
-    set({ sessionModelId: modelId, sessionProvider: provider });
-
-    // Persist to the backend so this session remembers its model.
-    tauriApi
-      .updateSession(sessionId, {
-        modelId,
-        provider: provider as "gemini" | "antigravity" | undefined,
-      })
-      .catch(() => {
-        // Silently ignore — local state is already updated.
-      });
-  },
-
-  setApprovalMode: (mode) => {
-    set({ approvalMode: mode });
-    // Persist to the backend so mode survives reloads (best-effort).
-    const activeSessionId = get().activeSessionId;
-    if (activeSessionId) {
-      tauriApi
-        .updateSession(activeSessionId, { approvalMode: mode })
-        .catch(() => {
-          // Silently ignore — local state is already updated.
-        });
-    }
-  },
-
-  changeProject: (sessionId, project) => {
-    set({ sessionCwd: project.path });
-    useAppStore.getState().setSelectedProjectId(project.id);
-
-    // Persist the working folder to the backend so it survives reloads.
-    tauriApi
-      .updateSession(sessionId, { cwd: project.path })
-      .then(() => useProjectStore.getState().refreshSessionHeader(sessionId))
-      .catch(() => {
-        // Silently ignore — local state is already updated.
-      });
-  },
-
   sendMessage: async (sessionId: string) => {
-    const { input, running, sessionModelId, sessionProvider, approvalMode, attachments } = get();
+    const { input, running, attachments } = get();
+    const { sessionModelId, sessionProvider, approvalMode } = useSessionStore.getState();
     const prompt = input.trim();
     if (!prompt || running) return;
 
@@ -282,7 +175,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Subscribe before invoking so early SSE frames aren't dropped.
       unlisten = await tauriApi.listenAgentEvents(sessionId, (event) => {
         // Drop events from a session the user has already navigated away from.
-        if (get().activeSessionId !== sessionId) return;
+        if (useAppStore.getState().selectedSessionId !== sessionId) return;
         if (event.type === "error") {
           if (isAbortError(event.error.message)) {
             hadError = true; // prevent reload, but don't toast or show inline error
@@ -319,15 +212,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (unlisten) unlisten();
       // Only update running/streaming state if this session is still active.
       // If the user switched to another session, don't wipe their view.
-      if (get().activeSessionId === sessionId) {
+      if (useAppStore.getState().selectedSessionId === sessionId) {
         set({ running: false, streamingText: "", streamingThinking: "" });
       }
       // Sync sidebar status based on whether the run succeeded or had an error.
-      // Do NOT call loadSession here — it replaces the entire messages array with
+      // Do NOT reload the session here — it replaces the entire messages array with
       // only DB-persisted data, which permanently wipes any in-memory error bubbles
       // that appeared before this run. All messages are already correct in memory
       // via handleEvent (modelStreamEnd, toolExecutionEnd, etc.).
-      if (get().activeSessionId === sessionId) {
+      if (useAppStore.getState().selectedSessionId === sessionId) {
         syncSessionStatus(sessionId, hadError ? "needs_attention" : "done");
       }
       // Refresh the header so a first-prompt auto-rename of the title shows
@@ -395,11 +288,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       running: false,
       streamingText: "",
       streamingThinking: "",
-      sessionModelId: null,
-      sessionProvider: null,
-      sessionCwd: null,
-      approvalMode: "always-ask",
-      activeSessionId: null,
       pendingQuestion: null,
       pendingPermissions: [],
       liveToolResults: [],
