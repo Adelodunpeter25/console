@@ -5,6 +5,8 @@ export type MessageRole = "user" | "assistant" | "toolResult";
 export interface TextPart {
   type: "text";
   text: string;
+  /** Opaque Gemini thought signature returned with this model part. */
+  thoughtSignature?: string;
 }
 
 export interface ThinkingPart {

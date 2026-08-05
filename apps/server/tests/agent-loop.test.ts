@@ -72,6 +72,7 @@ const dummyTool: AgentTool = {
         id: "call_1",
         name: "dummyCalc",
         argumentsJson: JSON.stringify({ a: 10, b: 20 }),
+        thoughtSignature: "signature-loop",
       };
     } else {
       // Second turn: model receives tool result and outputs text
@@ -104,6 +105,13 @@ const dummyTool: AgentTool = {
   assert.equal(result[1]?.role, "assistant");
   assert.equal(result[2]?.role, "toolResult");
   assert.equal(result[3]?.role, "assistant");
+  if (result[1]?.role === "assistant") {
+    const toolCall = result[1].content.find((part) => part.type === "toolCall");
+    assert.equal(toolCall?.type, "toolCall");
+    if (toolCall?.type === "toolCall") {
+      assert.equal(toolCall.call.thoughtSignature, "signature-loop");
+    }
+  }
   console.log("  ✅ Tool execution turn & loop continuation");
 }
 

@@ -4,7 +4,13 @@
  */
 import assert from "node:assert/strict";
 import type { AgentMessage, AgentTool } from "../agent/src/types/index.js";
-import { convertMessages, convertTools, parseSse } from "../providers/src/shared/index.js";
+import {
+  convertMessages,
+  convertTools,
+  LEGACY_THOUGHT_SIGNATURE,
+  parseSse,
+  streamCore,
+} from "../providers/src/shared/index.js";
 import { z } from "zod";
 
 console.log("Running Provider Wire Converter tests...");
@@ -20,7 +26,12 @@ console.log("Running Provider Wire Converter tests...");
         { type: "text", text: "I will list files." },
         {
           type: "toolCall",
-          call: { id: "call_123", name: "listDir", arguments: { path: "." } },
+          call: {
+            id: "call_123",
+            name: "listDir",
+            arguments: { path: "." },
+            thoughtSignature: "signature-A",
+          },
         },
       ],
       stopReason: "toolUse",
@@ -40,11 +51,35 @@ console.log("Running Provider Wire Converter tests...");
   // Verify function call wire structure
   assert.ok("functionCall" in wireContent[1]!.parts[1]!);
   assert.equal((wireContent[1]!.parts[1] as any).functionCall.name, "listDir");
+  assert.equal((wireContent[1]!.parts[1] as any).thoughtSignature, "signature-A");
 
   // Verify function response wire structure
   assert.ok("functionResponse" in wireContent[2]!.parts[0]!);
   assert.equal((wireContent[2]!.parts[0] as any).functionResponse.id, "call_123");
   console.log("  ✅ convertMessages wire transformation");
+}
+
+// 1b. Legacy function calls receive the documented compatibility sentinel.
+{
+  const wireContent = convertMessages([
+    {
+      role: "assistant",
+      id: "turn-legacy",
+      content: [
+        {
+          type: "toolCall",
+          call: { id: "legacy-call", name: "todo", arguments: {} },
+        },
+      ],
+      stopReason: "toolUse",
+    },
+  ]);
+
+  assert.equal(
+    (wireContent[0]!.parts[0] as any).thoughtSignature,
+    LEGACY_THOUGHT_SIGNATURE,
+  );
+  console.log("  ✅ Legacy thought-signature fallback");
 }
 
 // 2. Tool converter (convertTools)
@@ -91,6 +126,34 @@ console.log("Running Provider Wire Converter tests...");
   assert.equal(parsedChunks[0].response.candidates[0].content.parts[0].text, "Hello");
   assert.equal(parsedChunks[1].response.candidates[0].content.parts[0].text, " World");
   console.log("  ✅ parseSse text/event-stream chunk parser");
+}
+
+// 4. CCA stream preserves signatures on model parts.
+{
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      'data: {"response":{"candidates":[{"content":{"parts":[{"functionCall":{"name":"todo","args":{},"id":"call-1"},"thoughtSignature":"signature-stream"}]}}]}}\n\n',
+      { headers: { "Content-Type": "text/event-stream" } },
+    )) as typeof fetch;
+
+  try {
+    const deltas = [];
+    for await (const delta of streamCore({
+      endpoint: "https://example.test",
+      accessToken: "token",
+      extraHeaders: {},
+      body: {} as any,
+      signal: undefined,
+    })) {
+      deltas.push(delta);
+    }
+    assert.equal(deltas[0]?.type, "toolCall");
+    assert.equal((deltas[0] as any).thoughtSignature, "signature-stream");
+    console.log("  ✅ CCA thought-signature streaming");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 }
 
 console.log("Provider Wire Converter tests passed!\n");

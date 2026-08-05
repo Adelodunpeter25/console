@@ -19,8 +19,11 @@ import type {
   GeminiTextPart,
 } from "../types/index.js";
 
-function makeTextPart(text: string): GeminiTextPart {
-  return { text };
+function makeTextPart(text: string, thoughtSignature?: string): GeminiTextPart {
+  return {
+    text,
+    ...(thoughtSignature ? { thoughtSignature } : {}),
+  };
 }
 
 function makeInlineDataPart(data: string, mimeType: string): GeminiInlineDataPart {
@@ -31,10 +34,17 @@ function makeFunctionCallPart(
   name: string,
   args: Record<string, unknown>,
   id: string,
+  thoughtSignature?: string,
 ): GeminiFunctionCallPart {
   const ref: GeminiFunctionCallRef = { name, args, id };
-  return { functionCall: ref };
+  return {
+    functionCall: ref,
+    ...(thoughtSignature ? { thoughtSignature } : {}),
+  };
 }
+
+/** Used only for legacy histories created before signatures were persisted. */
+export const LEGACY_THOUGHT_SIGNATURE = "skip_thought_signature_validator";
 
 function makeFunctionResponsePart(
   name: string,
@@ -76,12 +86,19 @@ export function convertMessages(messages: AgentMessage[]): GeminiContent[] {
       const parts: GeminiOutgoingPart[] = [];
 
       for (const part of msg.content) {
-        if (part.type === "text" && part.text) {
-          parts.push(makeTextPart(part.text));
+        if (part.type === "text" && (part.text || part.thoughtSignature)) {
+          parts.push(makeTextPart(part.text, part.thoughtSignature));
         } else if (part.type === "toolCall") {
           const args = (part.call.arguments ?? {}) as Record<string, unknown>;
           const normalizedId = normalizeToolCallId(part.call.id);
-          parts.push(makeFunctionCallPart(part.call.name, args, normalizedId));
+          parts.push(
+            makeFunctionCallPart(
+              part.call.name,
+              args,
+              normalizedId,
+              part.call.thoughtSignature ?? LEGACY_THOUGHT_SIGNATURE,
+            ),
+          );
         }
       }
 

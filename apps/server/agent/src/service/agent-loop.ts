@@ -15,6 +15,8 @@ import { compactHistory, shouldCompact, type CompactionOptions } from "../compac
 import { resolveApproval } from "../permissions/approval.js";
 import { extractThinkingFromText } from "./thinking.js";
 import { EventStream } from "./event-stream.js";
+import { normalizeToolOutput } from "../utils/tool-output.js";
+import { parseToolCallArguments } from "../utils/model-turn.js";
 import type {
   AgentMessage,
   AgentSessionEvent,
@@ -31,9 +33,15 @@ import type {
 } from "../types/index.js";
 
 export type LLMDelta =
-  | { type: "text"; text: string }
+  | { type: "text"; text: string; thoughtSignature?: string }
   | { type: "thinking"; text: string }
-  | { type: "toolCall"; id: string; name: string; argumentsJson: string };
+  | {
+      type: "toolCall";
+      id: string;
+      name: string;
+      argumentsJson: string;
+      thoughtSignature?: string;
+    };
 
 export type StreamFn = (params: {
   model: Model;
@@ -79,22 +87,6 @@ interface StreamParams {
   messages: AgentMessage[];
   tools: AgentTool[];
   signal?: AbortSignal;
-}
-
-/**
- * Tool implementations return MCP-style envelopes such as
- * `{ content: [{ type: "text", text: "..." }] }`. Keep that transport
- * envelope out of the session history and UI-facing events.
- */
-function normalizeToolOutput(output: unknown): { content: unknown; isError?: boolean } {
-  if (output && typeof output === "object" && !Array.isArray(output) && "content" in output) {
-    const envelope = output as { content: unknown; isError?: unknown };
-    return {
-      content: envelope.content,
-      ...(envelope.isError === true ? { isError: true } : {}),
-    };
-  }
-  return { content: output };
 }
 
 /**
@@ -223,8 +215,14 @@ async function streamOneTurn(
   emit({ type: "modelStreamStart", turnId });
 
   let textAccumulator = "";
+  const textParts: Array<{ text: string; thoughtSignature?: string }> = [];
   let thinkingAccumulator = "";
-  const toolCallMap = new Map<string, { id: string; name: string; argumentsJson: string }>();
+  const toolCallMap = new Map<string, {
+    id: string;
+    name: string;
+    argumentsJson: string;
+    thoughtSignature?: string;
+  }>();
   const toolCallOrder: string[] = [];
 
   const stream = streamFn(params);
@@ -234,6 +232,10 @@ async function streamOneTurn(
     if (delta.type === "text") {
       textAccumulator += delta.text;
       emit({ type: "modelStreamPart", part: { text: delta.text } });
+      if (delta.thoughtSignature) {
+        textParts.push({ text: textAccumulator, thoughtSignature: delta.thoughtSignature });
+        textAccumulator = "";
+      }
     } else if (delta.type === "thinking") {
       thinkingAccumulator += delta.text;
       emit({ type: "modelStreamPart", part: { thinking: delta.text } });
@@ -241,11 +243,15 @@ async function streamOneTurn(
       const existing = toolCallMap.get(delta.id);
       if (existing) {
         existing.argumentsJson += delta.argumentsJson;
+        if (delta.thoughtSignature) {
+          existing.thoughtSignature = delta.thoughtSignature;
+        }
       } else {
         toolCallMap.set(delta.id, {
           id: delta.id,
           name: delta.name,
           argumentsJson: delta.argumentsJson,
+          thoughtSignature: delta.thoughtSignature,
         });
         toolCallOrder.push(delta.id);
         emit({
@@ -258,13 +264,13 @@ async function streamOneTurn(
 
   const toolCalls: ToolCall[] = toolCallOrder.map((id) => {
     const tc = toolCallMap.get(id)!;
-    let args: unknown;
-    try {
-      args = tc.argumentsJson ? JSON.parse(tc.argumentsJson) : {};
-    } catch {
-      args = {};
-    }
-    return { id: tc.id, name: tc.name, arguments: args };
+    const args = parseToolCallArguments(tc.argumentsJson);
+    return {
+      id: tc.id,
+      name: tc.name,
+      arguments: args,
+      ...(tc.thoughtSignature ? { thoughtSignature: tc.thoughtSignature } : {}),
+    };
   });
 
   const content: AssistantMessage["content"] = [];
@@ -275,10 +281,24 @@ async function streamOneTurn(
   }
 
   // 2. Extract <thinking>...</thinking> tags from text accumulator
-  if (textAccumulator) {
-    const { textParts, thinkingParts } = extractThinkingFromText(textAccumulator);
-    content.push(...thinkingParts);
-    content.push(...textParts);
+  if (textAccumulator) textParts.push({ text: textAccumulator });
+  if (textParts.length > 0) {
+    for (const part of textParts) {
+      const extracted = extractThinkingFromText(part.text);
+      content.push(...extracted.thinkingParts);
+      if (extracted.textParts.length > 0) {
+        const last = extracted.textParts.length - 1;
+        content.push(
+          ...extracted.textParts.map((textPart, index) =>
+            index === last && part.thoughtSignature
+              ? { ...textPart, thoughtSignature: part.thoughtSignature }
+              : textPart,
+          ),
+        );
+      } else if (part.thoughtSignature) {
+        content.push({ type: "text", text: "", thoughtSignature: part.thoughtSignature });
+      }
+    }
   }
 
   // 3. Tool calls

@@ -26,6 +26,8 @@ export interface ToolCall {
   id: string;
   name: string;
   arguments: unknown;
+  /** Opaque Gemini thought signature returned with this function call. */
+  thoughtSignature?: string;
 }
 
 export interface ToolResult {

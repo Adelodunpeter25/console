@@ -87,16 +87,21 @@ export async function* streamCore(options: StreamCoreOptions): AsyncGenerator<LL
     for (const part of candidate.content.parts) {
       if (isThinkingPart(part)) continue;
 
-      if (hasText(part)) {
-        const delta: LLMDelta = { type: "text", text: part.text };
-        yield delta;
-      } else if (hasFunctionCall(part) && part.functionCall !== undefined) {
+      if (hasFunctionCall(part) && part.functionCall !== undefined) {
         const fc = part.functionCall;
         const delta: LLMDelta = {
           type: "toolCall",
           id: fc.id ?? `call-${syntheticCallIndex++}`,
           name: fc.name,
           argumentsJson: JSON.stringify(fc.args),
+          ...(part.thoughtSignature ? { thoughtSignature: part.thoughtSignature } : {}),
+        };
+        yield delta;
+      } else if (hasText(part) || part.thoughtSignature) {
+        const delta: LLMDelta = {
+          type: "text",
+          text: part.text ?? "",
+          ...(part.thoughtSignature ? { thoughtSignature: part.thoughtSignature } : {}),
         };
         yield delta;
       }

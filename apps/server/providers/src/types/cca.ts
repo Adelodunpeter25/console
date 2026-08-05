@@ -15,6 +15,7 @@
 /** A plain text part in a Gemini Content turn */
 export interface GeminiTextPart {
   text: string;
+  thoughtSignature?: string;
 }
 
 /** Inline (base64) media part for multimodal input. */
@@ -35,6 +36,7 @@ export interface GeminiFunctionCallRef {
 /** A function call part in a model (assistant) turn */
 export interface GeminiFunctionCallPart {
   functionCall: GeminiFunctionCallRef;
+  thoughtSignature?: string;
 }
 
 /** The response payload nested inside a functionResponse part */

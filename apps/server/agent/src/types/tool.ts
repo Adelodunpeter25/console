@@ -32,6 +32,8 @@ export interface ToolCall {
    * The name of the tool to be executed (e.g., "readFile", "searchWeb").
    */
   name: string;
+  /** Opaque Gemini thought signature returned with this function call. */
+  thoughtSignature?: string;
   /**
    * The arguments for the tool, as provided by the model.
    * This is a raw object that needs to be parsed by the tool's input schema.
