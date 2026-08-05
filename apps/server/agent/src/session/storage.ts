@@ -16,7 +16,7 @@ import DatabaseConstructor, { type Database as DatabaseType } from "better-sqlit
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { AgentMessage, SessionHeader, ProjectInfo } from "../types/index.js";
+import type { AgentMessage, SessionHeader, ProjectInfo, ToolResult } from "../types/index.js";
 import { initGlobalDatabase } from "./schema.js";
 import { getGlobalDbPath, getConsoleStorageDir } from "./apppaths.js";
 import { type StorageState } from "./utils.js";
@@ -105,6 +105,10 @@ export class SqliteSessionStorage {
 
   appendMessages(sessionId: string, messages: AgentMessage[]): void {
     Sessions.appendMessages(this.state, sessionId, messages);
+  }
+
+  upsertToolResult(sessionId: string, persistenceId: string, result: ToolResult): void {
+    Sessions.upsertToolResult(this.state, sessionId, persistenceId, result);
   }
 
   loadSession(sessionId: string): { header: SessionHeader; messages: AgentMessage[] } | null {

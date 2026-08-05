@@ -9,7 +9,7 @@ import DatabaseConstructor, { type Database as DatabaseType } from "better-sqlit
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { AgentMessage, SessionHeader } from "../types/index.js";
+import type { AgentMessage, SessionHeader, ToolResult } from "../types/index.js";
 import { initSessionDatabase } from "./schema.js";
 import { truncateForPersistence, type SessionIndexRow, type SessionMetaRow, type StorageState } from "./utils.js";
 
@@ -211,6 +211,51 @@ export function appendMessages(
   tx();
 
   bumpSessionUpdated(state.globalDb, sessionId, now, inserted);
+}
+
+/**
+ * Incrementally persist a tool result into one stable tool-result message for
+ * the active run. Replayed events are replaced by toolCallId, so persistence
+ * remains idempotent across reconnects and retries.
+ */
+export function upsertToolResult(
+  state: StorageState,
+  sessionId: string,
+  persistenceId: string,
+  result: ToolResult,
+): void {
+  const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
+  if (!projectId) return;
+
+  const now = Date.now();
+  const sessionDb = getSessionDb(state, sessionId, projectId);
+  const existing = sessionDb
+    .prepare("SELECT content FROM messages WHERE id = ?")
+    .get(persistenceId) as { content: string } | undefined;
+
+  const message: Extract<AgentMessage, { role: "toolResult" }> = existing
+    ? JSON.parse(existing.content)
+    : { role: "toolResult", results: [] };
+  const resultIndex = message.results.findIndex((item) => item.toolCallId === result.toolCallId);
+  if (resultIndex >= 0) {
+    message.results[resultIndex] = result;
+  } else {
+    message.results.push(result);
+  }
+
+  const safeMessage = truncateForPersistence(message);
+  const content = JSON.stringify(safeMessage);
+  if (existing?.content === content) return;
+
+  sessionDb
+    .prepare(
+      `INSERT INTO messages (id, role, content, created_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET content = excluded.content, created_at = excluded.created_at`,
+    )
+    .run(persistenceId, safeMessage.role, content, now);
+
+  bumpSessionUpdated(state.globalDb, sessionId, now, existing ? 0 : 1);
 }
 
 export function loadSession(

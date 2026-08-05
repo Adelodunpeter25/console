@@ -1,56 +1,22 @@
 import { create } from "zustand";
 import { toast } from "sonner";
-import type { AgentMessage, AgentSessionEvent, AskQuestionRequest, PermissionRequest, ToolResult, ImageAttachment } from "@console/types";
+import type { ImageAttachment } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 import { useProviderStore } from "./useProviderStore";
 import { useProjectStore } from "./useProjectStore";
-import { useAppStore } from "./useAppStore";
 import { useSessionStore } from "./useSessionStore";
 import { useSessionStatusStore } from "./useSessionStatusStore";
+import type { ChatStoreState } from "../types/chat";
+import {
+  createChatSessionState,
+  getChatSessionState,
+  updateChatSession,
+} from "../types/chat-state";
+import { applyChatEvent } from "./chat-events";
 
-/** A pending question from the agent's ask tool, awaiting user input. */
-export interface PendingQuestion {
-  request: AskQuestionRequest;
-}
+type ChatState = ChatStoreState;
 
-/** A pending tool permission request, awaiting user approval. */
-export interface PendingPermission {
-  request: PermissionRequest;
-}
-
-interface ChatState {
-  messages: AgentMessage[];
-  input: string;
-  running: boolean;
-  streamingText: string;
-  streamingThinking: string;
-  /** Pending ask-question request from the agent, if any. */
-  pendingQuestion: PendingQuestion | null;
-  /** Pending permission request from the agent, if any. */
-  pendingPermissions: PendingPermission[];
-  /** Tool results arriving in real-time via `toolExecutionResult` events.
-      Cleared when `toolExecutionEnd` finalises the batch. */
-  liveToolResults: ToolResult[];
-  /** Images picked via the native dialog, awaiting send. */
-  attachments: ImageAttachment[];
-
-  loadMessages: (sessionId: string, messages: AgentMessage[]) => void;
-  setInput: (val: string) => void;
-  /** Open the native image picker and append the chosen images. */
-  pickImages: () => Promise<void>;
-  /** Remove a pending attachment by index. */
-  removeAttachment: (index: number) => void;
-  /** Add image attachments from drag-and-drop or another input source. */
-  addAttachments: (attachments: ImageAttachment[]) => void;
-  sendMessage: (sessionId: string) => Promise<void>;
-  abort: (sessionId: string) => Promise<void>;
-  /** Answer a pending question from the agent. */
-  answerQuestion: (sessionId: string, requestId: string, answer: string | string[]) => Promise<void>;
-  /** Approve or deny a pending permission request. */
-  approvePermission: (sessionId: string, requestId: string, allow: boolean) => Promise<void>;
-  clear: () => void;
-  handleEvent: (event: AgentSessionEvent) => void;
-}
+export { EMPTY_CHAT_SESSION } from "../types/chat-state";
 
 /** Abort-related error messages that should not be surfaced to the user. */
 const ABORT_MESSAGES = [
@@ -71,32 +37,35 @@ function syncSessionStatus(sessionId: string, status: "idle" | "working" | "done
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
-  messages: [],
-  input: "",
-  running: false,
-  streamingText: "",
-  streamingThinking: "",
-  pendingQuestion: null,
-  pendingPermissions: [],
-  liveToolResults: [],
-  attachments: [],
+  sessions: {},
 
   loadMessages: (sessionId, messages) => {
-    if (useAppStore.getState().selectedSessionId !== sessionId) return;
-    set({
-      messages,
-      streamingText: "",
-      streamingThinking: "",
-      liveToolResults: [],
-      pendingQuestion: null,
-      pendingPermissions: [],
-      attachments: [],
-    });
+    set((state) => ({
+      sessions: updateChatSession(state.sessions, sessionId, (current) => {
+        // Never replace an active run with a stale reload while navigating
+        // between sessions. The server remains the source of truth once the
+        // run has settled.
+        if (current.running) return current;
+        return {
+          ...current,
+          messages,
+          streamingText: "",
+          streamingThinking: "",
+          liveToolResults: [],
+          pendingQuestion: null,
+          pendingPermissions: [],
+          attachments: [],
+        };
+      }),
+    }));
   },
 
-  setInput: (input) => set({ input }),
+  setInput: (sessionId, input) =>
+    set((state) => ({
+      sessions: updateChatSession(state.sessions, sessionId, (current) => ({ ...current, input })),
+    })),
 
-  pickImages: async () => {
+  pickImages: async (sessionId) => {
     try {
       const picked = await tauriApi.pickImages();
       if (picked.length > 0) {
@@ -104,7 +73,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
           data: p.data,
           mimeType: p.mimeType,
         }));
-        set((s) => ({ attachments: [...s.attachments, ...attachments] }));
+        set((state) => ({
+          sessions: updateChatSession(state.sessions, sessionId, (current) => ({
+            ...current,
+            attachments: [...current.attachments, ...attachments],
+          })),
+        }));
       }
     } catch (err) {
       toast.error("Failed to pick images.");
@@ -112,18 +86,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  removeAttachment: (index) =>
-    set((s) => ({
-      attachments: s.attachments.filter((_, i) => i !== index),
+  removeAttachment: (sessionId, index) =>
+    set((state) => ({
+      sessions: updateChatSession(state.sessions, sessionId, (current) => ({
+        ...current,
+        attachments: current.attachments.filter((_, i) => i !== index),
+      })),
     })),
 
-  addAttachments: (attachments) => {
+  addAttachments: (sessionId, attachments) => {
     if (attachments.length === 0) return;
-    set((s) => ({ attachments: [...s.attachments, ...attachments] }));
+    set((state) => ({
+      sessions: updateChatSession(state.sessions, sessionId, (current) => ({
+        ...current,
+        attachments: [...current.attachments, ...attachments],
+      })),
+    }));
   },
 
   sendMessage: async (sessionId: string) => {
-    const { input, running, attachments } = get();
+    const current = getChatSessionState(get().sessions, sessionId);
+    const { input, running, attachments } = current;
     const { sessionModelId, sessionProvider, approvalMode } = useSessionStore.getState();
     const prompt = input.trim();
     if (!prompt || running) return;
@@ -139,25 +122,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     }
 
-    set((s) => ({
-      input: "",
-      running: true,
-      messages: [
-        ...s.messages,
-        {
-          role: "user",
-          content: prompt,
-          ...(attachments.length > 0
-            ? {
-                attachments: attachments.map((a) => ({ type: "image" as const, ...a })),
-              }
-            : {}),
-        },
-      ],
-      streamingText: "",
-      streamingThinking: "",
-      liveToolResults: [],
-      attachments: [],
+    set((state) => ({
+      sessions: updateChatSession(state.sessions, sessionId, (session) => ({
+        ...session,
+        input: "",
+        running: true,
+        messages: [
+          ...session.messages,
+          {
+            role: "user",
+            content: prompt,
+            ...(attachments.length > 0
+              ? {
+                  attachments: attachments.map((a) => ({ type: "image" as const, ...a })),
+                }
+              : {}),
+          },
+        ],
+        streamingText: "",
+        streamingThinking: "",
+        liveToolResults: [],
+        attachments: [],
+      })),
     }));
     syncSessionStatus(sessionId, "working");
 
@@ -166,24 +152,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const markError = (msg: string) => {
       hadError = true;
       toast.error(msg);
-      set((s) => ({
-        messages: [
-          ...s.messages,
-          {
-            role: "assistant",
-            content: [{ type: "text", text: `Error: ${msg}` }],
-          },
-        ],
-        streamingText: "",
-        streamingThinking: "",
+      set((state) => ({
+        sessions: updateChatSession(state.sessions, sessionId, (session) => ({
+          ...session,
+          messages: [
+            ...session.messages,
+            {
+              role: "assistant",
+              content: [{ type: "text", text: `Error: ${msg}` }],
+            },
+          ],
+          streamingText: "",
+          streamingThinking: "",
+        })),
       }));
     };
 
     try {
       // Subscribe before invoking so early SSE frames aren't dropped.
       unlisten = await tauriApi.listenAgentEvents(sessionId, (event) => {
-        // Drop events from a session the user has already navigated away from.
-        if (useAppStore.getState().selectedSessionId !== sessionId) return;
         if (event.type === "error") {
           if (isAbortError(event.error.message)) {
             hadError = true; // prevent reload, but don't toast or show inline error
@@ -196,7 +183,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (event.type === "askQuestion" || event.type === "permissionRequest") {
           syncSessionStatus(sessionId, "needs_attention");
         }
-        get().handleEvent(event);
+        get().handleEvent(sessionId, event);
       });
       await tauriApi.runAgent(
         sessionId,
@@ -218,19 +205,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     } finally {
       if (unlisten) unlisten();
-      // Only update running/streaming state if this session is still active.
-      // If the user switched to another session, don't wipe their view.
-      if (useAppStore.getState().selectedSessionId === sessionId) {
-        set({ running: false, streamingText: "", streamingThinking: "" });
-      }
+      set((state) => ({
+        sessions: updateChatSession(state.sessions, sessionId, (session) => ({
+          ...session,
+          running: false,
+          streamingText: "",
+          streamingThinking: "",
+        })),
+      }));
       // Sync sidebar status based on whether the run succeeded or had an error.
       // Do NOT reload the session here — it replaces the entire messages array with
       // only DB-persisted data, which permanently wipes any in-memory error bubbles
       // that appeared before this run. All messages are already correct in memory
       // via handleEvent (modelStreamEnd, toolExecutionEnd, etc.).
-      if (useAppStore.getState().selectedSessionId === sessionId) {
-        syncSessionStatus(sessionId, hadError ? "needs_attention" : "done");
-      }
+      syncSessionStatus(sessionId, hadError ? "needs_attention" : "done");
       // Refresh the header so a first-prompt auto-rename of the title shows
       // up in the sidebar (the server renames it in the DB when the run starts).
       useProjectStore.getState().refreshSessionHeader(sessionId);
@@ -243,13 +231,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } catch {
       // ignore
     }
-    set({
-      running: false,
-      streamingText: "",
-      streamingThinking: "",
-      pendingQuestion: null,
-      pendingPermissions: [],
-    });
+    set((state) => ({
+      sessions: updateChatSession(state.sessions, sessionId, (session) => ({
+        ...session,
+        running: false,
+        streamingText: "",
+        streamingThinking: "",
+        pendingQuestion: null,
+        pendingPermissions: [],
+      })),
+    }));
     syncSessionStatus(sessionId, "done");
   },
 
@@ -263,10 +254,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // The server consumes each pending request exactly once. Whether the
       // answer was delivered or not, clear it from the UI so the panel can't
       // get stuck on an already-consumed (or failed) request.
-      set((s) => ({
-        pendingQuestion: s.pendingQuestion?.request.requestId === requestId ? null : s.pendingQuestion,
+      set((state) => ({
+        sessions: updateChatSession(state.sessions, sessionId, (session) => ({
+          ...session,
+          pendingQuestion:
+            session.pendingQuestion?.request.requestId === requestId
+              ? null
+              : session.pendingQuestion,
+        })),
       }));
-      syncSessionStatus(sessionId, get().pendingQuestion ? "needs_attention" : "working");
+      syncSessionStatus(
+        sessionId,
+        getChatSessionState(get().sessions, sessionId).pendingQuestion
+          ? "needs_attention"
+          : "working",
+      );
     }
   },
 
@@ -280,126 +282,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // The server consumes each pending request exactly once. Whether the
       // decision was delivered or not, remove it from the UI so a failed or
       // already-consumed request can't wedge the permission panel.
-      set((s) => ({
-        pendingPermissions: s.pendingPermissions.filter(
-          (p) => p.request.requestId !== requestId,
-        ),
+      set((state) => ({
+        sessions: updateChatSession(state.sessions, sessionId, (session) => ({
+          ...session,
+          pendingPermissions: session.pendingPermissions.filter(
+            (p) => p.request.requestId !== requestId,
+          ),
+        })),
       }));
-      syncSessionStatus(sessionId, get().pendingPermissions.length > 0 ? "needs_attention" : "working");
+      syncSessionStatus(
+        sessionId,
+        getChatSessionState(get().sessions, sessionId).pendingPermissions.length > 0
+          ? "needs_attention"
+          : "working",
+      );
     }
   },
 
-  clear: () =>
-    set({
-      messages: [],
-      input: "",
-      running: false,
-      streamingText: "",
-      streamingThinking: "",
-      pendingQuestion: null,
-      pendingPermissions: [],
-      liveToolResults: [],
-      attachments: [],
-    }),
+  clear: (sessionId) =>
+    set((state) => ({
+      sessions: updateChatSession(state.sessions, sessionId, () => createChatSessionState()),
+    })),
 
-  handleEvent: (event: AgentSessionEvent) => {
-    switch (event.type) {
-      case "modelStreamPart": {
-        const text = event.part?.text;
-        const thinking = event.part?.thinking;
-        if (text || thinking) {
-          set((s) => ({
-            streamingText: text ? s.streamingText + text : s.streamingText,
-            streamingThinking: thinking ? s.streamingThinking + thinking : s.streamingThinking,
-          }));
-        }
-        break;
-      }
-      case "modelStreamEnd":
-        if (event.turn) {
-          set((s) => ({
-            messages: [...s.messages, event.turn],
-            streamingText: "",
-            streamingThinking: "",
-          }));
-        } else {
-          // Commit any buffered stream text if the turn payload is missing.
-          const { streamingText, streamingThinking } = get();
-          if (streamingText || streamingThinking) {
-            set((s) => ({
-              messages: [
-                ...s.messages,
-                {
-                  role: "assistant",
-                  content: [
-                    ...(streamingThinking
-                      ? [{ type: "thinking" as const, text: streamingThinking }]
-                      : []),
-                    ...(streamingText ? [{ type: "text" as const, text: streamingText }] : []),
-                  ],
-                },
-              ],
-              streamingText: "",
-              streamingThinking: "",
-            }));
-          }
-        }
-        break;
-      case "toolExecutionResult":
-        set((s) => ({
-          liveToolResults: [...s.liveToolResults, event.result],
-        }));
-        break;
-      case "toolExecutionEnd":
-        set((s) => {
-          // Some backends emit the completion event without repeating every
-          // result. Preserve the results already received live so completed
-          // tool rows do not regress to a spinner on the next render.
-          const results = [...event.results];
-          for (const live of s.liveToolResults) {
-            if (!results.some((result) => result.toolCallId === live.toolCallId)) {
-              results.push(live);
-            }
-          }
-          return {
-            messages: [...s.messages, { role: "toolResult", results }],
-            liveToolResults: [],
-          };
-        });
-        break;
-      case "askQuestion":
-        set({ pendingQuestion: { request: event.request } });
-        break;
-      case "permissionRequest":
-        set((s) => ({
-          pendingPermissions: [...s.pendingPermissions, { request: event.request }],
-        }));
-        break;
-      case "error":
-        if (isAbortError(event.error?.message ?? "")) {
-          // User-initiated abort — don't show an inline error bubble.
-          set({ streamingText: "", streamingThinking: "" });
-          break;
-        }
-        set((s) => ({
-          messages: [
-            ...s.messages,
-            {
-              role: "assistant",
-              content: [
-                {
-                  type: "text",
-                  text: `Error: ${event.error?.message ?? "Unknown agent error"}`,
-                },
-              ],
-            },
-          ],
-          streamingText: "",
-          streamingThinking: "",
-        }));
-        break;
-      default:
-        break;
-    }
-  },
+  handleEvent: (sessionId, event) =>
+    set((state) => ({
+      sessions: updateChatSession(state.sessions, sessionId, (session) =>
+        applyChatEvent(session, event),
+      ),
+    })),
 }));

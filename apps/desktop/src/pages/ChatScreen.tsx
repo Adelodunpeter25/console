@@ -8,6 +8,7 @@ import {
 } from "../store";
 import { MessageList, Composer, InteractionPanel } from "../components/chat";
 import { basename } from "../utils/format";
+import { EMPTY_CHAT_SESSION } from "../store/useChatStore";
 
 /**
  * Chat view component — thin orchestrator inside pages/.
@@ -15,6 +16,9 @@ import { basename } from "../utils/format";
  */
 export function ChatScreen() {
   const { selectedSessionId, selectedProjectId } = useAppStore();
+  const chatSession = useChatStore((state) =>
+    selectedSessionId ? state.sessions[selectedSessionId] : undefined,
+  );
   const {
     messages,
     input,
@@ -23,14 +27,9 @@ export function ChatScreen() {
     streamingThinking,
     liveToolResults,
     attachments,
-    setInput,
-    sendMessage,
-    abort,
-    loadMessages,
-    pickImages,
-    addAttachments,
-    removeAttachment,
-  } = useChatStore();
+  } = chatSession ?? EMPTY_CHAT_SESSION;
+  const { setInput, sendMessage, abort, loadMessages, pickImages, addAttachments, removeAttachment } =
+    useChatStore();
   const {
     sessionModelId,
     sessionProvider,
@@ -95,7 +94,7 @@ export function ChatScreen() {
       )}
       <Composer
         value={input}
-        onChange={setInput}
+        onChange={(value) => selectedSessionId && setInput(selectedSessionId, value)}
         onSend={() => selectedSessionId && sendMessage(selectedSessionId)}
         onAbort={() => selectedSessionId && abort(selectedSessionId)}
         running={running}
@@ -117,9 +116,9 @@ export function ChatScreen() {
         }
         sessionId={selectedSessionId}
         attachments={attachments}
-        onPickImages={pickImages}
-        onAddAttachments={addAttachments}
-        onRemoveAttachment={removeAttachment}
+        onPickImages={() => selectedSessionId && pickImages(selectedSessionId)}
+        onAddAttachments={(items) => selectedSessionId && addAttachments(selectedSessionId, items)}
+        onRemoveAttachment={(index) => selectedSessionId && removeAttachment(selectedSessionId, index)}
       />
     </div>
   );

@@ -154,8 +154,10 @@ interface InteractionPanelProps {
  * above the composer. Returns null when nothing is pending.
  */
 export function InteractionPanel({ sessionId }: InteractionPanelProps) {
-  const pendingQuestion = useChatStore((s) => s.pendingQuestion);
-  const pendingPermissions = useChatStore((s) => s.pendingPermissions);
+  const pendingQuestion = useChatStore((s) => s.sessions[sessionId]?.pendingQuestion ?? null);
+  const pendingPermissions = useChatStore(
+    (s) => s.sessions[sessionId]?.pendingPermissions ?? [],
+  );
 
   if (pendingPermissions.length > 0) {
     return (

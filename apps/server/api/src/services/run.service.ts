@@ -13,6 +13,7 @@ import { geminiStreamFn } from "../../../providers/src/gemini/stream-fn.js";
 import type { AgentSessionEvent, ApprovalMode, Model, UserMessage } from "../../../agent/src/types/index.js";
 import type { RunPromptDto } from "../types/index.js";
 import { expandPromptRefs } from "./assist.service.js";
+import { randomUUID } from "node:crypto";
 
 export class RunService {
   private sessionStorage = new SqliteSessionStorage();
@@ -164,6 +165,9 @@ export class RunService {
     agent.loadHistory(session.messages);
 
     this.sessionStorage.updateSessionStatus(sessionId, "working");
+    const runPersistenceId = randomUUID();
+    let toolBatchNumber = 0;
+    let toolResultsPersistenceId: string | null = null;
 
     try {
       const eventStream = agent.run(prompt, abortController.signal, dto.attachments);
@@ -173,6 +177,33 @@ export class RunService {
       let runError: string | null = null;
 
       for await (const event of eventStream) {
+        // Persist completed units as events arrive. This prevents a crash or
+        // disconnect after a tool finishes from losing the result entirely.
+        if (event.type === "toolExecutionStart") {
+          toolResultsPersistenceId = `tool-results:${runPersistenceId}:${toolBatchNumber++}`;
+        }
+        if (event.type === "modelStreamEnd" && event.turn) {
+          this.sessionStorage.appendMessage(sessionId, event.turn);
+        }
+        if (event.type === "toolExecutionResult" && toolResultsPersistenceId) {
+          this.sessionStorage.upsertToolResult(
+            sessionId,
+            toolResultsPersistenceId,
+            event.result,
+          );
+        }
+        if (event.type === "toolExecutionEnd") {
+          for (const result of event.results) {
+            if (!toolResultsPersistenceId) continue;
+            this.sessionStorage.upsertToolResult(
+              sessionId,
+              toolResultsPersistenceId,
+              result,
+            );
+          }
+          toolResultsPersistenceId = null;
+        }
+
         await onEvent(event);
 
         // Mark needs_attention when the agent asks a question or requests permission
@@ -185,17 +216,7 @@ export class RunService {
         }
       }
 
-      // Persist all new messages in one batch so they share a single
-      // created_at timestamp and are ordered by insertion (rowid) — this
-      // preserves the correct conversation order (user → assistant → tool
-      // result → assistant → …) on reload.
-      const updatedMessages = await eventStream.result();
-      const persistedBefore = session.messages.length;
-      const newMessages = updatedMessages
-        .slice(persistedBefore)
-        // The user prompt is already persisted above — skip it to avoid a duplicate row.
-        .filter((m) => !(m.role === "user" && m.content === prompt));
-      this.sessionStorage.appendMessages(sessionId, newMessages);
+      await eventStream.result();
 
       // Persist run failures as an error bubble so they survive reloads.
       if (runError) {

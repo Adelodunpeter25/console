@@ -38,13 +38,42 @@ storage.appendMessage(header.id, userMsg);
 storage.appendMessage(header.id, assistantMsg);
 console.log("  ✅ Append individual messages");
 
+// 2b. Incrementally upsert tool results without duplicating the message row.
+storage.upsertToolResult(header.id, "tool-results:run-1:0", {
+  toolCallId: "call-1",
+  toolName: "readFile",
+  content: "first result",
+});
+storage.upsertToolResult(header.id, "tool-results:run-1:0", {
+  toolCallId: "call-2",
+  toolName: "readFile",
+  content: "second result",
+});
+storage.upsertToolResult(header.id, "tool-results:run-1:0", {
+  toolCallId: "call-1",
+  toolName: "readFile",
+  content: "first result (replayed)",
+});
+
+const withToolResults = storage.loadSession(header.id);
+assert.ok(withToolResults);
+assert.equal(withToolResults.messages.length, 3);
+const toolMessage = withToolResults.messages[2];
+assert.equal(toolMessage?.role, "toolResult");
+if (toolMessage?.role === "toolResult") {
+  assert.equal(toolMessage.results.length, 2);
+  assert.equal(toolMessage.results[0]?.content, "first result (replayed)");
+}
+console.log("  ✅ Incremental tool-result upsert");
+
 // 3. Load session
 const loaded = storage.loadSession(header.id);
 assert.ok(loaded);
 assert.equal(loaded.header.id, header.id);
-assert.equal(loaded.messages.length, 2);
+assert.equal(loaded.messages.length, 3);
 assert.equal(loaded.messages[0]?.role, "user");
 assert.equal(loaded.messages[1]?.role, "assistant");
+assert.equal(loaded.messages[2]?.role, "toolResult");
 console.log("  ✅ Load session history");
 
 // 4. List sessions with cwd filter
