@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { AgentMessage } from "@console/types";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { AgentMessage, ToolCall, ToolResult } from "@console/types";
 import { useAppStore } from "../stores/useAppStore";
 
 export function useChatStream() {
@@ -9,23 +9,46 @@ export function useChatStream() {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [inputVal, setInputVal] = useState("");
   const [running, setRunning] = useState(false);
+  
+  // Real-time streaming states matching desktop page
+  const [streamingText, setStreamingText] = useState("");
+  const [streamingThinking, setStreamingThinking] = useState("");
+  const [activeToolCalls, setActiveToolCalls] = useState<ToolCall[]>([]);
+  const [liveToolResults, setLiveToolResults] = useState<ToolResult[]>([]);
+
+  // Use refs to avoid closure stale values in XMLHttpRequest handlers
+  const streamingTextRef = useRef("");
+  const streamingThinkingRef = useRef("");
+  const activeToolCallsRef = useRef<ToolCall[]>([]);
+  const liveToolResultsRef = useRef<ToolResult[]>([]);
 
   const fetchSessionMessages = useCallback(async () => {
     if (!selectedSessionId || !backendUrl) return;
     try {
       const response = await fetch(`${backendUrl}/api/sessions/${selectedSessionId}`);
       const data = await response.json();
-      if (data && data.messages) {
+      if (data && data.data && data.data.messages) {
+        setMessages(data.data.messages);
+      } else if (data && data.messages) {
         setMessages(data.messages);
       }
-    } catch {
-      // Ignore load errors
+    } catch (e) {
+      console.error("Failed to load session messages:", e);
     }
   }, [backendUrl, selectedSessionId]);
 
   useEffect(() => {
     if (selectedSessionId) {
       fetchSessionMessages();
+      // Reset streaming states
+      setStreamingText("");
+      setStreamingThinking("");
+      setActiveToolCalls([]);
+      setLiveToolResults([]);
+      streamingTextRef.current = "";
+      streamingThinkingRef.current = "";
+      activeToolCallsRef.current = [];
+      liveToolResultsRef.current = [];
     } else {
       setMessages([]);
     }
@@ -40,36 +63,29 @@ export function useChatStream() {
 
     // Optimistically push user message to UI
     setMessages((prev) => [...prev, { role: "user", content: prompt }]);
+    
+    // Reset streaming states before starting
+    setStreamingText("");
+    setStreamingThinking("");
+    setActiveToolCalls([]);
+    setLiveToolResults([]);
+    streamingTextRef.current = "";
+    streamingThinkingRef.current = "";
+    activeToolCallsRef.current = [];
+    liveToolResultsRef.current = [];
+
+    let xhr: XMLHttpRequest | null = null;
 
     try {
-      const res = await fetch(`${backendUrl}/api/sessions/${selectedSessionId}/run`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      });
-
-      if (!res.body) {
-        setRunning(false);
-        fetchSessionMessages();
-        return;
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let accumulatedText = "";
+      let offset = 0;
       let buffer = "";
 
-      // Temporary assistant response placeholder
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: [{ type: "text", text: "" }] },
-      ]);
+      xhr = new XMLHttpRequest();
+      xhr.open("POST", `${backendUrl}/api/sessions/${selectedSessionId}/run`);
+      xhr.setRequestHeader("Content-Type", "application/json");
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
+      const handleChunk = (chunk: string) => {
+        buffer += chunk;
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
 
@@ -77,30 +93,101 @@ export function useChatStream() {
           const trimmed = line.trim();
           if (trimmed.startsWith("data: ")) {
             try {
-              const frame = JSON.parse(trimmed.slice(6));
-              if (frame.type === "modelStreamPart" && frame.part?.text) {
-                accumulatedText += frame.part.text;
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  const lastIndex = updated.length - 1;
-                  if (updated[lastIndex] && updated[lastIndex].role === "assistant") {
-                    updated[lastIndex] = {
-                      role: "assistant",
-                      content: [{ type: "text", text: accumulatedText }],
-                    };
+              const eventData = trimmed.slice(6);
+              const event = JSON.parse(eventData);
+
+              switch (event.type) {
+                case "modelStreamPart": {
+                  const text = event.part?.text;
+                  const thinking = event.part?.thinking;
+                  if (text) {
+                    streamingTextRef.current += text;
+                    setStreamingText(streamingTextRef.current);
                   }
-                  return updated;
-                });
+                  if (thinking) {
+                    streamingThinkingRef.current += thinking;
+                    setStreamingThinking(streamingThinkingRef.current);
+                  }
+                  break;
+                }
+                case "modelStreamEnd": {
+                  const finalMessage: AgentMessage = event.turn || {
+                    role: "assistant",
+                    content: [
+                      ...(streamingThinkingRef.current
+                        ? [{ type: "thinking" as const, text: streamingThinkingRef.current }]
+                        : []),
+                      ...(streamingTextRef.current
+                        ? [{ type: "text" as const, text: streamingTextRef.current }]
+                        : []),
+                    ],
+                  };
+                  setMessages((prev) => [...prev, finalMessage]);
+                  setStreamingText("");
+                  setStreamingThinking("");
+                  streamingTextRef.current = "";
+                  streamingThinkingRef.current = "";
+                  break;
+                }
+                case "toolExecutionStart": {
+                  activeToolCallsRef.current = event.calls;
+                  setActiveToolCalls(event.calls);
+                  setLiveToolResults([]);
+                  liveToolResultsRef.current = [];
+                  break;
+                }
+                case "toolExecutionResult": {
+                  liveToolResultsRef.current.push(event.result);
+                  setLiveToolResults([...liveToolResultsRef.current]);
+                  break;
+                }
+                case "toolExecutionEnd": {
+                  const results = event.results || liveToolResultsRef.current;
+                  setMessages((prev) => [...prev, { role: "toolResult", results }]);
+                  setActiveToolCalls([]);
+                  setLiveToolResults([]);
+                  activeToolCallsRef.current = [];
+                  liveToolResultsRef.current = [];
+                  break;
+                }
+                case "error": {
+                  const msg = event.error?.message || "Unknown run error";
+                  if (!msg.toLowerCase().includes("aborted")) {
+                    setMessages((prev) => [
+                      ...prev,
+                      { role: "assistant", content: [{ type: "text", text: `Error: ${msg}` }] },
+                    ]);
+                  }
+                  break;
+                }
               }
-            } catch {
-              // Ignore frames parse issues
+            } catch (e) {
+              // Ignore JSON parse errors for incomplete lines
             }
           }
         }
-      }
-    } catch {
-      fetchSessionMessages();
-    } finally {
+      };
+
+      xhr.onprogress = () => {
+        if (!xhr) return;
+        const chunk = xhr.responseText.slice(offset);
+        offset = xhr.responseText.length;
+        handleChunk(chunk);
+      };
+
+      xhr.onload = () => {
+        setRunning(false);
+        fetchSessionMessages();
+      };
+
+      xhr.onerror = () => {
+        setRunning(false);
+        fetchSessionMessages();
+      };
+
+      xhr.send(JSON.stringify({ prompt }));
+    } catch (err) {
+      console.error("SSE run error:", err);
       setRunning(false);
       fetchSessionMessages();
     }
@@ -113,5 +200,9 @@ export function useChatStream() {
     running,
     sendMessage,
     refetchMessages: fetchSessionMessages,
+    streamingText,
+    streamingThinking,
+    activeToolCalls,
+    liveToolResults,
   };
 }
