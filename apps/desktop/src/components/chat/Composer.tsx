@@ -11,6 +11,7 @@ import {
 } from "../common";
 import { ComposerAutocomplete } from "./ComposerAutocomplete";
 import { tauriApi } from "../../lib/tauri-api";
+import { useMessageHistory } from "../../utils/useMessageHistory";
 
 interface ComposerProps {
   value: string;
@@ -68,40 +69,12 @@ export function Composer({
   messageHistory = [],
 }: ComposerProps) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
-  const historyIndexRef = React.useRef<number | null>(null);
-  const historyDraftRef = React.useRef("");
   const [previewAttachment, setPreviewAttachment] = React.useState<ImageAttachment | null>(null);
-  const navigateHistory = (
-    direction: -1 | 1,
-    event: React.KeyboardEvent<HTMLTextAreaElement>,
-  ) => {
-    if (messageHistory.length === 0) return;
-    const cursor = event.currentTarget.selectionStart;
-    if (direction < 0 && cursor !== 0) return;
-    if (direction > 0 && cursor !== value.length) return;
-
-    event.preventDefault();
-    if (direction < 0) {
-      if (historyIndexRef.current === null) historyDraftRef.current = value;
-      const next =
-        historyIndexRef.current === null
-          ? messageHistory.length - 1
-          : Math.max(0, historyIndexRef.current - 1);
-      historyIndexRef.current = next;
-      onChange(messageHistory[next] ?? "");
-      return;
-    }
-
-    if (historyIndexRef.current === null) return;
-    const next = historyIndexRef.current + 1;
-    if (next >= messageHistory.length) {
-      historyIndexRef.current = null;
-      onChange(historyDraftRef.current);
-    } else {
-      historyIndexRef.current = next;
-      onChange(messageHistory[next] ?? "");
-    }
-  };
+  const { navigate: navigateHistory, reset: resetHistory } = useMessageHistory({
+    history: messageHistory,
+    value,
+    onChange,
+  });
   const handleDropFiles = async (imageFiles: File[]) => {
     try {
       const droppedAttachments = await Promise.all(
@@ -193,7 +166,7 @@ export function Composer({
               ref={textareaRef}
               value={value}
               onChange={(e) => {
-                historyIndexRef.current = null;
+                resetHistory();
                 onChange(e.target.value);
               }}
               onKeyDown={(e) => {
@@ -207,7 +180,7 @@ export function Composer({
                 }
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  historyIndexRef.current = null;
+                  resetHistory();
                   onSend();
                 }
               }}
