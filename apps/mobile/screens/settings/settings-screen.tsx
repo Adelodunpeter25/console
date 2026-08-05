@@ -120,14 +120,14 @@ export function SettingsScreen() {
         </Text>
         <View className="flex-row gap-2 mb-4">
           {catalog.providers.map((p) => {
-            const active = selectedProvider === p.id;
+            const active = selectedProvider === p.name;
             return (
               <TouchableOpacity
-                key={p.id}
+                key={p.name}
                 className={`flex-1 py-2.5 rounded-full items-center justify-center border ${
                   active ? "bg-foreground border-foreground" : "bg-transparent border-border"
                 }`}
-                onPress={() => setSelectedProvider(p.id as "gemini" | "antigravity")}
+                onPress={() => setSelectedProvider(p.name)}
               >
                 <Text className={`text-sm font-bold ${active ? "text-black" : "text-foreground"}`}>
                   {p.name}
@@ -146,7 +146,7 @@ export function SettingsScreen() {
           <View className="gap-1.5">
             {models.map((m) => (
               <View key={m.id} className="py-2 px-3 rounded-lg bg-card border border-border">
-                <Text className="text-sm text-foreground">{m.name}</Text>
+                <Text className="text-sm text-foreground">{m.id}</Text>
               </View>
             ))}
           </View>
@@ -157,7 +157,7 @@ export function SettingsScreen() {
       <GlassSurface className="mb-4 p-5">
         <Text className="text-base font-semibold text-foreground mb-3">Account</Text>
         {catalog.providers.map((p) => {
-          const provider = p.id as "gemini" | "antigravity";
+          const provider = p.name;
           const loggedIn = auth.isLoggedIn(provider);
           return (
             <View key={provider} className="flex-row items-center justify-between py-2.5 border-b border-border last:border-b-0">
