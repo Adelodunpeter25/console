@@ -63,7 +63,7 @@ export function Sidebar({ width = 288 }: { width?: number }) {
       <div className="px-3 pt-3 pb-2 shrink-0">
         <button
           onClick={handleGlobalNewChat}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.06] text-foreground-secondary hover:bg-white/[0.1] hover:text-foreground transition-colors cursor-pointer"
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-foreground-secondary hover:bg-white/[0.06] hover:text-foreground transition-colors cursor-pointer"
           title="New Chat"
         >
           <SquarePen size={15} />
