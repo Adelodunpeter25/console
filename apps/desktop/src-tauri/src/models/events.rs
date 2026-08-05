@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::agent::AssistantMessage;
-use super::tool::{PermissionRequest, ToolCall, ToolResult};
+use super::tool::{PermissionRequest, TodoItem, ToolCall, ToolResult};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,6 +38,11 @@ pub enum AgentSessionEvent {
     ToolExecutionResult { result: ToolResult },
     #[serde(rename = "toolExecutionEnd")]
     ToolExecutionEnd { results: Vec<ToolResult> },
+    #[serde(rename = "todoUpdate", rename_all = "camelCase")]
+    TodoUpdate {
+        items: Vec<TodoItem>,
+        action: String,
+    },
     #[serde(rename = "compaction", rename_all = "camelCase")]
     Compaction {
         summary: String,

@@ -6,7 +6,7 @@ import {
   useProviderStore,
   useSessionStore,
 } from "../store";
-import { MessageList, Composer, InteractionPanel } from "../components/chat";
+import { MessageList, Composer, InteractionPanel, TodoList } from "../components/chat";
 import { basename } from "../utils/format";
 import { EMPTY_CHAT_SESSION } from "../store/useChatStore";
 
@@ -26,6 +26,7 @@ export function ChatScreen() {
     streamingText,
     streamingThinking,
     liveToolResults,
+    todoItems,
     attachments,
   } = chatSession ?? EMPTY_CHAT_SESSION;
   const { setInput, sendMessage, abort, loadMessages, pickImages, addAttachments, removeAttachment } =
@@ -89,6 +90,13 @@ export function ChatScreen() {
         <div className="px-6 pb-1">
           <div className="max-w-3xl mx-auto">
             <InteractionPanel sessionId={selectedSessionId} />
+          </div>
+        </div>
+      )}
+      {todoItems.length > 0 && (
+        <div className="px-6 pb-2">
+          <div className="max-w-3xl mx-auto">
+            <TodoList items={todoItems} />
           </div>
         </div>
       )}

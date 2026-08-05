@@ -3,11 +3,25 @@
  * Zero network/API calls — 0 credits used.
  */
 import assert from "node:assert/strict";
-import { clearSessionTodoList, todoTool } from "../agent/src/tools/index.js";
+import { clearSessionTodoList, createTodoTool, todoTool } from "../agent/src/tools/index.js";
 
 console.log("Running TODO Tool tests...");
 
 clearSessionTodoList();
+
+// Session controllers must not share state or events.
+{
+  const eventsA: string[] = [];
+  const controllerA = createTodoTool([], (items, action) => {
+    eventsA.push(`${action}:${items.length}`);
+  });
+  const controllerB = createTodoTool();
+  await controllerA.tool.execute(controllerA.tool.inputSchema.parse({ op: "init", tasks: ["A"] }));
+  assert.equal(controllerA.getItems().length, 1);
+  assert.equal(controllerB.getItems().length, 0);
+  assert.deepEqual(eventsA, ["created:1"]);
+  console.log("  ✅ todo session isolation and update event");
+}
 
 // 1. Init tasks
 {

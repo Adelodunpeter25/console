@@ -1,5 +1,6 @@
 import type { AssistantMessage } from "./agent";
 import type { PermissionRequest, ToolCall, ToolResult } from "./tool";
+import type { TodoItem } from "./todo";
 
 export interface AskQuestionRequest {
   requestId: string;
@@ -19,6 +20,7 @@ export type AgentSessionEvent =
   | { type: "askQuestion"; request: AskQuestionRequest }
   | { type: "toolExecutionResult"; result: ToolResult }
   | { type: "toolExecutionEnd"; results: ToolResult[] }
+  | { type: "todoUpdate"; items: TodoItem[]; action: "created" | "updated" }
   | { type: "compaction"; summary: string; originalMessageCount: number }
   | { type: "turnEnd"; turnId: string }
   | { type: "sessionEnd" }

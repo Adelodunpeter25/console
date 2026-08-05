@@ -226,7 +226,7 @@ function ToolCallGroup({
               key={call.id}
               call={call}
               result={results?.find((result) => result.toolCallId === call.id)}
-              defaultOpen
+              defaultOpen={false}
             />
           ))}
         </div>

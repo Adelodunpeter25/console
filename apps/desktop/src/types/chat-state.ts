@@ -11,6 +11,7 @@ export function createChatSessionState(): ChatSessionState {
     pendingPermissions: [],
     liveToolResults: [],
     activeToolCalls: [],
+    todoItems: [],
     attachments: [],
   };
 }

@@ -85,6 +85,8 @@ export function applyChatEvent(
         ...session,
         pendingPermissions: [...session.pendingPermissions, { request: event.request }],
       };
+    case "todoUpdate":
+      return { ...session, todoItems: event.items };
     case "error":
       if (event.error?.message.toLowerCase().includes("aborted")) {
         return { ...session, streamingText: "", streamingThinking: "" };

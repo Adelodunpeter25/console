@@ -5,6 +5,7 @@
 import { Agent } from "../../../agent/src/service/agent.js";
 import { allTools } from "../../../agent/src/tools/index.js";
 import { createAskTool } from "../../../agent/src/tools/ask.js";
+import { createTodoTool, type TodoItem } from "../../../agent/src/tools/todo.js";
 import { SqliteSessionStorage } from "../../../agent/src/session/storage.js";
 import { buildSystemPrompt } from "../../../agent/src/systemprompt/builder.js";
 import { findModelInProvider } from "../../../agent/src/commands/provider-registry.js";
@@ -19,6 +20,7 @@ import { repairToolCallHistory } from "../../../agent/src/utils/tool-history.js"
 export class RunService {
   private sessionStorage = new SqliteSessionStorage();
   private activeRuns = new Map<string, AbortController>();
+  private todoLists = new Map<string, TodoItem[]>();
   /** How long a pending question or permission decision may sit unresolved
       before it is rejected. Prevents the agent loop from hanging forever if
       the client disconnects or never answers. */
@@ -141,7 +143,15 @@ export class RunService {
       });
     });
 
-    const tools = allTools.map((tool) => (tool.name === "ask" ? askTool : tool));
+    const sessionTodo = createTodoTool(this.todoLists.get(sessionId) ?? [], (items, action) => {
+      this.todoLists.set(sessionId, items);
+      return onEvent({ type: "todoUpdate", items, action });
+    });
+    const tools = allTools.map((tool) => {
+      if (tool.name === "ask") return askTool;
+      if (tool.name === "todo") return sessionTodo.tool;
+      return tool;
+    });
 
     const agent = new Agent({
       model,

@@ -6,6 +6,7 @@ import type {
   PermissionRequest,
   ToolCall,
   ToolResult,
+  TodoItem,
 } from "@console/types";
 
 export interface PendingQuestion {
@@ -26,6 +27,7 @@ export interface ChatSessionState {
   pendingPermissions: PendingPermission[];
   liveToolResults: ToolResult[];
   activeToolCalls: ToolCall[];
+  todoItems: TodoItem[];
   attachments: ImageAttachment[];
 }
 

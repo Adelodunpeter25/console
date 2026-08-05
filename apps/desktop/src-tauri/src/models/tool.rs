@@ -64,3 +64,11 @@ pub struct ToolResult {
     pub content: serde_json::Value,
     pub is_error: Option<bool>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TodoItem {
+    pub id: i64,
+    pub content: String,
+    pub status: String,
+}

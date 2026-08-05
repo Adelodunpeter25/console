@@ -1,6 +1,7 @@
 import type { AgentMessage, AssistantMessage } from "./message.js";
 import type { Model } from "./model.js";
 import type { AgentTool, PermissionRequest, ToolCall, ToolResult } from "./tool.js";
+import type { TodoItem } from "../tools/todo.js";
 
 /** Interactive question payload emitted when the model calls the 'ask' tool */
 export interface AskQuestionRequest {
@@ -47,6 +48,7 @@ export type AgentSessionEvent =
   | { type: "askQuestion"; request: AskQuestionRequest }
   | { type: "toolExecutionResult"; result: ToolResult }
   | { type: "toolExecutionEnd"; results: ToolResult[] }
+  | { type: "todoUpdate"; items: TodoItem[]; action: "created" | "updated" }
   | { type: "compaction"; summary: string; originalMessageCount: number }
   | { type: "turnEnd"; turnId: string }
   | { type: "sessionEnd" }

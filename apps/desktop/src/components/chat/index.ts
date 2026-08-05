@@ -12,3 +12,4 @@ export { ScrollToBottom } from "./ScrollToBottom";
 export { Composer } from "./Composer";
 export { ComposerAutocomplete } from "./ComposerAutocomplete";
 export { InteractionPanel } from "./InteractionPanel";
+export { TodoList } from "./TodoList";
