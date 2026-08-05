@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { TitleBar } from "../components/TitleBar";
-import { SettingsSidebar, ConnectionSettings } from "../components/settings";
+import { SettingsSidebar, ConnectionSettings, AccountSettings } from "../components/settings";
 import { ResizablePanel } from "../components/common";
 import { getSidebarWidth, setSidebarWidth } from "../lib/ui-store";
 import type { SettingsSection } from "../components/settings";
@@ -20,7 +20,7 @@ const SIDEBAR_DEFAULT = 288;
  */
 export function SettingsPage() {
   const navigate = useNavigate();
-  const [activeSection, setActiveSection] = React.useState<SettingsSection>("connection");
+  const [activeSection, setActiveSection] = React.useState<SettingsSection>("account");
   const [sidebarWidth, setSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
 
   // Restore persisted sidebar width on mount.
@@ -54,6 +54,7 @@ export function SettingsPage() {
           />
         </ResizablePanel>
         <div className="flex-1 flex flex-col h-full overflow-hidden">
+          {activeSection === "account" && <AccountSettings />}
           {activeSection === "connection" && <ConnectionSettings />}
         </div>
       </div>

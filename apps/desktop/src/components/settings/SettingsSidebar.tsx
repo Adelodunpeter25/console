@@ -1,6 +1,6 @@
-import { ArrowLeft, Wifi } from "lucide-react";
+import { ArrowLeft, User, Wifi } from "lucide-react";
 
-export type SettingsSection = "connection";
+export type SettingsSection = "account" | "connection";
 
 interface SettingsSidebarProps {
   active: SettingsSection;
@@ -14,11 +14,11 @@ interface SettingsSidebarProps {
  * Settings navigation sidebar.
  *
  * Shows a "Back to App" button at the top, followed by a list of settings
- * sections. Currently only "Connection" is available; the structure is
- * ready for more sections (appearance, models, etc.) to be added.
+ * sections. "Account" is first (most fundamental), followed by "Connection".
  */
 export function SettingsSidebar({ active, onSelect, onBack, width }: SettingsSidebarProps) {
   const sections: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
+    { id: "account", label: "Account", icon: <User size={16} /> },
     { id: "connection", label: "Connection", icon: <Wifi size={16} /> },
   ];
 
