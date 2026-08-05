@@ -9,7 +9,7 @@ interface GlassSurfaceProps extends ViewProps {
 export function GlassSurface({ children, className = "", style, ...props }: GlassSurfaceProps) {
   return (
     <View
-      className={`bg-[#121316]/90 border border-white/10 rounded-2xl p-4 shadow-2xl ${className}`}
+      className={`bg-card border border-border rounded-2xl p-4 ${className}`}
       style={style}
       {...props}
     >
