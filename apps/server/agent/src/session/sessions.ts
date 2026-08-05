@@ -234,7 +234,7 @@ export function replaceMessages(
       const messageId =
         (safeMessage as any).id ||
         crypto.createHash("sha256").update(`${index}:${JSON.stringify(safeMessage)}`).digest("hex");
-      insert.run(messageId, safeMessage.role, JSON.stringify(safeMessage), now + index);
+      insert.run(messageId, safeMessage.role, JSON.stringify(safeMessage), (safeMessage as any).createdAt ?? (now + index));
     });
   });
   transaction();
@@ -282,7 +282,7 @@ export function upsertToolResult(
     .prepare(
       `INSERT INTO messages (id, role, content, created_at)
        VALUES (?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET content = excluded.content, created_at = excluded.created_at`,
+       ON CONFLICT(id) DO UPDATE SET content = excluded.content`,
     )
     .run(persistenceId, safeMessage.role, content, now);
 
@@ -329,7 +329,7 @@ export function loadSession(
       .get() as SessionMetaRow | undefined) ?? null;
 
     const messageRows = sessionDb
-      .prepare(`SELECT content, created_at FROM messages ORDER BY created_at ASC, rowid ASC`)
+      .prepare(`SELECT content, created_at FROM messages ORDER BY rowid ASC`)
       .all() as Array<{ content: string; created_at: number }>;
     messages = messageRows.map((r) => {
       const msg = JSON.parse(r.content) as AgentMessage;
