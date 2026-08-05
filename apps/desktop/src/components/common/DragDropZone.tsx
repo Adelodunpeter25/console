@@ -1,0 +1,59 @@
+import React from "react";
+
+interface DragDropZoneProps {
+  children: React.ReactNode;
+  onDropFiles: (files: File[]) => void | Promise<void>;
+  accept?: (file: File) => boolean;
+  className?: string;
+}
+
+/** Reusable drop target with a rounded blue drag-over highlight. */
+export function DragDropZone({
+  children,
+  onDropFiles,
+  accept,
+  className = "",
+}: DragDropZoneProps) {
+  const [isDragging, setIsDragging] = React.useState(false);
+  const dragDepth = React.useRef(0);
+
+  const handleDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    dragDepth.current += 1;
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    dragDepth.current -= 1;
+    if (dragDepth.current <= 0) {
+      dragDepth.current = 0;
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    dragDepth.current = 0;
+    setIsDragging(false);
+    const files = Array.from(event.dataTransfer.files).filter((file) => !accept || accept(file));
+    if (files.length > 0) void onDropFiles(files);
+  };
+
+  return (
+    <div
+      className={`${className} transition-shadow ${
+        isDragging
+          ? "ring-2 ring-blue-500/80 ring-offset-2 ring-offset-screen bg-blue-500/[0.06]"
+          : ""
+      }`}
+      onDragEnter={handleDragEnter}
+      onDragOver={(event) => event.preventDefault()}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {children}
+    </div>
+  );
+}
+

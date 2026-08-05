@@ -2,7 +2,13 @@ import React from "react";
 import { ArrowUp, Square, Paperclip, X } from "lucide-react";
 import { toast } from "sonner";
 import type { ApprovalMode, ImageAttachment, ProjectInfo } from "@console/types";
-import { ImageViewerModal, ModelSelector, ApprovalModeSelector, ProjectSelector } from "../common";
+import {
+  DragDropZone,
+  ImageViewerModal,
+  ModelSelector,
+  ApprovalModeSelector,
+  ProjectSelector,
+} from "../common";
 import { ComposerAutocomplete } from "./ComposerAutocomplete";
 
 interface ComposerProps {
@@ -59,17 +65,7 @@ export function Composer({
 }: ComposerProps) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const [previewAttachment, setPreviewAttachment] = React.useState<ImageAttachment | null>(null);
-  const [isDragging, setIsDragging] = React.useState(false);
-
-  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsDragging(false);
-
-    const imageFiles = Array.from(event.dataTransfer.files).filter((file) =>
-      file.type.startsWith("image/"),
-    );
-    if (imageFiles.length === 0) return;
-
+  const handleDropFiles = async (imageFiles: File[]) => {
     try {
       const droppedAttachments = await Promise.all(
         imageFiles.map(
@@ -115,16 +111,10 @@ export function Composer({
             onPick={onChange}
             textareaRef={textareaRef}
           />
-          <div
-            className={`bg-card border rounded-2xl focus-within:border-border-strong transition-colors ${
-              isDragging ? "border-foreground/50 bg-white/[0.04]" : "border-border"
-            }`}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
+          <DragDropZone
+            className="bg-card border border-border rounded-2xl focus-within:border-border-strong"
+            accept={(file) => file.type.startsWith("image/")}
+            onDropFiles={handleDropFiles}
           >
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-2 px-3 pt-3">
@@ -204,7 +194,7 @@ export function Composer({
                 </button>
               )}
             </div>
-          </div>
+          </DragDropZone>
         </div>
 
         {/* Selector Layer: project, model, approval mode */}
