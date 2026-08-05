@@ -9,3 +9,4 @@ export { ToolResultContent } from "./ToolResultContent";
 export { ThinkingBlock } from "./ThinkingBlock";
 export { EmptyState } from "./EmptyState";
 export { ResizablePanel } from "./ResizablePanel";
+export { ImageViewerModal } from "./ImageViewerModal";

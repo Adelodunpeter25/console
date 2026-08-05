@@ -1,7 +1,7 @@
 import React from "react";
 import { ArrowUp, Square, Paperclip, X } from "lucide-react";
 import type { ApprovalMode, ImageAttachment, ProjectInfo } from "@console/types";
-import { ModelSelector, ApprovalModeSelector, ProjectSelector } from "../common";
+import { ImageViewerModal, ModelSelector, ApprovalModeSelector, ProjectSelector } from "../common";
 import { ComposerAutocomplete } from "./ComposerAutocomplete";
 
 interface ComposerProps {
@@ -55,6 +55,7 @@ export function Composer({
   onRemoveAttachment,
 }: ComposerProps) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const [previewAttachment, setPreviewAttachment] = React.useState<ImageAttachment | null>(null);
 
   // Auto-grow textarea height up to a max.
   React.useEffect(() => {
@@ -65,7 +66,8 @@ export function Composer({
   }, [value]);
 
   return (
-    <div className="px-6 pb-4 pt-2">
+    <>
+      <div className="px-6 pb-4 pt-2">
       <div className="max-w-3xl mx-auto">
         <div className="relative">
           <ComposerAutocomplete
@@ -79,11 +81,18 @@ export function Composer({
               <div className="flex flex-wrap gap-2 px-3 pt-3">
                 {attachments.map((att, i) => (
                   <div key={i} className="relative group">
-                    <img
-                      src={`data:${att.mimeType};base64,${att.data}`}
-                      alt={`attachment ${i + 1}`}
-                      className="h-16 w-16 object-cover rounded-lg border border-border"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => setPreviewAttachment(att)}
+                      className="block h-16 w-16 overflow-hidden rounded-lg border border-border"
+                      title={`Preview attachment ${i + 1}`}
+                    >
+                      <img
+                        src={`data:${att.mimeType};base64,${att.data}`}
+                        alt={`attachment ${i + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+                    </button>
                     <button
                       onClick={() => onRemoveAttachment?.(i)}
                       className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-black/70 border border-border text-foreground-muted hover:text-foreground flex items-center justify-center"
@@ -162,6 +171,14 @@ export function Composer({
         </div>
 
       </div>
-    </div>
+      </div>
+      {previewAttachment && (
+        <ImageViewerModal
+          src={`data:${previewAttachment.mimeType};base64,${previewAttachment.data}`}
+          alt="Attachment preview"
+          onClose={() => setPreviewAttachment(null)}
+        />
+      )}
+    </>
   );
 }
