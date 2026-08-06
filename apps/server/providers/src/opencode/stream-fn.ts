@@ -39,11 +39,18 @@ export const opencodeStreamFn: StreamFn = async function* ({
       yield { type: "text", text: part.text };
     } else if (part.type === "reasoning-delta") {
       yield { type: "thinking", text: part.text };
+    } else if (part.type === "tool-input-start") {
+      yield {
+        type: "toolCall",
+        id: part.id,
+        name: part.toolName,
+        argumentsJson: "",
+      };
     } else if (part.type === "tool-input-delta") {
       yield {
         type: "toolCall",
         id: part.id,
-        name: part.toolName ?? "",
+        name: "",
         argumentsJson: part.delta,
       };
     } else if (part.type === "tool-call") {

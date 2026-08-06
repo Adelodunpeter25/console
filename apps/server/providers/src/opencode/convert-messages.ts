@@ -1,5 +1,5 @@
 /**
- * Converts AgentMessage[] to AI SDK UIMessage[] for the opencode provider.
+ * Converts AgentMessage[] to AI SDK CoreMessage[] for the opencode provider.
  *
  * Mapping:
  *   UserMessage       → role: "user", content (string or parts with images)
@@ -7,10 +7,10 @@
  *   ToolResultMessage → role: "tool", content: [{ type: "tool-result", ... }]
  */
 import type { AgentMessage } from "@console/types";
-import type { UIMessage } from "ai";
+import type { ModelMessage } from "ai";
 
-export function convertOpencodeMessages(messages: AgentMessage[]): UIMessage[] {
-  const out: UIMessage[] = [];
+export function convertOpencodeMessages(messages: AgentMessage[]): ModelMessage[] {
+  const out: ModelMessage[] = [];
 
   for (const msg of messages) {
     if (msg.role === "user") {
@@ -18,7 +18,6 @@ export function convertOpencodeMessages(messages: AgentMessage[]): UIMessage[] {
 
       if (msg.attachments && msg.attachments.length > 0) {
         out.push({
-          id: `user-${out.length}`,
           role: "user",
           content: [
             { type: "text", text: msg.content },
@@ -29,13 +28,13 @@ export function convertOpencodeMessages(messages: AgentMessage[]): UIMessage[] {
           ],
         });
       } else {
-        out.push({ id: `user-${out.length}`, role: "user", content: msg.content });
+        out.push({ role: "user", content: msg.content });
       }
       continue;
     }
 
     if (msg.role === "assistant") {
-      const content: UIMessage["content"] = [];
+      const content: any[] = [];
 
       for (const part of msg.content) {
         if (part.type === "thinking" && part.text) {
@@ -55,27 +54,61 @@ export function convertOpencodeMessages(messages: AgentMessage[]): UIMessage[] {
         }
       }
 
-      out.push({ id: `assistant-${out.length}`, role: "assistant", content });
+      out.push({ role: "assistant", content });
       continue;
     }
 
     if (msg.role === "toolResult") {
       for (const r of msg.results) {
+        const toolName = r.toolName || findToolName(r.toolCallId, messages);
         out.push({
-          id: `tool-${out.length}`,
           role: "tool",
           content: [
             {
               type: "tool-result",
               toolCallId: r.toolCallId,
-              result: r.content,
-              isError: r.isError,
+              toolName,
+              output: getToolResultOutput(r),
             },
           ],
-        });
+        } as any);
       }
     }
   }
 
   return out;
+}
+
+function getToolResultOutput(r: { content: any; isError?: boolean }): any {
+  if (r.isError) {
+    return {
+      type: "error-text",
+      value: typeof r.content === "string" ? r.content : JSON.stringify(r.content),
+    };
+  }
+
+  if (typeof r.content === "string") {
+    return {
+      type: "text",
+      value: r.content,
+    };
+  }
+
+  return {
+    type: "json",
+    value: r.content,
+  };
+}
+
+function findToolName(toolCallId: string, messages: AgentMessage[]): string {
+  for (const msg of messages) {
+    if (msg.role === "assistant") {
+      for (const part of msg.content) {
+        if (part.type === "toolCall" && part.call.id === toolCallId) {
+          return part.call.name;
+        }
+      }
+    }
+  }
+  return "";
 }
