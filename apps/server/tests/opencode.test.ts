@@ -141,11 +141,20 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
     );
     assert.equal(textDeltas.map((d) => (d as { text: string }).text).join(""), "pineapple");
 
-    // SDK accumulates tool-call arguments; the final tool-call part carries the full args.
+    // The agent loop concatenates every emitted toolCall delta per id, so the
+    // start ("" args) + all fragments must parse as a whole.
     assert.ok(toolDeltas.length > 0, "should emit toolCall deltas");
-    const lastTool = toolDeltas[toolDeltas.length - 1]! as { name: string; argumentsJson: string };
-    assert.equal(lastTool.name, "listDir");
-    assert.ok(lastTool.argumentsJson.includes('"path":"."'), `args were ${lastTool.argumentsJson}`);
+    const toolStart = toolDeltas.find((d) => d.name === "listDir") as {
+      id: string;
+      name: string;
+      argumentsJson: string;
+    };
+    assert.ok(toolStart, "should emit a toolCall start with the tool name");
+    const assembled = toolDeltas
+      .filter((d) => (d as { id: string }).id === toolStart.id)
+      .map((d) => (d as { argumentsJson: string }).argumentsJson)
+      .join("");
+    assert.deepEqual(JSON.parse(assembled), { path: "." }, `args were ${assembled}`);
     console.log("  ✅ opencodeStreamFn SDK streaming (thinking/text/toolCall)");
   } finally {
     globalThis.fetch = originalFetch;

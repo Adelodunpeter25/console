@@ -53,14 +53,9 @@ export const opencodeStreamFn: StreamFn = async function* ({
         name: "",
         argumentsJson: part.delta,
       };
-    } else if (part.type === "tool-call") {
-      yield {
-        type: "toolCall",
-        id: part.toolCallId,
-        name: part.toolName,
-        argumentsJson:
-          typeof part.input === "string" ? part.input : JSON.stringify(part.input ?? {}),
-      };
     }
+    // "tool-call" is intentionally ignored: it carries the complete input,
+    // but the agent loop already accumulated it from tool-input-start +
+    // tool-input-delta fragments. Re-yielding it would duplicate the JSON.
   }
 };
