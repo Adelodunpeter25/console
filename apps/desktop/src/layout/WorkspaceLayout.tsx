@@ -28,6 +28,8 @@ function WorkspaceTab({ config }: { config: WorkspaceTabConfig }) {
 
 export function WorkspaceLayout() {
   const model = useWorkspaceStore((state) => state.model);
+  const workspaceRevision = useWorkspaceStore((state) => state.revision);
+  const notifyLayoutChange = useWorkspaceStore((state) => state.notifyLayoutChange);
   const setSelectedProjectId = useAppStore((state) => state.setSelectedProjectId);
   const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
 
@@ -45,6 +47,14 @@ export function WorkspaceLayout() {
     [setSelectedProjectId, setSelectedSessionId],
   );
 
+  const handleModelChange = React.useCallback(
+    (nextModel: typeof model) => {
+      notifyLayoutChange();
+      syncActiveTab(nextModel);
+    },
+    [notifyLayoutChange, syncActiveTab],
+  );
+
   React.useEffect(() => {
     syncActiveTab(model);
   }, [model, syncActiveTab]);
@@ -58,7 +68,13 @@ export function WorkspaceLayout() {
     renderValues.content = <WorkspaceTabItem node={node} />;
   }, []);
 
-  const hasTabs = (model.getActiveTabset()?.getChildren().length ?? 0) > 0;
+  const hasTabs = React.useMemo(() => {
+    let foundTab = false;
+    model.visitNodes((node) => {
+      if (node instanceof TabNode) foundTab = true;
+    });
+    return foundTab;
+  }, [model, workspaceRevision]);
 
   return (
     <div
@@ -70,7 +86,7 @@ export function WorkspaceLayout() {
         model={model}
         factory={factory}
         onRenderTab={renderTab}
-        onModelChange={syncActiveTab}
+        onModelChange={handleModelChange}
         onTabSetPlaceHolder={() => (
           <EmptyState
             title="No Session Selected"

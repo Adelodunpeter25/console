@@ -6,6 +6,8 @@ import type { OpenChatTabInput } from "./types";
 
 interface WorkspaceState {
   model: ReturnType<typeof createWorkspaceModel>;
+  revision: number;
+  notifyLayoutChange: () => void;
   openChatTab: (input: OpenChatTabInput) => void;
   closeChatTab: (projectId: string, sessionId: string) => void;
   updateChatTabProject: (sessionId: string, projectId: string) => void;
@@ -13,6 +15,8 @@ interface WorkspaceState {
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   model: createWorkspaceModel(),
+  revision: 0,
+  notifyLayoutChange: () => set((state) => ({ revision: state.revision + 1 })),
 
   openChatTab: (input) => {
     const { model } = get();
@@ -21,6 +25,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
     if (existing instanceof TabNode) {
       model.doAction(Actions.selectTab(existing.getId()));
+      set((state) => ({ revision: state.revision + 1 }));
       return;
     }
 
@@ -29,7 +34,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     );
     // Keep the model reference stable while notifying subscribers that a
     // layout action occurred. FlexLayout itself listens to the model too.
-    set({ model });
+    set((state) => ({ model, revision: state.revision + 1 }));
   },
 
   closeChatTab: (projectId, sessionId) => {
@@ -37,7 +42,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const id = chatTabId(projectId, sessionId);
     if (model.getNodeById(id)) {
       model.doAction(Actions.deleteTab(id));
-      set({ model });
+      set((state) => ({ model, revision: state.revision + 1 }));
     }
   },
 
@@ -54,6 +59,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         config: { ...config, projectId },
       }),
     );
-    set({ model });
+      set((state) => ({ model, revision: state.revision + 1 }));
   },
 }));
