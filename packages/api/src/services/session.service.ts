@@ -18,7 +18,7 @@ function unwrapData<T>(body: { success?: boolean; data?: T; error?: string }, ac
 }
 
 export const sessionService = {
-  async getSessions(params?: { cwd?: string; projectId?: string }): Promise<SessionHeader[]> {
+  async getSessions(params?: { cwd?: string; projectId?: string; onlyDeleted?: boolean }): Promise<SessionHeader[]> {
     const res = await getConsoleApiClient().get("/api/sessions", { params });
     return unwrapData(res.data, "list sessions");
   },
@@ -43,6 +43,14 @@ export const sessionService = {
     // delete returns `{ success, data: { id, deleted } }` — treat HTTP success as ok
     if (res.data?.success === false) {
       throw new Error(res.data?.error || "Failed to delete session");
+    }
+    return { success: true };
+  },
+
+  async restoreSession(id: string): Promise<{ success: boolean }> {
+    const res = await getConsoleApiClient().post(`/api/sessions/${id}/restore`);
+    if (res.data?.success === false) {
+      throw new Error(res.data?.error || "Failed to restore session");
     }
     return { success: true };
   },

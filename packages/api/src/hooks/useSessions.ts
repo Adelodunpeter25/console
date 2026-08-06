@@ -4,12 +4,12 @@ import type { CreateSessionDto, UpdateSessionDto } from "@console/types";
 
 export const sessionKeys = {
   all: ["sessions"] as const,
-  lists: (params?: { cwd?: string; projectId?: string }) =>
+  lists: (params?: { cwd?: string; projectId?: string; onlyDeleted?: boolean }) =>
     [...sessionKeys.all, "list", params] as const,
   detail: (id: string) => [...sessionKeys.all, "detail", id] as const,
 };
 
-export function useSessions(params?: { cwd?: string; projectId?: string }) {
+export function useSessions(params?: { cwd?: string; projectId?: string; onlyDeleted?: boolean }) {
   return useQuery({
     queryKey: sessionKeys.lists(params),
     queryFn: () => sessionService.getSessions(params),
@@ -49,6 +49,16 @@ export function useDeleteSession() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => sessionService.deleteSession(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: sessionKeys.all });
+    },
+  });
+}
+
+export function useRestoreSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => sessionService.restoreSession(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: sessionKeys.all });
     },
