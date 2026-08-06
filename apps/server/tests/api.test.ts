@@ -166,12 +166,40 @@ const app = createApiApp();
   });
   assert.equal(patchRes.status, 200);
 
-  // Delete
+  // Delete (Soft Delete)
   const delRes = await app.request(`/api/sessions/${sessionId}`, {
     method: "DELETE",
   });
   assert.equal(delRes.status, 200);
-  console.log("  ✅ Session CRUD (/api/sessions)");
+
+  // Detail of soft-deleted session should return 404
+  const deletedDetailRes = await app.request(`/api/sessions/${sessionId}`);
+  assert.equal(deletedDetailRes.status, 404);
+
+  // List only deleted sessions
+  const deletedListRes = await app.request("/api/sessions?onlyDeleted=true");
+  assert.equal(deletedListRes.status, 200);
+  const deletedListJson = await deletedListRes.json();
+  assert.equal(deletedListJson.success, true);
+  assert.ok(deletedListJson.data.some((s: any) => s.id === sessionId));
+
+  // Restore the session
+  const restoreRes = await app.request(`/api/sessions/${sessionId}/restore`, {
+    method: "POST",
+  });
+  assert.equal(restoreRes.status, 200);
+  const restoreJson = await restoreRes.json();
+  assert.equal(restoreJson.success, true);
+  assert.equal(restoreJson.data.restored, true);
+
+  // Detail should now load correctly again (200 OK)
+  const restoredDetailRes = await app.request(`/api/sessions/${sessionId}`);
+  assert.equal(restoredDetailRes.status, 200);
+  const restoredDetailJson = await restoredDetailRes.json();
+  assert.equal(restoredDetailJson.success, true);
+  assert.equal(restoredDetailJson.data.header.title, "Renamed API Session");
+
+  console.log("  ✅ Session CRUD & Restore (/api/sessions)");
 }
 
 console.log("Hono API Layer & Service tests passed!\n");

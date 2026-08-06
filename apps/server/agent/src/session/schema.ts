@@ -30,7 +30,8 @@ export function initGlobalDatabase(db: Database.Database): void {
       status TEXT NOT NULL DEFAULT 'idle',
       approval_mode TEXT NOT NULL DEFAULT 'always-ask',
       created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
+      updated_at INTEGER NOT NULL,
+      deleted_at INTEGER
     );
 
     CREATE INDEX IF NOT EXISTS idx_projects_dir ON projects(dir);
@@ -46,6 +47,9 @@ export function initGlobalDatabase(db: Database.Database): void {
   }
   if (!cols.some((c) => c.name === "approval_mode")) {
     db.exec("ALTER TABLE sessions ADD COLUMN approval_mode TEXT NOT NULL DEFAULT 'always-ask'");
+  }
+  if (!cols.some((c) => c.name === "deleted_at")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN deleted_at INTEGER");
   }
 }
 

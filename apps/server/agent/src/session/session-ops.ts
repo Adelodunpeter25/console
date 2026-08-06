@@ -82,6 +82,10 @@ export function loadSession(
     | SessionIndexRow
     | undefined;
 
+  if (indexRow && indexRow.deleted_at !== null && indexRow.deleted_at !== undefined) {
+    return null;
+  }
+
   let projectId: string | null = indexRow?.project_id ?? null;
   let dbPath: string | undefined;
 
@@ -170,21 +174,25 @@ export function loadSession(
 
 export function listSessions(
   globalDb: DatabaseType,
-  options?: { cwd?: string; projectId?: string; limit?: number },
+  options?: { cwd?: string; projectId?: string; limit?: number; onlyDeleted?: boolean },
 ): SessionHeader[] {
   const limit = options?.limit ?? 100;
+  const onlyDeleted = !!options?.onlyDeleted;
+  const deletedCondition = onlyDeleted ? "deleted_at IS NOT NULL" : "deleted_at IS NULL";
 
   let rows: any[];
   if (options?.cwd) {
     rows = globalDb
-      .prepare(`SELECT * FROM sessions WHERE cwd = ? ORDER BY updated_at DESC LIMIT ?`)
+      .prepare(`SELECT * FROM sessions WHERE cwd = ? AND ${deletedCondition} ORDER BY updated_at DESC LIMIT ?`)
       .all(options.cwd, limit);
   } else if (options?.projectId) {
     rows = globalDb
-      .prepare(`SELECT * FROM sessions WHERE project_id = ? ORDER BY updated_at DESC LIMIT ?`)
+      .prepare(`SELECT * FROM sessions WHERE project_id = ? AND ${deletedCondition} ORDER BY updated_at DESC LIMIT ?`)
       .all(options.projectId, limit);
   } else {
-    rows = globalDb.prepare(`SELECT * FROM sessions ORDER BY updated_at DESC LIMIT ?`).all(limit);
+    rows = globalDb
+      .prepare(`SELECT * FROM sessions WHERE ${deletedCondition} ORDER BY updated_at DESC LIMIT ?`)
+      .all(limit);
   }
 
   return rows.map((r) => ({
@@ -197,12 +205,12 @@ export function listSessions(
     updatedAt: r.updated_at,
     messageCount: r.message_count,
     status: r.status ?? "idle",
+    deletedAt: r.deleted_at ?? undefined,
   }));
 }
 
 export function deleteSession(state: StorageState, sessionId: string): boolean {
-  const { globalDb, storageDir } = state;
-  const projectId = getProjectIdBySessionId(globalDb, sessionId);
+  const { globalDb } = state;
 
   const db = state.sessionDbs.get(sessionId);
   if (db) {
@@ -214,14 +222,14 @@ export function deleteSession(state: StorageState, sessionId: string): boolean {
     state.sessionDbs.delete(sessionId);
   }
 
-  if (projectId) {
-    removeDbFile(getSessionDbPath(storageDir, projectId, sessionId));
-  } else {
-    const dbPath = findSessionDbPath(storageDir, sessionId);
-    if (dbPath) removeDbFile(dbPath);
-  }
+  const now = Date.now();
+  const info = globalDb.prepare(`UPDATE sessions SET deleted_at = ? WHERE id = ?`).run(now, sessionId);
+  return info.changes > 0;
+}
 
-  const info = globalDb.prepare(`DELETE FROM sessions WHERE id = ?`).run(sessionId);
+export function restoreSession(state: StorageState, sessionId: string): boolean {
+  const { globalDb } = state;
+  const info = globalDb.prepare(`UPDATE sessions SET deleted_at = NULL WHERE id = ?`).run(sessionId);
   return info.changes > 0;
 }
 

@@ -101,11 +101,24 @@ assert.equal(reloaded?.header.title, "Renamed Session");
 assert.equal(reloaded?.header.modelId, "claude-sonnet-4-6");
 console.log("  ✅ Update session title & model");
 
-// 6. Delete session
+// 6. Delete session (Soft Delete)
 assert.equal(storage.deleteSession(header.id), true);
 assert.equal(storage.loadSession(header.id), null);
 assert.equal(storage.listSessions().length, 0);
-console.log("  ✅ Delete session");
+
+// Test listing deleted sessions
+const deletedSessions = storage.listSessions({ onlyDeleted: true });
+assert.equal(deletedSessions.length, 1);
+assert.equal(deletedSessions[0]?.id, header.id);
+console.log("  ✅ Soft delete session & list onlyDeleted");
+
+// 7. Restore session
+assert.equal(storage.restoreSession(header.id), true);
+assert.equal(storage.listSessions().length, 1);
+const restored = storage.loadSession(header.id);
+assert.ok(restored);
+assert.equal(restored.header.title, "Renamed Session");
+console.log("  ✅ Restore session");
 
 storage.close();
 console.log("SqliteSessionStorage tests passed!\n");

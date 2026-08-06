@@ -57,8 +57,8 @@ export const tauriApi = {
     invoke<void>("set_project_id", { provider, projectId }),
 
   // --- sessions ------------------------------------------------------------
-  listSessions: (cwd?: string, projectId?: string) =>
-    invoke<SessionHeader[]>("list_sessions", { cwd, projectId }),
+  listSessions: (cwd?: string, projectId?: string, onlyDeleted?: boolean) =>
+    invoke<SessionHeader[]>("list_sessions", { cwd, projectId, onlyDeleted }),
   createSession: (dto: CreateSessionDto) =>
     invoke<SessionHeader>("create_session", {
       cwd: dto.cwd,
@@ -78,6 +78,7 @@ export const tauriApi = {
       approvalMode: dto.approvalMode,
     }),
   deleteSession: (id: string) => invoke<unknown>("delete_session", { id }),
+  restoreSession: (id: string) => invoke<unknown>("restore_session", { id }),
 
   // --- projects ------------------------------------------------------------
   listProjects: () => invoke<ProjectInfo[]>("list_projects"),

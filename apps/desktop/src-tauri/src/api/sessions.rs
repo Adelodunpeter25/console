@@ -2,13 +2,18 @@ use crate::api::ApiClient;
 use crate::error::AppResult;
 use crate::models::{CreateSessionDto, SessionDetailResponse, SessionHeader, UpdateSessionDto};
 
-pub async fn list_sessions(client: &ApiClient, cwd: Option<&str>, project_id: Option<&str>) -> AppResult<Vec<SessionHeader>> {
+pub async fn list_sessions(client: &ApiClient, cwd: Option<&str>, project_id: Option<&str>, only_deleted: Option<bool>) -> AppResult<Vec<SessionHeader>> {
     let mut query: Vec<(&str, &str)> = Vec::new();
     if let Some(cwd) = cwd {
         query.push(("cwd", cwd));
     }
     if let Some(project_id) = project_id {
         query.push(("projectId", project_id));
+    }
+
+    let only_deleted_str = only_deleted.map(|b| if b { "true" } else { "false" });
+    if let Some(ref val) = only_deleted_str {
+        query.push(("onlyDeleted", val));
     }
 
     if query.is_empty() {
@@ -32,4 +37,8 @@ pub async fn update_session(client: &ApiClient, id: &str, dto: &UpdateSessionDto
 
 pub async fn delete_session(client: &ApiClient, id: &str) -> AppResult<serde_json::Value> {
     client.delete(&format!("/sessions/{}", id)).await
+}
+
+pub async fn restore_session(client: &ApiClient, id: &str) -> AppResult<serde_json::Value> {
+    client.post(&format!("/sessions/{}/restore", id), &serde_json::Value::Null).await
 }

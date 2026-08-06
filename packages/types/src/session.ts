@@ -16,6 +16,7 @@ export interface SessionHeader {
   messageCount?: number;
   status?: SessionStatus;
   approvalMode?: string;
+  deletedAt?: number;
 }
 
 export interface SessionContext {

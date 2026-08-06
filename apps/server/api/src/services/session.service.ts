@@ -10,8 +10,8 @@ import { repairToolCallHistory } from "../../../agent/src/utils/tool-history.js"
 export class SessionService {
   private storage = new SqliteSessionStorage();
 
-  listSessions(cwd?: string, projectId?: string): SessionHeader[] {
-    return this.storage.listSessions({ cwd, projectId });
+  listSessions(cwd?: string, projectId?: string, onlyDeleted?: boolean): SessionHeader[] {
+    return this.storage.listSessions({ cwd, projectId, onlyDeleted });
   }
 
   createSession(dto: CreateSessionDto): SessionHeader {
@@ -79,5 +79,9 @@ export class SessionService {
 
   deleteSession(sessionId: string): boolean {
     return this.storage.deleteSession(sessionId);
+  }
+
+  restoreSession(sessionId: string): boolean {
+    return this.storage.restoreSession(sessionId);
   }
 }

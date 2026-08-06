@@ -23,6 +23,7 @@ export interface SessionHeader {
   createdAt: number; // epoch ms
   updatedAt: number; // epoch ms
   messageCount?: number;
+  deletedAt?: number;
 }
 
 /**

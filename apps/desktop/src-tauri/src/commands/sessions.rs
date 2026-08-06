@@ -3,12 +3,13 @@ use crate::error::AppResult;
 use crate::models::{CreateSessionDto, SessionDetailResponse, SessionHeader, UpdateSessionDto};
 
 #[tauri::command]
-pub async fn list_sessions(cwd: Option<String>, project_id: Option<String>) -> AppResult<Vec<SessionHeader>> {
+pub async fn list_sessions(cwd: Option<String>, project_id: Option<String>, only_deleted: Option<bool>) -> AppResult<Vec<SessionHeader>> {
     let client = ApiClient::new();
     crate::api::sessions::list_sessions(
         &client,
         cwd.as_deref(),
         project_id.as_deref(),
+        only_deleted,
     )
     .await
 }
@@ -62,4 +63,10 @@ pub async fn update_session(
 pub async fn delete_session(id: String) -> AppResult<serde_json::Value> {
     let client = ApiClient::new();
     crate::api::sessions::delete_session(&client, &id).await
+}
+
+#[tauri::command]
+pub async fn restore_session(id: String) -> AppResult<serde_json::Value> {
+    let client = ApiClient::new();
+    crate::api::sessions::restore_session(&client, &id).await
 }

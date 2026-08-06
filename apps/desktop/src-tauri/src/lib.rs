@@ -8,7 +8,7 @@ mod models;
 
 use commands::{
     abort_run, add_project, answer_question, approve_permission, browse_directory,
-    create_directory, create_session, delete_directory, delete_file, delete_session,
+    create_directory, create_session, delete_directory, delete_file, delete_session, restore_session,
     get_approval_modes, get_auth_status, get_backend_url, get_directory_tree, get_login_url,
     get_project_id, get_provider_models, get_session, handle_oauth_callback, list_projects, list_providers,
     list_sessions, list_slash_commands, login_with_browser, pick_folder, pick_images, read_dropped_images, ping_server, read_file,
@@ -35,6 +35,7 @@ pub fn run() {
             get_session,
             update_session,
             delete_session,
+            restore_session,
             list_projects,
             add_project,
             list_providers,

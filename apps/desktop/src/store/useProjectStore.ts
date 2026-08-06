@@ -9,12 +9,16 @@ interface ProjectState {
   /** Flat list of all sessions across projects, newest first. */
   sessions: SessionHeader[];
   sessionsLoading: boolean;
+  deletedSessions: SessionHeader[];
+  deletedSessionsLoading: boolean;
   loadProjects: () => Promise<void>;
   addProject: (path: string) => Promise<ProjectInfo>;
   loadSessions: () => Promise<void>;
+  loadDeletedSessions: () => Promise<void>;
   createSession: (cwd: string, projectId: string, title?: string) => Promise<SessionHeader>;
   updateSession: (id: string, dto: UpdateSessionDto) => Promise<SessionHeader>;
   deleteSession: (id: string) => Promise<void>;
+  restoreSession: (id: string) => Promise<void>;
   /** Re-fetch a session header from the backend and patch it in-place (e.g. after an auto-renamed title). */
   refreshSessionHeader: (sessionId: string) => Promise<void>;
 }
@@ -24,6 +28,8 @@ export const useProjectStore = create<ProjectState>((set) => ({
   loading: false,
   sessions: [],
   sessionsLoading: false,
+  deletedSessions: [],
+  deletedSessionsLoading: false,
 
   loadProjects: async () => {
     set({ loading: true });
@@ -52,6 +58,16 @@ export const useProjectStore = create<ProjectState>((set) => ({
     }
   },
 
+  loadDeletedSessions: async () => {
+    set({ deletedSessionsLoading: true });
+    try {
+      const deletedSessions = await tauriApi.listSessions(undefined, undefined, true);
+      set({ deletedSessions, deletedSessionsLoading: false });
+    } catch {
+      set({ deletedSessionsLoading: false });
+    }
+  },
+
   createSession: async (cwd: string, projectId: string, title?: string) => {
     const session = await tauriApi.createSession({
       cwd,
@@ -75,6 +91,21 @@ export const useProjectStore = create<ProjectState>((set) => ({
     await tauriApi.deleteSession(id);
     set((s) => ({ sessions: s.sessions.filter((sess) => sess.id !== id) }));
     useSessionStatusStore.getState().clearStatus(id);
+  },
+
+  restoreSession: async (id: string) => {
+    await tauriApi.restoreSession(id);
+    set((s) => {
+      const restored = s.deletedSessions.find((sess) => sess.id === id);
+      const filteredDeleted = s.deletedSessions.filter((sess) => sess.id !== id);
+      if (restored) {
+        return {
+          deletedSessions: filteredDeleted,
+          sessions: [restored, ...s.sessions],
+        };
+      }
+      return { deletedSessions: filteredDeleted };
+    });
   },
 
   refreshSessionHeader: async (sessionId) => {

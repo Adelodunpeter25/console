@@ -7,7 +7,7 @@ import type {
   Model,
   PermissionRequest,
 } from "../types/index.js";
-import { createTaskTool } from "../tools/task.js";
+import { createSubagentTool } from "../tools/subagent.js";
 import { agentLoop, agentLoopContinue, type AgentLoopConfig, type StreamFn } from "./agent-loop.js";
 import type { EventStream } from "./event-stream.js";
 
@@ -162,7 +162,7 @@ export class Agent {
 
     const tools = this._tools.map((tool) =>
       tool.name === "subagent"
-        ? createTaskTool({
+        ? createSubagentTool({
             model: this._model,
             streamFn: this._streamFn,
             tools: this._tools,

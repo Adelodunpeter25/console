@@ -48,7 +48,7 @@ export function convertOpencodeMessages(messages: AgentMessage[]): ModelMessage[
             type: "tool-call",
             toolCallId: part.call.id,
             toolName: part.call.name,
-            input:
+            args:
               typeof part.call.arguments === "string"
                 ? JSON.parse(part.call.arguments)
                 : (part.call.arguments ?? {}),
@@ -74,7 +74,7 @@ export function convertOpencodeMessages(messages: AgentMessage[]): ModelMessage[
               type: "tool-result",
               toolCallId: r.toolCallId,
               toolName,
-              output: getToolResultOutput(r),
+              result: getToolResultOutput(r),
             },
           ],
         } as any);
@@ -86,24 +86,7 @@ export function convertOpencodeMessages(messages: AgentMessage[]): ModelMessage[
 }
 
 function getToolResultOutput(r: { content: any; isError?: boolean }): any {
-  if (r.isError) {
-    return {
-      type: "error-text",
-      value: typeof r.content === "string" ? r.content : JSON.stringify(r.content),
-    };
-  }
-
-  if (typeof r.content === "string") {
-    return {
-      type: "text",
-      value: r.content,
-    };
-  }
-
-  return {
-    type: "json",
-    value: r.content,
-  };
+  return r.content;
 }
 
 function findToolName(toolCallId: string, messages: AgentMessage[]): string {

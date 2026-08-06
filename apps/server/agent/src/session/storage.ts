@@ -119,12 +119,16 @@ export class SqliteSessionStorage {
     return Sessions.loadSession(this.state, sessionId);
   }
 
-  listSessions(options?: { cwd?: string; projectId?: string; limit?: number }): SessionHeader[] {
+  listSessions(options?: { cwd?: string; projectId?: string; limit?: number; onlyDeleted?: boolean }): SessionHeader[] {
     return Sessions.listSessions(this.state.globalDb, options);
   }
 
   deleteSession(sessionId: string): boolean {
     return Sessions.deleteSession(this.state, sessionId);
+  }
+
+  restoreSession(sessionId: string): boolean {
+    return Sessions.restoreSession(this.state, sessionId);
   }
 
   updateSessionStatus(sessionId: string, status: string): void {

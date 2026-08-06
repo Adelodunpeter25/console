@@ -15,7 +15,8 @@ const sessionService = new SessionService();
 sessionRoutes.get("/sessions", (c) => {
   const cwd = c.req.query("cwd");
   const projectId = c.req.query("projectId");
-  const sessions = sessionService.listSessions(cwd, projectId);
+  const onlyDeleted = c.req.query("onlyDeleted") === "true";
+  const sessions = sessionService.listSessions(cwd, projectId, onlyDeleted);
   return c.json({
     success: true,
     data: sessions,
@@ -83,5 +84,22 @@ sessionRoutes.delete("/sessions/:id", (c) => {
   return c.json({
     success: true,
     data: { id, deleted: true },
+  });
+});
+
+/**
+ * POST /api/sessions/:id/restore — Restore a soft-deleted session.
+ */
+sessionRoutes.post("/sessions/:id/restore", (c) => {
+  const id = c.req.param("id");
+  const restored = sessionService.restoreSession(id);
+
+  if (!restored) {
+    return c.json({ success: false, error: `Session '${id}' not found.` }, 404);
+  }
+
+  return c.json({
+    success: true,
+    data: { id, restored: true },
   });
 });

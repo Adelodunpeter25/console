@@ -1,13 +1,12 @@
 /**
- * Subagent Task Tool ('task').
+ * Subagent Task Tool ('subagent').
  * Spawns an isolated child AgentLoop to execute a focused sub-task without cluttering the main conversation history.
- * Inspired by oh-my-pi/packages/coding-agent/src/task/ & oh-my-pi/packages/agent/src/agent-loop.ts.
  */
 import { z } from "zod";
 import { agentLoop, type StreamFn } from "../service/agent-loop.js";
 import type { AgentTool, Model } from "../types/index.js";
 
-export interface TaskToolContext {
+export interface SubagentToolContext {
   model: Model;
   streamFn: StreamFn;
   tools: AgentTool[];
@@ -16,6 +15,9 @@ export interface TaskToolContext {
 
 const inputSchema = z.object({
   prompt: z.string().describe("Clear, actionable task description for the subagent"),
+  name: z
+    .string()
+    .describe("Name or identifier for the subagent to help differentiate it from other instances"),
   role: z
     .string()
     .optional()
@@ -36,21 +38,22 @@ type Input = z.infer<typeof inputSchema>;
 const description = `Spawn an isolated subagent to execute a dedicated sub-task (e.g. searching files, inspecting tests, evaluating code).
 The subagent runs in its own memory context and returns its final summary result back to you.`;
 
-export function createTaskTool(context?: TaskToolContext): AgentTool<typeof inputSchema> {
+export function createSubagentTool(context?: SubagentToolContext): AgentTool<typeof inputSchema> {
   return {
     name: "subagent",
     description,
     tier: "read",
     inputSchema,
     execute: async (args: Input): Promise<unknown> => {
-      const { prompt, role, maxTurns = 10 } = args;
+      const { prompt, name, role, maxTurns = 10 } = args;
+      const displayName = name || role;
 
       if (!context) {
         return {
           content: [
             {
               type: "text",
-              text: `Subagent [${role}] simulated run for: "${prompt}"\n(No active StreamFn/model attached to task tool context)`,
+              text: `Subagent [${displayName}] simulated run for: "${prompt}"\n(No active StreamFn/model attached to task tool context)`,
             },
           ],
         };
@@ -84,7 +87,7 @@ export function createTaskTool(context?: TaskToolContext): AgentTool<typeof inpu
         content: [
           {
             type: "text",
-            text: `Subagent [${role}] Completed Task:\n${summaryText.trim() || "Subagent finished with no text output."}`,
+            text: `Subagent [${displayName}] Completed Task:\n${summaryText.trim() || "Subagent finished with no text output."}`,
           },
         ],
       };
@@ -93,5 +96,6 @@ export function createTaskTool(context?: TaskToolContext): AgentTool<typeof inpu
 }
 
 /** Backward-compatible export name; the model-facing tool is `subagent`. */
-export const subagentTool = createTaskTool();
+export const subagentTool = createSubagentTool();
 export const taskTool = subagentTool;
+export const createTaskTool = createSubagentTool;
