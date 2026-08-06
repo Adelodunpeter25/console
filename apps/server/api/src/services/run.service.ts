@@ -14,7 +14,7 @@ import type {
   ApprovalMode,
   Model,
   UserMessage,
-} from "../../../agent/src/types/index.js";
+} from "@console/types";
 import type { RunPromptDto } from "../types/index.js";
 import { expandPromptRefs } from "./assist.service.js";
 import { randomUUID } from "node:crypto";
@@ -131,7 +131,7 @@ export class RunService {
     const model: Model = {
       id: modelId,
       provider: provider as Model["provider"],
-      contextWindow: 128_000,
+      contextWindow: catalogModel?.contextWindow ?? 128_000,
       ...(typeof catalogModel?.supportsImages === "boolean"
         ? { supportsImages: catalogModel.supportsImages }
         : {}),

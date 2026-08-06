@@ -3,7 +3,7 @@
  * GET https://opencode.ai/zen/v1/models, filter to free-tier model ids.
  * Falls back to the static free list on network/parse errors.
  */
-import type { Model } from "../../../agent/src/types/index.js";
+import type { Model } from "@console/types";
 import {
   OPENCODE_BASE_URL,
   OPENCODE_CONTEXT_WINDOW,

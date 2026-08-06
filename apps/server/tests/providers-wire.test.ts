@@ -3,7 +3,7 @@
  * Zero network calls — tests JSON serialization and wire mappings locally.
  */
 import assert from "node:assert/strict";
-import type { AgentMessage, AgentTool } from "../agent/src/types/index.js";
+import type { AgentMessage, AgentTool } from "@console/types";
 import {
   convertMessages,
   convertTools,

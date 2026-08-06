@@ -1,8 +1,8 @@
 import { create } from "zustand";
-import type { AuthStatusResponse } from "@console/types";
+import type { AuthStatusResponse, ProviderId } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 
-export type ProviderId = "gemini" | "antigravity";
+export type { ProviderId } from "@console/types";
 
 interface AuthState {
   status: AuthStatusResponse | null;

@@ -15,21 +15,21 @@ import { buildSystemPrompt } from "../agent/src/systemprompt/builder.js";
 import { createAntigravityStreamFn } from "../providers/src/antigravity/stream-fn.js";
 import { geminiStreamFn } from "../providers/src/gemini/stream-fn.js";
 import { opencodeStreamFn } from "../providers/src/opencode/stream-fn.js";
-import type { AgentSessionEvent, Model } from "@console/types";
+import type { AgentSessionEvent, Model, ProviderId } from "@console/types";
 
 function parseArgs(): {
   prompt: string;
-  provider: "gemini" | "antigravity" | "opencode";
+  provider: ProviderId;
   modelId: string;
 } {
   const args = process.argv.slice(2);
-  let provider: "gemini" | "antigravity" | "opencode" = "gemini";
+  let provider: ProviderId = "gemini";
   let modelId = "gemini-2.5-pro";
   const promptParts: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--provider" && args[i + 1]) {
-      provider = (args[i + 1] ?? "gemini") as "gemini" | "antigravity" | "opencode";
+      provider = (args[i + 1] ?? "gemini") as ProviderId;
       i++;
     } else if (args[i] === "--model" && args[i + 1]) {
       modelId = args[i + 1] ?? "gemini-2.5-pro";

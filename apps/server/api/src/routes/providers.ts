@@ -4,6 +4,7 @@
  */
 import { Hono } from "hono";
 import { ProviderService } from "../services/provider.service.js";
+import type { ProviderId } from "@console/types";
 
 export const providerRoutes = new Hono();
 const providerService = new ProviderService();
@@ -23,7 +24,7 @@ providerRoutes.get("/providers", (c) => {
  * GET /api/providers/:id/models — Fetch dynamic models for provider.
  */
 providerRoutes.get("/providers/:id/models", async (c) => {
-  const providerId = c.req.param("id") as "gemini" | "antigravity" | "opencode";
+  const providerId = c.req.param("id") as ProviderId;
   if (
     providerId !== "gemini" &&
     providerId !== "antigravity" &&

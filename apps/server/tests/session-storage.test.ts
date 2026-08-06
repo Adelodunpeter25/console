@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { SqliteSessionStorage } from "../agent/src/session/index.js";
-import type { AgentMessage } from "../agent/src/types/index.js";
+import type { AgentMessage } from "@console/types";
 
 console.log("Running SqliteSessionStorage tests...");
 

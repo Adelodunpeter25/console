@@ -1,34 +1,13 @@
 /**
  * Response DTOs for Hono API endpoints.
+ * Shared shapes come from @console/types; this module adds server-local extras.
  */
-import type { AgentMessage, SessionHeader } from "../../../agent/src/types/index.js";
+import type { AgentMessage, SessionHeader } from "@console/types";
 
-export interface ApiResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
+export type { ApiResponse, AuthStatusResponse, FsTreeEntry, SessionDetailResponse } from "@console/types";
 
 export interface ProjectInfo {
   name: string;
   path: string;
   lastModified?: number;
-}
-
-export interface AuthStatusResponse {
-  gemini: { loggedIn: boolean; email?: string; projectId?: string; configuredProjectId?: string };
-  antigravity: { loggedIn: boolean; email?: string; projectId?: string; configuredProjectId?: string };
-}
-
-export interface SessionDetailResponse {
-  header: SessionHeader;
-  messages: AgentMessage[];
-}
-
-export interface FsTreeEntry {
-  name: string;
-  path: string;
-  isDir: boolean;
-  size?: number;
-  children?: FsTreeEntry[];
 }

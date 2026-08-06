@@ -3,7 +3,7 @@
  */
 import type { Agent } from "../service/agent.js";
 import type { SqliteSessionStorage } from "../session/storage.js";
-import type { Model, Skill, SlashCommandFile } from "../types/index.js";
+import type { Model, ProviderId, Skill, SlashCommandFile } from "../types/index.js";
 import {
   compactCommand,
   modeCommand,
@@ -18,8 +18,8 @@ export interface SlashCommandContext {
   agent: Agent;
   sessionStorage?: SqliteSessionStorage;
   currentSessionId?: string;
-  currentProvider: "gemini" | "antigravity" | "opencode";
-  setProvider: (provider: "gemini" | "antigravity" | "opencode") => void;
+  currentProvider: ProviderId;
+  setProvider: (provider: ProviderId) => void;
   setModel: (model: Model) => void;
   setCurrentSessionId: (id: string) => void;
   discoveredCommands?: SlashCommandFile[];

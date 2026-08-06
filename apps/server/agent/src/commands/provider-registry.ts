@@ -15,7 +15,7 @@ import {
 } from "../../../providers/src/index.js";
 import type { StreamFn } from "../service/agent-loop.js";
 
-import type { Model, ProviderCatalogEntry } from "../types/index.js";
+import type { Model, ProviderCatalogEntry, ProviderId } from "../types/index.js";
 
 export interface ProviderEntry extends ProviderCatalogEntry {
   getStreamFn: () => StreamFn;
@@ -58,12 +58,9 @@ export const DEFAULT_OPENCODE_MODELS: Model[] = [
   "north-mini-code-free",
   "laguna-s-2.1-free",
   "longcat-2.0-free",
-].map((id) => ({ id, provider: "opencode", contextWindow: 128_000 }));
+].map((id) => ({ id, provider: "opencode", contextWindow: 200_000 }));
 
-export const PROVIDER_CATALOG: Record<
-  "gemini" | "antigravity" | "opencode",
-  ProviderEntry
-> = {
+export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
   gemini: {
     name: "gemini",
     displayName: "Google Gemini CLI",
@@ -92,7 +89,7 @@ export function listProviders(): ProviderCatalogEntry[] {
 }
 
 export function getProvider(name: string): ProviderEntry | undefined {
-  return PROVIDER_CATALOG[name as "gemini" | "antigravity" | "opencode"];
+  return PROVIDER_CATALOG[name as ProviderId];
 }
 
 export function listModelsForProvider(name: string): Model[] {
@@ -111,7 +108,7 @@ export function findModelInProvider(providerName: string, modelId: string): Mode
  * Falls back to bundled static models if offline, unauthenticated, or on network error.
  */
 export async function fetchModelsForProvider(
-  providerName: "gemini" | "antigravity" | "opencode",
+  providerName: ProviderId,
   signal?: AbortSignal,
 ): Promise<Model[]> {
   const provider = getProvider(providerName);

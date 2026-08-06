@@ -6,14 +6,14 @@ import {
   listProviders,
   type ProviderCatalogEntry,
 } from "../../../agent/src/commands/provider-registry.js";
-import type { Model } from "../../../agent/src/types/index.js";
+import type { Model, ProviderId } from "@console/types";
 
 export class ProviderService {
   getProviders(): ProviderCatalogEntry[] {
     return listProviders();
   }
 
-  async getModels(providerId: "gemini" | "antigravity" | "opencode"): Promise<Model[]> {
+  async getModels(providerId: ProviderId): Promise<Model[]> {
     return fetchModelsForProvider(providerId);
   }
 }

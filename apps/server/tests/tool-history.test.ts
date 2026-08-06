@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { repairToolCallHistory } from "../agent/src/utils/tool-history.js";
-import type { AgentMessage } from "../agent/src/types/index.js";
+import type { AgentMessage } from "@console/types";
 
 console.log("Running tool history repair tests...");
 

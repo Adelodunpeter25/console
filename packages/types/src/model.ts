@@ -1,13 +1,23 @@
+/**
+ * Shared model/provider types.
+ * `ProviderId` is the single source of truth for valid provider names.
+ */
+
+export type ProviderId = "gemini" | "antigravity" | "opencode";
+
+/** Providers that authenticate via Google OAuth (login-only providers). */
+export type OAuthProviderId = "gemini" | "antigravity";
+
 export interface Model {
   id: string;
-  provider: "gemini" | "antigravity" | "opencode";
+  provider: ProviderId;
   contextWindow: number;
   /** Whether the provider explicitly reports support for image input. */
   supportsImages?: boolean;
 }
 
 export interface ProviderCatalogEntry {
-  name: "gemini" | "antigravity" | "opencode";
+  name: ProviderId;
   displayName: string;
   description: string;
   models: Model[];

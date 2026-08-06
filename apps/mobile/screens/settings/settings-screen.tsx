@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import * as Linking from "expo-linking";
 import { useProviderModels } from "@console/api";
+import type { OAuthProviderId } from "@console/types";
 import { GlassSurface } from "../../components/layout/glass-surface";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { useServerConnection } from "../../hooks";
@@ -31,7 +32,7 @@ export function SettingsScreen() {
 
   const auth = useAuth();
   const catalog = useProviderCatalog();
-  const [selectedProvider, setSelectedProvider] = useState<"gemini" | "antigravity">("antigravity");
+  const [selectedProvider, setSelectedProvider] = useState<OAuthProviderId>("antigravity");
 
   const handleLogin = async () => {
     try {

@@ -13,6 +13,7 @@ import * as crypto from "node:crypto";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import type { GeminiOAuthCredential } from "../types/index.js";
+import type { OAuthProviderId } from "@console/types";
 import { saveCredential } from "./token-store.js";
 import {
   OAUTH_AUTH_URL,
@@ -524,7 +525,7 @@ async function loginWithConfig(config: OAuthConfig): Promise<void> {
 }
 
 export async function completeAuthFlowWithCode(
-  provider: "gemini" | "antigravity",
+  provider: OAuthProviderId,
   code: string,
   explicitProjectId?: string,
 ): Promise<GeminiOAuthCredential> {

@@ -74,7 +74,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     tauriApi
       .updateSession(sessionId, {
         modelId,
-        provider: provider as "gemini" | "antigravity" | undefined,
+        provider: provider as import("@console/types").ProviderId | undefined,
       })
       .catch(() => {});
   },

@@ -5,6 +5,7 @@
 import { Hono } from "hono";
 import { AuthService } from "../services/auth.service.js";
 import type { OAuthCallbackDto, OAuthLoginUrlDto, ProjectIdDto } from "../types/index.js";
+import type { OAuthProviderId } from "@console/types";
 
 export const authRoutes = new Hono();
 const authService = new AuthService();
@@ -61,7 +62,7 @@ authRoutes.post("/login/callback", async (c) => {
  * GET /api/auth/project-id/:provider — Get the configured Google Cloud project ID.
  */
 authRoutes.get("/project-id/:provider", async (c) => {
-  const provider = c.req.param("provider") as "gemini" | "antigravity";
+  const provider = c.req.param("provider") as OAuthProviderId;
   if (provider !== "gemini" && provider !== "antigravity") {
     return c.json({ success: false, error: "Invalid provider." }, 400);
   }

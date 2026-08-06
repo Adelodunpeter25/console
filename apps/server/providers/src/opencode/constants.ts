@@ -19,4 +19,4 @@ export const OPENCODE_FREE_MODEL_IDS = [
   "longcat-2.0-free",
 ] as const;
 
-export const OPENCODE_CONTEXT_WINDOW = 128_000;
+export const OPENCODE_CONTEXT_WINDOW = 200_000;

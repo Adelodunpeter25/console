@@ -3,7 +3,7 @@
  * Uses zod-to-json-schema to convert Zod schemas to JSON Schema.
  */
 import { zodToJsonSchema } from "zod-to-json-schema";
-import type { AgentTool } from "../../../agent/src/types/index.js";
+import type { AgentTool } from "@console/types";
 import type { GeminiFunctionDeclaration } from "../types/index.js";
 
 /**

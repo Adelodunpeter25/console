@@ -12,8 +12,9 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { GeminiOAuthCredential, ParsedCredential } from "../types/index.js";
+import type { OAuthProviderId } from "@console/types";
 
-export type CredentialType = "gemini" | "antigravity";
+export type CredentialType = OAuthProviderId;
 
 function credentialCandidates(type: CredentialType): string[] {
   const custom = process.env[`${type.toUpperCase()}_CREDENTIALS_PATH`];

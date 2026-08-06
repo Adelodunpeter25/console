@@ -5,7 +5,7 @@
  * Hits the /v1internal:fetchAvailableModels endpoint with an OAuth token
  * to fetch live discoverable models for Gemini CLI and Antigravity.
  */
-import type { Model } from "../../../agent/src/types/index.js";
+import type { Model, OAuthProviderId } from "@console/types";
 
 import {
   ANTIGRAVITY_BASE_URL,
@@ -18,7 +18,7 @@ const DENYLIST = new Set(["chat_20706", "chat_23310"]);
 
 export interface FetchAvailableModelsOptions {
   accessToken: string;
-  provider: "gemini" | "antigravity";
+  provider: OAuthProviderId;
   baseUrl?: string;
   userAgent?: string;
   signal?: AbortSignal;
@@ -38,7 +38,7 @@ export interface FetchAvailableModelsResponse {
   models?: Record<string, DiscoveredApiModel>;
 }
 
-function getDefaultUserAgent(provider: "gemini" | "antigravity"): string {
+function getDefaultUserAgent(provider: OAuthProviderId): string {
   return provider === "antigravity" ? getAntigravityUserAgent() : getGeminiCliUserAgent();
 }
 

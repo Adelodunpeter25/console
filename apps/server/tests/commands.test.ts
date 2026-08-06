@@ -9,6 +9,7 @@ import {
   SqliteSessionStorage,
   type SlashCommandContext,
 } from "../agent/src/index.js";
+import type { ProviderId } from "@console/types";
 
 console.log("Running SlashCommandRegistry tests...");
 
@@ -20,7 +21,7 @@ const session = storage.createSession({
   title: "Initial Session",
 });
 
-let currentProvider: "gemini" | "antigravity" | "opencode" = "antigravity";
+let currentProvider: ProviderId = "antigravity";
 let currentSessionId = session.id;
 
 const agent = new Agent({

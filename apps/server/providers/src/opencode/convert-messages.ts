@@ -1,101 +1,77 @@
 /**
- * Converts AgentMessage[] to OpenAI chat.completions wire format.
+ * Converts AgentMessage[] to AI SDK UIMessage[] for the opencode provider.
  *
  * Mapping:
- *   UserMessage       → role: "user", content (text, plus image_url parts if attached)
- *   AssistantMessage  → role: "assistant", content, tool_calls, reasoning_content
- *   ToolResultMessage → role: "tool", tool_call_id, content (JSON string)
+ *   UserMessage       → role: "user", content (string or parts with images)
+ *   AssistantMessage  → role: "assistant", content parts (text/reasoning/tool-call)
+ *   ToolResultMessage → role: "tool", content: [{ type: "tool-result", ... }]
  */
-import type { AgentMessage } from "../../../agent/src/types/index.js";
+import type { AgentMessage } from "@console/types";
+import type { UIMessage } from "ai";
 
-export interface OpenAIInputMessage {
-  role: "system" | "user" | "assistant" | "tool";
-  content: string | Array<Record<string, unknown>> | null;
-  name?: string;
-  tool_call_id?: string;
-  tool_calls?: Array<{
-    id: string;
-    type: "function";
-    function: { name: string; arguments: string };
-  }>;
-  reasoning_content?: string;
-}
-
-export function convertOpencodeMessages(
-  messages: AgentMessage[],
-  systemPrompt: string,
-): OpenAIInputMessage[] {
-  const out: OpenAIInputMessage[] = [];
-
-  if (systemPrompt.trim()) {
-    out.push({ role: "system", content: systemPrompt });
-  }
+export function convertOpencodeMessages(messages: AgentMessage[]): UIMessage[] {
+  const out: UIMessage[] = [];
 
   for (const msg of messages) {
     if (msg.role === "user") {
       if (!msg.content || msg.content.trim() === "") continue;
 
       if (msg.attachments && msg.attachments.length > 0) {
-        const parts: Array<Record<string, unknown>> = [
-          { type: "text", text: msg.content },
-          ...msg.attachments.map((att) => ({
-            type: "image_url" as const,
-            image_url: { url: `data:${att.mimeType};base64,${att.data}` },
-          })),
-        ];
-        out.push({ role: "user", content: parts });
+        out.push({
+          id: `user-${out.length}`,
+          role: "user",
+          content: [
+            { type: "text", text: msg.content },
+            ...msg.attachments.map((att) => ({
+              type: "image" as const,
+              image: `data:${att.mimeType};base64,${att.data}`,
+            })),
+          ],
+        });
       } else {
-        out.push({ role: "user", content: msg.content });
+        out.push({ id: `user-${out.length}`, role: "user", content: msg.content });
       }
       continue;
     }
 
     if (msg.role === "assistant") {
-      const textParts: string[] = [];
-      const toolCalls: OpenAIInputMessage["tool_calls"] = [];
-      const reasoningParts: string[] = [];
+      const content: UIMessage["content"] = [];
 
       for (const part of msg.content) {
-        if (part.type === "thinking") {
-          reasoningParts.push(part.text);
+        if (part.type === "thinking" && part.text) {
+          content.push({ type: "reasoning", text: part.text });
         } else if (part.type === "text" && part.text) {
-          textParts.push(part.text);
+          content.push({ type: "text", text: part.text });
         } else if (part.type === "toolCall") {
-          toolCalls.push({
-            id: part.call.id,
-            type: "function",
-            function: {
-              name: part.call.name,
-              arguments:
-                typeof part.call.arguments === "string"
-                  ? part.call.arguments
-                  : JSON.stringify(part.call.arguments ?? {}),
-            },
+          content.push({
+            type: "tool-call",
+            toolCallId: part.call.id,
+            toolName: part.call.name,
+            args:
+              typeof part.call.arguments === "string"
+                ? JSON.parse(part.call.arguments)
+                : (part.call.arguments ?? {}),
           });
         }
       }
 
-      const content = textParts.length > 0 ? textParts.join("\n") : null;
-
-      const m: OpenAIInputMessage = {
-        role: "assistant",
-        content,
-        ...(reasoningParts.length > 0
-          ? { reasoning_content: reasoningParts.join("\n") }
-          : {}),
-        ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
-      };
-      out.push(m);
+      out.push({ id: `assistant-${out.length}`, role: "assistant", content });
       continue;
     }
 
     if (msg.role === "toolResult") {
       for (const r of msg.results) {
         out.push({
+          id: `tool-${out.length}`,
           role: "tool",
-          tool_call_id: r.toolCallId,
-          content:
-            typeof r.content === "string" ? r.content : JSON.stringify(r.content ?? null),
+          content: [
+            {
+              type: "tool-result",
+              toolCallId: r.toolCallId,
+              result: r.content,
+              isError: r.isError,
+            },
+          ],
         });
       }
     }

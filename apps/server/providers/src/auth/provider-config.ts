@@ -8,8 +8,9 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import type { OAuthProviderId } from "@console/types";
 
-export type ProviderType = "gemini" | "antigravity";
+export type ProviderType = OAuthProviderId;
 
 interface ProviderConfig {
   /** Explicit Google Cloud project ID to use during login. */

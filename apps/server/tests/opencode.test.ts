@@ -3,27 +3,24 @@
  * Operates offline — uses mock fetch responses (0 LLM credits consumed).
  *
  * Covers:
- *  1. convertOpencodeMessages → OpenAI wire format (system/user/assistant/tool)
- *  2. convertOpencodeTools → OpenAI function tools (JSON Schema parameters)
- *  3. opencodeStreamFn → SSE chunk parsing into text / thinking / toolCall deltas
+ *  1. convertOpencodeMessages → AI SDK UIMessage[] format
+ *  2. convertOpencodeTools → AI SDK ToolSet (JSON Schema parameters)
+ *  3. opencodeStreamFn → SDK-driven text / thinking / toolCall deltas
  *  4. fetchOpencodeFreeModels → free-tier filtering from /v1/models payload
  *  5. provider-registry catalog entry for "opencode"
  */
 import assert from "node:assert/strict";
-import type { AgentMessage, AgentTool } from "../agent/src/types/index.js";
+import type { AgentMessage, AgentTool } from "@console/types";
 import { z } from "zod";
 import { listProviders, listModelsForProvider } from "../agent/src/commands/provider-registry.js";
-import {
-  convertOpencodeMessages,
-  type OpenAIInputMessage,
-} from "../providers/src/opencode/convert-messages.js";
+import { convertOpencodeMessages } from "../providers/src/opencode/convert-messages.js";
 import { convertOpencodeTools } from "../providers/src/opencode/convert-tools.js";
 import { opencodeStreamFn } from "../providers/src/opencode/stream-fn.js";
 import { fetchOpencodeFreeModels } from "../providers/src/opencode/discovery.js";
 
 console.log("Running OpenCode Zen (opencode) Provider tests...");
 
-// 1. Message converter (convertOpencodeMessages)
+// 1. Message converter (convertOpencodeMessages → UIMessage[])
 {
   const messages: AgentMessage[] = [
     { role: "user", content: "List files" },
@@ -46,30 +43,37 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
     },
   ];
 
-  const wire = convertOpencodeMessages(messages, "You are a terse assistant.");
+  const wire = convertOpencodeMessages(messages);
 
-  assert.equal(wire.length, 4);
-  assert.equal(wire[0]?.role, "system");
-  assert.equal(wire[0]?.content, "You are a terse assistant.");
-  assert.equal(wire[1]?.role, "user");
-  assert.equal(wire[1]?.content, "List files");
+  assert.equal(wire.length, 3);
+  assert.equal(wire[0]?.role, "user");
+  assert.equal(wire[0]?.content, "List files");
 
-  const assistant = wire[2] as OpenAIInputMessage;
+  const assistant = wire[1]!;
   assert.equal(assistant.role, "assistant");
-  assert.equal(assistant.reasoning_content, "I should list the files.");
-  assert.equal(assistant.content, "Listing now.");
-  assert.equal(assistant.tool_calls?.[0]?.function.name, "listDir");
-  assert.equal(assistant.tool_calls?.[0]?.id, "call_123");
-  assert.equal(assistant.tool_calls?.[0]?.function.arguments, '{"path":"."}');
+  assert.ok(Array.isArray(assistant.content));
+  const reasoningPart = (assistant.content as Array<Record<string, unknown>>)[0];
+  assert.equal(reasoningPart?.type, "reasoning");
+  assert.equal(reasoningPart?.text, "I should list the files.");
+  const textPart = (assistant.content as Array<Record<string, unknown>>)[1];
+  assert.equal(textPart?.type, "text");
+  assert.equal(textPart?.text, "Listing now.");
+  const toolPart = (assistant.content as Array<Record<string, unknown>>)[2];
+  assert.equal(toolPart?.type, "tool-call");
+  assert.equal(toolPart?.toolName, "listDir");
+  assert.equal(toolPart?.toolCallId, "call_123");
+  assert.deepEqual(toolPart?.args, { path: "." });
 
-  const toolMsg = wire[3] as OpenAIInputMessage;
+  const toolMsg = wire[2]!;
   assert.equal(toolMsg.role, "tool");
-  assert.equal(toolMsg.tool_call_id, "call_123");
-  assert.equal(toolMsg.content, '{"files":["a.ts","b.ts"]}');
-  console.log("  ✅ convertOpencodeMessages wire transformation");
+  const toolResultPart = (toolMsg.content as Array<Record<string, unknown>>)[0];
+  assert.equal(toolResultPart?.type, "tool-result");
+  assert.equal(toolResultPart?.toolCallId, "call_123");
+  assert.deepEqual(toolResultPart?.result, { files: ["a.ts", "b.ts"] });
+  console.log("  ✅ convertOpencodeMessages → UIMessage[] wire transformation");
 }
 
-// 2. Tool converter (convertOpencodeTools)
+// 2. Tool converter (convertOpencodeTools → ToolSet)
 {
   const sampleTool: AgentTool = {
     name: "searchCode",
@@ -81,30 +85,33 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
     execute: async () => {},
   };
 
-  const wireTools = convertOpencodeTools([sampleTool]);
-  assert.equal(wireTools.length, 1);
-  assert.equal(wireTools[0]?.type, "function");
-  assert.equal(wireTools[0]?.function.name, "searchCode");
-  assert.equal(wireTools[0]?.function.description, "Search codebase using regex pattern");
-  const toolParams = wireTools[0]?.function.parameters as Record<string, unknown>;
-  assert.ok(toolParams?.properties);
-  assert.ok((toolParams.properties as Record<string, unknown>).pattern);
-  console.log("  ✅ convertOpencodeTools Zod to JSON Schema conversion");
+  const toolSet = convertOpencodeTools([sampleTool]);
+  const tool = toolSet.searchCode as { description: string; parameters: Record<string, unknown> };
+  assert.ok(tool, "tool should be registered under its name");
+  assert.equal(tool.description, "Search codebase using regex pattern");
+  assert.ok(tool.parameters?.properties);
+  assert.ok((tool.parameters.properties as Record<string, unknown>).pattern);
+  console.log("  ✅ convertOpencodeTools → ToolSet conversion");
 }
 
-// 3. opencodeStreamFn — SSE chunk parsing into deltas (mock fetch)
+// 3. opencodeStreamFn — SDK-driven delta emission (mock fetch)
 {
   const originalFetch = globalThis.fetch;
   const mockSse = [
-    'data: {"choices":[{"delta":{"reasoning_content":"Let me think"}}]}',
+    'data: {"id":"x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":""}}]}',
     "",
-    'data: {"choices":[{"delta":{"content":"pineapple"}}]}',
+    'data: {"id":"x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"reasoning_content":"Let me think"}}]}',
     "",
-    'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"listDir","arguments":"{\\"path\\":"}}]}}]}',
+    'data: {"id":"x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"pineapple"}}]}',
     "",
-    'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\".\\"}"}}]}}]}',
+    'data: {"id":"x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"listDir","arguments":"{\\"path\\":"}}]}}]}',
+    "",
+    'data: {"id":"x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\".\\"}"}}]}}]}',
+    "",
+    'data: {"id":"x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}',
     "",
     "data: [DONE]",
+    "",
   ].join("\n");
 
   globalThis.fetch = (async () =>
@@ -115,7 +122,7 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
   try {
     const deltas: Array<{ type: string; text?: string; name?: string; argumentsJson?: string }> = [];
     for await (const delta of opencodeStreamFn({
-      model: { id: "deepseek-v4-flash-free", provider: "opencode", contextWindow: 128_000 },
+      model: { id: "deepseek-v4-flash-free", provider: "opencode", contextWindow: 200_000 },
       systemPrompt: "Be terse.",
       messages: [{ role: "user", content: "hi" }],
       tools: [],
@@ -123,19 +130,23 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
       deltas.push(delta);
     }
 
-    assert.equal(deltas.length, 4);
-    assert.equal(deltas[0]?.type, "thinking");
-    assert.equal((deltas[0] as { text: string }).text, "Let me think");
-    assert.equal(deltas[1]?.type, "text");
-    assert.equal((deltas[1] as { text: string }).text, "pineapple");
-    assert.equal(deltas[2]?.type, "toolCall");
-    assert.equal((deltas[2] as { name: string }).name, "listDir");
-    assert.equal((deltas[2] as { argumentsJson: string }).argumentsJson, '{"path":');
-    // Second tool-call fragment accumulates onto the same id
-    assert.equal(deltas[3]?.type, "toolCall");
-    assert.equal((deltas[3] as { id: string }).id, "call_1");
-    assert.equal((deltas[3] as { argumentsJson: string }).argumentsJson, '"."}');
-    console.log("  ✅ opencodeStreamFn SSE streaming (thinking/text/toolCall)");
+    const thinkingDeltas = deltas.filter((d) => d.type === "thinking");
+    const textDeltas = deltas.filter((d) => d.type === "text");
+    const toolDeltas = deltas.filter((d) => d.type === "toolCall");
+
+    assert.ok(thinkingDeltas.length > 0, "should emit thinking deltas");
+    assert.equal(
+      thinkingDeltas.map((d) => (d as { text: string }).text).join(""),
+      "Let me think",
+    );
+    assert.equal(textDeltas.map((d) => (d as { text: string }).text).join(""), "pineapple");
+
+    // SDK accumulates tool-call arguments; the final tool-call part carries the full args.
+    assert.ok(toolDeltas.length > 0, "should emit toolCall deltas");
+    const lastTool = toolDeltas[toolDeltas.length - 1]! as { name: string; argumentsJson: string };
+    assert.equal(lastTool.name, "listDir");
+    assert.ok(lastTool.argumentsJson.includes('"path":"."'), `args were ${lastTool.argumentsJson}`);
+    console.log("  ✅ opencodeStreamFn SDK streaming (thinking/text/toolCall)");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -165,7 +176,8 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
     const ids = models.map((m) => m.id).sort();
     assert.deepEqual(ids, ["big-pickle", "deepseek-v4-flash-free"]);
     assert.ok(models.every((m) => m.provider === "opencode"));
-    console.log("  ✅ fetchOpencodeFreeModels free-tier filtering");
+    assert.ok(models.every((m) => m.contextWindow === 200_000));
+    console.log("  ✅ fetchOpencodeFreeModels free-tier filtering (200k context)");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -182,7 +194,8 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
   assert.ok(models.length > 0);
   assert.ok(models.some((m) => m.id === "deepseek-v4-flash-free"));
   assert.ok(models.every((m) => m.provider === "opencode"));
-  console.log("  ✅ provider-registry opencode catalog entry");
+  assert.ok(models.every((m) => m.contextWindow === 200_000));
+  console.log("  ✅ provider-registry opencode catalog entry (200k context)");
 }
 
 console.log("OpenCode Zen (opencode) Provider tests passed!\n");

@@ -1,5 +1,6 @@
 import type { AgentMessage } from "./agent";
 import type { SessionHeader } from "./session";
+import type { OAuthProviderId, ProviderId } from "./model";
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -11,7 +12,7 @@ export interface CreateSessionDto {
   cwd: string;
   projectId?: string;
   modelId?: string;
-  provider?: "gemini" | "antigravity" | "opencode";
+  provider?: ProviderId;
   title?: string;
 }
 
@@ -19,14 +20,14 @@ export interface UpdateSessionDto {
   title?: string;
   cwd?: string;
   modelId?: string;
-  provider?: "gemini" | "antigravity" | "opencode";
+  provider?: ProviderId;
   approvalMode?: "always-ask" | "accept-edits" | "plan-mode" | "full-access";
 }
 
 export interface RunPromptDto {
   prompt: string;
   modelId?: string;
-  provider?: "gemini" | "antigravity" | "opencode";
+  provider?: ProviderId;
   approvalMode?: "always-ask" | "accept-edits" | "plan-mode" | "full-access";
   /** Image attachments to include with the prompt (base64-encoded). */
   attachments?: ImageAttachment[];
@@ -41,17 +42,17 @@ export interface ImageAttachment {
 }
 
 export interface OAuthLoginUrlDto {
-  provider: "gemini" | "antigravity";
+  provider: OAuthProviderId;
 }
 
 export interface OAuthCallbackDto {
-  provider: "gemini" | "antigravity";
+  provider: OAuthProviderId;
   code: string;
   state?: string;
 }
 
 export interface ProjectIdDto {
-  provider: "gemini" | "antigravity";
+  provider: OAuthProviderId;
   projectId?: string;
 }
 
@@ -97,10 +98,14 @@ export interface ProjectInfo {
   updatedAt: number;
 }
 
-export interface AuthStatusResponse {
-  gemini: { loggedIn: boolean; email?: string; projectId?: string; configuredProjectId?: string };
-  antigravity: { loggedIn: boolean; email?: string; projectId?: string; configuredProjectId?: string };
+export interface ProviderAuthStatus {
+  loggedIn: boolean;
+  email?: string;
+  projectId?: string;
+  configuredProjectId?: string;
 }
+
+export type AuthStatusResponse = Record<OAuthProviderId, ProviderAuthStatus>;
 
 export interface SessionDetailResponse {
   header: SessionHeader;

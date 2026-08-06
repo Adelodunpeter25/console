@@ -6,7 +6,7 @@
  *   AssistantMessage     → role: "model", parts: GeminiTextPart | GeminiFunctionCallPart
  *   ToolResultMessage    → role: "user",  parts: [GeminiFunctionResponsePart]
  */
-import type { AgentMessage } from "../../../agent/src/types/index.js";
+import type { AgentMessage } from "@console/types";
 import type {
   GeminiContent,
   GeminiFunctionCallPart,

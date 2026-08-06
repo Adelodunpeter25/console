@@ -13,13 +13,14 @@ import {
   setConfiguredProjectId,
 } from "../../../providers/src/auth/provider-config.js";
 import type { AuthStatusResponse } from "../types/index.js";
+import type { OAuthProviderId } from "@console/types";
 
 /**
  * Safely attempt to load a credential, returning null when the user is not
  * logged in (no credential file, invalid JSON, missing token, etc.) instead of
  * throwing — so getAuthStatus() can report "not logged in" gracefully.
  */
-async function tryLoadCredential(type: "gemini" | "antigravity") {
+async function tryLoadCredential(type: OAuthProviderId) {
   try {
     return await loadCredential(type);
   } catch {
@@ -53,7 +54,7 @@ export class AuthService {
     };
   }
 
-  getLoginUrl(provider: "gemini" | "antigravity"): {
+  getLoginUrl(provider: OAuthProviderId): {
     provider: string;
     authUrl: string;
     redirectUri: string;
@@ -77,7 +78,7 @@ export class AuthService {
   }
 
   async handleCallback(
-    provider: "gemini" | "antigravity",
+    provider: OAuthProviderId,
     code: string,
   ): Promise<{ provider: string; userEmail?: string; projectId?: string }> {
     // Load the user-configured project ID (if any) so it takes precedence
@@ -91,12 +92,12 @@ export class AuthService {
     };
   }
 
-  async getProjectId(provider: "gemini" | "antigravity"): Promise<string | undefined> {
+  async getProjectId(provider: OAuthProviderId): Promise<string | undefined> {
     return getConfiguredProjectId(provider);
   }
 
   async setProjectId(
-    provider: "gemini" | "antigravity",
+    provider: OAuthProviderId,
     projectId: string | undefined,
   ): Promise<void> {
     await setConfiguredProjectId(provider, projectId);

@@ -8,8 +8,10 @@
     "start": "tsx index.ts"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.25",
     "@console/types": "*",
     "@ff-labs/fff-node": "^0.10.0",
+    "ai": "^7.0.55",
     "better-sqlite3": "^12.11.1",
     "hono": "^4.4.12",
     "zod": "^3.23.8",
