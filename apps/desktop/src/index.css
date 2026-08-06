@@ -3,7 +3,8 @@
 
 /* Tailwind v4: scan Streamdown's dist for the utility classes it uses.
    Hoisted monorepo: apps/desktop/src → root node_modules. */
-@source "../../../../node_modules/streamdown/dist/*.js";
+@source "../../../node_modules/streamdown/dist/*.js";
+@source "../../../node_modules/@streamdown/code/dist/*.js";
 
 @custom-variant dark (&:is(.dark, .dark *));
 
@@ -101,6 +102,19 @@
 .selectable-text * {
   -webkit-user-select: text;
   user-select: text;
+}
+
+/* Keep Streamdown's code header and highlighted body as one clean panel. */
+.markdown-body [data-streamdown="code-block"] {
+  margin: 0.5rem 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.markdown-body [data-streamdown="code-block-body"] {
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
 }
 
 input,

@@ -143,6 +143,15 @@ function ReadFileResult({ text, filePath }: { text: string; filePath?: string })
   const headerLines = hasHeader ? lines.slice(0, headerEnd) : [];
   const codeLines = hasHeader ? lines.slice(headerEnd + 1) : lines;
 
+  // readFile includes display line numbers in its transport text. Streamdown
+  // supplies the actual code line numbers, so remove the transport prefix to
+  // avoid rendering two sets of numbers.
+  const numberedLines = codeLines.filter((line) => /^\s*\d+:\s?/.test(line)).length;
+  const normalizedCodeLines =
+    numberedLines > codeLines.length / 2
+      ? codeLines.map((line) => line.replace(/^\s*\d+:\s?/, ""))
+      : codeLines;
+
   // Use the metadata only to determine the language; successful results show
   // the file contents without repeating the transport/header details.
   const fileMatch = headerLines.find((l) => l.startsWith("File:"));
@@ -153,13 +162,9 @@ function ReadFileResult({ text, filePath }: { text: string; filePath?: string })
 
   // Build markdown code block for highlighting
   const fence = "```";
-  const markdown = `${fence}${lang ?? ""}\n${codeLines.join("\n")}\n${fence}`;
+  const markdown = `${fence}${lang ?? ""}\n${normalizedCodeLines.join("\n")}\n${fence}`;
 
-  return (
-    <div className="max-h-80 overflow-y-auto rounded bg-black/30">
-      <MarkdownRenderer content={markdown} />
-    </div>
-  );
+  return <MarkdownRenderer content={markdown} />;
 }
 
 /* ------------------------------------------------------------------ */

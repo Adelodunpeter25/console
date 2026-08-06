@@ -1,4 +1,5 @@
 import React from "react";
+import { code } from "@streamdown/code";
 import { Streamdown } from "streamdown";
 
 interface MarkdownRendererProps {
@@ -24,6 +25,8 @@ export function MarkdownRenderer({ content, className, streaming }: MarkdownRend
       className={[className, "markdown-body"].filter(Boolean).join(" ")}
       mode={streaming ? "streaming" : "static"}
       isAnimating={streaming}
+      plugins={{ code }}
+      controls={{ code: false }}
     >
       {content}
     </Streamdown>
