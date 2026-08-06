@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "streamdown/styles.css";
+@import "flexlayout-react/style/alpha_dark.css";
 
 /* Tailwind v4: scan Streamdown's dist for the utility classes it uses.
    Hoisted monorepo: apps/desktop/src → root node_modules. */

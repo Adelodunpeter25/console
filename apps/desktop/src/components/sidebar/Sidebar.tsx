@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useAppStore } from "../../store/useAppStore";
 import { useProjectStore } from "../../store/useProjectStore";
+import { useWorkspaceStore } from "../../layout/useWorkspaceStore";
 import { SessionItem } from "./SessionItem";
 import { dayBucket, formatDayGroup } from "../../utils/time";
 import type { SessionHeader } from "@console/types";
@@ -35,8 +36,8 @@ function groupSessionsByDate(
  */
 export function Sidebar({ width = 288 }: { width?: number }) {
   const navigate = useNavigate();
-  const { sidebarOpen, selectedSessionId, setSelectedProjectId, setSelectedSessionId } =
-    useAppStore();
+  const { sidebarOpen, selectedSessionId, setSelectedProjectId } = useAppStore();
+  const openChatTab = useWorkspaceStore((state) => state.openChatTab);
   const { projects, loadProjects, sessions, sessionsLoading, loadSessions, createSession } =
     useProjectStore();
 
@@ -58,7 +59,12 @@ export function Sidebar({ width = 288 }: { width?: number }) {
     }
     const session = await createSession(targetProject.path, targetProject.id, "New Chat");
     setSelectedProjectId(targetProject.id);
-    setSelectedSessionId(session.id);
+    openChatTab({
+      type: "chat",
+      projectId: targetProject.id,
+      sessionId: session.id,
+      title: session.title,
+    });
   };
 
   return (

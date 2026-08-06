@@ -23,6 +23,7 @@
     "@tauri-apps/plugin-opener": "^2.5.4",
     "@tauri-apps/plugin-store": "^2.4.4",
     "cmdk": "^1.1.1",
+    "flexlayout-react": "^0.10.3",
     "isbot": "^5.2.1",
     "lucide-react": "^0.474.0",
     "react": "19.1.0",

@@ -1,22 +1,32 @@
 import { create } from "zustand";
 import type { ApprovalMode, ProjectInfo, SessionDetailResponse } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
-import { useAppStore } from "./useAppStore";
 import { useProjectStore } from "./useProjectStore";
 import { useProviderStore } from "./useProviderStore";
 import { useSessionStatusStore } from "./useSessionStatusStore";
 
-interface SessionState {
-  loading: boolean;
+export interface SessionViewState {
   sessionModelId: string | null;
   sessionProvider: string | null;
   sessionCwd: string | null;
   approvalMode: ApprovalMode;
+}
+
+export const EMPTY_SESSION_VIEW: SessionViewState = {
+  sessionModelId: null,
+  sessionProvider: null,
+  sessionCwd: null,
+  approvalMode: "always-ask",
+};
+
+interface SessionState {
+  sessions: Record<string, SessionViewState>;
 
   loadSession: (sessionId: string) => Promise<SessionDetailResponse | null>;
+  getSession: (sessionId: string) => SessionViewState;
   changeModel: (sessionId: string, modelId: string) => void;
   changeProject: (sessionId: string, project: ProjectInfo) => void;
-  setApprovalMode: (mode: ApprovalMode) => void;
+  setApprovalMode: (sessionId: string, mode: ApprovalMode) => void;
   clear: () => void;
 }
 
@@ -30,47 +40,41 @@ function resolveProvider(modelId: string, fallback: string | null): string | nul
   return fallback;
 }
 
-const initialSessionState = {
-  loading: false,
-  sessionModelId: null,
-  sessionProvider: null,
-  sessionCwd: null,
-  approvalMode: "always-ask" as ApprovalMode,
-};
-
 export const useSessionStore = create<SessionState>((set, get) => ({
-  ...initialSessionState,
+  sessions: {},
 
   loadSession: async (sessionId) => {
-    set({ loading: true });
     try {
       const detail = await tauriApi.getSession(sessionId);
-      if (useAppStore.getState().selectedSessionId !== sessionId) return null;
-
-      set({
-        loading: false,
-        sessionModelId: detail.header.modelId ?? null,
-        sessionProvider: detail.header.provider ?? null,
-        sessionCwd: detail.header.cwd ?? null,
-        approvalMode: (detail.header.approvalMode as ApprovalMode) ?? "always-ask",
-      });
+      set((state) => ({
+        sessions: {
+          ...state.sessions,
+          [sessionId]: {
+            sessionModelId: detail.header.modelId ?? null,
+            sessionProvider: detail.header.provider ?? null,
+            sessionCwd: detail.header.cwd ?? null,
+            approvalMode: (detail.header.approvalMode as ApprovalMode) ?? "always-ask",
+          },
+        },
+      }));
       useSessionStatusStore.getState().setStatus(sessionId, detail.header.status ?? "idle");
       return detail;
     } catch {
-      if (useAppStore.getState().selectedSessionId === sessionId) {
-        set({ ...initialSessionState });
-      }
       return null;
-    } finally {
-      if (useAppStore.getState().selectedSessionId === sessionId) {
-        set({ loading: false });
-      }
     }
   },
 
+  getSession: (sessionId) => get().sessions[sessionId] ?? EMPTY_SESSION_VIEW,
+
   changeModel: (sessionId, modelId) => {
-    const provider = resolveProvider(modelId, get().sessionProvider);
-    set({ sessionModelId: modelId, sessionProvider: provider });
+    const current = get().getSession(sessionId);
+    const provider = resolveProvider(modelId, current.sessionProvider);
+    set((state) => ({
+      sessions: {
+        ...state.sessions,
+        [sessionId]: { ...current, sessionModelId: modelId, sessionProvider: provider },
+      },
+    }));
     tauriApi
       .updateSession(sessionId, {
         modelId,
@@ -80,21 +84,29 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   changeProject: (sessionId, project) => {
-    set({ sessionCwd: project.path });
-    useAppStore.getState().setSelectedProjectId(project.id);
+    const current = get().getSession(sessionId);
+    set((state) => ({
+      sessions: {
+        ...state.sessions,
+        [sessionId]: { ...current, sessionCwd: project.path },
+      },
+    }));
     tauriApi
       .updateSession(sessionId, { cwd: project.path })
       .then(() => useProjectStore.getState().refreshSessionHeader(sessionId))
       .catch(() => {});
   },
 
-  setApprovalMode: (mode) => {
-    set({ approvalMode: mode });
-    const sessionId = useAppStore.getState().selectedSessionId;
-    if (sessionId) {
-      tauriApi.updateSession(sessionId, { approvalMode: mode }).catch(() => {});
-    }
+  setApprovalMode: (sessionId, mode) => {
+    const current = get().getSession(sessionId);
+    set((state) => ({
+      sessions: {
+        ...state.sessions,
+        [sessionId]: { ...current, approvalMode: mode },
+      },
+    }));
+    tauriApi.updateSession(sessionId, { approvalMode: mode }).catch(() => {});
   },
 
-  clear: () => set({ ...initialSessionState }),
+  clear: () => set({ sessions: {} }),
 }));

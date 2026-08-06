@@ -3,6 +3,7 @@ import { FolderClosed, Trash2 } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useSessionStatusStore } from "../../store/useSessionStatusStore";
+import { useWorkspaceStore } from "../../layout/useWorkspaceStore";
 import { formatRelativeTime } from "../../utils/time";
 import { basename } from "../../utils/format";
 
@@ -23,10 +24,24 @@ interface SessionItemProps {
  * timestamp, and hover Delete button.
  */
 export function SessionItem({ session, isActive }: SessionItemProps) {
-  const { setSelectedSessionId } = useAppStore();
-  const { deleteSession } = useProjectStore();
+  const { setSelectedProjectId } = useAppStore();
+  const { projects, deleteSession } = useProjectStore();
+  const { openChatTab, closeChatTab } = useWorkspaceStore();
   const liveStatus = useSessionStatusStore((state) => state.statuses[session.id]);
   const status: SessionStatus = liveStatus ?? session.status ?? "idle";
+  const projectId =
+    session.projectId ?? projects.find((project) => project.path === session.cwd)?.id ?? null;
+
+  const handleOpen = () => {
+    if (!projectId) return;
+    setSelectedProjectId(projectId);
+    openChatTab({
+      type: "chat",
+      projectId,
+      sessionId: session.id,
+      title: session.title || "Untitled Chat",
+    });
+  };
 
   return (
     <div
@@ -35,7 +50,7 @@ export function SessionItem({ session, isActive }: SessionItemProps) {
           ? "bg-white/[0.08] text-foreground"
           : "text-foreground-secondary hover:text-foreground"
       }`}
-      onClick={() => setSelectedSessionId(isActive ? null : session.id)}
+      onClick={handleOpen}
     >
       {/* Line 1: Status Dot + Title + Time */}
       <div className="flex items-center gap-2 min-w-0">
@@ -61,7 +76,7 @@ export function SessionItem({ session, isActive }: SessionItemProps) {
           onClick={(e) => {
             e.stopPropagation();
             deleteSession(session.id);
-            if (isActive) setSelectedSessionId(null);
+            if (projectId) closeChatTab(projectId, session.id);
           }}
           className="w-4 h-4 shrink-0 flex items-center justify-center text-foreground-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
           title="Delete session"

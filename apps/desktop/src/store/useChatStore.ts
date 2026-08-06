@@ -112,7 +112,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   sendMessage: async (sessionId: string) => {
     const current = getChatSessionState(get().sessions, sessionId);
     const { input, running, attachments } = current;
-    const { sessionModelId, sessionProvider, approvalMode } = useSessionStore.getState();
+    const { sessionModelId, sessionProvider, approvalMode } = useSessionStore
+      .getState()
+      .getSession(sessionId);
     const prompt = input.trim();
     if (!prompt || running) return;
 

@@ -1,9 +1,9 @@
 import React from "react";
-import { useAppStore } from "../store/useAppStore";
 import { useChatStore } from "../store/useChatStore";
 import { useProjectStore } from "../store/useProjectStore";
 import { useProviderStore } from "../store/useProviderStore";
-import { useSessionStore } from "../store/useSessionStore";
+import { EMPTY_SESSION_VIEW, useSessionStore } from "../store/useSessionStore";
+import { useWorkspaceStore } from "../layout/useWorkspaceStore";
 import { MessageList } from "../components/chat/MessageList";
 import { Composer } from "../components/chat/Composer";
 import { InteractionPanel } from "../components/chat/InteractionPanel";
@@ -15,8 +15,14 @@ import { EMPTY_CHAT_SESSION } from "../store/useChatStore";
  * Chat view component — thin orchestrator inside pages/.
  * Rendered when a session is selected.
  */
-export function ChatScreen() {
-  const { selectedSessionId, selectedProjectId } = useAppStore();
+interface ChatScreenProps {
+  sessionId: string;
+  projectId: string;
+}
+
+export function ChatScreen({ sessionId, projectId }: ChatScreenProps) {
+  const selectedSessionId = sessionId;
+  const selectedProjectId = projectId;
   const chatSession = useChatStore((state) =>
     selectedSessionId ? state.sessions[selectedSessionId] : undefined,
   );
@@ -39,16 +45,11 @@ export function ChatScreen() {
     addAttachments,
     removeAttachment,
   } = useChatStore();
-  const {
-    sessionModelId,
-    sessionProvider,
-    sessionCwd,
-    approvalMode,
-    loadSession,
-    changeModel,
-    changeProject,
-    setApprovalMode,
-  } = useSessionStore();
+  const { sessionModelId, sessionProvider, sessionCwd, approvalMode } = useSessionStore(
+    (state) => state.sessions[sessionId] ?? EMPTY_SESSION_VIEW,
+  );
+  const { loadSession, changeModel, changeProject, setApprovalMode } = useSessionStore();
+  const updateChatTabProject = useWorkspaceStore((state) => state.updateChatTabProject);
   const { projects, loadProjects } = useProjectStore();
   const { loadProviders, modelsByProvider } = useProviderStore();
 
@@ -84,6 +85,12 @@ export function ChatScreen() {
     return modelsByProvider[sessionProvider]?.find((model) => model.id === sessionModelId)
       ?.supportsImages;
   }, [modelsByProvider, sessionModelId, sessionProvider]);
+
+  const handleProjectChange = (project: (typeof projects)[number]) => {
+    if (!selectedSessionId) return;
+    changeProject(selectedSessionId, project);
+    updateChatTabProject(selectedSessionId, project.id);
+  };
 
   return (
     <div className="flex-1 flex flex-col h-full bg-screen">
@@ -121,13 +128,11 @@ export function ChatScreen() {
           selectedSessionId && resolvedProjectId && changeModel(selectedSessionId, modelId)
         }
         approvalMode={approvalMode}
-        onApprovalModeChange={setApprovalMode}
+        onApprovalModeChange={(mode) => setApprovalMode(sessionId, mode)}
         projects={projects}
         selectedProjectId={resolvedProjectId}
         projectFallbackLabel={projectFallbackLabel}
-        onProjectChange={(project) =>
-          selectedSessionId && changeProject(selectedSessionId, project)
-        }
+        onProjectChange={handleProjectChange}
         sessionId={selectedSessionId}
         attachments={attachments}
         messageHistory={messages

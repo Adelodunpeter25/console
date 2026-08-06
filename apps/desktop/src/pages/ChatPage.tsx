@@ -2,8 +2,7 @@ import React from "react";
 import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
 import { TitleBar } from "../components/TitleBar";
 import { Sidebar } from "../components/sidebar/Sidebar";
-import { ChatScreen } from "./ChatScreen";
-import { EmptyState } from "../components/common/EmptyState";
+import { WorkspaceLayout } from "../layout";
 import { ResizablePanel } from "../components/common/ResizablePanel";
 import { CommandPalette } from "../components/commandpalette/CommandPalette";
 import { useAppStore } from "../store/useAppStore";
@@ -22,7 +21,7 @@ const SIDEBAR_DEFAULT = 288;
  * When no session is selected, an empty state is shown.
  */
 export function ChatPage() {
-  const { selectedSessionId, sidebarOpen } = useAppStore();
+  const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const { init } = useServerStore();
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [sidebarWidth, setSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
@@ -97,14 +96,7 @@ export function ChatPage() {
           </ResizablePanel>
         )}
         <div className="flex-1 flex flex-col h-full overflow-hidden">
-          {selectedSessionId ? (
-            <ChatScreen />
-          ) : (
-            <EmptyState
-              title="No Session Selected"
-              description="Select or create a chat session from the sidebar, or press ⌘K for the command palette."
-            />
-          )}
+          <WorkspaceLayout />
         </div>
       </div>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
