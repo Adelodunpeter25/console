@@ -58,8 +58,14 @@ export function WorkspaceLayout() {
     renderValues.content = <WorkspaceTabItem node={node} />;
   }, []);
 
+  const hasTabs = (model.getActiveTabset()?.getChildren().length ?? 0) > 0;
+
   return (
-    <div className="workspace-layout relative h-full w-full min-h-0">
+    <div
+      className={`workspace-layout relative h-full w-full min-h-0${
+        hasTabs ? "" : " workspace-layout--empty"
+      }`}
+    >
       <Layout
         model={model}
         factory={factory}

@@ -1,4 +1,8 @@
 /* Workspace tabs */
+.workspace-layout--empty .flexlayout__tabset_tabbar_outer {
+  display: none;
+}
+
 .workspace-layout .flexlayout__tabset_tabbar_outer {
   width: 100%;
   min-height: 42px;
