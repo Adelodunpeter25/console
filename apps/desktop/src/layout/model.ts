@@ -6,6 +6,7 @@ import type { WorkspaceTabConfig } from "./types";
 export function createWorkspaceModel(): Model {
   const initialModel: IJsonModel = {
     global: {
+      tabEnableDrag: true,
       tabEnableRename: false,
       tabSetEnableDivide: true,
       tabSetEnableMaximize: true,

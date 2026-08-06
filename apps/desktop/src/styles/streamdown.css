@@ -1,0 +1,16 @@
+/* Keep Streamdown's code header and highlighted body as one clean panel. */
+.markdown-body [data-streamdown="code-block"] {
+  margin: 0.5rem 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.markdown-body [data-streamdown="code-block-header"] {
+  display: none;
+}
+
+.markdown-body [data-streamdown="code-block-body"] {
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+}

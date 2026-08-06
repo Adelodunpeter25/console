@@ -1,0 +1,50 @@
+@theme {
+  /* Conductor-inspired: pure black panels, dark gray sidebar */
+  --color-screen: #000000;
+  --color-screen-alt: #0a0a0a;
+  --color-sidebar: #1a1a1a;
+  --color-card: #161616;
+  --color-card-alt: #1a1a1a;
+  --color-card-hover: #222222;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.14);
+  --color-foreground: #ffffff;
+  --color-foreground-secondary: #a1a1aa;
+  --color-foreground-muted: #6b6b70;
+  --color-primary: #ffffff;
+  --color-primary-foreground: #000000;
+  --color-danger: #ef4444;
+  --color-danger-muted: rgba(239, 68, 68, 0.15);
+  --color-warning: #f59e0b;
+  --color-warning-muted: rgba(245, 158, 11, 0.12);
+  --color-success: #22c55e;
+  --color-success-muted: rgba(34, 197, 94, 0.15);
+  --color-user-bubble: #2a2520;
+  --color-user-bubble-border: rgba(255, 180, 80, 0.15);
+  --color-thinking: rgba(168, 85, 247, 0.08);
+  --color-thinking-border: rgba(168, 85, 247, 0.2);
+  --color-tool: rgba(59, 130, 246, 0.08);
+  --color-tool-border: rgba(59, 130, 246, 0.18);
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-glass: 0.75rem;
+}
+
+/* Design tokens for Streamdown's components (shadcn/ui-style custom
+   properties). The app is dark-only, so we map the near-black card palette
+   directly; scoped to .dark so light themes would get defaults. */
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --radius: 0.625rem;
+}
