@@ -53,7 +53,7 @@ export function WorkspaceLayout() {
   }, []);
 
   return (
-    <div className="workspace-layout h-full w-full min-h-0">
+    <div className="workspace-layout relative h-full w-full min-h-0">
       <Layout
         model={model}
         factory={factory}
