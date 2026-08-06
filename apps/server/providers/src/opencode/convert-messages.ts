@@ -35,10 +35,12 @@ export function convertOpencodeMessages(messages: AgentMessage[]): ModelMessage[
 
     if (msg.role === "assistant") {
       const content: any[] = [];
+      let hasReasoning = false;
 
       for (const part of msg.content) {
         if (part.type === "thinking" && part.text) {
           content.push({ type: "reasoning", text: part.text });
+          hasReasoning = true;
         } else if (part.type === "text" && part.text) {
           content.push({ type: "text", text: part.text });
         } else if (part.type === "toolCall") {
@@ -52,6 +54,10 @@ export function convertOpencodeMessages(messages: AgentMessage[]): ModelMessage[
                 : (part.call.arguments ?? {}),
           });
         }
+      }
+
+      if (!hasReasoning) {
+        content.push({ type: "reasoning", text: " " });
       }
 
       out.push({ role: "assistant", content });
