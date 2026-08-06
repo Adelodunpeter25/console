@@ -46,7 +46,7 @@ export function convertOpencodeMessages(messages: AgentMessage[]): ModelMessage[
             type: "tool-call",
             toolCallId: part.call.id,
             toolName: part.call.name,
-            args:
+            input:
               typeof part.call.arguments === "string"
                 ? JSON.parse(part.call.arguments)
                 : (part.call.arguments ?? {}),
