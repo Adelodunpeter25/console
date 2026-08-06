@@ -14,17 +14,22 @@ import { SqliteSessionStorage } from "../agent/src/session/storage.js";
 import { buildSystemPrompt } from "../agent/src/systemprompt/builder.js";
 import { createAntigravityStreamFn } from "../providers/src/antigravity/stream-fn.js";
 import { geminiStreamFn } from "../providers/src/gemini/stream-fn.js";
+import { opencodeStreamFn } from "../providers/src/opencode/stream-fn.js";
 import type { AgentSessionEvent, Model } from "@console/types";
 
-function parseArgs(): { prompt: string; provider: "gemini" | "antigravity"; modelId: string } {
+function parseArgs(): {
+  prompt: string;
+  provider: "gemini" | "antigravity" | "opencode";
+  modelId: string;
+} {
   const args = process.argv.slice(2);
-  let provider: "gemini" | "antigravity" = "gemini";
+  let provider: "gemini" | "antigravity" | "opencode" = "gemini";
   let modelId = "gemini-2.5-pro";
   const promptParts: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--provider" && args[i + 1]) {
-      provider = (args[i + 1] ?? "gemini") as "gemini" | "antigravity";
+      provider = (args[i + 1] ?? "gemini") as "gemini" | "antigravity" | "opencode";
       i++;
     } else if (args[i] === "--model" && args[i + 1]) {
       modelId = args[i + 1] ?? "gemini-2.5-pro";
@@ -93,7 +98,12 @@ async function main() {
     contextWindow: 1_000_000,
   };
 
-  const streamFn = parsed.provider === "gemini" ? geminiStreamFn : createAntigravityStreamFn();
+  const streamFn =
+    parsed.provider === "gemini"
+      ? geminiStreamFn
+      : parsed.provider === "opencode"
+        ? opencodeStreamFn
+        : createAntigravityStreamFn();
 
   const { systemPrompt } = await buildSystemPrompt({
     cwd,

@@ -23,8 +23,12 @@ providerRoutes.get("/providers", (c) => {
  * GET /api/providers/:id/models — Fetch dynamic models for provider.
  */
 providerRoutes.get("/providers/:id/models", async (c) => {
-  const providerId = c.req.param("id") as "gemini" | "antigravity";
-  if (providerId !== "gemini" && providerId !== "antigravity") {
+  const providerId = c.req.param("id") as "gemini" | "antigravity" | "opencode";
+  if (
+    providerId !== "gemini" &&
+    providerId !== "antigravity" &&
+    providerId !== "opencode"
+  ) {
     return c.json({ success: false, error: `Invalid provider '${providerId}'.` }, 400);
   }
 

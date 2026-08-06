@@ -8,9 +8,7 @@ import { createAskTool } from "../../../agent/src/tools/ask.js";
 import { createTodoTool, type TodoItem } from "../../../agent/src/tools/todo.js";
 import { SqliteSessionStorage } from "../../../agent/src/session/storage.js";
 import { buildSystemPrompt } from "../../../agent/src/systemprompt/builder.js";
-import { findModelInProvider } from "../../../agent/src/commands/provider-registry.js";
-import { createAntigravityStreamFn } from "../../../providers/src/antigravity/stream-fn.js";
-import { geminiStreamFn } from "../../../providers/src/gemini/stream-fn.js";
+import { findModelInProvider, getProvider } from "../../../agent/src/commands/provider-registry.js";
 import type {
   AgentSessionEvent,
   ApprovalMode,
@@ -132,14 +130,18 @@ export class RunService {
 
     const model: Model = {
       id: modelId,
-      provider: provider as any,
+      provider: provider as Model["provider"],
       contextWindow: 128_000,
       ...(typeof catalogModel?.supportsImages === "boolean"
         ? { supportsImages: catalogModel.supportsImages }
         : {}),
     };
 
-    const streamFn = provider === "gemini" ? geminiStreamFn : createAntigravityStreamFn();
+    const providerEntry = getProvider(provider);
+    const streamFn = providerEntry?.getStreamFn();
+    if (!streamFn) {
+      throw new Error(`Unknown provider '${provider}'.`);
+    }
 
     const { systemPrompt } = await buildSystemPrompt({
       cwd: session.header.cwd,

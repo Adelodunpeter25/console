@@ -11,7 +11,7 @@ export interface CreateSessionDto {
   cwd: string;
   projectId?: string;
   modelId?: string;
-  provider?: "gemini" | "antigravity";
+  provider?: "gemini" | "antigravity" | "opencode";
   title?: string;
 }
 
@@ -19,14 +19,14 @@ export interface UpdateSessionDto {
   title?: string;
   cwd?: string;
   modelId?: string;
-  provider?: "gemini" | "antigravity";
+  provider?: "gemini" | "antigravity" | "opencode";
   approvalMode?: "always-ask" | "accept-edits" | "plan-mode" | "full-access";
 }
 
 export interface RunPromptDto {
   prompt: string;
   modelId?: string;
-  provider?: "gemini" | "antigravity";
+  provider?: "gemini" | "antigravity" | "opencode";
   approvalMode?: "always-ask" | "accept-edits" | "plan-mode" | "full-access";
   /** Image attachments to include with the prompt (base64-encoded). */
   attachments?: ImageAttachment[];

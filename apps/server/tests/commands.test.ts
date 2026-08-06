@@ -20,7 +20,7 @@ const session = storage.createSession({
   title: "Initial Session",
 });
 
-let currentProvider: "gemini" | "antigravity" = "antigravity";
+let currentProvider: "gemini" | "antigravity" | "opencode" = "antigravity";
 let currentSessionId = session.id;
 
 const agent = new Agent({

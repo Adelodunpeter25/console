@@ -5,6 +5,9 @@ export type { AntigravitySessionState } from "./antigravity/index.js";
 /** Gemini CLI provider — OAuth, cloudcode-pa endpoint */
 export { geminiStreamFn } from "./gemini/index.js";
 
+/** OpenCode Zen provider — free OpenAI-compatible endpoint */
+export { opencodeStreamFn, fetchOpencodeFreeModels } from "./opencode/index.js";
+
 /** Model discovery */
 export { fetchAvailableModels } from "./discovery/fetch-models.js";
 export type { FetchAvailableModelsOptions, DiscoveredApiModel } from "./discovery/fetch-models.js";

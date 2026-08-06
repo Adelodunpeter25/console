@@ -18,8 +18,8 @@ export interface SlashCommandContext {
   agent: Agent;
   sessionStorage?: SqliteSessionStorage;
   currentSessionId?: string;
-  currentProvider: "gemini" | "antigravity";
-  setProvider: (provider: "gemini" | "antigravity") => void;
+  currentProvider: "gemini" | "antigravity" | "opencode";
+  setProvider: (provider: "gemini" | "antigravity" | "opencode") => void;
   setModel: (model: Model) => void;
   setCurrentSessionId: (id: string) => void;
   discoveredCommands?: SlashCommandFile[];

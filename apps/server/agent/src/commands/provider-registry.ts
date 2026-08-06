@@ -7,8 +7,10 @@
 import {
   createAntigravityStreamFn,
   fetchAvailableModels,
+  fetchOpencodeFreeModels,
   geminiStreamFn,
   loadCredential,
+  opencodeStreamFn,
   refreshIfNeeded,
 } from "../../../providers/src/index.js";
 import type { StreamFn } from "../service/agent-loop.js";
@@ -47,7 +49,21 @@ export const DEFAULT_ANTIGRAVITY_MODELS: Model[] = AVAILABLE_MODELS.map((id) => 
   contextWindow: id.startsWith("claude-") ? 250_000 : 1_048_576,
 }));
 
-export const PROVIDER_CATALOG: Record<"gemini" | "antigravity", ProviderEntry> = {
+export const DEFAULT_OPENCODE_MODELS: Model[] = [
+  "big-pickle",
+  "deepseek-v4-flash-free",
+  "mimo-v2.5-free",
+  "ling-3.0-flash-free",
+  "nemotron-3-ultra-free",
+  "north-mini-code-free",
+  "laguna-s-2.1-free",
+  "longcat-2.0-free",
+].map((id) => ({ id, provider: "opencode", contextWindow: 128_000 }));
+
+export const PROVIDER_CATALOG: Record<
+  "gemini" | "antigravity" | "opencode",
+  ProviderEntry
+> = {
   gemini: {
     name: "gemini",
     displayName: "Google Gemini CLI",
@@ -62,6 +78,13 @@ export const PROVIDER_CATALOG: Record<"gemini" | "antigravity", ProviderEntry> =
     models: DEFAULT_ANTIGRAVITY_MODELS,
     getStreamFn: () => createAntigravityStreamFn(),
   },
+  opencode: {
+    name: "opencode",
+    displayName: "OpenCode Zen",
+    description: "Free OpenAI-compatible endpoint (opencode.ai/zen)",
+    models: DEFAULT_OPENCODE_MODELS,
+    getStreamFn: () => opencodeStreamFn,
+  },
 };
 
 export function listProviders(): ProviderCatalogEntry[] {
@@ -69,7 +92,7 @@ export function listProviders(): ProviderCatalogEntry[] {
 }
 
 export function getProvider(name: string): ProviderEntry | undefined {
-  return PROVIDER_CATALOG[name as "gemini" | "antigravity"];
+  return PROVIDER_CATALOG[name as "gemini" | "antigravity" | "opencode"];
 }
 
 export function listModelsForProvider(name: string): Model[] {
@@ -83,26 +106,32 @@ export function findModelInProvider(providerName: string, modelId: string): Mode
 }
 
 /**
- * Dynamically fetch models from the provider endpoint via /v1internal:fetchAvailableModels.
- * Updates the provider's cached model list if successful.
+ * Dynamically fetch models from the provider endpoint via /v1internal:fetchAvailableModels
+ * (or the Zen /models endpoint). Updates the provider's cached model list if successful.
  * Falls back to bundled static models if offline, unauthenticated, or on network error.
  */
 export async function fetchModelsForProvider(
-  providerName: "gemini" | "antigravity",
+  providerName: "gemini" | "antigravity" | "opencode",
   signal?: AbortSignal,
 ): Promise<Model[]> {
   const provider = getProvider(providerName);
   if (!provider) return [];
 
   try {
-    const rawCred = await loadCredential(providerName);
-    const cred = await refreshIfNeeded(rawCred, providerName, signal);
+    let discovered: Model[] | null = null;
 
-    const discovered = await fetchAvailableModels({
-      accessToken: cred.accessToken,
-      provider: providerName,
-      signal,
-    });
+    if (providerName === "opencode") {
+      discovered = await fetchOpencodeFreeModels(signal);
+    } else {
+      const rawCred = await loadCredential(providerName);
+      const cred = await refreshIfNeeded(rawCred, providerName, signal);
+
+      discovered = await fetchAvailableModels({
+        accessToken: cred.accessToken,
+        provider: providerName,
+        signal,
+      });
+    }
 
     if (discovered && discovered.length > 0) {
       provider.models = discovered;
@@ -114,7 +143,11 @@ export async function fetchModelsForProvider(
 
   // If dynamic fetch failed or yielded no models, return static/cached models
   const staticFallback =
-    providerName === "gemini" ? DEFAULT_GEMINI_MODELS : DEFAULT_ANTIGRAVITY_MODELS;
+    providerName === "gemini"
+      ? DEFAULT_GEMINI_MODELS
+      : providerName === "opencode"
+        ? DEFAULT_OPENCODE_MODELS
+        : DEFAULT_ANTIGRAVITY_MODELS;
   if (!provider.models || provider.models.length === 0) {
     provider.models = staticFallback;
   }

@@ -9,7 +9,7 @@ export interface Model {
   /**
    * The provider of the model (e.g., "gemini", "antigravity").
    */
-  provider: "gemini" | "antigravity";
+  provider: "gemini" | "antigravity" | "opencode";
   /**
    * The maximum number of tokens (input + output) the model can handle.
    */

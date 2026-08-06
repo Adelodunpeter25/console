@@ -13,7 +13,7 @@ export class ProviderService {
     return listProviders();
   }
 
-  async getModels(providerId: "gemini" | "antigravity"): Promise<Model[]> {
+  async getModels(providerId: "gemini" | "antigravity" | "opencode"): Promise<Model[]> {
     return fetchModelsForProvider(providerId);
   }
 }
