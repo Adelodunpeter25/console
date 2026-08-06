@@ -1,5 +1,6 @@
 import React from "react";
 import { Layout, TabNode } from "flexlayout-react";
+import type { ITabRenderValues } from "flexlayout-react";
 import { EmptyState } from "../components/common/EmptyState";
 import { ChatScreen } from "../pages/ChatScreen";
 import { useAppStore } from "../store/useAppStore";
@@ -7,6 +8,7 @@ import { getActiveWorkspaceTab } from "./model";
 import { useWorkspaceStore } from "./useWorkspaceStore";
 import { isWorkspaceTabConfig } from "./types";
 import type { WorkspaceTabConfig } from "./types";
+import { WorkspaceTabItem } from "./WorkspaceTabItem";
 
 function WorkspaceTab({ config }: { config: WorkspaceTabConfig }) {
   switch (config.type) {
@@ -52,11 +54,16 @@ export function WorkspaceLayout() {
     return isWorkspaceTabConfig(config) ? <WorkspaceTab config={config} /> : null;
   }, []);
 
+  const renderTab = React.useCallback((node: TabNode, renderValues: ITabRenderValues) => {
+    renderValues.content = <WorkspaceTabItem node={node} />;
+  }, []);
+
   return (
     <div className="workspace-layout relative h-full w-full min-h-0">
       <Layout
         model={model}
         factory={factory}
+        onRenderTab={renderTab}
         onModelChange={syncActiveTab}
         onTabSetPlaceHolder={() => (
           <EmptyState
