@@ -18,9 +18,21 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
   const projectPath = currentProject?.path;
 
   React.useEffect(() => {
-    if (projectPath) {
+    if (!projectPath) return;
+
+    browseDirectory(projectPath).catch(() => {});
+
+    // SSE EventSource for real-time filesystem change events from backend
+    const encoded = encodeURIComponent(projectPath);
+    const eventSource = new EventSource(`http://127.0.0.1:4000/api/fs/watch?path=${encoded}`);
+
+    eventSource.addEventListener("fsChange", () => {
       browseDirectory(projectPath).catch(() => {});
-    }
+    });
+
+    return () => {
+      eventSource.close();
+    };
   }, [projectPath, browseDirectory]);
 
   const tree = React.useMemo(() => {

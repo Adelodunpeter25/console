@@ -117,5 +117,24 @@ export interface FsTreeEntry {
   path: string;
   isDir: boolean;
   size?: number;
+  gitStatus?: GitFileStatus;
   children?: FsTreeEntry[];
+}
+
+export type GitFileStatus = "M" | "A" | "D" | "R" | "C" | "U" | "?" | "staged" | "modified" | "untracked" | "deleted";
+
+export interface GitStatusSummary {
+  branch: string;
+  clean: boolean;
+  files: Array<{
+    path: string;
+    status: GitFileStatus;
+    staged: boolean;
+  }>;
+}
+
+export interface FsChangeEvent {
+  type: "fsChange";
+  projectPath: string;
+  eventPath?: string;
 }

@@ -17,6 +17,7 @@ export interface FlatTreeItem {
   isOpen: boolean;
   loading: boolean;
   hasChildrenLoaded: boolean;
+  gitStatus?: string;
 }
 
 interface FileTreeProps {
@@ -50,6 +51,7 @@ export function FileTree({ tree, onFileSelect }: FileTreeProps) {
           isOpen,
           loading: isLoading,
           hasChildrenLoaded: fetchedChildren !== undefined || (entry.children && entry.children.length > 0) || false,
+          gitStatus: entry.gitStatus,
         });
 
         if (entry.isDir && isOpen && children.length > 0) {
@@ -174,7 +176,14 @@ export function FileTree({ tree, onFileSelect }: FileTreeProps) {
                   </svg>
                 </>
               )}
-              <span className="truncate">{item.name}</span>
+              <span className={`truncate flex-1 ${item.gitStatus === "M" ? "text-amber-400" : item.gitStatus === "A" || item.gitStatus === "?" ? "text-emerald-400" : item.gitStatus === "D" ? "text-rose-400 opacity-60 line-through" : ""}`}>
+                {item.name}
+              </span>
+              {item.gitStatus && (
+                <span className={`text-[10px] font-mono font-bold px-1 rounded ${item.gitStatus === "M" ? "text-amber-400 bg-amber-400/10" : item.gitStatus === "A" || item.gitStatus === "?" ? "text-emerald-400 bg-emerald-400/10" : item.gitStatus === "D" ? "text-rose-400 bg-rose-400/10" : "text-foreground-muted"}`}>
+                  {item.gitStatus === "?" ? "U" : item.gitStatus}
+                </span>
+              )}
             </div>
           );
         })}

@@ -5,7 +5,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { listDirTool, readFileTool, writeFileTool } from "../../../agent/src/tools/index.js";
-import type { FsTreeEntry } from "../types/index.js";
+import type { FsTreeEntry, GitFileStatus } from "@console/types";
+import { GitService } from "./git.service.js";
 
 export class FsService {
   /**
@@ -20,6 +21,14 @@ export class FsService {
 
     const dirEntries = await fs.readdir(resolvedPath, { withFileTypes: true });
     const entries: FsTreeEntry[] = [];
+
+    const gitService = new GitService();
+    const parentDir = path.dirname(resolvedPath);
+    const gitStatusSummary = await gitService.getGitStatus(targetPath ? resolvedPath : process.cwd());
+    const gitStatusMap = new Map<string, GitFileStatus>();
+    for (const f of gitStatusSummary.files) {
+      gitStatusMap.set(f.path, f.status);
+    }
 
     for (const entry of dirEntries) {
       const entryPath = path.join(resolvedPath, entry.name);
@@ -39,6 +48,7 @@ export class FsService {
         path: entryPath,
         isDir: entry.isDirectory(),
         size,
+        gitStatus: gitStatusMap.get(entryPath),
       });
     }
 

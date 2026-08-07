@@ -4,6 +4,7 @@
  */
 import { Hono } from "hono";
 import { FsService } from "../services/fs.service.js";
+import { fsWatchService } from "../services/fswatch.service.js";
 
 export const fsRoutes = new Hono();
 const fsService = new FsService();
@@ -143,19 +144,36 @@ fsRoutes.post("/dir", async (c) => {
 });
 
 /**
- * DELETE /api/fs/dir — Delete a directory recursively.
+ * GET /api/fs/watch — SSE stream for real-time filesystem change events.
  */
-fsRoutes.delete("/dir", async (c) => {
-  const dirPath = c.req.query("path");
-  if (!dirPath) {
+fsRoutes.get("/watch", (c) => {
+  const projectPath = c.req.query("path");
+  if (!projectPath) {
     return c.json({ success: false, error: "Query parameter 'path' is required." }, 400);
   }
 
-  try {
-    await fsService.deleteDirectory(dirPath);
-    return c.json({ success: true, data: { path: dirPath, deleted: true } });
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    return c.json({ success: false, error: errorMsg }, 400);
-  }
+  fsWatchService.watch(projectPath);
+
+  return c.streamSSE(async (stream) => {
+    const handler = (evt: any) => {
+      if (evt.projectPath === projectPath) {
+        stream.writeSSE({
+          event: "fsChange",
+          data: JSON.stringify(evt),
+        });
+      }
+    };
+
+    fsWatchService.on("change", handler);
+
+    stream.onAbort(() => {
+      fsWatchService.off("change", handler);
+    });
+
+    // Keep connection alive with heartbeat
+    while (!stream.aborted) {
+      await stream.sleep(15000);
+      await stream.writeSSE({ event: "ping", data: "" });
+    }
+  });
 });

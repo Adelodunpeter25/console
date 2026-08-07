@@ -1,0 +1,76 @@
+import { exec } from "node:crypto";
+import { exec as execCb } from "node:child_process";
+import { promisify } from "node:util";
+import path from "node:path";
+import type { GitFileStatus, GitStatusSummary } from "@console/types";
+
+const execAsync = promisify(execCb);
+
+export class GitService {
+  /**
+   * Run git status --porcelain=v1 in the repository directory and return structured status.
+   */
+  async getGitStatus(repoPath: string): Promise<GitStatusSummary> {
+    try {
+      // Get current branch name
+      const branchRes = await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: repoPath });
+      const branch = branchRes.stdout.trim() || "main";
+
+      // Get porcelain git status
+      const statusRes = await execAsync("git status --porcelain=v1 -u", { cwd: repoPath });
+      const lines = statusRes.stdout.split("\n").filter((line) => line.trim().length > 0);
+
+      const files: Array<{ path: string; status: GitFileStatus; staged: boolean }> = [];
+
+      for (const line of lines) {
+        const indexStatus = line[0];
+        const workTreeStatus = line[1];
+        const rawFilePath = line.slice(3).trim();
+
+        // Handle renamed files "fileA -> fileB"
+        const filePath = rawFilePath.includes("->")
+          ? rawFilePath.split("->")[1]!.trim()
+          : rawFilePath;
+
+        const absolutePath = path.resolve(repoPath, filePath);
+
+        let status: GitFileStatus = "?";
+        let staged = false;
+
+        if (indexStatus === "?" && workTreeStatus === "?") {
+          status = "?";
+        } else if (indexStatus === "A" || workTreeStatus === "A") {
+          status = "A";
+          staged = indexStatus === "A";
+        } else if (indexStatus === "M" || workTreeStatus === "M") {
+          status = "M";
+          staged = indexStatus === "M";
+        } else if (indexStatus === "D" || workTreeStatus === "D") {
+          status = "D";
+          staged = indexStatus === "D";
+        } else if (indexStatus === "R" || workTreeStatus === "R") {
+          status = "R";
+        }
+
+        files.push({
+          path: absolutePath,
+          status,
+          staged,
+        });
+      }
+
+      return {
+        branch,
+        clean: files.length === 0,
+        files,
+      };
+    } catch {
+      // Not a git repository or git command failed
+      return {
+        branch: "",
+        clean: true,
+        files: [],
+      };
+    }
+  }
+}

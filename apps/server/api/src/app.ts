@@ -13,6 +13,8 @@ import { providerRoutes } from "./routes/providers.js";
 import { runRoutes } from "./routes/run.js";
 import { sessionRoutes } from "./routes/sessions.js";
 
+import { gitRoutes } from "./routes/git.js";
+
 export function createApiApp(): Hono {
   const app = new Hono();
 
@@ -31,6 +33,7 @@ export function createApiApp(): Hono {
   api.route("/", assistRoutes);
   api.route("/", configRoutes);
   api.route("/fs", fsRoutes);
+  api.route("/git", gitRoutes);
   api.route("/", projectRoutes);
   api.route("/", providerRoutes);
   api.route("/", sessionRoutes);
