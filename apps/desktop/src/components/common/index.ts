@@ -11,3 +11,4 @@ export { EmptyState } from "./EmptyState";
 export { ResizablePanel } from "./ResizablePanel";
 export { ImageViewerModal } from "./ImageViewerModal";
 export { DragDropZone } from "./DragDropZone";
+export { ContextMenuProvider, useContextMenu } from "./ContextMenu";
