@@ -5,6 +5,7 @@ import { StreamingBubble } from "./StreamingBubble";
 import { ScrollToBottom } from "./ScrollToBottom";
 import { RunActivity } from "./RunActivity";
 import type { RunActivityState } from "../../types/chat";
+import { useCustomChatVirtualizer } from "../../hooks/useCustomChatVirtualizer";
 
 interface MessageListProps {
   messages: AgentMessage[];
@@ -23,6 +24,10 @@ export interface MessageListRef {
   scrollToBottom: () => void;
 }
 
+type RowItem =
+  | { kind: "message"; message: AgentMessage; originalIndex: number; key: string }
+  | { kind: "streaming"; key: "streaming" };
+
 export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
   function MessageList(
     { messages, streamingText, streamingThinking, running, runs }: MessageListProps,
@@ -30,7 +35,29 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
   ) {
     const isStreaming = Boolean(streamingText || streamingThinking);
     const showStreamingBubble = running || isStreaming;
-    const showEmpty = messages.length === 0 && !showStreamingBubble;
+
+    // Filter out toolResult messages from virtual row items.
+    // toolResult messages are transport-only items rendered as null in MessageBubble;
+    // including them as virtual rows creates empty placeholder heights that cause giant gaps.
+    const rowItems = React.useMemo<RowItem[]>(() => {
+      const items: RowItem[] = [];
+      for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i]!;
+        if (msg.role === "toolResult") continue;
+        items.push({
+          kind: "message",
+          message: msg,
+          originalIndex: i,
+          key: messageKey(msg, i),
+        });
+      }
+      if (showStreamingBubble) {
+        items.push({ kind: "streaming", key: "streaming" });
+      }
+      return items;
+    }, [messages, showStreamingBubble]);
+
+    const showEmpty = rowItems.length === 0;
 
     const userMessageRunMap = React.useMemo(() => {
       const map = new Map<number, RunActivityState>();
@@ -50,23 +77,32 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
       [messages],
     );
 
-    const parentRef = React.useRef<HTMLDivElement>(null);
+    const {
+      parentRef,
+      handleScroll: handleVirtualScroll,
+      startIndex,
+      endIndex,
+      topSpacerHeight,
+      bottomSpacerHeight,
+      measureRef,
+      scrollToEnd,
+    } = useCustomChatVirtualizer({
+      items: rowItems,
+      estimateSize: () => 150,
+      overscan: 5,
+    });
+
     const [showScrollButton, setShowScrollButton] = React.useState(false);
 
     const handleScroll = React.useCallback(() => {
+      handleVirtualScroll();
       if (!parentRef.current) return;
       const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
       const atBottom = scrollHeight - scrollTop - clientHeight < 60;
       setShowScrollButton(!atBottom);
-    }, []);
+    }, [handleVirtualScroll]);
 
-    const scrollToBottom = React.useCallback(() => {
-      if (parentRef.current) {
-        parentRef.current.scrollTop = parentRef.current.scrollHeight;
-      }
-    }, []);
-
-    // Auto-scroll when a new prompt is submitted by the user.
+    // Auto-scroll ONLY when a new prompt is submitted by the user.
     const prevMessagesLengthRef = React.useRef(messages.length);
     React.useEffect(() => {
       const prevLength = prevMessagesLengthRef.current;
@@ -76,48 +112,70 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
         const lastMsg = messages[messages.length - 1];
         if (lastMsg?.role === "user") {
           requestAnimationFrame(() => {
-            scrollToBottom();
+            scrollToEnd();
           });
         }
       }
-    }, [messages, scrollToBottom]);
+    }, [messages, scrollToEnd]);
 
     React.useImperativeHandle(
       ref,
       () => ({
-        scrollToBottom,
+        scrollToBottom: scrollToEnd,
       }),
-      [scrollToBottom],
+      [scrollToEnd],
     );
+
+    const visibleRowItems = rowItems.slice(startIndex, endIndex + 1);
 
     return (
       <>
-        <div ref={parentRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
+        <div ref={parentRef} onScroll={handleScroll} className="flex-1 overflow-y-auto pt-6 pb-6">
           {showEmpty ? (
             <div className="flex items-center justify-center h-full">
               <p className="text-foreground-muted text-sm">Type a prompt below to start the agent.</p>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto px-6 py-6 space-y-4">
-              {messages.map((msg, i) => (
-                <React.Fragment key={messageKey(msg, i)}>
-                  <MessageBubble message={msg} />
-                  {userMessageRunMap.has(i) && (
-                    <RunActivity
-                      activity={userMessageRunMap.get(i)!}
-                      running={running && i === latestUserIndex}
-                    />
-                  )}
-                </React.Fragment>
-              ))}
-              {showStreamingBubble && (
-                <StreamingBubble text={streamingText} thinking={streamingThinking} />
-              )}
+            <div className="max-w-3xl mx-auto px-6">
+              <div style={{ height: topSpacerHeight }} />
+              <div className="space-y-4">
+                {visibleRowItems.map((item, sliceIndex) => {
+                  const virtualIndex = startIndex + sliceIndex;
+
+                  if (item.kind === "streaming") {
+                    return (
+                      <div
+                        key="streaming"
+                        ref={(node) => measureRef(virtualIndex, node)}
+                      >
+                        <StreamingBubble text={streamingText} thinking={streamingThinking} />
+                      </div>
+                    );
+                  }
+
+                  const msg = item.message;
+                  return (
+                    <div
+                      key={item.key}
+                      ref={(node) => measureRef(virtualIndex, node)}
+                    >
+                      <MessageBubble message={msg} />
+                      {userMessageRunMap.has(item.originalIndex) && (
+                        <RunActivity
+                          activity={userMessageRunMap.get(item.originalIndex)!}
+                          running={running && item.originalIndex === latestUserIndex}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ height: bottomSpacerHeight }} />
             </div>
           )}
         </div>
 
-        {showScrollButton && <ScrollToBottom onClick={scrollToBottom} />}
+        {showScrollButton && <ScrollToBottom onClick={scrollToEnd} />}
       </>
     );
   },
