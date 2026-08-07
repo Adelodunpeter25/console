@@ -1,12 +1,13 @@
 import React from "react";
 import { TitleBar } from "../components/TitleBar";
 import { Sidebar } from "../components/sidebar/Sidebar";
+import { RightSidebar } from "../components/sidebar/RightSidebar";
 import { WorkspaceLayout } from "../layout";
 import { ResizablePanel } from "../components/common/ResizablePanel";
 import { CommandPalette } from "../components/commandpalette/CommandPalette";
 import { useAppStore } from "../store/useAppStore";
 import { useServerStore } from "../store/useServerStore";
-import { getSidebarWidth, setSidebarWidth } from "../lib/ui-store";
+import { getSidebarWidth, setSidebarWidth, getRightSidebarWidth, setRightSidebarWidth } from "../lib/ui-store";
 
 const SIDEBAR_MIN = 200;
 const SIDEBAR_MAX = 480;
@@ -15,26 +16,35 @@ const SIDEBAR_DEFAULT = 288;
 /**
  * Main chat page — the app's primary view.
  *
- * Layout: custom titlebar (with sidebar toggle) | sidebar | chat content.
+ * Layout: custom titlebar | left sidebar | center workspace dock | right sidebar.
  * Command palette (⌘K / Ctrl+K) overlays the entire page.
  * When no session is selected, an empty state is shown.
  */
 export function ChatPage() {
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
+  const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen);
   const { init } = useServerStore();
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [sidebarWidth, setSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
+  const [rightSidebarWidth, setRightSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
 
-  // Restore persisted sidebar width on mount.
+  // Restore persisted sidebar widths on mount.
   React.useEffect(() => {
     init();
     getSidebarWidth().then((w) => {
       if (w != null) setSidebarWidthState(Math.min(Math.max(w, SIDEBAR_MIN), SIDEBAR_MAX));
     });
+    getRightSidebarWidth().then((w) => {
+      if (w != null) setRightSidebarWidthState(Math.min(Math.max(w, SIDEBAR_MIN), SIDEBAR_MAX));
+    });
   }, [init]);
 
   const handleSidebarResizeEnd = (width: number) => {
     setSidebarWidth(width).catch(() => {});
+  };
+
+  const handleRightSidebarResizeEnd = (width: number) => {
+    setRightSidebarWidth(width).catch(() => {});
   };
 
   // ⌘K / Ctrl+K toggles the command palette
@@ -68,6 +78,18 @@ export function ChatPage() {
         <div className="flex-1 flex flex-col h-full overflow-hidden">
           <WorkspaceLayout />
         </div>
+        {rightSidebarOpen && (
+          <ResizablePanel
+            width={rightSidebarWidth}
+            onWidthChange={setRightSidebarWidthState}
+            minWidth={SIDEBAR_MIN}
+            maxWidth={SIDEBAR_MAX}
+            onResizeEnd={handleRightSidebarResizeEnd}
+            handleSide="left"
+          >
+            <RightSidebar width={rightSidebarWidth} />
+          </ResizablePanel>
+        )}
       </div>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>

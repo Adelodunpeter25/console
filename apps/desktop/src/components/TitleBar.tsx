@@ -1,6 +1,6 @@
 import React from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { SidebarLeftIcon } from "@hugeicons/core-free-icons";
+import { SidebarLeftIcon, SidebarRightIcon } from "@hugeicons/core-free-icons";
 import { useAppStore } from "../store/useAppStore";
 
 interface TitleBarProps {
@@ -25,7 +25,7 @@ interface TitleBarProps {
  * No custom window control buttons — the OS provides minimize/maximize/close.
  */
 export function TitleBar({ rightAction, title }: TitleBarProps) {
-  const { sidebarOpen, toggleSidebar } = useAppStore();
+  const { sidebarOpen, toggleSidebar, rightSidebarOpen, toggleRightSidebar } = useAppStore();
 
   return (
     <div
@@ -40,7 +40,7 @@ export function TitleBar({ rightAction, title }: TitleBarProps) {
             toggleSidebar();
           }}
           className="p-1.5 rounded-lg text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors"
-          title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          title={sidebarOpen ? "Collapse left sidebar" : "Expand left sidebar"}
         >
           <HugeiconsIcon icon={SidebarLeftIcon} size={16} />
         </button>
@@ -54,19 +54,31 @@ export function TitleBar({ rightAction, title }: TitleBarProps) {
       )}
       {!title && <div className="flex-1" data-tauri-drag-region />}
 
-      {/* Right: custom action only (window controls are native) */}
-      {rightAction && (
+      {/* Right: custom action + right sidebar toggle */}
+      <div className="flex items-center gap-1 pr-2" data-tauri-drag-region>
+        {rightAction && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              rightAction.onClick();
+            }}
+            className="flex items-center justify-center w-9 h-8 text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors"
+            title={rightAction.label}
+          >
+            {rightAction.icon}
+          </button>
+        )}
         <button
           onClick={(e) => {
             e.stopPropagation();
-            rightAction.onClick();
+            toggleRightSidebar();
           }}
-          className="flex items-center justify-center w-9 h-8 text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors mr-1"
-          title={rightAction.label}
+          className="p-1.5 rounded-lg text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors"
+          title={rightSidebarOpen ? "Collapse right sidebar" : "Expand right sidebar"}
         >
-          {rightAction.icon}
+          <HugeiconsIcon icon={SidebarRightIcon} size={16} />
         </button>
-      )}
+      </div>
     </div>
   );
 }
