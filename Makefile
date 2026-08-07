@@ -8,8 +8,11 @@ dev-server:
 	npm run dev:server
 
 ## dev-console: Start the console agent as a background daemon (survives closing terminal)
+##   Usage: make dev-console            (port defaults to 3000)
+##          make dev-console PORT=3001
+## Invokes the CLI directly via tsx because chained `npm run` drops the -p/--port flag.
 dev-console:
-	npm run cli -- start --daemon
+	./node_modules/.bin/tsx apps/cli/index.ts start -p $(if $(PORT),$(PORT),3000)
 
 ## dev-mobile: Start the Expo React Native app dev server
 dev-mobile:
@@ -35,7 +38,7 @@ check:
 help:
 	@echo "Available commands:"
 	@echo "  make dev-server  - Start the backend agent server"
-	@echo "  make dev-console - Start the console agent as a background daemon"
+	@echo "  make dev-console - Start the console agent as a background daemon (PORT=nnnn to set port)"
 	@echo "  make dev-mobile  - Start the Expo mobile app dev server"
 	@echo "  make dev-desktop  - Start the Tauri desktop app dev server"
 	@echo "  make build-desktop  - Build the Tauri desktop app for production"
