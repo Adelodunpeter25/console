@@ -4,7 +4,7 @@ import { useProjectStore } from "../store/useProjectStore";
 import { useProviderStore } from "../store/useProviderStore";
 import { EMPTY_SESSION_VIEW, useSessionStore } from "../store/useSessionStore";
 import { useWorkspaceStore } from "../layout/useWorkspaceStore";
-import { MessageList, MessageListRef } from "../components/chat/MessageList";
+import { MessageList } from "../components/chat/MessageList";
 import { Composer } from "../components/chat/Composer";
 import { InteractionPanel } from "../components/chat/InteractionPanel";
 import { TodoList } from "../components/chat/TodoList";
@@ -92,20 +92,9 @@ export function ChatScreen({ sessionId, projectId }: ChatScreenProps) {
     updateChatTabProject(selectedSessionId, project.id);
   };
 
-  const messageListRef = React.useRef<MessageListRef>(null);
-
-  const handleSend = () => {
-    if (!selectedSessionId) return;
-    sendMessage(selectedSessionId);
-    requestAnimationFrame(() => {
-      messageListRef.current?.scrollToBottom();
-    });
-  };
-
   return (
     <div className="flex-1 flex flex-col h-full bg-screen">
       <MessageList
-        ref={messageListRef}
         messages={messages}
         streamingText={streamingText}
         streamingThinking={streamingThinking}
@@ -129,7 +118,7 @@ export function ChatScreen({ sessionId, projectId }: ChatScreenProps) {
       <Composer
         value={input}
         onChange={(value) => selectedSessionId && setInput(selectedSessionId, value)}
-        onSend={handleSend}
+        onSend={() => selectedSessionId && sendMessage(selectedSessionId)}
         onAbort={() => selectedSessionId && abort(selectedSessionId)}
         running={running}
         disabled={!input.trim()}
