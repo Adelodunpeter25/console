@@ -5,7 +5,6 @@ import { StreamingBubble } from "./StreamingBubble";
 import { ScrollToBottom } from "./ScrollToBottom";
 import { RunActivity } from "./RunActivity";
 import type { RunActivityState } from "../../types/chat";
-import { useVirtualList } from "../../hooks/useVirtualList";
 
 interface MessageListProps {
   messages: AgentMessage[];
@@ -22,52 +21,6 @@ function messageKey(msg: AgentMessage, index: number): string {
 
 export interface MessageListRef {
   scrollToBottom: () => void;
-}
-
-/** Component wrapper per virtualized row with ResizeObserver for dynamic measurement */
-function VirtualizedRow({
-  virtualRow,
-  virtualizer,
-  children,
-}: {
-  virtualRow: { index: number; start: number };
-  virtualizer: any;
-  children: React.ReactNode;
-}) {
-  const rowRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    if (!rowRef.current) return;
-    // Measure element immediately on mount
-    virtualizer.measureElement(rowRef.current);
-
-    // Attach ResizeObserver to remeasuring on code block highlight, thought dropdown toggle, image load
-    const observer = new ResizeObserver(() => {
-      if (rowRef.current) {
-        virtualizer.measureElement(rowRef.current);
-      }
-    });
-
-    observer.observe(rowRef.current);
-    return () => observer.disconnect();
-  }, [virtualizer]);
-
-  return (
-    <div
-      ref={rowRef}
-      data-index={virtualRow.index}
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        width: "100%",
-        transform: `translateY(${virtualRow.start}px)`,
-      }}
-      className="pb-4"
-    >
-      {children}
-    </div>
-  );
 }
 
 export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
@@ -97,11 +50,7 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
       [messages],
     );
 
-    const { parentRef, virtualizer, virtualItems, totalSize } = useVirtualList({
-      items: messages,
-      estimateSize: 120,
-      overscan: 8,
-    });
+    const parentRef = React.useRef<HTMLDivElement>(null);
 
     const [showScrollButton, setShowScrollButton] = React.useState(false);
 
@@ -134,40 +83,20 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
               <p className="text-foreground-muted text-sm">Type a prompt below to start the agent.</p>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto px-6 py-6">
-              <div
-                style={{
-                  height: `${totalSize}px`,
-                  width: "100%",
-                  position: "relative",
-                }}
-              >
-                {virtualItems.map((virtualRow) => {
-                  const msg = messages[virtualRow.index];
-                  if (!msg) return null;
-                  const i = virtualRow.index;
-
-                  return (
-                    <VirtualizedRow
-                      key={messageKey(msg, i)}
-                      virtualRow={virtualRow}
-                      virtualizer={virtualizer}
-                    >
-                      <MessageBubble message={msg} />
-                      {userMessageRunMap.has(i) && (
-                        <RunActivity
-                          activity={userMessageRunMap.get(i)!}
-                          running={running && i === latestUserIndex}
-                        />
-                      )}
-                    </VirtualizedRow>
-                  );
-                })}
-              </div>
+            <div className="max-w-3xl mx-auto px-6 py-6 space-y-4">
+              {messages.map((msg, i) => (
+                <React.Fragment key={messageKey(msg, i)}>
+                  <MessageBubble message={msg} />
+                  {userMessageRunMap.has(i) && (
+                    <RunActivity
+                      activity={userMessageRunMap.get(i)!}
+                      running={running && i === latestUserIndex}
+                    />
+                  )}
+                </React.Fragment>
+              ))}
               {showStreamingBubble && (
-                <div className="mt-4">
-                  <StreamingBubble text={streamingText} thinking={streamingThinking} />
-                </div>
+                <StreamingBubble text={streamingText} thinking={streamingThinking} />
               )}
             </div>
           )}
