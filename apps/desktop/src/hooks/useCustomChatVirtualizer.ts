@@ -121,16 +121,6 @@ export function useCustomChatVirtualizer<T>({
     };
   }, [items.length, scrollState, offsets, totalSize, getItemSize, overscan]);
 
-  // Compensate scrollTop when topSpacerHeight shifts as preceding items above the fold are measured
-  const prevTopSpacerRef = React.useRef(topSpacerHeight);
-  React.useLayoutEffect(() => {
-    const prev = prevTopSpacerRef.current;
-    prevTopSpacerRef.current = topSpacerHeight;
-    const delta = topSpacerHeight - prev;
-    if (delta !== 0 && parentRef.current && scrollState.scrollTop > 0) {
-      parentRef.current.scrollTop += delta;
-    }
-  }, [topSpacerHeight, scrollState.scrollTop]);
 
   const scrollToEnd = React.useCallback(() => {
     if (parentRef.current) {
