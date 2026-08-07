@@ -1,10 +1,11 @@
 import React from "react";
 import type { SessionHeader, SessionStatus } from "@console/types";
-import { FolderClosed, Trash2 } from "lucide-react";
+import { FolderClosed, Pencil, Trash2 } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useSessionStatusStore } from "../../store/useSessionStatusStore";
 import { useWorkspaceStore } from "../../layout/useWorkspaceStore";
+import { useContextMenu } from "../common/ContextMenu";
 import { formatRelativeTime } from "../../utils/time";
 import { basename } from "../../utils/format";
 
@@ -33,6 +34,7 @@ export const SessionItem = React.memo(function SessionItem({
   const projects = useProjectStore((state) => state.projects);
   const openChatTab = useWorkspaceStore((state) => state.openChatTab);
   const closeChatTab = useWorkspaceStore((state) => state.closeChatTab);
+  const contextMenu = useContextMenu();
   const liveStatus = useSessionStatusStore((state) => state.statuses[session.id]);
   const status: SessionStatus = liveStatus ?? session.status ?? "idle";
   const projectId = React.useMemo(
@@ -52,6 +54,20 @@ export const SessionItem = React.memo(function SessionItem({
     });
   };
 
+  const handleContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault();
+    contextMenu.open(event.clientX, event.clientY, [
+      { label: "Rename", icon: <Pencil size={13} />, onClick: () => {} },
+      {
+        label: "Delete",
+        icon: <Trash2 size={13} />,
+        danger: true,
+        separatorBefore: true,
+        onClick: () => {},
+      },
+    ]);
+  };
+
   return (
     <div
       className={`group relative flex flex-col px-3 py-2 rounded-md cursor-pointer ${
@@ -60,6 +76,7 @@ export const SessionItem = React.memo(function SessionItem({
           : "text-foreground-secondary hover:text-foreground"
       }`}
       onClick={handleOpen}
+      onContextMenu={handleContextMenu}
     >
       {/* Line 1: Status Dot + Title + Time */}
       <div className="flex items-center gap-2 min-w-0">
