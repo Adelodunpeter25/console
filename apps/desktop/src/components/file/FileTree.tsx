@@ -149,8 +149,17 @@ export function FileTree({ tree, onFileSelect }: FileTreeProps) {
                 transform: `translateY(${virtualRow.start}px)`,
                 paddingLeft: `${item.level * 12 + 10}px`,
               }}
-              className="flex items-center gap-1.5 px-2 text-xs text-foreground-secondary hover:text-foreground hover:bg-white/[0.06] rounded cursor-pointer transition-colors group truncate"
+              className="relative flex items-center gap-1.5 px-2 text-xs text-foreground-secondary hover:text-foreground hover:bg-white/[0.06] rounded cursor-pointer transition-colors group truncate"
             >
+              {/* Indentation guide lines */}
+              {Array.from({ length: item.level }).map((_, idx) => (
+                <div
+                  key={idx}
+                  style={{ left: `${idx * 12 + 14}px` }}
+                  className="absolute top-0 bottom-0 w-[1px] bg-border/40 pointer-events-none group-hover:bg-border/70"
+                />
+              ))}
+
               {item.isDir ? (
                 <>
                   <span className="shrink-0 text-foreground-muted group-hover:text-foreground">
