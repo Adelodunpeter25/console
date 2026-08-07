@@ -88,9 +88,16 @@ export function reconstructRuns(messages: AgentMessage[]): RunActivityState[] {
         const hasToolCalls = msg.content.some((c) => c.type === "toolCall");
         if (!hasToolCalls) continue; // final response — not part of the timeline
 
-        // Build events in content order: text → text events, toolCall → toolCall events.
+        // Build events in content order: thinking → thinking events, text →
+        // text events, toolCall → toolCall events.
         for (const part of msg.content) {
-          if (part.type === "text" && part.text.trim()) {
+          if (part.type === "thinking" && part.text.trim()) {
+            currentRun.events.push({
+              type: "thinking",
+              id: `reconstructed-thinking-${runIndex}-${currentRun.events.length}`,
+              text: part.text,
+            });
+          } else if (part.type === "text" && part.text.trim()) {
             currentRun.events.push({
               type: "text",
               id: `reconstructed-text-${runIndex}-${currentRun.events.length}`,

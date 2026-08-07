@@ -3,6 +3,7 @@ import { ChevronRight, ChevronUp, Loader2 } from "lucide-react";
 import type { ActivityEvent, RunActivityState } from "../../types/chat";
 import type { ToolCall, ToolResult } from "@console/types";
 import { ToolCallBlock } from "../common/ToolCallBlock";
+import { ThinkingBlock } from "../common/ThinkingBlock";
 import { MarkdownRenderer } from "../common/MarkdownRenderer";
 
 interface RunActivityProps {
@@ -21,17 +22,21 @@ function formatDuration(milliseconds: number): string {
 /** A group of consecutive events for rendering. */
 type RenderGroup =
   | { kind: "text"; id: string; text: string }
+  | { kind: "thinking"; id: string; text: string }
   | { kind: "tools"; id: string; calls: ToolCall[]; results: ToolResult[] };
 
 /**
- * Group consecutive events: text events render individually, consecutive
- * tool call events of the same tool name render as a single ToolCallBlock.
+ * Group consecutive events: text/thinking events render individually,
+ * consecutive tool call events of the same tool name render as a single
+ * ToolCallBlock.
  */
 function groupEvents(events: ActivityEvent[]): RenderGroup[] {
   const groups: RenderGroup[] = [];
   for (const event of events) {
     if (event.type === "text") {
       groups.push({ kind: "text", id: event.id, text: event.text });
+    } else if (event.type === "thinking") {
+      groups.push({ kind: "thinking", id: event.id, text: event.text });
     } else {
       // toolCall event
       const last = groups[groups.length - 1];
@@ -99,6 +104,9 @@ export function RunActivity({ activity, running }: RunActivityProps) {
       {expanded && groups.length > 0 && (
         <div className="mt-1 space-y-2">
           {groups.map((group) => {
+            if (group.kind === "thinking") {
+              return <ThinkingBlock key={`${group.kind}-${group.id}`} text={group.text} />;
+            }
             if (group.kind === "text") {
               return (
                 <div key={`${group.kind}-${group.id}`} className="px-1">

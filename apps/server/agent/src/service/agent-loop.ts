@@ -233,6 +233,15 @@ async function streamOneTurn(
   let textAccumulator = "";
   const textParts: Array<{ text: string; thoughtSignature?: string }> = [];
   let thinkingAccumulator = "";
+  // Ordered segments in arrival order: each entry is either a thinking block,
+  // a tool call id, or a text part index. This preserves the model's real
+  // timeline (think → tool → think → tool) instead of grouping all thinking
+  // ahead of every tool call.
+  const segments: Array<
+    | { kind: "thinking"; text: string }
+    | { kind: "toolCall"; id: string }
+    | { kind: "text"; partIndex: number }
+  > = [];
   const toolCallMap = new Map<
     string,
     {
@@ -254,6 +263,7 @@ async function streamOneTurn(
       if (delta.thoughtSignature) {
         textParts.push({ text: textAccumulator, thoughtSignature: delta.thoughtSignature });
         textAccumulator = "";
+        segments.push({ kind: "text", partIndex: textParts.length - 1 });
       }
     } else if (delta.type === "thinking") {
       thinkingAccumulator += delta.text;
@@ -266,6 +276,12 @@ async function streamOneTurn(
           existing.thoughtSignature = delta.thoughtSignature;
         }
       } else {
+        // A tool call's first delta: flush thinking that streamed before it so
+        // the segment list reflects true order (think before this tool).
+        if (thinkingAccumulator) {
+          segments.push({ kind: "thinking", text: thinkingAccumulator });
+          thinkingAccumulator = "";
+        }
         toolCallMap.set(delta.id, {
           id: delta.id,
           name: delta.name,
@@ -273,12 +289,25 @@ async function streamOneTurn(
           thoughtSignature: delta.thoughtSignature,
         });
         toolCallOrder.push(delta.id);
+        segments.push({ kind: "toolCall", id: delta.id });
         emit({
           type: "modelStreamPart",
           part: { toolCall: { id: delta.id, name: delta.name, arguments: undefined } },
         });
       }
     }
+  }
+
+  // Flush trailing thinking.
+  if (thinkingAccumulator) {
+    segments.push({ kind: "thinking", text: thinkingAccumulator });
+    thinkingAccumulator = "";
+  }
+  // Flush any remaining text that never received a thought signature.
+  if (textAccumulator) {
+    textParts.push({ text: textAccumulator });
+    textAccumulator = "";
+    segments.push({ kind: "text", partIndex: textParts.length - 1 });
   }
 
   const toolCalls: ToolCall[] = toolCallOrder.map((id) => {
@@ -292,37 +321,33 @@ async function streamOneTurn(
     };
   });
 
+  // Assemble content in segment order.
   const content: AssistantMessage["content"] = [];
-
-  // 1. Direct thinking deltas
-  if (thinkingAccumulator) {
-    content.push({ type: "thinking", text: thinkingAccumulator });
-  }
-
-  // 2. Extract <thinking>...</thinking> tags from text accumulator
-  if (textAccumulator) textParts.push({ text: textAccumulator });
-  if (textParts.length > 0) {
-    for (const part of textParts) {
-      const extracted = extractThinkingFromText(part.text);
-      content.push(...extracted.thinkingParts);
-      if (extracted.textParts.length > 0) {
-        const last = extracted.textParts.length - 1;
-        content.push(
-          ...extracted.textParts.map((textPart, index) =>
-            index === last && part.thoughtSignature
-              ? { ...textPart, thoughtSignature: part.thoughtSignature }
-              : textPart,
-          ),
-        );
-      } else if (part.thoughtSignature) {
-        content.push({ type: "text", text: "", thoughtSignature: part.thoughtSignature });
-      }
+  const pushTextPart = (part: { text: string; thoughtSignature?: string }) => {
+    const extracted = extractThinkingFromText(part.text);
+    content.push(...extracted.thinkingParts);
+    if (extracted.textParts.length > 0) {
+      const last = extracted.textParts.length - 1;
+      content.push(
+        ...extracted.textParts.map((textPart, index) =>
+          index === last && part.thoughtSignature
+            ? { ...textPart, thoughtSignature: part.thoughtSignature }
+            : textPart,
+        ),
+      );
+    } else if (part.thoughtSignature) {
+      content.push({ type: "text", text: "", thoughtSignature: part.thoughtSignature });
     }
-  }
-
-  // 3. Tool calls
-  for (const tc of toolCalls) {
-    content.push({ type: "toolCall", call: tc });
+  };
+  for (const seg of segments) {
+    if (seg.kind === "thinking") {
+      content.push({ type: "thinking", text: seg.text });
+    } else if (seg.kind === "toolCall") {
+      const tc = toolCalls.find((t) => t.id === seg.id);
+      if (tc) content.push({ type: "toolCall", call: tc });
+    } else {
+      pushTextPart(textParts[seg.partIndex]!);
+    }
   }
 
   const stopReason: AssistantMessage["stopReason"] = toolCalls.length > 0 ? "toolUse" : "stop";

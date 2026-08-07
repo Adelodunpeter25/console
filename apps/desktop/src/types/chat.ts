@@ -22,6 +22,7 @@ export type RunStatus = "working" | "completed" | "aborted" | "failed";
 /** A single entry in the run activity timeline. */
 export type ActivityEvent =
   | { type: "text"; id: string; text: string }
+  | { type: "thinking"; id: string; text: string }
   | { type: "toolCall"; id: string; call: ToolCall; result?: ToolResult };
 
 export interface RunActivityState {

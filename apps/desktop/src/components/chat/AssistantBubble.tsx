@@ -66,20 +66,11 @@ export const AssistantBubble = React.memo(function AssistantBubble({
   }
 
   // If this turn has tool calls, suppress text — it's rendered as progress
-  // text inside the run activity timeline. Thinking blocks are still shown
-  // since they provide useful context without being "progress narration".
+  // text inside the run activity timeline. Thinking is also rendered inline
+  // in the run activity (in chronological order), so suppress it here too to
+  // avoid duplicating it above the timeline.
   if (hasToolCalls) {
-    if (thinkingParts.length === 0) return null;
-    return (
-      <div className="space-y-2">
-        {thinkingParts.map((part) => (
-          <ThinkingBlock
-            key={contentKey(part, contentKeyOccurrences)}
-            text={part.type === "thinking" ? part.text : ""}
-          />
-        ))}
-      </div>
-    );
+    return null;
   }
 
   return (

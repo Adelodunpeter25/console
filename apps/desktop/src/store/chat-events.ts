@@ -104,11 +104,19 @@ export function applyChatEvent(
         return baseResult;
       }
 
-      // Build timeline events in content order: text parts become text events,
-      // tool call parts become toolCall events (with no result yet).
+      // Build timeline events in content order: thinking/text parts become
+      // thinking/text events, tool call parts become toolCall events (with no
+      // result yet). This preserves the chronological think → tool → think →
+      // tool order from the agent loop.
       const newEvents: ActivityEvent[] = [];
       for (const part of turn.content) {
-        if (part.type === "text" && part.text.trim()) {
+        if (part.type === "thinking" && part.text.trim()) {
+          newEvents.push({
+            type: "thinking",
+            id: `thinking-${part.text.slice(0, 16)}-${Date.now()}`,
+            text: part.text,
+          });
+        } else if (part.type === "text" && part.text.trim()) {
           newEvents.push({
             type: "text",
             id: `text-${part.text.slice(0, 16)}-${Date.now()}`,
