@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Console Desktop application uses a flexible, multi-pane workspace layout powered by `flexlayout-react`. The workspace provides an IDE-like experience where users can open multiple tabs, split panes, and work with isolated project contexts seamlessly.
+The Console application uses a flexible, multi-pane workspace layout powered by `flexlayout-react`. The workspace provides an IDE-like experience where users can open multiple tabs, split panes, and work with isolated project contexts seamlessly.
 
 ---
 

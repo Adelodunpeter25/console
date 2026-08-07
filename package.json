@@ -11,7 +11,7 @@
     "dev:server": "npm run dev --workspace=@console/server",
     "start:server": "npm run start --workspace=@console/server",
     "dev:mobile": "npm run start --workspace=@console/mobile",
-    "dev:desktop": "npm run tauri dev --workspace=@console/desktop",
+    "dev:desktop": "npm run tauri:dev --workspace=@console/desktop",
     "build:desktop": "npm run tauri build --workspace=@console/desktop",
     "cli": "npm run cli --workspace=@console/cli",
     "check": "vp check",

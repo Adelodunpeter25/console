@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2/capabilities",
   "identifier": "default",
-  "description": "Default capability for Console Desktop — allows core Tauri operations and network access to the running agent server.",
+  "description": "Default capability for Console — allows core Tauri operations and network access to the running agent server.",
   "windows": ["main"],
   "permissions": [
     "core:default",

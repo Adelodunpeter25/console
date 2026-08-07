@@ -18,7 +18,7 @@ dev-console:
 dev-mobile:
 	npm run dev:mobile
 
-## dev-desktop: Start the Tauri desktop app in dev mode (requires server running)
+## dev-desktop: Start the Tauri desktop app in dev mode (separate dev bundle identifier, requires server running)
 dev-desktop:
 	npm run dev:desktop
 
