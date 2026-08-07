@@ -9,15 +9,14 @@ interface UseCustomChatVirtualizerOptions<T> {
 /**
  * Custom windowing virtualization hook tailored for chat applications.
  *
- * Unlike standard virtualizers that use `position: absolute` and `transform: translateY()`,
- * this hook renders visible items in normal document flow bounded by top and bottom spacer divs.
- * This guarantees that dynamic height changes (such as collapsible tool call blocks or
- * markdown blocks) collapse naturally in standard CSS flow without layout offset gaps.
+ * Renders visible items in normal document flow bounded by top and bottom spacer divs.
+ * Includes scroll-offset compensation when topSpacerHeight changes during backward
+ * scrolling to eliminate blank screens and visual layout jumps.
  */
 export function useCustomChatVirtualizer<T>({
   items,
   estimateSize = () => 150,
-  overscan = 5,
+  overscan = 10,
 }: UseCustomChatVirtualizerOptions<T>) {
   const parentRef = React.useRef<HTMLDivElement>(null);
   const sizeMapRef = React.useRef<Map<number, number>>(new Map());
@@ -121,6 +120,17 @@ export function useCustomChatVirtualizer<T>({
       bottomSpacerHeight: bottomSpacer,
     };
   }, [items.length, scrollState, offsets, totalSize, getItemSize, overscan]);
+
+  // Compensate scrollTop when topSpacerHeight shifts as preceding items above the fold are measured
+  const prevTopSpacerRef = React.useRef(topSpacerHeight);
+  React.useLayoutEffect(() => {
+    const prev = prevTopSpacerRef.current;
+    prevTopSpacerRef.current = topSpacerHeight;
+    const delta = topSpacerHeight - prev;
+    if (delta !== 0 && parentRef.current && scrollState.scrollTop > 0) {
+      parentRef.current.scrollTop += delta;
+    }
+  }, [topSpacerHeight, scrollState.scrollTop]);
 
   const scrollToEnd = React.useCallback(() => {
     if (parentRef.current) {
