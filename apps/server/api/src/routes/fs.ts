@@ -3,6 +3,7 @@
  * Thin controller delegating all business logic to FsService.
  */
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import { FsService } from "../services/fs.service.js";
 import { fsWatchService } from "../services/fswatch.service.js";
 
@@ -154,7 +155,7 @@ fsRoutes.get("/watch", (c) => {
 
   fsWatchService.watch(projectPath);
 
-  return c.streamSSE(async (stream) => {
+  return streamSSE(c, async (stream) => {
     const handler = (evt: any) => {
       if (evt.projectPath === projectPath) {
         stream.writeSSE({
