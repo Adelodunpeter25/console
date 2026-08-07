@@ -20,13 +20,15 @@ function messageKey(msg: AgentMessage, index: number): string {
   return `${msg.role}-${index}`;
 }
 
-export function MessageList({
-  messages,
-  streamingText,
-  streamingThinking,
-  running,
-  runs,
-}: MessageListProps) {
+export interface MessageListRef {
+  scrollToBottom: () => void;
+}
+
+export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
+  function MessageList(
+    { messages, streamingText, streamingThinking, running, runs }: MessageListProps,
+    ref,
+  ) {
   const isStreaming = Boolean(streamingText || streamingThinking);
   const showStreamingBubble = running || isStreaming;
   const showEmpty = messages.length === 0 && !showStreamingBubble;
@@ -70,6 +72,10 @@ export function MessageList({
       parentRef.current.scrollTop = parentRef.current.scrollHeight;
     }
   }, [parentRef]);
+
+  React.useImperativeHandle(ref, () => ({
+    scrollToBottom,
+  }), [scrollToBottom]);
 
   return (
     <>
@@ -129,4 +135,4 @@ export function MessageList({
       {showScrollButton && <ScrollToBottom onClick={scrollToBottom} />}
     </>
   );
-}
+});
