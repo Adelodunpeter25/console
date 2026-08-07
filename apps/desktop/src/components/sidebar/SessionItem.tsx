@@ -1,6 +1,6 @@
 import React from "react";
 import type { SessionHeader, SessionStatus } from "@console/types";
-import { FolderClosed, Pencil, Trash2 } from "lucide-react";
+import { FolderClosed, Trash2 } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useSessionStatusStore } from "../../store/useSessionStatusStore";
@@ -57,10 +57,9 @@ export const SessionItem = React.memo(function SessionItem({
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
     contextMenu.open(event.clientX, event.clientY, [
-      { label: "Rename", icon: <Pencil size={13} />, onClick: () => {} },
+      { label: "Rename", onClick: () => {} },
       {
         label: "Delete",
-        icon: <Trash2 size={13} />,
         danger: true,
         separatorBefore: true,
         onClick: () => {},
