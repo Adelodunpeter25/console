@@ -47,6 +47,9 @@ Uses `flexlayout-react` to support splitting (horizontal & vertical), tab draggi
   - Single file reading/viewing (`"file"` tabs via `<File />` component).
   - Git diff inspection (`"diff"` tabs via `<PatchDiff />` / `<MultiFileDiff />` components).
   - Lightweight, high-performance rendering without Monaco's heavy web worker overhead.
+- **Terminal Emulator:** `ghostty-web` (WASM-compiled Ghostty terminal engine) for:
+  - `"terminal"` tabs in the center dock.
+  - API-compatible with xterm.js but powered by Ghostty's high-fidelity VT parser, Unicode handling, and truecolor support.
 
 ---
 
