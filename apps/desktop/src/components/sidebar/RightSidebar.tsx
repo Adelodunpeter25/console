@@ -39,7 +39,7 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
   const handleFileSelect = React.useCallback(
     (filePath: string) => {
       if (!selectedProjectId) return;
-      openFileTab({ projectId: selectedProjectId, path: filePath });
+      openFileTab({ type: "file", projectId: selectedProjectId, path: filePath });
     },
     [openFileTab, selectedProjectId],
   );
