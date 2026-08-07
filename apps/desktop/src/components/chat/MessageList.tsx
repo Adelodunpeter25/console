@@ -52,7 +52,7 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
     );
 
     const parentRef = React.useRef<HTMLDivElement>(null);
-
+    const isAtBottomRef = React.useRef(true);
     const [showScrollButton, setShowScrollButton] = React.useState(false);
 
     // Virtual row count: settled messages + one extra slot for the live
@@ -64,14 +64,6 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
       getScrollElement: () => parentRef.current,
       estimateSize: () => 200,
       overscan: 5,
-      // Chat-style scrolling: anchor to the end so the viewport follows the
-      // growing streaming bubble automatically. followOnAppend scrolls to the
-      // end when new messages are appended and the user was already at the
-      // bottom. This replaces the old per-token autoScroll effect that forced
-      // a synchronous layout reflow on every single token.
-      anchorTo: "end",
-      followOnAppend: true,
-      scrollEndThreshold: 80,
       getItemKey: (index) => {
         if (index >= messages.length) return "streaming";
         const msg = messages[index]!;
@@ -85,26 +77,31 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
     const handleScroll = React.useCallback(() => {
       if (!parentRef.current) return;
       const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
-      const atBottom = scrollHeight - scrollTop - clientHeight < 60;
+      const atBottom = scrollHeight - scrollTop - clientHeight < 80;
+      isAtBottomRef.current = atBottom;
       setShowScrollButton(!atBottom);
     }, []);
 
     const scrollToBottom = React.useCallback(() => {
+      isAtBottomRef.current = true;
       virtualizer.scrollToEnd();
     }, [virtualizer]);
 
-    // Scroll to bottom on initial load / session switch. ChatScreen loads
-    // messages by first clearing to [] then loading the real array, so
-    // messages.length transitions through 0 → N and this effect fires once.
-    // The virtualizer's anchorTo: "end" + followOnAppend handle all streaming
-    // and new-message auto-follow after that, so we do NOT depend on
-    // streamingText/streamingThinking here.
+    // Auto-scroll to bottom when content updates or streams, if user is at bottom.
+    React.useEffect(() => {
+      if (isAtBottomRef.current) {
+        virtualizer.scrollToEnd();
+      }
+    }, [streamingText, streamingThinking, messages.length, running, virtualizer]);
+
+    // Scroll to bottom on initial load / session switch.
     const scrollRafRef = React.useRef<number | null>(null);
     React.useLayoutEffect(() => {
       if (messages.length === 0) return;
       if (scrollRafRef.current != null) return;
       scrollRafRef.current = requestAnimationFrame(() => {
         scrollRafRef.current = null;
+        isAtBottomRef.current = true;
         virtualizer.scrollToEnd();
       });
       return () => {
