@@ -19,6 +19,7 @@ use commands::{
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
@@ -65,6 +66,25 @@ pub fn run() {
             // Load the persisted backend URL before the frontend initialises
             // so `get_backend_url` returns the saved value on first read.
             crate::config::load_config(app.handle());
+
+            // Subscribe to the backend notification stream and show native OS
+            // notifications for agent lifecycle events (needs attention / done).
+            // Spawned once here so it survives across session switches.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                use tauri_plugin_notification::NotificationExt;
+
+                let client = crate::api::ApiClient::new();
+                let _ = crate::api::notifications::stream_notifications(&client, move |event| {
+                    let _ = handle
+                        .notification()
+                        .builder()
+                        .title(&event.title)
+                        .body(&event.body)
+                        .show();
+                })
+                .await;
+            });
 
             #[cfg(debug_assertions)]
             {

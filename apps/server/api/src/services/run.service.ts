@@ -22,6 +22,13 @@ import type { RunPromptDto } from "../types/index.js";
 import { expandPromptRefs } from "./assist.service.js";
 import { randomUUID } from "node:crypto";
 import { repairToolCallHistory } from "../../../agent/src/utils/tool-history.js";
+import {
+  attentionNotification,
+  doneNotification,
+  isAttentionEvent,
+  isDoneEvent,
+} from "./notify-agent-event.js";
+import { notificationService } from "./notification.service.js";
 
 export class RunService {
   private sessionStorage = new SqliteSessionStorage();
@@ -246,6 +253,13 @@ export class RunService {
         // Mark needs_attention when the agent asks a question or requests permission
         if (event.type === "askQuestion" || event.type === "permissionRequest") {
           this.sessionStorage.updateSessionStatus(sessionId, "needs_attention");
+        }
+
+        // Emit native notifications for attention-worthy and completion events.
+        if (isAttentionEvent(event)) {
+          notificationService.push(attentionNotification(sessionId, event));
+        } else if (isDoneEvent(event) && !runError) {
+          notificationService.push(doneNotification(sessionId));
         }
 
         await onEvent(event);

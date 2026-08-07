@@ -8,6 +8,7 @@ import { authRoutes } from "./routes/auth.js";
 import { assistRoutes } from "./routes/assist.js";
 import { configRoutes } from "./routes/config.js";
 import { fsRoutes } from "./routes/fs.js";
+import { notificationRoutes } from "./routes/notifications.js";
 import { projectRoutes } from "./routes/projects.js";
 import { providerRoutes } from "./routes/providers.js";
 import { runRoutes } from "./routes/run.js";
@@ -34,6 +35,7 @@ export function createApiApp(): Hono {
   api.route("/", configRoutes);
   api.route("/fs", fsRoutes);
   api.route("/git", gitRoutes);
+  api.route("/", notificationRoutes);
   api.route("/", projectRoutes);
   api.route("/", providerRoutes);
   api.route("/", sessionRoutes);
