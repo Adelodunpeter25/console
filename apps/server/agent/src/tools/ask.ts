@@ -13,19 +13,24 @@ const inputSchema = z.object({
   question: z.string().describe("The question to ask the user"),
   options: z
     .array(z.string())
-    .min(2)
-    .describe("List of selectable multiple-choice options for the user"),
+    .optional()
+    .describe("Optional list of selectable multiple-choice options for the user. Omit for a free-text question."),
   isMultiSelect: z
     .boolean()
     .optional()
     .default(false)
     .describe("Set to true if user can select multiple options"),
+  skippable: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe("Set to true if the question is optional and the user may skip it"),
 });
 
 type Input = z.infer<typeof inputSchema>;
 
-const description = `Ask the user a structured multiple-choice question to clarify ambiguous requirements, architecture options, or preferences.
-Provide a clear question and at least 2 distinct option choices.`;
+const description = `Ask the user a question to clarify ambiguous requirements, architecture options, or preferences.
+Provide a clear question and, optionally, a list of distinct option choices. The user can always type a custom answer, so plain free-text questions are fine too.`;
 
 export function createAskTool(handler?: AskQuestionHandler): AgentTool<typeof inputSchema> {
   return {
@@ -34,18 +39,19 @@ export function createAskTool(handler?: AskQuestionHandler): AgentTool<typeof in
     tier: "read",
     inputSchema,
     execute: async (args: Input): Promise<unknown> => {
-      const { question, options, isMultiSelect = false } = args;
+      const { question, options, isMultiSelect = false, skippable = false } = args;
 
       const request: AskQuestionRequest = {
         requestId: randomUUID(),
         question,
         options,
         isMultiSelect,
+        skippable,
       };
 
       if (!handler) {
         // Default fallback when running headless or unattached
-        const defaultAnswer = options[0]!;
+        const defaultAnswer = options?.[0] ?? "skipped";
         return {
           content: [
             {
@@ -63,7 +69,10 @@ export function createAskTool(handler?: AskQuestionHandler): AgentTool<typeof in
         content: [
           {
             type: "text",
-            text: `[User Answer]: "${answerText}"`,
+            text:
+              answerText === ""
+                ? `[User Answer]: User skipped this question.`
+                : `[User Answer]: "${answerText}"`,
           },
         ],
       };

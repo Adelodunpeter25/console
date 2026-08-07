@@ -71,7 +71,10 @@ interface QuestionPanelProps {
 function QuestionPanel({ request, sessionId }: QuestionPanelProps) {
   const answerQuestion = useChatStore((s) => s.answerQuestion);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [customAnswer, setCustomAnswer] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
+
+  const hasOptions = request.options != null && request.options.length > 0;
 
   const toggle = (option: string) => {
     setSelected((prev) => {
@@ -87,12 +90,25 @@ function QuestionPanel({ request, sessionId }: QuestionPanelProps) {
     });
   };
 
-  const handleSubmit = async () => {
-    if (selected.size === 0) return;
+  const submitAnswer = async (answer: string | string[]) => {
     setSubmitting(true);
-    const answer = request.isMultiSelect ? [...selected] : [...selected][0]!;
     await answerQuestion(sessionId, request.requestId, answer);
   };
+
+  const handleSubmit = async () => {
+    if (customAnswer.trim()) {
+      await submitAnswer(customAnswer.trim());
+      return;
+    }
+    if (selected.size === 0) return;
+    await submitAnswer(request.isMultiSelect ? [...selected] : [...selected][0]!);
+  };
+
+  const handleSkip = async () => {
+    await submitAnswer("");
+  };
+
+  const canSubmit = customAnswer.trim().length > 0 || selected.size > 0;
 
   return (
     <div className="rounded-xl border border-primary/20 bg-card px-4 py-3 space-y-3">
@@ -100,41 +116,67 @@ function QuestionPanel({ request, sessionId }: QuestionPanelProps) {
         <HelpCircle size={16} className="text-primary shrink-0" />
         <span className="text-sm font-medium text-foreground">{request.question}</span>
       </div>
-      <div className="space-y-1.5 pl-6">
-        {request.options.map((option) => {
-          const isSelected = selected.has(option);
-          return (
-            <button
-              key={option}
-              onClick={() => toggle(option)}
-              className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-md border text-sm transition-colors ${
-                isSelected
-                  ? "border-primary/40 bg-primary/10 text-foreground"
-                  : "border-border bg-transparent text-foreground-secondary hover:bg-white/5"
-              }`}
-            >
-              <span
-                className={`shrink-0 w-4 h-4 ${
-                  request.isMultiSelect ? "rounded-sm" : "rounded-full"
-                } border-2 flex items-center justify-center ${
-                  isSelected ? "border-primary bg-primary/20" : "border-foreground-muted"
+
+      {hasOptions && (
+        <div className="space-y-1.5 pl-6">
+          {request.options!.map((option) => {
+            const isSelected = selected.has(option);
+            return (
+              <button
+                key={option}
+                onClick={() => toggle(option)}
+                className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-md border text-sm transition-colors ${
+                  isSelected
+                    ? "border-primary/40 bg-primary/10 text-foreground"
+                    : "border-border bg-transparent text-foreground-secondary hover:bg-white/5"
                 }`}
               >
-                {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
-              </span>
-              {option}
-            </button>
-          );
-        })}
-      </div>
+                <span
+                  className={`shrink-0 w-4 h-4 ${
+                    request.isMultiSelect ? "rounded-sm" : "rounded-full"
+                  } border-2 flex items-center justify-center ${
+                    isSelected ? "border-primary bg-primary/20" : "border-foreground-muted"
+                  }`}
+                >
+                  {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                </span>
+                {option}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="pl-6">
+        <input
+          type="text"
+          value={customAnswer}
+          onChange={(e) => setCustomAnswer(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && canSubmit) handleSubmit();
+          }}
+          placeholder={hasOptions ? "Or type your own answer…" : "Type your answer…"}
+          className="w-full px-3 py-2 rounded-md border border-border bg-transparent text-sm text-foreground placeholder:text-foreground-muted focus:outline-none focus:border-primary/50"
+        />
+      </div>
+
+      <div className="flex items-center gap-2 pl-6">
         <button
           onClick={handleSubmit}
-          disabled={selected.size === 0 || submitting}
+          disabled={!canSubmit || submitting}
           className="px-4 py-1.5 rounded-md bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary text-xs font-medium transition-colors disabled:opacity-40"
         >
           {submitting ? "Sending…" : "Submit"}
         </button>
+        {request.skippable && (
+          <button
+            onClick={handleSkip}
+            disabled={submitting}
+            className="px-4 py-1.5 rounded-md bg-transparent hover:bg-white/5 border border-border text-foreground-muted text-xs font-medium transition-colors disabled:opacity-40"
+          >
+            Skip
+          </button>
+        )}
       </div>
     </div>
   );

@@ -5,8 +5,11 @@ import type { TodoItem } from "./todo";
 export interface AskQuestionRequest {
   requestId: string;
   question: string;
-  options: string[];
+  /** Optional multiple-choice options; omit for a free-text question. */
+  options?: string[];
   isMultiSelect?: boolean;
+  /** When true, the user may skip the question entirely. */
+  skippable?: boolean;
 }
 
 export type AgentSessionEvent =
