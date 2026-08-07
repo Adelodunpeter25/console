@@ -102,9 +102,6 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
           ref={virtuosoRef}
           data={rowItems}
           computeItemKey={(_index, item) => item.key}
-          initialTopMostItemIndex={rowItems.length > 0 ? rowItems.length - 1 : 0}
-          followOutput={(isAtBottom) => (isAtBottom ? "auto" : false)}
-          alignToBottom
           className="h-full w-full"
           atBottomStateChange={(atBottom) => {
             setShowScrollButton(!atBottom);
