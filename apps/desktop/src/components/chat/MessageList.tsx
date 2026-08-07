@@ -5,7 +5,6 @@ import { StreamingBubble } from "./StreamingBubble";
 import { ScrollToBottom } from "./ScrollToBottom";
 import { RunActivity } from "./RunActivity";
 import type { RunActivityState } from "../../types/chat";
-import { useVirtualList } from "../../hooks/useVirtualList";
 
 interface MessageListProps {
   messages: AgentMessage[];
@@ -50,11 +49,7 @@ export function MessageList({
     [messages],
   );
 
-  const { parentRef, virtualizer, virtualItems, totalSize } = useVirtualList({
-    items: messages,
-    estimateSize: 100,
-    overscan: 5,
-  });
+  const parentRef = React.useRef<HTMLDivElement>(null);
 
   const [showScrollButton, setShowScrollButton] = React.useState(false);
 
@@ -79,48 +74,20 @@ export function MessageList({
             <p className="text-foreground-muted text-sm">Type a prompt below to start the agent.</p>
           </div>
         ) : (
-          <div className="max-w-3xl mx-auto px-6 py-6">
-            <div
-              style={{
-                height: `${totalSize}px`,
-                width: "100%",
-                position: "relative",
-              }}
-            >
-              {virtualItems.map((virtualRow) => {
-                const msg = messages[virtualRow.index];
-                if (!msg) return null;
-                const i = virtualRow.index;
-
-                return (
-                  <div
-                    key={messageKey(msg, i)}
-                    ref={virtualizer.measureElement}
-                    data-index={virtualRow.index}
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                    className="pb-4"
-                  >
-                    <MessageBubble message={msg} />
-                    {userMessageRunMap.has(i) && (
-                      <RunActivity
-                        activity={userMessageRunMap.get(i)!}
-                        running={running && i === latestUserIndex}
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+          <div className="max-w-3xl mx-auto px-6 py-6 space-y-4">
+            {messages.map((msg, i) => (
+              <React.Fragment key={messageKey(msg, i)}>
+                <MessageBubble message={msg} />
+                {userMessageRunMap.has(i) && (
+                  <RunActivity
+                    activity={userMessageRunMap.get(i)!}
+                    running={running && i === latestUserIndex}
+                  />
+                )}
+              </React.Fragment>
+            ))}
             {showStreamingBubble && (
-              <div className="mt-4">
-                <StreamingBubble text={streamingText} thinking={streamingThinking} />
-              </div>
+              <StreamingBubble text={streamingText} thinking={streamingThinking} />
             )}
           </div>
         )}
