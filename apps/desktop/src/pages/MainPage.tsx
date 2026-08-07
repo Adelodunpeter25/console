@@ -7,7 +7,14 @@ import { ResizablePanel } from "../components/common/ResizablePanel";
 import { CommandPalette } from "../components/commandpalette/CommandPalette";
 import { useAppStore } from "../store/useAppStore";
 import { useServerStore } from "../store/useServerStore";
-import { getSidebarWidth, setSidebarWidth, getRightSidebarWidth, setRightSidebarWidth } from "../lib/ui-store";
+import {
+  getSidebarWidth,
+  setSidebarWidth,
+  getRightSidebarWidth,
+  setRightSidebarWidth,
+  getSidebarOpen,
+  getRightSidebarOpen,
+} from "../lib/ui-store";
 
 const SIDEBAR_MIN = 200;
 const SIDEBAR_MAX = 480;
@@ -21,12 +28,14 @@ const SIDEBAR_DEFAULT = 288;
 export function MainPage() {
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen);
+  const setSidebarOpen = useAppStore((state) => state.setSidebarOpen);
+  const setRightSidebarOpen = useAppStore((state) => state.setRightSidebarOpen);
   const { init } = useServerStore();
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [sidebarWidth, setSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
   const [rightSidebarWidth, setRightSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
 
-  // Restore persisted sidebar widths on mount.
+  // Restore persisted sidebar widths and visibility on mount.
   React.useEffect(() => {
     init();
     getSidebarWidth().then((w) => {
@@ -35,7 +44,13 @@ export function MainPage() {
     getRightSidebarWidth().then((w) => {
       if (w != null) setRightSidebarWidthState(Math.min(Math.max(w, SIDEBAR_MIN), SIDEBAR_MAX));
     });
-  }, [init]);
+    getSidebarOpen().then((open) => {
+      if (open != null) setSidebarOpen(open);
+    });
+    getRightSidebarOpen().then((open) => {
+      if (open != null) setRightSidebarOpen(open);
+    });
+  }, [init, setSidebarOpen, setRightSidebarOpen]);
 
   const handleSidebarResizeEnd = (width: number) => {
     setSidebarWidth(width).catch(() => {});

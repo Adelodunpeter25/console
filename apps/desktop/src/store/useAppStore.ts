@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { setSidebarOpen as persistSidebarOpen, setRightSidebarOpen as persistRightSidebarOpen } from "../lib/ui-store";
 
 interface AppState {
   selectedProjectId: string | null;
@@ -13,7 +14,7 @@ interface AppState {
   toggleRightSidebar: () => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   selectedProjectId: null,
   selectedSessionId: null,
   sidebarOpen: true,
@@ -21,8 +22,22 @@ export const useAppStore = create<AppState>((set) => ({
 
   setSelectedProjectId: (selectedProjectId) => set({ selectedProjectId }),
   setSelectedSessionId: (selectedSessionId) => set({ selectedSessionId }),
-  setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
-  toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
-  setRightSidebarOpen: (rightSidebarOpen) => set({ rightSidebarOpen }),
-  toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
+  setSidebarOpen: (sidebarOpen) => {
+    set({ sidebarOpen });
+    persistSidebarOpen(sidebarOpen).catch(() => {});
+  },
+  toggleSidebar: () => {
+    const next = !get().sidebarOpen;
+    set({ sidebarOpen: next });
+    persistSidebarOpen(next).catch(() => {});
+  },
+  setRightSidebarOpen: (rightSidebarOpen) => {
+    set({ rightSidebarOpen });
+    persistRightSidebarOpen(rightSidebarOpen).catch(() => {});
+  },
+  toggleRightSidebar: () => {
+    const next = !get().rightSidebarOpen;
+    set({ rightSidebarOpen: next });
+    persistRightSidebarOpen(next).catch(() => {});
+  },
 }));
