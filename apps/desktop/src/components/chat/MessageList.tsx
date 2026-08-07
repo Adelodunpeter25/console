@@ -2,6 +2,7 @@ import React from "react";
 import type { AgentMessage } from "@console/types";
 import { MessageBubble } from "./MessageBubble";
 import { StreamingBubble } from "./StreamingBubble";
+import { ScrollToBottom } from "./ScrollToBottom";
 import { RunActivity } from "./RunActivity";
 import type { RunActivityState } from "../../types/chat";
 import { useVirtualList } from "../../hooks/useVirtualList";
@@ -55,58 +56,77 @@ export function MessageList({
     overscan: 5,
   });
 
-  return (
-    <div ref={parentRef} className="flex-1 overflow-y-auto">
-      {showEmpty ? (
-        <div className="flex items-center justify-center h-full">
-          <p className="text-foreground-muted text-sm">Type a prompt below to start the agent.</p>
-        </div>
-      ) : (
-        <div className="max-w-3xl mx-auto px-6 py-6">
-          <div
-            style={{
-              height: `${totalSize}px`,
-              width: "100%",
-              position: "relative",
-            }}
-          >
-            {virtualItems.map((virtualRow) => {
-              const msg = messages[virtualRow.index];
-              if (!msg) return null;
-              const i = virtualRow.index;
+  const [showScrollButton, setShowScrollButton] = React.useState(false);
 
-              return (
-                <div
-                  key={messageKey(msg, i)}
-                  ref={virtualizer.measureElement}
-                  data-index={virtualRow.index}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                  className="pb-4"
-                >
-                  <MessageBubble message={msg} />
-                  {userMessageRunMap.has(i) && (
-                    <RunActivity
-                      activity={userMessageRunMap.get(i)!}
-                      running={running && i === latestUserIndex}
-                    />
-                  )}
-                </div>
-              );
-            })}
+  const handleScroll = React.useCallback(() => {
+    if (!parentRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
+    const atBottom = scrollHeight - scrollTop - clientHeight < 60;
+    setShowScrollButton(!atBottom);
+  }, [parentRef]);
+
+  const scrollToBottom = React.useCallback(() => {
+    if (parentRef.current) {
+      parentRef.current.scrollTop = parentRef.current.scrollHeight;
+    }
+  }, [parentRef]);
+
+  return (
+    <>
+      <div ref={parentRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
+        {showEmpty ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-foreground-muted text-sm">Type a prompt below to start the agent.</p>
           </div>
-          {showStreamingBubble && (
-            <div className="mt-4">
-              <StreamingBubble text={streamingText} thinking={streamingThinking} />
+        ) : (
+          <div className="max-w-3xl mx-auto px-6 py-6">
+            <div
+              style={{
+                height: `${totalSize}px`,
+                width: "100%",
+                position: "relative",
+              }}
+            >
+              {virtualItems.map((virtualRow) => {
+                const msg = messages[virtualRow.index];
+                if (!msg) return null;
+                const i = virtualRow.index;
+
+                return (
+                  <div
+                    key={messageKey(msg, i)}
+                    ref={virtualizer.measureElement}
+                    data-index={virtualRow.index}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                    className="pb-4"
+                  >
+                    <MessageBubble message={msg} />
+                    {userMessageRunMap.has(i) && (
+                      <RunActivity
+                        activity={userMessageRunMap.get(i)!}
+                        running={running && i === latestUserIndex}
+                      />
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          )}
-        </div>
-      )}
-    </div>
+            {showStreamingBubble && (
+              <div className="mt-4">
+                <StreamingBubble text={streamingText} thinking={streamingThinking} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {showScrollButton && <ScrollToBottom onClick={scrollToBottom} />}
+    </>
   );
 }
