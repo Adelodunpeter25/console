@@ -39,7 +39,7 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
   return (
     <aside
       style={{ width }}
-      className="flex flex-col h-full bg-surface border-l border-border select-none overflow-hidden shrink-0"
+      className="flex flex-col h-full bg-sidebar border-l border-border select-none overflow-hidden shrink-0"
     >
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <div className="flex items-center gap-2 text-foreground font-medium text-xs">
