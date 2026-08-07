@@ -75,14 +75,14 @@ To support multi-project workflows without cross-contamination:
 - [ ] Bind `⌘K` / `⌘P` file search and commands dynamically to the active tab's project context.
 
 ### Phase 2: Right Sidebar (File Explorer & Git Status)
-- [ ] Implement collapsible Right Sidebar container.
-- [ ] Add project file tree explorer component.
-- [ ] Add Git changes & diff status panel.
+- [x] Implement collapsible Right Sidebar container with TitleBar toggle.
+- [x] Add project file tree explorer component using `@pierre/trees`.
+- [ ] Add Git changes & diff status panel (pending backend support).
 
 ### Phase 3: Additional Tab Types
-- [ ] Implement File Editor / Viewer tab (`"file"`).
-- [ ] Implement Embedded Terminal tab (`"terminal"`).
-- [ ] Implement Diff Viewer tab (`"diff"`).
+- [x] Create File Viewer component using `@pierre/diffs` (`"file"`).
+- [x] Create Diff Viewer component using `@pierre/diffs` (`"diff"`).
+- [ ] Implement Embedded Terminal tab using `ghostty-web` (`"terminal"`).
 
 ### Phase 4: Full Layout Persistence
 - [ ] Save and restore the complete `flexlayout-react` layout state to disk (`uiStore` / `tauri-plugin-store`) across app restarts.

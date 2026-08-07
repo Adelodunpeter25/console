@@ -54,7 +54,7 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
 
       <div className="flex-1 overflow-y-auto">
         {projectPath ? (
-          <FileTree tree={tree} />
+          <FileTree tree={tree} projectRoot={projectPath} />
         ) : (
           <div className="p-4 text-xs text-foreground-muted text-center">
             No active project selected.

@@ -1,28 +1,16 @@
 import React from "react";
 import { FileTree as PierreFileTree, useFileTree } from "@pierre/trees/react";
 import type { FsTreeEntry } from "@console/types";
-
-function extractPaths(entries: FsTreeEntry[]): string[] {
-  const paths: string[] = [];
-  function walk(items: FsTreeEntry[]) {
-    for (const item of items) {
-      paths.push(item.path);
-      if (item.children && item.children.length > 0) {
-        walk(item.children);
-      }
-    }
-  }
-  walk(entries);
-  return paths;
-}
+import { extractRelativePaths } from "../../utils/tree-paths";
 
 interface FileTreeProps {
   tree: FsTreeEntry[];
+  projectRoot?: string;
   onFileSelect?: (path: string) => void;
 }
 
-export function FileTree({ tree, onFileSelect }: FileTreeProps) {
-  const paths = React.useMemo(() => extractPaths(tree), [tree]);
+export function FileTree({ tree, projectRoot, onFileSelect }: FileTreeProps) {
+  const paths = React.useMemo(() => extractRelativePaths(tree, projectRoot), [tree, projectRoot]);
 
   const handleSelectionChange = React.useCallback(
     (selectedPaths: readonly string[]) => {
