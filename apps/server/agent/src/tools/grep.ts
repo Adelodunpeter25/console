@@ -8,6 +8,10 @@ const inputSchema = z.object({
   path: z
     .string()
     .describe("File or directory to search in. If a directory, searches all files recursively."),
+  cwd: z
+    .string()
+    .optional()
+    .describe("Base directory for relative paths. Defaults to process.cwd()."),
   mode: z
     .enum(["plain", "regex", "fuzzy"])
     .optional()
@@ -53,7 +57,7 @@ Returns matching lines with surrounding context, grouped by file.
 Use for finding function definitions, import usages, variable names, TODOs, etc.`,
   inputSchema,
   execute: async (args: Input): Promise<unknown> => {
-    const searchPath = path.resolve(args.path);
+    const searchPath = path.resolve(args.cwd ?? process.cwd(), args.path);
 
     // fff operates on a directory root — if a file is given use its parent
     // and constrain via includePattern

@@ -5,6 +5,10 @@ import type { AgentTool } from "../types/index.js";
 
 const inputSchema = z.object({
   path: z.string().describe("Directory path to list"),
+  cwd: z
+    .string()
+    .optional()
+    .describe("Base directory for relative paths. Defaults to process.cwd()."),
   recursive: z.boolean().optional().default(false).describe("Recursively list subdirectories"),
   maxDepth: z
     .number()
@@ -122,7 +126,7 @@ Use this to understand project structure before reading specific files.
 Use recursive: true to explore subdirectories (up to maxDepth levels deep).`,
   inputSchema,
   execute: async (args: Input): Promise<unknown> => {
-    const dirPath = path.resolve(args.path);
+    const dirPath = path.resolve(args.cwd ?? process.cwd(), args.path);
 
     // Verify it's actually a directory
     try {

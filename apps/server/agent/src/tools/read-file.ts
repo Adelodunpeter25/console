@@ -5,6 +5,10 @@ import type { AgentTool } from "../types/index.js";
 
 const inputSchema = z.object({
   path: z.string().describe("Absolute or relative path to the file to read"),
+  cwd: z
+    .string()
+    .optional()
+    .describe("Base directory for relative paths. Defaults to process.cwd()."),
   startLine: z
     .number()
     .int()
@@ -35,7 +39,7 @@ Always prefer reading specific line ranges for large files to avoid wasting toke
 For directories, use listDir instead.`,
   inputSchema,
   execute: async (args: Input): Promise<unknown> => {
-    const filePath = path.resolve(args.path);
+    const filePath = path.resolve(args.cwd ?? process.cwd(), args.path);
 
     let raw: Buffer;
     try {

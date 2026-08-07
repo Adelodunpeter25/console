@@ -15,6 +15,10 @@ const inputSchema = z.object({
     .describe(
       "List of files to write. Each entry has a path and content. All writes happen concurrently.",
     ),
+  cwd: z
+    .string()
+    .optional()
+    .describe("Base directory for relative paths. Defaults to process.cwd()."),
   stopOnError: z
     .boolean()
     .optional()
@@ -35,8 +39,12 @@ interface FileWriteResult {
   error?: string;
 }
 
-async function writeOneFile(filePath: string, content: string): Promise<FileWriteResult> {
-  const resolved = path.resolve(filePath);
+async function writeOneFile(
+  baseCwd: string,
+  filePath: string,
+  content: string,
+): Promise<FileWriteResult> {
+  const resolved = path.resolve(baseCwd, filePath);
   const dir = path.dirname(resolved);
 
   try {
@@ -97,8 +105,9 @@ Set stopOnError: true if you need atomic-style behaviour (stop after first failu
 Validates that no two entries share the same path before writing.`,
   inputSchema,
   execute: async (args: Input): Promise<unknown> => {
+    const baseCwd = path.resolve(args.cwd ?? process.cwd());
     // Check for duplicate paths
-    const resolvedPaths = args.files.map((f) => path.resolve(f.path));
+    const resolvedPaths = args.files.map((f) => path.resolve(baseCwd, f.path));
     const seen = new Set<string>();
     const duplicates: string[] = [];
     for (const rp of resolvedPaths) {
@@ -125,14 +134,14 @@ Validates that no two entries share the same path before writing.`,
       // Sequential — stop on first error
       results = [];
       for (const file of args.files) {
-        const result = await writeOneFile(file.path, file.content);
+        const result = await writeOneFile(baseCwd, file.path, file.content);
         results.push(result);
         if (result.status === "failed") {
           // Mark remaining as skipped
           const remaining = args.files.slice(results.length);
           for (const skipped of remaining) {
             results.push({
-              path: path.resolve(skipped.path),
+              path: path.resolve(baseCwd, skipped.path),
               status: "failed",
               error: "Skipped due to stopOnError",
             });
@@ -142,7 +151,9 @@ Validates that no two entries share the same path before writing.`,
       }
     } else {
       // Concurrent — attempt all
-      results = await Promise.all(args.files.map((file) => writeOneFile(file.path, file.content)));
+      results = await Promise.all(
+        args.files.map((file) => writeOneFile(baseCwd, file.path, file.content)),
+      );
     }
 
     const anyFailed = results.some((r) => r.status === "failed");

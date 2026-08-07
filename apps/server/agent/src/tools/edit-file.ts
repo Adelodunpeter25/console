@@ -5,6 +5,10 @@ import type { AgentTool } from "../types/index.js";
 
 const inputSchema = z.object({
   path: z.string().describe("Path to the file to edit"),
+  cwd: z
+    .string()
+    .optional()
+    .describe("Base directory for relative paths. Defaults to process.cwd()."),
   oldContent: z
     .string()
     .describe(
@@ -24,7 +28,7 @@ If the match appears 0 times or more than once, the edit is rejected — be prec
 For complete file rewrites, use writeFile instead.`,
   inputSchema,
   execute: async (args: Input): Promise<unknown> => {
-    const filePath = path.resolve(args.path);
+    const filePath = path.resolve(args.cwd ?? process.cwd(), args.path);
 
     let original: string;
     try {

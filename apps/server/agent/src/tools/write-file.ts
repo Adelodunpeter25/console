@@ -5,6 +5,10 @@ import type { AgentTool } from "../types/index.js";
 
 const inputSchema = z.object({
   path: z.string().describe("Absolute or relative path to write the file to"),
+  cwd: z
+    .string()
+    .optional()
+    .describe("Base directory for relative paths. Defaults to process.cwd()."),
   content: z.string().describe("Full content to write to the file"),
   encoding: z.enum(["utf-8"]).optional().default("utf-8").describe("File encoding"),
   createDirs: z
@@ -24,7 +28,7 @@ Use this for creating new files or completely rewriting an existing file.
 For targeted changes to an existing file, use editFile instead to avoid rewriting unchanged content.`,
   inputSchema,
   execute: async (args: Input): Promise<unknown> => {
-    const filePath = path.resolve(args.path);
+    const filePath = path.resolve(args.cwd ?? process.cwd(), args.path);
     const dir = path.dirname(filePath);
 
     // Create parent directories if needed
