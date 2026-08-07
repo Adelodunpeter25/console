@@ -9,7 +9,8 @@ import { useProjectFsWatcher } from "../../hooks/useProjectFsWatcher";
 export function RightSidebar({ width = 288 }: { width?: number }) {
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const projects = useProjectStore((state) => state.projects);
-  const { browse, browseDirectory } = useFsStore();
+  const browse = useFsStore((state) => state.browse);
+  const browseDirectory = useFsStore((state) => state.browseDirectory);
 
   const currentProject = React.useMemo(
     () => projects.find((p) => p.id === selectedProjectId),

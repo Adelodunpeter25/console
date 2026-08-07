@@ -14,14 +14,12 @@ interface ModelSelectorProps {
  * primitives so it shares the same visual language as other selectors.
  */
 export function ModelSelector({ value, onChange }: ModelSelectorProps) {
-  const {
-    providers,
-    modelsByProvider,
-    loadProviders,
-    loadModels,
-    loadingProviders,
-    loadingModels,
-  } = useProviderStore();
+  const providers = useProviderStore((state) => state.providers);
+  const modelsByProvider = useProviderStore((state) => state.modelsByProvider);
+  const loadProviders = useProviderStore((state) => state.loadProviders);
+  const loadModels = useProviderStore((state) => state.loadModels);
+  const loadingProviders = useProviderStore((state) => state.loadingProviders);
+  const loadingModels = useProviderStore((state) => state.loadingModels);
   const [search, setSearch] = React.useState("");
   const [collapsedProviders, setCollapsedProviders] = React.useState<Set<string>>(new Set());
   const query = search.trim().toLowerCase();
@@ -30,14 +28,21 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
     loadProviders();
   }, [loadProviders]);
 
-  const allModels = React.useMemo(() => {
-    return providers.flatMap((p) => {
-      const models = modelsByProvider[p.name] ?? [];
-      return models
-        .filter((m) => !query || m.id.toLowerCase().includes(query))
-        .map((m) => ({ ...m, providerName: p.displayName }));
-    });
+  const modelsByProviderFiltered = React.useMemo(() => {
+    const result: Record<string, typeof modelsByProvider[string]> = {};
+    for (const provider of providers) {
+      const models = modelsByProvider[provider.name] ?? [];
+      result[provider.name] = !query
+        ? models
+        : models.filter((m) => m.id.toLowerCase().includes(query));
+    }
+    return result;
   }, [providers, modelsByProvider, query]);
+
+  const allModels = React.useMemo(
+    () => providers.flatMap((p) => modelsByProviderFiltered[p.name] ?? []),
+    [providers, modelsByProviderFiltered],
+  );
 
   const handleOpen = () => {
     providers.forEach((p) => {
@@ -68,9 +73,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
         </div>
       )}
       {providers.map((provider) => {
-        const models = (modelsByProvider[provider.name] ?? []).filter(
-          (model) => !query || model.id.toLowerCase().includes(query),
-        );
+        const models = modelsByProviderFiltered[provider.name] ?? [];
         const isLoading = loadingModels[provider.name];
         if (!isLoading && models.length === 0) return null;
         const collapsed = collapsedProviders.has(provider.name) && !query;

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useAppStore } from "../../store/useAppStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useWorkspaceStore } from "../../layout/useWorkspaceStore";
+import { useVirtualList } from "../../hooks/useVirtualList";
 import { SessionItem } from "./SessionItem";
 import { dayBucket, formatDayGroup } from "../../utils/time";
 import type { SessionHeader } from "@console/types";
@@ -29,6 +30,25 @@ function groupSessionsByDate(
     .map(([bucket, items]) => ({ label: formatDayGroup(bucket), items }));
 }
 
+/** Flatten grouped sessions into a single list with sticky group headers
+ *  interleaved as sentinel items, so the virtualizer can render them. */
+type FlatEntry =
+  | { kind: "header"; label: string; key: string }
+  | { kind: "session"; session: SessionHeader; key: string };
+
+function flattenGroups(
+  groups: Array<{ label: string; items: SessionHeader[] }>,
+): FlatEntry[] {
+  const result: FlatEntry[] = [];
+  for (const group of groups) {
+    result.push({ kind: "header", label: group.label, key: `header-${group.label}` });
+    for (const session of group.items) {
+      result.push({ kind: "session", session, key: session.id });
+    }
+  }
+  return result;
+}
+
 /**
  * Left sidebar — flat session list with New Chat action.
  * Rendered inside a ResizablePanel by ChatPage; width is passed in so the
@@ -36,10 +56,15 @@ function groupSessionsByDate(
  */
 export function Sidebar({ width = 288 }: { width?: number }) {
   const navigate = useNavigate();
-  const { sidebarOpen, selectedSessionId, setSelectedProjectId } = useAppStore();
+  const selectedSessionId = useAppStore((state) => state.selectedSessionId);
+  const setSelectedProjectId = useAppStore((state) => state.setSelectedProjectId);
   const openChatTab = useWorkspaceStore((state) => state.openChatTab);
-  const { projects, loadProjects, sessions, sessionsLoading, loadSessions, createSession } =
-    useProjectStore();
+  const projects = useProjectStore((state) => state.projects);
+  const loadProjects = useProjectStore((state) => state.loadProjects);
+  const sessions = useProjectStore((state) => state.sessions);
+  const sessionsLoading = useProjectStore((state) => state.sessionsLoading);
+  const loadSessions = useProjectStore((state) => state.loadSessions);
+  const createSession = useProjectStore((state) => state.createSession);
 
   React.useEffect(() => {
     loadProjects();
@@ -49,7 +74,18 @@ export function Sidebar({ width = 288 }: { width?: number }) {
     loadSessions();
   }, [loadSessions]);
 
-  if (!sidebarOpen) return null;
+  const flatEntries = React.useMemo(() => {
+    const groups = groupSessionsByDate(sessions);
+    return flattenGroups(groups);
+  }, [sessions]);
+
+  const { parentRef, virtualItems, totalSize } = useVirtualList({
+    items: flatEntries,
+    estimateSize: 52,
+    overscan: 8,
+  });
+
+  if (useAppStore.getState().sidebarOpen === false) return null;
 
   const handleGlobalNewChat = async () => {
     const targetProject = projects[0];
@@ -85,7 +121,7 @@ export function Sidebar({ width = 288 }: { width?: number }) {
       </div>
 
       {/* Session List */}
-      <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
+      <div ref={parentRef} className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
         {sessionsLoading ? (
           <div className="flex items-center justify-center py-8">
             <span className="text-xs text-foreground-muted">Loading...</span>
@@ -96,22 +132,52 @@ export function Sidebar({ width = 288 }: { width?: number }) {
             <p className="text-xs text-foreground-muted">No chats yet.</p>
           </div>
         ) : (
-          groupSessionsByDate(sessions).map((group) => (
-            <div key={group.label} className="space-y-0.5">
-              <div className="px-2 pt-3 pb-1">
-                <span className="text-[10px] font-bold tracking-wider text-foreground-muted uppercase">
-                  {group.label}
-                </span>
-              </div>
-              {group.items.map((session) => (
-                <SessionItem
-                  key={session.id}
-                  session={session}
-                  isActive={session.id === selectedSessionId}
-                />
-              ))}
-            </div>
-          ))
+          <div
+            style={{ height: totalSize, position: "relative", width: "100%" }}
+          >
+            {virtualItems.map((virtualRow) => {
+              const entry = flatEntries[virtualRow.index];
+              if (!entry) return null;
+
+              if (entry.kind === "header") {
+                return (
+                  <div
+                    key={entry.key}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                    className="px-2 pt-3 pb-1"
+                  >
+                    <span className="text-[10px] font-bold tracking-wider text-foreground-muted uppercase">
+                      {entry.label}
+                    </span>
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={entry.key}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <SessionItem
+                    session={entry.session}
+                    isActive={entry.session.id === selectedSessionId}
+                  />
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 

@@ -34,9 +34,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const [search, setSearch] = React.useState("");
   const [browsePath, setBrowsePath] = React.useState<string | undefined>(undefined);
 
-  const { browse, browsing, browseDirectory } = useFsStore();
-  const { addProject } = useProjectStore();
-  const { setSelectedProjectId } = useAppStore();
+  const browse = useFsStore((state) => state.browse);
+  const browsing = useFsStore((state) => state.browsing);
+  const browseDirectory = useFsStore((state) => state.browseDirectory);
+  const addProject = useProjectStore((state) => state.addProject);
+  const setSelectedProjectId = useAppStore((state) => state.setSelectedProjectId);
 
   // Load root directory listing when entering browse view
   React.useEffect(() => {

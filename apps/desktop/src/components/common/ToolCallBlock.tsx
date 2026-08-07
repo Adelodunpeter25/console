@@ -149,7 +149,16 @@ const ToolCallRow = React.memo(function ToolCallRow({
 /* Tool call block — renders each call as a named, expandable row       */
 /* ------------------------------------------------------------------ */
 
-export function ToolCallBlock({ calls, results }: ToolCallBlockProps) {
+export const ToolCallBlock = React.memo(function ToolCallBlock({
+  calls,
+  results,
+}: ToolCallBlockProps) {
+  const resultsMap = React.useMemo(() => {
+    const map = new Map<string, ToolResult>();
+    if (results) for (const r of results) map.set(r.toolCallId, r);
+    return map;
+  }, [results]);
+
   const groups = React.useMemo(() => {
     const grouped = new Map<string, ToolCall[]>();
     for (const call of calls) {
@@ -167,17 +176,22 @@ export function ToolCallBlock({ calls, results }: ToolCallBlockProps) {
           <ToolCallRow
             key={group.calls[0]!.id}
             call={group.calls[0]!}
-            result={results?.find((result) => result.toolCallId === group.calls[0]!.id)}
+            result={resultsMap.get(group.calls[0]!.id)}
           />
         ) : (
-          <ToolCallGroup key={group.name} name={group.name} calls={group.calls} results={results} />
+          <ToolCallGroup
+            key={group.name}
+            name={group.name}
+            calls={group.calls}
+            results={results}
+          />
         ),
       )}
     </div>
   );
-}
+});
 
-function ToolCallGroup({
+const ToolCallGroup = React.memo(function ToolCallGroup({
   name,
   calls,
   results,
@@ -187,9 +201,19 @@ function ToolCallGroup({
   results?: ToolResult[];
 }) {
   const [open, setOpen] = React.useState(false);
-  const groupResults = calls
-    .map((call) => results?.find((result) => result.toolCallId === call.id))
-    .filter((result): result is ToolResult => Boolean(result));
+  const resultsMap = React.useMemo(() => {
+    const map = new Map<string, ToolResult>();
+    if (results) for (const r of results) map.set(r.toolCallId, r);
+    return map;
+  }, [results]);
+
+  const groupResults = React.useMemo(
+    () =>
+      calls
+        .map((call) => resultsMap.get(call.id))
+        .filter((result): result is ToolResult => Boolean(result)),
+    [calls, resultsMap],
+  );
   const hasError = groupResults.some((result) => result.isError);
   const complete = groupResults.length === calls.length;
   const meta = getToolMeta(name);
@@ -223,7 +247,7 @@ function ToolCallGroup({
             <ToolCallRow
               key={call.id}
               call={call}
-              result={results?.find((result) => result.toolCallId === call.id)}
+              result={resultsMap.get(call.id)}
               defaultOpen={false}
             />
           ))}
@@ -231,4 +255,4 @@ function ToolCallGroup({
       )}
     </div>
   );
-}
+});
