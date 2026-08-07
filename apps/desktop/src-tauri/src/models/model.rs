@@ -15,5 +15,11 @@ pub struct ProviderCatalogEntry {
     pub name: String,
     pub display_name: String,
     pub description: String,
+    #[serde(default = "default_auth_method")]
+    pub auth_method: String,
     pub models: Vec<Model>,
+}
+
+fn default_auth_method() -> String {
+    "none".to_string()
 }

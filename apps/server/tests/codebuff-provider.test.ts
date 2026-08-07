@@ -193,8 +193,27 @@ function restoreFetch() {
 
     const startedRuns: string[] = [];
     const finishedRuns: Array<{ runId: string; status: string }> = [];
+    const sessionPosts: string[] = [];
 
     mockFetch(async (url, init) => {
+      if (url.endsWith("/api/v1/freebuff/session")) {
+        const rawHeaders = init?.headers as Record<string, string> | undefined;
+        assert.equal(rawHeaders?.["x-freebuff-model"], "deepseek/deepseek-v4-flash");
+        sessionPosts.push("1");
+        return new Response(
+          JSON.stringify({
+            status: "active",
+            accessTier: "full",
+            instanceId: "inst-1",
+            model: "deepseek/deepseek-v4-flash",
+            admittedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+            remainingMs: 3_600_000,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
       if (url.endsWith("/api/v1/agent-runs")) {
         const body = JSON.parse(String(init?.body));
         if (body.action === "START") {
@@ -227,10 +246,11 @@ function restoreFetch() {
       assert.equal(authHeader, "Bearer tok");
       const body = JSON.parse(String(init?.body));
       assert.equal(body.model, "deepseek/deepseek-v4-flash");
-      // Free-tier metadata must be in the request body (cost_mode free) and
-      // the run_id must be the server-issued runId, not a random string.
+      // Free-tier metadata: cost_mode free, server-issued run_id, and the
+      // live freebuff session instance id (CLI handshake).
       assert.equal(body.codebuff_metadata?.cost_mode, "free");
       assert.equal(body.codebuff_metadata?.run_id, "run-abc");
+      assert.equal(body.codebuff_metadata?.freebuff_instance_id, "inst-1");
       return new Response(mockSse, {
         headers: { "Content-Type": "text/event-stream" },
       });
@@ -247,9 +267,12 @@ function restoreFetch() {
         deltas.push(delta);
       }
 
-      // Lifecycle: START registered a run, stream consumed it, FINISH closed it.
+      // Lifecycle: session handshake → START registered a run, stream consumed it,
+      // FINISH closed it.
+      assert.deepEqual(sessionPosts, ["1"]);
       assert.deepEqual(startedRuns, ["run-abc"]);
       assert.deepEqual(finishedRuns, [{ runId: "run-abc", status: "completed" }], "run must be finished after streaming");
+      assert.deepEqual(deltas.filter((d) => d.type === "text").map((d) => (d as { text: string }).text).join(""), "pineapple");
 
       const thinkingDeltas = deltas.filter((d) => d.type === "thinking");
       const textDeltas = deltas.filter((d) => d.type === "text");

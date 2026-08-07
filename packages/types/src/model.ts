@@ -21,4 +21,6 @@ export interface ProviderCatalogEntry {
   displayName: string;
   description: string;
   models: Model[];
+  /** How the user authenticates with this provider (drives the Account UI). */
+  authMethod: "oauth" | "device-code" | "none";
 }

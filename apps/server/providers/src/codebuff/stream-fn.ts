@@ -23,6 +23,7 @@ import { CODEBUFF_API_URL } from "./constants.js";
 import { convertCodebuffMessages } from "./convert-messages.js";
 import { convertCodebuffTools } from "./convert-tools.js";
 import { loadCodebuffCredential } from "./creds.js";
+import { ensureFreebuffSession } from "./freebuff-session.js";
 import { finishAgentRun, startAgentRun } from "./runs.js";
 
 /** Map a model id → the free-tier root agent that owns its runs (run START
@@ -55,6 +56,18 @@ export const codebuffStreamFn: StreamFn = async function* ({
     );
   }
 
+  // 0. Ensure an active freebuff session for this model. The server rejects
+  //    free-mode chat requests that don't carry a live session instance id
+  //    (`free_mode_cli_required`) — this is the CLI session handshake.
+  const sessionResult = await ensureFreebuffSession(credential, model.id);
+  if (!sessionResult.ok) {
+    const { reason, message, detail } = sessionResult;
+    throw new Error(
+      `Codebuff free session unavailable (${reason}): ${message ?? detail ?? "no session"}`,
+    );
+  }
+  const freebuffInstanceId = sessionResult.session.instanceId;
+
   // 1. Register the agent run server-side — REQUIRED, requests without a
   //    known run_id are rejected with 400 "runId Not Found".
   const agentId = resolveFreeAgentIdForModel(model.id);
@@ -83,12 +96,17 @@ export const codebuffStreamFn: StreamFn = async function* ({
       // Mirrors the official SDK's getProviderOptions(): codebuff_metadata
       // and provider land at the top level of the request body. run_id must
       // be the server-issued runId.
+      // Mirrors the official SDK's getProviderOptions(): codebuff_metadata
+      // and provider land at the top level of the request body. run_id must
+      // be the server-issued runId, and freebuff_instance_id must be the
+      // live session instance the CLI would hold.
       providerOptions: {
         codebuff: {
           codebuff_metadata: {
             cost_mode: "free",
             run_id: runId,
             client_id: "console-agent",
+            freebuff_instance_id: freebuffInstanceId,
           },
           provider: { allow_fallbacks: true },
         },

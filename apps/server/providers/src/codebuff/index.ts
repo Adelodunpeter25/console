@@ -1,5 +1,10 @@
 export { codebuffStreamFn, resolveFreeAgentIdForModel } from "./stream-fn.js";
 export { startAgentRun, finishAgentRun } from "./runs.js";
+export {
+  ensureFreebuffSession,
+  invalidateFreebuffSession,
+} from "./freebuff-session.js";
+export type { FreebuffSessionResult } from "./freebuff-session.js";
 export { startCodebuffLogin, pollCodebuffLogin, generateFingerprintId } from "./login.js";
 export type { CodebuffLoginCode, CodebuffLoginStatus } from "./login.js";
 export {
