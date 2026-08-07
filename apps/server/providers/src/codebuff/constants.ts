@@ -11,9 +11,10 @@
  * environment variable.
  */
 
-/** Base host for the Codebuff backend. Overridable for tests/proxies. */
+/** Base host for the Codebuff backend. Overridable for tests/proxies.
+ *  The canonical API host is www.codebuff.com (bare codebuff.com 301-redirects). */
 export const CODEBUFF_BASE_URL =
-  process.env.CODEBUFF_BASE_URL ?? "https://codebuff.com";
+  process.env.CODEBUFF_BASE_URL ?? "https://www.codebuff.com";
 
 /** OpenAI-compatible API root (chat completions live at ${this}/chat/completions). */
 export const CODEBUFF_API_URL = `${CODEBUFF_BASE_URL}/api/v1`;

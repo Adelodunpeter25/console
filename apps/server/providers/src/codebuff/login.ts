@@ -20,7 +20,8 @@ export interface CodebuffLoginCode {
   loginUrl: string;
   fingerprintId: string;
   fingerprintHash: string;
-  expiresAt: string;
+  /** Epoch-ms number per the real API, but accept string for robustness. */
+  expiresAt: number | string;
 }
 
 export interface CodebuffLoginStatus {
@@ -71,17 +72,31 @@ export async function startCodebuffLogin(
 /**
  * Poll login status. Returns loggedIn:false until the user completes the
  * browser login; on success stores the credential and returns it.
+ *
+ * The backend returns 401 ("Authentication failed") while the user has not
+ * yet approved the login — that is the normal "keep polling" state, exactly
+ * like the official CLI treats it, so it maps to loggedIn:false rather than
+ * an error. Other HTTP errors are real failures and throw.
  */
 export async function pollCodebuffLogin(params: {
   fingerprintId: string;
   fingerprintHash: string;
-  expiresAt: string;
+  expiresAt: number | string;
 }): Promise<CodebuffLoginStatus> {
-  const query = new URLSearchParams(params);
+  const query = new URLSearchParams({
+    fingerprintId: params.fingerprintId,
+    fingerprintHash: params.fingerprintHash,
+    expiresAt: String(params.expiresAt),
+  });
   const response = await fetch(
     `${CODEBUFF_BASE_URL}/api/auth/cli/status?${query.toString()}`,
     { headers: { Accept: "application/json" } },
   );
+
+  // 401 = not approved yet → keep polling.
+  if (response.status === 401) {
+    return { loggedIn: false };
+  }
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");

@@ -124,6 +124,23 @@ fn url_decode(s: &str) -> String {
     result
 }
 
+/// Coerce a JSON value to a string. The Codebuff login response returns
+/// `expiresAt` as an epoch-millisecond number while other fields are
+/// strings, so poll parameters must accept either representation.
+fn json_to_string(value: Option<&serde_json::Value>) -> Option<String> {
+    let value = value?;
+    if let Some(s) = value.as_str() {
+        return Some(s.to_string());
+    }
+    if let Some(n) = value.as_i64() {
+        return Some(n.to_string());
+    }
+    if let Some(n) = value.as_u64() {
+        return Some(n.to_string());
+    }
+    None
+}
+
 #[tauri::command]
 pub async fn get_auth_status() -> AppResult<AuthStatusResponse> {
     let client = ApiClient::new();
@@ -218,26 +235,16 @@ pub async fn login_codebuff(app: tauri::AppHandle) -> AppResult<serde_json::Valu
     // 1. Get the login code from the backend.
     let login_value = crate::api::auth::codebuff_login_start(&client).await?;
     let login: serde_json::Value = login_value;
-    let login_url = login
-        .get("loginUrl")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| AppError::Other("Codebuff login response missing loginUrl".to_string()))?
-        .to_string();
-    let fingerprint_id = login
-        .get("fingerprintId")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| AppError::Other("Codebuff login response missing fingerprintId".to_string()))?
-        .to_string();
-    let fingerprint_hash = login
-        .get("fingerprintHash")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| AppError::Other("Codebuff login response missing fingerprintHash".to_string()))?
-        .to_string();
-    let expires_at = login
-        .get("expiresAt")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| AppError::Other("Codebuff login response missing expiresAt".to_string()))?
-        .to_string();
+    let login_url = json_to_string(login.get("loginUrl"))
+        .ok_or_else(|| AppError::Other("Codebuff login response missing loginUrl".to_string()))?;
+    let fingerprint_id = json_to_string(login.get("fingerprintId"))
+        .ok_or_else(|| AppError::Other("Codebuff login response missing fingerprintId".to_string()))?;
+    let fingerprint_hash = json_to_string(login.get("fingerprintHash"))
+        .ok_or_else(|| AppError::Other("Codebuff login response missing fingerprintHash".to_string()))?;
+    // expiresAt is an epoch-millisecond NUMBER in the real API response, not
+    // a string. Accept both.
+    let expires_at = json_to_string(login.get("expiresAt"))
+        .ok_or_else(|| AppError::Other("Codebuff login response missing expiresAt".to_string()))?;
 
     // 2. Open the browser so the user can approve the login.
     let app_handle = app.clone();

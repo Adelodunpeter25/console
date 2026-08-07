@@ -145,6 +145,30 @@ function restoreFetch() {
   });
 }
 
+// 2c. pollCodebuffLogin treats 401 (unapproved) as loggedIn:false, not an error
+// (the real Codebuff API returns 401 "Authentication failed" until approval).
+{
+  await withTempCreds(async () => {
+    mockFetch(async () =>
+      new Response(JSON.stringify({ error: "Authentication failed" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    try {
+      const status = await pollCodebuffLogin({
+        fingerprintId: "console-test",
+        fingerprintHash: "hash-1",
+        expiresAt: "2030-01-01T00:00:00Z",
+      });
+      assert.equal(status.loggedIn, false);
+      console.log("  ✅ pollCodebuffLogin → 401 maps to loggedIn:false (keep polling)");
+    } finally {
+      restoreFetch();
+    }
+  });
+}
+
 // 3. codebuffStreamFn — SSE deltas (mock fetch)
 {
   await withTempCreds(async () => {
