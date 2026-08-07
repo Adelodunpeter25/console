@@ -23,7 +23,12 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
     }
   }, [projectPath, browseDirectory]);
 
-  const tree = browse && browse.path === projectPath ? browse.entries : [];
+  const tree = React.useMemo(() => {
+    if (!browse || !projectPath) return [];
+    const normBrowse = browse.path.replace(/\/$/, "");
+    const normProject = projectPath.replace(/\/$/, "");
+    return normBrowse === normProject ? browse.entries : [];
+  }, [browse, projectPath]);
 
   const handleRefresh = () => {
     if (projectPath) {
@@ -54,7 +59,7 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
 
       <div className="flex-1 overflow-y-auto">
         {projectPath ? (
-          <FileTree tree={tree} projectRoot={projectPath} />
+          <FileTree tree={tree} />
         ) : (
           <div className="p-4 text-xs text-foreground-muted text-center">
             No active project selected.
