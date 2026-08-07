@@ -108,6 +108,9 @@ export const tauriApi = {
   deleteFile: (path: string) => invoke<DeleteFileResult>("delete_file", { path }),
   createDirectory: (path: string) => invoke<CreateDirectoryResult>("create_directory", { path }),
   deleteDirectory: (path: string) => invoke<DeleteDirectoryResult>("delete_directory", { path }),
+  watchDirectory: (path: string) => invoke<void>("watch_directory", { path }),
+  listenFsChanges: (callback: () => void): Promise<UnlistenFn> =>
+    listen<void>("fs-change", () => callback()),
 
   // --- agent run / streaming -----------------------------------------------
   runAgent: (

@@ -23,24 +23,20 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
 
     browseDirectory(projectPath).catch(() => {});
 
-    let eventSource: EventSource | null = null;
-    const encoded = encodeURIComponent(projectPath);
+    let unlisten: (() => void) | undefined;
 
-    tauriApi.getBackendUrl().then((baseUrl) => {
-      eventSource = new EventSource(`${baseUrl.replace(/\/$/, "")}/fs/watch?path=${encoded}`);
-      eventSource.addEventListener("fsChange", () => {
-        browseDirectory(projectPath).catch(() => {});
-      });
-    }).catch(() => {
-      // Fallback
-      eventSource = new EventSource(`http://127.0.0.1:4000/api/fs/watch?path=${encoded}`);
-      eventSource.addEventListener("fsChange", () => {
-        browseDirectory(projectPath).catch(() => {});
-      });
-    });
+    // Trigger Rust command to watch project path via Tauri IPC
+    tauriApi.watchDirectory(projectPath).catch(() => {});
+
+    // Listen to fs-change Tauri event via Rust relay
+    tauriApi.listenFsChanges(() => {
+      browseDirectory(projectPath).catch(() => {});
+    }).then((unlistenFn) => {
+      unlisten = unlistenFn;
+    }).catch(() => {});
 
     return () => {
-      if (eventSource) eventSource.close();
+      if (unlisten) unlisten();
     };
   }, [projectPath, browseDirectory]);
 

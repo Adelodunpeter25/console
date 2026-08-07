@@ -1,3 +1,4 @@
+use tauri::Emitter;
 use crate::api::ApiClient;
 use crate::error::AppResult;
 use crate::models::BrowseResult;
@@ -48,4 +49,13 @@ pub async fn create_directory(path: String) -> AppResult<serde_json::Value> {
 pub async fn delete_directory(path: String) -> AppResult<serde_json::Value> {
     let client = ApiClient::new();
     crate::api::fs::delete_directory(&client, &path).await
+}
+
+#[tauri::command]
+pub async fn watch_directory(app: tauri::AppHandle, path: String) -> AppResult<()> {
+    let client = ApiClient::new();
+    crate::api::fs::watch_directory(&client, &path, move || {
+        let _ = app.emit("fs-change", ());
+    })
+    .await
 }

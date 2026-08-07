@@ -71,3 +71,32 @@ pub async fn create_directory(client: &ApiClient, path: &str) -> AppResult<serde
 pub async fn delete_directory(client: &ApiClient, path: &str) -> AppResult<serde_json::Value> {
     client.delete_with_query("/fs/dir", &[("path", path)]).await
 }
+
+pub async fn watch_directory<F>(client: &ApiClient, path: &str, mut on_change: F) -> AppResult<()>
+where
+    F: FnMut() + Send + 'static,
+{
+    use futures_util::StreamExt;
+    let url = format!("{}/fs/watch?path={}", crate::config::api_base(), path);
+    let resp = client.raw_client().get(&url).send().await?;
+
+    let mut stream = resp.bytes_stream();
+    let mut buffer = String::new();
+
+    while let Some(chunk_result) = stream.next().await {
+        let chunk = chunk_result.map_err(|e| crate::error::AppError::Server(e.to_string()))?;
+        let text = String::from_utf8_lossy(&chunk);
+        buffer.push_str(&text);
+
+        while let Some(pos) = buffer.find("\n\n") {
+            let message = buffer[..pos].to_string();
+            buffer = buffer[pos + 2..].to_string();
+
+            if message.contains("event: fsChange") {
+                on_change();
+            }
+        }
+    }
+
+    Ok(())
+}
