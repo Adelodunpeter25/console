@@ -125,7 +125,7 @@ Returns a tree-like structure showing names, sizes, and nesting.
 Use this to understand project structure before reading specific files.
 Use recursive: true to explore subdirectories (up to maxDepth levels deep).`,
   inputSchema,
-  execute: async (args: Input): Promise<unknown> => {
+  execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {
     const dirPath = path.resolve(args.cwd ?? process.cwd(), args.path);
 
     // Verify it's actually a directory

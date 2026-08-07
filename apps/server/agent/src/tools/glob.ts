@@ -34,7 +34,7 @@ Common examples:
   - "{src,test}/**"  → everything under src/ or test/
 Results are sorted by path.`,
   inputSchema,
-  execute: async (args: Input): Promise<unknown> => {
+  execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {
     const searchRoot = path.resolve(args.cwd ?? process.cwd());
 
     const created = FileFinder.create({ basePath: searchRoot });

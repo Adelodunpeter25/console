@@ -134,12 +134,19 @@ function runAgentLoop(
 
         const results = await Promise.all(
           toolCalls.map((call) =>
-            executeTool(call, tools, approvalMode, onApproval, emit, onToolCall, onToolResult).then(
-              (result) => {
-                emit({ type: "toolExecutionResult", result });
-                return result;
-              },
-            ),
+            executeTool(
+              call,
+              tools,
+              approvalMode,
+              onApproval,
+              emit,
+              onToolCall,
+              onToolResult,
+              signal,
+            ).then((result) => {
+              emit({ type: "toolExecutionResult", result });
+              return result;
+            }),
           ),
         );
 

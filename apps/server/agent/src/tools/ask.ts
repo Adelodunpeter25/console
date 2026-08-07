@@ -67,7 +67,7 @@ export function createAskTool(handler?: AskQuestionHandler): AgentTool<typeof in
     description,
     tier: "read",
     inputSchema,
-    execute: async (args: Input): Promise<unknown> => {
+    execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {
       const { question, options } = args;
 
       if (!handler) {
@@ -111,7 +111,7 @@ export function createAskManyTool(handler?: AskQuestionHandler): AgentTool<typeo
     description: askManyDescription,
     tier: "read",
     inputSchema: askManySchema,
-    execute: async (args: z.infer<typeof askManySchema>): Promise<unknown> => {
+    execute: async (args: z.infer<typeof askManySchema>, _signal?: AbortSignal): Promise<unknown> => {
       if (!handler) {
         // Headless fallback: pick the first option (or "skipped") per question.
         return {

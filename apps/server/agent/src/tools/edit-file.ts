@@ -27,7 +27,7 @@ Always call readFile first to get the exact current content before using this to
 If the match appears 0 times or more than once, the edit is rejected — be precise.
 For complete file rewrites, use writeFile instead.`,
   inputSchema,
-  execute: async (args: Input): Promise<unknown> => {
+  execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {
     const filePath = path.resolve(args.cwd ?? process.cwd(), args.path);
 
     let original: string;

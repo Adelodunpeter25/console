@@ -104,7 +104,7 @@ Reports individual results so you know exactly which files succeeded or failed.
 Set stopOnError: true if you need atomic-style behaviour (stop after first failure).
 Validates that no two entries share the same path before writing.`,
   inputSchema,
-  execute: async (args: Input): Promise<unknown> => {
+  execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {
     const baseCwd = path.resolve(args.cwd ?? process.cwd());
     // Check for duplicate paths
     const resolvedPaths = args.files.map((f) => path.resolve(baseCwd, f.path));

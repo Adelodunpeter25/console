@@ -67,9 +67,20 @@ Use this to:
   - Download plain-text content
 Do NOT use for authentication-required pages.`,
   inputSchema,
-  execute: async (args: Input): Promise<unknown> => {
+  execute: async (args: Input, parentSignal?: AbortSignal): Promise<unknown> => {
     const controller = new AbortController();
     const timeoutHandle = setTimeout(() => controller.abort(), args.timeoutMs);
+
+    const onParentAbort = () => controller.abort();
+    if (parentSignal) {
+      if (parentSignal.aborted) {
+        onParentAbort();
+      } else {
+        parentSignal.addEventListener("abort", onParentAbort, { once: true });
+      }
+    }
+
+    const isParentAborted = () => parentSignal?.aborted ?? false;
 
     let response: Response;
     try {
@@ -81,8 +92,20 @@ Do NOT use for authentication-required pages.`,
       });
     } catch (err: unknown) {
       clearTimeout(timeoutHandle);
+      if (parentSignal) parentSignal.removeEventListener("abort", onParentAbort);
       const error = err as Error;
       if (error.name === "AbortError") {
+        if (isParentAborted()) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Request cancelled by user abort — ${args.url}`,
+              },
+            ],
+            isError: true,
+          };
+        }
         return {
           content: [
             {
@@ -99,6 +122,7 @@ Do NOT use for authentication-required pages.`,
       };
     } finally {
       clearTimeout(timeoutHandle);
+      if (parentSignal) parentSignal.removeEventListener("abort", onParentAbort);
     }
 
     // Collect response headers summary

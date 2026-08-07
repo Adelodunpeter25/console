@@ -56,7 +56,7 @@ Supports plain-text, regex, and typo-resistant fuzzy search modes.
 Returns matching lines with surrounding context, grouped by file.
 Use for finding function definitions, import usages, variable names, TODOs, etc.`,
   inputSchema,
-  execute: async (args: Input): Promise<unknown> => {
+  execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {
     const searchPath = path.resolve(args.cwd ?? process.cwd(), args.path);
 
     // fff operates on a directory root — if a file is given use its parent

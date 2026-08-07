@@ -44,7 +44,7 @@ export interface AgentTool<T extends z.ZodTypeAny = z.ZodTypeAny> {
   description: string;
   tier?: ToolTier;
   inputSchema: T;
-  execute: (args: z.infer<T>) => Promise<unknown>;
+  execute: (args: z.infer<T>, signal?: AbortSignal) => Promise<unknown>;
 }
 
 export class ToolError extends Error {
@@ -66,7 +66,6 @@ export function bindToolCwd<T extends z.ZodTypeAny>(
   tool: AgentTool<T>,
   cwd: string,
 ): AgentTool<T> {
-  // Only tools that accept a cwd arg need binding.
   const hasCwdArg =
     tool.inputSchema instanceof z.ZodObject &&
     "cwd" in tool.inputSchema.shape;
@@ -77,13 +76,13 @@ export function bindToolCwd<T extends z.ZodTypeAny>(
   const originalExecute = tool.execute;
   return {
     ...tool,
-    execute: async (args) => {
+    execute: async (args, signal) => {
       const bound = args as Record<string, unknown>;
       const cwdArg = bound.cwd;
       if (typeof cwdArg === "string" && cwdArg.trim() !== "") {
-        return originalExecute(args);
+        return originalExecute(args, signal);
       }
-      return originalExecute({ ...args, cwd });
+      return originalExecute({ ...args, cwd }, signal);
     },
   };
 }

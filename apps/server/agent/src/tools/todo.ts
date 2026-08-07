@@ -78,7 +78,7 @@ Use 'append' with tasks: ["new task"] to add items to the list.
 Use 'view' to render the current task list status.`,
     tier: "read",
     inputSchema,
-    execute: async (args: Input): Promise<unknown> => {
+    execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {
       const { op, tasks, index } = args;
 
       if (op === "init") {

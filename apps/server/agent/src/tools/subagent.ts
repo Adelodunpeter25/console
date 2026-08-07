@@ -44,7 +44,7 @@ export function createSubagentTool(context?: SubagentToolContext): AgentTool<typ
     description,
     tier: "read",
     inputSchema,
-    execute: async (args: Input): Promise<unknown> => {
+    execute: async (args: Input, signal?: AbortSignal): Promise<unknown> => {
       const { prompt, name, role, maxTurns = 10 } = args;
       const displayName = name || role;
 
@@ -65,13 +65,27 @@ export function createSubagentTool(context?: SubagentToolContext): AgentTool<typ
       const stream = agentLoop(prompt, {
         model,
         systemPrompt: subagentSystemPrompt,
-        tools: tools.filter((t) => t.name !== "subagent"), // Prevent infinite recursion
+        tools: tools.filter((t) => t.name !== "subagent"),
         streamFn,
         maxTurns,
         approvalMode: "accept-edits",
+        signal,
       });
 
       const messages = await stream.result();
+
+      if (signal?.aborted) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Subagent [${displayName}] cancelled by user abort.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
       const lastAssistantMessage = [...messages].reverse().find((m) => m.role === "assistant");
 
       let summaryText = "";

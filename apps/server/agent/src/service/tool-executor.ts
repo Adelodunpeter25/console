@@ -15,6 +15,7 @@ export async function executeTool(
   emit: (event: AgentSessionEvent) => void,
   onToolCall?: AgentLoopConfig["onToolCall"],
   onToolResult?: AgentLoopConfig["onToolResult"],
+  signal?: AbortSignal,
 ): Promise<ToolResult> {
   const tool = tools.find((t) => t.name === call.name);
 
@@ -110,9 +111,20 @@ export async function executeTool(
     }
   }
 
+  if (signal?.aborted) {
+    const result: ToolResult = {
+      toolCallId: call.id,
+      toolName: call.name,
+      content: "Tool execution cancelled by user abort.",
+      isError: true,
+    };
+    await onToolResult?.(call, result);
+    return result;
+  }
+
   try {
     await onToolCall?.(call);
-    const output = await tool.execute(parsed.data);
+    const output = await tool.execute(parsed.data, signal);
     const normalized = normalizeToolOutput(output);
     const result: ToolResult = {
       toolCallId: call.id,
@@ -122,6 +134,16 @@ export async function executeTool(
     await onToolResult?.(call, result);
     return result;
   } catch (err) {
+    if (signal?.aborted) {
+      const result: ToolResult = {
+        toolCallId: call.id,
+        toolName: call.name,
+        content: "Tool execution cancelled by user abort.",
+        isError: true,
+      };
+      await onToolResult?.(call, result);
+      return result;
+    }
     const message = err instanceof Error ? err.message : String(err);
     const result: ToolResult = {
       toolCallId: call.id,

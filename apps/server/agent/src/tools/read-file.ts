@@ -38,7 +38,7 @@ Lines are returned with their 1-indexed line numbers prefixed (e.g. "  42: conte
 Always prefer reading specific line ranges for large files to avoid wasting tokens.
 For directories, use listDir instead.`,
   inputSchema,
-  execute: async (args: Input): Promise<unknown> => {
+  execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {
     const filePath = path.resolve(args.cwd ?? process.cwd(), args.path);
 
     let raw: Buffer;

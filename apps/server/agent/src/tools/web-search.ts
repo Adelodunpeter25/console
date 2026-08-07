@@ -160,9 +160,20 @@ Use this to find up-to-date information, documentation, package details, or to r
 After finding URLs, use the fetch tool to read the full content of any page.
 DuckDuckGo requires no API key. Brave Search requires BRAVE_SEARCH_API_KEY env var (free tier available).`,
   inputSchema,
-  execute: async (args: Input): Promise<unknown> => {
+  execute: async (args: Input, parentSignal?: AbortSignal): Promise<unknown> => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
+
+    const onParentAbort = () => controller.abort();
+    if (parentSignal) {
+      if (parentSignal.aborted) {
+        onParentAbort();
+      } else {
+        parentSignal.addEventListener("abort", onParentAbort, { once: true });
+      }
+    }
+
+    const isParentAborted = () => parentSignal?.aborted ?? false;
 
     let results: SearchResult[];
     try {
@@ -173,8 +184,15 @@ DuckDuckGo requires no API key. Brave Search requires BRAVE_SEARCH_API_KEY env v
       }
     } catch (err: unknown) {
       clearTimeout(timeout);
+      if (parentSignal) parentSignal.removeEventListener("abort", onParentAbort);
       const error = err as Error;
       if (error.name === "AbortError") {
+        if (isParentAborted()) {
+          return {
+            content: [{ type: "text", text: "Web search cancelled by user abort." }],
+            isError: true,
+          };
+        }
         return {
           content: [{ type: "text", text: "Error: Web search timed out after 15s." }],
           isError: true,
@@ -186,6 +204,7 @@ DuckDuckGo requires no API key. Brave Search requires BRAVE_SEARCH_API_KEY env v
       };
     } finally {
       clearTimeout(timeout);
+      if (parentSignal) parentSignal.removeEventListener("abort", onParentAbort);
     }
 
     if (results.length === 0) {

@@ -27,7 +27,7 @@ Creates the file if it does not exist. Parent directories are created automatica
 Use this for creating new files or completely rewriting an existing file.
 For targeted changes to an existing file, use editFile instead to avoid rewriting unchanged content.`,
   inputSchema,
-  execute: async (args: Input): Promise<unknown> => {
+  execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {
     const filePath = path.resolve(args.cwd ?? process.cwd(), args.path);
     const dir = path.dirname(filePath);
 

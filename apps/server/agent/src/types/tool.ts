@@ -94,9 +94,10 @@ export interface AgentTool<T extends z.ZodTypeAny = z.ZodTypeAny> {
   /**
    * The asynchronous function that executes the tool's logic.
    * @param args - The input arguments, parsed and validated against the `inputSchema`.
+   * @param signal - Optional AbortSignal to cancel the tool execution mid-flight.
    * @returns A promise that resolves to the tool's output. This can be any data type.
    */
-  execute: (args: z.infer<T>) => Promise<unknown>;
+  execute: (args: z.infer<T>, signal?: AbortSignal) => Promise<unknown>;
 }
 
 /**
