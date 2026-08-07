@@ -1,7 +1,7 @@
 import React from "react";
 import { CheckCircle2, Circle, Loader2, LogIn, RefreshCw, Save } from "lucide-react";
 import { useAuthStore } from "../../store/useAuthStore";
-import type { ProviderId } from "../../store/useAuthStore";
+import type { OAuthProviderId, ProviderId } from "../../store/useAuthStore";
 import { GlassSurface } from "../common/GlassSurface";
 
 /**
@@ -41,7 +41,7 @@ export function AccountSettings() {
     }
   };
 
-  const providers: { id: ProviderId; label: string }[] = [
+  const providers: { id: OAuthProviderId; label: string }[] = [
     { id: "antigravity", label: "Antigravity" },
     { id: "gemini", label: "Gemini" },
   ];
@@ -66,7 +66,7 @@ export function AccountSettings() {
 
           <div className="space-y-1">
             {providers.map(({ id, label }) => {
-              const providerStatus = status?.[id];
+              const providerStatus = status ? status[id] : undefined;
               const loggedIn = providerStatus?.loggedIn;
               const email = providerStatus?.email;
               const isLoggingIn = loggingIn === id;

@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { AuthStatusResponse, ProviderId } from "@console/types";
 import { tauriApi } from "../lib/tauri-api";
 
-export type { ProviderId } from "@console/types";
+export type { OAuthProviderId, ProviderId } from "@console/types";
 
 interface AuthState {
   status: AuthStatusResponse | null;
