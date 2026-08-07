@@ -118,7 +118,18 @@ export function QuestionPanel({
         />
       </div>
 
-      <div className="flex items-center gap-2 pl-6">
+      <div className="flex items-center justify-between pl-6 pt-1">
+        <div>
+          {request.skippable !== false && (
+            <button
+              onClick={onSkip}
+              disabled={submitting}
+              className="px-4 py-1.5 rounded-md bg-transparent hover:bg-white/5 border border-border text-foreground-muted hover:text-foreground text-xs font-medium transition-colors disabled:opacity-40"
+            >
+              Skip
+            </button>
+          )}
+        </div>
         <button
           onClick={handlePrimary}
           disabled={!hasAnswer || submitting}
@@ -126,15 +137,6 @@ export function QuestionPanel({
         >
           {submitting ? "Sending…" : isLast ? (total > 1 ? "Submit all" : "Submit") : "Next"}
         </button>
-        {request.skippable !== false && (
-          <button
-            onClick={onSkip}
-            disabled={submitting}
-            className="px-4 py-1.5 rounded-md bg-transparent hover:bg-white/5 border border-border text-foreground-muted hover:text-foreground text-xs font-medium transition-colors disabled:opacity-40"
-          >
-            Skip
-          </button>
-        )}
       </div>
     </div>
   );

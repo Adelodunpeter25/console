@@ -25,7 +25,7 @@ const questionSchema = z.object({
     .boolean()
     .optional()
     .default(true)
-    .describe("Set to true if the question is optional and the user may skip it (defaults to true)"),
+    .describe("Set to false if this question is REQUIRED and cannot be skipped by the user. Defaults to true (optional)."),
 });
 
 const inputSchema = questionSchema;
@@ -33,7 +33,7 @@ const inputSchema = questionSchema;
 type Input = z.infer<typeof inputSchema>;
 
 const description = `Ask the user a question to clarify ambiguous requirements, architecture options, or preferences.
-Provide a clear question and, optionally, a list of distinct option choices. The user can always type a custom answer or click Skip.`;
+Provide a clear question and, optionally, a list of distinct option choices. Set skippable to false if the question is strictly required.`;
 
 /** Build the tool-result text for a single answer, marking skips explicitly. */
 function formatAnswer(answer: string | string[]): string {
@@ -49,13 +49,13 @@ function askOne(
   input: Input,
   batchId?: string,
 ): Promise<string | string[]> {
-  const isExplicitlyFalse = input.skippable === false;
+  const isSkippable = input.skippable !== false;
   const request: AskQuestionRequest = {
     requestId: randomUUID(),
     question: input.question,
     options: input.options,
     isMultiSelect: input.isMultiSelect,
-    skippable: !isExplicitlyFalse,
+    skippable: isSkippable,
     ...(batchId ? { batchId } : {}),
   };
   return handler(request);
