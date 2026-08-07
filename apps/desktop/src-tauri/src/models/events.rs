@@ -10,6 +10,8 @@ pub struct AskQuestionRequest {
     pub question: String,
     pub options: Vec<String>,
     pub is_multi_select: Option<bool>,
+    pub skippable: Option<bool>,
+    pub batch_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

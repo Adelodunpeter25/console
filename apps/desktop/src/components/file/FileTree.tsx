@@ -1,10 +1,10 @@
 import React from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronDown, ChevronRight, Folder, FolderOpen, Loader2 } from "lucide-react";
 import type { FsTreeEntry } from "@console/types";
 import { tauriApi } from "../../lib/tauri-api";
 import { resolveFileIconToken } from "../../utils/file-icons";
 import { getBuiltInSpriteSheet } from "@pierre/trees";
+import { useVirtualList } from "../../hooks/useVirtualList";
 
 const FULL_SPRITE_SHEET_SVG = getBuiltInSpriteSheet("complete");
 
@@ -62,13 +62,9 @@ export function FileTree({ tree, onFileSelect }: FileTreeProps) {
     return list;
   }, [tree, expandedPaths, childrenMap, loadingPaths]);
 
-  const parentRef = React.useRef<HTMLDivElement>(null);
-
-  // Virtualizer instance for fast high-performance rendering of huge file trees
-  const rowVirtualizer = useVirtualizer({
-    count: flatItems.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 26,
+  const { parentRef, virtualizer, virtualItems, totalSize } = useVirtualList({
+    items: flatItems,
+    estimateSize: 26,
     overscan: 10,
   });
 
@@ -118,12 +114,12 @@ export function FileTree({ tree, onFileSelect }: FileTreeProps) {
       <div dangerouslySetInnerHTML={{ __html: FULL_SPRITE_SHEET_SVG }} />
       <div
         style={{
-          height: `${rowVirtualizer.getTotalSize()}px`,
+          height: `${totalSize}px`,
           width: "100%",
           position: "relative",
         }}
       >
-        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+        {virtualItems.map((virtualRow) => {
           const item = flatItems[virtualRow.index];
           if (!item) return null;
 
