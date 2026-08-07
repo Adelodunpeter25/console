@@ -36,11 +36,14 @@ fn flush_event<F: FnMut(NotificationEvent)>(data_lines: &mut Vec<String>, on_eve
     }
     let data = data_lines.join("\n");
     data_lines.clear();
+    // Heartbeat "ping" frames carry no data (`data:` with empty value) — skip.
+    if data.trim().is_empty() {
+        return;
+    }
     match serde_json::from_str::<NotificationEvent>(&data) {
         Ok(event) => on_event(event),
         Err(err) => {
-            // Heartbeat "ping" frames carry no data and never reach here;
-            // anything else that fails to parse is a schema mismatch worth surfacing.
+            // Anything that fails to parse is a schema mismatch worth surfacing.
             eprintln!(
                 "notification SSE deserialize error: {err}; payload={}",
                 &data[..data.len().min(500)]
