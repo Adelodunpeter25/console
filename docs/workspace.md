@@ -40,6 +40,16 @@ Uses `flexlayout-react` to support splitting (horizontal & vertical), tab draggi
 
 ---
 
+## Technology Stack Decisions
+
+- **Layout Engine:** `flexlayout-react` for multi-tab management, pane splitting, dock layout, and tab drag-and-drop.
+- **File & Diff Rendering:** `@pierre/diffs` (powered by Shiki syntax highlighting) for:
+  - Single file reading/viewing (`"file"` tabs via `<File />` component).
+  - Git diff inspection (`"diff"` tabs via `<PatchDiff />` / `<MultiFileDiff />` components).
+  - Lightweight, high-performance rendering without Monaco's heavy web worker overhead.
+
+---
+
 ## Project Context Isolation & Command Palette Scoping
 
 To support multi-project workflows without cross-contamination:
