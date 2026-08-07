@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { z } from "zod";
 
 export type ToolTier = "read" | "write" | "exec";
 
@@ -52,4 +52,38 @@ export class ToolError extends Error {
     super(message);
     this.name = "ToolError";
   }
+}
+
+/**
+ * Wrap a tool so its `execute` receives a default `cwd` when the model omits one.
+ *
+ * Tools like `glob` and `bash` fall back to `process.cwd()` when no `cwd` arg is
+ * given, which is the server's launch directory — not the session's project.
+ * Binding the session cwd here makes every run operate on the project the user
+ * selected in the UI instead of the server's working directory.
+ */
+export function bindToolCwd<T extends z.ZodTypeAny>(
+  tool: AgentTool<T>,
+  cwd: string,
+): AgentTool<T> {
+  // Only tools that accept a cwd arg need binding.
+  const hasCwdArg =
+    tool.inputSchema instanceof z.ZodObject &&
+    "cwd" in tool.inputSchema.shape;
+  if (!hasCwdArg) {
+    return tool;
+  }
+
+  const originalExecute = tool.execute;
+  return {
+    ...tool,
+    execute: async (args) => {
+      const bound = args as Record<string, unknown>;
+      const cwdArg = bound.cwd;
+      if (typeof cwdArg === "string" && cwdArg.trim() !== "") {
+        return originalExecute(args);
+      }
+      return originalExecute({ ...args, cwd });
+    },
+  };
 }

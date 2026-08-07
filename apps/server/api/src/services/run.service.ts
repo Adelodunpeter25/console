@@ -11,11 +11,13 @@ import { buildSystemPrompt } from "../../../agent/src/systemprompt/builder.js";
 import { findModelInProvider, getProvider } from "../../../agent/src/commands/provider-registry.js";
 import type {
   AgentSessionEvent,
+  AgentTool,
   ApprovalMode,
   AskQuestionRequest,
   Model,
   UserMessage,
 } from "@console/types";
+import { bindToolCwd } from "@console/types";
 import type { RunPromptDto } from "../types/index.js";
 import { expandPromptRefs } from "./assist.service.js";
 import { randomUUID } from "node:crypto";
@@ -160,6 +162,12 @@ export class RunService {
         this.startDecisionTimeout(request.requestId, sessionId, "question");
       });
     };
+    // Bind every tool to the session's working directory so tools like glob and
+    // bash operate on the project the user selected instead of falling back to
+    // the server's process.cwd(). Subagent is replaced by Agent.run() with a
+    // contextual version that carries the same bound tools into the child loop.
+    const tools = allTools.map((tool) => bindToolCwd(tool as AgentTool, session.header.cwd));
+
     const askTool = createAskTool(askHandler);
     const askManyTool = createAskManyTool(askHandler);
 
@@ -167,7 +175,8 @@ export class RunService {
       this.todoLists.set(sessionId, items);
       return onEvent({ type: "todoUpdate", items, action });
     });
-    const tools = allTools.map((tool) => {
+
+    const boundTools = tools.map((tool) => {
       if (tool.name === "ask") return askTool;
       if (tool.name === "askMany") return askManyTool;
       if (tool.name === "todo") return sessionTodo.tool;
@@ -176,7 +185,7 @@ export class RunService {
 
     const agent = new Agent({
       model,
-      tools: tools as any,
+      tools: boundTools as any,
       systemPrompt,
       streamFn,
       approvalMode,
