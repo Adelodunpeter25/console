@@ -129,9 +129,10 @@ export function createAskManyTool(handler?: AskQuestionHandler): AgentTool<typeo
       }
 
       const batchId = randomUUID();
-      const answers = await Promise.all(
-        args.questions.map((q) => askOne(handler, q, batchId)),
-      );
+      const answers: Array<string | string[]> = [];
+      for (const q of args.questions) {
+        answers.push(await askOne(handler, q, batchId));
+      }
 
       return {
         content: [

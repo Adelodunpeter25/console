@@ -73,33 +73,26 @@ function QuestionWizard({ questions, sessionId }: { questions: AskQuestionReques
   const answerQuestion = useChatStore((s) => s.answerQuestion);
   const [index, setIndex] = React.useState(0);
   const [submitting, setSubmitting] = React.useState(false);
-  // Always-current collected answers (ref avoids stale state in the submit-all
-  // handler, which fires in the same tick as the last answer being recorded).
-  const answersRef = React.useRef<Map<string, string | string[]>>(new Map());
 
-  const current = questions[index]!;
-  const isLast = index === questions.length - 1;
+  const current = questions[index] ?? questions[0]!;
+  const isLast = index >= questions.length - 1;
 
-  const recordAnswer = (requestId: string, answer: string | string[]) => {
-    answersRef.current.set(requestId, answer);
-  };
-
-  const handleNext = () => {
-    setIndex((i) => Math.min(i + 1, questions.length - 1));
-  };
-
-  const handleSkip = () => {
-    recordAnswer(current.requestId, "");
-    setIndex((i) => Math.min(i + 1, questions.length - 1));
-  };
-
-  const handleSubmitAll = async () => {
+  const handleAnswerSubmit = async (requestId: string, answer: string | string[]) => {
     setSubmitting(true);
-    // Send every collected answer through the existing per-question endpoint.
-    for (const [requestId, answer] of answersRef.current.entries()) {
-      await answerQuestion(sessionId, requestId, answer);
-    }
+    await answerQuestion(sessionId, requestId, answer);
     setSubmitting(false);
+    if (!isLast) {
+      setIndex((i) => i + 1);
+    }
+  };
+
+  const handleSkip = async () => {
+    setSubmitting(true);
+    await answerQuestion(sessionId, current.requestId, "");
+    setSubmitting(false);
+    if (!isLast) {
+      setIndex((i) => i + 1);
+    }
   };
 
   if (!current) return null;
@@ -109,14 +102,10 @@ function QuestionWizard({ questions, sessionId }: { questions: AskQuestionReques
       key={current.requestId}
       request={current}
       total={questions.length}
-      index={index + 1}
+      index={Math.min(index + 1, questions.length)}
       isLast={isLast}
       submitting={submitting}
-      onAnswer={(answer) => {
-        recordAnswer(current.requestId, answer);
-        if (isLast) handleSubmitAll();
-        else handleNext();
-      }}
+      onAnswer={(answer) => handleAnswerSubmit(current.requestId, answer)}
       onSkip={handleSkip}
     />
   );
