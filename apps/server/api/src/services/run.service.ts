@@ -236,15 +236,6 @@ export class RunService {
 
         // Mark needs_attention when the agent asks a question or requests permission
         if (event.type === "askQuestion" || event.type === "permissionRequest") {
-          if (event.type === "permissionRequest") {
-            console.info("[permission] server emitted request", {
-              sessionId,
-              requestId: event.request.requestId,
-              toolName: event.request.toolName,
-              tier: event.request.tier,
-              requiresUpgrade: event.request.requiresUpgrade,
-            });
-          }
           this.sessionStorage.updateSessionStatus(sessionId, "needs_attention");
         }
 
