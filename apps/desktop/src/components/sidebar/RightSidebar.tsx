@@ -5,12 +5,14 @@ import { useProjectStore } from "../../store/useProjectStore";
 import { useFsStore } from "../../store/useFsStore";
 import { FileTree } from "../file/FileTree";
 import { useProjectFsWatcher } from "../../hooks/useProjectFsWatcher";
+import { useWorkspaceStore } from "../../layout/useWorkspaceStore";
 
 export function RightSidebar({ width = 288 }: { width?: number }) {
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
   const projects = useProjectStore((state) => state.projects);
   const browse = useFsStore((state) => state.browse);
   const browseDirectory = useFsStore((state) => state.browseDirectory);
+  const openFileTab = useWorkspaceStore((state) => state.openFileTab);
 
   const currentProject = React.useMemo(
     () => projects.find((p) => p.id === selectedProjectId),
@@ -19,7 +21,6 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
 
   const projectPath = currentProject?.path;
 
-  // Real-time project filesystem watcher hook
   useProjectFsWatcher(projectPath);
 
   const tree = React.useMemo(() => {
@@ -34,6 +35,14 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
       browseDirectory(projectPath).catch(() => {});
     }
   };
+
+  const handleFileSelect = React.useCallback(
+    (filePath: string) => {
+      if (!selectedProjectId) return;
+      openFileTab({ projectId: selectedProjectId, path: filePath });
+    },
+    [openFileTab, selectedProjectId],
+  );
 
   return (
     <aside
@@ -58,7 +67,7 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
 
       <div className="flex-1 overflow-y-auto">
         {projectPath ? (
-          <FileTree tree={tree} />
+          <FileTree tree={tree} onFileSelect={handleFileSelect} />
         ) : (
           <div className="p-4 text-xs text-foreground-muted text-center">
             No active project selected.

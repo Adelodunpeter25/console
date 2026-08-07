@@ -40,6 +40,10 @@ export interface OpenChatTabInput extends ChatTabConfig {
   title: string;
 }
 
+export interface OpenFileTabInput extends FileTabConfig {
+  title?: string;
+}
+
 export function isWorkspaceTabConfig(value: unknown): value is WorkspaceTabConfig {
   return Boolean(
     value &&
@@ -51,9 +55,11 @@ export function isWorkspaceTabConfig(value: unknown): value is WorkspaceTabConfi
 }
 
 export function chatTabId(_projectId: string, sessionId: string): string {
-  // Session ids are globally unique; keeping projectId in config (rather than
-  // the node id) lets an existing chat move projects without duplicating its tab.
   return `chat:${sessionId}`;
+}
+
+export function fileTabId(_projectId: string, filePath: string): string {
+  return `file:${filePath}`;
 }
 
 export function createChatTab({ projectId, sessionId, title }: OpenChatTabInput): IJsonTabNode {
@@ -66,4 +72,23 @@ export function createChatTab({ projectId, sessionId, title }: OpenChatTabInput)
     enableClose: true,
     enableRename: false,
   };
+}
+
+export function createFileTab({ projectId, path: filePath, title }: OpenFileTabInput): IJsonTabNode {
+  const tabTitle = title ?? basename(filePath);
+  return {
+    type: "tab",
+    id: fileTabId(projectId, filePath),
+    name: tabTitle,
+    component: "file",
+    config: { type: "file", projectId, path: filePath } satisfies FileTabConfig,
+    enableClose: true,
+    enableRename: false,
+  };
+}
+
+export function basename(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, "/");
+  const idx = normalized.lastIndexOf("/");
+  return idx >= 0 ? normalized.slice(idx + 1) : normalized;
 }

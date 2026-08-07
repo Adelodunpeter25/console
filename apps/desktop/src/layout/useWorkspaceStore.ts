@@ -1,14 +1,21 @@
 import { create } from "zustand";
 import { Actions, DockLocation, TabNode } from "flexlayout-react";
 import { createWorkspaceModel } from "./model";
-import { chatTabId, createChatTab, MAIN_WORKSPACE_TABSET_ID } from "./types";
-import type { OpenChatTabInput } from "./types";
+import {
+  chatTabId,
+  createChatTab,
+  createFileTab,
+  fileTabId,
+  MAIN_WORKSPACE_TABSET_ID,
+} from "./types";
+import type { OpenChatTabInput, OpenFileTabInput } from "./types";
 
 interface WorkspaceState {
   model: ReturnType<typeof createWorkspaceModel>;
   revision: number;
   notifyLayoutChange: () => void;
   openChatTab: (input: OpenChatTabInput) => void;
+  openFileTab: (input: OpenFileTabInput) => void;
   closeChatTab: (projectId: string, sessionId: string) => void;
   updateChatTabProject: (sessionId: string, projectId: string) => void;
 }
@@ -32,8 +39,23 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     model.doAction(
       Actions.addTab(createChatTab(input), MAIN_WORKSPACE_TABSET_ID, DockLocation.CENTER, -1, true),
     );
-    // Keep the model reference stable while notifying subscribers that a
-    // layout action occurred. FlexLayout itself listens to the model too.
+    set((state) => ({ model, revision: state.revision + 1 }));
+  },
+
+  openFileTab: (input) => {
+    const { model } = get();
+    const id = fileTabId(input.projectId, input.path);
+    const existing = model.getNodeById(id);
+
+    if (existing instanceof TabNode) {
+      model.doAction(Actions.selectTab(existing.getId()));
+      set((state) => ({ revision: state.revision + 1 }));
+      return;
+    }
+
+    model.doAction(
+      Actions.addTab(createFileTab(input), MAIN_WORKSPACE_TABSET_ID, DockLocation.CENTER, -1, true),
+    );
     set((state) => ({ model, revision: state.revision + 1 }));
   },
 
