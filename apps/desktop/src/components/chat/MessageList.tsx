@@ -67,6 +67,21 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
       }
     }, [parentRef]);
 
+    // Auto-scroll to the latest message when new content arrives, but only if
+    // the user hasn't scrolled up (they may be reading earlier context).
+    const autoScroll = React.useCallback(() => {
+      if (!parentRef.current) return;
+      const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
+      const atBottom = scrollHeight - scrollTop - clientHeight < 60;
+      if (atBottom) {
+        parentRef.current.scrollTop = parentRef.current.scrollHeight;
+      }
+    }, [parentRef]);
+
+    React.useEffect(() => {
+      autoScroll();
+    }, [autoScroll, messages, streamingText, streamingThinking]);
+
     React.useImperativeHandle(
       ref,
       () => ({
