@@ -36,11 +36,15 @@ export function ProjectSelector({
   const addProject = useProjectStore((state) => state.addProject);
   const [search, setSearch] = React.useState("");
   const query = search.trim().toLowerCase();
-  const filteredProjects = projects.filter(
-    (project) =>
-      !query ||
-      project.name.toLowerCase().includes(query) ||
-      project.path.toLowerCase().includes(query),
+  const filteredProjects = React.useMemo(
+    () =>
+      projects.filter(
+        (project) =>
+          !query ||
+          project.name.toLowerCase().includes(query) ||
+          project.path.toLowerCase().includes(query),
+      ),
+    [projects, query],
   );
 
   const handleOpenFolder = async () => {

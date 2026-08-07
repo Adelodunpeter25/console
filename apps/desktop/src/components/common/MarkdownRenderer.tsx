@@ -10,6 +10,9 @@ interface MarkdownRendererProps {
   streaming?: boolean;
 }
 
+const PLUGINS = { code };
+const CONTROLS = { code: false };
+
 /**
  * Renders markdown content with Streamdown — a streaming-first drop-in
  * replacement for react-markdown. Handles GFM, syntax highlighting (Shiki),
@@ -18,17 +21,30 @@ interface MarkdownRendererProps {
  *
  * The `markdown-body` class is kept on Streamdown's root for the text-selection
  * re-enable rule in index.css (the app disables selection app-wide by default).
+ *
+ * Wrapped in React.memo with props hoisted to module-level constants so that
+ * parent re-renders don't create new plugin/control objects that would defeat
+ * Streamdown's internal memoization.
  */
-export function MarkdownRenderer({ content, className, streaming }: MarkdownRendererProps) {
+export const MarkdownRenderer = React.memo(function MarkdownRenderer({
+  content,
+  className,
+  streaming,
+}: MarkdownRendererProps) {
+  const resolvedClassName = React.useMemo(
+    () => [className, "markdown-body"].filter(Boolean).join(" "),
+    [className],
+  );
+
   return (
     <Streamdown
-      className={[className, "markdown-body"].filter(Boolean).join(" ")}
+      className={resolvedClassName}
       mode={streaming ? "streaming" : "static"}
       isAnimating={streaming}
-      plugins={{ code }}
-      controls={{ code: false }}
+      plugins={PLUGINS}
+      controls={CONTROLS}
     >
       {content}
     </Streamdown>
   );
-}
+});

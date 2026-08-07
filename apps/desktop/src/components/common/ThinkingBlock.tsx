@@ -18,9 +18,12 @@ export function ThinkingBlock({
 }: ThinkingBlockProps) {
   const [isExpanded, setIsExpanded] = React.useState(defaultExpanded || isStreaming);
 
-  if (!text) return null;
+  const wordCount = React.useMemo(
+    () => (text ? text.trim().split(/\s+/).filter(Boolean).length : 0),
+    [text],
+  );
 
-  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+  if (!text) return null;
 
   return (
     <div className="rounded-lg bg-thinking/80 border border-thinking-border overflow-hidden transition-all">

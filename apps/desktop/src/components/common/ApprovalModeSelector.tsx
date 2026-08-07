@@ -23,7 +23,9 @@ const FALLBACK_LABELS: Record<ApprovalMode, string> = {
  * server's authoritative list.
  */
 export function ApprovalModeSelector({ value, onChange }: ApprovalModeSelectorProps) {
-  const { approvalModes, loadingApprovalModes, loadApprovalModes } = useProviderStore();
+  const approvalModes = useProviderStore((state) => state.approvalModes);
+  const loadingApprovalModes = useProviderStore((state) => state.loadingApprovalModes);
+  const loadApprovalModes = useProviderStore((state) => state.loadApprovalModes);
 
   useEffect(() => {
     void loadApprovalModes();

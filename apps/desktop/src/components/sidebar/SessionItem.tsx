@@ -1,3 +1,4 @@
+import React from "react";
 import type { SessionHeader, SessionStatus } from "@console/types";
 import { FolderClosed, Trash2 } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
@@ -23,14 +24,22 @@ interface SessionItemProps {
  * Single session row in the sidebar — status dot, title, working folder,
  * timestamp, and hover Delete button.
  */
-export function SessionItem({ session, isActive }: SessionItemProps) {
-  const { setSelectedProjectId } = useAppStore();
-  const { projects, deleteSession } = useProjectStore();
-  const { openChatTab, closeChatTab } = useWorkspaceStore();
+export const SessionItem = React.memo(function SessionItem({
+  session,
+  isActive,
+}: SessionItemProps) {
+  const setSelectedProjectId = useAppStore((state) => state.setSelectedProjectId);
+  const deleteSession = useProjectStore((state) => state.deleteSession);
+  const projects = useProjectStore((state) => state.projects);
+  const openChatTab = useWorkspaceStore((state) => state.openChatTab);
+  const closeChatTab = useWorkspaceStore((state) => state.closeChatTab);
   const liveStatus = useSessionStatusStore((state) => state.statuses[session.id]);
   const status: SessionStatus = liveStatus ?? session.status ?? "idle";
-  const projectId =
-    session.projectId ?? projects.find((project) => project.path === session.cwd)?.id ?? null;
+  const projectId = React.useMemo(
+    () =>
+      session.projectId ?? projects.find((project) => project.path === session.cwd)?.id ?? null,
+    [session.projectId, session.cwd, projects],
+  );
 
   const handleOpen = () => {
     if (!projectId) return;
@@ -95,4 +104,4 @@ export function SessionItem({ session, isActive }: SessionItemProps) {
       </div>
     </div>
   );
-}
+});

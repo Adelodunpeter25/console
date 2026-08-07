@@ -30,7 +30,7 @@ export function MainPage() {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen);
   const setSidebarOpen = useAppStore((state) => state.setSidebarOpen);
   const setRightSidebarOpen = useAppStore((state) => state.setRightSidebarOpen);
-  const { init } = useServerStore();
+  const init = useServerStore((state) => state.init);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [sidebarWidth, setSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
   const [rightSidebarWidth, setRightSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);

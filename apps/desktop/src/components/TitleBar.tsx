@@ -25,7 +25,10 @@ interface TitleBarProps {
  * No custom window control buttons — the OS provides minimize/maximize/close.
  */
 export function TitleBar({ rightAction, title }: TitleBarProps) {
-  const { sidebarOpen, toggleSidebar, rightSidebarOpen, toggleRightSidebar } = useAppStore();
+  const sidebarOpen = useAppStore((state) => state.sidebarOpen);
+  const toggleSidebar = useAppStore((state) => state.toggleSidebar);
+  const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen);
+  const toggleRightSidebar = useAppStore((state) => state.toggleRightSidebar);
 
   return (
     <div
