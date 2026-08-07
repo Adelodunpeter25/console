@@ -1,9 +1,9 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
 
 /**
- * Shared persisted UI preferences (sidebar width, window size) backed by
- * tauri-plugin-store. Values survive restarts. Keys are namespaced so the
- * store can grow without collisions.
+ * Shared persisted UI preferences (sidebar width) backed by tauri-plugin-store.
+ * Window size is handled by tauri-plugin-window-state. Values survive restarts.
+ * Keys are namespaced so the store can grow without collisions.
  */
 export const uiStore = new LazyStore("ui-preferences.json", {
   // Only persist on explicit set(); avoid the plugin's debounced auto-write
