@@ -205,3 +205,71 @@ pub async fn login_with_browser(
     // 6. Return the result.
     Ok(result)
 }
+
+/// Full automatic Codebuff device-code login flow:
+/// 1. Ask the backend for a login code (loginUrl + fingerprint params)
+/// 2. Open the login URL in the system browser
+/// 3. Poll the backend's status endpoint until the user completes login
+/// Return when logged in.
+#[tauri::command]
+pub async fn login_codebuff(app: tauri::AppHandle) -> AppResult<serde_json::Value> {
+    let client = ApiClient::new();
+
+    // 1. Get the login code from the backend.
+    let login_value = crate::api::auth::codebuff_login_start(&client).await?;
+    let login: serde_json::Value = login_value;
+    let login_url = login
+        .get("loginUrl")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AppError::Other("Codebuff login response missing loginUrl".to_string()))?
+        .to_string();
+    let fingerprint_id = login
+        .get("fingerprintId")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AppError::Other("Codebuff login response missing fingerprintId".to_string()))?
+        .to_string();
+    let fingerprint_hash = login
+        .get("fingerprintHash")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AppError::Other("Codebuff login response missing fingerprintHash".to_string()))?
+        .to_string();
+    let expires_at = login
+        .get("expiresAt")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AppError::Other("Codebuff login response missing expiresAt".to_string()))?
+        .to_string();
+
+    // 2. Open the browser so the user can approve the login.
+    let app_handle = app.clone();
+    let _ = app_handle.opener().open_url(login_url, None::<&str>);
+
+    // 3. Poll the status endpoint (matches the CLI's polling loop).
+    let mut attempts = 0;
+    const MAX_ATTEMPTS: u64 = 60; // 60 * 5s = 5 minutes, same as the CLI timeout.
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        attempts += 1;
+
+        if attempts >= MAX_ATTEMPTS {
+            return Err(AppError::Other(
+                "Codebuff login timed out. Please try again.".to_string(),
+            ));
+        }
+
+        let status: serde_json::Value = crate::api::auth::codebuff_login_status(
+            &client,
+            &fingerprint_id,
+            &fingerprint_hash,
+            &expires_at,
+        )
+        .await?;
+
+        if status
+            .get("loggedIn")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
+            return Ok(serde_json::json!({ "provider": "codebuff", "loggedIn": true }));
+        }
+    }
+}

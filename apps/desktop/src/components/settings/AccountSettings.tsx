@@ -1,7 +1,7 @@
 import React from "react";
 import { CheckCircle2, Circle, Loader2, LogIn, RefreshCw, Save } from "lucide-react";
 import { useAuthStore } from "../../store/useAuthStore";
-import type { OAuthProviderId, ProviderId } from "../../store/useAuthStore";
+import type { ProviderId } from "../../store/useAuthStore";
 import { GlassSurface } from "../common/GlassSurface";
 
 /**
@@ -20,7 +20,7 @@ import { GlassSurface } from "../common/GlassSurface";
  * No manual code copying — just click, authenticate, done.
  */
 export function AccountSettings() {
-  const { status, loading, loggingIn, error, projectIds, savingProjectId, loadStatus, loginWithBrowser, saveProjectId } =
+  const { status, loading, loggingIn, error, projectIds, savingProjectId, loadStatus, loginWithBrowser, loginCodebuff, saveProjectId } =
     useAuthStore();
 
   const [geminiProjectId, setGeminiProjectId] = React.useState("");
@@ -35,13 +35,18 @@ export function AccountSettings() {
 
   const handleLogin = async (provider: ProviderId) => {
     try {
-      await loginWithBrowser(provider);
+      if (provider === "codebuff") {
+        await loginCodebuff();
+      } else {
+        await loginWithBrowser(provider);
+      }
     } catch (err) {
       console.error(`Failed to login ${provider}:`, err);
     }
   };
 
-  const providers: { id: OAuthProviderId; label: string }[] = [
+  const providers: { id: ProviderId; label: string }[] = [
+    { id: "codebuff", label: "Codebuff (Free)" },
     { id: "antigravity", label: "Antigravity" },
     { id: "gemini", label: "Gemini" },
   ];
@@ -66,7 +71,9 @@ export function AccountSettings() {
 
           <div className="space-y-1">
             {providers.map(({ id, label }) => {
-              const providerStatus = status ? status[id] : undefined;
+              const providerStatus = status
+                ? (status as unknown as Record<string, { loggedIn?: boolean; email?: string } | undefined>)[id]
+                : undefined;
               const loggedIn = providerStatus?.loggedIn;
               const email = providerStatus?.email;
               const isLoggingIn = loggingIn === id;

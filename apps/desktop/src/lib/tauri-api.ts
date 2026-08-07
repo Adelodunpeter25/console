@@ -52,6 +52,8 @@ export const tauriApi = {
     }),
   loginWithBrowser: (provider: string) =>
     invoke<OAuthCallbackResult>("login_with_browser", { provider }),
+  /** Codebuff device-code login: opens browser, polls backend until approved. */
+  loginCodebuff: () => invoke<OAuthCallbackResult>("login_codebuff"),
   getProjectId: (provider: string) =>
     invoke<{ projectId?: string }>("get_project_id", { provider }),
   setProjectId: (provider: string, projectId?: string) =>

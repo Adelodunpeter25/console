@@ -11,7 +11,7 @@ use commands::{
     create_directory, create_session, delete_directory, delete_file, delete_session, restore_session,
     get_approval_modes, get_auth_status, get_backend_url, get_directory_tree, get_login_url,
     get_project_id, get_provider_models, get_session, handle_oauth_callback, list_projects, list_providers,
-    list_sessions, list_slash_commands, login_with_browser, pick_folder, pick_images, read_dropped_images, ping_server, read_file,
+    list_sessions, list_slash_commands, login_codebuff, login_with_browser, pick_folder, pick_images, read_dropped_images, ping_server, read_file,
     run_agent, search_files, set_backend_url, set_project_id, update_session, watch_directory, write_file, get_git_status,
 };
 
@@ -30,6 +30,7 @@ pub fn run() {
             get_login_url,
             handle_oauth_callback,
             login_with_browser,
+            login_codebuff,
             get_project_id,
             set_project_id,
             list_sessions,

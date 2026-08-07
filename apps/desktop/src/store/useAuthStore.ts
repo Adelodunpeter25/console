@@ -17,6 +17,8 @@ interface AuthState {
   loadStatus: () => Promise<void>;
   /** Full automatic OAuth flow: opens browser, catches redirect, exchanges code. */
   loginWithBrowser: (provider: ProviderId) => Promise<void>;
+  /** Codebuff device-code login flow (browser open + status polling). */
+  loginCodebuff: () => Promise<void>;
   /** Save a configured project ID to the backend for a provider. */
   saveProjectId: (provider: ProviderId, projectId: string | undefined) => Promise<void>;
   reset: () => void;
@@ -25,6 +27,7 @@ interface AuthState {
 const INITIAL_STATUS: AuthStatusResponse = {
   gemini: { loggedIn: false },
   antigravity: { loggedIn: false },
+  codebuff: { loggedIn: false },
 };
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -60,6 +63,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ loggingIn: provider, error: null });
     try {
       await tauriApi.loginWithBrowser(provider);
+      // Refresh status so `loggedIn` reflects the new credential.
+      await get().loadStatus();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Login failed";
+      set({ error: message });
+      throw e;
+    } finally {
+      set({ loggingIn: null });
+    }
+  },
+
+  /** Codebuff device-code login: opens browser, polls until approved. */
+  loginCodebuff: async () => {
+    set({ loggingIn: "codebuff", error: null });
+    try {
+      await tauriApi.loginCodebuff();
       // Refresh status so `loggedIn` reflects the new credential.
       await get().loadStatus();
     } catch (e) {

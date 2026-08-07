@@ -15,6 +15,31 @@ pub async fn handle_callback(client: &ApiClient, dto: &OAuthCallbackDto) -> AppR
     client.post("/auth/login/callback", dto).await
 }
 
+/// Start the Codebuff device-code login flow.
+/// Returns `{ provider, loginUrl, fingerprintId, fingerprintHash, expiresAt }`.
+pub async fn codebuff_login_start(client: &ApiClient) -> AppResult<serde_json::Value> {
+    client.post("/auth/codebuff/start", &serde_json::json!({})).await
+}
+
+/// Poll the Codebuff login status. Returns `{ loggedIn, credential? }`.
+pub async fn codebuff_login_status(
+    client: &ApiClient,
+    fingerprint_id: &str,
+    fingerprint_hash: &str,
+    expires_at: &str,
+) -> AppResult<serde_json::Value> {
+    client
+        .get_with_query(
+            "/auth/codebuff/status",
+            &[
+                ("fingerprintId", fingerprint_id),
+                ("fingerprintHash", fingerprint_hash),
+                ("expiresAt", expires_at),
+            ],
+        )
+        .await
+}
+
 #[derive(Debug, Serialize)]
 pub struct ProjectIdDto {
     pub provider: String,

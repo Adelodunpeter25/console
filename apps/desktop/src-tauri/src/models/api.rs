@@ -88,6 +88,8 @@ pub struct ProjectInfo {
 pub struct AuthStatusResponse {
     pub gemini: ProviderAuthStatus,
     pub antigravity: ProviderAuthStatus,
+    #[serde(default)]
+    pub codebuff: Option<ProviderAuthStatus>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
