@@ -6,6 +6,7 @@ import type {
   AuthStatusResponse,
   CreateSessionDto,
   FileSearchResponse,
+  GitStatusSummary,
   ImageAttachment,
   ProjectInfo,
   ProviderCatalogEntry,
@@ -91,6 +92,9 @@ export const tauriApi = {
 
   // --- config / approval modes --------------------------------------------
   getApprovalModes: () => invoke<ApprovalModeOption[]>("get_approval_modes"),
+
+  // --- git -----------------------------------------------------------------
+  getGitStatus: (path?: string) => invoke<GitStatusSummary>("get_git_status", { path }),
 
   // --- filesystem ----------------------------------------------------------
   browseDirectory: (path?: string) => invoke<BrowseResult>("browse_directory", { path }),

@@ -4,6 +4,7 @@ import { useAppStore } from "../../store/useAppStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useFsStore } from "../../store/useFsStore";
 import { FileTree } from "../file/FileTree";
+import { tauriApi } from "../../lib/tauri-api";
 
 export function RightSidebar({ width = 288 }: { width?: number }) {
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
@@ -22,16 +23,24 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
 
     browseDirectory(projectPath).catch(() => {});
 
-    // SSE EventSource for real-time filesystem change events from backend
+    let eventSource: EventSource | null = null;
     const encoded = encodeURIComponent(projectPath);
-    const eventSource = new EventSource(`http://127.0.0.1:4000/api/fs/watch?path=${encoded}`);
 
-    eventSource.addEventListener("fsChange", () => {
-      browseDirectory(projectPath).catch(() => {});
+    tauriApi.getBackendUrl().then((baseUrl) => {
+      eventSource = new EventSource(`${baseUrl.replace(/\/$/, "")}/fs/watch?path=${encoded}`);
+      eventSource.addEventListener("fsChange", () => {
+        browseDirectory(projectPath).catch(() => {});
+      });
+    }).catch(() => {
+      // Fallback
+      eventSource = new EventSource(`http://127.0.0.1:4000/api/fs/watch?path=${encoded}`);
+      eventSource.addEventListener("fsChange", () => {
+        browseDirectory(projectPath).catch(() => {});
+      });
     });
 
     return () => {
-      eventSource.close();
+      if (eventSource) eventSource.close();
     };
   }, [projectPath, browseDirectory]);
 
