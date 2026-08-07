@@ -13,7 +13,6 @@ export const uiStore = new LazyStore("ui-preferences.json", {
 
 export const UI_KEYS = {
   sidebarWidth: "sidebar.width",
-  windowSize: "window.size",
 } as const;
 
 export async function getSidebarWidth(): Promise<number | null> {
@@ -23,15 +22,5 @@ export async function getSidebarWidth(): Promise<number | null> {
 
 export async function setSidebarWidth(width: number): Promise<void> {
   await uiStore.set(UI_KEYS.sidebarWidth, width);
-  await uiStore.save();
-}
-
-export async function getWindowSize(): Promise<{ width: number; height: number } | null> {
-  const v = await uiStore.get<{ width: number; height: number }>(UI_KEYS.windowSize);
-  return v ?? null;
-}
-
-export async function setWindowSize(size: { width: number; height: number }): Promise<void> {
-  await uiStore.set(UI_KEYS.windowSize, size);
   await uiStore.save();
 }

@@ -1,5 +1,4 @@
 import React from "react";
-import { getCurrentWindow, PhysicalSize } from "@tauri-apps/api/window";
 import { TitleBar } from "../components/TitleBar";
 import { Sidebar } from "../components/sidebar/Sidebar";
 import { WorkspaceLayout } from "../layout";
@@ -7,7 +6,7 @@ import { ResizablePanel } from "../components/common/ResizablePanel";
 import { CommandPalette } from "../components/commandpalette/CommandPalette";
 import { useAppStore } from "../store/useAppStore";
 import { useServerStore } from "../store/useServerStore";
-import { getSidebarWidth, setSidebarWidth, getWindowSize, setWindowSize } from "../lib/ui-store";
+import { getSidebarWidth, setSidebarWidth } from "../lib/ui-store";
 
 const SIDEBAR_MIN = 200;
 const SIDEBAR_MAX = 480;
@@ -26,42 +25,13 @@ export function ChatPage() {
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [sidebarWidth, setSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
 
-  // Restore persisted sidebar width + window size on mount.
+  // Restore persisted sidebar width on mount.
   React.useEffect(() => {
     init();
     getSidebarWidth().then((w) => {
       if (w != null) setSidebarWidthState(Math.min(Math.max(w, SIDEBAR_MIN), SIDEBAR_MAX));
     });
-    const restoreWindow = async () => {
-      const size = await getWindowSize();
-      if (size) {
-        try {
-          await getCurrentWindow().setSize(new PhysicalSize(size.width, size.height));
-        } catch {
-          // Ignore — window may not be resizable in some platforms.
-        }
-      }
-    };
-    restoreWindow();
   }, [init]);
-
-  // Persist window size on resize (debounced).
-  React.useEffect(() => {
-    const win = getCurrentWindow();
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const onResize = async () => {
-      const size = await win.innerSize();
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        setWindowSize({ width: size.width, height: size.height }).catch(() => {});
-      }, 400);
-    };
-    const unlisten = win.onResized(onResize);
-    return () => {
-      unlisten.then((fn) => fn());
-      if (timer) clearTimeout(timer);
-    };
-  }, []);
 
   const handleSidebarResizeEnd = (width: number) => {
     setSidebarWidth(width).catch(() => {});

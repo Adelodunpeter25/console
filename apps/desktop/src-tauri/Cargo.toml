@@ -17,6 +17,7 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-log = "2"
 tauri-plugin-store = "2"
+tauri-plugin-window-state = "2"
 rfd = "0.15"
 tokio = { version = "1", features = ["rt"] }
 serde = { version = "1", features = ["derive"] }
