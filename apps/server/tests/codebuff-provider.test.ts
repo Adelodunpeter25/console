@@ -169,7 +169,7 @@ function restoreFetch() {
   });
 }
 
-// 3. codebuffStreamFn — SSE deltas (mock fetch)
+// 3. codebuffStreamFn — SSE deltas (mock fetch) + agent-run lifecycle
 {
   await withTempCreds(async () => {
     await writeFile(process.env.CODEBUFF_CREDENTIALS_PATH!, JSON.stringify({ authToken: "tok" }));
@@ -191,7 +191,31 @@ function restoreFetch() {
       "",
     ].join("\n");
 
+    const startedRuns: string[] = [];
+    const finishedRuns: Array<{ runId: string; status: string }> = [];
+
     mockFetch(async (url, init) => {
+      if (url.endsWith("/api/v1/agent-runs")) {
+        const body = JSON.parse(String(init?.body));
+        if (body.action === "START") {
+          assert.equal(body.agentId, "base2-free-deepseek-flash");
+          const runId = "run-abc";
+          startedRuns.push(runId);
+          return new Response(JSON.stringify({ runId }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (body.action === "FINISH") {
+          finishedRuns.push({ runId: body.runId, status: body.status });
+          return new Response(JSON.stringify({}), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        throw new Error(`Unexpected agent-runs action ${body.action}`);
+      }
+
       assert.ok(url.endsWith("/api/v1/chat/completions"), `unexpected url ${url}`);
       const rawHeaders = init?.headers as
         | Record<string, string>
@@ -203,8 +227,10 @@ function restoreFetch() {
       assert.equal(authHeader, "Bearer tok");
       const body = JSON.parse(String(init?.body));
       assert.equal(body.model, "deepseek/deepseek-v4-flash");
-      // Free-tier metadata must be in the request body (cost_mode free).
+      // Free-tier metadata must be in the request body (cost_mode free) and
+      // the run_id must be the server-issued runId, not a random string.
       assert.equal(body.codebuff_metadata?.cost_mode, "free");
+      assert.equal(body.codebuff_metadata?.run_id, "run-abc");
       return new Response(mockSse, {
         headers: { "Content-Type": "text/event-stream" },
       });
@@ -220,6 +246,10 @@ function restoreFetch() {
       })) {
         deltas.push(delta);
       }
+
+      // Lifecycle: START registered a run, stream consumed it, FINISH closed it.
+      assert.deepEqual(startedRuns, ["run-abc"]);
+      assert.deepEqual(finishedRuns, [{ runId: "run-abc", status: "completed" }], "run must be finished after streaming");
 
       const thinkingDeltas = deltas.filter((d) => d.type === "thinking");
       const textDeltas = deltas.filter((d) => d.type === "text");
@@ -237,7 +267,7 @@ function restoreFetch() {
         .map((d) => (d as { argumentsJson: string }).argumentsJson)
         .join("");
       assert.deepEqual(JSON.parse(assembled), { path: "." }, `args were ${assembled}`);
-      console.log("  ✅ codebuffStreamFn streaming (thinking/text/toolCall + free metadata)");
+      console.log("  ✅ codebuffStreamFn streaming (thinking/text/toolCall + free metadata + run lifecycle)");
     } finally {
       restoreFetch();
     }
