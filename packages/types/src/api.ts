@@ -105,7 +105,10 @@ export interface ProviderAuthStatus {
   configuredProjectId?: string;
 }
 
-export type AuthStatusResponse = Record<OAuthProviderId, ProviderAuthStatus>;
+export type AuthStatusResponse = Record<OAuthProviderId, ProviderAuthStatus> & {
+  /** Codebuff device-code login status (not OAuth). */
+  codebuff?: ProviderAuthStatus;
+};
 
 export interface SessionDetailResponse {
   header: SessionHeader;

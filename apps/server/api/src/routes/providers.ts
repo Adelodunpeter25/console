@@ -28,7 +28,8 @@ providerRoutes.get("/providers/:id/models", async (c) => {
   if (
     providerId !== "gemini" &&
     providerId !== "antigravity" &&
-    providerId !== "opencode"
+    providerId !== "opencode" &&
+    providerId !== "codebuff"
   ) {
     return c.json({ success: false, error: `Invalid provider '${providerId}'.` }, 400);
   }

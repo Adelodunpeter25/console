@@ -12,6 +12,8 @@ import {
   loadCredential,
   opencodeStreamFn,
   refreshIfNeeded,
+  codebuffStreamFn,
+  CODEBUFF_MODEL_SPECS,
 } from "../../../providers/src/index.js";
 import type { StreamFn } from "../service/agent-loop.js";
 
@@ -60,6 +62,15 @@ export const DEFAULT_OPENCODE_MODELS: Model[] = [
   "longcat-2.0-free",
 ].map((id) => ({ id, provider: "opencode", contextWindow: 200_000 }));
 
+export const DEFAULT_CODEBUFF_MODELS: Model[] = CODEBUFF_MODEL_SPECS.map(
+  (spec) => ({
+    id: spec.id,
+    provider: "codebuff" as const,
+    contextWindow: spec.contextWindow,
+    ...(spec.multimodal ? { supportsImages: true } : {}),
+  }),
+);
+
 export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
   gemini: {
     name: "gemini",
@@ -81,6 +92,13 @@ export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
     description: "Free OpenAI-compatible endpoint (opencode.ai/zen)",
     models: DEFAULT_OPENCODE_MODELS,
     getStreamFn: () => opencodeStreamFn,
+  },
+  codebuff: {
+    name: "codebuff",
+    displayName: "Codebuff (Freebuff)",
+    description: "Free-tier models served by codebuff.com (DeepSeek, MiMo, Kimi, MiniMax)",
+    models: DEFAULT_CODEBUFF_MODELS,
+    getStreamFn: () => codebuffStreamFn,
   },
 };
 
@@ -144,7 +162,9 @@ export async function fetchModelsForProvider(
       ? DEFAULT_GEMINI_MODELS
       : providerName === "opencode"
         ? DEFAULT_OPENCODE_MODELS
-        : DEFAULT_ANTIGRAVITY_MODELS;
+        : providerName === "codebuff"
+          ? DEFAULT_CODEBUFF_MODELS
+          : DEFAULT_ANTIGRAVITY_MODELS;
   if (!provider.models || provider.models.length === 0) {
     provider.models = staticFallback;
   }

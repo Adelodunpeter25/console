@@ -8,6 +8,26 @@ export { geminiStreamFn } from "./gemini/index.js";
 /** OpenCode Zen provider — free OpenAI-compatible endpoint */
 export { opencodeStreamFn, fetchOpencodeFreeModels } from "./opencode/index.js";
 
+/** Codebuff / Freebuff provider — device-code login + OpenAI-compatible backend */
+export {
+  codebuffStreamFn,
+  startCodebuffLogin,
+  pollCodebuffLogin,
+  generateFingerprintId,
+  loadCodebuffCredential,
+  clearCodebuffCredential,
+  hasCodebuffCredential,
+  CODEBUFF_BASE_URL,
+  CODEBUFF_API_URL,
+  CODEBUFF_MODEL_SPECS,
+  isCodebuffFreeModelId,
+} from "./codebuff/index.js";
+export type {
+  CodebuffCredential,
+  CodebuffLoginCode,
+  CodebuffLoginStatus,
+} from "./codebuff/index.js";
+
 /** Model discovery */
 export { fetchAvailableModels } from "./discovery/fetch-models.js";
 export type { FetchAvailableModelsOptions, DiscoveredApiModel } from "./discovery/fetch-models.js";
