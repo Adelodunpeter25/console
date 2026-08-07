@@ -1,5 +1,4 @@
 import React from "react";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { AgentMessage } from "@console/types";
 import { MessageBubble } from "./MessageBubble";
 import { StreamingBubble } from "./StreamingBubble";
@@ -24,18 +23,11 @@ export interface MessageListRef {
   scrollToBottom: () => void;
 }
 
-type RowItem =
-  | { kind: "message"; message: AgentMessage; index: number; key: string }
-  | { kind: "streaming"; key: "streaming" };
-
 export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
   function MessageList(
     { messages, streamingText, streamingThinking, running, runs }: MessageListProps,
     ref,
   ) {
-    const virtuosoRef = React.useRef<VirtuosoHandle>(null);
-    const [showScrollButton, setShowScrollButton] = React.useState(false);
-
     const isStreaming = Boolean(streamingText || streamingThinking);
     const showStreamingBubble = running || isStreaming;
     const showEmpty = messages.length === 0 && !showStreamingBubble;
@@ -58,27 +50,37 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
       [messages],
     );
 
-    const rowItems = React.useMemo<RowItem[]>(() => {
-      const items: RowItem[] = messages.map((msg, index) => ({
-        kind: "message",
-        message: msg,
-        index,
-        key: messageKey(msg, index),
-      }));
-      if (showStreamingBubble) {
-        items.push({ kind: "streaming", key: "streaming" });
-      }
-      return items;
-    }, [messages, showStreamingBubble]);
+    const parentRef = React.useRef<HTMLDivElement>(null);
+    const [showScrollButton, setShowScrollButton] = React.useState(false);
+
+    const handleScroll = React.useCallback(() => {
+      if (!parentRef.current) return;
+      const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
+      const atBottom = scrollHeight - scrollTop - clientHeight < 60;
+      setShowScrollButton(!atBottom);
+    }, []);
 
     const scrollToBottom = React.useCallback(() => {
-      if (virtuosoRef.current) {
-        virtuosoRef.current.scrollToIndex({
-          index: rowItems.length - 1,
-          behavior: "smooth",
-        });
+      if (parentRef.current) {
+        parentRef.current.scrollTop = parentRef.current.scrollHeight;
       }
-    }, [rowItems.length]);
+    }, []);
+
+    // Auto-scroll when a new prompt is submitted by the user.
+    const prevMessagesLengthRef = React.useRef(messages.length);
+    React.useEffect(() => {
+      const prevLength = prevMessagesLengthRef.current;
+      prevMessagesLengthRef.current = messages.length;
+
+      if (messages.length > prevLength) {
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg?.role === "user") {
+          requestAnimationFrame(() => {
+            scrollToBottom();
+          });
+        }
+      }
+    }, [messages, scrollToBottom]);
 
     React.useImperativeHandle(
       ref,
@@ -88,50 +90,35 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
       [scrollToBottom],
     );
 
-    if (showEmpty) {
-      return (
-        <div className="flex-1 flex items-center justify-center h-full">
-          <p className="text-foreground-muted text-sm">Type a prompt below to start the agent.</p>
-        </div>
-      );
-    }
-
     return (
-      <div className="flex-1 relative h-full w-full overflow-hidden">
-        <Virtuoso
-          ref={virtuosoRef}
-          data={rowItems}
-          computeItemKey={(_index, item) => item.key}
-          className="h-full w-full"
-          atBottomStateChange={(atBottom) => {
-            setShowScrollButton(!atBottom);
-          }}
-          itemContent={(_index, item) => {
-            if (item.kind === "streaming") {
-              return (
-                <div className="max-w-3xl mx-auto px-6 py-2">
-                  <StreamingBubble text={streamingText} thinking={streamingThinking} />
-                </div>
-              );
-            }
-
-            const msg = item.message;
-            return (
-              <div className="max-w-3xl mx-auto px-6 py-2">
-                <MessageBubble message={msg} />
-                {userMessageRunMap.has(item.index) && (
-                  <RunActivity
-                    activity={userMessageRunMap.get(item.index)!}
-                    running={running && item.index === latestUserIndex}
-                  />
-                )}
-              </div>
-            );
-          }}
-        />
+      <>
+        <div ref={parentRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
+          {showEmpty ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-foreground-muted text-sm">Type a prompt below to start the agent.</p>
+            </div>
+          ) : (
+            <div className="max-w-3xl mx-auto px-6 py-6 space-y-4">
+              {messages.map((msg, i) => (
+                <React.Fragment key={messageKey(msg, i)}>
+                  <MessageBubble message={msg} />
+                  {userMessageRunMap.has(i) && (
+                    <RunActivity
+                      activity={userMessageRunMap.get(i)!}
+                      running={running && i === latestUserIndex}
+                    />
+                  )}
+                </React.Fragment>
+              ))}
+              {showStreamingBubble && (
+                <StreamingBubble text={streamingText} thinking={streamingThinking} />
+              )}
+            </div>
+          )}
+        </div>
 
         {showScrollButton && <ScrollToBottom onClick={scrollToBottom} />}
-      </div>
+      </>
     );
   },
 );
