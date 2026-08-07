@@ -6,6 +6,9 @@
     "console": "./index.ts"
   },
   "type": "module",
+  "scripts": {
+    "cli": "tsx index.ts"
+  },
   "dependencies": {
     "@console/types": "*",
     "commander": "^12.1.0"

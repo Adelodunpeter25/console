@@ -25,8 +25,11 @@ export async function startDaemon(options: StartOptions): Promise<void> {
   await saveConfig(config);
   await ensureConsoleDir();
 
-  // Determine server path - works for both local and global installation
-  const serverPath = path.resolve(process.cwd(), "server", "index.ts");
+  // Determine server path - resolve relative to the CLI source file (which lives
+  // in apps/cli/commands/) so it works regardless of cwd (npm workspace runs,
+  // global install, make targets, etc.)
+  const cliCommandsDir = path.dirname(new URL(import.meta.url).pathname);
+  const serverPath = path.resolve(cliCommandsDir, "..", "..", "server", "index.ts");
 
   if (options.daemon) {
     // Start as background daemon

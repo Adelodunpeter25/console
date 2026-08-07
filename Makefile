@@ -1,4 +1,4 @@
-.PHONY: dev-server dev-mobile dev-desktop build-desktop typecheck check help
+.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop typecheck check help
 
 # Default target
 .DEFAULT_GOAL := help
@@ -6,6 +6,10 @@
 ## dev-server: Start the Hono agent server in dev mode
 dev-server:
 	npm run dev:server
+
+## dev-console: Start the console agent as a background daemon (survives closing terminal)
+dev-console:
+	npm run cli -- start --daemon
 
 ## dev-mobile: Start the Expo React Native app dev server
 dev-mobile:
@@ -31,6 +35,7 @@ check:
 help:
 	@echo "Available commands:"
 	@echo "  make dev-server  - Start the backend agent server"
+	@echo "  make dev-console - Start the console agent as a background daemon"
 	@echo "  make dev-mobile  - Start the Expo mobile app dev server"
 	@echo "  make dev-desktop  - Start the Tauri desktop app dev server"
 	@echo "  make build-desktop  - Build the Tauri desktop app for production"
