@@ -4,7 +4,7 @@ import { useAppStore } from "../../store/useAppStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useFsStore } from "../../store/useFsStore";
 import { FileTree } from "../file/FileTree";
-import { tauriApi } from "../../lib/tauri-api";
+import { useProjectFsWatcher } from "../../hooks/useProjectFsWatcher";
 
 export function RightSidebar({ width = 288 }: { width?: number }) {
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
@@ -18,27 +18,8 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
 
   const projectPath = currentProject?.path;
 
-  React.useEffect(() => {
-    if (!projectPath) return;
-
-    browseDirectory(projectPath).catch(() => {});
-
-    let unlisten: (() => void) | undefined;
-
-    // Trigger Rust command to watch project path via Tauri IPC
-    tauriApi.watchDirectory(projectPath).catch(() => {});
-
-    // Listen to fs-change Tauri event via Rust relay
-    tauriApi.listenFsChanges(() => {
-      browseDirectory(projectPath).catch(() => {});
-    }).then((unlistenFn) => {
-      unlisten = unlistenFn;
-    }).catch(() => {});
-
-    return () => {
-      if (unlisten) unlisten();
-    };
-  }, [projectPath, browseDirectory]);
+  // Real-time project filesystem watcher hook
+  useProjectFsWatcher(projectPath);
 
   const tree = React.useMemo(() => {
     if (!browse || !projectPath) return [];
