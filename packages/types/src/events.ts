@@ -10,6 +10,8 @@ export interface AskQuestionRequest {
   isMultiSelect?: boolean;
   /** When true, the user may skip the question entirely. */
   skippable?: boolean;
+  /** Shared id grouping questions from a single askMany call. */
+  batchId?: string;
 }
 
 export type AgentSessionEvent =

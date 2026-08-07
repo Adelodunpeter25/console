@@ -39,7 +39,8 @@ export interface ChatSessionState {
   running: boolean;
   streamingText: string;
   streamingThinking: string;
-  pendingQuestion: PendingQuestion | null;
+  /** Queue of pending questions (a batch from askMany arrives all at once). */
+  pendingQuestions: PendingQuestion[];
   pendingPermissions: PendingPermission[];
   activeToolCalls: ToolCall[];
   todoItems: TodoItem[];

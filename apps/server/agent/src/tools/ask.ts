@@ -1,6 +1,7 @@
 /**
- * Interactive Question Tool ('ask').
- * Allows the agent to ask the user structured multiple-choice questions to clarify requirements.
+ * Interactive Question Tools ('ask' / 'askMany').
+ * Allow the agent to ask the user structured multiple-choice or free-text
+ * questions to clarify requirements.
  * Inspired by oh-my-pi/packages/coding-agent/src/tools/ask.ts.
  */
 import { randomUUID } from "node:crypto";
@@ -9,7 +10,7 @@ import type { AgentTool, AskQuestionRequest } from "../types/index.js";
 
 export type AskQuestionHandler = (request: AskQuestionRequest) => Promise<string | string[]>;
 
-const inputSchema = z.object({
+const questionSchema = z.object({
   question: z.string().describe("The question to ask the user"),
   options: z
     .array(z.string())
@@ -27,10 +28,37 @@ const inputSchema = z.object({
     .describe("Set to true if the question is optional and the user may skip it"),
 });
 
+const inputSchema = questionSchema;
+
 type Input = z.infer<typeof inputSchema>;
 
 const description = `Ask the user a question to clarify ambiguous requirements, architecture options, or preferences.
 Provide a clear question and, optionally, a list of distinct option choices. The user can always type a custom answer, so plain free-text questions are fine too.`;
+
+/** Build the tool-result text for a single answer, marking skips explicitly. */
+function formatAnswer(answer: string | string[]): string {
+  const text = Array.isArray(answer) ? answer.join(", ") : answer;
+  return text === ""
+    ? `[User Answer]: User skipped this question.`
+    : `[User Answer]: "${text}"`;
+}
+
+/** Emit one askQuestion request and await its answer via the handler. */
+function askOne(
+  handler: AskQuestionHandler,
+  input: Input,
+  batchId?: string,
+): Promise<string | string[]> {
+  const request: AskQuestionRequest = {
+    requestId: randomUUID(),
+    question: input.question,
+    options: input.options,
+    isMultiSelect: input.isMultiSelect,
+    skippable: input.skippable,
+    ...(batchId ? { batchId } : {}),
+  };
+  return handler(request);
+}
 
 export function createAskTool(handler?: AskQuestionHandler): AgentTool<typeof inputSchema> {
   return {
@@ -39,15 +67,7 @@ export function createAskTool(handler?: AskQuestionHandler): AgentTool<typeof in
     tier: "read",
     inputSchema,
     execute: async (args: Input): Promise<unknown> => {
-      const { question, options, isMultiSelect = false, skippable = false } = args;
-
-      const request: AskQuestionRequest = {
-        requestId: randomUUID(),
-        question,
-        options,
-        isMultiSelect,
-        skippable,
-      };
+      const { question, options } = args;
 
       if (!handler) {
         // Default fallback when running headless or unattached
@@ -62,17 +82,64 @@ export function createAskTool(handler?: AskQuestionHandler): AgentTool<typeof in
         };
       }
 
-      const answer = await handler(request);
-      const answerText = Array.isArray(answer) ? answer.join(", ") : answer;
+      const answer = await askOne(handler, args);
+      return { content: [{ type: "text", text: formatAnswer(answer) }] };
+    },
+  };
+}
+
+export const askTool = createAskTool();
+
+/* ------------------------------------------------------------------ */
+/* askMany — batch question tool                                       */
+/* ------------------------------------------------------------------ */
+
+const askManySchema = z.object({
+  questions: z
+    .array(questionSchema)
+    .min(1)
+    .describe("The list of questions to ask the user, answered in order"),
+});
+
+const askManyDescription = `Ask the user multiple questions at once, presented one at a time.
+Each question may have optional multiple-choice options; the user can always type a custom answer or skip (if skippable). Use this when you need several independent answers before proceeding.`;
+
+export function createAskManyTool(handler?: AskQuestionHandler): AgentTool<typeof askManySchema> {
+  return {
+    name: "askMany",
+    description: askManyDescription,
+    tier: "read",
+    inputSchema: askManySchema,
+    execute: async (args: z.infer<typeof askManySchema>): Promise<unknown> => {
+      if (!handler) {
+        // Headless fallback: pick the first option (or "skipped") per question.
+        return {
+          content: [
+            {
+              type: "text",
+              text: args.questions
+                .map((q) => {
+                  const defaultAnswer = q.options?.[0] ?? "skipped";
+                  return `[Asked User]: "${q.question}"\nSelected default option: "${defaultAnswer}"`;
+                })
+                .join("\n\n"),
+            },
+          ],
+        };
+      }
+
+      const batchId = randomUUID();
+      const answers = await Promise.all(
+        args.questions.map((q) => askOne(handler, q, batchId)),
+      );
 
       return {
         content: [
           {
             type: "text",
-            text:
-              answerText === ""
-                ? `[User Answer]: User skipped this question.`
-                : `[User Answer]: "${answerText}"`,
+            text: answers
+              .map((a, i) => `Q${i + 1}: ${formatAnswer(a)}`)
+              .join("\n"),
           },
         ],
       };
@@ -80,4 +147,4 @@ export function createAskTool(handler?: AskQuestionHandler): AgentTool<typeof in
   };
 }
 
-export const askTool = createAskTool();
+export const askManyTool = createAskManyTool();

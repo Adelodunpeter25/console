@@ -4,7 +4,7 @@
  */
 import { Agent } from "../../../agent/src/service/agent.js";
 import { allTools } from "../../../agent/src/tools/index.js";
-import { createAskTool } from "../../../agent/src/tools/ask.js";
+import { createAskManyTool, createAskTool } from "../../../agent/src/tools/ask.js";
 import { createTodoTool, type TodoItem } from "../../../agent/src/tools/todo.js";
 import { SqliteSessionStorage } from "../../../agent/src/session/storage.js";
 import { buildSystemPrompt } from "../../../agent/src/systemprompt/builder.js";
@@ -12,6 +12,7 @@ import { findModelInProvider, getProvider } from "../../../agent/src/commands/pr
 import type {
   AgentSessionEvent,
   ApprovalMode,
+  AskQuestionRequest,
   Model,
   UserMessage,
 } from "@console/types";
@@ -152,13 +153,15 @@ export class RunService {
     // Wire the ask-question handler so the ask tool pauses for user input
     // instead of auto-selecting the first option. The handler emits the
     // askQuestion event through onEvent and waits for answerQuestion().
-    const askTool = createAskTool((request) => {
+    const askHandler = (request: AskQuestionRequest) => {
       return new Promise<string | string[]>((resolve, reject) => {
         this.pendingQuestions.set(request.requestId, { sessionId, resolve, reject });
         onEvent({ type: "askQuestion", request });
         this.startDecisionTimeout(request.requestId, sessionId, "question");
       });
-    });
+    };
+    const askTool = createAskTool(askHandler);
+    const askManyTool = createAskManyTool(askHandler);
 
     const sessionTodo = createTodoTool(this.todoLists.get(sessionId) ?? [], (items, action) => {
       this.todoLists.set(sessionId, items);
@@ -166,6 +169,7 @@ export class RunService {
     });
     const tools = allTools.map((tool) => {
       if (tool.name === "ask") return askTool;
+      if (tool.name === "askMany") return askManyTool;
       if (tool.name === "todo") return sessionTodo.tool;
       return tool;
     });

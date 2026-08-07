@@ -1,7 +1,8 @@
 import React from "react";
-import { HelpCircle, ShieldCheck, ShieldX, Loader2 } from "lucide-react";
+import { ShieldCheck, ShieldX, Loader2 } from "lucide-react";
 import type { AskQuestionRequest, PermissionRequest } from "@console/types";
 import { useChatStore } from "../../store/useChatStore";
+import { QuestionPanel } from "./QuestionPanel";
 
 /* ------------------------------------------------------------------ */
 /* Permission request panel                                            */
@@ -60,125 +61,64 @@ function PermissionPanel({ request, sessionId }: PermissionPanelProps) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Question panel                                                      */
+/* Question wizard                                                     */
 /* ------------------------------------------------------------------ */
 
-interface QuestionPanelProps {
-  request: AskQuestionRequest;
-  sessionId: string;
-}
-
-function QuestionPanel({ request, sessionId }: QuestionPanelProps) {
+/**
+ * Per-question wizard over the pending question queue. Renders one question
+ * at a time; "Next" collects the answer locally and advances; the last
+ * question's button becomes "Submit all", which sends every collected answer.
+ */
+function QuestionWizard({ questions, sessionId }: { questions: AskQuestionRequest[]; sessionId: string }) {
   const answerQuestion = useChatStore((s) => s.answerQuestion);
-  const [selected, setSelected] = React.useState<Set<string>>(new Set());
-  const [customAnswer, setCustomAnswer] = React.useState("");
+  const [index, setIndex] = React.useState(0);
   const [submitting, setSubmitting] = React.useState(false);
+  // Always-current collected answers (ref avoids stale state in the submit-all
+  // handler, which fires in the same tick as the last answer being recorded).
+  const answersRef = React.useRef<Map<string, string | string[]>>(new Map());
 
-  const hasOptions = request.options != null && request.options.length > 0;
+  const current = questions[index]!;
+  const isLast = index === questions.length - 1;
 
-  const toggle = (option: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (request.isMultiSelect) {
-        if (next.has(option)) next.delete(option);
-        else next.add(option);
-      } else {
-        next.clear();
-        next.add(option);
-      }
-      return next;
-    });
+  const recordAnswer = (requestId: string, answer: string | string[]) => {
+    answersRef.current.set(requestId, answer);
   };
 
-  const submitAnswer = async (answer: string | string[]) => {
+  const handleNext = () => {
+    setIndex((i) => Math.min(i + 1, questions.length - 1));
+  };
+
+  const handleSkip = () => {
+    recordAnswer(current.requestId, "");
+    setIndex((i) => Math.min(i + 1, questions.length - 1));
+  };
+
+  const handleSubmitAll = async () => {
     setSubmitting(true);
-    await answerQuestion(sessionId, request.requestId, answer);
-  };
-
-  const handleSubmit = async () => {
-    if (customAnswer.trim()) {
-      await submitAnswer(customAnswer.trim());
-      return;
+    // Send every collected answer through the existing per-question endpoint.
+    for (const [requestId, answer] of answersRef.current.entries()) {
+      await answerQuestion(sessionId, requestId, answer);
     }
-    if (selected.size === 0) return;
-    await submitAnswer(request.isMultiSelect ? [...selected] : [...selected][0]!);
+    setSubmitting(false);
   };
 
-  const handleSkip = async () => {
-    await submitAnswer("");
-  };
-
-  const canSubmit = customAnswer.trim().length > 0 || selected.size > 0;
+  if (!current) return null;
 
   return (
-    <div className="rounded-xl border border-primary/20 bg-card px-4 py-3 space-y-3">
-      <div className="flex items-center gap-2.5">
-        <HelpCircle size={16} className="text-primary shrink-0" />
-        <span className="text-sm font-medium text-foreground">{request.question}</span>
-      </div>
-
-      {hasOptions && (
-        <div className="space-y-1.5 pl-6">
-          {request.options!.map((option) => {
-            const isSelected = selected.has(option);
-            return (
-              <button
-                key={option}
-                onClick={() => toggle(option)}
-                className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-md border text-sm transition-colors ${
-                  isSelected
-                    ? "border-primary/40 bg-primary/10 text-foreground"
-                    : "border-border bg-transparent text-foreground-secondary hover:bg-white/5"
-                }`}
-              >
-                <span
-                  className={`shrink-0 w-4 h-4 ${
-                    request.isMultiSelect ? "rounded-sm" : "rounded-full"
-                  } border-2 flex items-center justify-center ${
-                    isSelected ? "border-primary bg-primary/20" : "border-foreground-muted"
-                  }`}
-                >
-                  {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                </span>
-                {option}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="pl-6">
-        <input
-          type="text"
-          value={customAnswer}
-          onChange={(e) => setCustomAnswer(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && canSubmit) handleSubmit();
-          }}
-          placeholder={hasOptions ? "Or type your own answer…" : "Type your answer…"}
-          className="w-full px-3 py-2 rounded-md border border-border bg-transparent text-sm text-foreground placeholder:text-foreground-muted focus:outline-none focus:border-primary/50"
-        />
-      </div>
-
-      <div className="flex items-center gap-2 pl-6">
-        <button
-          onClick={handleSubmit}
-          disabled={!canSubmit || submitting}
-          className="px-4 py-1.5 rounded-md bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary text-xs font-medium transition-colors disabled:opacity-40"
-        >
-          {submitting ? "Sending…" : "Submit"}
-        </button>
-        {request.skippable && (
-          <button
-            onClick={handleSkip}
-            disabled={submitting}
-            className="px-4 py-1.5 rounded-md bg-transparent hover:bg-white/5 border border-border text-foreground-muted text-xs font-medium transition-colors disabled:opacity-40"
-          >
-            Skip
-          </button>
-        )}
-      </div>
-    </div>
+    <QuestionPanel
+      key={current.requestId}
+      request={current}
+      total={questions.length}
+      index={index + 1}
+      isLast={isLast}
+      submitting={submitting}
+      onAnswer={(answer) => {
+        recordAnswer(current.requestId, answer);
+        if (isLast) handleSubmitAll();
+        else handleNext();
+      }}
+      onSkip={handleSkip}
+    />
   );
 }
 
@@ -191,13 +131,14 @@ interface InteractionPanelProps {
 }
 
 const EMPTY_PERMISSIONS: any[] = [];
+const EMPTY: any[] = [];
 
 /**
  * Renders the pending agent interaction (question or permission request)
  * above the composer. Returns null when nothing is pending.
  */
 export function InteractionPanel({ sessionId }: InteractionPanelProps) {
-  const pendingQuestion = useChatStore((s) => s.sessions[sessionId]?.pendingQuestion ?? null);
+  const pendingQuestions = useChatStore((s) => s.sessions[sessionId]?.pendingQuestions ?? EMPTY);
   const pendingPermissions = useChatStore((s) => s.sessions[sessionId]?.pendingPermissions ?? EMPTY_PERMISSIONS);
 
   React.useEffect(() => {
@@ -222,8 +163,14 @@ export function InteractionPanel({ sessionId }: InteractionPanelProps) {
       />
     );
   }
-  if (pendingQuestion) {
-    return <QuestionPanel request={pendingQuestion.request} sessionId={sessionId} />;
+  if (pendingQuestions.length > 0) {
+    return (
+      <QuestionWizard
+        key={pendingQuestions[0].request.batchId ?? pendingQuestions[0].request.requestId}
+        questions={pendingQuestions.map((q) => q.request)}
+        sessionId={sessionId}
+      />
+    );
   }
   return null;
 }

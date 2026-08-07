@@ -7,7 +7,7 @@ export function createChatSessionState(): ChatSessionState {
     running: false,
     streamingText: "",
     streamingThinking: "",
-    pendingQuestion: null,
+    pendingQuestions: [],
     pendingPermissions: [],
     activeToolCalls: [],
     todoItems: [],

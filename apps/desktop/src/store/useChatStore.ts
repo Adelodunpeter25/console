@@ -56,7 +56,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           streamingText: "",
           streamingThinking: "",
           activeToolCalls: [],
-          pendingQuestion: null,
+          pendingQuestions: [],
           pendingPermissions: [],
           runs: reconstructRuns(messages),
           attachments: [],
@@ -309,7 +309,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           running: false,
           streamingText: "",
           streamingThinking: "",
-          pendingQuestion: null,
+          pendingQuestions: [],
           pendingPermissions: [],
           activeToolCalls: [],
           runs,
@@ -327,20 +327,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       console.error("answerQuestion error:", err);
     } finally {
       // The server consumes each pending request exactly once. Whether the
-      // answer was delivered or not, clear it from the UI so the panel can't
-      // get stuck on an already-consumed (or failed) request.
+      // answer was delivered or not, remove it from the queue so the panel
+      // can't get stuck on an already-consumed (or failed) request.
       set((state) => ({
         sessions: updateChatSession(state.sessions, sessionId, (session) => ({
           ...session,
-          pendingQuestion:
-            session.pendingQuestion?.request.requestId === requestId
-              ? null
-              : session.pendingQuestion,
+          pendingQuestions: session.pendingQuestions.filter(
+            (q) => q.request.requestId !== requestId,
+          ),
         })),
       }));
       syncSessionStatus(
         sessionId,
-        getChatSessionState(get().sessions, sessionId).pendingQuestion
+        getChatSessionState(get().sessions, sessionId).pendingQuestions.length > 0
           ? "needs_attention"
           : "working",
       );

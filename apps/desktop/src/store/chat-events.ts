@@ -177,7 +177,10 @@ export function applyChatEvent(
       return updated;
     }
     case "askQuestion":
-      return { ...session, pendingQuestion: { request: event.request } };
+      return {
+        ...session,
+        pendingQuestions: [...session.pendingQuestions, { request: event.request }],
+      };
     case "permissionRequest":
       console.info("[permission] store queued request", {
         requestId: event.request.requestId,

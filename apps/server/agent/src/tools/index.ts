@@ -12,7 +12,7 @@ export * from "./todo.js";
 export * from "./web-search.js";
 export * from "./write-file.js";
 
-import { askTool } from "./ask.js";
+import { askManyTool, askTool } from "./ask.js";
 import { bashTool } from "./bash.js";
 import { batchWriteTool } from "./batch-write.js";
 import { editFileTool } from "./edit-file.js";
@@ -50,4 +50,5 @@ export const allTools = [
   subagentTool,
   // Interactive UI
   askTool,
+  askManyTool,
 ] as const;
