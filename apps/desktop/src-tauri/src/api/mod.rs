@@ -9,5 +9,6 @@ pub mod projects;
 pub mod providers;
 pub mod run;
 pub mod sessions;
+pub mod terminal;
 
 pub use client::ApiClient;

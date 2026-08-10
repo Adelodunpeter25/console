@@ -4,5 +4,6 @@ export * from "./events";
 export * from "./model";
 export * from "./notifications";
 export * from "./session";
+export * from "./terminal";
 export * from "./tool";
 export * from "./todo";

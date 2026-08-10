@@ -9,6 +9,7 @@ pub mod providers;
 pub mod run;
 pub mod sessions;
 pub mod server;
+pub mod terminal;
 
 pub use assist::*;
 pub use attach::*;
@@ -21,3 +22,4 @@ pub use providers::*;
 pub use run::*;
 pub use sessions::*;
 pub use server::*;
+pub use terminal::*;

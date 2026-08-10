@@ -13,6 +13,7 @@ use commands::{
     get_project_id, get_provider_models, get_session, handle_oauth_callback, list_projects, list_providers,
     list_sessions, list_slash_commands, login_codebuff, login_with_browser, pick_folder, pick_images, read_dropped_images, ping_server, read_file,
     run_agent, search_files, set_backend_url, set_project_id, update_session, watch_directory, write_file, get_git_status,
+    terminal_open, terminal_input, terminal_resize, terminal_kill,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -62,6 +63,10 @@ pub fn run() {
             answer_question,
             approve_permission,
             get_git_status,
+            terminal_open,
+            terminal_input,
+            terminal_resize,
+            terminal_kill,
         ])
         .setup(|app| {
             // Load the persisted backend URL before the frontend initialises

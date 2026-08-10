@@ -4,6 +4,8 @@
  */
 import { createServer } from "node:http";
 import { createApiApp } from "./api/src/app.js";
+import { attachTerminalSocket } from "./api/src/terminal/socket.route.js";
+import { terminalPtyManager } from "./api/src/terminal/pty.manager.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
@@ -52,6 +54,9 @@ function log(message: string): void {
 
 async function shutdown(): Promise<void> {
   log("Shutting down server...");
+
+  // Kill every tracked PTY so shells don't leak after the server exits.
+  terminalPtyManager.killAll();
 
   // Close log stream
   if (logStream) {
@@ -117,6 +122,9 @@ process.on("SIGINT", shutdown);
 // Start server
 async function startServer(): Promise<void> {
   await setupLogging();
+
+  // WebSocket endpoint for interactive terminals (node-pty backed).
+  attachTerminalSocket(server);
 
   server.listen(port, host, () => {
     log(`Console Agent Server running on http://${host}:${port}`);
