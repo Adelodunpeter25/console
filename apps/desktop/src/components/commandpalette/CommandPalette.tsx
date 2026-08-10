@@ -13,6 +13,7 @@ import {
 import { useAppStore } from "../../store/useAppStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useFsStore } from "../../store/useFsStore";
+import { useWorkspaceStore } from "../../layout/useWorkspaceStore";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -38,7 +39,9 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const browsing = useFsStore((state) => state.browsing);
   const browseDirectory = useFsStore((state) => state.browseDirectory);
   const addProject = useProjectStore((state) => state.addProject);
+  const createSession = useProjectStore((state) => state.createSession);
   const setSelectedProjectId = useAppStore((state) => state.setSelectedProjectId);
+  const openChatTab = useWorkspaceStore((state) => state.openChatTab);
 
   // Load root directory listing when entering browse view
   React.useEffect(() => {
@@ -69,9 +72,23 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     }
   };
 
-  const handleNewChat = () => {
-    // Placeholder — will be wired when a project is selected
-    onOpenChange(false);
+  const handleNewChat = async () => {
+    try {
+      // Create a session without a project. The composer shows the project
+      // selector so the user can pick (or add) a working folder before the
+      // first message.
+      const session = await createSession("", "", "New Chat");
+      setSelectedProjectId(null);
+      openChatTab({
+        type: "chat",
+        projectId: "",
+        sessionId: session.id,
+        title: session.title,
+      });
+      onOpenChange(false);
+    } catch {
+      // error is surfaced via store
+    }
   };
 
   const directories = React.useMemo(
@@ -156,7 +173,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 >
                   <MessageSquarePlus size={18} className="text-foreground-secondary shrink-0" />
                   <span className="flex-1">New Chat</span>
-                  <span className="text-xs text-foreground-muted">Select a project first</span>
                 </Command.Item>
               </Command.Group>
             </>

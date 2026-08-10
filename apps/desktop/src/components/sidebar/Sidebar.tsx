@@ -1,7 +1,6 @@
 import React from "react";
 import { FolderOpen, Settings, SquarePen } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
-import { toast } from "sonner";
 import { useAppStore } from "../../store/useAppStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useWorkspaceStore } from "../../layout/useWorkspaceStore";
@@ -88,16 +87,14 @@ export function Sidebar({ width = 288 }: { width?: number }) {
   if (useAppStore.getState().sidebarOpen === false) return null;
 
   const handleGlobalNewChat = async () => {
-    const targetProject = projects[0];
-    if (!targetProject) {
-      toast.error("Please add a project first.");
-      return;
-    }
-    const session = await createSession(targetProject.path, targetProject.id, "New Chat");
-    setSelectedProjectId(targetProject.id);
+    // Create a session without pinning it to a project. The composer lets the
+    // user pick (or add) a working folder before the first message is sent —
+    // no project is required to open a chat.
+    const session = await createSession("", "", "New Chat");
+    setSelectedProjectId(null);
     openChatTab({
       type: "chat",
-      projectId: targetProject.id,
+      projectId: "",
       sessionId: session.id,
       title: session.title,
     });

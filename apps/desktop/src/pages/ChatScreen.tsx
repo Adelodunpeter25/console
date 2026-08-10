@@ -1,4 +1,5 @@
 import React from "react";
+import { toast } from "sonner";
 import type { ApprovalMode, ImageAttachment } from "@console/types";
 import { useChatStore } from "../store/useChatStore";
 import { useProjectStore } from "../store/useProjectStore";
@@ -114,8 +115,16 @@ export function ChatScreen({ sessionId, projectId }: ChatScreenProps) {
   );
 
   const handleSend = React.useCallback(() => {
-    if (selectedSessionId) sendMessage(selectedSessionId);
-  }, [selectedSessionId, sendMessage]);
+    if (!selectedSessionId) return;
+    // A working folder must be chosen before the first message — the agent
+    // operates on the selected project's files. Prompt instead of silently
+    // running in the server's cwd.
+    if (!resolvedProjectId) {
+      toast.message("Select a folder first — use the folder picker below the composer.");
+      return;
+    }
+    sendMessage(selectedSessionId);
+  }, [selectedSessionId, resolvedProjectId, sendMessage]);
 
   const handleAbort = React.useCallback(() => {
     if (selectedSessionId) abort(selectedSessionId);
@@ -182,7 +191,7 @@ export function ChatScreen({ sessionId, projectId }: ChatScreenProps) {
         onSend={handleSend}
         onAbort={handleAbort}
         running={running}
-        disabled={!input.trim()}
+        disabled={!input.trim() || !resolvedProjectId}
         selectedModel={sessionModelId}
         selectedModelSupportsImages={selectedModelSupportsImages}
         onModelChange={handleModelChange}
