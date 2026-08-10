@@ -117,6 +117,14 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
           rangeChanged={handleRangeChanged}
           itemContent={(index, msg) => {
             const run = userMessageRunMap.get(index);
+            // Tool-result messages and assistant turns with tool calls render
+            // as null inside MessageBubble — skip the padding wrapper so they
+            // don't create invisible 16px gaps in the virtualized list.
+            const isHidden =
+              msg.role === "toolResult" ||
+              (msg.role === "assistant" &&
+                msg.content.some((c) => c.type === "toolCall"));
+            if (isHidden) return null;
             return (
               <div className="pb-4">
                 <MessageBubble message={msg} />

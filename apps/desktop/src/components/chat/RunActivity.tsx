@@ -95,7 +95,7 @@ export function RunActivity({ activity, running }: RunActivityProps) {
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded((current) => !current)}
-        className="flex w-full items-center gap-2 px-1 py-1 text-left text-xs text-foreground-muted hover:text-foreground-secondary"
+        className="flex w-full items-center gap-2 px-3 py-1 text-left text-xs text-foreground-muted hover:text-foreground-secondary"
       >
         {isWorking ? <Loader2 size={13} className="animate-spin" /> : null}
         <span>{summaryLabel}</span>
