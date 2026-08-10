@@ -11,7 +11,7 @@ interface MarkdownRendererProps {
 }
 
 const PLUGINS = { code };
-const CONTROLS = { code: false };
+const CONTROLS = { code: { copy: true, download: false } };
 
 /**
  * Renders markdown content with Streamdown — a streaming-first drop-in
