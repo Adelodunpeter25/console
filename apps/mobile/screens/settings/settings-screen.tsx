@@ -7,9 +7,8 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
-import * as Linking from "expo-linking";
 import { useProviderModels } from "@console/api";
-import type { OAuthProviderId } from "@console/types";
+import type { OAuthProviderId, ProviderId } from "@console/types";
 import { GlassSurface } from "../../components/layout/glass-surface";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { useServerConnection } from "../../hooks";
@@ -32,12 +31,11 @@ export function SettingsScreen() {
 
   const auth = useAuth();
   const catalog = useProviderCatalog();
-  const [selectedProvider, setSelectedProvider] = useState<OAuthProviderId>("antigravity");
+  const [selectedProvider, setSelectedProvider] = useState<ProviderId>("antigravity");
 
-  const handleLogin = async () => {
+  const handleLogin = async (provider: OAuthProviderId) => {
     try {
-      const url = await auth.getLoginUrlFor(selectedProvider);
-      Linking.openURL(url);
+      await auth.login(provider);
     } catch (err) {
       console.error("Failed to open login URL:", err);
     }
@@ -157,40 +155,42 @@ export function SettingsScreen() {
       {/* Account / OAuth Card */}
       <GlassSurface className="mb-4 p-5">
         <Text className="text-base font-semibold text-foreground mb-3">Account</Text>
-        {catalog.providers.map((p) => {
-          const provider = p.name;
-          const loggedIn = auth.isLoggedIn(provider);
-          return (
-            <View
-              key={provider}
-              className="flex-row items-center justify-between py-2.5 border-b border-border last:border-b-0"
-            >
-              <View className="flex-1 pr-3">
-                <Text className="text-sm font-semibold text-foreground">{p.name}</Text>
-                <Text className="text-xs text-foreground-secondary mt-0.5">
-                  {loggedIn ? (auth.status?.[provider]?.email ?? "Logged in") : "Not logged in"}
-                </Text>
-              </View>
-              {loggedIn ? (
-                <View className="px-3 py-1 rounded-full bg-foreground/10 border border-border">
-                  <Text className="text-xs font-bold text-foreground">✓ Connected</Text>
+        {catalog.providers
+          .filter((p) => p.authMethod === "oauth")
+          .map((p) => {
+            const provider = p.name as OAuthProviderId;
+            const loggedIn = auth.isLoggedIn(provider);
+            return (
+              <View
+                key={provider}
+                className="flex-row items-center justify-between py-2.5 border-b border-border last:border-b-0"
+              >
+                <View className="flex-1 pr-3">
+                  <Text className="text-sm font-semibold text-foreground">{p.name}</Text>
+                  <Text className="text-xs text-foreground-secondary mt-0.5">
+                    {loggedIn ? (auth.status?.[provider]?.email ?? "Logged in") : "Not logged in"}
+                  </Text>
                 </View>
-              ) : (
-                <TouchableOpacity
-                  className="px-4 py-2 rounded-full bg-foreground items-center justify-center"
-                  onPress={handleLogin}
-                  disabled={auth.isFetchingLoginUrl}
-                >
-                  {auth.isFetchingLoginUrl ? (
-                    <ActivityIndicator size="small" color="#000000" />
-                  ) : (
-                    <Text className="text-xs font-bold text-black">Log In</Text>
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
-          );
-        })}
+                {loggedIn ? (
+                  <View className="px-3 py-1 rounded-full bg-foreground/10 border border-border">
+                    <Text className="text-xs font-bold text-foreground">✓ Connected</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    className="px-4 py-2 rounded-full bg-foreground items-center justify-center"
+                    onPress={() => handleLogin(provider)}
+                    disabled={auth.isFetchingLoginUrl}
+                  >
+                    {auth.isFetchingLoginUrl ? (
+                      <ActivityIndicator size="small" color="#000000" />
+                    ) : (
+                      <Text className="text-xs font-bold text-black">Log In</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })}
       </GlassSurface>
 
       {/* App Info Card */}

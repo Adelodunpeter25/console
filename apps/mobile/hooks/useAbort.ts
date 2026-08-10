@@ -1,23 +1,29 @@
 import { useCallback } from "react";
-import { useAbortRun } from "@console/api";
 import { useAppStore } from "../stores/useAppStore";
+import { useChatStore } from "../stores/useChatStore";
 
-/** Wraps the shared abort-run mutation for the mobile stop button. */
+/** Wraps the chat-store abort for the mobile stop button. */
 export function useAbort() {
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
-  const abortRun = useAbortRun();
+  const abort = useChatStore((state) => state.abort);
+  const running = useChatStore(
+    useCallback(
+      (state) => (selectedSessionId ? state.sessions[selectedSessionId]?.running : false),
+      [selectedSessionId],
+    ),
+  );
 
-  const abort = useCallback(async () => {
+  const handleAbort = useCallback(async () => {
     if (!selectedSessionId) return;
     try {
-      await abortRun.mutateAsync(selectedSessionId);
+      await abort(selectedSessionId);
     } catch (err) {
       console.error("Abort run error:", err);
     }
-  }, [abortRun, selectedSessionId]);
+  }, [abort, selectedSessionId]);
 
   return {
-    abort,
-    isAborting: abortRun.isPending,
+    abort: handleAbort,
+    isAborting: Boolean(running),
   };
 }

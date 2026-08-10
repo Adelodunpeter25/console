@@ -1,80 +1,159 @@
-import type { AgentSessionEvent } from "@console/types";
-import type { ChatSnapshot } from "../types";
+import type { AgentSessionEvent, ToolResult } from "@console/types";
+import type {
+  ActivityEvent,
+  ChatSessionState,
+  ChatSnapshot,
+  RunActivityState,
+} from "../types/chat";
 
-/**
- * Pure reducer applying an agent session event to the current chat snapshot.
- * Mirrors the desktop chat-events reducer and adds mobile handling for
- * permission requests and ask-tool questions so runs never hang waiting.
- */
-export function applyChatEvent(snapshot: ChatSnapshot, event: AgentSessionEvent): ChatSnapshot {
+/** Update the latest run in the session's runs array. */
+function updateLatestRun(
+  session: ChatSessionState,
+  update: (run: RunActivityState) => RunActivityState,
+): ChatSessionState {
+  if (session.runs.length === 0) return session;
+  const runs = [...session.runs];
+  runs[runs.length - 1] = update(runs[runs.length - 1]!);
+  return { ...session, runs };
+}
+
+/** Update a specific tool call event's result by toolCallId. */
+function setToolCallResult(events: ActivityEvent[], result: ToolResult): ActivityEvent[] {
+  return events.map((event) =>
+    event.type === "toolCall" && event.call.id === result.toolCallId
+      ? { ...event, result }
+      : event,
+  );
+}
+
+/** Finalize any tool call events that never received a result. */
+function finalizePendingToolCalls(events: ActivityEvent[]): ActivityEvent[] {
+  return events.map((event) =>
+    event.type === "toolCall" && !event.result
+      ? {
+          ...event,
+          result: {
+            toolCallId: event.call.id,
+            toolName: event.call.name,
+            content: "Run ended before this tool call completed.",
+            isError: true,
+          },
+        }
+      : event,
+  );
+}
+
+export function applyChatEvent(
+  session: ChatSessionState,
+  event: AgentSessionEvent,
+): ChatSessionState {
   switch (event.type) {
     case "modelStreamPart": {
       const text = event.part?.text;
       const thinking = event.part?.thinking;
-      if (!text && !thinking) return snapshot;
+      if (!text && !thinking) return session;
       return {
-        ...snapshot,
-        streamingText: text ? snapshot.streamingText + text : snapshot.streamingText,
+        ...session,
+        streamingText: text ? session.streamingText + text : session.streamingText,
         streamingThinking: thinking
-          ? snapshot.streamingThinking + thinking
-          : snapshot.streamingThinking,
+          ? session.streamingThinking + thinking
+          : session.streamingThinking,
       };
     }
-
     case "modelStreamEnd": {
-      if (event.turn) {
+      const turn = event.turn;
+      if (!turn) {
+        // Fallback: construct from streaming buffers if no turn was provided.
+        if (!session.streamingText && !session.streamingThinking) return session;
         return {
-          ...snapshot,
-          messages: [...snapshot.messages, event.turn],
+          ...session,
+          messages: [
+            ...session.messages,
+            {
+              role: "assistant",
+              content: [
+                ...(session.streamingThinking
+                  ? [{ type: "thinking" as const, text: session.streamingThinking }]
+                  : []),
+                ...(session.streamingText
+                  ? [{ type: "text" as const, text: session.streamingText }]
+                  : []),
+              ],
+            },
+          ],
           streamingText: "",
           streamingThinking: "",
         };
       }
-      if (!snapshot.streamingText && !snapshot.streamingThinking) return snapshot;
-      return {
-        ...snapshot,
-        messages: [
-          ...snapshot.messages,
-          {
-            role: "assistant",
-            content: [
-              ...(snapshot.streamingThinking
-                ? [{ type: "thinking" as const, text: snapshot.streamingThinking }]
-                : []),
-              ...(snapshot.streamingText
-                ? [{ type: "text" as const, text: snapshot.streamingText }]
-                : []),
-            ],
-          },
-        ],
+
+      // Always append the turn to messages for persistence.
+      const baseResult: ChatSessionState = {
+        ...session,
+        messages: [...session.messages, turn],
         streamingText: "",
         streamingThinking: "",
       };
-    }
 
-    case "toolExecutionStart":
-      return {
-        ...snapshot,
-        activeToolCalls: event.calls,
-        liveToolResults: [],
-      };
+      // If the turn has tool calls, extract text and tool call parts as
+      // timeline events in the latest run. The text becomes "progress text"
+      // inside the run activity, not a standalone message bubble.
+      const toolCallParts = turn.content.filter(
+        (c): c is Extract<typeof c, { type: "toolCall" }> => c.type === "toolCall",
+      );
 
-    case "toolExecutionResult":
-      return {
-        ...snapshot,
-        liveToolResults: [...snapshot.liveToolResults, event.result],
-      };
+      if (toolCallParts.length === 0) {
+        // No tool calls — this is the final response, not part of the timeline.
+        return baseResult;
+      }
 
-    case "toolExecutionEnd": {
-      const results = [...event.results];
-      for (const live of snapshot.liveToolResults) {
-        if (!results.some((result) => result.toolCallId === live.toolCallId)) {
-          results.push(live);
+      // Build timeline events in content order: thinking/text parts become
+      // thinking/text events, tool call parts become toolCall events (with no
+      // result yet). This preserves the chronological think → tool → think →
+      // tool order from the agent loop.
+      const newEvents: ActivityEvent[] = [];
+      for (const part of turn.content) {
+        if (part.type === "thinking" && part.text.trim()) {
+          newEvents.push({
+            type: "thinking",
+            id: `thinking-${part.text.slice(0, 16)}-${Date.now()}`,
+            text: part.text,
+          });
+        } else if (part.type === "text" && part.text.trim()) {
+          newEvents.push({
+            type: "text",
+            id: `text-${part.text.slice(0, 16)}-${Date.now()}`,
+            text: part.text,
+          });
+        } else if (part.type === "toolCall") {
+          newEvents.push({ type: "toolCall", id: part.call.id, call: part.call });
         }
       }
-      for (const call of snapshot.activeToolCalls) {
-        if (!results.some((result) => result.toolCallId === call.id)) {
-          results.push({
+
+      // Set active tool calls for toolExecutionEnd error finalization.
+      baseResult.activeToolCalls = toolCallParts.map((c) => c.call);
+
+      return updateLatestRun(baseResult, (run) => ({
+        ...run,
+        events: [...run.events, ...newEvents],
+      }));
+    }
+    case "toolExecutionResult":
+      return updateLatestRun(session, (run) => ({
+        ...run,
+        events: setToolCallResult(run.events, event.result),
+      }));
+    case "toolExecutionStart": {
+      // Tool calls were already added as events in modelStreamEnd.
+      // Just track active calls for toolExecutionEnd finalization.
+      return { ...session, activeToolCalls: event.calls };
+    }
+    case "toolExecutionEnd": {
+      // Build the complete results list for this batch.
+      const eventResults = [...event.results];
+      // Add error results for any active calls that didn't get a result.
+      for (const call of session.activeToolCalls) {
+        if (!eventResults.some((r) => r.toolCallId === call.id)) {
+          eventResults.push({
             toolCallId: call.id,
             toolName: call.name,
             content: "Tool execution ended without a result.",
@@ -82,34 +161,63 @@ export function applyChatEvent(snapshot: ChatSnapshot, event: AgentSessionEvent)
           });
         }
       }
-      return {
-        ...snapshot,
-        messages: [...snapshot.messages, { role: "toolResult", results }],
-        liveToolResults: [],
+
+      // Update each tool call event with its result.
+      let updated = updateLatestRun(session, (run) => ({
+        ...run,
+        events: eventResults.reduce(setToolCallResult, run.events),
+      }));
+
+      // Append the toolResult message to messages for persistence transport.
+      // It renders as null in the UI — results are shown via RunActivity.
+      updated = {
+        ...updated,
+        messages: [...updated.messages, { role: "toolResult", results: eventResults }],
         activeToolCalls: [],
       };
+
+      return updated;
     }
-
-    case "permissionRequest":
-      return {
-        ...snapshot,
-        pendingPermission: { request: event.request },
-      };
-
     case "askQuestion":
       return {
-        ...snapshot,
-        pendingQuestion: { request: event.request },
+        ...session,
+        pendingQuestions: [...session.pendingQuestions, { request: event.request }],
       };
-
-    case "error": {
+    case "permissionRequest":
+      return {
+        ...session,
+        pendingPermissions: [...session.pendingPermissions, { request: event.request }],
+      };
+    case "todoUpdate":
+      return { ...session, todoItems: event.items };
+    case "sessionEnd":
+      // Finalize the latest run: mark as completed if still working, and
+      // add error results for any tool calls that never received a result.
+      return updateLatestRun(session, (run) => {
+        if (run.status !== "working") return run;
+        return {
+          ...run,
+          status: "completed",
+          events: finalizePendingToolCalls(run.events),
+          elapsedMs: run.startedAt ? Date.now() - run.startedAt : run.elapsedMs,
+        };
+      });
+    case "error":
       if (event.error?.message.toLowerCase().includes("aborted")) {
-        return { ...snapshot, streamingText: "", streamingThinking: "" };
+        return updateLatestRun(session, (run) => ({
+          ...run,
+          status: run.status === "working" ? "aborted" : run.status,
+          events: finalizePendingToolCalls(run.events),
+        }));
       }
       return {
-        ...snapshot,
+        ...updateLatestRun(session, (run) => ({
+          ...run,
+          status: run.status === "working" ? "failed" : run.status,
+          events: finalizePendingToolCalls(run.events),
+        })),
         messages: [
-          ...snapshot.messages,
+          ...session.messages,
           {
             role: "assistant",
             content: [
@@ -120,9 +228,33 @@ export function applyChatEvent(snapshot: ChatSnapshot, event: AgentSessionEvent)
         streamingText: "",
         streamingThinking: "",
       };
-    }
-
     default:
-      return snapshot;
+      return session;
   }
+}
+
+/**
+ * Derive the UI snapshot for a session.
+ *
+ * The store holds the full per-session runtime state (queues, runs timeline,
+ * todo items, attachments). The snapshot flattens it to what screens render:
+ * a single pending permission/question (the most recent), live tool results
+ * from the latest run, and the streaming buffers.
+ */
+export function toChatSnapshot(session: ChatSessionState): ChatSnapshot {
+  return {
+    messages: session.messages,
+    streamingText: session.streamingText,
+    streamingThinking: session.streamingThinking,
+    activeToolCalls: session.activeToolCalls,
+    liveToolResults: (session.runs[session.runs.length - 1]?.events ?? [])
+      .filter(
+        (event): event is Extract<ActivityEvent, { type: "toolCall" }> =>
+          event.type === "toolCall" && Boolean(event.result),
+      )
+      .map((event) => event.result!),
+    pendingPermission: session.pendingPermissions[session.pendingPermissions.length - 1] ?? null,
+    pendingQuestion: session.pendingQuestions[session.pendingQuestions.length - 1] ?? null,
+    running: session.running,
+  };
 }

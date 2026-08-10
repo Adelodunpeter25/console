@@ -7,3 +7,8 @@ export * from "./useChatDecisions";
 export * from "./useProviders";
 export * from "./useSlashCommands";
 export * from "./useFileSearch";
+export * from "./useNotificationStream";
+export * from "./useProjectFsWatcher";
+export * from "./useTerminal";
+export * from "./useGit";
+export * from "./useProjects";

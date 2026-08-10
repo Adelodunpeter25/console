@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { useAnswerQuestion, useApprovePermission } from "@console/api";
 import { useAppStore } from "../stores/useAppStore";
 import { useChatStore } from "../stores/useChatStore";
 
@@ -11,48 +10,37 @@ import { useChatStore } from "../stores/useChatStore";
  */
 export function useChatDecisions() {
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
-  const clearPending = useChatStore((state) => state.clearPending);
-  const answerQuestion = useAnswerQuestion();
-  const approvePermission = useApprovePermission();
+  const answerQuestion = useChatStore((state) => state.answerQuestion);
+  const approvePermission = useChatStore((state) => state.approvePermission);
 
   const answer = useCallback(
     async (requestId: string, answer: string | string[]) => {
       if (!selectedSessionId) return;
       try {
-        await answerQuestion.mutateAsync({
-          sessionId: selectedSessionId,
-          payload: { requestId, answer },
-        });
+        await answerQuestion(selectedSessionId, requestId, answer);
       } catch (err) {
         console.error("Failed to answer question:", err);
-      } finally {
-        clearPending();
       }
     },
-    [answerQuestion, clearPending, selectedSessionId],
+    [answerQuestion, selectedSessionId],
   );
 
   const approve = useCallback(
     async (requestId: string, allow: boolean) => {
       if (!selectedSessionId) return;
       try {
-        await approvePermission.mutateAsync({
-          sessionId: selectedSessionId,
-          payload: { requestId, allow },
-        });
+        await approvePermission(selectedSessionId, requestId, allow);
       } catch (err) {
         console.error("Failed to approve permission:", err);
-      } finally {
-        clearPending();
       }
     },
-    [approvePermission, clearPending, selectedSessionId],
+    [approvePermission, selectedSessionId],
   );
 
   return {
     answer,
     approve,
-    isAnswering: answerQuestion.isPending,
-    isApproving: approvePermission.isPending,
+    isAnswering: false,
+    isApproving: false,
   };
 }

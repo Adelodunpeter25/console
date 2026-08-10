@@ -1,43 +1,91 @@
-import { useCallback } from "react";
-import { useAuthStatus, useGetLoginUrl, useHandleOAuthCallback } from "@console/api";
-import type { OAuthProviderId } from "@console/types";
+import { useCallback, useEffect, useState } from "react";
+import * as Linking from "expo-linking";
+import type { OAuthProviderId, ProviderId } from "@console/types";
+import { useAuthStore } from "../stores/useAuthStore";
 
-/** Auth status + OAuth login flow for mobile (server owns the tokens). */
+/**
+ * Auth status + OAuth login flow for mobile.
+ *
+ * The desktop app runs a local callback server to catch the OAuth redirect;
+ * mobile can't do that, so it opens the auth URL in the system browser and
+ * handles the redirect via a deep link (`expo-linking`). The deep-link URL
+ * must be registered in the app config; this hook listens for it.
+ */
 export function useAuth() {
-  const { data: status, isLoading, refetch } = useAuthStatus();
-  const getLoginUrl = useGetLoginUrl();
-  const handleCallback = useHandleOAuthCallback();
+  const status = useAuthStore((state) => state.status);
+  const loading = useAuthStore((state) => state.loading);
+  const loggingIn = useAuthStore((state) => state.loggingIn);
+  const loadStatus = useAuthStore((state) => state.loadStatus);
+  const loginWithBrowser = useAuthStore((state) => state.loginWithBrowser);
+  const reset = useAuthStore((state) => state.reset);
+
+  // Load auth status on mount.
+  useEffect(() => {
+    loadStatus().catch(() => {});
+  }, [loadStatus]);
 
   const isLoggedIn = useCallback(
     (provider: OAuthProviderId) => Boolean(status?.[provider]?.loggedIn),
     [status],
   );
 
-  /** Fetch a login URL for a provider so the app can open it in a browser. */
-  const getLoginUrlFor = useCallback(
+  const handleLogin = useCallback(
     async (provider: OAuthProviderId) => {
-      const result = await getLoginUrl.mutateAsync({ provider });
-      return result.authUrl;
+      await loginWithBrowser(provider);
     },
-    [getLoginUrl],
+    [loginWithBrowser],
   );
 
-  const submitCallback = useCallback(
-    async (provider: OAuthProviderId, code: string, state?: string) => {
-      await handleCallback.mutateAsync({ provider, code, state });
-      refetch();
-    },
-    [handleCallback, refetch],
-  );
+  const refetch = useCallback(() => loadStatus(), [loadStatus]);
 
   return {
     status,
-    isLoading,
+    isLoading: loading,
+    loggingIn,
     refetch,
     isLoggedIn,
-    getLoginUrlFor,
-    submitCallback,
-    isFetchingLoginUrl: getLoginUrl.isPending,
-    isSubmittingCallback: handleCallback.isPending,
+    getLoginUrlFor: handleLogin,
+    login: handleLogin,
+    submitCallback: async (
+      provider: OAuthProviderId,
+      code: string,
+      state?: string,
+    ) => {
+      // The backend consumes the code via /api/auth/login/callback. Mobile
+      // opens the auth URL in the browser; if the redirect lands back in the
+      // app via deep link, the code/state arrive here and we exchange them.
+      const { authService } = await import("@console/api");
+      await authService.handleCallback({ provider, code, state });
+      await loadStatus();
+    },
+    isFetchingLoginUrl: loggingIn !== null,
+    isSubmittingCallback: false,
+    reset,
   };
+}
+
+/** Listen for the OAuth deep link (scheme://auth?code=...&state=...) and exchange it. */
+export function useOAuthDeepLink() {
+  const { submitCallback } = useAuth();
+
+  useEffect(() => {
+    const handleUrl = (event: { url: string }) => {
+      const { hostname, queryParams } = Linking.parse(event.url);
+      if (hostname !== "auth") return;
+      const code = queryParams?.code;
+      const state = queryParams?.state;
+      const provider = (queryParams?.provider as OAuthProviderId) ?? "antigravity";
+      if (typeof code === "string") {
+        submitCallback(provider, code, typeof state === "string" ? state : undefined).catch(
+          (err) => console.error("OAuth callback exchange failed:", err),
+        );
+      }
+    };
+    const sub = Linking.addEventListener("url", handleUrl);
+    // Also handle the case where the app was opened via the link already.
+    Linking.getInitialURL().then((url) => {
+      if (url) handleUrl({ url });
+    });
+    return () => sub.remove();
+  }, [submitCallback]);
 }

@@ -1,40 +1,52 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { Alert } from "react-native";
-import { useSessions, useCreateSession, useDeleteSession } from "@console/api";
 import { useAppStore } from "../stores/useAppStore";
+import { useProjectStore } from "../stores/useProjectStore";
+import { useSessionStatusStore } from "../stores/useSessionStatusStore";
 
+/**
+ * Project-scoped session management backed by `useProjectStore`.
+ *
+ * Exposes the same surface as before (sessions, create, delete, select) but
+ * now runs through the desktop-parity project store so list + status state
+ * stays consistent across screens.
+ */
 export function useProjectSessions(projectId: string, projectPath: string) {
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
   const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
 
-  const { data: sessions = [], refetch: refetchSessions } = useSessions({ projectId });
-  const createSessionMutation = useCreateSession();
-  const deleteSessionMutation = useDeleteSession();
+  const createSession = useProjectStore((state) => state.createSession);
+  const deleteSession = useProjectStore((state) => state.deleteSession);
 
-  const createSession = useCallback(async () => {
+  // Pull the flat session list and filter to this project.
+  const allSessions = useProjectStore((state) => state.sessions);
+  const sessionsLoading = useProjectStore((state) => state.sessionsLoading);
+  const loadSessions = useProjectStore((state) => state.loadSessions);
+
+  const sessions = useMemo(
+    () => allSessions.filter((s) => s.projectId === projectId),
+    [allSessions, projectId],
+  );
+
+  // Load sessions when the project changes.
+  useEffect(() => {
+    if (allSessions.length === 0 && !sessionsLoading) {
+      loadSessions().catch(() => {});
+    }
+  }, [allSessions.length, sessionsLoading, loadSessions]);
+
+  const handleCreate = useCallback(async () => {
     try {
-      const sess = await createSessionMutation.mutateAsync({
-        cwd: projectPath,
-        projectId,
-        title: "New Chat",
-      });
+      const sess = await createSession(projectPath, projectId);
       setSelectedSessionId(sess.id);
-      refetchSessions();
       setActiveTab("chat");
     } catch {
       Alert.alert("Error", "Failed to create session");
     }
-  }, [
-    createSessionMutation,
-    projectId,
-    projectPath,
-    refetchSessions,
-    setActiveTab,
-    setSelectedSessionId,
-  ]);
+  }, [createSession, projectId, projectPath, setActiveTab, setSelectedSessionId]);
 
-  const deleteSession = useCallback(
+  const handleDelete = useCallback(
     async (id: string) => {
       Alert.alert("Delete", "Delete this chat session?", [
         { text: "Cancel", style: "cancel" },
@@ -43,11 +55,10 @@ export function useProjectSessions(projectId: string, projectPath: string) {
           style: "destructive",
           onPress: async () => {
             try {
-              await deleteSessionMutation.mutateAsync(id);
+              await deleteSession(id);
               if (selectedSessionId === id) {
                 setSelectedSessionId(null);
               }
-              refetchSessions();
             } catch {
               Alert.alert("Error", "Failed to delete session");
             }
@@ -55,16 +66,19 @@ export function useProjectSessions(projectId: string, projectPath: string) {
         },
       ]);
     },
-    [deleteSessionMutation, refetchSessions, selectedSessionId, setSelectedSessionId],
+    [deleteSession, selectedSessionId, setSelectedSessionId],
   );
+
+  const statuses = useSessionStatusStore((state) => state.statuses);
 
   return {
     sessions,
     selectedSessionId,
     setSelectedSessionId,
-    createSession,
-    deleteSession,
-    refetchSessions,
-    isCreating: createSessionMutation.isPending,
+    createSession: handleCreate,
+    deleteSession: handleDelete,
+    refetchSessions: loadSessions,
+    isCreating: false,
+    statuses,
   };
 }
