@@ -1,23 +1,8 @@
 import { create } from "zustand";
 import { tauriApi } from "../lib/tauri-api";
 import { useWorkspaceStore } from "../layout/useWorkspaceStore";
+import type { TerminalStatus, TerminalRecord } from "../types";
 import type { TerminalSpawnedEvent } from "@console/types";
-
-export type TerminalStatus = "spawning" | "running" | "exited" | "error";
-
-export interface TerminalRecord {
-  id: string;
-  projectId: string;
-  status: TerminalStatus;
-  pid?: number;
-  shell?: string;
-  cwd?: string;
-  cols: number;
-  rows: number;
-  error?: string;
-  /** Nonce bumped on every event so subscribers (e.g. exit banner) re-render. */
-  revision: number;
-}
 
 interface TerminalStoreState {
   terminals: Record<string, TerminalRecord>;

@@ -13,6 +13,7 @@ import { useWorkspaceStore } from "./useWorkspaceStore";
 import { isWorkspaceTabConfig } from "./types";
 import type { FileTabConfig, WorkspaceTabConfig } from "./types";
 import { WorkspaceTabItem } from "./WorkspaceTabItem";
+import { inferLanguage } from "../utils/file-language";
 
 function FileTab({ config }: { config: FileTabConfig }) {
   const [state, setState] = React.useState<
@@ -62,56 +63,6 @@ function FileTab({ config }: { config: FileTabConfig }) {
       language={inferLanguage(config.path)}
     />
   );
-}
-
-function inferLanguage(filePath: string): string | undefined {
-  const ext = filePath.slice(filePath.lastIndexOf(".") + 1).toLowerCase();
-  const map: Record<string, string> = {
-    ts: "typescript",
-    tsx: "tsx",
-    js: "javascript",
-    jsx: "jsx",
-    mjs: "javascript",
-    cjs: "javascript",
-    json: "json",
-    md: "markdown",
-    py: "python",
-    rs: "rust",
-    go: "go",
-    rb: "ruby",
-    java: "java",
-    kt: "kotlin",
-    swift: "swift",
-    cs: "csharp",
-    cpp: "cpp",
-    cc: "cpp",
-    cxx: "cpp",
-    c: "c",
-    h: "c",
-    hpp: "cpp",
-    html: "html",
-    css: "css",
-    scss: "scss",
-    sass: "sass",
-    less: "less",
-    yaml: "yaml",
-    yml: "yaml",
-    toml: "toml",
-    sh: "bash",
-    bash: "bash",
-    zsh: "bash",
-    sql: "sql",
-    php: "php",
-    vue: "vue",
-    svelte: "svelte",
-    lua: "lua",
-    r: "r",
-    dockerfile: "dockerfile",
-  };
-  if (map[ext]) return map[ext];
-  const base = basename(filePath).toLowerCase();
-  if (base === "dockerfile") return "dockerfile";
-  return undefined;
 }
 
 function WorkspaceTab({ config }: { config: WorkspaceTabConfig }) {
