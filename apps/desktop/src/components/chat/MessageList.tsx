@@ -133,7 +133,9 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
             List: MessageListContainer,
             Footer: () =>
               showStreamingBubble ? (
-                <StreamingBubble text={streamingText} thinking={streamingThinking} />
+                <div className="max-w-3xl mx-auto px-6 py-2">
+                  <StreamingBubble text={streamingText} thinking={streamingThinking} />
+                </div>
               ) : null,
           }}
         />
