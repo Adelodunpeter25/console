@@ -47,7 +47,7 @@ pub async fn open_terminal(
         .await
         .map_err(|e| AppError::Sse(format!("terminal ws connect failed: {e}")))?;
 
-    let (mut sink, mut stream) = ws.split();
+    let (sink, mut stream) = ws.split();
 
     // Await the spawn confirmation (the server sends "spawned" first).
     let spawned: TerminalSpawnedEvent = loop {
