@@ -4,3 +4,4 @@ export * from "./auth.service";
 export * from "./provider.service";
 export * from "./config.service";
 export * from "./run.service";
+export * from "./terminal.service";

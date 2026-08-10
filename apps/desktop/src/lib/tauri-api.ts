@@ -13,6 +13,8 @@ import type {
   SessionDetailResponse,
   SessionHeader,
   SlashCommandInfo,
+  TerminalSpawnedEvent,
+  TerminalServerMessage,
   UpdateSessionDto,
 } from "@console/types";
 import type {
@@ -171,4 +173,34 @@ export const tauriApi = {
   // --- image attachments ----------------------------------------------------
   pickImages: () => invoke<PickedImage[]>("pick_images"),
   readDroppedImages: (paths: string[]) => invoke<PickedImage[]>("read_dropped_images", { paths }),
+
+  // --- interactive terminals ------------------------------------------------
+  /** Spawn a shell PTY on the server (through the Rust relay) in `cwd`. */
+  terminalOpen: (
+    cwd: string,
+    opts?: { shell?: string; cols?: number; rows?: number; label?: string },
+  ) =>
+    invoke<TerminalSpawnedEvent>("terminal_open", {
+      cwd,
+      shell: opts?.shell,
+      cols: opts?.cols,
+      rows: opts?.rows,
+      label: opts?.label,
+    }),
+  /** Send keystrokes / pasted text into the PTY. */
+  terminalInput: (id: string, data: string) =>
+    invoke<void>("terminal_input", { id, data }),
+  /** Resize the PTY viewport. */
+  terminalResize: (id: string, cols: number, rows: number) =>
+    invoke<void>("terminal_resize", { id, cols, rows }),
+  /** Kill the PTY and tear down the socket. */
+  terminalKill: (id: string) => invoke<void>("terminal_kill", { id }),
+  /** Subscribe to terminal output/exit/error frames relayed by Rust. */
+  listenTerminalEvents: (
+    terminalId: string,
+    callback: (message: TerminalServerMessage) => void,
+  ): Promise<UnlistenFn> =>
+    listen<TerminalServerMessage>(`terminal-events:${terminalId}`, (e) => {
+      callback(e.payload);
+    }),
 };

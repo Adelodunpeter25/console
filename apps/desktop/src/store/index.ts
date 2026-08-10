@@ -8,3 +8,4 @@ export { useAuthStore } from "./useAuthStore";
 export type { ProviderId } from "./useAuthStore";
 export { useProviderStore } from "./useProviderStore";
 export { useFsStore } from "./useFsStore";
+export { useTerminalStore } from "./useTerminalStore";

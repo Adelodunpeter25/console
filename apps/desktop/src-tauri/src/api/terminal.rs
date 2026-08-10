@@ -101,11 +101,8 @@ pub async fn open_terminal(
             let parsed = serde_json::from_str::<TerminalServerMessage>(&text);
             match parsed {
                 Ok(event) => {
-                    let (event_name, payload) = event.as_event_payload_by_type();
-                    let _ = app.emit(
-                        &channel,
-                        serde_json::json!({ "event": event_name, "payload": payload }),
-                    );
+                    let (_event_name, payload) = event.as_event_payload_by_type();
+                    let _ = app.emit(&channel, payload);
                     if matches!(event, TerminalServerMessage::Exit { .. }) {
                         break;
                     }

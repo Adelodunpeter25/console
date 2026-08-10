@@ -3,6 +3,7 @@ import { Layout, TabNode } from "flexlayout-react";
 import type { ITabRenderValues } from "flexlayout-react";
 import { EmptyState } from "../components/common/EmptyState";
 import { FileViewer } from "../components/file/FileViewer";
+import { TerminalTab } from "../components/terminal/TerminalTab";
 import { ChatScreen } from "../pages/ChatScreen";
 import { tauriApi } from "../lib/tauri-api";
 import { basename } from "./types";
@@ -120,10 +121,11 @@ function WorkspaceTab({ config }: { config: WorkspaceTabConfig }) {
     case "file":
       return <FileTab config={config} />;
     case "terminal":
+      return <TerminalTab config={config} />;
     case "diff":
       return (
         <EmptyState
-          title={`${config.type[0]!.toUpperCase()}${config.type.slice(1)} view`}
+          title="Diff view"
           description="This workspace tab is reserved for a future view."
         />
       );

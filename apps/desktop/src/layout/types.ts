@@ -40,6 +40,10 @@ export interface OpenChatTabInput extends ChatTabConfig {
   title: string;
 }
 
+export interface OpenTerminalTabInput extends TerminalTabConfig {
+  title?: string;
+}
+
 export interface OpenFileTabInput extends FileTabConfig {
   title?: string;
 }
@@ -56,6 +60,10 @@ export function isWorkspaceTabConfig(value: unknown): value is WorkspaceTabConfi
 
 export function chatTabId(_projectId: string, sessionId: string): string {
   return `chat:${sessionId}`;
+}
+
+export function terminalTabId(_projectId: string, terminalId: string): string {
+  return `terminal:${terminalId}`;
 }
 
 export function fileTabId(_projectId: string, filePath: string): string {
@@ -82,6 +90,18 @@ export function createFileTab({ projectId, path: filePath, title }: OpenFileTabI
     name: tabTitle,
     component: "file",
     config: { type: "file", projectId, path: filePath } satisfies FileTabConfig,
+    enableClose: true,
+    enableRename: false,
+  };
+}
+
+export function createTerminalTab({ projectId, terminalId, title }: OpenTerminalTabInput): IJsonTabNode {
+  return {
+    type: "tab",
+    id: terminalTabId(projectId, terminalId),
+    name: title || "Terminal",
+    component: "terminal",
+    config: { type: "terminal", projectId, terminalId } satisfies TerminalTabConfig,
     enableClose: true,
     enableRename: false,
   };
