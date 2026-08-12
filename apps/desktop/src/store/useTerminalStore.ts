@@ -85,7 +85,12 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
   },
 
   write: (id, data) => {
-    void tauriApi.terminalInput(id, data);
+    tauriApi.terminalInput(id, data).catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("no active terminal")) {
+        get().markStatus(id, "exited", { error: msg });
+      }
+    });
   },
 
   resize: (id, cols, rows) => {
@@ -99,7 +104,12 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
         },
       };
     });
-    void tauriApi.terminalResize(id, cols, rows);
+    tauriApi.terminalResize(id, cols, rows).catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("no active terminal")) {
+        get().markStatus(id, "exited", { error: msg });
+      }
+    });
   },
 
   kill: async (id) => {

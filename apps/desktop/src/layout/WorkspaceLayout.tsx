@@ -1,6 +1,6 @@
 import React from "react";
-import { Layout, TabNode } from "flexlayout-react";
-import type { ITabRenderValues } from "flexlayout-react";
+import { Actions, Layout, TabNode } from "flexlayout-react";
+import type { Action, ITabRenderValues } from "flexlayout-react";
 import { EmptyState } from "../components/common/EmptyState";
 import { FileViewer } from "../components/file/FileViewer";
 import { TerminalTab } from "../components/terminal/TerminalTab";
@@ -8,6 +8,7 @@ import { ChatScreen } from "../pages/ChatScreen";
 import { tauriApi } from "../lib/tauri-api";
 import { basename } from "./types";
 import { useAppStore } from "../store/useAppStore";
+import { useTerminalStore } from "../store/useTerminalStore";
 import { getActiveWorkspaceTab } from "./model";
 import { useWorkspaceStore } from "./useWorkspaceStore";
 import { isWorkspaceTabConfig } from "./types";
@@ -112,6 +113,17 @@ export function WorkspaceLayout() {
     [notifyLayoutChange, syncActiveTab],
   );
 
+  const handleAction = React.useCallback((action: Action) => {
+    if (action.type === Actions.DELETE_TAB) {
+      const nodeId = (action.data as { node?: string })?.node;
+      if (nodeId && nodeId.startsWith("terminal:")) {
+        const terminalId = nodeId.slice("terminal:".length);
+        void useTerminalStore.getState().kill(terminalId);
+      }
+    }
+    return action;
+  }, []);
+
   React.useEffect(() => {
     syncActiveTab(model);
   }, [model, syncActiveTab]);
@@ -142,6 +154,7 @@ export function WorkspaceLayout() {
       <Layout
         model={model}
         factory={factory}
+        onAction={handleAction}
         onRenderTab={renderTab}
         onModelChange={handleModelChange}
         onTabSetPlaceHolder={() => (

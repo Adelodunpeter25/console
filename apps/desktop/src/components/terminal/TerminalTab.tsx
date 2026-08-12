@@ -131,20 +131,31 @@ export function TerminalTab({ config }: TerminalTabProps) {
       unlisten?.();
       resizeObserver?.disconnect();
       window.removeEventListener("resize", fitAndSync);
-      // The PTY is killed when the tab unmounts (flexlayout unmounts tabs on
-      // close; hidden tabs remain mounted). This keeps shells from leaking.
-      void kill(config.terminalId);
       fitRef.current = null;
       termRef.current?.dispose();
       termRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.terminalId, markStatus, resize, write, kill]);
+  }, [config.terminalId, markStatus, resize, write]);
+
+  const terminalRecord = useTerminalStore((s) => s.terminals[config.terminalId]);
+  const isInactive = terminalRecord?.status === "exited" || terminalRecord?.status === "error";
 
   return (
-    <div
-      ref={containerRef}
-      className="h-full w-full overflow-hidden bg-[#0d0d0d] [&>div]:h-full"
-    />
+    <div className="relative h-full w-full bg-[#0d0d0d]">
+      {isInactive && (
+        <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between bg-neutral-900/90 px-4 py-2 text-xs text-neutral-400 backdrop-blur border-b border-neutral-800">
+          <span>
+            {terminalRecord?.status === "error"
+              ? `Terminal error: ${terminalRecord.error ?? "Session failed"}`
+              : "Terminal session ended"}
+          </span>
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        className="h-full w-full overflow-hidden bg-[#0d0d0d] [&>div]:h-full"
+      />
+    </div>
   );
 }
