@@ -40,6 +40,9 @@ const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
   svelte: "svelte",
   lua: "lua",
   r: "r",
+  xml: "xml",
+  svg: "xml",
+  gradle: "groovy",
   dockerfile: "dockerfile",
 };
 
