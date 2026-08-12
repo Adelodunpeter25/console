@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { EventEmitter } from "node:events";
+import { isPathIgnored } from "../utils/ignored.js";
 
 export interface FsWatcherEvent {
   type: "fsChange";
@@ -21,20 +22,25 @@ export class FsWatchService extends EventEmitter {
 
     try {
       const watcher = fs.watch(normPath, { recursive: true }, (eventType, filename) => {
-        // Debounce notifications per project path (150ms) to avoid event spamming
+        const relativeFilename = filename ? filename.toString() : "";
+        if (relativeFilename && isPathIgnored(relativeFilename)) {
+          return;
+        }
+
+        // Debounce notifications per project path (300ms) to avoid event spamming
         if (this.debounceTimers.has(normPath)) {
           clearTimeout(this.debounceTimers.get(normPath)!);
         }
 
         const timer = setTimeout(() => {
           this.debounceTimers.delete(normPath);
-          const fullEventPath = filename ? path.join(normPath, filename.toString()) : undefined;
+          const fullEventPath = filename ? path.join(normPath, relativeFilename) : undefined;
           this.emit("change", {
             type: "fsChange",
             projectPath: normPath,
             eventPath: fullEventPath,
           } as FsWatcherEvent);
-        }, 150);
+        }, 300);
 
         this.debounceTimers.set(normPath, timer);
       });

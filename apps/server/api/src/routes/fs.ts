@@ -145,6 +145,24 @@ fsRoutes.post("/dir", async (c) => {
 });
 
 /**
+ * DELETE /api/fs/dir — Delete a directory.
+ */
+fsRoutes.delete("/dir", async (c) => {
+  const dirPath = c.req.query("path");
+  if (!dirPath) {
+    return c.json({ success: false, error: "Query parameter 'path' is required." }, 400);
+  }
+
+  try {
+    await fsService.deleteDirectory(dirPath);
+    return c.json({ success: true, data: { path: dirPath, deleted: true } });
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return c.json({ success: false, error: errorMsg }, 400);
+  }
+});
+
+/**
  * GET /api/fs/watch — SSE stream for real-time filesystem change events.
  */
 fsRoutes.get("/watch", (c) => {
