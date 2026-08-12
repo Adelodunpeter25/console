@@ -100,3 +100,12 @@
   min-width: 0;
   flex: 1;
 }
+
+/* Monaco Editor text selection enablement */
+.monaco-editor,
+.monaco-editor .view-lines,
+.monaco-editor .view-line,
+.monaco-editor .margin {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
