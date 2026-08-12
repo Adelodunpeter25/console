@@ -1,6 +1,6 @@
 import React from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
-import { WorkspaceNode, getTabId } from "./types";
+import { WorkspaceNode, LeafPaneNode, SplitPaneNode, getTabId } from "./types";
 import { useWorkspaceStore } from "./useWorkspaceStore";
 import { WorkspaceTabBar } from "./WorkspaceTabBar";
 import { WorkspaceContent } from "./WorkspaceContent";
@@ -10,37 +10,33 @@ interface WorkspacePaneProps {
   canClosePane?: boolean;
 }
 
-/**
- * WorkspacePane — Recursive renderer for cmux-style split tiles and leaf panes.
- */
-export function WorkspacePane({ node, canClosePane = false }: WorkspacePaneProps) {
+function SplitPaneView({ node }: { node: SplitPaneNode }) {
+  const isHorizontal = node.direction === "horizontal";
+  return (
+    <Group orientation={node.direction} className="w-full h-full">
+      <Panel defaultSize={node.sizes[0]} minSize={15}>
+        <WorkspacePane node={node.children[0]} canClosePane={true} />
+      </Panel>
+
+      <Separator
+        className={
+          isHorizontal
+            ? "w-1 h-full bg-border hover:bg-amber-500/80 transition-colors cursor-col-resize shrink-0"
+            : "h-1 w-full bg-border hover:bg-amber-500/80 transition-colors cursor-row-resize shrink-0"
+        }
+      />
+
+      <Panel defaultSize={node.sizes[1]} minSize={15}>
+        <WorkspacePane node={node.children[1]} canClosePane={true} />
+      </Panel>
+    </Group>
+  );
+}
+
+function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane: boolean }) {
   const activePaneId = useWorkspaceStore((state) => state.activePaneId);
   const setActivePane = useWorkspaceStore((state) => state.setActivePane);
 
-  if (node.type === "split") {
-    const isHorizontal = node.direction === "horizontal";
-    return (
-      <Group orientation={node.direction} className="w-full h-full">
-        <Panel defaultSize={node.sizes[0]} minSize={15}>
-          <WorkspacePane node={node.children[0]} canClosePane={true} />
-        </Panel>
-
-        <Separator
-          className={
-            isHorizontal
-              ? "w-1 h-full bg-border hover:bg-amber-500/80 transition-colors cursor-col-resize shrink-0"
-              : "h-1 w-full bg-border hover:bg-amber-500/80 transition-colors cursor-row-resize shrink-0"
-          }
-        />
-
-        <Panel defaultSize={node.sizes[1]} minSize={15}>
-          <WorkspacePane node={node.children[1]} canClosePane={true} />
-        </Panel>
-      </Group>
-    );
-  }
-
-  // Leaf Pane
   const isActivePane = activePaneId === node.id;
   const activeTabConfig = React.useMemo(() => {
     if (!node.activeTabId) return null;
@@ -60,4 +56,14 @@ export function WorkspacePane({ node, canClosePane = false }: WorkspacePaneProps
       </div>
     </div>
   );
+}
+
+/**
+ * WorkspacePane — Recursive renderer for cmux-style split tiles and leaf panes.
+ */
+export function WorkspacePane({ node, canClosePane = false }: WorkspacePaneProps) {
+  if (node.type === "split") {
+    return <SplitPaneView node={node} />;
+  }
+  return <LeafPaneView node={node} canClosePane={canClosePane} />;
 }

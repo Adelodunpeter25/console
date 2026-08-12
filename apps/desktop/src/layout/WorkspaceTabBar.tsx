@@ -1,6 +1,6 @@
 import React from "react";
-import { Columns, Rows, Plus, X } from "lucide-react";
-import { LeafPaneNode, WorkspaceTabConfig, getTabId } from "./types";
+import { Plus, X } from "lucide-react";
+import { LeafPaneNode, getTabId } from "./types";
 import { WorkspaceTabItem } from "./WorkspaceTabItem";
 import { useWorkspaceStore } from "./useWorkspaceStore";
 import { useProjectStore } from "../store/useProjectStore";
@@ -12,12 +12,11 @@ interface WorkspaceTabBarProps {
 
 /**
  * WorkspaceTabBar — Top actions & tab bar header for each split pane tile.
- * Includes split controls (Split Right, Split Down) and pane management.
+ * Clean, lightweight tab bar without header split clutter.
  */
 export function WorkspaceTabBar({ pane, canClosePane }: WorkspaceTabBarProps) {
   const setActiveTab = useWorkspaceStore((state) => state.setActiveTab);
   const closeTab = useWorkspaceStore((state) => state.closeTab);
-  const splitPane = useWorkspaceStore((state) => state.splitPane);
   const closePane = useWorkspaceStore((state) => state.closePane);
   const createSession = useProjectStore((state) => state.createSession);
   const openChatTab = useWorkspaceStore((state) => state.openChatTab);
@@ -59,25 +58,9 @@ export function WorkspaceTabBar({ pane, canClosePane }: WorkspaceTabBarProps) {
         </button>
       </div>
 
-      {/* Split Pane Control Actions */}
-      <div className="flex items-center gap-1 px-2 shrink-0 border-l border-border bg-sidebar">
-        <button
-          onClick={() => splitPane(pane.id, "horizontal")}
-          className="p-1.5 rounded text-foreground-muted hover:text-foreground hover:bg-white/[0.06] transition-colors cursor-pointer"
-          title="Split Pane Right (Left/Right)"
-          aria-label="Split Right"
-        >
-          <Columns size={14} />
-        </button>
-        <button
-          onClick={() => splitPane(pane.id, "vertical")}
-          className="p-1.5 rounded text-foreground-muted hover:text-foreground hover:bg-white/[0.06] transition-colors cursor-pointer"
-          title="Split Pane Down (Top/Bottom)"
-          aria-label="Split Down"
-        >
-          <Rows size={14} />
-        </button>
-        {canClosePane && (
+      {/* Pane Close Action (If multiple split tiles exist) */}
+      {canClosePane && (
+        <div className="flex items-center px-2 shrink-0 border-l border-border bg-sidebar">
           <button
             onClick={() => closePane(pane.id)}
             className="p-1.5 rounded text-foreground-muted hover:text-danger hover:bg-white/[0.06] transition-colors cursor-pointer"
@@ -86,8 +69,8 @@ export function WorkspaceTabBar({ pane, canClosePane }: WorkspaceTabBarProps) {
           >
             <X size={14} />
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

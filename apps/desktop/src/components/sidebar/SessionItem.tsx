@@ -45,11 +45,13 @@ export const SessionItem = React.memo(function SessionItem({
   );
 
   const handleOpen = () => {
-    if (!projectId) return;
-    setSelectedProjectId(projectId);
+    const pid = projectId ?? session.projectId ?? "";
+    if (pid) {
+      setSelectedProjectId(pid);
+    }
     openChatTab({
       type: "chat",
-      projectId,
+      projectId: pid,
       sessionId: session.id,
       title: session.title || "Untitled Chat",
     });
