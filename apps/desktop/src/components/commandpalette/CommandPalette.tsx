@@ -3,6 +3,7 @@ import { Command } from "cmdk";
 import {
   FolderPlus,
   MessageSquarePlus,
+  TerminalSquare,
   ArrowLeft,
   Folder,
   File,
@@ -10,9 +11,11 @@ import {
   CornerDownLeft,
   Search,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useAppStore } from "../../store/useAppStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useFsStore } from "../../store/useFsStore";
+import { useTerminalStore } from "../../store/useTerminalStore";
 import { useWorkspaceStore } from "../../layout/useWorkspaceStore";
 
 interface CommandPaletteProps {
@@ -25,7 +28,7 @@ type View = "root" | "browse";
 /**
  * Raycast-style command palette built on cmdk.
  *
- * Root view lists commands (New Project, New Chat).
+ * Root view lists commands (New Project, New Chat, New Terminal).
  * Selecting "New Project" pushes to a browse view that navigates the
  * filesystem via the backend browse API — arrow keys to move, Enter to
  * descend into a directory or select it, Back to return to the root.
@@ -40,8 +43,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const browseDirectory = useFsStore((state) => state.browseDirectory);
   const addProject = useProjectStore((state) => state.addProject);
   const createSession = useProjectStore((state) => state.createSession);
+  const projects = useProjectStore((state) => state.projects);
   const setSelectedProjectId = useAppStore((state) => state.setSelectedProjectId);
+  const activeProjectId = useAppStore((state) => state.selectedProjectId);
   const openChatTab = useWorkspaceStore((state) => state.openChatTab);
+  const openTerminalTab = useTerminalStore((state) => state.openTerminalTab);
 
   // Load root directory listing when entering browse view
   React.useEffect(() => {
@@ -74,9 +80,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
   const handleNewChat = async () => {
     try {
-      // Create a session without a project. The composer shows the project
-      // selector so the user can pick (or add) a working folder before the
-      // first message.
       const session = await createSession("", "", "New Chat");
       setSelectedProjectId(null);
       openChatTab({
@@ -88,6 +91,26 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       onOpenChange(false);
     } catch {
       // error is surfaced via store
+    }
+  };
+
+  const handleNewTerminal = async () => {
+    try {
+      const cwd = activeProjectId
+        ? projects.find((p) => p.id === activeProjectId)?.path ?? ""
+        : "";
+
+      if (!activeProjectId || !cwd) {
+        toast.error("Select an active project first to open a terminal.");
+        return;
+      }
+
+      await openTerminalTab({ projectId: activeProjectId, cwd });
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to open terminal. Is the server running?",
+      );
     }
   };
 
@@ -173,6 +196,14 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 >
                   <MessageSquarePlus size={18} className="text-foreground-secondary shrink-0" />
                   <span className="flex-1">New Chat</span>
+                </Command.Item>
+
+                <Command.Item
+                  onSelect={handleNewTerminal}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-foreground aria-selected:bg-white/8 aria-selected:text-foreground cursor-pointer transition-colors"
+                >
+                  <TerminalSquare size={18} className="text-foreground-secondary shrink-0" />
+                  <span className="flex-1">New Terminal</span>
                 </Command.Item>
               </Command.Group>
             </>
