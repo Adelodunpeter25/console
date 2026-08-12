@@ -69,55 +69,59 @@ export const SessionItem = React.memo(function SessionItem({
 
   return (
     <div
-      className={`group relative flex flex-col px-3 py-2 rounded-md cursor-pointer ${
+      className={`group relative flex flex-col gap-0.5 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors ${
         isActive
           ? "bg-white/[0.08] text-foreground"
-          : "text-foreground-secondary hover:text-foreground"
+          : "text-foreground-secondary hover:bg-white/[0.04] hover:text-foreground"
       }`}
       onClick={handleOpen}
       onContextMenu={handleContextMenu}
     >
-      {/* Line 1: Status Dot + Title + Time */}
+      {/* Row 1: Fixed Status Dot Container + Title + Right Action Slot */}
       <div className="flex items-center gap-2 min-w-0">
-        {status === "working" ? (
-          <div className="w-3.5 h-3.5 shrink-0 flex items-center justify-center">
+        <div className="w-4 h-4 shrink-0 flex items-center justify-center">
+          {status === "working" ? (
             <div className="w-3 h-3 border-[1.5px] border-blue-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : (
-          <div
-            className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[status] ?? STATUS_DOT.idle}`}
-          />
-        )}
+          ) : (
+            <div
+              className={`w-2 h-2 rounded-full ${STATUS_DOT[status] ?? STATUS_DOT.idle}`}
+            />
+          )}
+        </div>
 
-        <span className={`text-xs truncate flex-1 min-w-0 ${isActive ? "font-medium" : ""}`}>
+        <span className={`text-xs truncate flex-1 min-w-0 ${isActive ? "font-semibold text-foreground" : ""}`}>
           {session.title || "Untitled Chat"}
         </span>
 
-        <span className="text-[11px] text-foreground-muted shrink-0">
-          {formatRelativeTime(session.updatedAt, true)}
-        </span>
-
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            deleteSession(session.id);
-            if (projectId) closeChatTab(projectId, session.id);
-          }}
-          className="w-4 h-4 shrink-0 flex items-center justify-center text-foreground-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-          title="Delete session"
-          aria-label={`Delete ${session.title || "session"}`}
-        >
-          <Trash2 size={13} />
-        </button>
+        {/* Right side: Time by default, replaced by Delete button on group hover */}
+        <div className="shrink-0 flex items-center justify-end w-9 text-right">
+          <span className="text-[11px] text-foreground-muted group-hover:hidden transition-opacity">
+            {formatRelativeTime(session.updatedAt, true)}
+          </span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteSession(session.id);
+              if (projectId) closeChatTab(projectId, session.id);
+            }}
+            className="hidden group-hover:flex items-center justify-center p-1 rounded hover:bg-white/10 text-foreground-muted hover:text-danger transition-colors cursor-pointer"
+            title="Delete session"
+            aria-label={`Delete ${session.title || "session"}`}
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
       </div>
 
-      {/* Line 2: Working Folder */}
-      <div className="flex items-center gap-1.5 mt-0.5 pl-[18px] pr-5 min-w-0">
-        <FolderClosed size={11} className="text-foreground-muted shrink-0" />
-        <span className="text-[11px] text-foreground-muted truncate min-w-0">
-          {basename(session.cwd)}
-        </span>
-      </div>
+      {/* Row 2: Working Folder path aligned flush under Title text (24px left indent) */}
+      {session.cwd && (
+        <div className="flex items-center gap-1.5 pl-6 min-w-0">
+          <FolderClosed size={11} className="text-foreground-muted shrink-0" />
+          <span className="text-[11px] text-foreground-muted truncate min-w-0">
+            {basename(session.cwd)}
+          </span>
+        </div>
+      )}
     </div>
   );
 });
