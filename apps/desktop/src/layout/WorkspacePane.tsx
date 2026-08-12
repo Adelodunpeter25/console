@@ -38,11 +38,18 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
   const setActivePane = useWorkspaceStore((state) => state.setActivePane);
   const dropTabOnPane = useWorkspaceStore((state) => state.dropTabOnPane);
   const [dropPos, setDropPos] = React.useState<DropPosition | null>(null);
+  const dragDepthRef = React.useRef(0);
 
   const activeTabConfig = React.useMemo(() => {
     if (!node.activeTabId) return null;
     return node.tabs.find((t) => getTabId(t) === node.activeTabId) ?? null;
   }, [node.tabs, node.activeTabId]);
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current += 1;
+  };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -56,13 +63,10 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
-    const rect = e.currentTarget.getBoundingClientRect();
-    if (
-      e.clientX <= rect.left ||
-      e.clientX >= rect.right ||
-      e.clientY <= rect.top ||
-      e.clientY >= rect.bottom
-    ) {
+    e.stopPropagation();
+    dragDepthRef.current -= 1;
+    if (dragDepthRef.current <= 0) {
+      dragDepthRef.current = 0;
       setDropPos(null);
     }
   };
@@ -70,6 +74,7 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    dragDepthRef.current = 0;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const finalPos = dropPos ?? calcDropPosition(rect, e.clientX, e.clientY);
@@ -89,6 +94,7 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
   return (
     <div
       onClick={() => setActivePane(node.id)}
+      onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
