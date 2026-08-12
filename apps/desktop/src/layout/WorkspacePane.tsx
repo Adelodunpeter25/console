@@ -38,43 +38,64 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
   const setActivePane = useWorkspaceStore((state) => state.setActivePane);
   const dropTabOnPane = useWorkspaceStore((state) => state.dropTabOnPane);
   const [dropPos, setDropPos] = React.useState<DropPosition | null>(null);
-  const dragDepthRef = React.useRef(0);
+  const paneRef = React.useRef<HTMLDivElement>(null);
 
   const activeTabConfig = React.useMemo(() => {
     if (!node.activeTabId) return null;
     return node.tabs.find((t) => getTabId(t) === node.activeTabId) ?? null;
   }, [node.tabs, node.activeTabId]);
 
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragDepthRef.current += 1;
-  };
+  const clearDropPos = React.useCallback(() => {
+    setDropPos(null);
+  }, []);
+
+  // Clear highlight if the drag ends anywhere (cancel, drop outside, etc.)
+  React.useEffect(() => {
+    window.addEventListener("dragend", clearDropPos);
+    return () => window.removeEventListener("dragend", clearDropPos);
+  }, [clearDropPos]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
 
-    const rect = e.currentTarget.getBoundingClientRect();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
     const pos = calcDropPosition(rect, e.clientX, e.clientY);
-    setDropPos(pos);
+    setDropPos((prev) => (prev === pos ? prev : pos));
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    dragDepthRef.current -= 1;
-    if (dragDepthRef.current <= 0) {
-      dragDepthRef.current = 0;
-      setDropPos(null);
+
+    // Only clear when the pointer actually leaves the pane — not when it
+    // moves between children (which also fires dragleave on the parent).
+    const next = e.relatedTarget as Node | null;
+    if (next && e.currentTarget.contains(next)) return;
+
+    // relatedTarget is often null in WebKit during DnD; fall back to coordinates.
+    if (!next) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const { clientX, clientY } = e;
+      if (
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom
+      ) {
+        return;
+      }
     }
+
+    setDropPos(null);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    dragDepthRef.current = 0;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const finalPos = dropPos ?? calcDropPosition(rect, e.clientX, e.clientY);
@@ -88,23 +109,26 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
       if (data.tabConfig) {
         dropTabOnPane(node.id, finalPos, data.tabConfig, data.sourcePaneId);
       }
-    } catch {}
+    } catch {
+      // ignore malformed payloads
+    }
   };
 
   return (
     <div
+      ref={paneRef}
       onClick={() => setActivePane(node.id)}
-      onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="flex flex-col h-full w-full overflow-hidden bg-black relative"
+      className="flex flex-col h-full w-full overflow-hidden bg-black relative isolate"
     >
-      <WorkspaceDropzone position={dropPos} />
       <WorkspaceTabBar pane={node} canClosePane={canClosePane} />
-      <div className="flex-1 overflow-hidden relative bg-black">
+      <div className="flex-1 overflow-hidden relative bg-black min-h-0">
         <WorkspaceContent config={activeTabConfig} />
       </div>
+      {/* Render last so the overlay always paints above tab bar + content */}
+      <WorkspaceDropzone position={dropPos} />
     </div>
   );
 }
