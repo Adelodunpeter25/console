@@ -6,12 +6,14 @@ interface AppState {
   selectedSessionId: string | null;
   sidebarOpen: boolean;
   rightSidebarOpen: boolean;
+  commandPaletteOpen: boolean;
   setSelectedProjectId: (id: string | null) => void;
   setSelectedSessionId: (id: string | null) => void;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
   setRightSidebarOpen: (open: boolean) => void;
   toggleRightSidebar: () => void;
+  setCommandPaletteOpen: (open: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -19,6 +21,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedSessionId: null,
   sidebarOpen: true,
   rightSidebarOpen: true,
+  commandPaletteOpen: false,
 
   setSelectedProjectId: (selectedProjectId) => set({ selectedProjectId }),
   setSelectedSessionId: (selectedSessionId) => set({ selectedSessionId }),
@@ -40,4 +43,5 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ rightSidebarOpen: next });
     persistRightSidebarOpen(next).catch(() => {});
   },
+  setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
 }));

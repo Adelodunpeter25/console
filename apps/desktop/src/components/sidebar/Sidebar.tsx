@@ -1,5 +1,5 @@
 import React from "react";
-import { FolderOpen, Settings, SquarePen } from "lucide-react";
+import { FolderOpen, FolderPlus, Search, Settings, SquarePen } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useAppStore } from "../../store/useAppStore";
 import { useProjectStore } from "../../store/useProjectStore";
@@ -7,6 +7,7 @@ import { useWorkspaceStore } from "../../layout/useWorkspaceStore";
 import { useVirtualList } from "../../hooks/useVirtualList";
 import { SessionItem } from "./SessionItem";
 import { dayBucket, formatDayGroup } from "../../utils/time";
+import { tauriApi } from "../../lib/tauri-api";
 import type { SessionHeader } from "@console/types";
 
 /** Group sessions into labeled date buckets, newest-first by last-updated. */
@@ -49,7 +50,7 @@ function flattenGroups(
 }
 
 /**
- * Left sidebar — flat session list with New Chat action.
+ * Left sidebar — flat session list with New Chat, Search, and Add Project actions.
  * Rendered inside a ResizablePanel by ChatPage; width is passed in so the
  * internal container matches the panel (default 288px = w-72).
  */
@@ -57,9 +58,11 @@ export function Sidebar({ width = 288 }: { width?: number }) {
   const navigate = useNavigate();
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
   const setSelectedProjectId = useAppStore((state) => state.setSelectedProjectId);
+  const setCommandPaletteOpen = useAppStore((state) => state.setCommandPaletteOpen);
   const openChatTab = useWorkspaceStore((state) => state.openChatTab);
   const projects = useProjectStore((state) => state.projects);
   const loadProjects = useProjectStore((state) => state.loadProjects);
+  const addProject = useProjectStore((state) => state.addProject);
   const sessions = useProjectStore((state) => state.sessions);
   const sessionsLoading = useProjectStore((state) => state.sessionsLoading);
   const loadSessions = useProjectStore((state) => state.loadSessions);
@@ -87,9 +90,6 @@ export function Sidebar({ width = 288 }: { width?: number }) {
   if (useAppStore.getState().sidebarOpen === false) return null;
 
   const handleGlobalNewChat = async () => {
-    // Create a session without pinning it to a project. The composer lets the
-    // user pick (or add) a working folder before the first message is sent —
-    // no project is required to open a chat.
     const session = await createSession("", "", "New Chat");
     setSelectedProjectId(null);
     openChatTab({
@@ -100,20 +100,50 @@ export function Sidebar({ width = 288 }: { width?: number }) {
     });
   };
 
+  const handleAddProject = async () => {
+    try {
+      const result = await tauriApi.pickFolder();
+      if (result && result.path) {
+        await addProject(result.path);
+      }
+    } catch {
+      // User cancelled picker
+    }
+  };
+
   return (
     <div
       className="bg-sidebar border-r border-border flex flex-col h-full shrink-0 select-none"
       style={{ width }}
     >
       {/* Top Actions Bar */}
-      <div className="px-3 pt-3 pb-2 shrink-0">
+      <div className="px-3 pt-3 pb-2 shrink-0 space-y-1">
+        <div className="flex items-center justify-between gap-1">
+          <button
+            onClick={handleGlobalNewChat}
+            className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-foreground-secondary hover:bg-white/[0.06] hover:text-foreground transition-colors cursor-pointer"
+            title="New Chat"
+          >
+            <SquarePen size={15} />
+            <span className="text-xs font-medium">New chat</span>
+          </button>
+          <button
+            onClick={handleAddProject}
+            className="p-2 rounded-lg text-foreground-muted hover:bg-white/[0.06] hover:text-foreground transition-colors cursor-pointer"
+            title="Add Project Folder to Database"
+            aria-label="Add Project Folder"
+          >
+            <FolderPlus size={16} />
+          </button>
+        </div>
+
         <button
-          onClick={handleGlobalNewChat}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-foreground-secondary hover:bg-white/[0.06] hover:text-foreground transition-colors cursor-pointer"
-          title="New Chat"
+          onClick={() => setCommandPaletteOpen(true)}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-foreground-muted hover:bg-white/[0.06] hover:text-foreground transition-colors cursor-pointer"
+          title="Search (Command Palette)"
         >
-          <SquarePen size={15} />
-          <span className="text-xs font-medium">New chat</span>
+          <Search size={15} />
+          <span className="text-xs font-medium">Search</span>
         </button>
       </div>
 

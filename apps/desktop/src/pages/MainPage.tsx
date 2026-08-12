@@ -30,8 +30,9 @@ export function MainPage() {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen);
   const setSidebarOpen = useAppStore((state) => state.setSidebarOpen);
   const setRightSidebarOpen = useAppStore((state) => state.setRightSidebarOpen);
+  const paletteOpen = useAppStore((state) => state.commandPaletteOpen);
+  const setPaletteOpen = useAppStore((state) => state.setCommandPaletteOpen);
   const init = useServerStore((state) => state.init);
-  const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [sidebarWidth, setSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
   const [rightSidebarWidth, setRightSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
 
@@ -65,12 +66,12 @@ export function MainPage() {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        setPaletteOpen((v) => !v);
+        setPaletteOpen(!useAppStore.getState().commandPaletteOpen);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [setPaletteOpen]);
 
   return (
     <div className="flex flex-col h-screen w-screen bg-screen overflow-hidden">
