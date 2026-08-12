@@ -1,5 +1,6 @@
 import React from "react";
 import Editor from "@monaco-editor/react";
+import { inferLanguage } from "../../utils/file-language";
 
 interface FileViewerProps {
   content: string;
@@ -9,15 +10,14 @@ interface FileViewerProps {
 
 /**
  * FileViewer — Monaco-powered file viewer component for code tabs.
- * Provides IDE-grade syntax highlighting, line numbers, code folding, and smooth scrolling.
+ * Uses central file icon language resolver for accurate language inferencing.
  */
 export function FileViewer({ content, fileName = "file", language }: FileViewerProps) {
-  // Normalize language for Monaco Editor
+  // Infer Monaco Editor language using centralized resolver
   const monacoLanguage = React.useMemo(() => {
-    if (!language) return "plaintext";
-    if (language === "tsx" || language === "jsx") return "typescript";
-    return language;
-  }, [language]);
+    if (language && language !== "plaintext") return language;
+    return inferLanguage(fileName);
+  }, [language, fileName]);
 
   return (
     <div className="h-full w-full bg-screen overflow-hidden">
