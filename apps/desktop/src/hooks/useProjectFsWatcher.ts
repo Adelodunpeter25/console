@@ -7,23 +7,31 @@ import { tauriApi } from "../lib/tauri-api";
  * Decouples IPC listener setup, teardown, and directory browsing from UI components.
  */
 export function useProjectFsWatcher(projectPath?: string | null) {
-  const browseDirectory = useFsStore((state) => state.browseDirectory);
+  const activePathRef = React.useRef(projectPath);
+  activePathRef.current = projectPath;
 
   React.useEffect(() => {
     if (!projectPath) return;
 
     // Initial browse fetch for the selected project path
-    browseDirectory(projectPath).catch(() => {});
+    useFsStore.getState().browseDirectory(projectPath).catch(() => {});
 
     let unlisten: (() => void) | undefined;
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
     // Trigger Rust command to watch project path via Tauri IPC
     tauriApi.watchDirectory(projectPath).catch(() => {});
 
-    // Listen to fs-change Tauri event via Rust IPC relay
+    // Listen to fs-change Tauri event via Rust IPC relay with 300ms debouncing
     tauriApi
       .listenFsChanges(() => {
-        browseDirectory(projectPath).catch(() => {});
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          const currentPath = activePathRef.current;
+          if (currentPath) {
+            useFsStore.getState().browseDirectory(currentPath).catch(() => {});
+          }
+        }, 300);
       })
       .then((unlistenFn) => {
         unlisten = unlistenFn;
@@ -31,7 +39,8 @@ export function useProjectFsWatcher(projectPath?: string | null) {
       .catch(() => {});
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       if (unlisten) unlisten();
     };
-  }, [projectPath, browseDirectory]);
+  }, [projectPath]);
 }
