@@ -3,6 +3,7 @@ import { MessageSquare, FileCode, Terminal, GitCompare, X } from "lucide-react";
 import { WorkspaceTabConfig, getTabTitle } from "./types";
 
 interface WorkspaceTabItemProps {
+  paneId?: string;
   config: WorkspaceTabConfig;
   isActive: boolean;
   onSelect: () => void;
@@ -24,16 +25,25 @@ function getTabIcon(type: WorkspaceTabConfig["type"]) {
 }
 
 /**
- * WorkspaceTabItem — Boxy tab pill with monochrome icons, black background,
+ * WorkspaceTabItem — Draggable tab pill with monochrome icons, black background,
  * dark brown (#8a5027) top indicator, min/max width constraints, and text truncation (...).
  */
 export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
+  paneId,
   config,
   isActive,
   onSelect,
   onClose,
 }: WorkspaceTabItemProps) {
   const title = getTabTitle(config);
+
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData(
+      "application/json",
+      JSON.stringify({ sourcePaneId: paneId, tabConfig: config }),
+    );
+    e.dataTransfer.effectAllowed = "move";
+  };
 
   const handleClose = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -42,8 +52,10 @@ export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
 
   return (
     <div
+      draggable
+      onDragStart={handleDragStart}
       onClick={onSelect}
-      className={`group relative flex items-center gap-2 px-3 py-1.5 h-9 min-w-[120px] max-w-[180px] rounded-none text-xs cursor-pointer border-r border-border transition-colors select-none ${
+      className={`group relative flex items-center gap-2 px-3 py-1.5 h-9 min-w-[120px] max-w-[180px] rounded-none text-xs cursor-grab active:cursor-grabbing border-r border-border transition-colors select-none ${
         isActive
           ? "bg-black text-foreground font-medium border-t-2 border-t-[#8a5027]"
           : "bg-transparent text-foreground-muted hover:bg-white/[0.04] hover:text-foreground"

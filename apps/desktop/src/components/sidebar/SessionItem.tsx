@@ -44,6 +44,18 @@ export const SessionItem = React.memo(function SessionItem({
     [session.projectId, session.cwd, projects],
   );
 
+  const handleDragStart = (e: React.DragEvent) => {
+    const pid = projectId ?? session.projectId ?? "";
+    const config = {
+      type: "chat",
+      projectId: pid,
+      sessionId: session.id,
+      title: session.title || "Untitled Chat",
+    };
+    e.dataTransfer.setData("application/json", JSON.stringify({ tabConfig: config }));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
   const handleOpen = () => {
     const pid = projectId ?? session.projectId ?? "";
     if (pid) {
@@ -97,7 +109,9 @@ export const SessionItem = React.memo(function SessionItem({
 
   return (
     <div
-      className={`group relative flex flex-col justify-between py-2 px-3 min-h-[48px] rounded-lg cursor-pointer transition-colors ${
+      draggable
+      onDragStart={handleDragStart}
+      className={`group relative flex flex-col justify-between py-2 px-3 min-h-[48px] rounded-lg cursor-grab active:cursor-grabbing transition-colors ${
         isActive
           ? "bg-white/[0.08] text-foreground"
           : "text-foreground-secondary hover:text-foreground"

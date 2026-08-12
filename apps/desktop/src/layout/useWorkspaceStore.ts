@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import {
   WorkspaceNode,
-  LeafPaneNode,
   WorkspaceTabConfig,
   OpenChatTabInput,
   OpenFileTabInput,
@@ -9,7 +8,15 @@ import {
   SplitDirection,
   getTabId,
 } from "./types";
+import {
+  createLeaf,
+  findLeaf,
+  findFirstLeaf,
+  mapTree,
+  addTabToPane,
+} from "./treeHelpers";
 import { useTerminalStore } from "../store/useTerminalStore";
+import type { DropPosition } from "./WorkspaceDropzone";
 
 interface WorkspaceState {
   rootNode: WorkspaceNode;
@@ -25,79 +32,15 @@ interface WorkspaceState {
   closePane: (paneId: string) => void;
   closeChatTab: (projectId: string, sessionId: string) => void;
   updateChatTabProject: (sessionId: string, newProjectId: string) => void;
+  dropTabOnPane: (
+    targetPaneId: string,
+    position: DropPosition,
+    config: WorkspaceTabConfig,
+    sourcePaneId?: string,
+  ) => void;
 }
 
 const DEFAULT_LEAF_ID = "pane-main";
-
-function createLeaf(id: string, tabs: WorkspaceTabConfig[] = [], activeTabId: string | null = null): LeafPaneNode {
-  return { type: "leaf", id, tabs, activeTabId: activeTabId ?? (tabs[0] ? getTabId(tabs[0]) : null) };
-}
-
-function findLeaf(node: WorkspaceNode, paneId: string): LeafPaneNode | null {
-  if (node.type === "leaf") return node.id === paneId ? node : null;
-  return findLeaf(node.children[0], paneId) || findLeaf(node.children[1], paneId);
-}
-
-function findFirstLeaf(node: WorkspaceNode): LeafPaneNode {
-  if (node.type === "leaf") return node;
-  return findFirstLeaf(node.children[0]);
-}
-
-function mapTree(node: WorkspaceNode, fn: (leaf: LeafPaneNode) => LeafPaneNode): WorkspaceNode {
-  if (node.type === "leaf") return fn(node);
-  return {
-    ...node,
-    children: [mapTree(node.children[0], fn), mapTree(node.children[1], fn)],
-  };
-}
-
-function addTabToPane(
-  tree: WorkspaceNode,
-  targetPaneId: string,
-  config: WorkspaceTabConfig,
-): { rootNode: WorkspaceNode; activePaneId: string } {
-  const tabId = getTabId(config);
-
-  // 1. Check if tab is already open in ANY leaf pane
-  let existingPaneId: string | null = null;
-  function searchTab(node: WorkspaceNode) {
-    if (node.type === "leaf") {
-      if (node.tabs.some((t) => getTabId(t) === tabId)) {
-        existingPaneId = node.id;
-      }
-    } else {
-      searchTab(node.children[0]);
-      searchTab(node.children[1]);
-    }
-  }
-  searchTab(tree);
-
-  if (existingPaneId) {
-    const nextTree = mapTree(tree, (leaf) =>
-      leaf.id === existingPaneId
-        ? {
-            ...leaf,
-            tabs: leaf.tabs.map((t) => (getTabId(t) === tabId ? config : t)),
-            activeTabId: tabId,
-          }
-        : leaf,
-    );
-    return { rootNode: nextTree, activePaneId: existingPaneId };
-  }
-
-  // 2. Tab is not open anywhere: add it to targetPaneId (or fallback to first leaf)
-  let paneFound = false;
-  const nextTree = mapTree(tree, (leaf) => {
-    if (leaf.id !== targetPaneId) return leaf;
-    paneFound = true;
-    return { ...leaf, tabs: [...leaf.tabs, config], activeTabId: tabId };
-  });
-
-  if (paneFound) return { rootNode: nextTree, activePaneId: targetPaneId };
-
-  const first = findFirstLeaf(tree);
-  return addTabToPane(tree, first.id, config);
-}
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   rootNode: createLeaf(DEFAULT_LEAF_ID),
@@ -246,5 +189,66 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         return { ...leaf, tabs: nextTabs };
       }),
     }));
+  },
+
+  dropTabOnPane: (targetPaneId, position, config, sourcePaneId) => {
+    const state = get();
+    const tabId = getTabId(config);
+
+    let currentTree = state.rootNode;
+    if (sourcePaneId) {
+      currentTree = mapTree(currentTree, (leaf) => {
+        if (leaf.id !== sourcePaneId) return leaf;
+        const nextTabs = leaf.tabs.filter((t) => getTabId(t) !== tabId);
+        const nextActive =
+          leaf.activeTabId === tabId ? (nextTabs[0] ? getTabId(nextTabs[0]) : null) : leaf.activeTabId;
+        return { ...leaf, tabs: nextTabs, activeTabId: nextActive };
+      });
+    }
+
+    if (position === "center") {
+      const added = addTabToPane(currentTree, targetPaneId, config);
+      set({ rootNode: added.rootNode, activePaneId: added.activePaneId });
+      return;
+    }
+
+    const direction: SplitDirection =
+      position === "left" || position === "right" ? "horizontal" : "vertical";
+    const targetLeaf = findLeaf(currentTree, targetPaneId);
+    if (!targetLeaf) {
+      const added = addTabToPane(currentTree, targetPaneId, config);
+      set({ rootNode: added.rootNode, activePaneId: added.activePaneId });
+      return;
+    }
+
+    const newLeafId = `pane-${Date.now()}`;
+    const newLeaf = createLeaf(newLeafId, [config], tabId);
+
+    function splitAndDrop(node: WorkspaceNode): WorkspaceNode {
+      if (node.type === "leaf") {
+        if (node.id !== targetPaneId) return node;
+        const splitId = `split-${Date.now()}`;
+        const isLeftOrTop = position === "left" || position === "top";
+        const children: [WorkspaceNode, WorkspaceNode] = isLeftOrTop
+          ? [newLeaf, node]
+          : [node, newLeaf];
+        return {
+          type: "split",
+          id: splitId,
+          direction,
+          sizes: [50, 50],
+          children,
+        };
+      }
+      return {
+        ...node,
+        children: [splitAndDrop(node.children[0]), splitAndDrop(node.children[1])],
+      };
+    }
+
+    set({
+      rootNode: splitAndDrop(currentTree),
+      activePaneId: newLeafId,
+    });
   },
 }));

@@ -27,6 +27,7 @@ export function WorkspaceTabBar({ pane, canClosePane }: WorkspaceTabBarProps) {
           return (
             <WorkspaceTabItem
               key={tabId}
+              paneId={pane.id}
               config={tab}
               isActive={isActive}
               onSelect={() => setActiveTab(pane.id, tabId)}
