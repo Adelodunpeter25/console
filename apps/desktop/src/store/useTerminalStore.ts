@@ -125,6 +125,9 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     set((state) => {
       const term = state.terminals[id];
       if (!term) return state;
+      if (term.status === status && (!extra || Object.keys(extra).every((k) => (term as unknown as Record<string, unknown>)[k] === (extra as Record<string, unknown>)[k]))) {
+        return state;
+      }
       return {
         terminals: {
           ...state.terminals,

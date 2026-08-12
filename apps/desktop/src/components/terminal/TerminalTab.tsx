@@ -15,6 +15,7 @@ interface TerminalTabProps {
 export function TerminalTab({ config }: TerminalTabProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const instanceRef = React.useRef<XtermInstance | null>(null);
+  const resizeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const markStatus = useTerminalStore((s) => s.markStatus);
   const write = useTerminalStore((s) => s.write);
   const resize = useTerminalStore((s) => s.resize);
@@ -34,9 +35,11 @@ export function TerminalTab({ config }: TerminalTabProps) {
       if (!instanceRef.current) return;
       const dims = instanceRef.current.fit();
       if (dims && dims.cols > 0 && dims.rows > 0) {
-        resize(config.terminalId, dims.cols, dims.rows);
+        if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
+        resizeTimerRef.current = setTimeout(() => {
+          resize(config.terminalId, dims.cols, dims.rows);
+        }, 50);
       }
-      markStatus(config.terminalId, "running");
     };
 
     instance.terminal.onData((data) => {
@@ -46,7 +49,7 @@ export function TerminalTab({ config }: TerminalTabProps) {
     void (async () => {
       unlisten = await tauriApi.listenTerminalEvents(config.terminalId, (message) => {
         if (message.type === "output") {
-          instance.terminal.write(message.data);
+          instance.writeChunk(message.data);
         } else if (message.type === "exit") {
           markStatus(config.terminalId, "exited");
         } else if (message.type === "error") {
@@ -60,6 +63,7 @@ export function TerminalTab({ config }: TerminalTabProps) {
         return;
       }
 
+      markStatus(config.terminalId, "running");
       fitAndSync();
       if (containerRef.current) {
         resizeObserver = new ResizeObserver(() => fitAndSync());
@@ -70,6 +74,7 @@ export function TerminalTab({ config }: TerminalTabProps) {
 
     return () => {
       disposed = true;
+      if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
       unlisten?.();
       resizeObserver?.disconnect();
       window.removeEventListener("resize", fitAndSync);

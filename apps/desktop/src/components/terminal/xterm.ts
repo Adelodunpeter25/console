@@ -8,6 +8,8 @@ export const DEFAULT_TERMINAL_OPTIONS: ITerminalOptions = {
     'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
   cursorBlink: true,
   cursorStyle: "block",
+  scrollback: 5000,
+  smoothScrollDuration: 0,
   theme: {
     background: "#0d0d0d",
     foreground: "#d4d4d4",
@@ -35,11 +37,12 @@ export interface XtermInstance {
   fitAddon: FitAddon;
   open: (container: HTMLElement) => void;
   fit: () => { cols: number; rows: number } | undefined;
+  writeChunk: (data: string) => void;
   dispose: () => void;
 }
 
 /**
- * Creates and configures an xterm.js instance with FitAddon attached.
+ * Creates and configures an xterm.js instance with FitAddon and high-throughput write buffering attached.
  */
 export function createXtermInstance(options: Partial<ITerminalOptions> = {}): XtermInstance {
   const terminal = new Terminal({
@@ -49,6 +52,18 @@ export function createXtermInstance(options: Partial<ITerminalOptions> = {}): Xt
 
   const fitAddon = new FitAddon();
   terminal.loadAddon(fitAddon);
+
+  let buffer: string[] = [];
+  let rafId: number | null = null;
+
+  const flushBuffer = () => {
+    if (buffer.length > 0) {
+      const combined = buffer.join("");
+      buffer = [];
+      terminal.write(combined);
+    }
+    rafId = null;
+  };
 
   return {
     terminal,
@@ -64,7 +79,18 @@ export function createXtermInstance(options: Partial<ITerminalOptions> = {}): Xt
         return undefined;
       }
     },
+    writeChunk: (data: string) => {
+      buffer.push(data);
+      if (rafId === null) {
+        rafId = requestAnimationFrame(flushBuffer);
+      }
+    },
     dispose: () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      buffer = [];
       try {
         fitAddon.dispose();
       } catch {
