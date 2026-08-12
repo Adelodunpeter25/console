@@ -1,32 +1,31 @@
-import type { IJsonTabNode } from "flexlayout-react";
-
-export const MAIN_WORKSPACE_TABSET_ID = "workspace-main";
-
-/** Every view that can eventually live in the center workspace. */
 export type WorkspaceTabType = "chat" | "terminal" | "file" | "diff";
 
 export interface ChatTabConfig {
   type: "chat";
   projectId: string;
   sessionId: string;
+  title?: string;
 }
 
 export interface TerminalTabConfig {
   type: "terminal";
   projectId: string;
   terminalId: string;
+  title?: string;
 }
 
 export interface FileTabConfig {
   type: "file";
   projectId: string;
   path: string;
+  title?: string;
 }
 
 export interface DiffTabConfig {
   type: "diff";
   projectId: string;
   path: string;
+  title?: string;
   baseRevision?: string;
 }
 
@@ -36,79 +35,58 @@ export type WorkspaceTabConfig =
   | FileTabConfig
   | DiffTabConfig;
 
-export interface OpenChatTabInput extends ChatTabConfig {
-  title: string;
+export type OpenChatTabInput = ChatTabConfig & { title?: string };
+export type OpenTerminalTabInput = TerminalTabConfig & { title?: string };
+export type OpenFileTabInput = FileTabConfig & { title?: string };
+
+export type SplitDirection = "horizontal" | "vertical";
+
+export interface LeafPaneNode {
+  type: "leaf";
+  id: string;
+  tabs: WorkspaceTabConfig[];
+  activeTabId: string | null;
 }
 
-export interface OpenTerminalTabInput extends TerminalTabConfig {
-  title?: string;
+export interface SplitPaneNode {
+  type: "split";
+  id: string;
+  direction: SplitDirection;
+  sizes: [number, number];
+  children: [WorkspaceNode, WorkspaceNode];
 }
 
-export interface OpenFileTabInput extends FileTabConfig {
-  title?: string;
-}
-
-export function isWorkspaceTabConfig(value: unknown): value is WorkspaceTabConfig {
-  return Boolean(
-    value &&
-      typeof value === "object" &&
-      "type" in value &&
-      "projectId" in value &&
-      typeof value.projectId === "string",
-  );
-}
-
-export function chatTabId(_projectId: string, sessionId: string): string {
-  return `chat:${sessionId}`;
-}
-
-export function terminalTabId(_projectId: string, terminalId: string): string {
-  return `terminal:${terminalId}`;
-}
-
-export function fileTabId(_projectId: string, filePath: string): string {
-  return `file:${filePath}`;
-}
-
-export function createChatTab({ projectId, sessionId, title }: OpenChatTabInput): IJsonTabNode {
-  return {
-    type: "tab",
-    id: chatTabId(projectId, sessionId),
-    name: title || "Untitled Chat",
-    component: "chat",
-    config: { type: "chat", projectId, sessionId } satisfies ChatTabConfig,
-    enableClose: true,
-    enableRename: false,
-  };
-}
-
-export function createFileTab({ projectId, path: filePath, title }: OpenFileTabInput): IJsonTabNode {
-  const tabTitle = title ?? basename(filePath);
-  return {
-    type: "tab",
-    id: fileTabId(projectId, filePath),
-    name: tabTitle,
-    component: "file",
-    config: { type: "file", projectId, path: filePath } satisfies FileTabConfig,
-    enableClose: true,
-    enableRename: false,
-  };
-}
-
-export function createTerminalTab({ projectId, terminalId, title }: OpenTerminalTabInput): IJsonTabNode {
-  return {
-    type: "tab",
-    id: terminalTabId(projectId, terminalId),
-    name: title || "Terminal",
-    component: "terminal",
-    config: { type: "terminal", projectId, terminalId } satisfies TerminalTabConfig,
-    enableClose: true,
-    enableRename: false,
-  };
-}
+export type WorkspaceNode = LeafPaneNode | SplitPaneNode;
 
 export function basename(filePath: string): string {
   const normalized = filePath.replace(/\\/g, "/");
-  const idx = normalized.lastIndexOf("/");
-  return idx >= 0 ? normalized.slice(idx + 1) : normalized;
+  const lastSlash = normalized.lastIndexOf("/");
+  return lastSlash >= 0 ? normalized.slice(lastSlash + 1) : normalized;
+}
+
+export function getTabId(config: WorkspaceTabConfig): string {
+  switch (config.type) {
+    case "chat":
+      return `chat:${config.sessionId}`;
+    case "terminal":
+      return `terminal:${config.terminalId}`;
+    case "file":
+      return `file:${config.path}`;
+    case "diff":
+      return `diff:${config.path}`;
+  }
+}
+
+export function getTabTitle(config: WorkspaceTabConfig): string {
+  if (config.title) return config.title;
+  switch (config.type) {
+    case "chat":
+      return "Untitled Chat";
+    case "terminal":
+      return "Terminal";
+    case "file":
+      return basename(config.path);
+    case "diff":
+      return `Diff: ${basename(config.path)}`;
+  }
 }
