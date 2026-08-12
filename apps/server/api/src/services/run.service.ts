@@ -290,7 +290,16 @@ export class RunService {
       } else {
         this.sessionStorage.updateSessionStatus(sessionId, "needs_attention");
         // Persist the failure so the error survives session switches.
-        const errorMsg = err instanceof Error ? err.message : String(err);
+        let errorMsg = err instanceof Error ? err.message : String(err);
+        if (err && typeof err === "object") {
+          const anyErr = err as any;
+          if (anyErr.responseBody && typeof anyErr.responseBody === "string") {
+            try {
+              const parsed = JSON.parse(anyErr.responseBody);
+              if (parsed?.error?.message) errorMsg = parsed.error.message;
+            } catch {}
+          }
+        }
         this.sessionStorage.appendMessage(sessionId, {
           role: "assistant",
           content: [{ type: "text", text: `Error: ${errorMsg}` }],

@@ -41,7 +41,16 @@ runRoutes.post("/sessions/:id/run", async (c) => {
         }
       });
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
+      let errorMsg = err instanceof Error ? err.message : String(err);
+      if (err && typeof err === "object") {
+        const anyErr = err as any;
+        if (anyErr.responseBody && typeof anyErr.responseBody === "string") {
+          try {
+            const parsed = JSON.parse(anyErr.responseBody);
+            if (parsed?.error?.message) errorMsg = parsed.error.message;
+          } catch {}
+        }
+      }
       if (clientConnected) {
         try {
           await sseStream.writeSSE({

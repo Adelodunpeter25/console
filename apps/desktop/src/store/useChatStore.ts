@@ -197,11 +197,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
         }
         if (event.type === "error") {
-          if (isAbortError(event.error.message)) {
-            hadError = true; // prevent reload, but don't toast or show inline error
-          } else {
+          const errorMsg = event.error?.message || "An unknown error occurred.";
+          if (isAbortError(errorMsg)) {
             hadError = true;
-            toast.error(event.error.message);
+          } else {
+            markError(errorMsg);
           }
         }
         // Sync needs_attention to the sidebar when the agent pauses.
