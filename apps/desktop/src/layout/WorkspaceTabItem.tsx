@@ -1,6 +1,7 @@
 import React from "react";
-import { MessageSquare, FileCode, Terminal, GitCompare, X } from "lucide-react";
+import { MessageSquare, Terminal, X } from "lucide-react";
 import { WorkspaceTabConfig, getTabTitle } from "./types";
+import { FileIcon } from "../components/file/FileIcon";
 
 interface WorkspaceTabItemProps {
   paneId?: string;
@@ -10,23 +11,22 @@ interface WorkspaceTabItemProps {
   onClose: () => void;
 }
 
-function getTabIcon(type: WorkspaceTabConfig["type"]) {
+function getTabIcon(config: WorkspaceTabConfig) {
   const iconClass = "text-foreground-muted shrink-0";
-  switch (type) {
+  switch (config.type) {
     case "chat":
       return <MessageSquare size={13} className={iconClass} />;
-    case "file":
-      return <FileCode size={13} className={iconClass} />;
     case "terminal":
       return <Terminal size={13} className={iconClass} />;
+    case "file":
     case "diff":
-      return <GitCompare size={13} className={iconClass} />;
+      return <FileIcon fileName={config.path} className="w-3.5 h-3.5 shrink-0 text-foreground-muted" />;
   }
 }
 
 /**
- * WorkspaceTabItem — Draggable tab pill with monochrome icons, black background,
- * dark brown (#8a5027) top indicator, min/max width constraints, and text truncation (...).
+ * WorkspaceTabItem — Draggable tab pill using sprite icons for file tabs, monochrome icons for tools,
+ * black background, dark brown (#8a5027) top indicator, min/max width constraints, and text truncation (...).
  */
 export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
   paneId,
@@ -62,7 +62,7 @@ export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
       }`}
       title={title}
     >
-      {getTabIcon(config.type)}
+      {getTabIcon(config)}
       <span className="truncate flex-1 min-w-0">{title}</span>
       <button
         onClick={handleClose}
