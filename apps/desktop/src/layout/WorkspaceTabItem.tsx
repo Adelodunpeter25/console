@@ -23,7 +23,7 @@ function getTabIcon(type: WorkspaceTabConfig["type"]) {
 }
 
 /**
- * WorkspaceTabItem — Sleek, modern tab pill component with type icons and close action.
+ * WorkspaceTabItem — Tab pill component with warm brown (#a96842) top active indicator.
  */
 export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
   config,
@@ -31,7 +31,6 @@ export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
   onSelect,
   onClose,
 }: WorkspaceTabItemProps) {
-  const tabId = getTabId(config);
   const title = getTabTitle(config);
 
   const handleClose = (e: React.MouseEvent) => {
@@ -42,9 +41,9 @@ export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
   return (
     <div
       onClick={onSelect}
-      className={`group relative flex items-center gap-2 px-3 py-1.5 h-9 max-w-[200px] min-w-[120px] rounded-t-lg text-xs cursor-pointer border-r border-border transition-colors select-none ${
+      className={`group relative flex items-center gap-2 px-3 py-1.5 h-9 max-w-[200px] min-w-[120px] rounded-t-sm text-xs cursor-pointer border-r border-border transition-colors select-none ${
         isActive
-          ? "bg-white/[0.08] text-foreground font-semibold border-t-2 border-t-amber-500"
+          ? "bg-[#211d1a] text-foreground font-medium border-t-2 border-t-[#a96842]"
           : "bg-transparent text-foreground-muted hover:bg-white/[0.04] hover:text-foreground"
       }`}
       title={title}
