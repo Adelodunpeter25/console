@@ -126,7 +126,7 @@ export const SessionItem = React.memo(function SessionItem({
             title="Delete session"
             aria-label={`Delete ${session.title || "session"}`}
           >
-            <Trash2 size={14} />
+            <Trash2 size={13} />
           </button>
         </div>
       </div>
