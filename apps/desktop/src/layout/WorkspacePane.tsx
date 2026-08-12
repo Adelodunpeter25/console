@@ -21,8 +21,8 @@ function SplitPaneView({ node }: { node: SplitPaneNode }) {
       <Separator
         className={
           isHorizontal
-            ? "w-1 h-full bg-border hover:bg-amber-500/80 transition-colors cursor-col-resize shrink-0"
-            : "h-1 w-full bg-border hover:bg-amber-500/80 transition-colors cursor-row-resize shrink-0"
+            ? "w-[1px] h-full bg-border hover:bg-[#8a5027] transition-colors cursor-col-resize shrink-0"
+            : "h-[1px] w-full bg-border hover:bg-[#8a5027] transition-colors cursor-row-resize shrink-0"
         }
       />
 
@@ -34,10 +34,8 @@ function SplitPaneView({ node }: { node: SplitPaneNode }) {
 }
 
 function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane: boolean }) {
-  const activePaneId = useWorkspaceStore((state) => state.activePaneId);
   const setActivePane = useWorkspaceStore((state) => state.setActivePane);
 
-  const isActivePane = activePaneId === node.id;
   const activeTabConfig = React.useMemo(() => {
     if (!node.activeTabId) return null;
     return node.tabs.find((t) => getTabId(t) === node.activeTabId) ?? null;
@@ -46,12 +44,10 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
   return (
     <div
       onClick={() => setActivePane(node.id)}
-      className={`flex flex-col h-full w-full overflow-hidden bg-screen ${
-        isActivePane ? "ring-1 ring-amber-500/30" : ""
-      }`}
+      className="flex flex-col h-full w-full overflow-hidden bg-black"
     >
       <WorkspaceTabBar pane={node} canClosePane={canClosePane} />
-      <div className="flex-1 overflow-hidden relative">
+      <div className="flex-1 overflow-hidden relative bg-black">
         <WorkspaceContent config={activeTabConfig} />
       </div>
     </div>

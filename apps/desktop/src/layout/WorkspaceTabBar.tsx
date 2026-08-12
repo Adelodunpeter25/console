@@ -10,7 +10,7 @@ interface WorkspaceTabBarProps {
 }
 
 /**
- * WorkspaceTabBar — Clean header bar for workspace tabs without header + button clutter.
+ * WorkspaceTabBar — Clean header bar for workspace tabs without extra header clutter or gaps.
  */
 export function WorkspaceTabBar({ pane, canClosePane }: WorkspaceTabBarProps) {
   const setActiveTab = useWorkspaceStore((state) => state.setActiveTab);
@@ -18,7 +18,7 @@ export function WorkspaceTabBar({ pane, canClosePane }: WorkspaceTabBarProps) {
   const closePane = useWorkspaceStore((state) => state.closePane);
 
   return (
-    <div className="flex items-center justify-between h-9 bg-sidebar border-b border-border shrink-0 select-none overflow-hidden">
+    <div className="flex items-center justify-between h-9 bg-black border-b border-border shrink-0 select-none overflow-hidden">
       {/* Scrollable Tabs List */}
       <div className="flex items-center h-full overflow-x-auto overflow-y-hidden flex-1 no-scrollbar">
         {pane.tabs.map((tab) => {
@@ -38,10 +38,10 @@ export function WorkspaceTabBar({ pane, canClosePane }: WorkspaceTabBarProps) {
 
       {/* Pane Close Action (If multiple split tiles exist) */}
       {canClosePane && (
-        <div className="flex items-center px-2 shrink-0 border-l border-border bg-sidebar">
+        <div className="flex items-center px-2 shrink-0 border-l border-border bg-black">
           <button
             onClick={() => closePane(pane.id)}
-            className="p-1.5 rounded text-foreground-muted hover:text-danger hover:bg-white/[0.06] transition-colors cursor-pointer"
+            className="p-1.5 rounded-none text-foreground-muted hover:text-danger hover:bg-white/[0.06] transition-colors cursor-pointer"
             title="Close Split Tile"
             aria-label="Close Tile"
           >
