@@ -85,30 +85,23 @@ export class FsService {
    * Read file content with line range support.
    */
   async readFileContent(filePath: string, startLine?: number, endLine?: number): Promise<string> {
-    const result = (await readFileTool.execute(
-      readFileTool.inputSchema.parse({
-        path: filePath,
-        startLine,
-        endLine,
-      }),
-    )) as { content: Array<{ text: string }> };
-
-    return result.content[0]?.text ?? "";
+    const raw = await fs.readFile(filePath, "utf-8");
+    if (startLine === undefined && endLine === undefined) {
+      return raw;
+    }
+    const lines = raw.split("\n");
+    const start = startLine ? Math.max(1, startLine) - 1 : 0;
+    const end = endLine ? Math.min(lines.length, endLine) : lines.length;
+    return lines.slice(start, end).join("\n");
   }
 
   /**
    * Write or overwrite file content.
    */
   async writeFileContent(filePath: string, content: string): Promise<string> {
-    const result = (await writeFileTool.execute(
-      writeFileTool.inputSchema.parse({
-        path: filePath,
-        content,
-        createDirs: true,
-      }),
-    )) as { content: Array<{ text: string }> };
-
-    return result.content[0]?.text ?? "File written successfully.";
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, content, "utf-8");
+    return "File written successfully.";
   }
 
   /**
