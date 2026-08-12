@@ -84,8 +84,8 @@ export function Sidebar({ width = 288 }: { width?: number }) {
   const getItemSize = React.useCallback(
     (index: number) => {
       const entry = flatEntries[index];
-      if (entry?.kind === "header") return 28;
-      return 50;
+      if (entry?.kind === "header") return 36;
+      return 52;
     },
     [flatEntries],
   );
@@ -138,7 +138,7 @@ export function Sidebar({ width = 288 }: { width?: number }) {
 
         <button
           onClick={() => setCommandPaletteOpen(true)}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-foreground-muted hover:bg-white/[0.06] hover:text-foreground transition-colors cursor-pointer"
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-foreground-secondary hover:bg-white/[0.06] hover:text-foreground transition-colors cursor-pointer"
           title="Search (Command Palette)"
         >
           <Search size={15} />
@@ -177,7 +177,7 @@ export function Sidebar({ width = 288 }: { width?: number }) {
                       width: "100%",
                       transform: `translateY(${virtualRow.start}px)`,
                     }}
-                    className="px-2 pt-2 pb-1 flex items-center justify-between min-h-[28px]"
+                    className="px-2 pt-3 pb-1 flex items-center justify-between min-h-[36px]"
                   >
                     <span className="text-[10px] font-bold tracking-wider text-foreground-muted uppercase">
                       {entry.label}
