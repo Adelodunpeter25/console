@@ -51,8 +51,28 @@ export function attachTerminalSocket(server: Server): () => void {
     const params = parseSpawnParams(req.url);
 
     let session: TerminalId | null = null;
+    let paused = false;
+    // Pause the PTY when the socket send buffer saturates so flooding programs
+    // can't grow memory without bound; resume once it drains.
+    const HIGH_WATER = 1 << 20; // 1 MiB
+    const checkBackpressure = () => {
+      if (!session || paused) return;
+      if (ws.bufferedAmount > HIGH_WATER) {
+        paused = true;
+        terminalPtyManager.pause(session);
+      }
+    };
+    const maybeResume = () => {
+      if (!session || !paused) return;
+      if (ws.bufferedAmount <= HIGH_WATER / 2) {
+        paused = false;
+        terminalPtyManager.resume(session);
+      }
+    };
     const send = (message: unknown) => {
-      if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(message));
+      if (ws.readyState === ws.OPEN) {
+        ws.send(JSON.stringify(message), checkBackpressure);
+      }
     };
 
     // Validate cwd before spawning so the client gets a clean error frame.
@@ -79,7 +99,6 @@ export function attachTerminalSocket(server: Server): () => void {
         send({ type: "error", message: "Invalid terminal frame: expected JSON." });
         return;
       }
-
       if (!session) return;
 
       switch (frame.type) {
@@ -104,6 +123,9 @@ export function attachTerminalSocket(server: Server): () => void {
         session = null;
       }
     });
+
+    // The send buffer drained below the low-water mark — resume output.
+    ws.on("drain", maybeResume);
 
     ws.on("error", () => {
       // Socket error — the close handler still fires; nothing extra needed.

@@ -1,5 +1,6 @@
 import { Terminal, type ITerminalOptions } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { CanvasAddon } from "@xterm/addon-canvas";
 import "@xterm/xterm/css/xterm.css";
 
 export const DEFAULT_TERMINAL_OPTIONS: ITerminalOptions = {
@@ -9,6 +10,7 @@ export const DEFAULT_TERMINAL_OPTIONS: ITerminalOptions = {
   cursorBlink: true,
   cursorStyle: "block",
   scrollback: 5000,
+  convertEol: true,
   smoothScrollDuration: 0,
   theme: {
     background: "#0d0d0d",
@@ -52,6 +54,8 @@ export function createXtermInstance(options: Partial<ITerminalOptions> = {}): Xt
 
   const fitAddon = new FitAddon();
   terminal.loadAddon(fitAddon);
+  const canvasAddon = new CanvasAddon();
+  terminal.loadAddon(canvasAddon);
 
   let buffer: string[] = [];
   let rafId: number | null = null;

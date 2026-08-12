@@ -169,6 +169,34 @@ export class TerminalPtyManager {
     session.callbacks?.onExit(null);
   }
 
+  /**
+   * Pause a PTY's output. Used when the client socket's send buffer is
+   * saturated so a flooding program (`yes`, huge file cats) can't balloon
+   * memory; the child blocks on write until resume().
+   */
+  pause(id: TerminalId): void {
+    const session = this.sessions.get(id);
+    if (session && !session.killed) {
+      try {
+        session.pty.pause();
+      } catch {
+        // Already paused or dying — fine.
+      }
+    }
+  }
+
+  /** Resume a paused PTY's output (the send buffer drained). */
+  resume(id: TerminalId): void {
+    const session = this.sessions.get(id);
+    if (session && !session.killed) {
+      try {
+        session.pty.resume();
+      } catch {
+        // Already resumed or dying — fine.
+      }
+    }
+  }
+
   /** Kill every tracked session (e.g. on server shutdown). */
   killAll(): void {
     for (const id of [...this.sessions.keys()]) {
