@@ -95,7 +95,7 @@ export const SessionItem = React.memo(function SessionItem({
 
   return (
     <div
-      className={`group relative flex flex-col justify-between py-2.5 px-3 min-h-[56px] rounded-lg cursor-pointer transition-colors ${
+      className={`group relative flex flex-col justify-between py-1.5 px-3 min-h-[46px] rounded-lg cursor-pointer transition-colors ${
         isActive
           ? "bg-white/[0.08] text-foreground"
           : "text-foreground-secondary hover:text-foreground"
@@ -121,7 +121,7 @@ export const SessionItem = React.memo(function SessionItem({
 
         <button
           onClick={handleDelete}
-          className="w-5 h-5 shrink-0 flex items-center justify-center rounded hover:bg-white/10 text-foreground-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          className="w-5 h-5 shrink-0 flex items-center justify-center text-foreground-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-colors cursor-pointer"
           title="Delete session"
           aria-label={`Delete ${session.title || "session"}`}
         >

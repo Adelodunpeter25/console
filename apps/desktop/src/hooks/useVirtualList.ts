@@ -4,6 +4,7 @@ import { useVirtualizer, Virtualizer } from "@tanstack/react-virtual";
 interface UseVirtualListOptions<T> {
   items: T[];
   estimateSize?: number;
+  getItemSize?: (index: number) => number;
   overscan?: number;
 }
 
@@ -20,6 +21,7 @@ interface UseVirtualListResult<T> {
 export function useVirtualList<T>({
   items,
   estimateSize = 32,
+  getItemSize,
   overscan = 5,
 }: UseVirtualListOptions<T>): UseVirtualListResult<T> {
   const parentRef = React.useRef<HTMLDivElement>(null);
@@ -27,7 +29,7 @@ export function useVirtualList<T>({
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => estimateSize,
+    estimateSize: getItemSize ?? (() => estimateSize),
     overscan,
   });
 

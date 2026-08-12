@@ -81,9 +81,18 @@ export function Sidebar({ width = 288 }: { width?: number }) {
     return flattenGroups(groups);
   }, [sessions]);
 
+  const getItemSize = React.useCallback(
+    (index: number) => {
+      const entry = flatEntries[index];
+      if (entry?.kind === "header") return 28;
+      return 50;
+    },
+    [flatEntries],
+  );
+
   const { parentRef, virtualItems, totalSize } = useVirtualList({
     items: flatEntries,
-    estimateSize: 64,
+    getItemSize,
     overscan: 8,
   });
 
@@ -117,25 +126,15 @@ export function Sidebar({ width = 288 }: { width?: number }) {
       style={{ width }}
     >
       {/* Top Actions Bar */}
-      <div className="px-3 pt-3 pb-2 shrink-0 space-y-1">
-        <div className="flex items-center justify-between gap-1">
-          <button
-            onClick={handleGlobalNewChat}
-            className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-foreground-secondary hover:bg-white/[0.06] hover:text-foreground transition-colors cursor-pointer"
-            title="New Chat"
-          >
-            <SquarePen size={15} />
-            <span className="text-xs font-medium">New chat</span>
-          </button>
-          <button
-            onClick={handleAddProject}
-            className="p-2 rounded-lg text-foreground-muted hover:bg-white/[0.06] hover:text-foreground transition-colors cursor-pointer"
-            title="Add Project Folder to Database"
-            aria-label="Add Project Folder"
-          >
-            <FolderPlus size={16} />
-          </button>
-        </div>
+      <div className="px-3 pt-3 pb-1 shrink-0 space-y-1">
+        <button
+          onClick={handleGlobalNewChat}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-foreground-secondary hover:bg-white/[0.06] hover:text-foreground transition-colors cursor-pointer"
+          title="New Chat"
+        >
+          <SquarePen size={15} />
+          <span className="text-xs font-medium">New chat</span>
+        </button>
 
         <button
           onClick={() => setCommandPaletteOpen(true)}
@@ -167,6 +166,7 @@ export function Sidebar({ width = 288 }: { width?: number }) {
               if (!entry) return null;
 
               if (entry.kind === "header") {
+                const isFirstHeader = virtualRow.index === 0;
                 return (
                   <div
                     key={entry.key}
@@ -177,11 +177,21 @@ export function Sidebar({ width = 288 }: { width?: number }) {
                       width: "100%",
                       transform: `translateY(${virtualRow.start}px)`,
                     }}
-                    className="px-2 pt-3 pb-1"
+                    className="px-2 pt-2 pb-1 flex items-center justify-between min-h-[28px]"
                   >
                     <span className="text-[10px] font-bold tracking-wider text-foreground-muted uppercase">
                       {entry.label}
                     </span>
+                    {isFirstHeader && (
+                      <button
+                        onClick={handleAddProject}
+                        className="p-1 rounded text-foreground-muted hover:text-foreground hover:bg-white/10 transition-colors cursor-pointer"
+                        title="Add Project Folder to Database"
+                        aria-label="Add Project Folder"
+                      >
+                        <FolderPlus size={14} />
+                      </button>
+                    )}
                   </div>
                 );
               }
