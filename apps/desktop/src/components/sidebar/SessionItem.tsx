@@ -52,7 +52,9 @@ export const SessionItem = React.memo(function SessionItem({
       sessionId: session.id,
       title: session.title || "Untitled Chat",
     };
-    e.dataTransfer.setData("application/json", JSON.stringify({ tabConfig: config }));
+    const payload = JSON.stringify({ tabConfig: config });
+    e.dataTransfer.setData("application/json", payload);
+    e.dataTransfer.setData("text/plain", payload);
     e.dataTransfer.effectAllowed = "move";
   };
 

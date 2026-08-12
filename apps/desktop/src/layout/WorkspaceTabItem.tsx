@@ -38,10 +38,9 @@ export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
   const title = getTabTitle(config);
 
   const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData(
-      "application/json",
-      JSON.stringify({ sourcePaneId: paneId, tabConfig: config }),
-    );
+    const payload = JSON.stringify({ sourcePaneId: paneId, tabConfig: config });
+    e.dataTransfer.setData("application/json", payload);
+    e.dataTransfer.setData("text/plain", payload);
     e.dataTransfer.effectAllowed = "move";
   };
 

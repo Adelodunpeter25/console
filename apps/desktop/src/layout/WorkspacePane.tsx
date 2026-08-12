@@ -46,29 +46,42 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
+
     const rect = e.currentTarget.getBoundingClientRect();
     const pos = calcDropPosition(rect, e.clientX, e.clientY);
     setDropPos(pos);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
-    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
-    setDropPos(null);
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (
+      e.clientX <= rect.left ||
+      e.clientX >= rect.right ||
+      e.clientY <= rect.top ||
+      e.clientY >= rect.bottom
+    ) {
+      setDropPos(null);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    const pos = dropPos ?? "center";
+    e.stopPropagation();
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const finalPos = dropPos ?? calcDropPosition(rect, e.clientX, e.clientY);
     setDropPos(null);
 
-    const json = e.dataTransfer.getData("application/json");
+    const json = e.dataTransfer.getData("application/json") || e.dataTransfer.getData("text/plain");
     if (!json) return;
 
     try {
       const data = JSON.parse(json);
       if (data.tabConfig) {
-        dropTabOnPane(node.id, pos, data.tabConfig, data.sourcePaneId);
+        dropTabOnPane(node.id, finalPos, data.tabConfig, data.sourcePaneId);
       }
     } catch {}
   };
