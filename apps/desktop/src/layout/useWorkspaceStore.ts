@@ -51,23 +51,49 @@ function mapTree(node: WorkspaceNode, fn: (leaf: LeafPaneNode) => LeafPaneNode):
   };
 }
 
-function addTabToPane(tree: WorkspaceNode, targetPaneId: string, config: WorkspaceTabConfig): { tree: WorkspaceNode; activePaneId: string } {
+function addTabToPane(
+  tree: WorkspaceNode,
+  targetPaneId: string,
+  config: WorkspaceTabConfig,
+): { rootNode: WorkspaceNode; activePaneId: string } {
   const tabId = getTabId(config);
-  let paneFound = false;
 
+  // 1. Check if tab is already open in ANY leaf pane
+  let existingPaneId: string | null = null;
+  function searchTab(node: WorkspaceNode) {
+    if (node.type === "leaf") {
+      if (node.tabs.some((t) => getTabId(t) === tabId)) {
+        existingPaneId = node.id;
+      }
+    } else {
+      searchTab(node.children[0]);
+      searchTab(node.children[1]);
+    }
+  }
+  searchTab(tree);
+
+  if (existingPaneId) {
+    const nextTree = mapTree(tree, (leaf) =>
+      leaf.id === existingPaneId
+        ? {
+            ...leaf,
+            tabs: leaf.tabs.map((t) => (getTabId(t) === tabId ? config : t)),
+            activeTabId: tabId,
+          }
+        : leaf,
+    );
+    return { rootNode: nextTree, activePaneId: existingPaneId };
+  }
+
+  // 2. Tab is not open anywhere: add it to targetPaneId (or fallback to first leaf)
+  let paneFound = false;
   const nextTree = mapTree(tree, (leaf) => {
     if (leaf.id !== targetPaneId) return leaf;
     paneFound = true;
-    const existingIndex = leaf.tabs.findIndex((t) => getTabId(t) === tabId);
-    if (existingIndex >= 0) {
-      const updated = [...leaf.tabs];
-      updated[existingIndex] = config;
-      return { ...leaf, tabs: updated, activeTabId: tabId };
-    }
     return { ...leaf, tabs: [...leaf.tabs, config], activeTabId: tabId };
   });
 
-  if (paneFound) return { tree: nextTree, activePaneId: targetPaneId };
+  if (paneFound) return { rootNode: nextTree, activePaneId: targetPaneId };
 
   const first = findFirstLeaf(tree);
   return addTabToPane(tree, first.id, config);
@@ -177,7 +203,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   closePane: (paneId) => {
     const state = get();
-    if (state.rootNode.type === "leaf") return; // Keep at least one pane
+    if (state.rootNode.type === "leaf") return;
 
     function removeNode(node: WorkspaceNode): WorkspaceNode | null {
       if (node.type === "leaf") {
