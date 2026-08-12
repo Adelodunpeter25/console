@@ -104,8 +104,8 @@ export const SessionItem = React.memo(function SessionItem({
       onContextMenu={handleContextMenu}
     >
       {/* Row 1: Fixed Status Container + Title + Right-aligned Hover Delete Button */}
-      <div className="flex items-center gap-2 min-w-0">
-        <div className="w-4 h-4 shrink-0 flex items-center justify-center">
+      <div className="flex items-center gap-1.5 min-w-0">
+        <div className="w-3.5 h-3.5 shrink-0 flex items-center justify-center">
           {status === "working" ? (
             <div className="w-3 h-3 border-[1.5px] border-blue-500 border-t-transparent rounded-full animate-spin" />
           ) : (
@@ -132,8 +132,8 @@ export const SessionItem = React.memo(function SessionItem({
       </div>
 
       {/* Row 2: Working Folder Path (left) + Timestamp (right, pixel-aligned with Delete button above) */}
-      <div className="flex items-center justify-between gap-1.5 pl-6 min-w-0 text-[11px] text-foreground-muted mt-1">
-        <div className="flex items-center gap-1.5 min-w-0 truncate">
+      <div className="flex items-center justify-between gap-1 pl-5 min-w-0 text-[11px] text-foreground-muted mt-0.5">
+        <div className="flex items-center gap-1 min-w-0 truncate">
           <FolderClosed size={11} className="shrink-0" />
           <span className="truncate">{basename(session.cwd)}</span>
         </div>

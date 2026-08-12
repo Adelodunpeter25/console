@@ -84,7 +84,7 @@ export function Sidebar({ width = 288 }: { width?: number }) {
   const getItemSize = React.useCallback(
     (index: number) => {
       const entry = flatEntries[index];
-      if (entry?.kind === "header") return 36;
+      if (entry?.kind === "header") return 38;
       return 52;
     },
     [flatEntries],
@@ -177,7 +177,7 @@ export function Sidebar({ width = 288 }: { width?: number }) {
                       width: "100%",
                       transform: `translateY(${virtualRow.start}px)`,
                     }}
-                    className="px-2 pt-3 pb-1 flex items-center justify-between min-h-[36px]"
+                    className="px-2 pt-3.5 pb-1 flex items-center justify-between min-h-[38px]"
                   >
                     <span className="text-[10px] font-bold tracking-wider text-foreground-muted uppercase">
                       {entry.label}
