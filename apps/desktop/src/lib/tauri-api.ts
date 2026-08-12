@@ -174,6 +174,10 @@ export const tauriApi = {
   pickImages: () => invoke<PickedImage[]>("pick_images"),
   readDroppedImages: (paths: string[]) => invoke<PickedImage[]>("read_dropped_images", { paths }),
 
+  // --- native dialogs --------------------------------------------------------
+  confirmDialog: (title: string, message: string) =>
+    invoke<boolean>("confirm_dialog", { title, message }),
+
   // --- interactive terminals ------------------------------------------------
   /** Spawn a shell PTY on the server (through the Rust relay) in `cwd`. */
   terminalOpen: (

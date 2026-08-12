@@ -8,6 +8,7 @@ import { useWorkspaceStore } from "../../layout/useWorkspaceStore";
 import { useContextMenu } from "../common/ContextMenu";
 import { formatRelativeTime } from "../../utils/time";
 import { basename } from "../../utils/format";
+import { tauriApi } from "../../lib/tauri-api";
 
 const STATUS_DOT: Record<SessionStatus, string> = {
   idle: "bg-foreground-muted",
@@ -23,7 +24,7 @@ interface SessionItemProps {
 
 /**
  * Single session row in the sidebar — status dot, title, working folder,
- * timestamp, and hover Delete button.
+ * timestamp on second row, and hover Delete button with Tauri confirm dialog for non-done chats.
  */
 export const SessionItem = React.memo(function SessionItem({
   session,
@@ -54,6 +55,19 @@ export const SessionItem = React.memo(function SessionItem({
     });
   };
 
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (status !== "done") {
+      const confirmed = await tauriApi.confirmDialog(
+        "Delete Active Session",
+        `"${session.title || "Untitled Chat"}" is currently not marked as done. Are you sure you want to delete it?`,
+      );
+      if (!confirmed) return;
+    }
+    deleteSession(session.id);
+    if (projectId) closeChatTab(projectId, session.id);
+  };
+
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
     contextMenu.open(event.clientX, event.clientY, [
@@ -62,22 +76,34 @@ export const SessionItem = React.memo(function SessionItem({
         label: "Delete",
         danger: true,
         separatorBefore: true,
-        onClick: () => {},
+        onClick: () => {
+          void (async () => {
+            if (status !== "done") {
+              const confirmed = await tauriApi.confirmDialog(
+                "Delete Active Session",
+                `"${session.title || "Untitled Chat"}" is currently not marked as done. Are you sure you want to delete it?`,
+              );
+              if (!confirmed) return;
+            }
+            deleteSession(session.id);
+            if (projectId) closeChatTab(projectId, session.id);
+          })();
+        },
       },
     ]);
   };
 
   return (
     <div
-      className={`group relative flex flex-col gap-0.5 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors ${
+      className={`group relative flex flex-col justify-between py-2.5 px-3 min-h-[56px] rounded-lg cursor-pointer transition-colors ${
         isActive
           ? "bg-white/[0.08] text-foreground"
-          : "text-foreground-secondary hover:bg-white/[0.04] hover:text-foreground"
+          : "text-foreground-secondary hover:text-foreground"
       }`}
       onClick={handleOpen}
       onContextMenu={handleContextMenu}
     >
-      {/* Row 1: Fixed Status Dot Container + Title + Right Action Slot */}
+      {/* Row 1: Fixed Status Container + Title + Hover Delete Button */}
       <div className="flex items-center gap-2 min-w-0">
         <div className="w-4 h-4 shrink-0 flex items-center justify-center">
           {status === "working" ? (
@@ -93,35 +119,26 @@ export const SessionItem = React.memo(function SessionItem({
           {session.title || "Untitled Chat"}
         </span>
 
-        {/* Right side: Time by default, replaced by Delete button on group hover */}
-        <div className="shrink-0 flex items-center justify-end w-9 text-right">
-          <span className="text-[11px] text-foreground-muted group-hover:hidden transition-opacity">
-            {formatRelativeTime(session.updatedAt, true)}
-          </span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              deleteSession(session.id);
-              if (projectId) closeChatTab(projectId, session.id);
-            }}
-            className="hidden group-hover:flex items-center justify-center p-1 rounded hover:bg-white/10 text-foreground-muted hover:text-danger transition-colors cursor-pointer"
-            title="Delete session"
-            aria-label={`Delete ${session.title || "session"}`}
-          >
-            <Trash2 size={13} />
-          </button>
-        </div>
+        <button
+          onClick={handleDelete}
+          className="w-5 h-5 shrink-0 flex items-center justify-center rounded hover:bg-white/10 text-foreground-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          title="Delete session"
+          aria-label={`Delete ${session.title || "session"}`}
+        >
+          <Trash2 size={13} />
+        </button>
       </div>
 
-      {/* Row 2: Working Folder path aligned flush under Title text (24px left indent) */}
-      {session.cwd && (
-        <div className="flex items-center gap-1.5 pl-6 min-w-0">
-          <FolderClosed size={11} className="text-foreground-muted shrink-0" />
-          <span className="text-[11px] text-foreground-muted truncate min-w-0">
-            {basename(session.cwd)}
-          </span>
+      {/* Row 2: Working Folder Path (left) + Timestamp (right) */}
+      <div className="flex items-center justify-between gap-1.5 pl-6 min-w-0 text-[11px] text-foreground-muted mt-1">
+        <div className="flex items-center gap-1.5 min-w-0 truncate">
+          <FolderClosed size={11} className="shrink-0" />
+          <span className="truncate">{basename(session.cwd)}</span>
         </div>
-      )}
+        <span className="shrink-0 ml-auto pl-2">
+          {formatRelativeTime(session.updatedAt, true)}
+        </span>
+      </div>
     </div>
   );
 });

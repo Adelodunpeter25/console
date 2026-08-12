@@ -7,7 +7,7 @@ mod error;
 mod models;
 
 use commands::{
-    abort_run, add_project, answer_question, approve_permission, browse_directory,
+    abort_run, add_project, answer_question, approve_permission, browse_directory, confirm_dialog,
     create_directory, create_session, delete_directory, delete_file, delete_session, restore_session,
     get_approval_modes, get_auth_status, get_backend_url, get_directory_tree, get_login_url,
     get_project_id, get_provider_models, get_session, handle_oauth_callback, list_projects, list_providers,
@@ -67,6 +67,7 @@ pub fn run() {
             terminal_input,
             terminal_resize,
             terminal_kill,
+            confirm_dialog,
         ])
         .setup(|app| {
             // Load the persisted backend URL before the frontend initialises

@@ -80,7 +80,7 @@ export function Sidebar({ width = 288 }: { width?: number }) {
 
   const { parentRef, virtualItems, totalSize } = useVirtualList({
     items: flatEntries,
-    estimateSize: 52,
+    estimateSize: 64,
     overscan: 8,
   });
 
