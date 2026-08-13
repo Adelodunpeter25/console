@@ -15,6 +15,14 @@ interface MessageListProps {
   runs: RunActivityState[];
 }
 
+function isVisibleMessage(msg: AgentMessage): boolean {
+  if (msg.role === "toolResult") return false;
+  if (msg.role === "assistant" && msg.content.some((c) => c.type === "toolCall")) {
+    return false;
+  }
+  return true;
+}
+
 function messageKey(index: number, msg: AgentMessage): string {
   if (msg.role === "assistant" && msg.id) return msg.id;
   return `${msg.role}-${index}`;
@@ -24,10 +32,6 @@ export interface MessageListRef {
   scrollToBottom: () => void;
 }
 
-// Hoisted list override so it isn't recreated per render (which would remount
-// the subtree on every scroll). Must forward ref per react-virtuoso contract.
-// Note: no vertical margins on items — react-virtuoso measures contentRect,
-// which excludes margins. Spacing lives inside each item (pb-4).
 const MessageListContainer = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> & { "data-testid": string }
@@ -51,28 +55,32 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
   ) {
     const isStreaming = Boolean(streamingText || streamingThinking);
     const showStreamingBubble = running || isStreaming;
-    const showEmpty = messages.length === 0 && !showStreamingBubble;
 
+    // Filter hidden messages out before passing to Virtuoso so no item renders 0px
+    const displayMessages = React.useMemo(() => {
+      return messages.filter(isVisibleMessage);
+    }, [messages]);
+
+    const showEmpty = displayMessages.length === 0 && !showStreamingBubble;
     const virtuosoRef = React.useRef<VirtuosoHandle>(null);
 
-    // Map each user message to its run activity timeline (runs are indexed by
-    // user-turn order; a user message without a run gets nothing).
+    // Map each visible user message to its run activity timeline
     const userMessageRunMap = React.useMemo(() => {
       const map = new Map<number, RunActivityState>();
       let userCount = 0;
-      for (let i = 0; i < messages.length; i++) {
-        if (messages[i]!.role === "user") {
+      for (let i = 0; i < displayMessages.length; i++) {
+        if (displayMessages[i]!.role === "user") {
           const run = runs[userCount];
           if (run) map.set(i, run);
           userCount++;
         }
       }
       return map;
-    }, [messages, runs]);
+    }, [displayMessages, runs]);
 
     const latestUserIndex = React.useMemo(
-      () => messages.findLastIndex((message) => message.role === "user"),
-      [messages],
+      () => displayMessages.findLastIndex((message) => message.role === "user"),
+      [displayMessages],
     );
 
     const [showScrollButton, setShowScrollButton] = React.useState(false);
@@ -90,12 +98,10 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
 
     const handleRangeChanged = React.useCallback(
       (range: { startIndex: number; endIndex: number }) => {
-        // Show the "scroll to bottom" affordance only when the user has
-        // scrolled away from the newest message.
-        const atBottom = range.endIndex >= messages.length - 1;
+        const atBottom = range.endIndex >= displayMessages.length - 1;
         setShowScrollButton(!atBottom);
       },
-      [messages.length],
+      [displayMessages.length],
     );
 
     if (showEmpty) {
@@ -111,20 +117,12 @@ export const MessageList = React.forwardRef<MessageListRef, MessageListProps>(
         <Virtuoso<AgentMessage>
           ref={virtuosoRef}
           className="flex-1"
-          data={messages}
+          data={displayMessages}
           computeItemKey={messageKey}
           followOutput={(isAtBottom) => (isAtBottom ? "smooth" : false)}
           rangeChanged={handleRangeChanged}
           itemContent={(index, msg) => {
             const run = userMessageRunMap.get(index);
-            // Tool-result messages and assistant turns with tool calls render
-            // as null inside MessageBubble — skip the padding wrapper so they
-            // don't create invisible 16px gaps in the virtualized list.
-            const isHidden =
-              msg.role === "toolResult" ||
-              (msg.role === "assistant" &&
-                msg.content.some((c) => c.type === "toolCall"));
-            if (isHidden) return null;
             return (
               <div className="pb-4">
                 <MessageBubble message={msg} />
