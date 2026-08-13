@@ -1,6 +1,7 @@
 appId: com.console.desktop
 productName: Console
 copyright: Copyright © 2026 Console
+electronVersion: "43.4.0"
 directories:
   output: release
   buildResources: build
