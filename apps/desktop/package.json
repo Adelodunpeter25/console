@@ -1,8 +1,8 @@
 {
   "name": "@console/desktop",
   "version": "1.0.0",
-  "description": "Console - Autonomous AI Coding Assistant",
-  "author": "Console Team",
+  "description": "Console - The Desktop app",
+  "author": "Adelodun Peter",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
