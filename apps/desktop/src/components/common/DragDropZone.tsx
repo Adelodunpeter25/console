@@ -8,7 +8,7 @@ interface DragDropZoneProps {
   className?: string;
 }
 
-/** Reusable drop target with a rounded blue drag-over highlight in Chromium / Electron. */
+/** Reusable drop target with a subtle warm brown highlight matching the central theme. */
 export function DragDropZone({
   children,
   onDropFiles,
@@ -60,7 +60,7 @@ export function DragDropZone({
       ref={zoneRef}
       className={`${className} transition-shadow ${
         isDragging
-          ? "ring-2 ring-blue-500/80 ring-offset-2 ring-offset-screen bg-blue-500/[0.06]"
+          ? "ring-2 ring-dropzone-border ring-offset-2 ring-offset-screen bg-dropzone-bg/50"
           : ""
       }`}
       onDragEnter={handleDragEnter}
