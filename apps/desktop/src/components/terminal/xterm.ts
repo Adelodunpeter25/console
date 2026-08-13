@@ -1,5 +1,6 @@
 import { Terminal, type ITerminalOptions } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { CanvasAddon } from "@xterm/addon-canvas";
 import "@xterm/xterm/css/xterm.css";
 
@@ -9,9 +10,11 @@ export const DEFAULT_TERMINAL_OPTIONS: ITerminalOptions = {
     'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
   cursorBlink: true,
   cursorStyle: "block",
-  scrollback: 5000,
+  scrollback: 10000,
   convertEol: true,
   smoothScrollDuration: 0,
+  scrollSensitivity: 1.5,
+  allowProposedApi: true,
   theme: {
     background: "#0d0d0d",
     foreground: "#d4d4d4",
@@ -44,7 +47,8 @@ export interface XtermInstance {
 }
 
 /**
- * Creates and configures an xterm.js instance with FitAddon and high-throughput write buffering attached.
+ * Creates and configures a high-performance xterm.js instance with WebGL/Canvas acceleration
+ * and adaptive write batching for 60fps streaming under heavy CLI throughput.
  */
 export function createXtermInstance(options: Partial<ITerminalOptions> = {}): XtermInstance {
   const terminal = new Terminal({
@@ -54,16 +58,16 @@ export function createXtermInstance(options: Partial<ITerminalOptions> = {}): Xt
 
   const fitAddon = new FitAddon();
   terminal.loadAddon(fitAddon);
-  const canvasAddon = new CanvasAddon();
-  terminal.loadAddon(canvasAddon);
 
   let buffer: string[] = [];
+  let bufferLength = 0;
   let rafId: number | null = null;
 
   const flushBuffer = () => {
     if (buffer.length > 0) {
       const combined = buffer.join("");
       buffer = [];
+      bufferLength = 0;
       terminal.write(combined);
     }
     rafId = null;
@@ -74,6 +78,24 @@ export function createXtermInstance(options: Partial<ITerminalOptions> = {}): Xt
     fitAddon,
     open: (container: HTMLElement) => {
       terminal.open(container);
+
+      // Hardware-accelerated rendering: try WebGL first, fallback to Canvas
+      try {
+        const webglAddon = new WebglAddon();
+        webglAddon.onContextLoss(() => {
+          webglAddon.dispose();
+          const canvasAddon = new CanvasAddon();
+          terminal.loadAddon(canvasAddon);
+        });
+        terminal.loadAddon(webglAddon);
+      } catch {
+        try {
+          const canvasAddon = new CanvasAddon();
+          terminal.loadAddon(canvasAddon);
+        } catch {
+          // Default DOM renderer is used as fallback
+        }
+      }
     },
     fit: () => {
       try {
@@ -85,6 +107,18 @@ export function createXtermInstance(options: Partial<ITerminalOptions> = {}): Xt
     },
     writeChunk: (data: string) => {
       buffer.push(data);
+      bufferLength += data.length;
+
+      // If buffer exceeds 32KB during high-throughput output, flush immediately
+      if (bufferLength >= 32768) {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+        flushBuffer();
+        return;
+      }
+
       if (rafId === null) {
         rafId = requestAnimationFrame(flushBuffer);
       }
@@ -95,16 +129,13 @@ export function createXtermInstance(options: Partial<ITerminalOptions> = {}): Xt
         rafId = null;
       }
       buffer = [];
+      bufferLength = 0;
       try {
         fitAddon.dispose();
-      } catch {
-        // ignore
-      }
+      } catch {}
       try {
         terminal.dispose();
-      } catch {
-        // ignore
-      }
+      } catch {}
     },
   };
 }
