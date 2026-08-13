@@ -26,15 +26,23 @@ export const opencodeStreamFn: StreamFn = async function* ({
   const convertedMessages = convertOpencodeMessages(messages);
   const convertedTools = convertOpencodeTools(tools);
 
+  let streamError: unknown = null;
+
   const result = streamText({
     model: opencode.chatModel(model.id),
     system: systemPrompt,
     messages: convertedMessages,
     ...(Object.keys(convertedTools).length > 0 ? { tools: convertedTools } : {}),
     abortSignal: signal,
+    onError({ error }) {
+      streamError = error;
+    },
   });
 
   for await (const part of result.fullStream) {
+    if (part.type === "error") {
+      throw (part as any).error ?? new Error("AI stream error");
+    }
     if (part.type === "text-delta") {
       yield { type: "text", text: part.text };
     } else if (part.type === "reasoning-delta") {
@@ -57,5 +65,9 @@ export const opencodeStreamFn: StreamFn = async function* ({
     // "tool-call" is intentionally ignored: it carries the complete input,
     // but the agent loop already accumulated it from tool-input-start +
     // tool-input-delta fragments. Re-yielding it would duplicate the JSON.
+  }
+
+  if (streamError) {
+    throw streamError;
   }
 };

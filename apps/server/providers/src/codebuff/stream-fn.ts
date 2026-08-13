@@ -86,6 +86,7 @@ export const codebuffStreamFn: StreamFn = async function* ({
   const convertedTools = convertCodebuffTools(tools);
 
   let failed = false;
+  let streamError: unknown = null;
   try {
     const result = streamText({
       model: codebuff.chatModel(model.id),
@@ -93,9 +94,9 @@ export const codebuffStreamFn: StreamFn = async function* ({
       messages: convertedMessages,
       ...(Object.keys(convertedTools).length > 0 ? { tools: convertedTools } : {}),
       abortSignal: signal,
-      // Mirrors the official SDK's getProviderOptions(): codebuff_metadata
-      // and provider land at the top level of the request body. run_id must
-      // be the server-issued runId.
+      onError({ error }) {
+        streamError = error;
+      },
       // Mirrors the official SDK's getProviderOptions(): codebuff_metadata
       // and provider land at the top level of the request body. run_id must
       // be the server-issued runId, and freebuff_instance_id must be the
@@ -114,6 +115,9 @@ export const codebuffStreamFn: StreamFn = async function* ({
     });
 
     for await (const part of result.fullStream) {
+      if (part.type === "error") {
+        throw (part as any).error ?? new Error("AI stream error");
+      }
       if (part.type === "text-delta") {
         yield { type: "text", text: part.text };
       } else if (part.type === "reasoning-delta") {
@@ -135,6 +139,10 @@ export const codebuffStreamFn: StreamFn = async function* ({
       }
       // "tool-call" is intentionally ignored: the agent loop already accumulated
       // it from tool-input-start + tool-input-delta fragments.
+    }
+
+    if (streamError) {
+      throw streamError;
     }
   } catch (error) {
     failed = true;

@@ -134,6 +134,10 @@ export async function streamOneTurn(
     }
   }
 
+  if (!params.signal?.aborted && content.length === 0) {
+    throw new Error("The model returned an empty response.");
+  }
+
   const stopReason: AssistantMessage["stopReason"] = toolCalls.length > 0 ? "toolUse" : "stop";
 
   return {
