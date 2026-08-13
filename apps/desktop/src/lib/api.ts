@@ -242,10 +242,10 @@ export const api = {
     const params = new URLSearchParams({ path });
     if (startLine) params.set("startLine", String(startLine));
     if (endLine) params.set("endLine", String(endLine));
-    return request<ReadFileResult>(`/api/fs/read?${params.toString()}`);
+    return request<ReadFileResult>(`/api/fs/file?${params.toString()}`);
   },
   writeFile: (path: string, content: string) =>
-    request<WriteFileResult>("/api/fs/write", {
+    request<WriteFileResult>("/api/fs/file", {
       method: "POST",
       body: JSON.stringify({ path, content }),
     }),
@@ -263,11 +263,16 @@ export const api = {
       method: "DELETE",
     }),
   watchDirectory: async (path: string) => {
-    const url = `${backendUrl}/api/fs/watch?path=${encodeURIComponent(path)}`;
-    const eventSource = new EventSource(url);
-    eventSource.onmessage = () => {
-      fsListeners.forEach((cb) => cb());
-    };
+    try {
+      const url = `${backendUrl}/api/fs/watch?path=${encodeURIComponent(path)}`;
+      const eventSource = new EventSource(url);
+      eventSource.onmessage = () => {
+        fsListeners.forEach((cb) => cb());
+      };
+      eventSource.onerror = () => {
+        // Handled silently to avoid noisy console spam when backend restarts
+      };
+    } catch {}
   },
   listenFsChanges: async (callback: () => void): Promise<UnlistenFn> => {
     fsListeners.add(callback);

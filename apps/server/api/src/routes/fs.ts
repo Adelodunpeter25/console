@@ -62,9 +62,9 @@ fsRoutes.get("/tree", async (c) => {
 });
 
 /**
- * GET /api/fs/file & GET /api/fs/read — Read file content.
+ * GET /api/fs/file — Read file content.
  */
-const handleReadFile = async (c: any) => {
+fsRoutes.get("/file", async (c) => {
   const filePath = c.req.query("path");
   if (!filePath) {
     return c.json({ success: false, error: "Query parameter 'path' is required." }, 400);
@@ -85,15 +85,12 @@ const handleReadFile = async (c: any) => {
     const errorMsg = err instanceof Error ? err.message : String(err);
     return c.json({ success: false, error: errorMsg }, 400);
   }
-};
-
-fsRoutes.get("/file", handleReadFile);
-fsRoutes.get("/read", handleReadFile);
+});
 
 /**
- * POST /api/fs/file & POST /api/fs/write — Create or save file content.
+ * POST /api/fs/file — Create or save file content.
  */
-const handleWriteFile = async (c: any) => {
+fsRoutes.post("/file", async (c) => {
   const body = await c.req.json<{ path: string; content: string }>();
   if (!body.path) {
     return c.json({ success: false, error: "Field 'path' is required." }, 400);
@@ -109,10 +106,7 @@ const handleWriteFile = async (c: any) => {
     const errorMsg = err instanceof Error ? err.message : String(err);
     return c.json({ success: false, error: errorMsg }, 400);
   }
-};
-
-fsRoutes.post("/file", handleWriteFile);
-fsRoutes.post("/write", handleWriteFile);
+});
 
 /**
  * DELETE /api/fs/file — Delete a file.
