@@ -15,22 +15,25 @@ interface WorkspaceTabItemProps {
   onClose: () => void;
 }
 
-function getTabIcon(config: WorkspaceTabConfig) {
-  const iconClass = "text-foreground-muted shrink-0";
+function getTabIcon(config: WorkspaceTabConfig, isActive: boolean) {
+  const iconClass = isActive
+    ? "text-foreground shrink-0"
+    : "text-foreground-secondary group-hover:text-foreground transition-colors shrink-0";
+
   switch (config.type) {
     case "chat":
-      return <HugeiconsIcon icon={ChatIcon} size={14} className={iconClass} />;
+      return <HugeiconsIcon icon={ChatIcon} size={15} className={iconClass} />;
     case "terminal":
-      return <HugeiconsIcon icon={ComputerTerminal01Icon} size={14} className={iconClass} />;
+      return <HugeiconsIcon icon={ComputerTerminal01Icon} size={15} className={iconClass} />;
     case "file":
     case "diff":
-      return <FileIcon fileName={config.path} className="w-3.5 h-3.5 shrink-0 text-foreground-muted" />;
+      return <FileIcon fileName={config.path} className="w-[15px] h-[15px] shrink-0" />;
   }
 }
 
 /**
  * WorkspaceTabItem — Draggable tab pill.
- * Uses Hugeicons for Chat and Terminal tabs, Sprite FileIcons for source files,
+ * Uses 15px high-contrast Hugeicons for Chat and Terminal tabs, Sprite FileIcons for source files,
  * and scoped active brown indicator (#8a5027) for the focused pane.
  */
 export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
@@ -77,7 +80,7 @@ export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
       className={`group relative flex items-center gap-2 px-3 py-1.5 h-9 min-w-[120px] max-w-[180px] rounded-none text-xs cursor-grab active:cursor-grabbing border-r border-border transition-colors select-none ${activeStyles}`}
       title={title}
     >
-      {getTabIcon(config)}
+      {getTabIcon(config, isActive)}
       <span className="truncate flex-1 min-w-0">{title}</span>
       <button
         onClick={handleClose}
