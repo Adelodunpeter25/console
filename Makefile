@@ -1,4 +1,4 @@
-.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop typecheck check help
+.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop build-desktop-mac typecheck check help
 
 # Default target
 .DEFAULT_GOAL := help
@@ -21,13 +21,17 @@ dev-console:
 dev-mobile:
 	npm run dev:mobile
 
-## dev-desktop: Start the Tauri desktop app in dev mode (separate dev bundle identifier, requires server running)
+## dev-desktop: Start the Electron desktop app in dev mode (requires server running)
 dev-desktop:
 	npm run dev:desktop
 
-## build-desktop: Build the Tauri desktop app for production
+## build-desktop: Build the Electron desktop app for production
 build-desktop:
 	npm run build:desktop
+
+## build-desktop-mac: Build and package the Electron desktop app for macOS (DMG & ZIP)
+build-desktop-mac:
+	npm run build:desktop:mac
 
 ## typecheck: Run TypeScript check across all monorepo workspaces
 typecheck:
@@ -40,10 +44,11 @@ check:
 ## help: Show this help message
 help:
 	@echo "Available commands:"
-	@echo "  make dev-server  - Start the backend agent server"
-	@echo "  make dev-console - Start the console agent as a background daemon (PORT=nnnn to set port)"
-	@echo "  make dev-mobile  - Start the Expo mobile app dev server"
-	@echo "  make dev-desktop  - Start the Tauri desktop app dev server"
-	@echo "  make build-desktop  - Build the Tauri desktop app for production"
-	@echo "  make typecheck   - Run TypeScript typechecking"
-	@echo "  make check       - Run Vite+ code format and lint checks"
+	@echo "  make dev-server        - Start the backend agent server"
+	@echo "  make dev-console       - Start the console agent as a background daemon (PORT=nnnn to set port)"
+	@echo "  make dev-mobile        - Start the Expo mobile app dev server"
+	@echo "  make dev-desktop       - Start the Electron desktop app in dev mode"
+	@echo "  make build-desktop     - Build the Electron desktop app for production"
+	@echo "  make build-desktop-mac - Build and package macOS DMG & ZIP installers"
+	@echo "  make typecheck         - Run TypeScript typechecking"
+	@echo "  make check             - Run Vite+ code format and lint checks"
