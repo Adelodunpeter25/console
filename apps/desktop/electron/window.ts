@@ -1,6 +1,7 @@
 import { BrowserWindow } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadWindowState, trackWindowState } from "./window-state";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -8,9 +9,13 @@ export const MAIN_DIST = path.join(__dirname, "..");
 export const RENDERER_DIST = path.join(__dirname, "..", "dist");
 
 export function createMainWindow(): BrowserWindow {
+  const windowState = loadWindowState();
+
   const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    x: windowState.x,
+    y: windowState.y,
+    width: windowState.width,
+    height: windowState.height,
     minWidth: 800,
     minHeight: 600,
     titleBarStyle: "hiddenInset",
@@ -25,7 +30,12 @@ export function createMainWindow(): BrowserWindow {
     },
   });
 
+  trackWindowState(win);
+
   win.once("ready-to-show", () => {
+    if (windowState.isMaximized) {
+      win.maximize();
+    }
     win.show();
   });
 
