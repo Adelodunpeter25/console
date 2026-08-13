@@ -75,7 +75,7 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
     e.stopPropagation();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     if (rect.width > 0 && rect.height > 0) {
-      const pos = calcDropPosition(rect, e.clientX, e.clientY);
+      const pos = calcDropPosition(rect, e.clientX);
       setDropPos(pos);
     }
   };
@@ -93,7 +93,7 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
 
-    const pos = calcDropPosition(rect, e.clientX, e.clientY);
+    const pos = calcDropPosition(rect, e.clientX);
     setDropPos((prev) => (prev === pos ? prev : pos));
   };
 
@@ -131,7 +131,7 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
     e.stopPropagation();
 
     const rect = e.currentTarget.getBoundingClientRect();
-    const finalPos = dropPos ?? calcDropPosition(rect, e.clientX, e.clientY);
+    const finalPos = dropPos ?? calcDropPosition(rect, e.clientX);
     setDropPos(null);
 
     const dragged = useWorkspaceStore.getState().draggedTab;

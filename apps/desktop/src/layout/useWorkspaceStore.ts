@@ -257,7 +257,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return;
     }
 
-    const splitDirection: SplitDirection = position === "left" || position === "right" ? "horizontal" : "vertical";
+    const splitDirection: SplitDirection = "horizontal";
     const newLeafId = `pane-${Date.now()}`;
     const newLeaf: LeafPaneNode = {
       type: "leaf",
@@ -269,7 +269,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     function injectSplit(node: WorkspaceNode): WorkspaceNode {
       if (node.type === "leaf") {
         if (node.id !== targetPaneId) return node;
-        const isBefore = position === "left" || position === "top";
+        const isBefore = position === "left";
         return {
           type: "split",
           id: `split-${Date.now()}`,
