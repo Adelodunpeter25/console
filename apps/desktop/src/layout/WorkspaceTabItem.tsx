@@ -1,5 +1,7 @@
 import React from "react";
-import { MessageSquare, Terminal, X } from "lucide-react";
+import { X } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ChatIcon, ComputerTerminal01Icon } from "@hugeicons/core-free-icons";
 import { WorkspaceTabConfig, getTabTitle } from "./types";
 import { FileIcon } from "../components/file/FileIcon";
 import { useWorkspaceStore } from "./useWorkspaceStore";
@@ -17,9 +19,9 @@ function getTabIcon(config: WorkspaceTabConfig) {
   const iconClass = "text-foreground-muted shrink-0";
   switch (config.type) {
     case "chat":
-      return <MessageSquare size={13} className={iconClass} />;
+      return <HugeiconsIcon icon={ChatIcon} size={14} className={iconClass} />;
     case "terminal":
-      return <Terminal size={13} className={iconClass} />;
+      return <HugeiconsIcon icon={ComputerTerminal01Icon} size={14} className={iconClass} />;
     case "file":
     case "diff":
       return <FileIcon fileName={config.path} className="w-3.5 h-3.5 shrink-0 text-foreground-muted" />;
@@ -28,7 +30,8 @@ function getTabIcon(config: WorkspaceTabConfig) {
 
 /**
  * WorkspaceTabItem — Draggable tab pill.
- * The active brown indicator (#8a5027) is shown ONLY for the active tab of the currently focused pane.
+ * Uses Hugeicons for Chat and Terminal tabs, Sprite FileIcons for source files,
+ * and scoped active brown indicator (#8a5027) for the focused pane.
  */
 export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
   paneId,
