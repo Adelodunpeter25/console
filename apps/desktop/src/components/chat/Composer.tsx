@@ -124,7 +124,7 @@ export function Composer({
 
   return (
     <>
-      <div className="px-6 pb-4 pt-2">
+      <div data-composer="true" className="px-6 pb-4 pt-2">
         <div className="max-w-3xl mx-auto">
           <div className="relative">
             <ComposerAutocomplete

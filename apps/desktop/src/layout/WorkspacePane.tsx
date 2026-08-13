@@ -55,7 +55,22 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
     return () => window.removeEventListener("dragend", clearDropPos);
   }, [clearDropPos]);
 
+  const isComposerTarget = (e: React.DragEvent) => {
+    return Boolean((e.target as HTMLElement)?.closest('[data-composer="true"], textarea'));
+  };
+
+  const isFileAttachmentDrag = (e: React.DragEvent) => {
+    const hasFiles = e.dataTransfer.types.includes("Files");
+    const draggedTab = useWorkspaceStore.getState().draggedTab;
+    return hasFiles && !draggedTab;
+  };
+
   const handleDragEnter = (e: React.DragEvent) => {
+    if (isComposerTarget(e) || isFileAttachmentDrag(e)) {
+      setDropPos(null);
+      return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -66,6 +81,11 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
   };
 
   const handleDragOver = (e: React.DragEvent) => {
+    if (isComposerTarget(e) || isFileAttachmentDrag(e)) {
+      if (dropPos !== null) setDropPos(null);
+      return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
@@ -102,6 +122,11 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
   };
 
   const handleDrop = (e: React.DragEvent) => {
+    if (isComposerTarget(e) || isFileAttachmentDrag(e)) {
+      setDropPos(null);
+      return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
 

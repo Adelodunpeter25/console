@@ -45,9 +45,9 @@ export function calcDropPosition(
   const x = (clientX - rect.left) / rect.width;
   const y = (clientY - rect.top) / rect.height;
 
-  if (x < 0.25) return "left";
-  if (x > 0.75) return "right";
-  if (y < 0.25) return "top";
-  if (y > 0.75) return "bottom";
+  if (x < 0.18) return "left";
+  if (x > 0.82) return "right";
+  if (y < 0.18) return "top";
+  if (y > 0.90) return "bottom";
   return "center";
 }
