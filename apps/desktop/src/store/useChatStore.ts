@@ -166,21 +166,35 @@ export const useChatStore = create<ChatState>((set, get) => ({
     let unlisten: (() => void) | null = null;
     let hadError = false;
     const markError = (msg: string) => {
+      if (hadError) return;
       hadError = true;
       toast.error(msg);
       set((state) => ({
-        sessions: updateChatSession(state.sessions, sessionId, (session) => ({
-          ...session,
-          messages: [
-            ...session.messages,
-            {
-              role: "assistant",
-              content: [{ type: "text", text: `Error: ${msg}` }],
-            },
-          ],
-          streamingText: "",
-          streamingThinking: "",
-        })),
+        sessions: updateChatSession(state.sessions, sessionId, (session) => {
+          const lastMsg = session.messages[session.messages.length - 1];
+          const isDup =
+            lastMsg?.role === "assistant" &&
+            lastMsg.content.some((c) => c.type === "text" && c.text === `Error: ${msg}`);
+          if (isDup) {
+            return {
+              ...session,
+              streamingText: "",
+              streamingThinking: "",
+            };
+          }
+          return {
+            ...session,
+            messages: [
+              ...session.messages,
+              {
+                role: "assistant",
+                content: [{ type: "text", text: `Error: ${msg}` }],
+              },
+            ],
+            streamingText: "",
+            streamingThinking: "",
+          };
+        }),
       }));
     };
 

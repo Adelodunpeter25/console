@@ -15,6 +15,7 @@ import { compactHistory, shouldCompact } from "../compaction/index.js";
 import { EventStream } from "./event-stream.js";
 import { executeTool } from "./tool-executor.js";
 import { streamOneTurn } from "./stream-turn.js";
+import { extractErrorMessage } from "../utils/error.js";
 import type {
   AgentMessage,
   AgentSessionEvent,
@@ -165,16 +166,7 @@ function runAgentLoop(
         (err instanceof Error && err.name === "AbortError") ||
         (err instanceof Error && err.message === "This operation was aborted.");
       if (!isAbort) {
-        let message = err instanceof Error ? err.message : String(err);
-        if (err && typeof err === "object") {
-          const anyErr = err as any;
-          if (anyErr.responseBody && typeof anyErr.responseBody === "string") {
-            try {
-              const parsed = JSON.parse(anyErr.responseBody);
-              if (parsed?.error?.message) message = parsed.error.message;
-            } catch {}
-          }
-        }
+        const message = extractErrorMessage(err);
         emit({ type: "error", error: { message } });
       }
     } finally {

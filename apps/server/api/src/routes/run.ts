@@ -5,6 +5,7 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { RunService } from "../services/run.service.js";
+import { extractErrorMessage } from "../../../agent/src/utils/error.js";
 import type { AnswerQuestionDto, ApproveToolPermissionDto, RunPromptDto } from "../types/index.js";
 
 export const runRoutes = new Hono();
@@ -41,16 +42,7 @@ runRoutes.post("/sessions/:id/run", async (c) => {
         }
       });
     } catch (err) {
-      let errorMsg = err instanceof Error ? err.message : String(err);
-      if (err && typeof err === "object") {
-        const anyErr = err as any;
-        if (anyErr.responseBody && typeof anyErr.responseBody === "string") {
-          try {
-            const parsed = JSON.parse(anyErr.responseBody);
-            if (parsed?.error?.message) errorMsg = parsed.error.message;
-          } catch {}
-        }
-      }
+      const errorMsg = extractErrorMessage(err);
       if (clientConnected) {
         try {
           await sseStream.writeSSE({
