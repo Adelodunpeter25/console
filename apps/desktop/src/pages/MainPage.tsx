@@ -6,7 +6,12 @@ import { WorkspaceLayout } from "../layout";
 import { ResizablePanel } from "../components/common/ResizablePanel";
 import { CommandPalette } from "../components/commandpalette/CommandPalette";
 import { useAppStore } from "../store/useAppStore";
+import { useProjectStore } from "../store/useProjectStore";
 import { useServerStore } from "../store/useServerStore";
+import { useWorkspaceStore } from "../layout/useWorkspaceStore";
+import { findLeaf, findFirstLeaf } from "../layout/treeHelpers";
+import { getTabId } from "../layout/types";
+import { basename } from "../utils/format";
 import {
   getSidebarWidth,
   setSidebarWidth,
@@ -33,8 +38,35 @@ export function MainPage() {
   const paletteOpen = useAppStore((state) => state.commandPaletteOpen);
   const setPaletteOpen = useAppStore((state) => state.setCommandPaletteOpen);
   const init = useServerStore((state) => state.init);
+
+  const rootNode = useWorkspaceStore((state) => state.rootNode);
+  const activePaneId = useWorkspaceStore((state) => state.activePaneId);
+  const projects = useProjectStore((state) => state.projects);
+
   const [sidebarWidth, setSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
   const [rightSidebarWidth, setRightSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
+
+  // Derive active workspace title: "Chat Title — Project"
+  const activeTitle = React.useMemo(() => {
+    const activeLeaf = findLeaf(rootNode, activePaneId) ?? findFirstLeaf(rootNode);
+    if (!activeLeaf || !activeLeaf.activeTabId) return "Console";
+
+    const activeTab = activeLeaf.tabs.find((t) => getTabId(t) === activeLeaf.activeTabId);
+    if (!activeTab) return "Console";
+
+    const tabTitle =
+      activeTab.title ||
+      (activeTab.type === "chat"
+        ? "Chat"
+        : activeTab.type === "terminal"
+          ? "Terminal"
+          : "File");
+
+    const project = projects.find((p) => p.id === activeTab.projectId);
+    const projectName = project?.path ? basename(project.path) : "";
+
+    return projectName ? `${tabTitle} — ${projectName}` : tabTitle;
+  }, [rootNode, activePaneId, projects]);
 
   // Restore persisted sidebar widths and visibility on mount.
   React.useEffect(() => {
@@ -75,7 +107,7 @@ export function MainPage() {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-screen overflow-hidden">
-      <TitleBar />
+      <TitleBar title={activeTitle} />
       <div className="flex flex-1 overflow-hidden">
         {sidebarOpen && (
           <ResizablePanel

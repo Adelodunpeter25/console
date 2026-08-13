@@ -13,9 +13,12 @@ interface WorkspaceTabBarProps {
  * WorkspaceTabBar — Clean header bar for workspace tabs without extra header clutter or gaps.
  */
 export function WorkspaceTabBar({ pane, canClosePane }: WorkspaceTabBarProps) {
+  const activePaneId = useWorkspaceStore((state) => state.activePaneId);
   const setActiveTab = useWorkspaceStore((state) => state.setActiveTab);
   const closeTab = useWorkspaceStore((state) => state.closeTab);
   const closePane = useWorkspaceStore((state) => state.closePane);
+
+  const isPaneFocused = pane.id === activePaneId;
 
   return (
     <div className="flex items-center justify-between h-9 bg-black border-b border-border shrink-0 select-none overflow-hidden">
@@ -30,6 +33,7 @@ export function WorkspaceTabBar({ pane, canClosePane }: WorkspaceTabBarProps) {
               paneId={pane.id}
               config={tab}
               isActive={isActive}
+              isFocused={isPaneFocused}
               onSelect={() => setActiveTab(pane.id, tabId)}
               onClose={() => closeTab(pane.id, tabId)}
             />

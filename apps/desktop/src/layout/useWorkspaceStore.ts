@@ -6,6 +6,7 @@ import {
   OpenFileTabInput,
   OpenTerminalTabInput,
   SplitDirection,
+  LeafPaneNode,
   getTabId,
 } from "./types";
 import {
@@ -16,6 +17,7 @@ import {
   addTabToPane,
 } from "./treeHelpers";
 import { useTerminalStore } from "../store/useTerminalStore";
+import { useAppStore } from "../store/useAppStore";
 import type { DropPosition } from "./WorkspaceDropzone";
 
 export interface DraggedTabState {
@@ -49,6 +51,16 @@ interface WorkspaceState {
 
 const DEFAULT_LEAF_ID = "pane-main";
 
+function syncTab(config?: WorkspaceTabConfig | null) {
+  if (!config) return;
+  if (config.type === "chat") {
+    useAppStore.getState().setSelectedSessionId(config.sessionId);
+    useAppStore.getState().setSelectedProjectId(config.projectId || null);
+  } else if (config.projectId) {
+    useAppStore.getState().setSelectedProjectId(config.projectId);
+  }
+}
+
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   rootNode: createLeaf(DEFAULT_LEAF_ID),
   activePaneId: DEFAULT_LEAF_ID,
@@ -63,6 +75,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       sessionId: input.sessionId,
       title: input.title,
     };
+    syncTab(config);
     set((s) => addTabToPane(s.rootNode, s.activePaneId, config));
   },
 
@@ -73,6 +86,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       path: input.path,
       title: input.title,
     };
+    syncTab(config);
     set((s) => addTabToPane(s.rootNode, s.activePaneId, config));
   },
 
@@ -83,16 +97,29 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       terminalId: input.terminalId,
       title: input.title,
     };
+    syncTab(config);
     set((s) => addTabToPane(s.rootNode, s.activePaneId, config));
   },
 
-  setActivePane: (activePaneId) => set({ activePaneId }),
+  setActivePane: (activePaneId) => {
+    const state = get();
+    const leaf = findLeaf(state.rootNode, activePaneId);
+    if (leaf?.activeTabId) {
+      syncTab(leaf.tabs.find((t) => getTabId(t) === leaf.activeTabId));
+    }
+    set({ activePaneId });
+  },
 
   setActiveTab: (paneId, tabId) => {
+    const state = get();
+    const leaf = findLeaf(state.rootNode, paneId);
+    if (leaf) {
+      syncTab(leaf.tabs.find((t) => getTabId(t) === tabId));
+    }
     set((s) => ({
       activePaneId: paneId,
-      rootNode: mapTree(s.rootNode, (leaf) =>
-        leaf.id === paneId ? { ...leaf, activeTabId: tabId } : leaf,
+      rootNode: mapTree(s.rootNode, (l) =>
+        l.id === paneId ? { ...l, activeTabId: tabId } : l,
       ),
     }));
   },
@@ -113,6 +140,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       const closedIndex = leaf.tabs.findIndex((t) => getTabId(t) === tabId);
       const fallback = nextTabs[Math.max(0, closedIndex - 1)];
       nextActiveTabId = fallback ? getTabId(fallback) : null;
+      syncTab(fallback);
     }
 
     set((s) => ({
@@ -133,10 +161,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     function splitNode(node: WorkspaceNode): WorkspaceNode {
       if (node.type === "leaf") {
         if (node.id !== paneId) return node;
-        const splitId = `split-${Date.now()}`;
         return {
           type: "split",
-          id: splitId,
+          id: `split-${Date.now()}`,
           direction,
           sizes: [50, 50],
           children: [node, newLeaf],
@@ -158,107 +185,105 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const state = get();
     if (state.rootNode.type === "leaf") return;
 
-    function removeNode(node: WorkspaceNode): WorkspaceNode | null {
-      if (node.type === "leaf") {
-        return node.id === paneId ? null : node;
-      }
-      const left = removeNode(node.children[0]);
-      const right = removeNode(node.children[1]);
+    function removeLeaf(node: WorkspaceNode): WorkspaceNode | null {
+      if (node.type === "leaf") return node.id === paneId ? null : node;
+      const left = removeLeaf(node.children[0]);
+      const right = removeLeaf(node.children[1]);
+      if (!left && !right) return null;
       if (!left) return right;
       if (!right) return left;
       return { ...node, children: [left, right] };
     }
 
-    const nextRoot = removeNode(state.rootNode);
-    if (!nextRoot) return;
+    const nextRoot = removeLeaf(state.rootNode) ?? createLeaf(DEFAULT_LEAF_ID);
+    const nextActive = findLeaf(nextRoot, state.activePaneId)
+      ? state.activePaneId
+      : (findFirstLeaf(nextRoot)?.id ?? DEFAULT_LEAF_ID);
 
-    const firstLeaf = findFirstLeaf(nextRoot);
-    set({ rootNode: nextRoot, activePaneId: firstLeaf.id });
+    const activeLeaf = findLeaf(nextRoot, nextActive);
+    if (activeLeaf?.activeTabId) {
+      syncTab(activeLeaf.tabs.find((t) => getTabId(t) === activeLeaf.activeTabId));
+    }
+
+    set({ rootNode: nextRoot, activePaneId: nextActive });
   },
 
-  closeChatTab: (_projectId, sessionId) => {
-    const tabId = `chat:${sessionId}`;
-    const state = get();
-    mapTree(state.rootNode, (leaf) => {
-      if (leaf.tabs.some((t) => getTabId(t) === tabId)) {
-        state.closeTab(leaf.id, tabId);
-      }
-      return leaf;
-    });
-  },
-
-  updateChatTabProject: (sessionId, newProjectId) => {
-    const tabId = `chat:${sessionId}`;
+  closeChatTab: (projectId, sessionId) => {
+    const targetId = `chat:${sessionId}`;
     set((s) => ({
       rootNode: mapTree(s.rootNode, (leaf) => {
-        const nextTabs = leaf.tabs.map((t) =>
-          getTabId(t) === tabId && t.type === "chat"
-            ? { ...t, projectId: newProjectId }
-            : t,
-        );
-        return { ...leaf, tabs: nextTabs };
+        const nextTabs = leaf.tabs.filter((t) => getTabId(t) !== targetId);
+        let nextActive = leaf.activeTabId;
+        if (leaf.activeTabId === targetId) {
+          nextActive = nextTabs[0] ? getTabId(nextTabs[0]) : null;
+          syncTab(nextTabs[0]);
+        }
+        return { ...leaf, tabs: nextTabs, activeTabId: nextActive };
       }),
     }));
   },
 
-  dropTabOnPane: (targetPaneId, position, config, sourcePaneId) => {
-    const state = get();
-    const tabId = getTabId(config);
+  updateChatTabProject: (sessionId, newProjectId) => {
+    set((s) => ({
+      rootNode: mapTree(s.rootNode, (leaf) => ({
+        ...leaf,
+        tabs: leaf.tabs.map((t) =>
+          t.type === "chat" && t.sessionId === sessionId
+            ? { ...t, projectId: newProjectId }
+            : t,
+        ),
+      })),
+    }));
+  },
 
-    let currentTree = state.rootNode;
+  dropTabOnPane: (targetPaneId, position, config, sourcePaneId) => {
+    const tabId = getTabId(config);
+    let workingRoot = get().rootNode;
+
     if (sourcePaneId) {
-      currentTree = mapTree(currentTree, (leaf) => {
+      workingRoot = mapTree(workingRoot, (leaf) => {
         if (leaf.id !== sourcePaneId) return leaf;
         const nextTabs = leaf.tabs.filter((t) => getTabId(t) !== tabId);
-        const nextActive =
-          leaf.activeTabId === tabId ? (nextTabs[0] ? getTabId(nextTabs[0]) : null) : leaf.activeTabId;
+        const nextActive = leaf.activeTabId === tabId ? (nextTabs[0] ? getTabId(nextTabs[0]) : null) : leaf.activeTabId;
         return { ...leaf, tabs: nextTabs, activeTabId: nextActive };
       });
     }
 
+    syncTab(config);
+
     if (position === "center") {
-      const added = addTabToPane(currentTree, targetPaneId, config);
-      set({ rootNode: added.rootNode, activePaneId: added.activePaneId });
+      const res = addTabToPane(workingRoot, targetPaneId, config);
+      set({ rootNode: res.rootNode, activePaneId: res.activePaneId });
       return;
     }
 
-    const direction: SplitDirection =
-      position === "left" || position === "right" ? "horizontal" : "vertical";
-    const targetLeaf = findLeaf(currentTree, targetPaneId);
-    if (!targetLeaf) {
-      const added = addTabToPane(currentTree, targetPaneId, config);
-      set({ rootNode: added.rootNode, activePaneId: added.activePaneId });
-      return;
-    }
-
+    const splitDirection: SplitDirection = position === "left" || position === "right" ? "horizontal" : "vertical";
     const newLeafId = `pane-${Date.now()}`;
-    const newLeaf = createLeaf(newLeafId, [config], tabId);
+    const newLeaf: LeafPaneNode = {
+      type: "leaf",
+      id: newLeafId,
+      tabs: [config],
+      activeTabId: tabId,
+    };
 
-    function splitAndDrop(node: WorkspaceNode): WorkspaceNode {
+    function injectSplit(node: WorkspaceNode): WorkspaceNode {
       if (node.type === "leaf") {
         if (node.id !== targetPaneId) return node;
-        const splitId = `split-${Date.now()}`;
-        const isLeftOrTop = position === "left" || position === "top";
-        const children: [WorkspaceNode, WorkspaceNode] = isLeftOrTop
-          ? [newLeaf, node]
-          : [node, newLeaf];
+        const isBefore = position === "left" || position === "top";
         return {
           type: "split",
-          id: splitId,
-          direction,
+          id: `split-${Date.now()}`,
+          direction: splitDirection,
           sizes: [50, 50],
-          children,
+          children: isBefore ? [newLeaf, node] : [node, newLeaf],
         };
       }
       return {
         ...node,
-        children: [splitAndDrop(node.children[0]), splitAndDrop(node.children[1])],
+        children: [injectSplit(node.children[0]), injectSplit(node.children[1])],
       };
     }
 
-    set({
-      rootNode: splitAndDrop(currentTree),
-      activePaneId: newLeafId,
-    });
+    set({ rootNode: injectSplit(workingRoot), activePaneId: newLeafId });
   },
 }));

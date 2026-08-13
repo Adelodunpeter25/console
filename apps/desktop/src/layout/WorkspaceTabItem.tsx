@@ -8,6 +8,7 @@ interface WorkspaceTabItemProps {
   paneId?: string;
   config: WorkspaceTabConfig;
   isActive: boolean;
+  isFocused?: boolean;
   onSelect: () => void;
   onClose: () => void;
 }
@@ -26,13 +27,14 @@ function getTabIcon(config: WorkspaceTabConfig) {
 }
 
 /**
- * WorkspaceTabItem — Draggable tab pill using sprite icons for file tabs, monochrome icons for tools,
- * black background, dark brown (#8a5027) top indicator, min/max width constraints, and text truncation (...).
+ * WorkspaceTabItem — Draggable tab pill.
+ * The active brown indicator (#8a5027) is shown ONLY for the active tab of the currently focused pane.
  */
 export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
   paneId,
   config,
   isActive,
+  isFocused = true,
   onSelect,
   onClose,
 }: WorkspaceTabItemProps) {
@@ -55,6 +57,13 @@ export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
     onClose();
   };
 
+  const activeStyles =
+    isActive && isFocused
+      ? "bg-black text-foreground font-medium border-t-2 border-t-[#8a5027]"
+      : isActive
+        ? "bg-black/50 text-foreground-secondary border-t-2 border-t-transparent"
+        : "bg-transparent text-foreground-muted hover:bg-white/[0.04] hover:text-foreground border-t-2 border-t-transparent";
+
   return (
     <div
       draggable
@@ -62,11 +71,7 @@ export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
       onDragEnd={handleDragEnd}
       onClick={onSelect}
       style={{ WebkitUserDrag: "element" } as React.CSSProperties}
-      className={`group relative flex items-center gap-2 px-3 py-1.5 h-9 min-w-[120px] max-w-[180px] rounded-none text-xs cursor-grab active:cursor-grabbing border-r border-border transition-colors select-none ${
-        isActive
-          ? "bg-black text-foreground font-medium border-t-2 border-t-[#8a5027]"
-          : "bg-transparent text-foreground-muted hover:bg-white/[0.04] hover:text-foreground"
-      }`}
+      className={`group relative flex items-center gap-2 px-3 py-1.5 h-9 min-w-[120px] max-w-[180px] rounded-none text-xs cursor-grab active:cursor-grabbing border-r border-border transition-colors select-none ${activeStyles}`}
       title={title}
     >
       {getTabIcon(config)}
