@@ -1,32 +1,29 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-
-const host = process.env.TAURI_DEV_HOST;
+import electron from "vite-plugin-electron/simple";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    electron({
+      main: {
+        entry: "electron/main.ts",
+      },
+      preload: {
+        input: "electron/preload.ts",
+      },
+    }),
+  ],
   clearScreen: false,
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
-    allowedHosts: true,
-    hmr: host
-      ? {
-          protocol: "ws",
-          host,
-          port: 1421,
-        }
-      : undefined,
-    watch: {
-      ignored: ["**/src-tauri/**"],
-    },
   },
-  envPrefix: ["VITE_", "TAURI_ENV_*"],
   build: {
-    target: process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
-    minify: !process.env.TAURI_ENV_DEBUG ? "esbuild" : false,
-    sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    target: "esnext",
+    minify: "esbuild",
+    sourcemap: true,
   },
 });

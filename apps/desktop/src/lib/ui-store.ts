@@ -1,59 +1,46 @@
-import { LazyStore } from "@tauri-apps/plugin-store";
-
 /**
- * Shared persisted UI preferences (sidebar width) backed by tauri-plugin-store.
- * Window size is handled by tauri-plugin-window-state. Values survive restarts.
- * Keys are namespaced so the store can grow without collisions.
+ * Shared persisted UI preferences (sidebar width) backed by localStorage in Electron.
  */
-export const uiStore = new LazyStore("ui-preferences.json", {
-  // Only persist on explicit set(); avoid the plugin's debounced auto-write
-  // racing explicit saves during rapid drags.
-  autoSave: false,
-});
 
 export const UI_KEYS = {
-  sidebarWidth: "sidebar.width",
-  rightSidebarWidth: "sidebar.rightWidth",
-  sidebarOpen: "sidebar.open",
-  rightSidebarOpen: "sidebar.rightOpen",
+  sidebarWidth: "console.sidebar.width",
+  rightSidebarWidth: "console.sidebar.rightWidth",
+  sidebarOpen: "console.sidebar.open",
+  rightSidebarOpen: "console.sidebar.rightOpen",
 } as const;
 
 export async function getSidebarWidth(): Promise<number | null> {
-  const v = await uiStore.get<number>(UI_KEYS.sidebarWidth);
-  return typeof v === "number" ? v : null;
+  const v = localStorage.getItem(UI_KEYS.sidebarWidth);
+  return v ? Number(v) : null;
 }
 
 export async function setSidebarWidth(width: number): Promise<void> {
-  await uiStore.set(UI_KEYS.sidebarWidth, width);
-  await uiStore.save();
+  localStorage.setItem(UI_KEYS.sidebarWidth, String(width));
 }
 
 export async function getRightSidebarWidth(): Promise<number | null> {
-  const v = await uiStore.get<number>(UI_KEYS.rightSidebarWidth);
-  return typeof v === "number" ? v : null;
+  const v = localStorage.getItem(UI_KEYS.rightSidebarWidth);
+  return v ? Number(v) : null;
 }
 
 export async function setRightSidebarWidth(width: number): Promise<void> {
-  await uiStore.set(UI_KEYS.rightSidebarWidth, width);
-  await uiStore.save();
+  localStorage.setItem(UI_KEYS.rightSidebarWidth, String(width));
 }
 
 export async function getSidebarOpen(): Promise<boolean | null> {
-  const v = await uiStore.get<boolean>(UI_KEYS.sidebarOpen);
-  return typeof v === "boolean" ? v : null;
+  const v = localStorage.getItem(UI_KEYS.sidebarOpen);
+  return v !== null ? v === "true" : null;
 }
 
 export async function setSidebarOpen(open: boolean): Promise<void> {
-  await uiStore.set(UI_KEYS.sidebarOpen, open);
-  await uiStore.save();
+  localStorage.setItem(UI_KEYS.sidebarOpen, String(open));
 }
 
 export async function getRightSidebarOpen(): Promise<boolean | null> {
-  const v = await uiStore.get<boolean>(UI_KEYS.rightSidebarOpen);
-  return typeof v === "boolean" ? v : null;
+  const v = localStorage.getItem(UI_KEYS.rightSidebarOpen);
+  return v !== null ? v === "true" : null;
 }
 
 export async function setRightSidebarOpen(open: boolean): Promise<void> {
-  await uiStore.set(UI_KEYS.rightSidebarOpen, open);
-  await uiStore.save();
+  localStorage.setItem(UI_KEYS.rightSidebarOpen, String(open));
 }

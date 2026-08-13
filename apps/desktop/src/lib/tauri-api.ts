@@ -1,5 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AgentSessionEvent,
   ApprovalModeOption,
@@ -29,182 +27,401 @@ import type {
   ProviderModelsResult,
   ReadFileResult,
   WriteFileResult,
+  PickedImage,
 } from "../types";
-import type { PickedImage } from "../types";
+
+export type UnlistenFn = () => void;
+
+let backendUrl = localStorage.getItem("console_backend_url") || "http://localhost:3000";
+
+// Terminal WebSockets registry
+const activeTerminals = new Map<string, WebSocket>();
+const terminalListeners = new Map<string, Set<(msg: TerminalServerMessage) => void>>();
+const agentListeners = new Map<string, Set<(event: AgentSessionEvent) => void>>();
+const fsListeners = new Set<() => void>();
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const url = `${backendUrl}${path.startsWith("/") ? path : `/${path}`}`;
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+    },
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "Unknown error");
+    throw new Error(`HTTP ${res.status}: ${errText}`);
+  }
+
+  const json = await res.json();
+  if (json && typeof json === "object" && "success" in json) {
+    if (!json.success) {
+      throw new Error(json.error || "API returned failure");
+    }
+    return json.data as T;
+  }
+  return json as T;
+}
+
+declare global {
+  interface Window {
+    electronApi?: {
+      confirmDialog: (title: string, message: string) => Promise<boolean>;
+      pickFolder: () => Promise<string | null>;
+      pickImages: () => Promise<PickedImage[]>;
+      readDroppedImages: (paths: string[]) => Promise<PickedImage[]>;
+      openExternal: (url: string) => Promise<void>;
+      showNotification: (title: string, body: string) => Promise<void>;
+      getAppVersion: () => Promise<string>;
+    };
+  }
+}
 
 /**
- * Thin Tauri IPC bridge. Every method maps to a `#[tauri::command]` in
- * `src-tauri` and ultimately to a Console server route. Response types live
- * in `src/types` (desktop-specific) and `@console/types` (shared).
+ * Desktop API client for Electron runtime.
  */
 export const tauriApi = {
-  // --- server / health -----------------------------------------------------
-  pingServer: () => invoke<unknown>("ping_server"),
-  getBackendUrl: () => invoke<string>("get_backend_url"),
-  setBackendUrl: (url: string) => invoke<void>("set_backend_url", { url }),
+  // --- server / health ---
+  pingServer: () => request<unknown>("/api/health"),
+  getBackendUrl: async () => backendUrl,
+  setBackendUrl: async (url: string) => {
+    backendUrl = url;
+    localStorage.setItem("console_backend_url", url);
+  },
 
-  // --- auth ----------------------------------------------------------------
-  getAuthStatus: () => invoke<AuthStatusResponse>("get_auth_status"),
-  getLoginUrl: (provider: string) => invoke<LoginUrlResult>("get_login_url", { provider }),
+  // --- auth ---
+  getAuthStatus: () => request<AuthStatusResponse>("/api/auth/status"),
+  getLoginUrl: (provider: string) =>
+    request<LoginUrlResult>(`/api/auth/login-url?provider=${encodeURIComponent(provider)}`),
   handleOAuthCallback: (provider: string, code: string, state?: string) =>
-    invoke<OAuthCallbackResult>("handle_oauth_callback", {
-      provider,
-      code,
-      state,
+    request<OAuthCallbackResult>("/api/auth/callback", {
+      method: "POST",
+      body: JSON.stringify({ provider, code, state }),
     }),
-  loginWithBrowser: (provider: string) =>
-    invoke<OAuthCallbackResult>("login_with_browser", { provider }),
-  /** Codebuff device-code login: opens browser, polls backend until approved. */
-  loginCodebuff: () => invoke<OAuthCallbackResult>("login_codebuff"),
+  loginWithBrowser: async (provider: string): Promise<OAuthCallbackResult> => {
+    const res = await tauriApi.getLoginUrl(provider);
+    if (res?.authUrl && window.electronApi?.openExternal) {
+      await window.electronApi.openExternal(res.authUrl);
+    }
+    return { provider, userEmail: undefined, projectId: undefined };
+  },
+  loginCodebuff: () => request<OAuthCallbackResult>("/api/auth/codebuff", { method: "POST" }),
   getProjectId: (provider: string) =>
-    invoke<{ projectId?: string }>("get_project_id", { provider }),
+    request<{ projectId?: string }>(`/api/auth/project-id?provider=${encodeURIComponent(provider)}`),
   setProjectId: (provider: string, projectId?: string) =>
-    invoke<void>("set_project_id", { provider, projectId }),
+    request<void>("/api/auth/project-id", {
+      method: "POST",
+      body: JSON.stringify({ provider, projectId }),
+    }),
 
-  // --- sessions ------------------------------------------------------------
-  listSessions: (cwd?: string, projectId?: string, onlyDeleted?: boolean) =>
-    invoke<SessionHeader[]>("list_sessions", { cwd, projectId, onlyDeleted }),
+  // --- sessions ---
+  listSessions: (cwd?: string, projectId?: string, onlyDeleted?: boolean) => {
+    const params = new URLSearchParams();
+    if (cwd) params.set("cwd", cwd);
+    if (projectId) params.set("projectId", projectId);
+    if (onlyDeleted) params.set("onlyDeleted", "true");
+    return request<SessionHeader[]>(`/api/sessions?${params.toString()}`);
+  },
   createSession: (dto: CreateSessionDto) =>
-    invoke<SessionHeader>("create_session", {
-      cwd: dto.cwd,
-      projectId: dto.projectId,
-      modelId: dto.modelId,
-      provider: dto.provider,
-      title: dto.title,
+    request<SessionHeader>("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify(dto),
     }),
-  getSession: (id: string) => invoke<SessionDetailResponse>("get_session", { id }),
+  getSession: (id: string) => request<SessionDetailResponse>(`/api/sessions/${encodeURIComponent(id)}`),
   updateSession: (id: string, dto: UpdateSessionDto) =>
-    invoke<SessionHeader>("update_session", {
-      id,
-      title: dto.title,
-      cwd: dto.cwd,
-      modelId: dto.modelId,
-      provider: dto.provider,
-      approvalMode: dto.approvalMode,
+    request<SessionHeader>(`/api/sessions/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(dto),
     }),
-  deleteSession: (id: string) => invoke<unknown>("delete_session", { id }),
-  restoreSession: (id: string) => invoke<unknown>("restore_session", { id }),
+  deleteSession: (id: string) =>
+    request<unknown>(`/api/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  restoreSession: (id: string) =>
+    request<unknown>(`/api/sessions/${encodeURIComponent(id)}/restore`, { method: "POST" }),
 
-  // --- projects ------------------------------------------------------------
-  listProjects: () => invoke<ProjectInfo[]>("list_projects"),
-  addProject: (path: string) => invoke<ProjectInfo>("add_project", { path }),
+  // --- projects ---
+  listProjects: () => request<ProjectInfo[]>("/api/projects"),
+  addProject: (path: string) =>
+    request<ProjectInfo>("/api/projects", {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    }),
 
-  // --- providers / models --------------------------------------------------
-  listProviders: () => invoke<ProviderCatalogEntry[]>("list_providers"),
+  // --- providers / models ---
+  listProviders: () => request<ProviderCatalogEntry[]>("/api/providers"),
   getProviderModels: (providerId: string) =>
-    invoke<ProviderModelsResult>("get_provider_models", { providerId }),
+    request<ProviderModelsResult>(`/api/providers/${encodeURIComponent(providerId)}/models`),
 
-  // --- config / approval modes --------------------------------------------
-  getApprovalModes: () => invoke<ApprovalModeOption[]>("get_approval_modes"),
+  // --- config / approval modes ---
+  getApprovalModes: () => request<ApprovalModeOption[]>("/api/config/approval-modes"),
 
-  // --- git -----------------------------------------------------------------
-  getGitStatus: (path?: string) => invoke<GitStatusSummary>("get_git_status", { path }),
+  // --- git ---
+  getGitStatus: (path?: string) => {
+    const q = path ? `?path=${encodeURIComponent(path)}` : "";
+    return request<GitStatusSummary>(`/api/git/status${q}`);
+  },
 
-  // --- filesystem ----------------------------------------------------------
-  browseDirectory: (path?: string) => invoke<BrowseResult>("browse_directory", { path }),
-  pickFolder: () => invoke<PickFolderResult>("pick_folder"),
-  getDirectoryTree: (path?: string, depth?: number) =>
-    invoke<DirectoryTreeResult>("get_directory_tree", { path, depth }),
-  readFile: (path: string, startLine?: number, endLine?: number) =>
-    invoke<ReadFileResult>("read_file", { path, startLine, endLine }),
+  // --- filesystem ---
+  browseDirectory: (path?: string) => {
+    const q = path ? `?path=${encodeURIComponent(path)}` : "";
+    return request<BrowseResult>(`/api/fs/browse${q}`);
+  },
+  pickFolder: async (): Promise<PickFolderResult> => {
+    if (window.electronApi?.pickFolder) {
+      const selected = await window.electronApi.pickFolder();
+      return { path: selected || "" };
+    }
+    return { path: "" };
+  },
+  getDirectoryTree: (path?: string, depth?: number) => {
+    const params = new URLSearchParams();
+    if (path) params.set("path", path);
+    if (depth) params.set("depth", String(depth));
+    return request<DirectoryTreeResult>(`/api/fs/tree?${params.toString()}`);
+  },
+  readFile: (path: string, startLine?: number, endLine?: number) => {
+    const params = new URLSearchParams({ path });
+    if (startLine) params.set("startLine", String(startLine));
+    if (endLine) params.set("endLine", String(endLine));
+    return request<ReadFileResult>(`/api/fs/read?${params.toString()}`);
+  },
   writeFile: (path: string, content: string) =>
-    invoke<WriteFileResult>("write_file", { path, content }),
-  deleteFile: (path: string) => invoke<DeleteFileResult>("delete_file", { path }),
-  createDirectory: (path: string) => invoke<CreateDirectoryResult>("create_directory", { path }),
-  deleteDirectory: (path: string) => invoke<DeleteDirectoryResult>("delete_directory", { path }),
-  watchDirectory: (path: string) => invoke<void>("watch_directory", { path }),
-  listenFsChanges: (callback: () => void): Promise<UnlistenFn> =>
-    listen<void>("fs-change", () => callback()),
+    request<WriteFileResult>("/api/fs/write", {
+      method: "POST",
+      body: JSON.stringify({ path, content }),
+    }),
+  deleteFile: (path: string) =>
+    request<DeleteFileResult>(`/api/fs/file?path=${encodeURIComponent(path)}`, {
+      method: "DELETE",
+    }),
+  createDirectory: (path: string) =>
+    request<CreateDirectoryResult>("/api/fs/dir", {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    }),
+  deleteDirectory: (path: string) =>
+    request<DeleteDirectoryResult>(`/api/fs/dir?path=${encodeURIComponent(path)}`, {
+      method: "DELETE",
+    }),
+  watchDirectory: async (path: string) => {
+    const url = `${backendUrl}/api/fs/watch?path=${encodeURIComponent(path)}`;
+    const eventSource = new EventSource(url);
+    eventSource.onmessage = () => {
+      fsListeners.forEach((cb) => cb());
+    };
+  },
+  listenFsChanges: async (callback: () => void): Promise<UnlistenFn> => {
+    fsListeners.add(callback);
+    return () => fsListeners.delete(callback);
+  },
 
-  // --- agent run / streaming -----------------------------------------------
-  runAgent: (
+  // --- agent run / streaming ---
+  runAgent: async (
     sessionId: string,
     prompt: string,
     modelId?: string,
     provider?: string,
     approvalMode?: string,
     attachments?: ImageAttachment[],
-  ) =>
-    invoke<void>("run_agent", {
-      sessionId,
-      prompt,
-      modelId,
-      provider,
-      approvalMode,
-      attachments,
-    }),
-  abortRun: (sessionId: string) => invoke<unknown>("abort_run", { sessionId }),
+  ) => {
+    const url = `${backendUrl}/api/sessions/${encodeURIComponent(sessionId)}/run`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, modelId, provider, approvalMode, attachments }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => "Unknown error");
+      throw new Error(`HTTP ${response.status}: ${errText}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) return;
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const dataMatch = line.match(/^data:\s*(.*)$/m);
+        if (dataMatch) {
+          try {
+            const event = JSON.parse(dataMatch[1]) as AgentSessionEvent;
+            const listeners = agentListeners.get(sessionId);
+            listeners?.forEach((cb) => cb(event));
+          } catch {}
+        }
+      }
+    }
+  },
+
+  abortRun: (sessionId: string) =>
+    request<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}/abort`, { method: "POST" }),
   answerQuestion: (sessionId: string, requestId: string, answer: string | string[]) =>
-    invoke<unknown>("answer_question", {
-      sessionId,
-      requestId,
-      answer,
+    request<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}/answer`, {
+      method: "POST",
+      body: JSON.stringify({ requestId, answer }),
     }),
   approvePermission: (sessionId: string, requestId: string, allow: boolean) =>
-    invoke<unknown>("approve_permission", {
-      sessionId,
-      requestId,
-      allow,
+    request<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ requestId, allow }),
     }),
 
-  listenAgentEvents: (
+  listenAgentEvents: async (
     sessionId: string,
     callback: (event: AgentSessionEvent) => void,
-  ): Promise<UnlistenFn> =>
-    listen<AgentSessionEvent>(`agent-event:${sessionId}`, (e) => {
-      if (e.payload.type === "permissionRequest") {
-        console.info("[permission] Tauri event received", {
-          sessionId,
-          requestId: e.payload.request.requestId,
-          toolName: e.payload.request.toolName,
-          tier: e.payload.request.tier,
-          requiresUpgrade: e.payload.request.requiresUpgrade,
-        });
+  ): Promise<UnlistenFn> => {
+    let set = agentListeners.get(sessionId);
+    if (!set) {
+      set = new Set();
+      agentListeners.set(sessionId, set);
+    }
+    set.add(callback);
+    return () => {
+      const current = agentListeners.get(sessionId);
+      current?.delete(callback);
+      if (current && current.size === 0) {
+        agentListeners.delete(sessionId);
       }
-      callback(e.payload);
-    }),
+    };
+  },
 
-  // --- desktop assistant (slash commands + @ file refs) --------------------
+  // --- desktop assistant ---
   listSlashCommands: (sessionId: string) =>
-    invoke<SlashCommandInfo[]>("list_slash_commands", { sessionId }),
+    request<SlashCommandInfo[]>(`/api/assist/commands?sessionId=${encodeURIComponent(sessionId)}`),
   searchFiles: (sessionId: string, query: string) =>
-    invoke<FileSearchResponse>("search_files", { sessionId, query }),
+    request<FileSearchResponse>(
+      `/api/assist/files?sessionId=${encodeURIComponent(sessionId)}&query=${encodeURIComponent(query)}`,
+    ),
 
-  // --- image attachments ----------------------------------------------------
-  pickImages: () => invoke<PickedImage[]>("pick_images"),
-  readDroppedImages: (paths: string[]) => invoke<PickedImage[]>("read_dropped_images", { paths }),
+  // --- images ---
+  pickImages: async (): Promise<PickedImage[]> => {
+    if (window.electronApi?.pickImages) {
+      return window.electronApi.pickImages();
+    }
+    return [];
+  },
+  readDroppedImages: async (paths: string[]): Promise<PickedImage[]> => {
+    if (window.electronApi?.readDroppedImages) {
+      return window.electronApi.readDroppedImages(paths);
+    }
+    return [];
+  },
 
-  // --- native dialogs --------------------------------------------------------
-  confirmDialog: (title: string, message: string) =>
-    invoke<boolean>("confirm_dialog", { title, message }),
+  // --- dialogs ---
+  confirmDialog: async (title: string, message: string): Promise<boolean> => {
+    if (window.electronApi?.confirmDialog) {
+      return window.electronApi.confirmDialog(title, message);
+    }
+    return window.confirm(`${title}\n\n${message}`);
+  },
 
-  // --- interactive terminals ------------------------------------------------
-  /** Spawn a shell PTY on the server (through the Rust relay) in `cwd`. */
-  terminalOpen: (
+  // --- terminals ---
+  terminalOpen: async (
     cwd: string,
     opts?: { shell?: string; cols?: number; rows?: number; label?: string },
-  ) =>
-    invoke<TerminalSpawnedEvent>("terminal_open", {
+  ): Promise<TerminalSpawnedEvent> => {
+    const wsBase = backendUrl.replace(/^http/, "ws");
+    const params = new URLSearchParams({
       cwd,
-      shell: opts?.shell,
-      cols: opts?.cols,
-      rows: opts?.rows,
-      label: opts?.label,
-    }),
-  /** Send keystrokes / pasted text into the PTY. */
-  terminalInput: (id: string, data: string) =>
-    invoke<void>("terminal_input", { id, data }),
-  /** Resize the PTY viewport. */
-  terminalResize: (id: string, cols: number, rows: number) =>
-    invoke<void>("terminal_resize", { id, cols, rows }),
-  /** Kill the PTY and tear down the socket. */
-  terminalKill: (id: string) => invoke<void>("terminal_kill", { id }),
-  /** Subscribe to terminal output/exit/error frames relayed by Rust. */
-  listenTerminalEvents: (
+      cols: String(opts?.cols || 80),
+      rows: String(opts?.rows || 24),
+    });
+    if (opts?.shell) params.set("shell", opts.shell);
+
+    const ws = new WebSocket(`${wsBase}/api/terminals?${params.toString()}`);
+
+    return new Promise((resolve, reject) => {
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data) as TerminalServerMessage;
+          if (msg.type === "spawned") {
+            const spawnedMsg = msg as TerminalSpawnedEvent;
+            activeTerminals.set(spawnedMsg.id, ws);
+            resolve({
+              type: "spawned",
+              id: spawnedMsg.id,
+              pid: spawnedMsg.pid,
+              shell: spawnedMsg.shell,
+              cwd: spawnedMsg.cwd,
+              cols: spawnedMsg.cols,
+              rows: spawnedMsg.rows,
+            });
+          }
+          if (msg.type === "output" || msg.type === "exit" || msg.type === "error" || msg.type === "spawned") {
+            // broadcast to any active listeners
+            terminalListeners.forEach((set) => {
+              set.forEach((cb) => cb(msg));
+            });
+          }
+        } catch (err) {
+          console.error("Failed to parse terminal message", err);
+        }
+      };
+
+      ws.onerror = (err) => {
+        reject(err);
+      };
+
+      ws.onclose = () => {
+        // clean up
+      };
+    });
+  },
+
+  terminalInput: async (id: string, data: string) => {
+    const ws = activeTerminals.get(id);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "input", data }));
+    }
+  },
+
+  terminalResize: async (id: string, cols: number, rows: number) => {
+    const ws = activeTerminals.get(id);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "resize", cols, rows }));
+    }
+  },
+
+  terminalKill: async (id: string) => {
+    const ws = activeTerminals.get(id);
+    if (ws) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "kill" }));
+      }
+      ws.close();
+      activeTerminals.delete(id);
+      terminalListeners.delete(id);
+    }
+  },
+
+  listenTerminalEvents: async (
     terminalId: string,
     callback: (message: TerminalServerMessage) => void,
-  ): Promise<UnlistenFn> =>
-    listen<TerminalServerMessage>(`terminal-events:${terminalId}`, (e) => {
-      callback(e.payload);
-    }),
+  ): Promise<UnlistenFn> => {
+    let set = terminalListeners.get(terminalId);
+    if (!set) {
+      set = new Set();
+      terminalListeners.set(terminalId, set);
+    }
+    set.add(callback);
+    return () => {
+      const current = terminalListeners.get(terminalId);
+      current?.delete(callback);
+      if (current && current.size === 0) {
+        terminalListeners.delete(terminalId);
+      }
+    };
+  },
 };

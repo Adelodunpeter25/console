@@ -88,8 +88,9 @@ out
 # dist directory
 /dist
 
-# Tauri / Rust (desktop app)
+# Tauri / Rust / Electron (desktop app)
 apps/desktop/dist
+apps/desktop/dist-electron
 apps/desktop/src-tauri/target
 apps/desktop/src-tauri/gen
 apps/desktop/node_modules
