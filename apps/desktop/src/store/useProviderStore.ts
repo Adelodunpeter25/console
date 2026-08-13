@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { ApprovalModeOption, Model, ProviderCatalogEntry } from "@console/types";
-import { tauriApi } from "../lib/tauri-api";
+import { api } from "../lib/api";
 
 interface ProviderState {
   /** Full provider catalog (name, display name, description, static models). */
@@ -34,7 +34,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
   loadProviders: async () => {
     set({ loadingProviders: true, error: null });
     try {
-      const providers = await tauriApi.listProviders();
+      const providers = await api.listProviders();
       set({ providers, loadingProviders: false });
     } catch (e) {
       set({
@@ -54,7 +54,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
       error: null,
     }));
     try {
-      const result = await tauriApi.getProviderModels(providerId);
+      const result = await api.getProviderModels(providerId);
       const models = result.models;
       set((s) => ({
         modelsByProvider: { ...s.modelsByProvider, [providerId]: models },
@@ -74,7 +74,7 @@ export const useProviderStore = create<ProviderState>((set, get) => ({
     if (get().approvalModes.length > 0) return;
     set({ loadingApprovalModes: true, error: null });
     try {
-      const modes = await tauriApi.getApprovalModes();
+      const modes = await api.getApprovalModes();
       set({ approvalModes: modes, loadingApprovalModes: false });
     } catch (e) {
       set({

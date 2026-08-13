@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { tauriApi } from "../lib/tauri-api";
+import { api } from "../lib/api";
 import type { BrowseResult, DirectoryTreeResult, PickFolderResult, ReadFileResult } from "../types";
 
 interface FsState {
@@ -49,7 +49,7 @@ export const useFsStore = create<FsState>((set, get) => ({
   browseDirectory: async (path?: string) => {
     set({ browsing: true, error: null });
     try {
-      const result = await tauriApi.browseDirectory(path);
+      const result = await api.browseDirectory(path);
       set({ browse: result, browsing: false });
       return result;
     } catch (e) {
@@ -63,7 +63,7 @@ export const useFsStore = create<FsState>((set, get) => ({
 
   pickFolder: async () => {
     set({ error: null });
-    const result = await tauriApi.pickFolder();
+    const result = await api.pickFolder();
     set({ pickedFolder: result });
     return result;
   },
@@ -74,7 +74,7 @@ export const useFsStore = create<FsState>((set, get) => ({
     if (cached) return cached;
 
     set({ error: null });
-    const result = await tauriApi.getDirectoryTree(path, depth);
+    const result = await api.getDirectoryTree(path, depth);
     set((s) => ({ treesByPath: { ...s.treesByPath, [key]: result } }));
     return result;
   },
@@ -84,7 +84,7 @@ export const useFsStore = create<FsState>((set, get) => ({
     if (cached && !startLine && !endLine) return cached;
 
     set({ error: null });
-    const result = await tauriApi.readFile(path, startLine, endLine);
+    const result = await api.readFile(path, startLine, endLine);
     if (!startLine && !endLine) {
       set((s) => ({ fileContentsByPath: { ...s.fileContentsByPath, [path]: result } }));
     }
@@ -95,7 +95,7 @@ export const useFsStore = create<FsState>((set, get) => ({
     markBusy(set, path);
     set({ error: null });
     try {
-      await tauriApi.writeFile(path, content);
+      await api.writeFile(path, content);
       // Invalidate cached content so the next read fetches the new state.
       set((s) => {
         const next = { ...s.fileContentsByPath };
@@ -114,7 +114,7 @@ export const useFsStore = create<FsState>((set, get) => ({
     markBusy(set, path);
     set({ error: null });
     try {
-      await tauriApi.deleteFile(path);
+      await api.deleteFile(path);
       set((s) => {
         const contents = { ...s.fileContentsByPath };
         delete contents[path];
@@ -132,7 +132,7 @@ export const useFsStore = create<FsState>((set, get) => ({
     markBusy(set, path);
     set({ error: null });
     try {
-      await tauriApi.createDirectory(path);
+      await api.createDirectory(path);
     } catch (e) {
       set({ error: e instanceof Error ? e.message : "Failed to create directory" });
       throw e;
@@ -145,7 +145,7 @@ export const useFsStore = create<FsState>((set, get) => ({
     markBusy(set, path);
     set({ error: null });
     try {
-      await tauriApi.deleteDirectory(path);
+      await api.deleteDirectory(path);
       // Invalidate any cached tree rooted at or under this path.
       set((s) => {
         const trees = { ...s.treesByPath };

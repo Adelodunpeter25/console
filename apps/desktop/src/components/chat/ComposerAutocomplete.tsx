@@ -1,7 +1,7 @@
 import React from "react";
 import { FileText, Command, Folder, Loader2 } from "lucide-react";
 import type { FileSearchResult, SlashCommandInfo } from "@console/types";
-import { tauriApi } from "../../lib/tauri-api";
+import { api } from "../../lib/api";
 
 export interface SlashSuggestion {
   kind: "slash";
@@ -130,7 +130,7 @@ export function ComposerAutocomplete({
   React.useEffect(() => {
     let cancelled = false;
     if (sessionId) {
-      tauriApi
+      api
         .listSlashCommands(sessionId)
         .then((cmds) => !cancelled && setSlashCommands(cmds))
         .catch(() => {});
@@ -195,7 +195,7 @@ export function ComposerAutocomplete({
       setSelectedIndex(0);
     } else if (trigger.kind === "file" && sessionId) {
       setLoading(true);
-      tauriApi
+      api
         .searchFiles(sessionId, trigger.query)
         .then((res) => {
           if (seq === requestSeq.current) {

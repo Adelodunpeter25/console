@@ -12,4 +12,10 @@ export interface ElectronApi {
   openExternal: (url: string) => Promise<void>;
   showNotification: (title: string, body: string) => Promise<void>;
   getAppVersion: () => Promise<string>;
+  authLoginWithBrowser: (opts: {
+    provider: string;
+    authUrl: string;
+    port?: number;
+    callbackPath?: string;
+  }) => Promise<{ code: string }>;
 }

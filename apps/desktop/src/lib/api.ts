@@ -75,14 +75,20 @@ declare global {
       openExternal: (url: string) => Promise<void>;
       showNotification: (title: string, body: string) => Promise<void>;
       getAppVersion: () => Promise<string>;
+      authLoginWithBrowser: (opts: {
+        provider: string;
+        authUrl: string;
+        port?: number;
+        callbackPath?: string;
+      }) => Promise<{ code: string }>;
     };
   }
 }
 
 /**
- * Desktop API client for Electron runtime.
+ * Desktop API client connecting directly to the Console backend and Electron native bridge.
  */
-export const tauriApi = {
+export const api = {
   // --- server / health ---
   pingServer: () => request<unknown>("/api/health"),
   getBackendUrl: async () => backendUrl,
@@ -94,22 +100,74 @@ export const tauriApi = {
   // --- auth ---
   getAuthStatus: () => request<AuthStatusResponse>("/api/auth/status"),
   getLoginUrl: (provider: string) =>
-    request<LoginUrlResult>(`/api/auth/login-url?provider=${encodeURIComponent(provider)}`),
+    request<LoginUrlResult>("/api/auth/login/url", {
+      method: "POST",
+      body: JSON.stringify({ provider }),
+    }),
   handleOAuthCallback: (provider: string, code: string, state?: string) =>
-    request<OAuthCallbackResult>("/api/auth/callback", {
+    request<OAuthCallbackResult>("/api/auth/login/callback", {
       method: "POST",
       body: JSON.stringify({ provider, code, state }),
     }),
   loginWithBrowser: async (provider: string): Promise<OAuthCallbackResult> => {
-    const res = await tauriApi.getLoginUrl(provider);
-    if (res?.authUrl && window.electronApi?.openExternal) {
+    const res = await api.getLoginUrl(provider);
+    if (!res?.authUrl) {
+      throw new Error("Failed to obtain OAuth login URL from server.");
+    }
+
+    if (window.electronApi?.authLoginWithBrowser) {
+      // Electron launches a local callback server, opens the browser, and waits for redirect
+      const { code } = await window.electronApi.authLoginWithBrowser({
+        provider,
+        authUrl: res.authUrl,
+      });
+
+      // Complete token exchange on the server
+      return api.handleOAuthCallback(provider, code);
+    }
+
+    // Fallback: open external browser
+    if (window.electronApi?.openExternal) {
       await window.electronApi.openExternal(res.authUrl);
     }
     return { provider, userEmail: undefined, projectId: undefined };
   },
-  loginCodebuff: () => request<OAuthCallbackResult>("/api/auth/codebuff", { method: "POST" }),
+  loginCodebuff: async (): Promise<OAuthCallbackResult> => {
+    const startRes = await request<{
+      provider: string;
+      loginUrl: string;
+      fingerprintId: string;
+      fingerprintHash: string;
+      expiresAt: string;
+    }>("/api/auth/codebuff/start", { method: "POST" });
+
+    if (window.electronApi?.openExternal && startRes.loginUrl) {
+      await window.electronApi.openExternal(startRes.loginUrl);
+    }
+
+    // Poll for status
+    const params = new URLSearchParams({
+      fingerprintId: startRes.fingerprintId,
+      fingerprintHash: startRes.fingerprintHash,
+      expiresAt: startRes.expiresAt,
+    });
+
+    while (Date.now() < Number(startRes.expiresAt) * 1000) {
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
+        const poll = await request<{ completed: boolean; email?: string }>(
+          `/api/auth/codebuff/status?${params.toString()}`,
+        );
+        if (poll.completed) {
+          return { provider: "codebuff", userEmail: poll.email };
+        }
+      } catch {}
+    }
+
+    throw new Error("Codebuff login timed out.");
+  },
   getProjectId: (provider: string) =>
-    request<{ projectId?: string }>(`/api/auth/project-id?provider=${encodeURIComponent(provider)}`),
+    request<{ projectId?: string }>(`/api/auth/project-id/${encodeURIComponent(provider)}`),
   setProjectId: (provider: string, projectId?: string) =>
     request<void>("/api/auth/project-id", {
       method: "POST",
@@ -360,7 +418,6 @@ export const tauriApi = {
             });
           }
           if (msg.type === "output" || msg.type === "exit" || msg.type === "error" || msg.type === "spawned") {
-            // broadcast to any active listeners
             terminalListeners.forEach((set) => {
               set.forEach((cb) => cb(msg));
             });
@@ -425,3 +482,7 @@ export const tauriApi = {
     };
   },
 };
+
+// Aliases for backwards compatibility
+export const desktopApi = api;
+export const tauriApi = api;

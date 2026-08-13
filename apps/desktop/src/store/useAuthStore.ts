@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { AuthStatusResponse, ProviderId } from "@console/types";
-import { tauriApi } from "../lib/tauri-api";
+import { api } from "../lib/api";
 
 export type { OAuthProviderId, ProviderId } from "@console/types";
 
@@ -41,7 +41,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loadStatus: async () => {
     set({ loading: true, error: null });
     try {
-      const status = await tauriApi.getAuthStatus();
+      const status = await api.getAuthStatus();
       set({
         status,
         loading: false,
@@ -62,7 +62,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loginWithBrowser: async (provider: ProviderId) => {
     set({ loggingIn: provider, error: null });
     try {
-      await tauriApi.loginWithBrowser(provider);
+      await api.loginWithBrowser(provider);
       // Refresh status so `loggedIn` reflects the new credential.
       await get().loadStatus();
     } catch (e) {
@@ -78,7 +78,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loginCodebuff: async () => {
     set({ loggingIn: "codebuff", error: null });
     try {
-      await tauriApi.loginCodebuff();
+      await api.loginCodebuff();
       // Refresh status so `loggedIn` reflects the new credential.
       await get().loadStatus();
     } catch (e) {
@@ -93,7 +93,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   saveProjectId: async (provider: ProviderId, projectId: string | undefined) => {
     set({ savingProjectId: true, error: null });
     try {
-      await tauriApi.setProjectId(provider, projectId?.trim() || undefined);
+      await api.setProjectId(provider, projectId?.trim() || undefined);
       set((state) => ({
         projectIds: { ...state.projectIds, [provider]: projectId?.trim() || undefined },
         savingProjectId: false,

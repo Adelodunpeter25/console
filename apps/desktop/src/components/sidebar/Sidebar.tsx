@@ -7,7 +7,7 @@ import { useWorkspaceStore } from "../../layout/useWorkspaceStore";
 import { useVirtualList } from "../../hooks/useVirtualList";
 import { SessionItem } from "./SessionItem";
 import { dayBucket, formatDayGroup } from "../../utils/time";
-import { tauriApi } from "../../lib/tauri-api";
+import { api } from "../../lib/api";
 import type { SessionHeader } from "@console/types";
 
 /** Group sessions into labeled date buckets, newest-first by last-updated. */
@@ -111,7 +111,7 @@ export function Sidebar({ width = 288 }: { width?: number }) {
 
   const handleAddProject = async () => {
     try {
-      const result = await tauriApi.pickFolder();
+      const result = await api.pickFolder();
       if (result && result.path) {
         await addProject(result.path);
       }

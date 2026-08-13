@@ -3,7 +3,7 @@ import { FolderOpen } from "lucide-react";
 import type { ProjectInfo } from "@console/types";
 import { toast } from "sonner";
 import { useProjectStore } from "../../store/useProjectStore";
-import { tauriApi } from "../../lib/tauri-api";
+import { api } from "../../lib/api";
 import {
   Dropdown,
   DropdownAction,
@@ -49,7 +49,7 @@ export function ProjectSelector({
 
   const handleOpenFolder = async () => {
     try {
-      const picked = await tauriApi.pickFolder();
+      const picked = await api.pickFolder();
       if (!picked.path) return;
       const project = await addProject(picked.path);
       onSelect(project);

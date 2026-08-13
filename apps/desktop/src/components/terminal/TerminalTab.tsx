@@ -1,6 +1,6 @@
 import React from "react";
 import type { TerminalTabConfig } from "../../layout/types";
-import { tauriApi } from "../../lib/tauri-api";
+import { api } from "../../lib/api";
 import { useTerminalStore } from "../../store/useTerminalStore";
 import { createXtermInstance, type XtermInstance } from "./xterm";
 
@@ -9,8 +9,8 @@ interface TerminalTabProps {
 }
 
 /**
- * Interactive terminal tab — renders xterm.js and pipes bytes to/from the
- * server PTY through the Rust relay (tauriApi.terminal*).
+ * Interactive terminal tab * Component rendering an xterm.js viewport wired directly to an active
+ * server PTY (api.terminal*).
  */
 export function TerminalTab({ config }: TerminalTabProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -47,7 +47,7 @@ export function TerminalTab({ config }: TerminalTabProps) {
     });
 
     void (async () => {
-      unlisten = await tauriApi.listenTerminalEvents(config.terminalId, (message) => {
+      unlisten = await api.listenTerminalEvents(config.terminalId, (message) => {
         if (message.type === "output") {
           instance.writeChunk(message.data);
         } else if (message.type === "exit") {

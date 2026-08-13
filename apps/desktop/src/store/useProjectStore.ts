@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { ProjectInfo, SessionHeader, UpdateSessionDto } from "@console/types";
-import { tauriApi } from "../lib/tauri-api";
+import { api } from "../lib/api";
 import { useSessionStatusStore } from "./useSessionStatusStore";
 
 interface ProjectState {
@@ -34,7 +34,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   loadProjects: async () => {
     set({ loading: true });
     try {
-      const projects = await tauriApi.listProjects();
+      const projects = await api.listProjects();
       set({ projects, loading: false });
     } catch {
       set({ loading: false });
@@ -42,7 +42,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   },
 
   addProject: async (path: string) => {
-    const project = await tauriApi.addProject(path);
+    const project = await api.addProject(path);
     set((s) => ({ projects: [...s.projects, project] }));
     return project;
   },
@@ -50,7 +50,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   loadSessions: async () => {
     set({ sessionsLoading: true });
     try {
-      const sessions = await tauriApi.listSessions();
+      const sessions = await api.listSessions();
       set({ sessions, sessionsLoading: false });
       useSessionStatusStore.getState().setStatuses(sessions);
     } catch {
@@ -61,7 +61,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   loadDeletedSessions: async () => {
     set({ deletedSessionsLoading: true });
     try {
-      const deletedSessions = await tauriApi.listSessions(undefined, undefined, true);
+      const deletedSessions = await api.listSessions(undefined, undefined, true);
       set({ deletedSessions, deletedSessionsLoading: false });
     } catch {
       set({ deletedSessionsLoading: false });
@@ -69,7 +69,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   },
 
   createSession: async (cwd: string, projectId: string, title?: string) => {
-    const session = await tauriApi.createSession({
+    const session = await api.createSession({
       cwd,
       projectId,
       title: title ?? "New Chat",
@@ -80,7 +80,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   },
 
   updateSession: async (id, dto) => {
-    const updated = await tauriApi.updateSession(id, dto);
+    const updated = await api.updateSession(id, dto);
     set((s) => ({
       sessions: s.sessions.map((sess) => (sess.id === id ? { ...sess, ...updated } : sess)),
     }));
@@ -88,13 +88,13 @@ export const useProjectStore = create<ProjectState>((set) => ({
   },
 
   deleteSession: async (id: string) => {
-    await tauriApi.deleteSession(id);
+    await api.deleteSession(id);
     set((s) => ({ sessions: s.sessions.filter((sess) => sess.id !== id) }));
     useSessionStatusStore.getState().clearStatus(id);
   },
 
   restoreSession: async (id: string) => {
-    await tauriApi.restoreSession(id);
+    await api.restoreSession(id);
     set((s) => {
       const restored = s.deletedSessions.find((sess) => sess.id === id);
       const filteredDeleted = s.deletedSessions.filter((sess) => sess.id !== id);
@@ -110,7 +110,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
   refreshSessionHeader: async (sessionId) => {
     try {
-      const detail = await tauriApi.getSession(sessionId);
+      const detail = await api.getSession(sessionId);
       const header = detail.header;
       set((s) => ({
         sessions: s.sessions.map((sess) => (sess.id === sessionId ? { ...sess, ...header } : sess)),

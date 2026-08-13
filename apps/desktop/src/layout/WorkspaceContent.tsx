@@ -3,7 +3,7 @@ import { EmptyState } from "../components/common/EmptyState";
 import { FileViewer } from "../components/file/FileViewer";
 import { TerminalTab } from "../components/terminal/TerminalTab";
 import { ChatScreen } from "../pages/ChatScreen";
-import { tauriApi } from "../lib/tauri-api";
+import { api } from "../lib/api";
 import { inferLanguage } from "../utils/file-language";
 import { WorkspaceTabConfig, FileTabConfig, basename } from "./types";
 
@@ -15,7 +15,7 @@ function FileTabContent({ config }: { config: FileTabConfig }) {
   React.useEffect(() => {
     let cancelled = false;
     setState({ status: "loading" });
-    tauriApi
+    api
       .readFile(config.path)
       .then((result) => {
         if (!cancelled) setState({ status: "ready", content: result.content });

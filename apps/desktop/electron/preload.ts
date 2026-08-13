@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { ElectronApi, PickedImageResult } from "./types";
+import type { ElectronApi } from "./types";
 
 const electronApi: ElectronApi = {
   confirmDialog: (title: string, message: string) =>
@@ -12,6 +12,7 @@ const electronApi: ElectronApi = {
   showNotification: (title: string, body: string) =>
     ipcRenderer.invoke("notification:show", { title, body }),
   getAppVersion: () => ipcRenderer.invoke("app:getVersion"),
+  authLoginWithBrowser: (opts) => ipcRenderer.invoke("auth:loginWithBrowser", opts),
 };
 
 contextBridge.exposeInMainWorld("electronApi", electronApi);

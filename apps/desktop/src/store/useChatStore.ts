@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { toast } from "sonner";
 import type { ImageAttachment } from "@console/types";
-import { tauriApi } from "../lib/tauri-api";
+import { api } from "../lib/api";
 import { useProviderStore } from "./useProviderStore";
 import { useProjectStore } from "./useProjectStore";
 import { useSessionStore } from "./useSessionStore";
@@ -72,7 +72,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   pickImages: async (sessionId) => {
     try {
-      const picked = await tauriApi.pickImages();
+      const picked = await api.pickImages();
       if (picked.length > 0) {
         const attachments: ImageAttachment[] = picked.map((p) => ({
           data: p.data,
@@ -186,7 +186,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       // Subscribe before invoking so early SSE frames aren't dropped.
-      unlisten = await tauriApi.listenAgentEvents(sessionId, (event) => {
+      unlisten = await api.listenAgentEvents(sessionId, (event) => {
         if (event.type === "permissionRequest") {
           console.info("[permission] desktop event received", {
             sessionId,
@@ -210,7 +210,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
         get().handleEvent(sessionId, event);
       });
-      await tauriApi.runAgent(
+      await api.runAgent(
         sessionId,
         prompt,
         sessionModelId ?? undefined,
@@ -285,7 +285,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   abort: async (sessionId: string) => {
     try {
-      await tauriApi.abortRun(sessionId);
+      await api.abortRun(sessionId);
     } catch {
       // ignore
     }
@@ -321,7 +321,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   answerQuestion: async (sessionId: string, requestId: string, answer: string | string[]) => {
     try {
-      await tauriApi.answerQuestion(sessionId, requestId, answer);
+      await api.answerQuestion(sessionId, requestId, answer);
     } catch (err) {
       toast.error("Failed to send answer. Please try again.");
       console.error("answerQuestion error:", err);
@@ -348,7 +348,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   approvePermission: async (sessionId: string, requestId: string, allow: boolean) => {
     try {
-      await tauriApi.approvePermission(sessionId, requestId, allow);
+      await api.approvePermission(sessionId, requestId, allow);
     } catch (err) {
       toast.error("Failed to send approval. Please try again.");
       console.error("approvePermission error:", err);

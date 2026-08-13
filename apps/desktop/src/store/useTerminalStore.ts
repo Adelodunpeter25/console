@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { tauriApi } from "../lib/tauri-api";
+import { api } from "../lib/api";
 import { useWorkspaceStore } from "../layout/useWorkspaceStore";
 import type { TerminalStatus, TerminalRecord } from "../types";
 import type { TerminalSpawnedEvent } from "@console/types";
@@ -44,7 +44,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     if (existing) return existing;
 
     const promise = (async () => {
-      const spawned = await tauriApi.terminalOpen(cwd, { cols, rows, label, shell });
+      const spawned = await api.terminalOpen(cwd, { cols, rows, label, shell });
       set((state) => ({
         terminals: {
           ...state.terminals,
@@ -85,7 +85,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
   },
 
   write: (id, data) => {
-    tauriApi.terminalInput(id, data).catch((err: unknown) => {
+    api.terminalInput(id, data).catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("no active terminal")) {
         get().markStatus(id, "exited", { error: msg });
@@ -104,7 +104,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
         },
       };
     });
-    tauriApi.terminalResize(id, cols, rows).catch((err: unknown) => {
+    api.terminalResize(id, cols, rows).catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("no active terminal")) {
         get().markStatus(id, "exited", { error: msg });
@@ -114,7 +114,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
 
   kill: async (id) => {
     try {
-      await tauriApi.terminalKill(id);
+      await api.terminalKill(id);
     } catch {
       // The PTY may already have exited; treat as already gone.
     }

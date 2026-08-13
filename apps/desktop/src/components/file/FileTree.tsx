@@ -1,7 +1,7 @@
 import React from "react";
 import { ChevronDown, ChevronRight, Folder, FolderOpen, Loader2 } from "lucide-react";
 import type { FsTreeEntry } from "@console/types";
-import { tauriApi } from "../../lib/tauri-api";
+import { api } from "../../lib/api";
 import { resolveFileIconToken } from "../../utils/file-icons";
 import { getBuiltInSpriteSheet } from "@pierre/trees";
 import { useVirtualList } from "../../hooks/useVirtualList";
@@ -89,7 +89,7 @@ export function FileTree({ tree, onFileSelect }: FileTreeProps) {
     if (!item.hasChildrenLoaded) {
       setLoadingPaths((prev) => new Set(prev).add(item.path));
       try {
-        const res = await tauriApi.browseDirectory(item.path);
+        const res = await api.browseDirectory(item.path);
         setChildrenMap((prev) => new Map(prev).set(item.path, res.entries));
       } catch (err) {
         console.error(`Failed to load directory ${item.path}:`, err);

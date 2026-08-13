@@ -8,7 +8,7 @@ import { ModelSelector } from "../common/ModelSelector";
 import { ApprovalModeSelector } from "../common/ApprovalModeSelector";
 import { ProjectSelector } from "../common/ProjectSelector";
 import { ComposerAutocomplete } from "./ComposerAutocomplete";
-import { tauriApi } from "../../lib/tauri-api";
+import { api } from "../../lib/api";
 import { useMessageHistory } from "../../utils/useMessageHistory";
 
 interface ComposerProps {
@@ -103,7 +103,7 @@ export function Composer({
   const handleDropPaths = React.useCallback(
     async (paths: string[]) => {
       try {
-        const dropped = await tauriApi.readDroppedImages(paths);
+        const dropped = await api.readDroppedImages(paths);
         onAddAttachments?.(
           dropped.map((image) => ({ data: image.data, mimeType: image.mimeType })),
         );

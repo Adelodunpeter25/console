@@ -1,6 +1,6 @@
 import React from "react";
 import { useFsStore } from "../store/useFsStore";
-import { tauriApi } from "../lib/tauri-api";
+import { api } from "../lib/api";
 
 /**
  * Custom React hook encapsulating real-time project filesystem watching & auto-sync.
@@ -20,10 +20,10 @@ export function useProjectFsWatcher(projectPath?: string | null) {
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
     // Trigger Rust command to watch project path via Tauri IPC
-    tauriApi.watchDirectory(projectPath).catch(() => {});
+    api.watchDirectory(projectPath).catch(() => {});
 
     // Listen to fs-change Tauri event via Rust IPC relay with 300ms debouncing
-    tauriApi
+    api
       .listenFsChanges(() => {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {

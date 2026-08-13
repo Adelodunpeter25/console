@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { tauriApi } from "../lib/tauri-api";
+import { api } from "../lib/api";
 
 interface ServerState {
   backendUrl: string;
@@ -20,7 +20,7 @@ export const useServerStore = create<ServerState>((set) => ({
 
   init: async () => {
     try {
-      const url = await tauriApi.getBackendUrl();
+      const url = await api.getBackendUrl();
       set({ backendUrl: url, loading: false });
     } catch {
       set({ loading: false });
@@ -29,14 +29,14 @@ export const useServerStore = create<ServerState>((set) => ({
 
   setUrl: async (url: string) => {
     const trimmed = url.trim().replace(/\/+$/, "");
-    await tauriApi.setBackendUrl(trimmed);
+    await api.setBackendUrl(trimmed);
     set({ backendUrl: trimmed });
   },
 
   testConnection: async () => {
     set({ testing: "testing" });
     try {
-      await tauriApi.pingServer();
+      await api.pingServer();
       set({ testing: "success", connected: true });
     } catch {
       set({ testing: "error", connected: false });

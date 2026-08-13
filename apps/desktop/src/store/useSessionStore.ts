@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { ApprovalMode, ProjectInfo, SessionDetailResponse } from "@console/types";
-import { tauriApi } from "../lib/tauri-api";
+import { api } from "../lib/api";
 import { useProjectStore } from "./useProjectStore";
 import { useProviderStore } from "./useProviderStore";
 import { useSessionStatusStore } from "./useSessionStatusStore";
@@ -45,7 +45,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   loadSession: async (sessionId) => {
     try {
-      const detail = await tauriApi.getSession(sessionId);
+      const detail = await api.getSession(sessionId);
       set((state) => ({
         sessions: {
           ...state.sessions,
@@ -75,7 +75,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         [sessionId]: { ...current, sessionModelId: modelId, sessionProvider: provider },
       },
     }));
-    tauriApi
+    api
       .updateSession(sessionId, {
         modelId,
         provider: provider as import("@console/types").ProviderId | undefined,
@@ -91,7 +91,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         [sessionId]: { ...current, sessionCwd: project.path },
       },
     }));
-    tauriApi
+    api
       .updateSession(sessionId, { cwd: project.path })
       .then(() => useProjectStore.getState().refreshSessionHeader(sessionId))
       .catch(() => {});
@@ -105,7 +105,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         [sessionId]: { ...current, approvalMode: mode },
       },
     }));
-    tauriApi.updateSession(sessionId, { approvalMode: mode }).catch(() => {});
+    api.updateSession(sessionId, { approvalMode: mode }).catch(() => {});
   },
 
   clear: () => set({ sessions: {} }),

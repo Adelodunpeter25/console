@@ -8,7 +8,7 @@ import { useWorkspaceStore } from "../../layout/useWorkspaceStore";
 import { useContextMenu } from "../common/ContextMenu";
 import { formatRelativeTime } from "../../utils/time";
 import { basename } from "../../utils/format";
-import { tauriApi } from "../../lib/tauri-api";
+import { api } from "../../lib/api";
 
 const STATUS_DOT: Record<SessionStatus, string> = {
   idle: "bg-foreground-muted",
@@ -79,7 +79,7 @@ export const SessionItem = React.memo(function SessionItem({
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (status !== "done") {
-      const confirmed = await tauriApi.confirmDialog(
+      const confirmed = await api.confirmDialog(
         "Delete Active Session",
         `"${session.title || "Untitled Chat"}" is currently not marked as done. Are you sure you want to delete it?`,
       );
@@ -100,7 +100,7 @@ export const SessionItem = React.memo(function SessionItem({
         onClick: () => {
           void (async () => {
             if (status !== "done") {
-              const confirmed = await tauriApi.confirmDialog(
+              const confirmed = await api.confirmDialog(
                 "Delete Active Session",
                 `"${session.title || "Untitled Chat"}" is currently not marked as done. Are you sure you want to delete it?`,
               );
