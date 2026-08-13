@@ -2,6 +2,7 @@ import React from "react";
 import { MessageSquare, Terminal, X } from "lucide-react";
 import { WorkspaceTabConfig, getTabTitle } from "./types";
 import { FileIcon } from "../components/file/FileIcon";
+import { useWorkspaceStore } from "./useWorkspaceStore";
 
 interface WorkspaceTabItemProps {
   paneId?: string;
@@ -38,10 +39,15 @@ export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
   const title = getTabTitle(config);
 
   const handleDragStart = (e: React.DragEvent) => {
+    useWorkspaceStore.getState().setDraggedTab({ sourcePaneId: paneId, tabConfig: config });
     const payload = JSON.stringify({ sourcePaneId: paneId, tabConfig: config });
     e.dataTransfer.setData("application/json", payload);
     e.dataTransfer.setData("text/plain", payload);
     e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragEnd = () => {
+    useWorkspaceStore.getState().setDraggedTab(null);
   };
 
   const handleClose = (e: React.MouseEvent) => {
@@ -53,7 +59,9 @@ export const WorkspaceTabItem = React.memo(function WorkspaceTabItem({
     <div
       draggable
       onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
       onClick={onSelect}
+      style={{ WebkitUserDrag: "element" } as React.CSSProperties}
       className={`group relative flex items-center gap-2 px-3 py-1.5 h-9 min-w-[120px] max-w-[180px] rounded-none text-xs cursor-grab active:cursor-grabbing border-r border-border transition-colors select-none ${
         isActive
           ? "bg-black text-foreground font-medium border-t-2 border-t-[#8a5027]"

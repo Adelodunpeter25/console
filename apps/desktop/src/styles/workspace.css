@@ -109,3 +109,11 @@
   user-select: text !important;
   -webkit-user-select: text !important;
 }
+
+/* Enable native WebKit element dragging on draggable items */
+[draggable="true"] {
+  -webkit-user-drag: element !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+

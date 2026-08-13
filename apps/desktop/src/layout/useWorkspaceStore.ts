@@ -18,10 +18,17 @@ import {
 import { useTerminalStore } from "../store/useTerminalStore";
 import type { DropPosition } from "./WorkspaceDropzone";
 
+export interface DraggedTabState {
+  tabConfig: WorkspaceTabConfig;
+  sourcePaneId?: string;
+}
+
 interface WorkspaceState {
   rootNode: WorkspaceNode;
   activePaneId: string;
+  draggedTab: DraggedTabState | null;
 
+  setDraggedTab: (dragged: DraggedTabState | null) => void;
   openChatTab: (input: OpenChatTabInput) => void;
   openFileTab: (input: OpenFileTabInput) => void;
   openTerminalTab: (input: OpenTerminalTabInput) => void;
@@ -45,6 +52,9 @@ const DEFAULT_LEAF_ID = "pane-main";
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   rootNode: createLeaf(DEFAULT_LEAF_ID),
   activePaneId: DEFAULT_LEAF_ID,
+  draggedTab: null,
+
+  setDraggedTab: (draggedTab) => set({ draggedTab }),
 
   openChatTab: (input) => {
     const config: WorkspaceTabConfig = {

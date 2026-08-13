@@ -55,6 +55,16 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
     return () => window.removeEventListener("dragend", clearDropPos);
   }, [clearDropPos]);
 
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      const pos = calcDropPosition(rect, e.clientX, e.clientY);
+      setDropPos(pos);
+    }
+  };
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -71,12 +81,10 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
     e.preventDefault();
     e.stopPropagation();
 
-    // Only clear when the pointer actually leaves the pane — not when it
-    // moves between children (which also fires dragleave on the parent).
+    // Only clear when the pointer actually leaves the pane
     const next = e.relatedTarget as Node | null;
     if (next && e.currentTarget.contains(next)) return;
 
-    // relatedTarget is often null in WebKit during DnD; fall back to coordinates.
     if (!next) {
       const rect = e.currentTarget.getBoundingClientRect();
       const { clientX, clientY } = e;
@@ -101,23 +109,34 @@ function LeafPaneView({ node, canClosePane }: { node: LeafPaneNode; canClosePane
     const finalPos = dropPos ?? calcDropPosition(rect, e.clientX, e.clientY);
     setDropPos(null);
 
-    const json = e.dataTransfer.getData("application/json") || e.dataTransfer.getData("text/plain");
-    if (!json) return;
+    const dragged = useWorkspaceStore.getState().draggedTab;
+    let tabConfig = dragged?.tabConfig;
+    let sourcePaneId = dragged?.sourcePaneId;
 
-    try {
-      const data = JSON.parse(json);
-      if (data.tabConfig) {
-        dropTabOnPane(node.id, finalPos, data.tabConfig, data.sourcePaneId);
+    if (!tabConfig) {
+      const json = e.dataTransfer.getData("application/json") || e.dataTransfer.getData("text/plain");
+      if (json) {
+        try {
+          const data = JSON.parse(json);
+          tabConfig = data.tabConfig;
+          sourcePaneId = data.sourcePaneId;
+        } catch {
+          // ignore malformed payloads
+        }
       }
-    } catch {
-      // ignore malformed payloads
     }
+
+    if (tabConfig) {
+      dropTabOnPane(node.id, finalPos, tabConfig, sourcePaneId);
+    }
+    useWorkspaceStore.getState().setDraggedTab(null);
   };
 
   return (
     <div
       ref={paneRef}
       onClick={() => setActivePane(node.id)}
+      onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}

@@ -47,15 +47,20 @@ export const SessionItem = React.memo(function SessionItem({
   const handleDragStart = (e: React.DragEvent) => {
     const pid = projectId ?? session.projectId ?? "";
     const config = {
-      type: "chat",
+      type: "chat" as const,
       projectId: pid,
       sessionId: session.id,
       title: session.title || "Untitled Chat",
     };
+    useWorkspaceStore.getState().setDraggedTab({ tabConfig: config });
     const payload = JSON.stringify({ tabConfig: config });
     e.dataTransfer.setData("application/json", payload);
     e.dataTransfer.setData("text/plain", payload);
     e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragEnd = () => {
+    useWorkspaceStore.getState().setDraggedTab(null);
   };
 
   const handleOpen = () => {
@@ -113,6 +118,8 @@ export const SessionItem = React.memo(function SessionItem({
     <div
       draggable
       onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      style={{ WebkitUserDrag: "element" } as React.CSSProperties}
       className={`group relative flex flex-col justify-between py-2 px-3 min-h-[48px] rounded-lg cursor-grab active:cursor-grabbing transition-colors ${
         isActive
           ? "bg-white/[0.08] text-foreground"
