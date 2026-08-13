@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { setSidebarOpen as persistSidebarOpen, setRightSidebarOpen as persistRightSidebarOpen } from "../lib/ui-store";
+import type { TerminalTabConfig } from "../layout/types";
 
 interface AppState {
   selectedProjectId: string | null;
@@ -7,6 +8,7 @@ interface AppState {
   sidebarOpen: boolean;
   rightSidebarOpen: boolean;
   commandPaletteOpen: boolean;
+  dockedTerminal: TerminalTabConfig | null;
   setSelectedProjectId: (id: string | null) => void;
   setSelectedSessionId: (id: string | null) => void;
   setSidebarOpen: (open: boolean) => void;
@@ -14,6 +16,7 @@ interface AppState {
   setRightSidebarOpen: (open: boolean) => void;
   toggleRightSidebar: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
+  setDockedTerminal: (terminal: TerminalTabConfig | null) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -22,6 +25,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sidebarOpen: true,
   rightSidebarOpen: true,
   commandPaletteOpen: false,
+  dockedTerminal: null,
 
   setSelectedProjectId: (selectedProjectId) => set({ selectedProjectId }),
   setSelectedSessionId: (selectedSessionId) => set({ selectedSessionId }),
@@ -44,4 +48,5 @@ export const useAppStore = create<AppState>((set, get) => ({
     persistRightSidebarOpen(next).catch(() => {});
   },
   setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
+  setDockedTerminal: (dockedTerminal) => set({ dockedTerminal }),
 }));
