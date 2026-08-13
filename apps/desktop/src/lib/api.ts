@@ -356,12 +356,18 @@ export const api = {
   },
 
   // --- desktop assistant ---
-  listSlashCommands: (sessionId: string) =>
-    request<SlashCommandInfo[]>(`/api/assist/commands?sessionId=${encodeURIComponent(sessionId)}`),
-  searchFiles: (sessionId: string, query: string) =>
-    request<FileSearchResponse>(
-      `/api/assist/files?sessionId=${encodeURIComponent(sessionId)}&query=${encodeURIComponent(query)}`,
-    ),
+  listSlashCommands: (sessionId: string) => {
+    const encoded = encodeURIComponent(sessionId || "");
+    return request<SlashCommandInfo[]>(sessionId ? `/api/assist/${encoded}/commands` : `/api/assist/commands`);
+  },
+  searchFiles: (sessionId: string, query: string) => {
+    const encoded = encodeURIComponent(sessionId || "");
+    return request<FileSearchResponse>(
+      sessionId
+        ? `/api/assist/${encoded}/search?q=${encodeURIComponent(query)}`
+        : `/api/assist/search?q=${encodeURIComponent(query)}`,
+    );
+  },
 
   // --- images ---
   pickImages: async (): Promise<PickedImage[]> => {
