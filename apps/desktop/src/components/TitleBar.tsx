@@ -15,14 +15,10 @@ interface TitleBarProps {
 }
 
 /**
- * Custom titlebar for native overlay window.
+ * Custom draggable titlebar for Electron macOS overlay window.
  *
- * Uses `titleBarStyle: "Overlay"` so macOS traffic lights (and Linux/Windows
- * native controls) are rendered by the OS on top of this bar. The bar itself
- * is a Tauri drag region (`data-tauri-drag-region`) with left padding to
- * accommodate the traffic lights at {x:14, y:20}.
- *
- * No custom window control buttons — the OS provides minimize/maximize/close.
+ * Uses `titleBarStyle: "hiddenInset"` with traffic lights at { x: 16, y: 14 }.
+ * Draggable region uses `-webkit-app-region: drag` and buttons use `-webkit-app-region: no-drag`.
  */
 export function TitleBar({ rightAction, title }: TitleBarProps) {
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
@@ -32,17 +28,18 @@ export function TitleBar({ rightAction, title }: TitleBarProps) {
 
   return (
     <div
-      data-tauri-drag-region
+      style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       className="flex items-center h-10 bg-sidebar border-b border-border shrink-0 select-none"
     >
-      {/* Left: sidebar toggle (padded past traffic lights on macOS) */}
-      <div className="flex items-center pl-20 px-2" data-tauri-drag-region>
+      {/* Left: sidebar toggle (padded past traffic lights at x:16 on macOS) */}
+      <div className="flex items-center pl-20 pr-2">
         <button
+          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           onClick={(e) => {
             e.stopPropagation();
             toggleSidebar();
           }}
-          className="p-1.5 rounded-lg text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors"
+          className="p-1.5 rounded-lg text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors cursor-pointer"
           title={sidebarOpen ? "Collapse left sidebar" : "Expand left sidebar"}
         >
           <HugeiconsIcon icon={SidebarLeftIcon} size={16} />
@@ -51,32 +48,34 @@ export function TitleBar({ rightAction, title }: TitleBarProps) {
 
       {/* Center: optional title */}
       {title && (
-        <div className="flex-1 text-center" data-tauri-drag-region>
+        <div className="flex-1 text-center">
           <span className="text-xs text-foreground-muted font-medium">{title}</span>
         </div>
       )}
-      {!title && <div className="flex-1" data-tauri-drag-region />}
+      {!title && <div className="flex-1" />}
 
       {/* Right: custom action + right sidebar toggle */}
-      <div className="flex items-center gap-1 pr-2" data-tauri-drag-region>
+      <div className="flex items-center gap-1 pr-2">
         {rightAction && (
           <button
+            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             onClick={(e) => {
               e.stopPropagation();
               rightAction.onClick();
             }}
-            className="flex items-center justify-center w-9 h-8 text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors"
+            className="flex items-center justify-center w-9 h-8 text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors cursor-pointer"
             title={rightAction.label}
           >
             {rightAction.icon}
           </button>
         )}
         <button
+          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           onClick={(e) => {
             e.stopPropagation();
             toggleRightSidebar();
           }}
-          className="p-1.5 rounded-lg text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors"
+          className="p-1.5 rounded-lg text-foreground-secondary hover:text-foreground hover:bg-white/5 transition-colors cursor-pointer"
           title={rightSidebarOpen ? "Collapse right sidebar" : "Expand right sidebar"}
         >
           <HugeiconsIcon icon={SidebarRightIcon} size={16} />

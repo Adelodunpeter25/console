@@ -14,11 +14,11 @@ export function createMainWindow(): BrowserWindow {
     minWidth: 800,
     minHeight: 600,
     titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 16, y: 16 },
+    trafficLightPosition: { x: 16, y: 14 },
     backgroundColor: "#000000",
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, "preload.mjs"),
+      preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false,
