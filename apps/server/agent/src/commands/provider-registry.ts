@@ -77,11 +77,10 @@ export const DEFAULT_CODEBUFF_MODELS: Model[] = CODEBUFF_MODEL_SPECS.map(
 );
 
 export const DEFAULT_CODEX_MODELS: Model[] = [
+  "gpt-5.6-terra",
+  "gpt-5.6-luna",
   "gpt-5.5",
-  "gpt-5.3-codex",
-  "gpt-5.2-codex",
-  "gpt-5.1-codex-max",
-  "gpt-5.1-codex",
+  "gpt-5.4-mini",
 ].map((id) => ({ id, provider: "codex" as const, contextWindow: 272_000, supportsImages: true }));
 
 export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
