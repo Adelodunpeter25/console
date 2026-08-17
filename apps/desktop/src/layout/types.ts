@@ -19,6 +19,8 @@ export interface FileTabConfig {
   projectId: string;
   path: string;
   title?: string;
+  /** Timestamp used for the five-minute file preview tab behavior. */
+  openedAt?: number;
 }
 
 export interface DiffTabConfig {

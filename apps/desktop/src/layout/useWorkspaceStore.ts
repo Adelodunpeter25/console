@@ -55,6 +55,7 @@ interface WorkspaceState {
 }
 
 const DEFAULT_LEAF_ID = "pane-main";
+const FILE_PREVIEW_WINDOW_MS = 5 * 60 * 1000;
 
 function syncTab(config?: WorkspaceTabConfig | null) {
   if (!config) return;
@@ -90,8 +91,65 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       projectId: input.projectId,
       path: input.path,
       title: input.title,
+      openedAt: Date.now(),
     };
     syncTab(config);
+
+    const state = get();
+    const activeLeaf = findLeaf(state.rootNode, state.activePaneId);
+    const existingTab = state.rootNode.type === "leaf"
+      ? state.rootNode.tabs.find((tab) => tab.type === "file" && tab.path === config.path)
+      : undefined;
+    const existingInAnyPane = (() => {
+      let found: WorkspaceTabConfig | undefined;
+      function visit(node: WorkspaceNode) {
+        if (found) return;
+        if (node.type === "leaf") {
+          found = node.tabs.find((tab) => tab.type === "file" && tab.path === config.path);
+          return;
+        }
+        visit(node.children[0]);
+        visit(node.children[1]);
+      }
+      visit(state.rootNode);
+      return found;
+    })();
+
+    // Re-open an already visible file instead of creating a duplicate tab.
+    if (existingTab || existingInAnyPane) {
+      set((s) => addTabToPane(s.rootNode, s.activePaneId, config));
+      return;
+    }
+
+    const recentPreview = activeLeaf?.tabs
+      .filter(
+        (tab): tab is Extract<WorkspaceTabConfig, { type: "file" }> =>
+          tab.type === "file" &&
+          typeof tab.openedAt === "number" &&
+          Date.now() - tab.openedAt < FILE_PREVIEW_WINDOW_MS,
+      )
+      .sort((left, right) => (right.openedAt ?? 0) - (left.openedAt ?? 0))[0];
+
+    if (recentPreview && activeLeaf) {
+      const recentTabId = getTabId(recentPreview);
+      const nextTabId = getTabId(config);
+      set((s) => ({
+        rootNode: mapTree(s.rootNode, (leaf) =>
+          leaf.id === activeLeaf.id
+            ? {
+                ...leaf,
+                tabs: leaf.tabs.map((tab) =>
+                  getTabId(tab) === recentTabId ? config : tab,
+                ),
+                activeTabId: nextTabId,
+              }
+            : leaf,
+        ),
+        activePaneId: activeLeaf.id,
+      }));
+      return;
+    }
+
     set((s) => addTabToPane(s.rootNode, s.activePaneId, config));
   },
 

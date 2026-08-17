@@ -59,7 +59,7 @@ function providerModels(
  * Provider-filtered model picker with server-persisted favorites.
  * Provider and model data remain owned by the provider store/backend.
  */
-export function ModelSelector({ value, provider, onChange }: ModelSelectorProps) {
+export function ModelSelector({ value, onChange }: ModelSelectorProps) {
   const providers = useProviderStore((state) => state.providers);
   const modelsByProvider = useProviderStore((state) => state.modelsByProvider);
   const loadProviders = useProviderStore((state) => state.loadProviders);
@@ -78,18 +78,14 @@ export function ModelSelector({ value, provider, onChange }: ModelSelectorProps)
   }, [loadProviders]);
 
   React.useEffect(() => {
-    if (provider && providers.some((item) => item.name === provider)) {
-      setActiveTab(provider as ProviderId);
-    }
-  }, [provider, providers]);
-
-  React.useEffect(() => {
     if (activeTab !== "favorites") {
       void loadModels(activeTab).catch(() => {});
     }
   }, [activeTab, loadModels]);
 
   const handleOpen = () => {
+    setActiveTab("favorites");
+    setSearch("");
     providers.forEach((item) => {
       if (!modelsByProvider[item.name]) void loadModels(item.name).catch(() => {});
     });
