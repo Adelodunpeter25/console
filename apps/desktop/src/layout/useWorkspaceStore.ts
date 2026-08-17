@@ -41,7 +41,7 @@ interface WorkspaceState {
   setActivePane: (paneId: string) => void;
   splitPane: (paneId: string, direction: SplitDirection) => void;
   closePane: (paneId: string) => void;
-  closeChatTab: (projectId: string, sessionId: string) => void;
+  closeChatTab: (sessionId: string) => void;
   updateChatTabProject: (sessionId: string, newProjectId: string) => void;
   dropTabOnPane: (
     targetPaneId: string,
@@ -231,7 +231,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ rootNode: nextRoot, activePaneId: nextActive });
   },
 
-  closeChatTab: (projectId, sessionId) => {
+  closeChatTab: (sessionId) => {
     const targetId = `chat:${sessionId}`;
     set((s) => ({
       rootNode: mapTree(s.rootNode, (leaf) => {

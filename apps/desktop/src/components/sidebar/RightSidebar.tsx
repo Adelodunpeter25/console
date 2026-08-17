@@ -1,5 +1,5 @@
 import React from "react";
-import { FolderTree, RefreshCw, X } from "lucide-react";
+import { FolderTree, Plus, RefreshCw, X } from "lucide-react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ComputerTerminal01Icon } from "@hugeicons/core-free-icons";
 import { Group, Panel, Separator } from "react-resizable-panels";
@@ -19,9 +19,13 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
   const browse = useFsStore((state) => state.browse);
   const browseDirectory = useFsStore((state) => state.browseDirectory);
   const openFileTab = useWorkspaceStore((state) => state.openFileTab);
-  const dockedTerminal = useAppStore((state) => state.dockedTerminal);
-  const setDockedTerminal = useAppStore((state) => state.setDockedTerminal);
+  const dockedTerminals = useAppStore((state) => state.dockedTerminals);
+  const activeDockedTerminalId = useAppStore((state) => state.activeDockedTerminalId);
+  const dockTerminal = useAppStore((state) => state.dockTerminal);
+  const setActiveDockedTerminal = useAppStore((state) => state.setActiveDockedTerminal);
+  const removeDockedTerminal = useAppStore((state) => state.removeDockedTerminal);
   const openTerminal = useTerminalStore((state) => state.openTerminal);
+  const killTerminal = useTerminalStore((state) => state.kill);
 
   const [isOverBottom, setIsOverBottom] = React.useState(false);
   const asideRef = React.useRef<HTMLElement>(null);
@@ -109,7 +113,7 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
         }
       }
       if (tabConfig.type === "terminal") {
-        setDockedTerminal(tabConfig);
+        dockTerminal(tabConfig);
       } else {
         // If a non-terminal was dropped at the bottom, spawn a terminal for that project
         const pId = tabConfig.projectId || selectedProjectId;
@@ -117,7 +121,7 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
         if (pId && pPath) {
           try {
             const terminal = await openTerminal({ projectId: pId, cwd: pPath });
-            setDockedTerminal({
+            dockTerminal({
               type: "terminal",
               projectId: pId,
               terminalId: terminal.id,
@@ -128,6 +132,33 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
       }
     }
     useWorkspaceStore.getState().setDraggedTab(null);
+  };
+
+  const activeDockedTerminal = dockedTerminals.find(
+    (terminal) => terminal.terminalId === activeDockedTerminalId,
+  ) ?? dockedTerminals[0];
+
+  const handleNewTerminal = async () => {
+    const projectId = selectedProjectId ?? activeDockedTerminal?.projectId;
+    const path = projects.find((project) => project.id === projectId)?.path;
+    if (!projectId || !path) return;
+
+    try {
+      const terminal = await openTerminal({ projectId, cwd: path });
+      dockTerminal({
+        type: "terminal",
+        projectId,
+        terminalId: terminal.id,
+        title: "Terminal",
+      });
+    } catch {
+      // The terminal store owns the error state for failed spawns.
+    }
+  };
+
+  const handleCloseTerminal = (terminalId: string) => {
+    removeDockedTerminal(terminalId);
+    void killTerminal(terminalId);
   };
 
   const explorerContent = (
@@ -169,7 +200,7 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
       style={{ width }}
       className="relative flex flex-col h-full bg-sidebar border-l border-border select-none overflow-hidden shrink-0"
     >
-      {dockedTerminal ? (
+      {dockedTerminals.length > 0 ? (
         <Group orientation="vertical" className="h-full w-full">
           <Panel defaultSize={55} minSize={20}>
             {explorerContent}
@@ -179,25 +210,63 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
 
           <Panel defaultSize={45} minSize={20}>
             <div className="flex flex-col h-full bg-[#0d0d0d] overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-1.5 bg-sidebar border-b border-border text-xs text-foreground shrink-0">
-                <div className="flex items-center gap-1.5 font-medium">
-                  <HugeiconsIcon
-                    icon={ComputerTerminal01Icon}
-                    size={14}
-                    className="text-foreground-secondary shrink-0"
-                  />
-                  <span className="truncate">{dockedTerminal.title ?? "Terminal"}</span>
+              <div className="flex items-center h-8 bg-sidebar border-b border-border text-xs text-foreground shrink-0">
+                <div className="flex items-center h-full min-w-0 flex-1 overflow-x-auto no-scrollbar">
+                  {dockedTerminals.map((terminal) => {
+                    const isActive = terminal.terminalId === activeDockedTerminal?.terminalId;
+                    return (
+                      <div
+                        key={terminal.terminalId}
+                        className={`group flex items-center h-full min-w-0 max-w-[150px] border-r border-border ${
+                          isActive ? "bg-[#0d0d0d]" : "bg-sidebar hover:bg-surface-hover"
+                        }`}
+                      >
+                        <button
+                          onClick={() => setActiveDockedTerminal(terminal.terminalId)}
+                          title={terminal.title ?? "Terminal"}
+                          className={`flex items-center gap-1.5 min-w-0 px-2.5 h-full text-left cursor-pointer ${
+                            isActive ? "text-foreground" : "text-foreground-muted"
+                          }`}
+                        >
+                          <HugeiconsIcon
+                            icon={ComputerTerminal01Icon}
+                            size={13}
+                            className="shrink-0"
+                          />
+                          <span className="truncate">{terminal.title ?? "Terminal"}</span>
+                        </button>
+                        <button
+                          onClick={() => handleCloseTerminal(terminal.terminalId)}
+                          title={`Close ${terminal.title ?? "Terminal"}`}
+                          aria-label={`Close ${terminal.title ?? "Terminal"}`}
+                          className="mr-1 p-1 text-foreground-muted hover:text-danger rounded hover:bg-white/10 transition-colors cursor-pointer opacity-70 group-hover:opacity-100"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
                 <button
-                  onClick={() => setDockedTerminal(null)}
-                  title="Close / Undock Terminal"
-                  className="p-1 text-foreground-muted hover:text-danger rounded hover:bg-white/10 transition-colors cursor-pointer"
+                  onClick={() => void handleNewTerminal()}
+                  title="New Terminal"
+                  aria-label="New Terminal"
+                  className="p-1.5 mr-1 text-foreground-muted hover:text-foreground rounded hover:bg-white/10 transition-colors cursor-pointer shrink-0"
                 >
-                  <X size={12} />
+                  <Plus size={13} />
                 </button>
               </div>
               <div className="flex-1 overflow-hidden min-h-0 relative">
-                <TerminalTab config={dockedTerminal} />
+                {dockedTerminals.map((terminal) => (
+                  <div
+                    key={terminal.terminalId}
+                    className={`absolute inset-0 ${
+                      terminal.terminalId === activeDockedTerminal?.terminalId ? "" : "hidden"
+                    }`}
+                  >
+                    <TerminalTab config={terminal} />
+                  </div>
+                ))}
               </div>
             </div>
           </Panel>

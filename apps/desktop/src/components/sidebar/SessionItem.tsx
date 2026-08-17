@@ -86,7 +86,7 @@ export const SessionItem = React.memo(function SessionItem({
       if (!confirmed) return;
     }
     deleteSession(session.id);
-    if (projectId) closeChatTab(projectId, session.id);
+    closeChatTab(session.id);
   };
 
   const handleContextMenu = (event: React.MouseEvent) => {
@@ -107,7 +107,7 @@ export const SessionItem = React.memo(function SessionItem({
               if (!confirmed) return;
             }
             deleteSession(session.id);
-            if (projectId) closeChatTab(projectId, session.id);
+            closeChatTab(session.id);
           })();
         },
       },

@@ -8,7 +8,8 @@ interface AppState {
   sidebarOpen: boolean;
   rightSidebarOpen: boolean;
   commandPaletteOpen: boolean;
-  dockedTerminal: TerminalTabConfig | null;
+  dockedTerminals: TerminalTabConfig[];
+  activeDockedTerminalId: string | null;
   setSelectedProjectId: (id: string | null) => void;
   setSelectedSessionId: (id: string | null) => void;
   setSidebarOpen: (open: boolean) => void;
@@ -16,7 +17,9 @@ interface AppState {
   setRightSidebarOpen: (open: boolean) => void;
   toggleRightSidebar: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
-  setDockedTerminal: (terminal: TerminalTabConfig | null) => void;
+  dockTerminal: (terminal: TerminalTabConfig) => void;
+  setActiveDockedTerminal: (terminalId: string) => void;
+  removeDockedTerminal: (terminalId: string) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -25,7 +28,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   sidebarOpen: true,
   rightSidebarOpen: true,
   commandPaletteOpen: false,
-  dockedTerminal: null,
+  dockedTerminals: [],
+  activeDockedTerminalId: null,
 
   setSelectedProjectId: (selectedProjectId) => set({ selectedProjectId }),
   setSelectedSessionId: (selectedSessionId) => set({ selectedSessionId }),
@@ -48,5 +52,46 @@ export const useAppStore = create<AppState>((set, get) => ({
     persistRightSidebarOpen(next).catch(() => {});
   },
   setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
-  setDockedTerminal: (dockedTerminal) => set({ dockedTerminal }),
+  dockTerminal: (terminal) =>
+    set((state) => {
+      if (state.dockedTerminals.some((item) => item.terminalId === terminal.terminalId)) {
+        return { activeDockedTerminalId: terminal.terminalId };
+      }
+
+      const baseTitle = terminal.title ?? "Terminal";
+      const titles = new Set(state.dockedTerminals.map((item) => item.title ?? "Terminal"));
+      let title = baseTitle;
+      let suffix = 2;
+      while (titles.has(title)) {
+        title = `${baseTitle} ${suffix}`;
+        suffix += 1;
+      }
+
+      const nextTerminal = { ...terminal, title };
+      return {
+        dockedTerminals: [...state.dockedTerminals, nextTerminal],
+        activeDockedTerminalId: terminal.terminalId,
+      };
+    }),
+  setActiveDockedTerminal: (terminalId) =>
+    set((state) =>
+      state.dockedTerminals.some((terminal) => terminal.terminalId === terminalId)
+        ? { activeDockedTerminalId: terminalId }
+        : state,
+    ),
+  removeDockedTerminal: (terminalId) =>
+    set((state) => {
+      const index = state.dockedTerminals.findIndex((terminal) => terminal.terminalId === terminalId);
+      if (index < 0) return state;
+
+      const dockedTerminals = state.dockedTerminals.filter(
+        (terminal) => terminal.terminalId !== terminalId,
+      );
+      const activeDockedTerminalId =
+        state.activeDockedTerminalId === terminalId
+          ? (dockedTerminals[Math.max(0, index - 1)]?.terminalId ?? null)
+          : state.activeDockedTerminalId;
+
+      return { dockedTerminals, activeDockedTerminalId };
+    }),
 }));
