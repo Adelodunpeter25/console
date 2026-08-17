@@ -159,7 +159,7 @@ export function ModelSelector({ value, provider, onChange }: ModelSelectorProps)
       open={open}
       onOpenChange={setOpen}
     >
-      <div className="flex h-[min(26rem,calc(100vh-8rem))] min-h-0">
+      <div className="flex h-[min(380px,calc(100vh-8rem))] min-h-0">
         <aside className="flex w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-white/[0.08] pr-1">
           <button
             type="button"
