@@ -3,7 +3,6 @@ import { FolderTree, RefreshCw, X } from "lucide-react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ComputerTerminal01Icon } from "@hugeicons/core-free-icons";
 import { Group, Panel, Separator } from "react-resizable-panels";
-import { toast } from "sonner";
 import { useAppStore } from "../../store/useAppStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useFsStore } from "../../store/useFsStore";
@@ -46,25 +45,6 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
   const handleRefresh = () => {
     if (projectPath) {
       browseDirectory(projectPath).catch(() => {});
-    }
-  };
-
-  const handleNewTerminal = async () => {
-    if (!selectedProjectId || !projectPath) {
-      toast.error("Select an active project first to open a terminal.");
-      return;
-    }
-
-    try {
-      const terminal = await openTerminal({ projectId: selectedProjectId, cwd: projectPath });
-      setDockedTerminal({
-        type: "terminal",
-        projectId: selectedProjectId,
-        terminalId: terminal.id,
-        title: "Terminal",
-      });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to open terminal.");
     }
   };
 
@@ -153,22 +133,13 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
           <span className="truncate">{currentProject?.name ?? "Explorer"}</span>
         </div>
         {projectPath && (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handleNewTerminal}
-              title="New Terminal"
-              className="p-1 text-foreground-muted hover:text-foreground hover:bg-surface-hover rounded transition-colors"
-            >
-              <HugeiconsIcon icon={ComputerTerminal01Icon} size={13} />
-            </button>
-            <button
-              onClick={handleRefresh}
-              title="Refresh File Tree"
-              className="p-1 text-foreground-muted hover:text-foreground hover:bg-surface-hover rounded transition-colors"
-            >
-              <RefreshCw size={12} />
-            </button>
-          </div>
+          <button
+            onClick={handleRefresh}
+            title="Refresh File Tree"
+            className="p-1 text-foreground-muted hover:text-foreground hover:bg-surface-hover rounded transition-colors"
+          >
+            <RefreshCw size={12} />
+          </button>
         )}
       </div>
 

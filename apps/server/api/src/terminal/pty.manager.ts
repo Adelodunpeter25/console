@@ -11,6 +11,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmodSync } from "node:fs";
+import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import pty from "node-pty";
@@ -20,6 +21,8 @@ import type {
   TerminalSpawnParams,
   TerminalSpawnedEvent,
 } from "@console/types";
+
+const require = createRequire(import.meta.url);
 
 /** Callback the route registers to receive pty events for a session. */
 export interface PtyCallbacks {
