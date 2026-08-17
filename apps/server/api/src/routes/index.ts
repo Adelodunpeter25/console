@@ -5,5 +5,6 @@ export * from "./fs.js";
 export * from "./notifications.js";
 export * from "./projects.js";
 export * from "./providers.js";
+export * from "./model-favorites.js";
 export * from "./run.js";
 export * from "./sessions.js";

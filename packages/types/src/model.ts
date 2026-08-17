@@ -16,6 +16,11 @@ export interface Model {
   supportsImages?: boolean;
 }
 
+export interface ModelFavorite {
+  provider: ProviderId;
+  modelId: string;
+}
+
 export interface ProviderCatalogEntry {
   name: ProviderId;
   displayName: string;

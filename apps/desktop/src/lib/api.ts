@@ -6,6 +6,7 @@ import type {
   FileSearchResponse,
   GitStatusSummary,
   ImageAttachment,
+  ModelFavorite,
   ProjectInfo,
   ProviderCatalogEntry,
   SessionDetailResponse,
@@ -212,6 +213,12 @@ export const api = {
   listProviders: () => request<ProviderCatalogEntry[]>("/api/providers"),
   getProviderModels: (providerId: string) =>
     request<ProviderModelsResult>(`/api/providers/${encodeURIComponent(providerId)}/models`),
+  listModelFavorites: () => request<ModelFavorite[]>("/api/model-favorites"),
+  setModelFavorite: (favorite: ModelFavorite, isFavorite: boolean) =>
+    request<{ provider: string; modelId: string; favorite: boolean }>("/api/model-favorites", {
+      method: "PUT",
+      body: JSON.stringify({ ...favorite, favorite: isFavorite }),
+    }),
 
   // --- config / approval modes ---
   getApprovalModes: () => request<ApprovalModeOption[]>("/api/config/approval-modes"),

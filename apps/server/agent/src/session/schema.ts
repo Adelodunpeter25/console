@@ -38,6 +38,13 @@ export function initGlobalDatabase(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_sessions_cwd ON sessions(cwd);
     CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS model_favorites (
+      provider TEXT NOT NULL,
+      model_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (provider, model_id)
+    );
   `);
 
   // Migration: add columns to pre-existing sessions tables.

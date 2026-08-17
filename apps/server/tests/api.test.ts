@@ -134,7 +134,31 @@ const app = createApiApp();
   console.log("  ✅ GET /api/providers & GET /api/providers/:id/models");
 }
 
-// 7. Session Persistence CRUD
+// 7. Model Favorites
+{
+  const favorite = { provider: "gemini", modelId: "api-test-model" };
+  const saveRes = await app.request("/api/model-favorites", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...favorite, favorite: true }),
+  });
+  assert.equal(saveRes.status, 200);
+
+  const listRes = await app.request("/api/model-favorites");
+  assert.equal(listRes.status, 200);
+  const listJson = await listRes.json();
+  assert.ok(listJson.data.some((item: typeof favorite) => item.provider === favorite.provider && item.modelId === favorite.modelId));
+
+  const removeRes = await app.request("/api/model-favorites", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...favorite, favorite: false }),
+  });
+  assert.equal(removeRes.status, 200);
+  console.log("  ✅ Model Favorites (/api/model-favorites)");
+}
+
+// 8. Session Persistence CRUD
 {
   // Create
   const createRes = await app.request("/api/sessions", {

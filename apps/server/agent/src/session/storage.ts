@@ -16,12 +16,13 @@ import DatabaseConstructor, { type Database as DatabaseType } from "better-sqlit
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { AgentMessage, SessionHeader, ProjectInfo, ToolResult } from "../types/index.js";
+import type { AgentMessage, ModelFavorite, SessionHeader, ProjectInfo, ToolResult } from "../types/index.js";
 import { initGlobalDatabase } from "./schema.js";
 import { getGlobalDbPath, getConsoleStorageDir } from "./apppaths.js";
 import { type StorageState } from "./utils.js";
 import * as Projects from "./projects.js";
 import * as Sessions from "./sessions.js";
+import * as ModelFavorites from "./model-favorites.js";
 
 export class SqliteSessionStorage {
   private state: StorageState;
@@ -153,6 +154,14 @@ export class SqliteSessionStorage {
 
   updateApprovalMode(sessionId: string, approvalMode: string): boolean {
     return Sessions.updateApprovalMode(this.state, sessionId, approvalMode);
+  }
+
+  listModelFavorites() {
+    return ModelFavorites.listModelFavorites(this.state.globalDb);
+  }
+
+  setModelFavorite(favorite: ModelFavorite, isFavorite: boolean): void {
+    ModelFavorites.setModelFavorite(this.state.globalDb, favorite, isFavorite);
   }
 
   // MARK: - Lifecycle

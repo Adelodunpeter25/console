@@ -13,6 +13,7 @@ import { projectRoutes } from "./routes/projects.js";
 import { providerRoutes } from "./routes/providers.js";
 import { runRoutes } from "./routes/run.js";
 import { sessionRoutes } from "./routes/sessions.js";
+import { modelFavoriteRoutes } from "./routes/model-favorites.js";
 
 import { gitRoutes } from "./routes/git.js";
 
@@ -38,6 +39,7 @@ export function createApiApp(): Hono {
   api.route("/", notificationRoutes);
   api.route("/", projectRoutes);
   api.route("/", providerRoutes);
+  api.route("/", modelFavoriteRoutes);
   api.route("/", sessionRoutes);
   api.route("/", runRoutes);
 

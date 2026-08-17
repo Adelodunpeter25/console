@@ -11,6 +11,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Model, ProviderCatalogEntry, ProviderId } from "@console/types";
+import { useModelFavorites, modelFavoriteKey } from "../../hooks/useModelFavorites";
 import { useProviderStore } from "../../store/useProviderStore";
 import { Dropdown } from "./Dropdown";
 
@@ -21,8 +22,6 @@ interface ModelSelectorProps {
 }
 
 type PickerTab = ProviderId | "favorites";
-
-const FAVORITES_STORAGE_KEY = "console.model-picker.favorites";
 
 const PROVIDER_ICONS: Record<ProviderId, LucideIcon> = {
   gemini: Sparkles,
@@ -40,24 +39,11 @@ const PROVIDER_IMAGES: Partial<Record<ProviderId, string>> = {
 
 const PROVIDER_MASK_IMAGES = new Set<ProviderId>(["antigravity", "opencode", "codebuff"]);
 
-function modelKey(provider: ProviderId, modelId: string): string {
-  return `${provider}:${modelId}`;
-}
-
 function formatModelName(modelId: string): string {
   return modelId
     .split(/[-_]/g)
     .map((part) => (part.length > 0 ? part[0]!.toUpperCase() + part.slice(1) : part))
     .join(" ");
-}
-
-function readFavorites(): string[] {
-  try {
-    const saved = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) ?? "[]");
-    return Array.isArray(saved) && saved.every((item) => typeof item === "string") ? saved : [];
-  } catch {
-    return [];
-  }
 }
 
 function providerModels(
@@ -68,7 +54,7 @@ function providerModels(
 }
 
 /**
- * Provider-filtered model picker with locally persisted favorites.
+ * Provider-filtered model picker with server-persisted favorites.
  * Provider and model data remain owned by the provider store/backend.
  */
 export function ModelSelector({ value, provider, onChange }: ModelSelectorProps) {
@@ -80,10 +66,9 @@ export function ModelSelector({ value, provider, onChange }: ModelSelectorProps)
   const loadingModels = useProviderStore((state) => state.loadingModels);
   const [search, setSearch] = React.useState("");
   const [activeTab, setActiveTab] = React.useState<PickerTab>("favorites");
-  const [favorites, setFavorites] = React.useState<string[]>(readFavorites);
   const [open, setOpen] = React.useState(false);
+  const { favorites, favoriteSet, toggleFavorite: toggleModelFavorite } = useModelFavorites();
 
-  const favoriteSet = React.useMemo(() => new Set(favorites), [favorites]);
   const query = search.trim().toLowerCase();
 
   React.useEffect(() => {
@@ -102,25 +87,10 @@ export function ModelSelector({ value, provider, onChange }: ModelSelectorProps)
     }
   }, [activeTab, loadModels]);
 
-  React.useEffect(() => {
-    try {
-      localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites));
-    } catch {
-      // Favorites still work for the current session if storage is unavailable.
-    }
-  }, [favorites]);
-
   const handleOpen = () => {
     providers.forEach((item) => {
       if (!modelsByProvider[item.name]) void loadModels(item.name).catch(() => {});
     });
-  };
-
-  const toggleFavorite = (item: Model) => {
-    const key = modelKey(item.provider, item.id);
-    setFavorites((current) =>
-      current.includes(key) ? current.filter((favorite) => favorite !== key) : [...current, key],
-    );
   };
 
   const getVisibleModels = (): Array<{ model: Model; provider: ProviderCatalogEntry }> => {
@@ -132,7 +102,7 @@ export function ModelSelector({ value, provider, onChange }: ModelSelectorProps)
     return selectedProviders.flatMap((item) =>
       providerModels(item, modelsByProvider)
         .filter((model) => {
-          if (activeTab === "favorites" && !favoriteSet.has(modelKey(item.name, model.id))) {
+          if (activeTab === "favorites" && !favoriteSet.has(modelFavoriteKey(item.name, model.id))) {
             return false;
           }
           return !query || model.id.toLowerCase().includes(query);
@@ -250,7 +220,7 @@ export function ModelSelector({ value, provider, onChange }: ModelSelectorProps)
               </div>
             ) : (
               visibleModels.map(({ model, provider: modelProvider }) => {
-                const favorite = favoriteSet.has(modelKey(modelProvider.name, model.id));
+                const favorite = favoriteSet.has(modelFavoriteKey(modelProvider.name, model.id));
                 const selected = value === model.id;
                 const loading = loadingModels[modelProvider.name];
                 return (
@@ -282,7 +252,7 @@ export function ModelSelector({ value, provider, onChange }: ModelSelectorProps)
                     <button
                       type="button"
                       aria-label={favorite ? `Remove ${model.id} from favorites` : `Add ${model.id} to favorites`}
-                      onClick={() => toggleFavorite(model)}
+                      onClick={() => toggleModelFavorite(model)}
                       className={`mr-1.5 rounded p-1.5 outline-none transition-colors focus-visible:ring-1 focus-visible:ring-white/[0.35] ${
                         favorite
                           ? "text-yellow-400"
