@@ -21,7 +21,7 @@ export function createApiApp(): Hono {
   const app = new Hono();
 
   // Middleware
-  app.use("*", cors({ origin: "*", allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"] }));
+  app.use("*", cors({ origin: "*", allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] }));
   app.use("*", logger());
 
   // Health check
