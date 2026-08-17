@@ -13,6 +13,14 @@ interface FileSearchPaletteProps {
   onOpenChange: (open: boolean) => void;
 }
 
+function splitFilePath(filePath: string): { name: string; directory: string } {
+  const normalized = filePath.replace(/\\/g, "/");
+  const separator = normalized.lastIndexOf("/");
+  return separator < 0
+    ? { name: normalized, directory: "" }
+    : { name: normalized.slice(separator + 1), directory: normalized.slice(0, separator) };
+}
+
 /** Quick-open palette for files in the active project. */
 export function FileSearchPalette({ open, onOpenChange }: FileSearchPaletteProps) {
   const [query, setQuery] = React.useState("");
@@ -135,24 +143,30 @@ export function FileSearchPalette({ open, onOpenChange }: FileSearchPaletteProps
             </Command.Empty>
           )}
 
-          {!loading && !error && results.length > 0 && (
-            <Command.Group
-              heading="Files"
-              className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-foreground-muted [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider"
-            >
-              {results.map((file) => (
-                <Command.Item
-                  key={file.absolutePath}
-                  value={file.relativePath}
-                  onSelect={() => handleSelect(file)}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-foreground-secondary aria-selected:bg-white/8 aria-selected:text-foreground cursor-pointer transition-colors"
-                >
-                  <FileIcon fileName={file.relativePath} className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{file.relativePath}</span>
-                </Command.Item>
-              ))}
-            </Command.Group>
-          )}
+          {results.map((file) => {
+            const { name, directory } = splitFilePath(file.relativePath);
+            return (
+              <Command.Item
+                key={file.absolutePath}
+                value={file.relativePath}
+                onSelect={() => handleSelect(file)}
+                className="group flex items-center gap-3 px-5 py-2.5 rounded-md text-foreground aria-selected:bg-[#1473e6] aria-selected:text-white cursor-pointer transition-colors"
+              >
+                <FileIcon
+                  fileName={file.relativePath}
+                  className="w-4 h-4 shrink-0 text-foreground-muted group-aria-selected:text-white"
+                />
+                <span className="flex min-w-0 items-baseline gap-4">
+                  <span className="shrink-0 text-[15px] font-medium">{name}</span>
+                  {directory && (
+                    <span className="file-path truncate text-sm text-foreground-muted">
+                      {directory}
+                    </span>
+                  )}
+                </span>
+              </Command.Item>
+            );
+          })}
         </Command.List>
 
         <div className="flex items-center gap-3 px-3 py-2 border-t border-border text-xs text-foreground-muted">
