@@ -103,10 +103,11 @@ export function FileSearchPalette({ open, onOpenChange }: FileSearchPaletteProps
       onOpenChange={onOpenChange}
       label="Search files"
       shouldFilter={false}
+      disablePointerSelection
       className="fixed inset-0 z-[101] flex items-start justify-center pt-[15vh]"
       overlayClassName="fixed inset-0 bg-black/60 backdrop-blur-sm"
     >
-      <div className="w-full max-w-2xl bg-card border border-border-strong rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[60vh]">
+      <div className="w-full max-w-xl bg-card border border-border-strong rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[60vh]">
         <div className="flex items-center gap-2 px-3 py-3 border-b border-border">
           <Search size={16} className="text-foreground-muted shrink-0 ml-1" />
           <Command.Input
