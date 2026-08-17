@@ -7,7 +7,7 @@ import "@xterm/xterm/css/xterm.css";
 export const DEFAULT_TERMINAL_OPTIONS: ITerminalOptions = {
   fontSize: 13,
   fontFamily:
-    'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+    '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
   cursorBlink: true,
   cursorStyle: "block",
   scrollback: 10000,

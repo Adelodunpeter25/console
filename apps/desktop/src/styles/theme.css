@@ -39,7 +39,7 @@
   --color-dropzone-badge-border: rgba(217, 119, 6, 0.35);
   --color-dropzone-badge-text: #f59e0b;
 
-  --font-sans: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --radius-glass: 0.75rem;

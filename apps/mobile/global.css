@@ -10,5 +10,5 @@
   --color-foreground-secondary: #a1a1aa;
   --color-primary: #ffffff;
   --font-mono: "JetBrainsMono";
-  --font-sans: "JetBrainsMono";
+  --font-sans: system-ui, sans-serif;
 }
