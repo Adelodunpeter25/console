@@ -154,12 +154,12 @@ export function ModelSelector({ value, provider, onChange }: ModelSelectorProps)
       label={value ? formatModelName(value) : "Default"}
       heading="Models"
       onOpen={handleOpen}
-      width={500}
+      width={480}
       scrollable={false}
       open={open}
       onOpenChange={setOpen}
     >
-      <div className="flex h-[min(380px,calc(100vh-8rem))] min-h-0">
+      <div className="flex h-[min(350px,calc(100vh-8rem))] min-h-0">
         <aside className="flex w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-white/[0.08] pr-1">
           <button
             type="button"
