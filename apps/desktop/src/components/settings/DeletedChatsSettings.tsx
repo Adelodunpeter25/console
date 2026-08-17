@@ -50,13 +50,70 @@ export function DeletedChatsSettings() {
     }
   };
 
+  const handleRestoreAll = async () => {
+    if (deletedSessions.length === 0) return;
+    setBusyId("all");
+    try {
+      for (const session of deletedSessions) {
+        await restoreSession(session.id);
+      }
+      toast.success("All deleted chats restored.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to restore all chats.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handlePermanentDeleteAll = async () => {
+    if (deletedSessions.length === 0) return;
+    const confirmed = await api.confirmDialog(
+      "Delete All Chats Permanently",
+      `All ${deletedSessions.length} deleted chats and their message histories will be permanently deleted. This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    setBusyId("all");
+    try {
+      for (const session of deletedSessions) {
+        await permanentlyDeleteSession(session.id);
+      }
+      toast.success("All deleted chats permanently deleted.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to delete all chats.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div className="flex-1 overflow-y-auto bg-screen px-5 py-5">
-      <div className="mb-5">
-        <h2 className="text-base font-semibold tracking-tight text-foreground">Deleted Chats</h2>
-        <p className="mt-0.5 text-xs text-foreground-secondary">
-          Restore deleted chats or permanently remove them and their message history.
-        </p>
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold tracking-tight text-foreground">Deleted Chats</h2>
+          <p className="mt-0.5 text-xs text-foreground-secondary">
+            Restore deleted chats or permanently remove them and their message history.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            disabled={busyId !== null || deletedSessions.length === 0}
+            onClick={() => void handleRestoreAll()}
+            className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-[11px] text-foreground-secondary transition-colors hover:bg-white/[0.08] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {busyId === "all" ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+            Restore all
+          </button>
+          <button
+            type="button"
+            disabled={busyId !== null || deletedSessions.length === 0}
+            onClick={() => void handlePermanentDeleteAll()}
+            className="flex items-center gap-1 rounded-md border border-danger/30 px-2.5 py-1.5 text-[11px] text-danger transition-colors hover:bg-danger-muted disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Trash2 size={12} /> Delete all
+          </button>
+        </div>
       </div>
 
       <GlassSurface className="mb-4 border-warning/20 bg-warning-muted/30 p-4">

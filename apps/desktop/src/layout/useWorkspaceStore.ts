@@ -43,6 +43,7 @@ interface WorkspaceState {
   splitPane: (paneId: string, direction: SplitDirection) => void;
   closePane: (paneId: string) => void;
   closeChatTab: (sessionId: string) => void;
+  updateChatTabTitle: (sessionId: string, title: string) => void;
   updateChatTabProject: (sessionId: string, newProjectId: string) => void;
   dropTabOnPane: (
     targetPaneId: string,
@@ -269,6 +270,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         }
         return { ...leaf, tabs: nextTabs, activeTabId: nextActive };
       }),
+    }));
+  },
+
+  updateChatTabTitle: (sessionId, title) => {
+    set((s) => ({
+      rootNode: mapTree(s.rootNode, (leaf) => ({
+        ...leaf,
+        tabs: leaf.tabs.map((t) =>
+          t.type === "chat" && t.sessionId === sessionId ? { ...t, title } : t,
+        ),
+      })),
     }));
   },
 

@@ -1,6 +1,7 @@
 import React from "react";
 import type { SessionHeader, SessionStatus } from "@console/types";
-import { FolderClosed, Trash2 } from "lucide-react";
+import { FolderClosed, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { useAppStore } from "../../store/useAppStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useSessionStatusStore } from "../../store/useSessionStatusStore";
@@ -32,9 +33,11 @@ export const SessionItem = React.memo(function SessionItem({
 }: SessionItemProps) {
   const setSelectedProjectId = useAppStore((state) => state.setSelectedProjectId);
   const deleteSession = useProjectStore((state) => state.deleteSession);
+  const updateSession = useProjectStore((state) => state.updateSession);
   const projects = useProjectStore((state) => state.projects);
   const openChatTab = useWorkspaceStore((state) => state.openChatTab);
   const closeChatTab = useWorkspaceStore((state) => state.closeChatTab);
+  const updateChatTabTitle = useWorkspaceStore((state) => state.updateChatTabTitle);
   const contextMenu = useContextMenu();
   const liveStatus = useSessionStatusStore((state) => state.statuses[session.id]);
   const status: SessionStatus = liveStatus ?? session.status ?? "idle";
@@ -92,7 +95,23 @@ export const SessionItem = React.memo(function SessionItem({
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
     contextMenu.open(event.clientX, event.clientY, [
-      { label: "Rename", onClick: () => {} },
+      {
+        label: "Rename",
+        icon: <Pencil size={13} />,
+        onClick: () => {
+          const currentTitle = session.title || "Untitled Chat";
+          const nextTitle = window.prompt("Rename chat", currentTitle)?.trim();
+          if (!nextTitle || nextTitle === currentTitle) return;
+
+          void updateSession(session.id, { title: nextTitle })
+            .then(() => {
+              updateChatTabTitle(session.id, nextTitle);
+            })
+            .catch((err) => {
+              toast.error(err instanceof Error ? err.message : "Unable to rename chat.");
+            });
+        },
+      },
       {
         label: "Delete",
         danger: true,
