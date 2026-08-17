@@ -1,7 +1,7 @@
 import React from "react";
 import { ArrowUp, Square, Paperclip, X } from "lucide-react";
 import { toast } from "sonner";
-import type { ApprovalMode, ImageAttachment, ProjectInfo } from "@console/types";
+import type { ApprovalMode, ImageAttachment, ProjectInfo, ProviderId } from "@console/types";
 import { DragDropZone } from "../common/DragDropZone";
 import { ImageViewerModal } from "../common/ImageViewerModal";
 import { ModelSelector } from "../common/ModelSelector";
@@ -19,8 +19,9 @@ interface ComposerProps {
   running: boolean;
   disabled: boolean;
   selectedModel: string | null;
+  selectedProvider?: string | null;
   selectedModelSupportsImages?: boolean;
-  onModelChange: (modelId: string) => void;
+  onModelChange: (modelId: string, provider?: ProviderId) => void;
   approvalMode: ApprovalMode;
   onApprovalModeChange: (mode: ApprovalMode) => void;
   projects: ProjectInfo[];
@@ -51,6 +52,7 @@ export function Composer({
   running,
   disabled,
   selectedModel,
+  selectedProvider,
   selectedModelSupportsImages,
   onModelChange,
   approvalMode,
@@ -249,7 +251,11 @@ export function Composer({
               fallbackLabel={projectFallbackLabel}
               onSelect={onProjectChange}
             />
-            <ModelSelector value={selectedModel} onChange={onModelChange} />
+            <ModelSelector
+              value={selectedModel}
+              provider={selectedProvider}
+              onChange={onModelChange}
+            />
             <ApprovalModeSelector value={approvalMode} onChange={onApprovalModeChange} />
           </div>
         </div>

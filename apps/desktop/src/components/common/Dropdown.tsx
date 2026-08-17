@@ -12,6 +12,10 @@ interface DropdownContextValue {
 
 const DropdownContext = React.createContext<DropdownContextValue>({ close: () => {} });
 
+export function useDropdown(): DropdownContextValue {
+  return React.useContext(DropdownContext);
+}
+
 interface DropdownProps {
   /** Currently selected value label shown in the trigger button. */
   label: string;
@@ -21,6 +25,11 @@ interface DropdownProps {
   onOpen?: () => void;
   /** Popover width in px. */
   width?: number;
+  /** Disable the default scrolling wrapper when the content manages its own layout. */
+  scrollable?: boolean;
+  /** Optional controlled open state for dropdowns with custom menu interactions. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   children: React.ReactNode;
 }
 
@@ -29,9 +38,24 @@ interface DropdownProps {
  * compact trigger button, upward-opening popover with a heading.
  * Closes automatically when any DropdownItem is selected.
  */
-export function Dropdown({ label, heading, onOpen, width = 256, children }: DropdownProps) {
-  const [open, setOpen] = React.useState(false);
+export function Dropdown({
+  label,
+  heading,
+  onOpen,
+  width = 256,
+  scrollable = true,
+  open: controlledOpen,
+  onOpenChange,
+  children,
+}: DropdownProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
   const ref = React.useRef<HTMLDivElement>(null);
+
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
 
   React.useEffect(() => {
     if (!open) return;
@@ -77,7 +101,7 @@ export function Dropdown({ label, heading, onOpen, width = 256, children }: Drop
             <div className="px-1.5 py-1 text-[10px] font-medium uppercase tracking-wider text-foreground-muted">
               <span>{heading}</span>
             </div>
-            <div className="max-h-80 overflow-y-auto">{children}</div>
+            <div className={scrollable ? "max-h-80 overflow-y-auto" : undefined}>{children}</div>
           </div>
         </DropdownContext.Provider>
       )}

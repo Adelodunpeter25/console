@@ -1,6 +1,6 @@
 import React from "react";
 import { toast } from "sonner";
-import type { ApprovalMode, ImageAttachment } from "@console/types";
+import type { ApprovalMode, ImageAttachment, ProviderId } from "@console/types";
 import { useChatStore } from "../store/useChatStore";
 import { useProjectStore } from "../store/useProjectStore";
 import { useProviderStore } from "../store/useProviderStore";
@@ -131,8 +131,8 @@ export function ChatScreen({ sessionId, projectId }: ChatScreenProps) {
   }, [selectedSessionId, abort]);
 
   const handleModelChange = React.useCallback(
-    (modelId: string) => {
-      if (selectedSessionId && resolvedProjectId) changeModel(selectedSessionId, modelId);
+    (modelId: string, provider?: ProviderId) => {
+      if (selectedSessionId && resolvedProjectId) changeModel(selectedSessionId, modelId, provider);
     },
     [selectedSessionId, resolvedProjectId, changeModel],
   );
@@ -193,6 +193,7 @@ export function ChatScreen({ sessionId, projectId }: ChatScreenProps) {
         running={running}
         disabled={!input.trim() || !resolvedProjectId}
         selectedModel={sessionModelId}
+        selectedProvider={sessionProvider}
         selectedModelSupportsImages={selectedModelSupportsImages}
         onModelChange={handleModelChange}
         approvalMode={approvalMode}

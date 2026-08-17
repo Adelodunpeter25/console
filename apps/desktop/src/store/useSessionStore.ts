@@ -24,7 +24,7 @@ interface SessionState {
 
   loadSession: (sessionId: string) => Promise<SessionDetailResponse | null>;
   getSession: (sessionId: string) => SessionViewState;
-  changeModel: (sessionId: string, modelId: string) => void;
+  changeModel: (sessionId: string, modelId: string, provider?: string) => void;
   changeProject: (sessionId: string, project: ProjectInfo) => void;
   setApprovalMode: (sessionId: string, mode: ApprovalMode) => void;
   clear: () => void;
@@ -66,9 +66,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   getSession: (sessionId) => get().sessions[sessionId] ?? EMPTY_SESSION_VIEW,
 
-  changeModel: (sessionId, modelId) => {
+  changeModel: (sessionId, modelId, selectedProvider) => {
     const current = get().getSession(sessionId);
-    const provider = resolveProvider(modelId, current.sessionProvider);
+    const provider = selectedProvider ?? resolveProvider(modelId, current.sessionProvider);
     set((state) => ({
       sessions: {
         ...state.sessions,
