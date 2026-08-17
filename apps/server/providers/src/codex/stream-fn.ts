@@ -66,6 +66,7 @@ export const codexStreamFn: StreamFn = async function* ({ model, systemPrompt, m
     model: model.id,
     input: convertInput(messages),
     stream: true,
+    store: false,
     ...(systemPrompt.trim() ? { instructions: systemPrompt } : {}),
     ...(tools.length > 0 ? { tools: convertTools(tools) } : {}),
   };
