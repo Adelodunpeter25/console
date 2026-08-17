@@ -101,7 +101,12 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
 
     if (tabConfig) {
       if (sourcePaneId) {
-        useWorkspaceStore.getState().closeTab(sourcePaneId, getTabId(tabConfig));
+        const workspace = useWorkspaceStore.getState();
+        if (tabConfig.type === "terminal") {
+          workspace.detachTab(sourcePaneId, getTabId(tabConfig));
+        } else {
+          workspace.closeTab(sourcePaneId, getTabId(tabConfig));
+        }
       }
       if (tabConfig.type === "terminal") {
         setDockedTerminal(tabConfig);

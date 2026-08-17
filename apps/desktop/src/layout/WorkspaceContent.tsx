@@ -62,11 +62,7 @@ interface WorkspaceContentProps {
  */
 export function WorkspaceContent({ config }: WorkspaceContentProps) {
   if (!config) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-screen">
-        <EmptyState title="No Active Tab" description="Open a chat or select a file to display." />
-      </div>
-    );
+    return <EmptyState title="No Active Tab" description="Open a chat or select a file to display." />;
   }
 
   switch (config.type) {

@@ -13,7 +13,7 @@ interface EmptyStateProps {
  */
 export function EmptyState({ icon: Icon = Brain, title, description }: EmptyStateProps) {
   return (
-    <div className="flex-1 flex items-center justify-center bg-screen">
+    <div className="h-full w-full flex items-center justify-center bg-screen">
       <div className="text-center max-w-sm">
         <div className="w-14 h-14 rounded-2xl bg-card border border-border flex items-center justify-center mx-auto mb-4">
           <Icon size={26} className="text-foreground-muted" />

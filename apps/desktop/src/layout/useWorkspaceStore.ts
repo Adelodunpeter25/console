@@ -35,6 +35,8 @@ interface WorkspaceState {
   openFileTab: (input: OpenFileTabInput) => void;
   openTerminalTab: (input: OpenTerminalTabInput) => void;
   closeTab: (paneId: string, tabId: string) => void;
+  /** Remove a tab without disposing its external resource (used when docking). */
+  detachTab: (paneId: string, tabId: string) => void;
   setActiveTab: (paneId: string, tabId: string) => void;
   setActivePane: (paneId: string) => void;
   splitPane: (paneId: string, direction: SplitDirection) => void;
@@ -133,6 +135,27 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (closedTab && closedTab.type === "terminal") {
       void useTerminalStore.getState().kill(closedTab.terminalId);
     }
+
+    const nextTabs = leaf.tabs.filter((t) => getTabId(t) !== tabId);
+    let nextActiveTabId = leaf.activeTabId;
+    if (leaf.activeTabId === tabId) {
+      const closedIndex = leaf.tabs.findIndex((t) => getTabId(t) === tabId);
+      const fallback = nextTabs[Math.max(0, closedIndex - 1)];
+      nextActiveTabId = fallback ? getTabId(fallback) : null;
+      syncTab(fallback);
+    }
+
+    set((s) => ({
+      rootNode: mapTree(s.rootNode, (l) =>
+        l.id === paneId ? { ...l, tabs: nextTabs, activeTabId: nextActiveTabId } : l,
+      ),
+    }));
+  },
+
+  detachTab: (paneId, tabId) => {
+    const state = get();
+    const leaf = findLeaf(state.rootNode, paneId);
+    if (!leaf) return;
 
     const nextTabs = leaf.tabs.filter((t) => getTabId(t) !== tabId);
     let nextActiveTabId = leaf.activeTabId;
