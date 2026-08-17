@@ -103,3 +103,21 @@ sessionRoutes.post("/sessions/:id/restore", (c) => {
     data: { id, restored: true },
   });
 });
+
+/** DELETE /api/sessions/:id/permanent — Irreversibly delete a soft-deleted session. */
+sessionRoutes.delete("/sessions/:id/permanent", (c) => {
+  const id = c.req.param("id");
+  const deleted = sessionService.permanentlyDeleteSession(id);
+
+  if (!deleted) {
+    return c.json(
+      { success: false, error: `Deleted session '${id}' not found.` },
+      404,
+    );
+  }
+
+  return c.json({
+    success: true,
+    data: { id, permanentlyDeleted: true },
+  });
+});

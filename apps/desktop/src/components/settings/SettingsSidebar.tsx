@@ -1,6 +1,6 @@
-import { ArrowLeft, User, Wifi } from "lucide-react";
+import { ArrowLeft, MessagesSquare, User, Wifi } from "lucide-react";
 
-export type SettingsSection = "account" | "connection";
+export type SettingsSection = "account" | "connection" | "deleted-chats";
 
 interface SettingsSidebarProps {
   active: SettingsSection;
@@ -27,6 +27,11 @@ export function SettingsSidebar({ active, onSelect, onBack, width }: SettingsSid
       id: "connection",
       label: "Connection",
       icon: <Wifi size={14} className="shrink-0 text-current" />,
+    },
+    {
+      id: "deleted-chats",
+      label: "Deleted chats",
+      icon: <MessagesSquare size={14} className="shrink-0 text-current" />,
     },
   ];
 

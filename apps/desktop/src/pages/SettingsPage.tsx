@@ -4,6 +4,7 @@ import { TitleBar } from "../components/TitleBar";
 import { SettingsSidebar } from "../components/settings/SettingsSidebar";
 import { ConnectionSettings } from "../components/settings/ConnectionSettings";
 import { AccountSettings } from "../components/settings/AccountSettings";
+import { DeletedChatsSettings } from "../components/settings/DeletedChatsSettings";
 import { ResizablePanel } from "../components/common/ResizablePanel";
 import { getSidebarWidth, setSidebarWidth } from "../lib/ui-store";
 import type { SettingsSection } from "../components/settings/SettingsSidebar";
@@ -58,6 +59,7 @@ export function SettingsPage() {
         <div className="flex-1 flex flex-col h-full overflow-hidden">
           {activeSection === "account" && <AccountSettings />}
           {activeSection === "connection" && <ConnectionSettings />}
+          {activeSection === "deleted-chats" && <DeletedChatsSettings />}
         </div>
       </div>
     </div>

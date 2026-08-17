@@ -19,6 +19,7 @@ interface ProjectState {
   updateSession: (id: string, dto: UpdateSessionDto) => Promise<SessionHeader>;
   deleteSession: (id: string) => Promise<void>;
   restoreSession: (id: string) => Promise<void>;
+  permanentlyDeleteSession: (id: string) => Promise<void>;
   /** Re-fetch a session header from the backend and patch it in-place (e.g. after an auto-renamed title). */
   refreshSessionHeader: (sessionId: string) => Promise<void>;
 }
@@ -106,6 +107,11 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
       return { deletedSessions: filteredDeleted };
     });
+  },
+
+  permanentlyDeleteSession: async (id: string) => {
+    await api.permanentlyDeleteSession(id);
+    set((s) => ({ deletedSessions: s.deletedSessions.filter((sess) => sess.id !== id) }));
   },
 
   refreshSessionHeader: async (sessionId) => {

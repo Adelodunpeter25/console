@@ -131,6 +131,10 @@ export class SqliteSessionStorage {
     return Sessions.restoreSession(this.state, sessionId);
   }
 
+  permanentlyDeleteSession(sessionId: string): boolean {
+    return Sessions.permanentlyDeleteSession(this.state, sessionId);
+  }
+
   updateSessionStatus(sessionId: string, status: string): void {
     Sessions.updateSessionStatus(this.state.globalDb, sessionId, status);
   }

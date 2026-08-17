@@ -233,6 +233,34 @@ export function restoreSession(state: StorageState, sessionId: string): boolean 
   return info.changes > 0;
 }
 
+/** Permanently remove a session that has already been soft-deleted. */
+export function permanentlyDeleteSession(state: StorageState, sessionId: string): boolean {
+  const { globalDb, storageDir } = state;
+  const row = globalDb
+    .prepare(`SELECT project_id, deleted_at FROM sessions WHERE id = ?`)
+    .get(sessionId) as { project_id: string | null; deleted_at: number | null } | undefined;
+
+  if (!row || row.deleted_at === null || row.deleted_at === undefined) return false;
+
+  const db = state.sessionDbs.get(sessionId);
+  if (db) {
+    try {
+      db.close();
+    } catch {
+      // Ignored — the database file can still be removed below.
+    }
+    state.sessionDbs.delete(sessionId);
+  }
+
+  const dbPath = row.project_id
+    ? getSessionDbPath(storageDir, row.project_id, sessionId)
+    : findSessionDbPath(storageDir, sessionId);
+  if (dbPath) removeDbFile(dbPath);
+
+  const info = globalDb.prepare(`DELETE FROM sessions WHERE id = ?`).run(sessionId);
+  return info.changes > 0;
+}
+
 export function updateTitle(state: StorageState, sessionId: string, title: string): boolean {
   const { globalDb, storageDir } = state;
   const projectId = getProjectIdBySessionId(globalDb, sessionId);

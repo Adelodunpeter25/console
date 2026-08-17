@@ -197,6 +197,8 @@ export const api = {
     request<unknown>(`/api/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
   restoreSession: (id: string) =>
     request<unknown>(`/api/sessions/${encodeURIComponent(id)}/restore`, { method: "POST" }),
+  permanentlyDeleteSession: (id: string) =>
+    request<unknown>(`/api/sessions/${encodeURIComponent(id)}/permanent`, { method: "DELETE" }),
 
   // --- projects ---
   listProjects: () => request<ProjectInfo[]>("/api/projects"),

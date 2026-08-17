@@ -84,4 +84,8 @@ export class SessionService {
   restoreSession(sessionId: string): boolean {
     return this.storage.restoreSession(sessionId);
   }
+
+  permanentlyDeleteSession(sessionId: string): boolean {
+    return this.storage.permanentlyDeleteSession(sessionId);
+  }
 }
