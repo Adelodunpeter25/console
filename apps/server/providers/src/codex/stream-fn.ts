@@ -54,9 +54,44 @@ function convertTools(tools: AgentTool[]): Array<Record<string, unknown>> {
     type: "function",
     name: tool.name,
     description: tool.description,
-    parameters: zodToJsonSchema(tool.inputSchema, { target: "openApi3", $refStrategy: "none" }),
+    parameters: normalizeCodexSchema(
+      zodToJsonSchema(tool.inputSchema, { target: "openApi3", $refStrategy: "none" }),
+    ),
     strict: false,
   }));
+}
+
+/**
+ * Codex consumes draft-2020-12 JSON Schema. zod-to-json-schema's OpenAPI
+ * output still uses draft-07's boolean exclusiveMinimum/exclusiveMaximum
+ * keywords, which Codex rejects with errors such as "True is not of type
+ * number". This mirrors the draft upgrade performed by oh-my-pi while
+ * preserving the rest of Console's tool schema.
+ */
+export function normalizeCodexSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(normalizeCodexSchema);
+  if (!value || typeof value !== "object") return value;
+
+  const schema = value as Record<string, unknown>;
+  const normalized: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(schema)) {
+    normalized[key] = normalizeCodexSchema(child);
+  }
+
+  if (normalized.exclusiveMinimum === true) {
+    if (typeof normalized.minimum === "number") normalized.exclusiveMinimum = normalized.minimum;
+    else delete normalized.exclusiveMinimum;
+  } else if (normalized.exclusiveMinimum === false) {
+    delete normalized.exclusiveMinimum;
+  }
+  if (normalized.exclusiveMaximum === true) {
+    if (typeof normalized.maximum === "number") normalized.exclusiveMaximum = normalized.maximum;
+    else delete normalized.exclusiveMaximum;
+  } else if (normalized.exclusiveMaximum === false) {
+    delete normalized.exclusiveMaximum;
+  }
+
+  return normalized;
 }
 
 export const codexStreamFn: StreamFn = async function* ({ model, systemPrompt, messages, tools, signal }) {
