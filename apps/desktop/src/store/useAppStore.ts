@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { setSidebarOpen as persistSidebarOpen, setRightSidebarOpen as persistRightSidebarOpen } from "../lib/ui-store";
 import type { TerminalTabConfig } from "../layout/types";
 
+export const MAX_DOCKED_TERMINALS = 3;
+
 interface AppState {
   selectedProjectId: string | null;
   selectedSessionId: string | null;
@@ -17,7 +19,7 @@ interface AppState {
   setRightSidebarOpen: (open: boolean) => void;
   toggleRightSidebar: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
-  dockTerminal: (terminal: TerminalTabConfig) => void;
+  dockTerminal: (terminal: TerminalTabConfig) => boolean;
   setActiveDockedTerminal: (terminalId: string) => void;
   removeDockedTerminal: (terminalId: string) => void;
 }
@@ -52,11 +54,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     persistRightSidebarOpen(next).catch(() => {});
   },
   setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
-  dockTerminal: (terminal) =>
+  dockTerminal: (terminal) => {
+    let accepted = false;
     set((state) => {
       if (state.dockedTerminals.some((item) => item.terminalId === terminal.terminalId)) {
+        accepted = true;
         return { activeDockedTerminalId: terminal.terminalId };
       }
+      if (state.dockedTerminals.length >= MAX_DOCKED_TERMINALS) return state;
 
       const baseTitle = terminal.title ?? "Terminal";
       const titles = new Set(state.dockedTerminals.map((item) => item.title ?? "Terminal"));
@@ -68,11 +73,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       const nextTerminal = { ...terminal, title };
+      accepted = true;
       return {
         dockedTerminals: [...state.dockedTerminals, nextTerminal],
         activeDockedTerminalId: terminal.terminalId,
       };
-    }),
+    });
+    return accepted;
+  },
   setActiveDockedTerminal: (terminalId) =>
     set((state) =>
       state.dockedTerminals.some((terminal) => terminal.terminalId === terminalId)

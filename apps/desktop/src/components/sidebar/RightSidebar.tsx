@@ -3,7 +3,7 @@ import { FolderTree, Plus, RefreshCw, X } from "lucide-react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ComputerTerminal01Icon } from "@hugeicons/core-free-icons";
 import { Group, Panel, Separator } from "react-resizable-panels";
-import { useAppStore } from "../../store/useAppStore";
+import { MAX_DOCKED_TERMINALS, useAppStore } from "../../store/useAppStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useFsStore } from "../../store/useFsStore";
 import { FileTree } from "../file/FileTree";
@@ -104,6 +104,14 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
     }
 
     if (tabConfig) {
+      const isExistingDockedTerminal =
+        tabConfig.type === "terminal" &&
+        dockedTerminals.some((terminal) => terminal.terminalId === tabConfig.terminalId);
+      if (dockedTerminals.length >= MAX_DOCKED_TERMINALS && !isExistingDockedTerminal) {
+        useWorkspaceStore.getState().setDraggedTab(null);
+        return;
+      }
+
       if (sourcePaneId) {
         const workspace = useWorkspaceStore.getState();
         if (tabConfig.type === "terminal") {
@@ -121,12 +129,13 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
         if (pId && pPath) {
           try {
             const terminal = await openTerminal({ projectId: pId, cwd: pPath });
-            dockTerminal({
+            const accepted = dockTerminal({
               type: "terminal",
               projectId: pId,
               terminalId: terminal.id,
               title: "Terminal",
             });
+            if (!accepted) void killTerminal(terminal.id);
           } catch {}
         }
       }
@@ -139,18 +148,21 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
   ) ?? dockedTerminals[0];
 
   const handleNewTerminal = async () => {
+    if (dockedTerminals.length >= MAX_DOCKED_TERMINALS) return;
+
     const projectId = selectedProjectId ?? activeDockedTerminal?.projectId;
     const path = projects.find((project) => project.id === projectId)?.path;
     if (!projectId || !path) return;
 
     try {
       const terminal = await openTerminal({ projectId, cwd: path });
-      dockTerminal({
+      const accepted = dockTerminal({
         type: "terminal",
         projectId,
         terminalId: terminal.id,
         title: "Terminal",
       });
+      if (!accepted) void killTerminal(terminal.id);
     } catch {
       // The terminal store owns the error state for failed spawns.
     }
@@ -249,9 +261,14 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
                 </div>
                 <button
                   onClick={() => void handleNewTerminal()}
-                  title="New Terminal"
+                  disabled={dockedTerminals.length >= MAX_DOCKED_TERMINALS}
+                  title={
+                    dockedTerminals.length >= MAX_DOCKED_TERMINALS
+                      ? "Maximum of 3 terminals"
+                      : "New Terminal"
+                  }
                   aria-label="New Terminal"
-                  className="p-1.5 mr-1 text-foreground-muted hover:text-foreground rounded hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+                  className="p-1.5 mr-1 text-foreground-muted hover:text-foreground rounded hover:bg-white/10 transition-colors cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Plus size={13} />
                 </button>
