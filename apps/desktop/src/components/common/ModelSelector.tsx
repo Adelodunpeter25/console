@@ -154,7 +154,7 @@ export function ModelSelector({ value, provider, onChange }: ModelSelectorProps)
       label={value ? formatModelName(value) : "Default"}
       heading="Models"
       onOpen={handleOpen}
-      width={620}
+      width={500}
       scrollable={false}
       open={open}
       onOpenChange={setOpen}
