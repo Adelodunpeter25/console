@@ -28,6 +28,7 @@ const PROVIDER_ICONS: Record<ProviderId, LucideIcon> = {
   antigravity: WandSparkles,
   opencode: Code2,
   codebuff: Bot,
+  codex: Bot,
 };
 
 const PROVIDER_IMAGES: Partial<Record<ProviderId, string>> = {
@@ -35,9 +36,10 @@ const PROVIDER_IMAGES: Partial<Record<ProviderId, string>> = {
   antigravity: "/providers/antigravity.svg",
   opencode: "/providers/opencode.svg",
   codebuff: "/providers/codebuff.svg",
+  codex: "/providers/openai.svg",
 };
 
-const PROVIDER_MASK_IMAGES = new Set<ProviderId>(["antigravity", "opencode", "codebuff"]);
+const PROVIDER_MASK_IMAGES = new Set<ProviderId>(["antigravity", "opencode", "codebuff", "codex"]);
 
 function formatModelName(modelId: string): string {
   return modelId

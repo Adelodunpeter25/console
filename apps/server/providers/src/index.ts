@@ -8,6 +8,19 @@ export { geminiStreamFn } from "./gemini/index.js";
 /** OpenCode Zen provider — free OpenAI-compatible endpoint */
 export { opencodeStreamFn, fetchOpencodeFreeModels } from "./opencode/index.js";
 
+/** OpenAI Codex provider — ChatGPT OAuth and Codex Responses API. */
+export { codexStreamFn } from "./codex/stream-fn.js";
+export {
+  codexCredentialExists,
+  createCodexAuthorizationUrl,
+  exchangeCodexCode,
+  generateCodexPkce,
+  loadCodexCredential,
+  refreshCodexIfNeeded,
+  saveCodexCredential,
+} from "./codex/oauth.js";
+export type { CodexOAuthCredential, ParsedCodexCredential } from "./codex/oauth.js";
+
 /** Codebuff / Freebuff provider — device-code login + OpenAI-compatible backend */
 export {
   codebuffStreamFn,

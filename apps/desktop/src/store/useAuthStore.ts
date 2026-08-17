@@ -28,6 +28,7 @@ const INITIAL_STATUS: AuthStatusResponse = {
   gemini: { loggedIn: false },
   antigravity: { loggedIn: false },
   codebuff: { loggedIn: false },
+  codex: { loggedIn: false },
 };
 
 export const useAuthStore = create<AuthState>((set, get) => ({

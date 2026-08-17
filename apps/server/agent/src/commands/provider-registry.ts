@@ -14,7 +14,12 @@ import {
   refreshIfNeeded,
   codebuffStreamFn,
   CODEBUFF_MODEL_SPECS,
+  codexStreamFn,
+  codexCredentialExists,
+  loadCodexCredential,
+  refreshCodexIfNeeded,
 } from "../../../providers/src/index.js";
+import { codexModelsUrl } from "../../../providers/src/codex/constants.js";
 import type { StreamFn } from "../service/agent-loop.js";
 
 import type { Model, ProviderCatalogEntry, ProviderId } from "../types/index.js";
@@ -71,6 +76,14 @@ export const DEFAULT_CODEBUFF_MODELS: Model[] = CODEBUFF_MODEL_SPECS.map(
   }),
 );
 
+export const DEFAULT_CODEX_MODELS: Model[] = [
+  "gpt-5.5",
+  "gpt-5.3-codex",
+  "gpt-5.2-codex",
+  "gpt-5.1-codex-max",
+  "gpt-5.1-codex",
+].map((id) => ({ id, provider: "codex" as const, contextWindow: 272_000, supportsImages: true }));
+
 export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
   gemini: {
     name: "gemini",
@@ -103,6 +116,14 @@ export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
     authMethod: "device-code",
     models: DEFAULT_CODEBUFF_MODELS,
     getStreamFn: () => codebuffStreamFn,
+  },
+  codex: {
+    name: "codex",
+    displayName: "OpenAI Codex",
+    description: "ChatGPT subscription models through the Codex Responses API",
+    authMethod: "oauth",
+    models: DEFAULT_CODEX_MODELS,
+    getStreamFn: () => codexStreamFn,
   },
 };
 
@@ -141,6 +162,33 @@ export async function fetchModelsForProvider(
 
     if (providerName === "opencode") {
       discovered = await fetchOpencodeFreeModels(signal);
+    } else if (providerName === "codex") {
+      if (!(await codexCredentialExists())) throw new Error("Codex is not logged in");
+      const cred = await refreshCodexIfNeeded(await loadCodexCredential());
+      const response = await fetch(codexModelsUrl(), {
+        headers: {
+          Authorization: `Bearer ${cred.accessToken}`,
+          "chatgpt-account-id": cred.accountId,
+          "OpenAI-Beta": "responses=experimental",
+          originator: "pi",
+          version: "0.144.1",
+          Accept: "application/json",
+        },
+        signal,
+      });
+      if (response.ok) {
+        const payload = (await response.json()) as { models?: Array<{ slug?: string; id?: string; context_window?: number; input_modalities?: string[] }> };
+        discovered = (payload.models ?? []).flatMap((entry) => {
+          const id = entry.slug ?? entry.id;
+          if (!id) return [];
+          return [{
+            id,
+            provider: "codex" as const,
+            contextWindow: entry.context_window ?? 272_000,
+            ...(entry.input_modalities?.includes("image") ? { supportsImages: true } : {}),
+          }];
+        });
+      }
     } else {
       const rawCred = await loadCredential(providerName);
       const cred = await refreshIfNeeded(rawCred, providerName, signal);
@@ -166,8 +214,10 @@ export async function fetchModelsForProvider(
       ? DEFAULT_GEMINI_MODELS
       : providerName === "opencode"
         ? DEFAULT_OPENCODE_MODELS
-        : providerName === "codebuff"
+      : providerName === "codebuff"
           ? DEFAULT_CODEBUFF_MODELS
+          : providerName === "codex"
+            ? DEFAULT_CODEX_MODELS
           : DEFAULT_ANTIGRAVITY_MODELS;
   if (!provider.models || provider.models.length === 0) {
     provider.models = staticFallback;

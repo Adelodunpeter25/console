@@ -81,7 +81,7 @@ declare global {
         authUrl: string;
         port?: number;
         callbackPath?: string;
-      }) => Promise<{ code: string }>;
+      }) => Promise<{ code: string; state?: string }>;
       loadWorkspaceLayout: () => Promise<unknown>;
       saveWorkspaceLayout: (layout: unknown) => Promise<boolean>;
       saveWorkspaceLayoutSync: (layout: unknown) => boolean;
@@ -121,13 +121,19 @@ export const api = {
 
     if (window.electronApi?.authLoginWithBrowser) {
       // Electron launches a local callback server, opens the browser, and waits for redirect
-      const { code } = await window.electronApi.authLoginWithBrowser({
+      const { code, state } = await window.electronApi.authLoginWithBrowser({
         provider,
         authUrl: res.authUrl,
+        ...(res.redirectUri
+          ? {
+              port: Number(new URL(res.redirectUri).port),
+              callbackPath: new URL(res.redirectUri).pathname,
+            }
+          : {}),
       });
 
       // Complete token exchange on the server
-      return api.handleOAuthCallback(provider, code);
+      return api.handleOAuthCallback(provider, code, state);
     }
 
     // Fallback: open external browser

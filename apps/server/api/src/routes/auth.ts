@@ -73,6 +73,9 @@ authRoutes.get("/status", async (c) => {
 authRoutes.post("/login/url", async (c) => {
   const body = await c.req.json<OAuthLoginUrlDto>();
   const provider = body.provider ?? "antigravity";
+  if (provider !== "gemini" && provider !== "antigravity" && provider !== "codex") {
+    return c.json({ success: false, error: "Invalid OAuth provider." }, 400);
+  }
   const result = authService.getLoginUrl(provider);
 
   return c.json({
@@ -86,14 +89,17 @@ authRoutes.post("/login/url", async (c) => {
  */
 authRoutes.post("/login/callback", async (c) => {
   const body = await c.req.json<OAuthCallbackDto>();
-  const { provider, code } = body;
+  const { provider, code, state } = body;
 
+  if (provider !== "gemini" && provider !== "antigravity" && provider !== "codex") {
+    return c.json({ success: false, error: "Invalid OAuth provider." }, 400);
+  }
   if (!code) {
     return c.json({ success: false, error: "Authorization 'code' is required." }, 400);
   }
 
   try {
-    const data = await authService.handleCallback(provider, code);
+    const data = await authService.handleCallback(provider, code, state);
     return c.json({
       success: true,
       data,

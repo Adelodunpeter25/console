@@ -17,7 +17,7 @@ export interface ElectronApi {
     authUrl: string;
     port?: number;
     callbackPath?: string;
-  }) => Promise<{ code: string }>;
+  }) => Promise<{ code: string; state?: string }>;
   loadWorkspaceLayout: () => Promise<unknown>;
   saveWorkspaceLayout: (layout: unknown) => Promise<boolean>;
   saveWorkspaceLayoutSync: (layout: unknown) => boolean;

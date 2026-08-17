@@ -17,7 +17,14 @@ import {
   loadCodebuffCredential,
   pollCodebuffLogin,
   startCodebuffLogin,
+  codexCredentialExists,
+  createCodexAuthorizationUrl,
+  exchangeCodexCode,
+  generateCodexPkce,
+  loadCodexCredential,
+  saveCodexCredential,
 } from "../../../providers/src/index.js";
+import * as crypto from "node:crypto";
 import type { AuthStatusResponse } from "../types/index.js";
 import type { OAuthProviderId } from "@console/types";
 
@@ -35,10 +42,19 @@ async function tryLoadCredential(type: OAuthProviderId) {
 }
 
 export class AuthService {
+  private readonly codexPending = new Map<string, { verifier: string; expiresAt: number }>();
+
   async getAuthStatus(): Promise<AuthStatusResponse> {
     const geminiCred = await tryLoadCredential("gemini");
     const antigravityCred = await tryLoadCredential("antigravity");
     const codebuffCred = await loadCodebuffCredential();
+    const codexCred = await (async () => {
+      try {
+        return await loadCodexCredential();
+      } catch {
+        return null;
+      }
+    })();
 
     const [geminiConfigured, antigravityConfigured] = await Promise.all([
       getConfiguredProjectId("gemini"),
@@ -61,6 +77,10 @@ export class AuthService {
       codebuff: {
         loggedIn: Boolean(codebuffCred?.authToken),
         email: codebuffCred?.email,
+      },
+      codex: {
+        loggedIn: Boolean(codexCred?.accessToken) || (await codexCredentialExists()),
+        email: codexCred?.email,
       },
     };
   }
@@ -96,6 +116,14 @@ export class AuthService {
     authUrl: string;
     redirectUri: string;
   } {
+    if (provider === "codex") {
+      const state = crypto.randomBytes(24).toString("hex");
+      const { verifier, challenge } = generateCodexPkce();
+      const result = createCodexAuthorizationUrl({ state, verifierChallenge: challenge });
+      this.codexPending.set(state, { verifier, expiresAt: Date.now() + 10 * 60_000 });
+      return { provider, authUrl: result.authUrl, redirectUri: result.redirectUri };
+    }
+
     const oauthConfig = provider === "gemini" ? GEMINI_OAUTH_CONFIG : ANTIGRAVITY_OAUTH_CONFIG;
 
     const redirectUri = `http://localhost:${oauthConfig.port}${oauthConfig.callbackPath}`;
@@ -117,7 +145,18 @@ export class AuthService {
   async handleCallback(
     provider: OAuthProviderId,
     code: string,
+    state?: string,
   ): Promise<{ provider: string; userEmail?: string; projectId?: string }> {
+    if (provider === "codex") {
+      if (!state) throw new Error("Codex OAuth callback is missing state.");
+      const pending = this.codexPending.get(state);
+      this.codexPending.delete(state);
+      if (!pending || pending.expiresAt < Date.now()) throw new Error("Codex OAuth state is invalid or expired.");
+      const credential = await exchangeCodexCode(code, pending.verifier, "http://localhost:1455/auth/callback");
+      await saveCodexCredential(credential);
+      return { provider, userEmail: credential.email };
+    }
+
     // Load the user-configured project ID (if any) so it takes precedence
     // over env vars during loadCodeAssist.
     const configuredProjectId = await getConfiguredProjectId(provider);

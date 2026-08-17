@@ -3,6 +3,7 @@ import { ipcMain, shell, BrowserWindow } from "electron";
 
 interface OAuthCallbackServerResult {
   code: string;
+  state?: string;
 }
 
 function startCallbackServer(port: number, callbackPath: string): Promise<OAuthCallbackServerResult> {
@@ -12,6 +13,7 @@ function startCallbackServer(port: number, callbackPath: string): Promise<OAuthC
         const reqUrl = new URL(req.url || "/", `http://localhost:${port}`);
         if (reqUrl.pathname === callbackPath) {
           const code = reqUrl.searchParams.get("code");
+          const state = reqUrl.searchParams.get("state") ?? undefined;
           const error = reqUrl.searchParams.get("error");
 
           res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -32,7 +34,7 @@ function startCallbackServer(port: number, callbackPath: string): Promise<OAuthC
           if (error) {
             reject(new Error(`OAuth failed: ${error}`));
           } else if (code) {
-            resolve({ code });
+            resolve({ code, state });
           } else {
             reject(new Error("No code parameter received in OAuth callback."));
           }
@@ -88,7 +90,7 @@ export function registerAuthIpc(getMainWindow: () => BrowserWindow | null): void
       await shell.openExternal(authUrl);
 
       // Wait for OAuth redirect
-      const { code } = await serverPromise;
+      const { code, state } = await serverPromise;
 
       // Bring desktop app back to focus
       const win = getMainWindow();
@@ -97,7 +99,7 @@ export function registerAuthIpc(getMainWindow: () => BrowserWindow | null): void
         win.focus();
       }
 
-      return { code };
+      return { code, state };
     },
   );
 }

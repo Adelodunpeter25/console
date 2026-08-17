@@ -8,6 +8,7 @@ const INITIAL_STATUS: AuthStatusResponse = {
   gemini: { loggedIn: false },
   antigravity: { loggedIn: false },
   codebuff: { loggedIn: false },
+  codex: { loggedIn: false },
 };
 
 interface AuthState {
