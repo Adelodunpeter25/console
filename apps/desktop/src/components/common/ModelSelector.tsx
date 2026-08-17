@@ -35,9 +35,10 @@ const PROVIDER_IMAGES: Partial<Record<ProviderId, string>> = {
   gemini: "/providers/gemini.svg",
   antigravity: "/providers/antigravity.svg",
   opencode: "/providers/opencode.svg",
+  codebuff: "/providers/codebuff.svg",
 };
 
-const PROVIDER_MASK_IMAGES = new Set<ProviderId>(["antigravity", "opencode"]);
+const PROVIDER_MASK_IMAGES = new Set<ProviderId>(["antigravity", "opencode", "codebuff"]);
 
 function modelKey(provider: ProviderId, modelId: string): string {
   return `${provider}:${modelId}`;
