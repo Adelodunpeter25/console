@@ -244,13 +244,13 @@ export function ModelSelector({ value, provider, onChange }: ModelSelectorProps)
                         <span className="min-w-0 flex-1 truncate" title={model.id}>
                           {formatModelName(model.id)}
                         </span>
-                        {selected && <Check size={14} className="shrink-0 text-success" />}
                       </span>
                       <span className="mt-0.5 block truncate text-[10px] text-foreground-muted">
                         {activeTab === "favorites" ? modelProvider.displayName : model.id}
                         {loading && <LoaderCircle size={10} className="ml-1 inline animate-spin" />}
                       </span>
                     </button>
+                    {selected && <Check size={14} className="mr-1 shrink-0 text-success" />}
                     <button
                       type="button"
                       aria-label={favorite ? `Remove ${model.id} from favorites` : `Add ${model.id} to favorites`}
