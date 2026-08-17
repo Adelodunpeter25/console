@@ -32,8 +32,12 @@ const PROVIDER_ICONS: Record<ProviderId, LucideIcon> = {
 };
 
 const PROVIDER_IMAGES: Partial<Record<ProviderId, string>> = {
+  gemini: "/providers/gemini.svg",
+  antigravity: "/providers/antigravity.svg",
   opencode: "/providers/opencode.svg",
 };
+
+const PROVIDER_MASK_IMAGES = new Set<ProviderId>(["antigravity", "opencode"]);
 
 function modelKey(provider: ProviderId, modelId: string): string {
   return `${provider}:${modelId}`;
@@ -187,7 +191,7 @@ export function ModelSelector({ value, provider, onChange }: ModelSelectorProps)
                     : "text-foreground-secondary hover:bg-white/[0.06] hover:text-foreground"
                 }`}
               >
-                {image ? (
+                {image && PROVIDER_MASK_IMAGES.has(item.name) ? (
                   <span
                     aria-hidden="true"
                     className="h-4 w-4 bg-current"
@@ -202,6 +206,8 @@ export function ModelSelector({ value, provider, onChange }: ModelSelectorProps)
                       maskSize: "contain",
                     }}
                   />
+                ) : image ? (
+                  <img src={image} alt="" className="h-4 w-4" />
                 ) : (
                   <Icon size={15} />
                 )}
