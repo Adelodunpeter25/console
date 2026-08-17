@@ -13,9 +13,22 @@ interface WorkspacePaneProps {
 
 function SplitPaneView({ node }: { node: SplitPaneNode }) {
   const isHorizontal = node.direction === "horizontal";
+  const updateSplitSizes = useWorkspaceStore((state) => state.updateSplitSizes);
+  const firstPanelId = `${node.id}-first`;
+  const secondPanelId = `${node.id}-second`;
   return (
-    <Group orientation={node.direction} className="w-full h-full">
-      <Panel defaultSize={node.sizes[0]} minSize={15}>
+    <Group
+      orientation={node.direction}
+      className="w-full h-full"
+      onLayoutChanged={(layout) => {
+        const firstSize = layout[firstPanelId];
+        const secondSize = layout[secondPanelId];
+        if (firstSize !== undefined && secondSize !== undefined) {
+          updateSplitSizes(node.id, [firstSize, secondSize]);
+        }
+      }}
+    >
+      <Panel id={firstPanelId} defaultSize={node.sizes[0]} minSize={15}>
         <WorkspacePane node={node.children[0]} canClosePane={true} />
       </Panel>
 
@@ -27,7 +40,7 @@ function SplitPaneView({ node }: { node: SplitPaneNode }) {
         }
       />
 
-      <Panel defaultSize={node.sizes[1]} minSize={15}>
+      <Panel id={secondPanelId} defaultSize={node.sizes[1]} minSize={15}>
         <WorkspacePane node={node.children[1]} canClosePane={true} />
       </Panel>
     </Group>

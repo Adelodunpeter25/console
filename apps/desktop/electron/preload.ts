@@ -13,6 +13,9 @@ const electronApi: ElectronApi = {
     ipcRenderer.invoke("notification:show", { title, body }),
   getAppVersion: () => ipcRenderer.invoke("app:getVersion"),
   authLoginWithBrowser: (opts) => ipcRenderer.invoke("auth:loginWithBrowser", opts),
+  loadWorkspaceLayout: () => ipcRenderer.invoke("storage:load-layout"),
+  saveWorkspaceLayout: (layout: unknown) => ipcRenderer.invoke("storage:save-layout", layout),
+  saveWorkspaceLayoutSync: (layout: unknown) => ipcRenderer.sendSync("storage:save-layout-sync", layout),
 };
 
 contextBridge.exposeInMainWorld("electronApi", electronApi);

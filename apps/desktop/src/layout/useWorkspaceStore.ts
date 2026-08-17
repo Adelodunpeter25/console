@@ -39,6 +39,7 @@ interface WorkspaceState {
   detachTab: (paneId: string, tabId: string) => void;
   setActiveTab: (paneId: string, tabId: string) => void;
   setActivePane: (paneId: string) => void;
+  updateSplitSizes: (splitId: string, sizes: [number, number]) => void;
   splitPane: (paneId: string, direction: SplitDirection) => void;
   closePane: (paneId: string) => void;
   closeChatTab: (sessionId: string) => void;
@@ -49,6 +50,7 @@ interface WorkspaceState {
     config: WorkspaceTabConfig,
     sourcePaneId?: string,
   ) => void;
+  restoreLayout: (rootNode: WorkspaceNode, activePaneId: string) => void;
 }
 
 const DEFAULT_LEAF_ID = "pane-main";
@@ -124,6 +126,30 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         l.id === paneId ? { ...l, activeTabId: tabId } : l,
       ),
     }));
+  },
+
+  updateSplitSizes: (splitId, sizes) => {
+    function update(node: WorkspaceNode): WorkspaceNode {
+      if (node.type === "leaf") return node;
+      const children: [WorkspaceNode, WorkspaceNode] = [
+        update(node.children[0]),
+        update(node.children[1]),
+      ];
+      const sameChildren = children[0] === node.children[0] && children[1] === node.children[1];
+      const sameSizes = node.sizes[0] === sizes[0] && node.sizes[1] === sizes[1];
+      if (node.id !== splitId && sameChildren) return node;
+      if (node.id === splitId && sameSizes && sameChildren) return node;
+      return {
+        ...node,
+        sizes: node.id === splitId ? sizes : node.sizes,
+        children,
+      };
+    }
+
+    set((s) => {
+      const rootNode = update(s.rootNode);
+      return rootNode === s.rootNode ? s : { rootNode };
+    });
   },
 
   closeTab: (paneId, tabId) => {
@@ -308,5 +334,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
 
     set({ rootNode: injectSplit(workingRoot), activePaneId: newLeafId });
+  },
+
+  restoreLayout: (rootNode, activePaneId) => {
+    const activeLeaf = findLeaf(rootNode, activePaneId) ?? findFirstLeaf(rootNode);
+    const resolvedActivePaneId = activeLeaf.id;
+    const activeTab = activeLeaf.activeTabId
+      ? activeLeaf.tabs.find((tab) => getTabId(tab) === activeLeaf.activeTabId)
+      : undefined;
+    syncTab(activeTab);
+    set({ rootNode, activePaneId: resolvedActivePaneId });
   },
 }));

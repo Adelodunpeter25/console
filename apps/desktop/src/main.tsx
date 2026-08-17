@@ -4,6 +4,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { router } from "./router";
 import { Toaster } from "sonner";
 import { ContextMenuProvider } from "./components/common/ContextMenu";
+import { LayoutPersistence } from "./layout/LayoutPersistence";
 import "./index.css";
 
 const rootEl = document.getElementById("root");
@@ -11,6 +12,7 @@ if (rootEl) {
   createRoot(rootEl).render(
     <React.StrictMode>
       <ContextMenuProvider>
+        <LayoutPersistence />
         <RouterProvider router={router} />
         <Toaster
           theme="dark"

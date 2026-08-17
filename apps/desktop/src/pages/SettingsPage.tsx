@@ -6,12 +6,11 @@ import { ConnectionSettings } from "../components/settings/ConnectionSettings";
 import { AccountSettings } from "../components/settings/AccountSettings";
 import { DeletedChatsSettings } from "../components/settings/DeletedChatsSettings";
 import { ResizablePanel } from "../components/common/ResizablePanel";
-import { getSidebarWidth, setSidebarWidth } from "../lib/ui-store";
+import { useAppStore } from "../store/useAppStore";
 import type { SettingsSection } from "../components/settings/SettingsSidebar";
 
 const SIDEBAR_MIN = 200;
 const SIDEBAR_MAX = 480;
-const SIDEBAR_DEFAULT = 288;
 
 /**
  * Settings page — separate full-page route with its own sidebar.
@@ -24,18 +23,8 @@ const SIDEBAR_DEFAULT = 288;
 export function SettingsPage() {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = React.useState<SettingsSection>("account");
-  const [sidebarWidth, setSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
-
-  // Restore persisted sidebar width on mount.
-  React.useEffect(() => {
-    getSidebarWidth().then((w) => {
-      if (w != null) setSidebarWidthState(Math.min(Math.max(w, SIDEBAR_MIN), SIDEBAR_MAX));
-    });
-  }, []);
-
-  const handleSidebarResizeEnd = (width: number) => {
-    setSidebarWidth(width).catch(() => {});
-  };
+  const sidebarWidth = useAppStore((state) => state.sidebarWidth);
+  const setSidebarWidth = useAppStore((state) => state.setSidebarWidth);
 
   return (
     <div className="flex flex-col h-screen w-screen bg-screen overflow-hidden">
@@ -43,10 +32,9 @@ export function SettingsPage() {
       <div className="flex flex-1 overflow-hidden">
         <ResizablePanel
           width={sidebarWidth}
-          onWidthChange={setSidebarWidthState}
+          onWidthChange={setSidebarWidth}
           minWidth={SIDEBAR_MIN}
           maxWidth={SIDEBAR_MAX}
-          onResizeEnd={handleSidebarResizeEnd}
           handleSide="right"
         >
           <SettingsSidebar

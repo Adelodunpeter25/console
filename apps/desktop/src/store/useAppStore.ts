@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { setSidebarOpen as persistSidebarOpen, setRightSidebarOpen as persistRightSidebarOpen } from "../lib/ui-store";
 import type { TerminalTabConfig } from "../layout/types";
 
 export const MAX_DOCKED_TERMINALS = 3;
@@ -9,6 +8,9 @@ interface AppState {
   selectedSessionId: string | null;
   sidebarOpen: boolean;
   rightSidebarOpen: boolean;
+  sidebarWidth: number;
+  rightSidebarWidth: number;
+  rightSidebarPanelSizes: [number, number];
   commandPaletteOpen: boolean;
   dockedTerminals: TerminalTabConfig[];
   activeDockedTerminalId: string | null;
@@ -18,10 +20,14 @@ interface AppState {
   toggleSidebar: () => void;
   setRightSidebarOpen: (open: boolean) => void;
   toggleRightSidebar: () => void;
+  setSidebarWidth: (width: number) => void;
+  setRightSidebarWidth: (width: number) => void;
+  setRightSidebarPanelSizes: (sizes: [number, number]) => void;
   setCommandPaletteOpen: (open: boolean) => void;
   dockTerminal: (terminal: TerminalTabConfig) => boolean;
   setActiveDockedTerminal: (terminalId: string) => void;
   removeDockedTerminal: (terminalId: string) => void;
+  restoreDockedTerminals: (terminals: TerminalTabConfig[], activeTerminalId: string | null) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -29,30 +35,34 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedSessionId: null,
   sidebarOpen: true,
   rightSidebarOpen: true,
+  sidebarWidth: 288,
+  rightSidebarWidth: 288,
+  rightSidebarPanelSizes: [55, 45],
   commandPaletteOpen: false,
   dockedTerminals: [],
   activeDockedTerminalId: null,
 
   setSelectedProjectId: (selectedProjectId) => set({ selectedProjectId }),
   setSelectedSessionId: (selectedSessionId) => set({ selectedSessionId }),
-  setSidebarOpen: (sidebarOpen) => {
-    set({ sidebarOpen });
-    persistSidebarOpen(sidebarOpen).catch(() => {});
-  },
+  setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
   toggleSidebar: () => {
     const next = !get().sidebarOpen;
     set({ sidebarOpen: next });
-    persistSidebarOpen(next).catch(() => {});
   },
-  setRightSidebarOpen: (rightSidebarOpen) => {
-    set({ rightSidebarOpen });
-    persistRightSidebarOpen(rightSidebarOpen).catch(() => {});
-  },
+  setRightSidebarOpen: (rightSidebarOpen) => set({ rightSidebarOpen }),
   toggleRightSidebar: () => {
     const next = !get().rightSidebarOpen;
     set({ rightSidebarOpen: next });
-    persistRightSidebarOpen(next).catch(() => {});
   },
+  setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
+  setRightSidebarWidth: (rightSidebarWidth) => set({ rightSidebarWidth }),
+  setRightSidebarPanelSizes: (rightSidebarPanelSizes) =>
+    set((state) =>
+      state.rightSidebarPanelSizes[0] === rightSidebarPanelSizes[0] &&
+      state.rightSidebarPanelSizes[1] === rightSidebarPanelSizes[1]
+        ? state
+        : { rightSidebarPanelSizes },
+    ),
   setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
   dockTerminal: (terminal) => {
     let accepted = false;
@@ -102,4 +112,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       return { dockedTerminals, activeDockedTerminalId };
     }),
+  restoreDockedTerminals: (terminals, activeTerminalId) => {
+    const dockedTerminals = terminals.slice(0, MAX_DOCKED_TERMINALS);
+    const activeDockedTerminalId = dockedTerminals.some(
+      (terminal) => terminal.terminalId === activeTerminalId,
+    )
+      ? activeTerminalId
+      : (dockedTerminals[0]?.terminalId ?? null);
+    set({ dockedTerminals, activeDockedTerminalId });
+  },
 }));

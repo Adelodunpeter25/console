@@ -7,23 +7,13 @@ import { ResizablePanel } from "../components/common/ResizablePanel";
 import { CommandPalette } from "../components/commandpalette/CommandPalette";
 import { useAppStore } from "../store/useAppStore";
 import { useProjectStore } from "../store/useProjectStore";
-import { useServerStore } from "../store/useServerStore";
 import { useWorkspaceStore } from "../layout/useWorkspaceStore";
 import { findLeaf, findFirstLeaf } from "../layout/treeHelpers";
 import { getTabId } from "../layout/types";
 import { basename } from "../utils/format";
-import {
-  getSidebarWidth,
-  setSidebarWidth,
-  getRightSidebarWidth,
-  setRightSidebarWidth,
-  getSidebarOpen,
-  getRightSidebarOpen,
-} from "../lib/ui-store";
 
 const SIDEBAR_MIN = 200;
 const SIDEBAR_MAX = 480;
-const SIDEBAR_DEFAULT = 288;
 
 /**
  * MainPage — Top-level shell layout container.
@@ -33,18 +23,16 @@ const SIDEBAR_DEFAULT = 288;
 export function MainPage() {
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen);
-  const setSidebarOpen = useAppStore((state) => state.setSidebarOpen);
-  const setRightSidebarOpen = useAppStore((state) => state.setRightSidebarOpen);
+  const sidebarWidth = useAppStore((state) => state.sidebarWidth);
+  const rightSidebarWidth = useAppStore((state) => state.rightSidebarWidth);
+  const setSidebarWidth = useAppStore((state) => state.setSidebarWidth);
+  const setRightSidebarWidth = useAppStore((state) => state.setRightSidebarWidth);
   const paletteOpen = useAppStore((state) => state.commandPaletteOpen);
   const setPaletteOpen = useAppStore((state) => state.setCommandPaletteOpen);
-  const init = useServerStore((state) => state.init);
 
   const rootNode = useWorkspaceStore((state) => state.rootNode);
   const activePaneId = useWorkspaceStore((state) => state.activePaneId);
   const projects = useProjectStore((state) => state.projects);
-
-  const [sidebarWidth, setSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
-  const [rightSidebarWidth, setRightSidebarWidthState] = React.useState(SIDEBAR_DEFAULT);
 
   // Derive active workspace title: "Chat Title — Project"
   const activeTitle = React.useMemo(() => {
@@ -68,31 +56,6 @@ export function MainPage() {
     return projectName ? `${tabTitle} — ${projectName}` : tabTitle;
   }, [rootNode, activePaneId, projects]);
 
-  // Restore persisted sidebar widths and visibility on mount.
-  React.useEffect(() => {
-    init();
-    getSidebarWidth().then((w) => {
-      if (w != null) setSidebarWidthState(Math.min(Math.max(w, SIDEBAR_MIN), SIDEBAR_MAX));
-    });
-    getRightSidebarWidth().then((w) => {
-      if (w != null) setRightSidebarWidthState(Math.min(Math.max(w, SIDEBAR_MIN), SIDEBAR_MAX));
-    });
-    getSidebarOpen().then((open) => {
-      if (open != null) setSidebarOpen(open);
-    });
-    getRightSidebarOpen().then((open) => {
-      if (open != null) setRightSidebarOpen(open);
-    });
-  }, [init, setSidebarOpen, setRightSidebarOpen]);
-
-  const handleSidebarResizeEnd = (width: number) => {
-    setSidebarWidth(width).catch(() => {});
-  };
-
-  const handleRightSidebarResizeEnd = (width: number) => {
-    setRightSidebarWidth(width).catch(() => {});
-  };
-
   // ⌘K / Ctrl+K toggles the command palette
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -112,10 +75,9 @@ export function MainPage() {
         {sidebarOpen && (
           <ResizablePanel
             width={sidebarWidth}
-            onWidthChange={setSidebarWidthState}
+            onWidthChange={setSidebarWidth}
             minWidth={SIDEBAR_MIN}
             maxWidth={SIDEBAR_MAX}
-            onResizeEnd={handleSidebarResizeEnd}
             handleSide="right"
           >
             <Sidebar width={sidebarWidth} />
@@ -127,10 +89,9 @@ export function MainPage() {
         {rightSidebarOpen && (
           <ResizablePanel
             width={rightSidebarWidth}
-            onWidthChange={setRightSidebarWidthState}
+            onWidthChange={setRightSidebarWidth}
             minWidth={SIDEBAR_MIN}
             maxWidth={SIDEBAR_MAX}
-            onResizeEnd={handleRightSidebarResizeEnd}
             handleSide="left"
           >
             <RightSidebar width={rightSidebarWidth} />

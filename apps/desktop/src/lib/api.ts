@@ -82,6 +82,9 @@ declare global {
         port?: number;
         callbackPath?: string;
       }) => Promise<{ code: string }>;
+      loadWorkspaceLayout: () => Promise<unknown>;
+      saveWorkspaceLayout: (layout: unknown) => Promise<boolean>;
+      saveWorkspaceLayoutSync: (layout: unknown) => boolean;
     };
   }
 }

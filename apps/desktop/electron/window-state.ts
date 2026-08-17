@@ -1,24 +1,11 @@
-import { app, BrowserWindow, screen, type Rectangle } from "electron";
-import fs from "node:fs";
-import path from "node:path";
+import { BrowserWindow, screen, type Rectangle } from "electron";
+import { loadStoredWindowState, saveStoredWindowState, type StoredWindowState } from "./storage";
 
-interface WindowState {
-  x?: number;
-  y?: number;
-  width: number;
-  height: number;
-  isMaximized?: boolean;
-}
-
-const DEFAULT_STATE: WindowState = {
+const DEFAULT_STATE: StoredWindowState = {
   width: 1280,
   height: 800,
   isMaximized: false,
 };
-
-function getStateFilePath(): string {
-  return path.join(app.getPath("userData"), "window-state.json");
-}
 
 function isInsideAnyDisplay(bounds: Partial<Rectangle>): boolean {
   if (bounds.x === undefined || bounds.y === undefined) return false;
@@ -34,17 +21,14 @@ function isInsideAnyDisplay(bounds: Partial<Rectangle>): boolean {
   });
 }
 
-export function loadWindowState(): WindowState {
+export function loadWindowState(): StoredWindowState {
   try {
-    const filePath = getStateFilePath();
-    if (fs.existsSync(filePath)) {
-      const data = JSON.parse(fs.readFileSync(filePath, "utf-8")) as WindowState;
-      if (data && typeof data.width === "number" && typeof data.height === "number") {
-        if (data.x !== undefined && data.y !== undefined && isInsideAnyDisplay(data)) {
-          return data;
-        }
-        return { width: data.width, height: data.height, isMaximized: data.isMaximized };
+    const data = loadStoredWindowState();
+    if (data && typeof data.width === "number" && typeof data.height === "number") {
+      if (data.x !== undefined && data.y !== undefined && isInsideAnyDisplay(data)) {
+        return data;
       }
+      return { width: data.width, height: data.height, isMaximized: data.isMaximized };
     }
   } catch {}
   return DEFAULT_STATE;
@@ -59,7 +43,7 @@ export function trackWindowState(win: BrowserWindow): void {
       try {
         if (win.isDestroyed()) return;
         const isMaximized = win.isMaximized();
-        let state: WindowState;
+        let state: StoredWindowState;
 
         if (isMaximized) {
           const prevState = loadWindowState();
@@ -75,7 +59,7 @@ export function trackWindowState(win: BrowserWindow): void {
           };
         }
 
-        fs.writeFileSync(getStateFilePath(), JSON.stringify(state, null, 2), "utf-8");
+        saveStoredWindowState(state);
       } catch {}
     }, 200);
   };

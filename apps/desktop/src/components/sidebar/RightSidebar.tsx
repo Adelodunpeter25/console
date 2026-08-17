@@ -15,6 +15,8 @@ import { getTabId } from "../../layout/types";
 
 export function RightSidebar({ width = 288 }: { width?: number }) {
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
+  const rightSidebarPanelSizes = useAppStore((state) => state.rightSidebarPanelSizes);
+  const setRightSidebarPanelSizes = useAppStore((state) => state.setRightSidebarPanelSizes);
   const projects = useProjectStore((state) => state.projects);
   const browse = useFsStore((state) => state.browse);
   const browseDirectory = useFsStore((state) => state.browseDirectory);
@@ -213,14 +215,24 @@ export function RightSidebar({ width = 288 }: { width?: number }) {
       className="relative flex flex-col h-full bg-sidebar border-l border-border select-none overflow-hidden shrink-0"
     >
       {dockedTerminals.length > 0 ? (
-        <Group orientation="vertical" className="h-full w-full">
-          <Panel defaultSize={55} minSize={20}>
+        <Group
+          orientation="vertical"
+          className="h-full w-full"
+          onLayoutChanged={(layout) => {
+            const explorerSize = layout["right-sidebar-explorer"];
+            const terminalSize = layout["right-sidebar-terminal"];
+            if (explorerSize !== undefined && terminalSize !== undefined) {
+              setRightSidebarPanelSizes([explorerSize, terminalSize]);
+            }
+          }}
+        >
+          <Panel id="right-sidebar-explorer" defaultSize={rightSidebarPanelSizes[0]} minSize={20}>
             {explorerContent}
           </Panel>
 
           <Separator className="h-[1px] w-full bg-border hover:bg-[#8a5027] transition-colors cursor-row-resize shrink-0" />
 
-          <Panel defaultSize={45} minSize={20}>
+          <Panel id="right-sidebar-terminal" defaultSize={rightSidebarPanelSizes[1]} minSize={20}>
             <div className="flex flex-col h-full bg-[#0d0d0d] overflow-hidden">
               <div className="flex items-center h-8 bg-sidebar border-b border-border text-xs text-foreground shrink-0">
                 <div className="flex items-center h-full min-w-0 flex-1 overflow-x-auto no-scrollbar">
