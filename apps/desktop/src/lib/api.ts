@@ -383,12 +383,14 @@ export const api = {
     const encoded = encodeURIComponent(sessionId || "");
     return request<SlashCommandInfo[]>(sessionId ? `/api/assist/${encoded}/commands` : `/api/assist/commands`);
   },
-  searchFiles: (sessionId: string, query: string) => {
+  searchFiles: (sessionId: string, query: string, root?: string) => {
     const encoded = encodeURIComponent(sessionId || "");
+    const params = new URLSearchParams({ q: query });
+    if (root) params.set("root", root);
     return request<FileSearchResponse>(
       sessionId
-        ? `/api/assist/${encoded}/search?q=${encodeURIComponent(query)}`
-        : `/api/assist/search?q=${encodeURIComponent(query)}`,
+        ? `/api/assist/${encoded}/search?${params.toString()}`
+        : `/api/assist/search?${params.toString()}`,
     );
   },
 

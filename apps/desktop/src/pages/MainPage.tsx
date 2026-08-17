@@ -5,6 +5,7 @@ import { RightSidebar } from "../components/sidebar/RightSidebar";
 import { WorkspaceLayout } from "../layout";
 import { ResizablePanel } from "../components/common/ResizablePanel";
 import { CommandPalette } from "../components/commandpalette/CommandPalette";
+import { FileSearchPalette } from "../components/commandpalette/FileSearchPalette";
 import { useAppStore } from "../store/useAppStore";
 import { useProjectStore } from "../store/useProjectStore";
 import { useWorkspaceStore } from "../layout/useWorkspaceStore";
@@ -29,6 +30,7 @@ export function MainPage() {
   const setRightSidebarWidth = useAppStore((state) => state.setRightSidebarWidth);
   const paletteOpen = useAppStore((state) => state.commandPaletteOpen);
   const setPaletteOpen = useAppStore((state) => state.setCommandPaletteOpen);
+  const [fileSearchOpen, setFileSearchOpen] = React.useState(false);
 
   const rootNode = useWorkspaceStore((state) => state.rootNode);
   const activePaneId = useWorkspaceStore((state) => state.activePaneId);
@@ -61,7 +63,13 @@ export function MainPage() {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
+        setFileSearchOpen(false);
         setPaletteOpen(!useAppStore.getState().commandPaletteOpen);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        setPaletteOpen(false);
+        setFileSearchOpen(true);
       }
     };
     window.addEventListener("keydown", handler);
@@ -99,6 +107,7 @@ export function MainPage() {
         )}
       </div>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <FileSearchPalette open={fileSearchOpen} onOpenChange={setFileSearchOpen} />
     </div>
   );
 }

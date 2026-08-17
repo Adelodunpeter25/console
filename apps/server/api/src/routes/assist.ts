@@ -50,7 +50,7 @@ async function handleSearch(c: Context) {
   const sessionId = c.req.param("sessionId") ?? c.req.query("sessionId") ?? "";
   const query = (c.req.query("q") ?? c.req.query("query") ?? "").trim();
   const session = sessionId ? sessionStorage.loadSession(sessionId) : null;
-  const root = session?.header.cwd ?? process.cwd();
+  const root = c.req.query("root") ?? session?.header.cwd ?? process.cwd();
 
   if (!query) {
     return c.json({ success: true, data: { root, query, items: [] } });
