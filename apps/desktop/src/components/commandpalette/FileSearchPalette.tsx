@@ -1,8 +1,9 @@
 import React from "react";
 import { Command } from "cmdk";
-import { FileText, LoaderCircle, Search } from "lucide-react";
+import { LoaderCircle, Search } from "lucide-react";
 import type { FileSearchResult } from "@console/types";
 import { api } from "../../lib/api";
+import { FileIcon } from "../file/FileIcon";
 import { useAppStore } from "../../store/useAppStore";
 import { useProjectStore } from "../../store/useProjectStore";
 import { useWorkspaceStore } from "../../layout/useWorkspaceStore";
@@ -29,7 +30,9 @@ export function FileSearchPalette({ open, onOpenChange }: FileSearchPaletteProps
   const activeProject = projects.find((project) => project.id === selectedProjectId);
   const activeSession = sessions.find((session) => session.id === selectedSessionId);
   const projectId = selectedProjectId ?? activeSession?.projectId ?? "";
-  const searchRoot = activeProject?.path;
+  // A chat's cwd is the source of truth for file operations. Fall back to the
+  // selected project only when there is no selected chat.
+  const searchRoot = selectedSessionId ? activeSession?.cwd : activeProject?.path;
 
   React.useEffect(() => {
     if (!open) return;
@@ -95,7 +98,7 @@ export function FileSearchPalette({ open, onOpenChange }: FileSearchPaletteProps
       className="fixed inset-0 z-[101] flex items-start justify-center pt-[15vh]"
       overlayClassName="fixed inset-0 bg-black/60 backdrop-blur-sm"
     >
-      <div className="w-full max-w-lg bg-card border border-border-strong rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[60vh]">
+      <div className="w-full max-w-2xl bg-card border border-border-strong rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[60vh]">
         <div className="flex items-center gap-2 px-3 py-3 border-b border-border">
           <Search size={16} className="text-foreground-muted shrink-0 ml-1" />
           <Command.Input
@@ -144,7 +147,7 @@ export function FileSearchPalette({ open, onOpenChange }: FileSearchPaletteProps
                   onSelect={() => handleSelect(file)}
                   className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-foreground-secondary aria-selected:bg-white/8 aria-selected:text-foreground cursor-pointer transition-colors"
                 >
-                  <FileText size={16} className="text-foreground-muted shrink-0" />
+                  <FileIcon fileName={file.relativePath} className="w-4 h-4 shrink-0" />
                   <span className="truncate">{file.relativePath}</span>
                 </Command.Item>
               ))}

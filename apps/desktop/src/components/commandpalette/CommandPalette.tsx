@@ -128,7 +128,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]"
       overlayClassName="fixed inset-0 bg-black/60 backdrop-blur-sm"
     >
-      <div className="w-full max-w-lg bg-card border border-border-strong rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[60vh]">
+      <div className="w-full max-w-2xl bg-card border border-border-strong rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[60vh]">
         {/* Header — changes based on view */}
         {view === "browse" ? (
           <div className="flex items-center gap-2 px-3 py-3 border-b border-border">
