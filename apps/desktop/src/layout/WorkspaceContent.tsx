@@ -1,4 +1,5 @@
 import React from "react";
+import { LoaderCircle } from "lucide-react";
 import { EmptyState } from "../components/common/EmptyState";
 import { FileViewer } from "../components/file/FileViewer";
 import { TerminalTab } from "../components/terminal/TerminalTab";
@@ -32,7 +33,14 @@ function FileTabContent({ config }: { config: FileTabConfig }) {
   }, [config.path]);
 
   if (state.status === "loading") {
-    return <EmptyState title="Loading file…" description={basename(config.path)} />;
+    return (
+      <div className="flex h-full items-center justify-center bg-screen">
+        <div className="flex items-center gap-2 text-sm text-foreground-secondary">
+          <LoaderCircle size={15} className="animate-spin text-foreground-muted" />
+          <span>Loading {basename(config.path)}…</span>
+        </div>
+      </div>
+    );
   }
 
   if (state.status === "error") {
