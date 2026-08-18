@@ -126,7 +126,31 @@ export const codexStreamFn: StreamFn = async function* ({ model, systemPrompt, m
     throw new Error(`Codex request failed (${response.status} ${response.statusText}): ${await response.text().catch(() => "")}`);
   }
 
-  const toolNames = new Map<string, string>();
+  type FunctionCallState = {
+    itemId: string;
+    callId: string;
+    name: string;
+    arguments: string;
+    finalized: boolean;
+    emittedArguments: boolean;
+  };
+
+  const callsByItemId = new Map<string, FunctionCallState>();
+  const callsByCallId = new Map<string, FunctionCallState>();
+  const pendingDeltas = new Map<string, string>();
+  const pendingFinalArguments = new Map<string, { name?: string; arguments: string }>();
+
+  const emitArguments = (state: FunctionCallState, argumentsJson: string) => {
+    if (state.emittedArguments || !argumentsJson) return null;
+    state.emittedArguments = true;
+    return {
+      type: "toolCall" as const,
+      id: state.callId,
+      name: state.name,
+      argumentsJson,
+    };
+  };
+
   for await (const event of parseSse<Record<string, unknown>>(response)) {
     const type = typeof event.type === "string" ? event.type : "";
     if (type === "error") {
@@ -137,17 +161,79 @@ export const codexStreamFn: StreamFn = async function* ({ model, systemPrompt, m
     } else if (type === "response.reasoning_summary_text.delta" || type === "response.reasoning_text.delta") {
       if (typeof event.delta === "string") yield { type: "thinking", text: event.delta };
     } else if (type === "response.output_item.added") {
-      const item = event.item as { type?: string; id?: string; call_id?: string; name?: string; arguments?: string } | undefined;
+      const item = event.item as
+        | { type?: string; id?: string; call_id?: string; name?: string; arguments?: string }
+        | undefined;
       if (item?.type === "function_call" && item.call_id && item.name) {
-        toolNames.set(item.call_id, item.name);
-        yield { type: "toolCall", id: item.call_id, name: item.name, argumentsJson: item.arguments ?? "" };
+        const itemId = item.id ?? item.call_id;
+        const state: FunctionCallState = {
+          itemId,
+          callId: item.call_id,
+          name: item.name,
+          arguments: item.arguments ?? "",
+          finalized: false,
+          emittedArguments: false,
+        };
+        const pendingDelta = pendingDeltas.get(itemId);
+        if (pendingDelta) {
+          state.arguments += pendingDelta;
+          pendingDeltas.delete(itemId);
+        }
+        const pendingFinal = pendingFinalArguments.get(itemId);
+        if (pendingFinal) {
+          state.name = pendingFinal.name ?? state.name;
+          state.arguments = pendingFinal.arguments;
+          state.finalized = true;
+          pendingFinalArguments.delete(itemId);
+        }
+
+        callsByItemId.set(itemId, state);
+        callsByCallId.set(state.callId, state);
+        // Emit the call immediately for the UI/agent loop, but defer arguments
+        // until the finalized event so streamed fragments cannot be duplicated.
+        yield { type: "toolCall", id: state.callId, name: state.name, argumentsJson: "" };
+        if (state.finalized) {
+          const finalized = emitArguments(state, state.arguments);
+          if (finalized) yield finalized;
+        }
       }
     } else if (type === "response.function_call_arguments.delta") {
-      const id = typeof event.call_id === "string" ? event.call_id : "";
-      if (id) yield { type: "toolCall", id, name: toolNames.get(id) ?? "", argumentsJson: String(event.delta ?? "") };
+      const itemId = typeof event.item_id === "string" ? event.item_id : "";
+      const fragment = String(event.delta ?? "");
+      const state = callsByItemId.get(itemId);
+      if (state) {
+        state.arguments += fragment;
+      } else if (itemId) {
+        pendingDeltas.set(itemId, `${pendingDeltas.get(itemId) ?? ""}${fragment}`);
+      }
+    } else if (type === "response.function_call_arguments.done") {
+      const itemId = typeof event.item_id === "string" ? event.item_id : "";
+      const argumentsJson = String(event.arguments ?? "");
+      const state = callsByItemId.get(itemId);
+      if (state) {
+        state.name = typeof event.name === "string" ? event.name : state.name;
+        state.arguments = argumentsJson;
+        state.finalized = true;
+        const finalized = emitArguments(state, state.arguments);
+        if (finalized) yield finalized;
+      } else if (itemId) {
+        pendingFinalArguments.set(itemId, {
+          name: typeof event.name === "string" ? event.name : undefined,
+          arguments: argumentsJson,
+        });
+      }
     } else if (type === "response.failed" || type === "response.incomplete") {
       const responseError = event.response as { error?: { message?: string } } | undefined;
       if (responseError?.error?.message) throw new Error(responseError.error.message);
+    }
+  }
+
+  // The finalized event is normally guaranteed, but flushing here keeps a
+  // completed stream with only argument deltas from silently becoming `{}`.
+  for (const state of callsByCallId.values()) {
+    if (!state.finalized) {
+      const assembled = emitArguments(state, state.arguments);
+      if (assembled) yield assembled;
     }
   }
 };
