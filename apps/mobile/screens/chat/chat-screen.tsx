@@ -34,11 +34,11 @@ export function ChatScreen() {
   }) => <MessageBubble key={index} item={item} />;
 
   return (
-    <KeyboardAvoidingView className="flex-1" behavior="padding">
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
       <ScreenHeader title="Console" onBack={() => setActiveTab("home")} />
 
       {stream.messages.length === 0 && !isStreaming ? (
-        <View className="flex-1 items-center justify-center">
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <Text className="text-foreground-secondary text-sm italic">
             No messages. Type a prompt below to start.
           </Text>
@@ -46,6 +46,7 @@ export function ChatScreen() {
       ) : (
         <FlatList
           ref={flatListRef}
+          style={{ flex: 1 }}
           data={stream.messages}
           keyExtractor={(_, i) => i.toString()}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}

@@ -116,11 +116,11 @@ export function HomeScreen() {
   };
 
   return (
-    <View className="flex-1 bg-screen">
+    <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
       <ScreenHeader title="Console" showSettings onSettingsPress={() => setActiveTab("settings")} />
 
       <ScrollView
-        className="flex-1"
+        style={{ flex: 1 }}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}

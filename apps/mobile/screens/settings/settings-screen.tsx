@@ -46,7 +46,7 @@ export function SettingsScreen() {
   const loadingModels = modelsData.isLoading;
 
   return (
-    <ScrollView className="flex-1 bg-screen px-4 pt-4" style={{ flex: 1 }}>
+    <ScrollView style={{ flex: 1, paddingHorizontal: 16, paddingTop: 16 }}>
       <View className="mb-5">
         <ScreenHeader title="Console Settings" onBack={() => setActiveTab("home")} />
         <Text className="text-sm text-foreground-secondary mt-1 ml-4">

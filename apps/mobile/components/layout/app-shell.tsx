@@ -11,9 +11,9 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   return (
     <KeyboardProvider>
-      <SafeAreaView className="flex-1 bg-screen">
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
         <StatusBar style="light" />
-        <View className="flex-1">{children}</View>
+        <View style={{ flex: 1 }}>{children}</View>
       </SafeAreaView>
     </KeyboardProvider>
   );

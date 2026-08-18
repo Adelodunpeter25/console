@@ -74,7 +74,7 @@ function AppRoot() {
 
   return (
     <SafeAreaProvider>
-      <View className="flex-1 bg-screen" style={{ flex: 1 }}>
+      <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
         <StatusBar style="light" />
 
         {backendUrl ? (
