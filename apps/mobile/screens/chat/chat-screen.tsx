@@ -3,8 +3,9 @@ import { View, Text, type NativeScrollEvent, type NativeSyntheticEvent } from "r
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { MessageSquareText } from "lucide-react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { useSession } from "@console/api";
 import { useChatStream, useAbort, useChatDecisions } from "../../hooks";
-import { useAppStore, useProjectStore } from "../../stores";
+import { useAppStore } from "../../stores";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { MessageBubble } from "../../components/chat/message-bubbles";
 import { LiveToolResults } from "../../components/chat/live-tool-results";
@@ -18,9 +19,8 @@ export function ChatScreen() {
   const decisions = useChatDecisions();
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
-  const chatTitle = useProjectStore(
-    (state) => state.sessions.find((s) => s.id === selectedSessionId)?.title ?? "Console",
-  );
+  const { data: sessionDetail } = useSession(selectedSessionId ?? "");
+  const chatTitle = sessionDetail?.header.title ?? "Console";
   const listRef = useRef<FlashListRef<(typeof stream.messages)[number]>>(null);
 
   const isStreaming =
@@ -64,7 +64,7 @@ export function ChatScreen() {
   }) => <MessageBubble key={index} item={item} />;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={12}>
       <ScreenHeader title={chatTitle} onBack={() => setActiveTab("home")} />
 
       {stream.messages.length === 0 && !isStreaming ? (

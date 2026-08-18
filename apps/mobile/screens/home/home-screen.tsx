@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Alert, Text, View, TouchableOpacity, ScrollView } from "react-native";
 import { GitBranch } from "lucide-react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useCreateSession, useProjects, useSessions } from "@console/api";
 import { SessionHeader } from "@console/types";
 import { ScreenHeader } from "../../components/layout/screen-header";
@@ -224,12 +225,14 @@ export function HomeScreen() {
       </ScrollView>
 
       {/* Keep the composer outside the list so it stays anchored to the resized window. */}
-      <SearchBar
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        onComposePress={composeSession}
-        disabled={createSession.isPending}
-      />
+      <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={12}>
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onComposePress={composeSession}
+          disabled={createSession.isPending}
+        />
+      </KeyboardAvoidingView>
     </View>
   );
 }
