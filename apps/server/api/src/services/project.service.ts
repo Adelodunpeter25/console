@@ -27,7 +27,7 @@ export class ProjectService {
             name: proj.name,
             path: proj.path,
             createdAt: proj.createdAt,
-            updatedAt: stat.mtimeMs,
+            updatedAt: Math.round(stat.mtimeMs),
           });
         } catch {
           // Ignored if custom project folder no longer exists

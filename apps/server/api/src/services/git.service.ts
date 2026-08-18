@@ -79,7 +79,9 @@ export class GitService {
    */
   async listBranches(repoPath: string): Promise<GitBranchInfo[]> {
     try {
-      const { stdout } = await execAsync("git branch --format=%(refname:short)", {
+      // The quotes are load-bearing: the bare format string trips the shell's
+      // parser on the parentheses, so every call would fail and return [].
+      const { stdout } = await execAsync('git branch --format="%(refname:short)"', {
         cwd: repoPath,
       });
       const branches = stdout
