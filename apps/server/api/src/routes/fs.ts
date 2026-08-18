@@ -52,6 +52,33 @@ fsRoutes.post("/pick-folder", async (c) => {
 });
 
 /**
+ * POST /api/fs/pick-file — Opens a native macOS file picker dialog and
+ * returns the selected file's path. Dismissing the dialog is a cancelled
+ * pick, not a failure.
+ */
+fsRoutes.post("/pick-file", async (c) => {
+  const { exec } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const execAsync = promisify(exec);
+
+  try {
+    const script = `osascript -e 'POSIX path of (choose file with prompt "Select an image")'`;
+    const { stdout } = await execAsync(script);
+    const selectedPath = stdout.trim();
+    return c.json({ success: true, data: { path: selectedPath } });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const cancelled = /-128|User canceled|user cancelled/i.test(errMsg);
+    return c.json(
+      cancelled
+        ? { success: false, cancelled: true, error: "File selection cancelled." }
+        : { success: false, error: "File selection failed." },
+      400
+    );
+  }
+});
+
+/**
  * GET /api/fs/tree — Return structured directory tree summary.
  */
 fsRoutes.get("/tree", async (c) => {
