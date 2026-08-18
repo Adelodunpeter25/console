@@ -6,6 +6,7 @@ import { SessionHeader } from "@console/types";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { SearchBar } from "../../components/common/search-bar";
 import { useAppStore } from "../../stores";
+import { useProjectBranches } from "../../hooks";
 import { formatRelativeTime } from "../../utils/time";
 import { theme } from "../../styles/theme";
 
@@ -53,9 +54,16 @@ function shortRelativeTime(dateInput?: number): string {
   return full.replace(" ago", "").replace("just now", "now");
 }
 
+function folderName(path?: string): string {
+  if (!path) return "";
+  const trimmed = path.replace(/\/+$/, "");
+  return trimmed.slice(trimmed.lastIndexOf("/") + 1);
+}
+
 export function HomeScreen() {
   const { data: projects = [] } = useProjects();
   const { data: sessions = [] } = useSessions();
+  const { branches } = useProjectBranches(projects);
   const createSession = useCreateSession();
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
@@ -83,7 +91,9 @@ export function HomeScreen() {
       const project = projects.find((p) => p.id === projectId);
       result.push({
         projectId,
-        projectName: project ? project.name.toUpperCase() : "DRAFT",
+        projectName: project
+          ? project.name.toUpperCase()
+          : (folderName(list[0]?.cwd) || "DRAFT").toUpperCase(),
         data: list.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)),
       });
     }
@@ -149,7 +159,8 @@ export function HomeScreen() {
                 {section.data.map((session, index) => {
                   const project = projects.find((p) => p.id === session.projectId);
                   const status = getStatusStyle(session.status);
-                  const projectName = project?.name ?? "DeskMini";
+                  const projectName = project?.name ?? folderName(session.cwd);
+                  const branch = branches[session.projectId ?? ""];
                   const isLast = index === section.data.length - 1;
 
                   return (
@@ -177,8 +188,12 @@ export function HomeScreen() {
                         </Text>
                         <View className="flex-row items-center gap-1">
                           <Text className="text-xs text-foreground-secondary">{projectName}</Text>
-                          <Text className="text-xs text-foreground-secondary">•</Text>
-                          <Text className="text-xs text-foreground-secondary">main</Text>
+                          {branch ? (
+                            <>
+                              <Text className="text-xs text-foreground-secondary">•</Text>
+                              <Text className="text-xs text-foreground-secondary">{branch}</Text>
+                            </>
+                          ) : null}
                         </View>
                       </View>
 
