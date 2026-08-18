@@ -1,5 +1,5 @@
 import type { AssistantMessage } from "./agent";
-import type { PermissionRequest, ToolCall, ToolResult } from "./tool";
+import type { PermissionRequest, ToolCall, ToolCallPreview, ToolResult } from "./tool";
 import type { TodoItem } from "./todo";
 
 export interface AskQuestionRequest {
@@ -18,7 +18,7 @@ export type AgentSessionEvent =
   | { type: "sessionStart" }
   | { type: "turnStart"; prompt: string }
   | { type: "modelStreamStart"; turnId: string }
-  | { type: "modelStreamPart"; part: { text?: string; thinking?: string; toolCall?: ToolCall } }
+  | { type: "modelStreamPart"; part: { text?: string; thinking?: string; toolCall?: ToolCallPreview } }
   | { type: "modelStreamEnd"; turnId: string; turn: AssistantMessage }
   | { type: "toolExecutionStart"; calls: ToolCall[] }
   | { type: "permissionRequest"; request: PermissionRequest }

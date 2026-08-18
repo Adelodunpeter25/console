@@ -76,7 +76,7 @@ export async function streamOneTurn(
         segments.push({ kind: "toolCall", id: delta.id });
         emit({
           type: "modelStreamPart",
-          part: { toolCall: { id: delta.id, name: delta.name, arguments: undefined } },
+          part: { toolCall: { id: delta.id, name: delta.name } },
         });
       }
     }

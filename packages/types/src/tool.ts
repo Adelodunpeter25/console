@@ -32,6 +32,15 @@ export interface ToolCall {
   thoughtSignature?: string;
 }
 
+/** Partial tool-call payload emitted while model arguments are still streaming. */
+export interface ToolCallPreview {
+  id: string;
+  name: string;
+  arguments?: unknown;
+  /** Opaque Gemini thought signature returned with this function call. */
+  thoughtSignature?: string;
+}
+
 export interface ToolResult {
   toolCallId: string;
   toolName?: string;

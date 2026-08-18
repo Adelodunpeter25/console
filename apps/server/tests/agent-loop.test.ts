@@ -115,7 +115,37 @@ const dummyTool: AgentTool = {
   console.log("  ✅ Tool execution turn & loop continuation");
 }
 
-// 3. Test Agent stateful class wrapper
+// 3. Tool-call previews remain JSON-safe before arguments finish streaming
+{
+  const mockStreamFn: StreamFn = async function* () {
+    yield {
+      type: "toolCall",
+      id: "preview-call",
+      name: "readFile",
+      argumentsJson: "{\"path\":\"README.md\"}",
+    };
+    yield { type: "text", text: "Finished." };
+  };
+
+  const stream = agentLoop("Inspect the README", {
+    model: testModel,
+    systemPrompt: "Test",
+    tools: [],
+    streamFn: mockStreamFn,
+  });
+  const events = [];
+  for await (const event of stream) events.push(event);
+
+  const preview = events.find((event) => event.type === "modelStreamPart");
+  assert.ok(preview);
+  assert.deepEqual(JSON.parse(JSON.stringify(preview)), {
+    type: "modelStreamPart",
+    part: { toolCall: { id: "preview-call", name: "readFile" } },
+  });
+  console.log("  ✅ JSON-safe partial tool-call preview");
+}
+
+// 4. Test Agent stateful class wrapper
 {
   const mockStreamFn: StreamFn = async function* () {
     yield { type: "text", text: "Response 1" };
