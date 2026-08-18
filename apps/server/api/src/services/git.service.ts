@@ -2,7 +2,7 @@ import { exec } from "node:crypto";
 import { exec as execCb } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
-import type { GitFileStatus, GitStatusSummary } from "@console/types";
+import type { GitBranchInfo, GitFileStatus, GitStatusSummary } from "@console/types";
 
 const execAsync = promisify(execCb);
 
@@ -72,5 +72,39 @@ export class GitService {
         files: [],
       };
     }
+  }
+
+  /**
+   * List all local branches, marking the checked-out one.
+   */
+  async listBranches(repoPath: string): Promise<GitBranchInfo[]> {
+    try {
+      const { stdout } = await execAsync("git branch --format=%(refname:short)", {
+        cwd: repoPath,
+      });
+      const branches = stdout
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+      let current = "";
+      try {
+        const currentRes = await execAsync("git rev-parse --abbrev-ref HEAD", {
+          cwd: repoPath,
+        });
+        current = currentRes.stdout.trim();
+      } catch {
+        // Detached HEAD: no current local branch.
+      }
+      return branches.map((name) => ({ name, current: name === current }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Check out an existing local branch.
+   */
+  async checkoutBranch(repoPath: string, branch: string): Promise<void> {
+    await execAsync(`git switch "${branch}"`, { cwd: repoPath });
   }
 }

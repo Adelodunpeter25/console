@@ -137,6 +137,11 @@ export interface GitStatusSummary {
   }>;
 }
 
+export interface GitBranchInfo {
+  name: string;
+  current: boolean;
+}
+
 export interface FsChangeEvent {
   type: "fsChange";
   projectPath: string;
