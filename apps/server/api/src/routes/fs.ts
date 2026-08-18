@@ -37,8 +37,17 @@ fsRoutes.post("/pick-folder", async (c) => {
     const { stdout } = await execAsync(script);
     const selectedPath = stdout.trim().replace(/\/$/, "");
     return c.json({ success: true, data: { path: selectedPath } });
-  } catch {
-    return c.json({ success: false, error: "Folder selection cancelled or failed." }, 400);
+  } catch (err) {
+    // osascript exits non-zero when the user dismisses the dialog; the
+    // "User canceled" marker (-128) is not a failure, just a cancelled pick.
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const cancelled = /-128|User canceled|user cancelled/i.test(errMsg);
+    return c.json(
+      cancelled
+        ? { success: false, cancelled: true, error: "Folder selection cancelled." }
+        : { success: false, error: "Folder selection failed." },
+      400
+    );
   }
 });
 
