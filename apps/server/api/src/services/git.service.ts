@@ -1,10 +1,31 @@
-import { exec } from "node:crypto";
 import { exec as execCb } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
-import type { GitBranchInfo, GitFileStatus, GitStatusSummary } from "@console/types";
+import type {
+  GitBranchInfo,
+  GitBranchesResponse,
+  GitFileStatus,
+  GitStatusSummary,
+} from "@console/types";
 
 const execAsync = promisify(execCb);
+
+function errorText(error: unknown): string {
+  if (error instanceof Error) {
+    const stderr = "stderr" in error && typeof error.stderr === "string" ? error.stderr : "";
+    return `${error.message}\n${stderr}`.toLowerCase();
+  }
+  return String(error).toLowerCase();
+}
+
+function isNotGitRepositoryError(error: unknown): boolean {
+  const message = errorText(error);
+  return (
+    message.includes("not a git repository") ||
+    message.includes("not a repository") ||
+    message.includes("no git repository")
+  );
+}
 
 export class GitService {
   /**
@@ -76,11 +97,20 @@ export class GitService {
 
   /**
    * List all local branches, marking the checked-out one.
+   *
+   * A folder without Git is a valid project state. It returns an explicit
+   * `isGitRepository: false` response instead of being indistinguishable from
+   * an empty branch list or a failed request.
    */
-  async listBranches(repoPath: string): Promise<GitBranchInfo[]> {
+  async listBranches(repoPath: string): Promise<GitBranchesResponse> {
     try {
-      // The quotes are load-bearing: the bare format string trips the shell's
-      // parser on the parentheses, so every call would fail and return [].
+      const repositoryCheck = await execAsync("git rev-parse --is-inside-work-tree", {
+        cwd: repoPath,
+      });
+      if (repositoryCheck.stdout.trim() !== "true") {
+        return { branches: [], isGitRepository: false };
+      }
+
       const { stdout } = await execAsync('git branch --format="%(refname:short)"', {
         cwd: repoPath,
       });
@@ -95,11 +125,17 @@ export class GitService {
         });
         current = currentRes.stdout.trim();
       } catch {
-        // Detached HEAD: no current local branch.
+        // Empty repository or detached HEAD: no current local branch.
       }
-      return branches.map((name) => ({ name, current: name === current }));
-    } catch {
-      return [];
+      return {
+        branches: branches.map((name) => ({ name, current: name === current })),
+        isGitRepository: true,
+      };
+    } catch (error) {
+      if (isNotGitRepositoryError(error)) {
+        return { branches: [], isGitRepository: false };
+      }
+      throw error;
     }
   }
 

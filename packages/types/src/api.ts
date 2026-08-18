@@ -142,6 +142,11 @@ export interface GitBranchInfo {
   current: boolean;
 }
 
+export interface GitBranchesResponse {
+  branches: GitBranchInfo[];
+  isGitRepository: boolean;
+}
+
 export interface FsChangeEvent {
   type: "fsChange";
   projectPath: string;
