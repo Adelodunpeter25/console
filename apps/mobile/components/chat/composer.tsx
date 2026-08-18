@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, TouchableOpacity } from "react-native";
 import { ArrowUp, Square } from "lucide-react-native";
 import { theme } from "../../styles/theme";
 
@@ -46,11 +46,7 @@ export function Composer({ value, onChangeText, onSend, onStop, running }: Compo
           disabled={!canSend}
           activeOpacity={0.8}
         >
-          {canSend ? (
-            <ArrowUp size={20} color={theme.colors.text.dark} />
-          ) : (
-            <ActivityIndicator size="small" color={theme.colors.text.muted} />
-          )}
+          <ArrowUp size={20} color={canSend ? theme.colors.text.dark : theme.colors.text.muted} />
         </TouchableOpacity>
       )}
     </View>

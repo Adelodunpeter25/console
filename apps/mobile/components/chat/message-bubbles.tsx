@@ -8,7 +8,6 @@ import {
 } from "react-native";
 import {
   AlertTriangle,
-  Bot,
   Check,
   ChevronDown,
   Sparkles,
@@ -210,14 +209,12 @@ export function UserBubble({ content, createdAt }: { content: string; createdAt?
 export function AssistantBubble({
   textContent,
   thinkingContent,
-  label = "Assistant",
   toolCalls,
   isStreaming,
   createdAt,
 }: {
   textContent?: string;
   thinkingContent?: string;
-  label?: string;
   toolCalls?: { name: string }[];
   isStreaming?: boolean;
   createdAt?: number;

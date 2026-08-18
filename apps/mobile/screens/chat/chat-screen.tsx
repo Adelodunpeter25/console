@@ -3,7 +3,7 @@ import { View, Text, FlatList, type NativeScrollEvent, type NativeSyntheticEvent
 import { MessageSquareText } from "lucide-react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useChatStream, useAbort, useChatDecisions } from "../../hooks";
-import { useAppStore } from "../../stores";
+import { useAppStore, useProjectStore } from "../../stores";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { MessageBubble } from "../../components/chat/message-bubbles";
 import { LiveToolResults } from "../../components/chat/live-tool-results";
@@ -16,6 +16,10 @@ export function ChatScreen() {
   const { abort, isAborting } = useAbort();
   const decisions = useChatDecisions();
   const setActiveTab = useAppStore((state) => state.setActiveTab);
+  const selectedSessionId = useAppStore((state) => state.selectedSessionId);
+  const chatTitle = useProjectStore(
+    (state) => state.sessions.find((s) => s.id === selectedSessionId)?.title ?? "Console",
+  );
   const flatListRef = useRef<FlatList>(null);
 
   const isStreaming =
@@ -60,7 +64,7 @@ export function ChatScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-      <ScreenHeader title="Console" onBack={() => setActiveTab("home")} />
+      <ScreenHeader title={chatTitle} onBack={() => setActiveTab("home")} />
 
       {stream.messages.length === 0 && !isStreaming ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
