@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { memo, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -19,7 +19,7 @@ import { theme } from "../../styles/theme";
 import { formatMessageTime } from "../../utils/time";
 
 /** Animated three-dot typing indicator for streaming states. */
-function TypingDots() {
+const TypingDots = memo(function TypingDots() {
   const dot1 = useRef(new Animated.Value(0.3)).current;
   const dot2 = useRef(new Animated.Value(0.3)).current;
   const dot3 = useRef(new Animated.Value(0.3)).current;
@@ -63,10 +63,16 @@ function TypingDots() {
       ))}
     </View>
   );
-}
+});
 
 /** Collapsible "Thought" block. Expands while streaming so the user sees live reasoning. */
-function ThinkingBlock({ text, isStreaming }: { text: string; isStreaming?: boolean }) {
+const ThinkingBlock = memo(function ThinkingBlock({
+  text,
+  isStreaming,
+}: {
+  text: string;
+  isStreaming?: boolean;
+}) {
   const [expanded, setExpanded] = useState(Boolean(isStreaming));
 
   return (
@@ -95,10 +101,10 @@ function ThinkingBlock({ text, isStreaming }: { text: string; isStreaming?: bool
       ) : null}
     </View>
   );
-}
+});
 
 /** Compact collapsible tool-activity row (running / done / failed). */
-export function ToolActivityRow({
+export const ToolActivityRow = memo(function ToolActivityRow({
   name,
   isRunning,
   isError,
@@ -171,9 +177,9 @@ export function ToolActivityRow({
       ) : null}
     </Pressable>
   );
-}
+});
 
-export function ToolResultItem({ result }: { result: ToolResult }) {
+export const ToolResultItem = memo(function ToolResultItem({ result }: { result: ToolResult }) {
   const isError = result.isError;
   const detail =
     typeof result.content === "string"
@@ -184,9 +190,15 @@ export function ToolResultItem({ result }: { result: ToolResult }) {
   return (
     <ToolActivityRow name={result.toolName ?? "tool"} isError={isError} detail={detail} />
   );
-}
+});
 
-export function UserBubble({ content, createdAt }: { content: string; createdAt?: number }) {
+export const UserBubble = memo(function UserBubble({
+  content,
+  createdAt,
+}: {
+  content: string;
+  createdAt?: number;
+}) {
   return (
     <View className="items-end mb-4">
       <View
@@ -204,9 +216,9 @@ export function UserBubble({ content, createdAt }: { content: string; createdAt?
       ) : null}
     </View>
   );
-}
+});
 
-export function AssistantBubble({
+export const AssistantBubble = memo(function AssistantBubble({
   textContent,
   thinkingContent,
   toolCalls,
@@ -259,10 +271,10 @@ export function AssistantBubble({
       ) : null}
     </View>
   );
-}
+});
 
-/** Renders the agent message bubbles for the chat FlatList. */
-export function MessageBubble({
+/** Renders the agent message bubbles for the chat FlashList. */
+export const MessageBubble = memo(function MessageBubble({
   item,
   isStreaming,
 }: {
@@ -305,4 +317,4 @@ export function MessageBubble({
       createdAt={item.createdAt}
     />
   );
-}
+});
