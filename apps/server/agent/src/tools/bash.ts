@@ -4,6 +4,8 @@ import { z } from "zod";
 import type { AgentTool } from "../types/index.js";
 
 const MAX_OUTPUT_BYTES = 50 * 1024;
+const DEFAULT_TIMEOUT_MS = 30_000;
+const MAX_TIMEOUT_MS = 20 * 60 * 1000;
 
 const inputSchema = z.object({
   command: z.string().describe("Shell command to execute"),
@@ -15,12 +17,18 @@ const inputSchema = z.object({
     .number()
     .int()
     .min(1000)
-    .max(300_000)
+    .max(MAX_TIMEOUT_MS)
     .optional()
-    .default(30_000)
     .describe(
-      "Timeout in milliseconds. The process is killed if it exceeds this. Default: 30s, max: 5min.",
+      "Timeout in milliseconds. The process is killed if it exceeds this. Default: 30s, max: 20min.",
     ),
+  timeout: z
+    .number()
+    .int()
+    .min(1000)
+    .max(MAX_TIMEOUT_MS)
+    .optional()
+    .describe("Alias for timeoutMs, in milliseconds. Default: 30s, max: 20min."),
   env: z
     .record(z.string())
     .optional()
@@ -146,17 +154,19 @@ Returns stdout, stderr, and exit code.
 The command runs in a shell (/bin/sh -c), so pipes, redirects, and shell builtins all work.
 Use for: running tests, builds, git operations, linters, package managers, file system queries.
 Do NOT use for file reads/writes — use readFile, writeFile, editFile, or listDir instead.
-Commands are killed after timeoutMs (default 30s, max 5min).
+Commands are killed after timeoutMs (default 30s, max 20min).
+The timeout parameter is accepted as an alias for timeoutMs.
 stdout and stderr are each capped at 50KB.`,
   inputSchema,
   execute: async (args: Input, signal?: AbortSignal): Promise<unknown> => {
     const cwd = args.cwd ? path.resolve(args.cwd) : process.cwd();
     const env = args.env ? { ...process.env, ...args.env } : process.env;
+    const timeoutMs = args.timeoutMs ?? args.timeout ?? DEFAULT_TIMEOUT_MS;
 
     const result = await execWithSignal(args.command, {
       cwd,
       env,
-      timeout: args.timeoutMs,
+      timeout: timeoutMs,
       shell: process.platform === "win32" ? undefined : "/bin/sh",
       signal,
     });
@@ -189,7 +199,7 @@ stdout and stderr are each capped at 50KB.`,
           {
             type: "text",
             text: [
-              `Command timed out after ${args.timeoutMs}ms.`,
+              `Command timed out after ${timeoutMs}ms.`,
               `Command: ${args.command}`,
               `Working directory: ${cwd}`,
               "",

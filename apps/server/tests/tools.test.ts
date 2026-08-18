@@ -8,6 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import {
   batchWriteTool,
+  bashTool,
   editFileTool,
   globTool,
   grepTool,
@@ -104,6 +105,17 @@ try {
 
   assert.ok(grepRes.content[0]?.text.includes("Universe"));
   console.log("  ✅ grep tool (fff-powered)");
+
+  // 8. Bash timeout alias and extended maximum
+  const bashArgs = bashTool.inputSchema.parse({
+    command: "printf timeout-alias",
+    timeout: 20 * 60 * 1000,
+  });
+  assert.equal(bashArgs.timeout, 20 * 60 * 1000);
+  const bashRes = (await bashTool.execute(bashArgs)) as { content: Array<{ text: string }> };
+  assert.ok(bashRes.content[0]?.text.includes("timeout-alias"));
+  assert.throws(() => bashTool.inputSchema.parse({ command: "true", timeoutMs: 20 * 60 * 1000 + 1 }));
+  console.log("  ✅ bash timeout alias and 20-minute maximum");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }
