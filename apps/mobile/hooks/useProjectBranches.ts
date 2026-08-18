@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { GitStatusSummary, ProjectInfo } from "@console/types";
 import { getConsoleApiClient } from "@console/api";
 
@@ -10,8 +10,16 @@ export function useProjectBranches(projects: ProjectInfo[]) {
   const [branches, setBranches] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
+  // Stable key derived from the projects so load is only recreated when the
+  // actual set of projects changes, never when a caller passes a new array
+  // reference (which would re-fire the effect and loop setState in render).
+  const projectsKey = useMemo(
+    () => projects.map((p) => `${p.id}:${p.path}`).join("|"),
+    [projects],
+  );
+
   const load = useCallback(async () => {
-    if (projects.length === 0) {
+    if (projectsKey === "") {
       setBranches({});
       return;
     }
@@ -36,7 +44,7 @@ export function useProjectBranches(projects: ProjectInfo[]) {
     } finally {
       setLoading(false);
     }
-  }, [projects]);
+  }, [projectsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     load();
