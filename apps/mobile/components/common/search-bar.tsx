@@ -1,5 +1,5 @@
 import React from "react";
-import { View, TextInput, TouchableOpacity } from "react-native";
+import { View, TextInput, Pressable } from "react-native";
 import { Search, Plus } from "lucide-react-native";
 
 interface SearchBarProps {
@@ -31,14 +31,14 @@ export function SearchBar({
           autoCorrect={false}
         />
       </View>
-      <TouchableOpacity
+      <Pressable
         className={`w-12 h-12 rounded-full bg-foreground items-center justify-center ${disabled ? "opacity-50" : ""}`}
+        style={({ pressed }) => (pressed && !disabled ? { opacity: 0.8 } : null)}
         onPress={onComposePress}
         disabled={disabled}
-        activeOpacity={0.8}
       >
         <Plus size={20} color="#000000" />
-      </TouchableOpacity>
+      </Pressable>
     </View>
   );
 }

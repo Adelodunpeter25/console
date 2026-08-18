@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { Check, ShieldAlert, X } from "lucide-react-native";
 import type { PendingPermission, PendingQuestion } from "../../types";
 import { theme } from "../../styles/theme";
@@ -89,12 +89,14 @@ export function ApprovalPanel({
 
       {isPermission ? (
         <View className="flex-row gap-2.5">
-          <TouchableOpacity
+          <Pressable
             className="flex-1 py-2.5 rounded-full items-center justify-center flex-row gap-2"
-            style={{ backgroundColor: theme.colors.text.primary }}
+            style={({ pressed }) => ({
+              backgroundColor: theme.colors.text.primary,
+              opacity: pressed && !submitting ? 0.8 : 1,
+            })}
             onPress={() => handleApprove(true)}
             disabled={submitting}
-            activeOpacity={0.8}
           >
             {submitting ? (
               <ActivityIndicator size="small" color={theme.colors.text.dark} />
@@ -104,33 +106,38 @@ export function ApprovalPanel({
                 <Text className="text-sm font-bold text-black">Allow</Text>
               </>
             )}
-          </TouchableOpacity>
-          <TouchableOpacity
+          </Pressable>
+          <Pressable
             className="flex-1 py-2.5 rounded-full border items-center justify-center flex-row gap-2"
-            style={{ borderColor: theme.colors.border }}
+            style={({ pressed }) => ({
+              borderColor: theme.colors.border,
+              opacity: pressed && !submitting ? 0.8 : 1,
+            })}
             onPress={() => handleApprove(false)}
             disabled={submitting}
-            activeOpacity={0.8}
           >
             <X size={15} color={theme.colors.text.primary} />
             <Text className="text-sm font-bold text-foreground">Deny</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       ) : (
         <View className="gap-2">
           {(pendingQuestion?.request.options ?? []).map((option: string, idx: number) => (
-            <TouchableOpacity
+            <Pressable
               key={idx}
               className="py-2.5 px-4 rounded-full border items-center justify-center"
-              style={{ borderColor: theme.colors.border, backgroundColor: "rgba(255,255,255,0.04)" }}
+              style={({ pressed }) => ({
+                borderColor: theme.colors.border,
+                backgroundColor: "rgba(255,255,255,0.04)",
+                opacity: pressed && !submitting ? 0.8 : 1,
+              })}
               onPress={() =>
                 handleAnswer(pendingQuestion?.request.isMultiSelect ? [option] : option)
               }
               disabled={submitting}
-              activeOpacity={0.8}
             >
               <Text className="text-sm font-semibold text-foreground">{option}</Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </View>
       )}

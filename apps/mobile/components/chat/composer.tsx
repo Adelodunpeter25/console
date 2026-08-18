@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, TextInput, TouchableOpacity } from "react-native";
+import { View, Text, TextInput, Pressable } from "react-native";
 import { ArrowUp, Square } from "lucide-react-native";
 import { theme } from "../../styles/theme";
 
@@ -28,26 +28,28 @@ export function Composer({ value, onChangeText, onSend, onStop, running }: Compo
         />
       </View>
       {running && onStop ? (
-        <TouchableOpacity
+        <Pressable
           className="w-11 h-11 rounded-full items-center justify-center"
-          style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
+          style={({ pressed }) => ({
+            backgroundColor: "rgba(255,255,255,0.08)",
+            opacity: pressed ? 0.7 : 1,
+          })}
           onPress={onStop}
-          activeOpacity={0.7}
         >
           <Square size={16} color={theme.colors.text.primary} />
-        </TouchableOpacity>
+        </Pressable>
       ) : (
-        <TouchableOpacity
+        <Pressable
           className="w-11 h-11 rounded-full items-center justify-center"
-          style={{
+          style={({ pressed }) => ({
             backgroundColor: canSend ? theme.colors.text.primary : "rgba(255,255,255,0.08)",
-          }}
+            opacity: pressed && canSend ? 0.8 : 1,
+          })}
           onPress={onSend}
           disabled={!canSend}
-          activeOpacity={0.8}
         >
           <ArrowUp size={20} color={canSend ? theme.colors.text.dark : theme.colors.text.muted} />
-        </TouchableOpacity>
+        </Pressable>
       )}
     </View>
   );

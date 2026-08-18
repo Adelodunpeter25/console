@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Alert, Text, View, TouchableOpacity, ScrollView } from "react-native";
+import { Alert, Text, View, Pressable, ScrollView } from "react-native";
 import { GitBranch } from "lucide-react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useCreateSession, useProjects, useSessions } from "@console/api";
@@ -165,11 +165,11 @@ export function HomeScreen() {
                   const isLast = index === section.data.length - 1;
 
                   return (
-                    <TouchableOpacity
+                    <Pressable
                       key={session.id}
                       className={`flex-row items-center px-4 py-3.5 ${!isLast ? "border-b border-border/40" : ""}`}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
                       onPress={() => openSession(session.id)}
-                      activeOpacity={0.65}
                     >
                       {/* Avatar icon with status colour */}
                       <View
@@ -215,7 +215,7 @@ export function HomeScreen() {
                           {shortRelativeTime(session.updatedAt ?? session.createdAt)}
                         </Text>
                       </View>
-                    </TouchableOpacity>
+                    </Pressable>
                   );
                 })}
               </View>

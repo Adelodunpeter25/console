@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useCallback, useRef } from "react";
 import { View, Text, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { MessageSquareText } from "lucide-react-native";
@@ -33,35 +33,37 @@ export function ChatScreen() {
   const isAtEndRef = useRef(true);
   const followRef = useRef(true);
 
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const distanceFromEnd =
-      contentSize.height - (layoutMeasurement.height + contentOffset.y);
-    const atEnd = distanceFromEnd < 96;
-    isAtEndRef.current = atEnd;
-    if (!isStreaming) {
-      followRef.current = atEnd;
-    }
-  };
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+      const distanceFromEnd =
+        contentSize.height - (layoutMeasurement.height + contentOffset.y);
+      const atEnd = distanceFromEnd < 96;
+      isAtEndRef.current = atEnd;
+      if (!isStreaming) {
+        followRef.current = atEnd;
+      }
+    },
+    [isStreaming],
+  );
 
-  const handleScrollToEnd = () => {
+  const handleScrollToEnd = useCallback(() => {
     isAtEndRef.current = true;
     followRef.current = true;
     listRef.current?.scrollToEnd({ animated: true });
-  };
+  }, []);
 
-  const handleStop = () => {
+  const handleStop = useCallback(() => {
     stream.stop();
     abort();
-  };
+  }, [stream, abort]);
 
-  const renderItem = ({
-    item,
-    index,
-  }: {
-    item: (typeof stream.messages)[number];
-    index: number;
-  }) => <MessageBubble key={index} item={item} />;
+  const renderItem = useCallback(
+    ({ item, index }: { item: (typeof stream.messages)[number]; index: number }) => (
+      <MessageBubble key={index} item={item} />
+    ),
+    [],
+  );
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={20}>
