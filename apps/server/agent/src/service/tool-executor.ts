@@ -2,10 +2,8 @@ import { randomUUID } from "node:crypto";
 import { resolveApproval } from "../permissions/approval.js";
 import { normalizeToolOutput } from "../utils/tool-output.js";
 import { validateToolInput } from "./tool-input.js";
-import type { ToolInputTelemetry } from "./tool-input.js";
 import type { AgentTool, AgentSessionEvent, ApprovalMode, PermissionRequest, ToolCall, ToolResult } from "../types/index.js";
 import type { AgentLoopConfig } from "./types.js";
-import type { Model } from "@console/types";
 
 /**
  * Execute a single tool call with Zod parsing, Permission resolution, & error handling.
@@ -19,9 +17,6 @@ export async function executeTool(
   onToolCall?: AgentLoopConfig["onToolCall"],
   onToolResult?: AgentLoopConfig["onToolResult"],
   signal?: AbortSignal,
-  model?: Model,
-  onToolInputEvent?: AgentLoopConfig["onToolInputEvent"],
-  toolInputTelemetry?: ToolInputTelemetry,
 ): Promise<ToolResult> {
   const tool = tools.find((t) => t.name === call.name);
 
@@ -41,16 +36,6 @@ export async function executeTool(
   const validation = validateToolInput(tool.inputSchema, call.arguments);
   if (!validation.success) {
     const issues = validation.issues ?? [];
-    const event = {
-      name: "tool_input_invalid",
-      label: `tool_input_invalid:${tool.name}`,
-      toolName: tool.name,
-      modelId: model?.id,
-      provider: model?.provider,
-      repairedPaths: validation.repairedPaths,
-    } as const;
-    toolInputTelemetry?.record(event);
-    await onToolInputEvent?.(event);
     const errorText = issues
       .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
       .join("\n");
@@ -64,19 +49,6 @@ export async function executeTool(
     };
     await onToolResult?.(call, result);
     return result;
-  }
-
-  if (validation.repairedPaths.length > 0) {
-    const event = {
-      name: "tool_input_repaired",
-      label: `tool_input_repaired:${tool.name}`,
-      toolName: tool.name,
-      modelId: model?.id,
-      provider: model?.provider,
-      repairedPaths: [...new Set(validation.repairedPaths)],
-    } as const;
-    toolInputTelemetry?.record(event);
-    await onToolInputEvent?.(event);
   }
 
   const parsedData = validation.data as Parameters<typeof tool.execute>[0];

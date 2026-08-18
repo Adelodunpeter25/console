@@ -3,10 +3,8 @@ import { z } from "zod";
 import {
   executeTool,
   pathString,
-  ToolInputTelemetry,
   validateToolInput,
   type AgentTool,
-  type Model,
 } from "../agent/src/index.js";
 
 console.log("Running tool-input harness tests...");
@@ -65,9 +63,6 @@ const listSchema = z.object({
 }
 
 {
-  const events: string[] = [];
-  const telemetry = new ToolInputTelemetry();
-  const model: Model = { id: "repair-model", provider: "opencode", contextWindow: 8192 };
   const tool: AgentTool = {
     name: "collect",
     description: "Collect strings",
@@ -83,13 +78,8 @@ const listSchema = z.object({
     () => {},
     undefined,
     undefined,
-    undefined,
-    model,
-    (event) => events.push(`${event.label}:${event.modelId}`),
-    telemetry,
   );
   assert.equal(repaired.isError, undefined);
-  assert.deepEqual(events, ["tool_input_repaired:collect:repair-model"]);
 
   const invalid = await executeTool(
     { id: "invalid-call", name: "collect", arguments: { values: 42 } },
@@ -99,25 +89,10 @@ const listSchema = z.object({
     () => {},
     undefined,
     undefined,
-    undefined,
-    model,
-    (event) => events.push(`${event.label}:${event.modelId}`),
-    telemetry,
   );
   assert.equal(invalid.isError, true);
   assert.equal(String(invalid.content).startsWith("Error:"), false);
-  assert.equal(events[1], "tool_input_invalid:collect:repair-model");
-  assert.deepEqual(telemetry.snapshot(), [
-    {
-      modelId: "repair-model",
-      provider: "opencode",
-      toolName: "collect",
-      repaired: 1,
-      invalid: 1,
-      repairRate: 0.5,
-    },
-  ]);
-  console.log("  ✅ executor repair and per-model telemetry");
+  console.log("  ✅ executor repair and invalid-input recovery");
 }
 
 console.log("Tool-input harness tests passed!\n");
