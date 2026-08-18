@@ -64,7 +64,7 @@ export function ChatScreen() {
   }) => <MessageBubble key={index} item={item} />;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={15}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={20}>
       <ScreenHeader title={chatTitle} onBack={() => setActiveTab("home")} />
 
       {stream.messages.length === 0 && !isStreaming ? (

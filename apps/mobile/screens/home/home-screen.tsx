@@ -225,7 +225,7 @@ export function HomeScreen() {
       </ScrollView>
 
       {/* Keep the composer outside the list so it stays anchored to the resized window. */}
-      <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={15}>
+      <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={20}>
         <SearchBar
           value={searchQuery}
           onChangeText={setSearchQuery}
