@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { View, Text, FlatList } from "react-native";
+import { View, Text, FlatList, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { MessageSquareText } from "lucide-react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useChatStream, useAbort, useChatDecisions } from "../../hooks";
@@ -21,6 +21,29 @@ export function ChatScreen() {
   const isStreaming =
     stream.running &&
     (!!stream.streamingText || !!stream.streamingThinking || stream.activeToolCalls.length > 0);
+
+  // The user is "at the bottom" (the list's end) by default. While streaming we
+  // follow the growing message regardless; when idle we only auto-scroll if the
+  // user never scrolled away, so reading older history isn't yanked.
+  const isAtEndRef = useRef(true);
+  const followRef = useRef(true);
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const distanceFromEnd =
+      contentSize.height - (layoutMeasurement.height + contentOffset.y);
+    const atEnd = distanceFromEnd < 96;
+    isAtEndRef.current = atEnd;
+    if (!isStreaming) {
+      followRef.current = atEnd;
+    }
+  };
+
+  const handleScrollToEnd = () => {
+    isAtEndRef.current = true;
+    followRef.current = true;
+    flatListRef.current?.scrollToEnd({ animated: true });
+  };
 
   const handleStop = () => {
     stream.stop();
@@ -63,7 +86,13 @@ export function ChatScreen() {
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16 }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          onScroll={handleScroll}
+          scrollEventThrottle={32}
+          onContentSizeChange={() => {
+            if (followRef.current || isStreaming) {
+              handleScrollToEnd();
+            }
+          }}
           renderItem={renderItem}
           ListFooterComponent={
             <View>
@@ -105,7 +134,10 @@ export function ChatScreen() {
       <Composer
         value={stream.inputVal}
         onChangeText={stream.setInputVal}
-        onSend={() => stream.sendMessage()}
+        onSend={() => {
+          handleScrollToEnd();
+          stream.sendMessage();
+        }}
         onStop={isAborting ? undefined : handleStop}
         running={stream.running}
       />
