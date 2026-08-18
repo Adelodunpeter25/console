@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { GitStatusSummary } from "@console/types";
-import { getConsoleApiClient } from "@console/api";
+import { gitService } from "@console/api";
 
 /**
  * Fetch the git status summary for a path from the backend
@@ -19,8 +19,7 @@ export function useGitStatus(path?: string | null) {
     setLoading(true);
     setError(null);
     try {
-      const res = await getConsoleApiClient().get("/api/git/status", { params: { path } });
-      setSummary(res.data?.data ?? null);
+      setSummary(await gitService.getStatus(path));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load git status");
       setSummary(null);

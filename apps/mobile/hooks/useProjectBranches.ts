@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import type { GitStatusSummary, ProjectInfo } from "@console/types";
-import { getConsoleApiClient } from "@console/api";
+import type { ProjectInfo } from "@console/types";
+import { gitService } from "@console/api";
 
 /** Stable key derived from the projects so the query only re-fetches when the actual set of projects changes. */
 function projectKey(projects: ProjectInfo[]) {
@@ -12,10 +12,7 @@ async function fetchBranches(projects: ProjectInfo[]): Promise<Record<string, st
   const results = await Promise.all(
     projects.map(async (project) => {
       try {
-        const res = await getConsoleApiClient().get("/api/git/status", {
-          params: { path: project.path },
-        });
-        const summary: GitStatusSummary = res.data?.data;
+        const summary = await gitService.getStatus(project.path);
         return [project.id, summary?.branch ?? ""] as const;
       } catch {
         return [project.id, ""] as const;
