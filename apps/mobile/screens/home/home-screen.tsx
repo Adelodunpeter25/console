@@ -127,7 +127,7 @@ export function HomeScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#0a0a0b" }} behavior="padding" keyboardVerticalOffset={0}>
       <ScreenHeader title="Console" showSettings onSettingsPress={() => setActiveTab("settings")} />
 
       <ScrollView
@@ -225,15 +225,13 @@ export function HomeScreen() {
       </ScrollView>
 
       {/* Keep the composer outside the list so it stays anchored to the resized window. */}
-      <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={20}>
-        <SearchBar
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onComposePress={composeSession}
-          disabled={createSession.isPending}
-        />
-      </KeyboardAvoidingView>
-    </View>
+      <SearchBar
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        onComposePress={composeSession}
+        disabled={createSession.isPending}
+      />
+    </KeyboardAvoidingView>
   );
 }
 

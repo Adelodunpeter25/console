@@ -66,7 +66,7 @@ export function ChatScreen() {
   );
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={20}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
       <ScreenHeader title={chatTitle} onBack={() => setActiveTab("home")} />
 
       {stream.messages.length === 0 && !isStreaming ? (
