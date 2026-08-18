@@ -240,9 +240,19 @@ export function applyChatEvent(
  * todo items, attachments). The snapshot flattens it to what screens render:
  * a single pending permission/question (the most recent), live tool results
  * from the latest run, and the streaming buffers.
+ *
+ * Snapshots are cached per session-state reference so selectors handed to
+ * `useSyncExternalStore` return a stable object identity for unchanged state.
+ * Without this, React 19 reports "The result of getSnapshot should be cached"
+ * and can loop with "Maximum update depth exceeded".
  */
+const snapshotCache = new WeakMap<ChatSessionState, ChatSnapshot>();
+
 export function toChatSnapshot(session: ChatSessionState): ChatSnapshot {
-  return {
+  const cached = snapshotCache.get(session);
+  if (cached) return cached;
+
+  const snapshot: ChatSnapshot = {
     messages: session.messages,
     streamingText: session.streamingText,
     streamingThinking: session.streamingThinking,
@@ -257,4 +267,7 @@ export function toChatSnapshot(session: ChatSessionState): ChatSnapshot {
     pendingQuestion: session.pendingQuestions[session.pendingQuestions.length - 1] ?? null,
     running: session.running,
   };
+
+  snapshotCache.set(session, snapshot);
+  return snapshot;
 }

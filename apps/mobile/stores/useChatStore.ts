@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { AgentMessage, AgentSessionEvent, ImageAttachment } from "@console/types";
 import { runService } from "@console/api";
 import type { ChatSessionState, ChatSnapshot } from "../types";
-import { createChatSessionState } from "../types/chat-state";
+import { createChatSessionState, EMPTY_CHAT_SESSION } from "../types/chat-state";
 import { createSseParser } from "../utils/sse";
 import { applyChatEvent, toChatSnapshot } from "../utils/chat-events";
 import { reconstructRuns } from "../utils/reconstruct-runs";
@@ -64,7 +64,7 @@ function updateSession(
 ): Record<string, ChatSessionState> {
   return {
     ...sessions,
-    [sessionId]: update(sessions[sessionId] ?? createChatSessionState()),
+    [sessionId]: update(sessions[sessionId] ?? EMPTY_CHAT_SESSION),
   };
 }
 
@@ -370,7 +370,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       ),
     })),
 
-  getSession: (sessionId) => get().sessions[sessionId] ?? createChatSessionState(),
+  getSession: (sessionId) => get().sessions[sessionId] ?? EMPTY_CHAT_SESSION,
 
   getSnapshot: (sessionId) => toChatSnapshot(get().getSession(sessionId)),
 }));

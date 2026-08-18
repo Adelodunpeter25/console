@@ -33,7 +33,7 @@ export function getChatSessionState(
   sessions: Record<string, ChatSessionState>,
   sessionId: string,
 ): ChatSessionState {
-  return sessions[sessionId] ?? createChatSessionState();
+  return sessions[sessionId] ?? EMPTY_CHAT_SESSION;
 }
 
 export function updateChatSession(
