@@ -96,3 +96,6 @@ apps/desktop/node_modules
 
 # Reference clone (t3code) - mobile folder only
 t3code/
+
+# macOS
+.DS_Store
