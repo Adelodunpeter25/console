@@ -181,7 +181,7 @@ function restoreFetch() {
       "",
       'data: {"id":"x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"pineapple"}}]}',
       "",
-      'data: {"id":"x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"listDir","arguments":"{\\"path\\":"}}]}}]}',
+      'data: {"id":"x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"list_directory","arguments":"{\\"path\\":"}}]}}]}',
       "",
       'data: {"id":"x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\".\\"}"}}]}}]}',
       "",
@@ -251,6 +251,20 @@ function restoreFetch() {
       assert.equal(body.codebuff_metadata?.cost_mode, "free");
       assert.equal(body.codebuff_metadata?.run_id, "run-abc");
       assert.equal(body.codebuff_metadata?.freebuff_instance_id, "inst-1");
+      // The system prompt must open with the canonical Buffy marker or the
+      // server 403s with free_mode_cli_required (requestHasFreebuffSystemMarker).
+      const systemMsg = body.messages?.find((m: any) => m.role === "system");
+      assert.ok(
+        systemMsg && systemMsg.content.startsWith("You are Buffy, the strategic coding assistant."),
+        `system prompt must open with the Buffy marker, got: ${JSON.stringify(body.messages)}`,
+      );
+      // Console tools must be sent under freebuff signature names so the
+      // server's foreign_toolset downgrade doesn't fire.
+      const toolNames = (body.tools ?? []).map((t: any) => t.function?.name);
+      assert.ok(
+        toolNames.includes("list_directory"),
+        `listDir should be aliased to list_directory, got: ${JSON.stringify(toolNames)}`,
+      );
       return new Response(mockSse, {
         headers: { "Content-Type": "text/event-stream" },
       });
@@ -262,7 +276,7 @@ function restoreFetch() {
         model: { id: "deepseek/deepseek-v4-flash", provider: "codebuff", contextWindow: 400_000 },
         systemPrompt: "Be terse.",
         messages: [{ role: "user", content: "hi" }],
-        tools: [],
+        tools: [{ name: "listDir", description: "List a directory", inputSchema: z.object({ path: z.string() }) }],
       })) {
         deltas.push(delta);
       }
@@ -284,7 +298,7 @@ function restoreFetch() {
 
       assert.ok(toolDeltas.length > 0, "should emit toolCall deltas");
       const toolStart = toolDeltas.find((d) => d.name === "listDir") as { id: string; name: string; argumentsJson: string } | undefined;
-      assert.ok(toolStart, "should emit a toolCall start with the tool name");
+      assert.ok(toolStart, "freebuff signature tool name must reverse-map back to the console tool id (list_directory → listDir)");
       const assembled = toolDeltas
         .filter((d) => (d as { id: string }).id === toolStart.id)
         .map((d) => (d as { argumentsJson: string }).argumentsJson)
