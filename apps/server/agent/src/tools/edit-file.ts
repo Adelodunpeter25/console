@@ -5,7 +5,7 @@ import type { AgentTool } from "../types/index.js";
 import { pathString } from "../service/tool-input.js";
 
 const inputSchema = z.object({
-  path: pathString("Filesystem path to the file to edit"),
+  path: pathString("Required filesystem path to the file to edit."),
   cwd: z
     .string()
     .optional()

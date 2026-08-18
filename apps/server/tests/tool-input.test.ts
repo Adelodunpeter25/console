@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { z } from "zod";
+import { bindToolCwd } from "@console/types";
 import {
   executeTool,
   pathString,
@@ -8,6 +9,27 @@ import {
 } from "../agent/src/index.js";
 
 console.log("Running tool-input harness tests...");
+
+{
+  let received: unknown;
+  const bound = bindToolCwd(
+    {
+      name: "boundPath",
+      description: "Test bound path tool",
+      inputSchema: z.object({ path: z.string(), cwd: z.string().optional() }),
+      execute: async (args) => {
+        received = args;
+        return { content: [{ type: "text", text: "ok" }] };
+      },
+    },
+    "/project",
+  );
+
+  assert.equal("cwd" in (bound.inputSchema as z.AnyZodObject).shape, false);
+  await bound.execute(bound.inputSchema.parse({ path: "." }));
+  assert.deepEqual(received, { path: ".", cwd: "/project" });
+  console.log("  ✅ bound tools hide cwd and inject the project directory");
+}
 
 const listSchema = z.object({
   items: z.array(z.string()),

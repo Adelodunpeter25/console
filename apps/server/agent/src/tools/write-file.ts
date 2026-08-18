@@ -5,7 +5,7 @@ import type { AgentTool } from "../types/index.js";
 import { pathString } from "../service/tool-input.js";
 
 const inputSchema = z.object({
-  path: pathString("Absolute or relative filesystem path to write the file to"),
+  path: pathString("Required filesystem path to write the file to."),
   cwd: z
     .string()
     .optional()

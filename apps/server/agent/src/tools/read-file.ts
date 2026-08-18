@@ -5,7 +5,9 @@ import type { AgentTool } from "../types/index.js";
 import { pathString } from "../service/tool-input.js";
 
 const inputSchema = z.object({
-  path: pathString("Absolute or relative filesystem path to the file to read"),
+  path: pathString(
+    'Required filesystem path to the file to read. Use "." only when a directory target is intended.',
+  ),
   cwd: z
     .string()
     .optional()

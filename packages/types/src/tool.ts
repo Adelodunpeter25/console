@@ -64,7 +64,9 @@ export class ToolError extends Error {
 }
 
 /**
- * Wrap a tool so its `execute` receives a default `cwd` when the model omits one.
+ * Wrap a tool for a project session. The model-facing schema omits `cwd` so
+ * the model only supplies the target path; execution still receives the
+ * selected project directory internally.
  *
  * Tools like `glob` and `bash` fall back to `process.cwd()` when no `cwd` arg is
  * given, which is the server's launch directory — not the session's project.
@@ -75,23 +77,16 @@ export function bindToolCwd<T extends z.ZodTypeAny>(
   tool: AgentTool<T>,
   cwd: string,
 ): AgentTool<T> {
-  const hasCwdArg =
-    tool.inputSchema instanceof z.ZodObject &&
-    "cwd" in tool.inputSchema.shape;
+  const hasCwdArg = tool.inputSchema instanceof z.ZodObject && "cwd" in tool.inputSchema.shape;
   if (!hasCwdArg) {
     return tool;
   }
 
   const originalExecute = tool.execute;
+  const modelInputSchema = (tool.inputSchema as z.AnyZodObject).omit({ cwd: true });
   return {
     ...tool,
-    execute: async (args, signal) => {
-      const bound = args as Record<string, unknown>;
-      const cwdArg = bound.cwd;
-      if (typeof cwdArg === "string" && cwdArg.trim() !== "") {
-        return originalExecute(args, signal);
-      }
-      return originalExecute({ ...args, cwd }, signal);
-    },
+    inputSchema: modelInputSchema as T,
+    execute: async (args, signal) => originalExecute({ ...args, cwd } as z.infer<T>, signal),
   };
 }
