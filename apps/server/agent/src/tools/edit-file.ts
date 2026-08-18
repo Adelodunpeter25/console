@@ -2,9 +2,10 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { z } from "zod";
 import type { AgentTool } from "../types/index.js";
+import { pathString } from "../service/tool-input.js";
 
 const inputSchema = z.object({
-  path: z.string().describe("Path to the file to edit"),
+  path: pathString("Filesystem path to the file to edit"),
   cwd: z
     .string()
     .optional()

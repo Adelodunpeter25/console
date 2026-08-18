@@ -2,6 +2,7 @@ import { FileFinder } from "@ff-labs/fff-node";
 import * as path from "node:path";
 import { z } from "zod";
 import type { AgentTool } from "../types/index.js";
+import { pathString } from "../service/tool-input.js";
 
 const inputSchema = z.object({
   pattern: z
@@ -9,7 +10,7 @@ const inputSchema = z.object({
     .describe(
       'Glob pattern compatible with npm `glob`. Examples: "src/**/*.ts", "**/*.json", "*.md", "{src,test}/**"',
     ),
-  cwd: z.string().optional().describe("Root directory to search from. Defaults to process.cwd()."),
+  cwd: pathString("Root filesystem directory to search from. Defaults to process.cwd().").optional(),
   maxResults: z
     .number()
     .int()

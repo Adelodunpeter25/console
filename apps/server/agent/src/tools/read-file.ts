@@ -2,9 +2,10 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { z } from "zod";
 import type { AgentTool } from "../types/index.js";
+import { pathString } from "../service/tool-input.js";
 
 const inputSchema = z.object({
-  path: z.string().describe("Absolute or relative path to the file to read"),
+  path: pathString("Absolute or relative filesystem path to the file to read"),
   cwd: z
     .string()
     .optional()
@@ -121,6 +122,14 @@ For directories, use listDir instead.`,
     const clampedEnd = Math.min(end, totalLines);
     const selectedLines = allLines.slice(start - 1, clampedEnd);
 
+    const defaultNotes: string[] = [];
+    if (args.endLine !== undefined && args.startLine === undefined) {
+      defaultNotes.push("startLine defaulted to 1 because endLine was provided");
+    }
+    if (args.startLine !== undefined && args.endLine === undefined) {
+      defaultNotes.push("endLine defaulted to the end of the file");
+    }
+
     const lineWidth = String(clampedEnd).length;
     const numbered = selectedLines
       .map((line, i) => {
@@ -138,6 +147,7 @@ For directories, use listDir instead.`,
       `File: ${filePath}`,
       `Showing: ${rangeDescription}`,
       `Size: ${raw.length} bytes`,
+      ...(defaultNotes.length > 0 ? [`Defaults applied: ${defaultNotes.join("; ")}`] : []),
       "",
     ].join("\n");
 

@@ -9,6 +9,7 @@ import type {
   ToolResult,
 } from "../types/index.js";
 import type { CompactionOptions } from "../compaction/index.js";
+import type { ToolInputEvent, ToolInputTelemetry } from "./tool-input.js";
 
 export type LLMDelta =
   | { type: "text"; text: string; thoughtSignature?: string }
@@ -57,6 +58,10 @@ export interface AgentLoopConfig {
   onToolCall?: (call: ToolCall) => Promise<void> | void;
   /** Hook called after a tool finishes executing. */
   onToolResult?: (call: ToolCall, result: ToolResult) => Promise<void> | void;
+  /** Hook for measuring recoverable and unrecoverable model tool-input shapes. */
+  onToolInputEvent?: (event: ToolInputEvent) => Promise<void> | void;
+  /** Per-agent counters for tool-input repair rates by model/provider/tool. */
+  toolInputTelemetry?: ToolInputTelemetry;
 }
 
 export interface StreamParams {

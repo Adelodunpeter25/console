@@ -2,14 +2,14 @@ import { FileFinder } from "@ff-labs/fff-node";
 import * as path from "node:path";
 import { z } from "zod";
 import type { AgentTool } from "../types/index.js";
+import { pathString } from "../service/tool-input.js";
 
 const inputSchema = z.object({
   pattern: z.string().describe("Search term or regular expression to look for"),
-  path: z
-    .string()
-    .describe("File or directory to search in. If a directory, searches all files recursively."),
-  cwd: z
-    .string()
+  path: pathString(
+    "Filesystem file or directory to search. If a directory, searches all files recursively.",
+  ),
+  cwd: pathString("Root filesystem directory to search from. Defaults to process.cwd().")
     .optional()
     .describe("Base directory for relative paths. Defaults to process.cwd()."),
   mode: z

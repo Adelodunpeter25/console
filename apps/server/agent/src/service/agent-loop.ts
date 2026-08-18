@@ -56,6 +56,8 @@ function runAgentLoop(
     compaction,
     onToolCall,
     onToolResult,
+    onToolInputEvent,
+    toolInputTelemetry,
   } = config;
 
   const stream = new EventStream<AgentSessionEvent, AgentMessage[]>(
@@ -144,6 +146,9 @@ function runAgentLoop(
               onToolCall,
               onToolResult,
               signal,
+              model,
+              onToolInputEvent,
+              toolInputTelemetry,
             ).then((result) => {
               emit({ type: "toolExecutionResult", result });
               return result;

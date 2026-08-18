@@ -7,6 +7,7 @@ import type {
   Model,
   PermissionRequest,
 } from "../types/index.js";
+import { ToolInputTelemetry, type ToolInputEvent } from "./tool-input.js";
 import { createSubagentTool } from "../tools/subagent.js";
 import { bindToolCwd } from "@console/types";
 import { agentLoop, agentLoopContinue, type AgentLoopConfig, type StreamFn } from "./agent-loop.js";
@@ -42,6 +43,10 @@ export interface AgentOptions {
   maxTurns?: number;
   /** Called for every event emitted during a run. */
   onEvent?: (event: AgentSessionEvent) => void;
+  /** Called when model tool arguments are repaired or rejected. */
+  onToolInputEvent?: (event: ToolInputEvent) => Promise<void> | void;
+  /** Optional per-agent tool-input repair counters. */
+  toolInputTelemetry?: ToolInputTelemetry;
 }
 
 // ---------------------------------------------------------------------------
@@ -60,6 +65,8 @@ export class Agent {
   private _onApproval?: AgentOptions["onApproval"];
   private _maxTurns: number;
   private _onEvent?: (event: AgentSessionEvent) => void;
+  private _onToolInputEvent?: AgentOptions["onToolInputEvent"];
+  private _toolInputTelemetry: ToolInputTelemetry;
 
   private _messages: AgentMessage[] = [];
   private _abortController?: AbortController;
@@ -74,6 +81,8 @@ export class Agent {
     this._onApproval = options.onApproval;
     this._maxTurns = options.maxTurns ?? 50;
     this._onEvent = options.onEvent;
+    this._onToolInputEvent = options.onToolInputEvent;
+    this._toolInputTelemetry = options.toolInputTelemetry ?? new ToolInputTelemetry();
   }
 
   // -------------------------------------------------------------------------
@@ -104,6 +113,10 @@ export class Agent {
 
   get approvalMode(): ApprovalMode {
     return this._approvalMode;
+  }
+
+  get toolInputTelemetry(): ToolInputTelemetry {
+    return this._toolInputTelemetry;
   }
 
   // -------------------------------------------------------------------------
@@ -182,6 +195,8 @@ export class Agent {
       signal: this._abortController.signal,
       maxTurns: this._maxTurns,
       onEvent: this._onEvent,
+      onToolInputEvent: this._onToolInputEvent,
+      toolInputTelemetry: this._toolInputTelemetry,
     };
 
     // First run: use agentLoop (adds the prompt as a UserMessage internally)
