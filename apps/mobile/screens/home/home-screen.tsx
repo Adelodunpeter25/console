@@ -63,7 +63,7 @@ function folderName(path?: string): string {
 export function HomeScreen() {
   const { data: projects = [] } = useProjects();
   const { data: sessions = [] } = useSessions();
-  const { branches } = useProjectBranches(projects);
+  const { data: branches = {} } = useProjectBranches(projects);
   const createSession = useCreateSession();
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);

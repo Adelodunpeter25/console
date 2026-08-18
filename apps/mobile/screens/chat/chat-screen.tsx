@@ -1,5 +1,6 @@
 import React, { useRef } from "react";
-import { View, Text, FlatList, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { View, Text, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { MessageSquareText } from "lucide-react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useChatStream, useAbort, useChatDecisions } from "../../hooks";
@@ -20,7 +21,7 @@ export function ChatScreen() {
   const chatTitle = useProjectStore(
     (state) => state.sessions.find((s) => s.id === selectedSessionId)?.title ?? "Console",
   );
-  const flatListRef = useRef<FlatList>(null);
+  const listRef = useRef<FlashListRef<(typeof stream.messages)[number]>>(null);
 
   const isStreaming =
     stream.running &&
@@ -46,7 +47,7 @@ export function ChatScreen() {
   const handleScrollToEnd = () => {
     isAtEndRef.current = true;
     followRef.current = true;
-    flatListRef.current?.scrollToEnd({ animated: true });
+    listRef.current?.scrollToEnd({ animated: true });
   };
 
   const handleStop = () => {
@@ -82,8 +83,8 @@ export function ChatScreen() {
           </Text>
         </View>
       ) : (
-        <FlatList
-          ref={flatListRef}
+        <FlashList
+          ref={listRef}
           style={{ flex: 1 }}
           data={stream.messages}
           keyExtractor={(_, i) => i.toString()}
