@@ -1,5 +1,7 @@
 import React from "react";
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from "react-native";
+import { ArrowUp, Square } from "lucide-react-native";
+import { theme } from "../../styles/theme";
 
 interface ComposerProps {
   value: string;
@@ -11,36 +13,43 @@ interface ComposerProps {
 
 /** Chat input row. Shows a stop button while a run is in progress. */
 export function Composer({ value, onChangeText, onSend, onStop, running }: ComposerProps) {
+  const canSend = value.trim().length > 0;
+
   return (
-    <View className="flex-row gap-2.5 px-4 py-3 bg-screen border-t border-border items-end">
-      <TextInput
-        className="flex-1 min-h-11 max-h-28 bg-card border border-border rounded-2xl px-4 py-2.5 text-foreground text-sm"
-        value={value}
-        onChangeText={onChangeText}
-        placeholder="Ask agent to write code..."
-        placeholderTextColor="#71717a"
-        multiline
-      />
+    <View className="flex-row items-end gap-2 px-4 pt-2.5 pb-3 bg-screen border-t border-border">
+      <View className="flex-1 flex-row items-end bg-card border border-border rounded-[22px] px-4 min-h-[48px]">
+        <TextInput
+          className="flex-1 max-h-[132px] py-2.5 text-foreground text-[15px] leading-[22px]"
+          value={value}
+          onChangeText={onChangeText}
+          placeholder="Message the agent…"
+          placeholderTextColor={theme.colors.text.muted}
+          multiline
+        />
+      </View>
       {running && onStop ? (
         <TouchableOpacity
-          className="w-11 h-11 bg-card border border-border rounded-full items-center justify-center"
+          className="w-11 h-11 rounded-full items-center justify-center"
+          style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
           onPress={onStop}
           activeOpacity={0.7}
         >
-          <View className="w-3.5 h-3.5 rounded-sm bg-foreground" />
+          <Square size={16} color={theme.colors.text.primary} />
         </TouchableOpacity>
       ) : (
         <TouchableOpacity
-          className={`w-11 h-11 bg-foreground rounded-full items-center justify-center ${
-            !value.trim() ? "opacity-30" : ""
-          }`}
+          className="w-11 h-11 rounded-full items-center justify-center"
+          style={{
+            backgroundColor: canSend ? theme.colors.text.primary : "rgba(255,255,255,0.08)",
+          }}
           onPress={onSend}
-          disabled={!value.trim() || Boolean(running)}
+          disabled={!canSend}
+          activeOpacity={0.8}
         >
-          {running ? (
-            <ActivityIndicator size="small" color="#000000" />
+          {canSend ? (
+            <ArrowUp size={20} color={theme.colors.text.dark} />
           ) : (
-            <Text className="text-black text-sm font-bold">↑</Text>
+            <ActivityIndicator size="small" color={theme.colors.text.muted} />
           )}
         </TouchableOpacity>
       )}

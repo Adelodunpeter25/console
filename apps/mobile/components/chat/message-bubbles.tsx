@@ -1,42 +1,203 @@
-import React from "react";
-import { View, Text, ActivityIndicator } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
+import {
+  AlertTriangle,
+  Bot,
+  Check,
+  ChevronDown,
+  Sparkles,
+  Wrench,
+} from "lucide-react-native";
 import type { AgentMessage, ToolResult } from "@console/types";
 import { MarkdownRenderer } from "../common/markdown-renderer";
 import { theme } from "../../styles/theme";
+import { formatMessageTime } from "../../utils/time";
 
-export function ToolResultItem({ result }: { result: ToolResult }) {
-  const isError = result.isError;
+/** Animated three-dot typing indicator for streaming states. */
+function TypingDots() {
+  const dot1 = useRef(new Animated.Value(0.3)).current;
+  const dot2 = useRef(new Animated.Value(0.3)).current;
+  const dot3 = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const animate = (value: Animated.Value, delay: number) => {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(value, {
+            toValue: 1,
+            duration: 500,
+            delay,
+            useNativeDriver: true,
+          }),
+          Animated.timing(value, {
+            toValue: 0.3,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ]),
+      );
+      loop.start();
+      return loop;
+    };
+    const loops = [dot1, dot2, dot3].map((v, i) => animate(v, i * 160));
+    return () => loops.forEach((l) => l.stop());
+  }, [dot1, dot2, dot3]);
+
+  const dotStyle = (value: Animated.Value) => ({
+    opacity: value,
+  });
+
   return (
-    <View className="bg-card-alt border border-border rounded-lg p-2.5 mb-1.5">
-      <View className="flex-row justify-between items-center mb-1">
-        <Text className="text-xs font-mono font-bold text-foreground">⚙️ {result.toolName}</Text>
-        <Text
-          className="text-[9px] font-bold font-mono tracking-wide"
-          style={{ color: isError ? theme.colors.status.attention : theme.colors.status.ready }}
-        >
-          {isError ? "FAILED" : "DONE"}
-        </Text>
-      </View>
-      <Text
-        className="text-xs font-mono text-foreground-secondary leading-4"
-        numberOfLines={3}
-        selectable
-      >
-        {String(result.content || "")}
-      </Text>
+    <View className="flex-row items-center gap-1.5 py-2">
+      {[dot1, dot2, dot3].map((v, i) => (
+        <Animated.View
+          key={i}
+          className="w-1.5 h-1.5 rounded-full"
+          style={[{ backgroundColor: theme.colors.text.muted }, dotStyle(v)]}
+        />
+      ))}
     </View>
   );
 }
 
-export function UserBubble({ content }: { content: string }) {
+/** Collapsible "Thought" block. Expands while streaming so the user sees live reasoning. */
+function ThinkingBlock({ text, isStreaming }: { text: string; isStreaming?: boolean }) {
+  const [expanded, setExpanded] = useState(Boolean(isStreaming));
+
   return (
-    <View className="bg-foreground/5 border border-border rounded-xl p-3.5 mb-3.5 self-end max-w-[85%]">
-      <Text className="text-[9px] font-mono font-bold text-foreground-secondary mb-2 tracking-widest">
-        YOU
-      </Text>
-      <Text className="text-foreground text-sm leading-5" selectable>
-        {content}
-      </Text>
+    <View className="mb-3">
+      <Pressable
+        onPress={() => setExpanded((v) => !v)}
+        className="flex-row items-center gap-1.5 self-start"
+        hitSlop={8}
+      >
+        <Sparkles size={13} color={theme.colors.text.muted} />
+        <Text className="text-xs font-semibold text-foreground-secondary">
+          {isStreaming ? "Thinking…" : "Thought"}
+        </Text>
+        <ChevronDown
+          size={14}
+          color={theme.colors.text.muted}
+          style={{ transform: [{ rotate: expanded ? "0deg" : "-90deg" }] }}
+        />
+      </Pressable>
+      {expanded && text ? (
+        <View className="mt-2 border-l-2 pl-3.5" style={{ borderColor: theme.colors.borderSubtle }}>
+          <Text className="text-[13px] text-foreground-secondary leading-5" selectable>
+            {text}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** Compact collapsible tool-activity row (running / done / failed). */
+export function ToolActivityRow({
+  name,
+  isRunning,
+  isError,
+  detail,
+}: {
+  name: string;
+  isRunning?: boolean;
+  isError?: boolean;
+  detail?: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const statusColor = isError
+    ? theme.colors.status.attention
+    : isRunning
+      ? theme.colors.status.running
+      : theme.colors.status.ready;
+  const statusBg = isError
+    ? theme.colors.status.attentionBg
+    : isRunning
+      ? theme.colors.status.runningBg
+      : theme.colors.status.readyBg;
+
+  return (
+    <Pressable
+      onPress={() => setExpanded((v) => !v)}
+      className="mb-1.5 rounded-xl overflow-hidden"
+      style={{ backgroundColor: "rgba(255,255,255,0.04)" }}
+      hitSlop={4}
+    >
+      <View className="flex-row items-center gap-2.5 px-3 py-2">
+        <View
+          className="w-7 h-7 rounded-lg items-center justify-center"
+          style={{ backgroundColor: statusBg }}
+        >
+          {isRunning ? (
+            <ActivityIndicator size="small" color={statusColor} />
+          ) : isError ? (
+            <AlertTriangle size={14} color={statusColor} />
+          ) : (
+            <Wrench size={13} color={statusColor} />
+          )}
+        </View>
+        <Text className="flex-1 text-[13px] font-mono text-foreground" numberOfLines={1}>
+          {name}
+        </Text>
+        {isRunning ? (
+          <Text className="text-[11px] font-semibold text-foreground-secondary">{detail ?? "Running"}</Text>
+        ) : (
+          <View className="flex-row items-center gap-1.5">
+            <Text
+              className="text-[10px] font-bold font-mono tracking-wide"
+              style={{ color: statusColor }}
+            >
+              {isError ? "FAILED" : "DONE"}
+            </Text>
+            <ChevronDown
+              size={12}
+              color={theme.colors.text.muted}
+              style={{ transform: [{ rotate: expanded ? "0deg" : "-90deg" }] }}
+            />
+          </View>
+        )}
+      </View>
+      {expanded && detail ? (
+        <View className="px-3.5 pb-2.5 pt-1" style={{ backgroundColor: "rgba(255,255,255,0.02)" }}>
+          <Text className="text-[12px] font-mono text-foreground-secondary leading-4" selectable>
+            {detail}
+          </Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+export function ToolResultItem({ result }: { result: ToolResult }) {
+  const isError = result.isError;
+  const detail = String(result.content ?? "");
+  return (
+    <ToolActivityRow name={result.toolName ?? "tool"} isError={isError} detail={detail} />
+  );
+}
+
+export function UserBubble({ content, createdAt }: { content: string; createdAt?: number }) {
+  return (
+    <View className="items-end mb-4">
+      <View
+        className="max-w-[85%] px-4 py-2.5 rounded-[20px] rounded-br-md"
+        style={{ backgroundColor: theme.colors.surfaceElevated }}
+      >
+        <Text className="text-foreground text-[15px] leading-[22px]" selectable>
+          {content}
+        </Text>
+      </View>
+      {createdAt ? (
+        <Text className="text-[11px] text-foreground-secondary/70 mt-1 mr-0.5">
+          {formatMessageTime(createdAt)}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -44,64 +205,84 @@ export function UserBubble({ content }: { content: string }) {
 export function AssistantBubble({
   textContent,
   thinkingContent,
-  label = "AGENT",
+  label = "Assistant",
   toolCalls,
   isStreaming,
+  createdAt,
 }: {
   textContent?: string;
   thinkingContent?: string;
   label?: string;
   toolCalls?: { name: string }[];
   isStreaming?: boolean;
+  createdAt?: number;
 }) {
+  const hasContent =
+    Boolean(textContent) || Boolean(thinkingContent) || (toolCalls && toolCalls.length > 0);
+  const showTyping = isStreaming && !hasContent;
+
   return (
-    <View className="bg-card border border-border rounded-xl p-3.5 mb-3.5 self-start w-full max-w-[92%]">
-      <Text className="text-[9px] font-mono font-bold text-foreground-secondary mb-2 tracking-widest">
-        {label}
-      </Text>
-      {thinkingContent ? (
-        <View className="border-l-2 border-foreground-secondary/30 pl-2.5 mb-3">
-          <Text className="text-[11px] font-mono text-foreground-secondary mb-1">
-            💭 Thinking...
-          </Text>
-          <Text className="text-[11px] font-mono text-foreground-secondary/70 leading-[18px]">
-            {thinkingContent}
-          </Text>
+    <View className="mb-4">
+      <View className="flex-row items-center gap-2 mb-2">
+        <View
+          className="w-6 h-6 rounded-lg items-center justify-center"
+          style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
+        >
+          <Bot size={13} color={theme.colors.text.primary} />
         </View>
-      ) : null}
+        <Text className="text-[13px] font-semibold text-foreground">{label}</Text>
+        {createdAt ? (
+          <Text className="text-[11px] text-foreground-secondary/70">
+            {formatMessageTime(createdAt)}
+          </Text>
+        ) : null}
+      </View>
+
+      {showTyping ? <TypingDots /> : null}
+
+      {thinkingContent ? <ThinkingBlock text={thinkingContent} isStreaming={isStreaming} /> : null}
+
       {textContent ? <MarkdownRenderer content={textContent} /> : null}
+
       {toolCalls && toolCalls.length > 0 ? (
-        <View className="mt-2 pt-2 border-t border-border">
+        <View className="mt-1.5">
           {toolCalls.map((call, idx) => (
-            <View key={idx} className="flex-row items-center my-1">
-              <ActivityIndicator
-                size="small"
-                color={theme.colors.status.running}
-                style={{ marginRight: 8 }}
-              />
-              <Text className="text-[11px] font-mono text-foreground-secondary">
-                Running {call.name}…
-              </Text>
-            </View>
+            <ToolActivityRow key={idx} name={call.name} isRunning={isStreaming} detail="Running…" />
           ))}
         </View>
       ) : null}
-      {isStreaming && !textContent && !thinkingContent && (!toolCalls || toolCalls.length === 0) ? (
-        <ActivityIndicator size="small" color={theme.colors.text.muted} />
+
+      {isStreaming && textContent ? (
+        <View className="mt-1 flex-row items-center gap-1.5">
+          <ActivityIndicator size="small" color={theme.colors.text.muted} />
+        </View>
+      ) : null}
+
+      {!isStreaming && !showTyping && !textContent && !thinkingContent && (!toolCalls || toolCalls.length === 0) ? (
+        <View className="flex-row items-center gap-1.5">
+          <Check size={13} color={theme.colors.status.ready} />
+          <Text className="text-xs text-foreground-secondary">Done</Text>
+        </View>
       ) : null}
     </View>
   );
 }
 
 /** Renders the agent message bubbles for the chat FlatList. */
-export function MessageBubble({ item }: { item: AgentMessage }) {
+export function MessageBubble({
+  item,
+  isStreaming,
+}: {
+  item: AgentMessage;
+  isStreaming?: boolean;
+}) {
   if (item.role === "user") {
-    return <UserBubble content={item.content} />;
+    return <UserBubble content={item.content} createdAt={item.createdAt} />;
   }
 
   if (item.role === "toolResult") {
     return (
-      <View className="w-full max-w-[92%] mb-3.5 self-start">
+      <View className="mb-4">
         {item.results.map((res, i) => (
           <ToolResultItem key={i} result={res} />
         ))}
@@ -109,7 +290,7 @@ export function MessageBubble({ item }: { item: AgentMessage }) {
     );
   }
 
-  const content = item.content as Array<{ type: string; text?: string }>;
+  const content = item.content as Array<{ type: string; text?: string; call?: { name: string } }>;
   const textContent = (content ?? [])
     .filter((c) => c.type === "text")
     .map((c) => c.text ?? "")
@@ -118,6 +299,17 @@ export function MessageBubble({ item }: { item: AgentMessage }) {
     .filter((c) => c.type === "thinking")
     .map((c) => c.text ?? "")
     .join("\n\n");
+  const toolCalls = (content ?? [])
+    .filter((c) => c.type === "toolCall" && c.call)
+    .map((c) => c.call as { name: string });
 
-  return <AssistantBubble textContent={textContent} thinkingContent={thinkingContent} />;
+  return (
+    <AssistantBubble
+      textContent={textContent}
+      thinkingContent={thinkingContent}
+      toolCalls={toolCalls}
+      isStreaming={isStreaming}
+      createdAt={item.createdAt}
+    />
+  );
 }

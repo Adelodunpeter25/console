@@ -1,5 +1,6 @@
 import React, { useRef } from "react";
 import { View, Text, FlatList } from "react-native";
+import { MessageSquareText } from "lucide-react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useChatStream, useAbort, useChatDecisions } from "../../hooks";
 import { useAppStore } from "../../stores";
@@ -8,6 +9,7 @@ import { MessageBubble } from "../../components/chat/message-bubbles";
 import { LiveToolResults } from "../../components/chat/live-tool-results";
 import { Composer } from "../../components/chat/composer";
 import { ApprovalPanel } from "../../components/chat/approval-panel";
+import { theme } from "../../styles/theme";
 
 export function ChatScreen() {
   const stream = useChatStream();
@@ -38,9 +40,18 @@ export function ChatScreen() {
       <ScreenHeader title="Console" onBack={() => setActiveTab("home")} />
 
       {stream.messages.length === 0 && !isStreaming ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <Text className="text-foreground-secondary text-sm italic">
-            No messages. Type a prompt below to start.
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
+          <View
+            className="w-14 h-14 rounded-2xl items-center justify-center mb-4"
+            style={{ backgroundColor: "rgba(255,255,255,0.06)" }}
+          >
+            <MessageSquareText size={24} color={theme.colors.text.secondary} />
+          </View>
+          <Text className="text-foreground text-base font-semibold mb-1.5 text-center">
+            Start a conversation
+          </Text>
+          <Text className="text-foreground-secondary text-sm text-center leading-5">
+            Ask the agent to write code, review a change, or run commands on your project.
           </Text>
         </View>
       ) : (
@@ -49,7 +60,7 @@ export function ChatScreen() {
           style={{ flex: 1 }}
           data={stream.messages}
           keyExtractor={(_, i) => i.toString()}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16 }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
@@ -59,6 +70,7 @@ export function ChatScreen() {
               <LiveToolResults results={stream.liveToolResults} />
               {isStreaming ? (
                 <MessageBubble
+                  isStreaming
                   item={{
                     role: "assistant",
                     content: [

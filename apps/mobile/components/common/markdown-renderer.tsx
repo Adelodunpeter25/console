@@ -1,9 +1,51 @@
-import React from "react";
-import { View, Text } from "react-native";
-import Markdown from "react-native-markdown-display";
+import React, { useState } from "react";
+import { Linking, Pressable, Text, View } from "react-native";
+import Markdown, { type ASTNode } from "react-native-markdown-display";
+import { Check, Copy, FileCode } from "lucide-react-native";
+import { theme } from "../../styles/theme";
+import { setStringAsync } from "expo-clipboard";
 
 interface MarkdownRendererProps {
   content: string;
+}
+
+/** Extension of ASTNode with the fields tokensToAST actually attaches. */
+interface RenderNode extends ASTNode {
+  sourceInfo?: string;
+}
+
+function CodeBlockHeader({
+  language,
+  code,
+}: {
+  language: string;
+  code: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await setStringAsync(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <View className="flex-row items-center justify-between px-3.5 py-2 border-b border-border/60 bg-card-alt/40">
+      <View className="flex-row items-center gap-1.5">
+        <FileCode size={13} color={theme.colors.text.secondary} />
+        <Text className="text-[11px] font-mono font-semibold text-foreground-secondary">
+          {language || "code"}
+        </Text>
+      </View>
+      <Pressable onPress={handleCopy} hitSlop={8}>
+        {copied ? (
+          <Check size={14} color={theme.colors.status.ready} />
+        ) : (
+          <Copy size={14} color={theme.colors.text.secondary} />
+        )}
+      </Pressable>
+    </View>
+  );
 }
 
 export function MarkdownRenderer({ content }: MarkdownRendererProps) {
@@ -18,7 +60,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
           </View>
         ),
         paragraph: (node, children) => (
-          <Text key={node.key} className="text-foreground text-sm leading-6 my-1">
+          <Text key={node.key} className="text-foreground text-[15px] leading-[23px] my-[3px]">
             {children}
           </Text>
         ),
@@ -33,59 +75,99 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
           </Text>
         ),
         heading3: (node, children) => (
-          <Text key={node.key} className="text-foreground text-sm font-bold mt-2.5 mb-1">
+          <Text key={node.key} className="text-foreground text-[15px] font-bold mt-2.5 mb-1">
+            {children}
+          </Text>
+        ),
+        heading4: (node, children) => (
+          <Text key={node.key} className="text-foreground text-sm font-bold mt-2 mb-0.5">
             {children}
           </Text>
         ),
         bullet_list: (node, children) => (
-          <View key={node.key} className="my-1 pl-1">
+          <View key={node.key} className="my-1">
             {children}
           </View>
         ),
         ordered_list: (node, children) => (
-          <View key={node.key} className="my-1 pl-1">
+          <View key={node.key} className="my-1">
             {children}
           </View>
         ),
         list_item: (node, children, parent) => {
           const isOrdered = parent && parent[0]?.type === "ordered_list";
+          const bullet = isOrdered ? node.index !== undefined ? `${node.index + 1}.` : "•" : "•";
           return (
-            <View key={node.key} className="flex-row items-start my-0.5">
-              <Text className="text-foreground-secondary mr-2 mt-0.5 text-xs">
-                {isOrdered ? "•" : "•"}
+            <View key={node.key} className="flex-row items-start my-[3px]">
+              <Text className="text-foreground-secondary mr-2.5 mt-0.5 text-[13px] font-semibold">
+                {bullet}
               </Text>
               <View className="flex-1">{children}</View>
             </View>
           );
         },
+        link: (node: RenderNode, children) => (
+          <Text
+            key={node.key}
+            className="underline text-[15px]"
+            style={{ color: "#7da7ff" }}
+            onPress={() => {
+              const href = node.attributes?.href;
+              if (typeof href === "string") {
+                Linking.openURL(href).catch(() => {});
+              }
+            }}
+          >
+            {children}
+          </Text>
+        ),
         code_inline: (node) => (
           <Text
             key={node.key}
-            className="font-mono text-xs bg-card-alt text-orange-400 px-1 py-0.5 rounded"
+            className="font-mono text-[12px] text-orange-300 px-1.5 py-0.5 rounded-md"
+            style={{ backgroundColor: "rgba(255,255,255,0.06)" }}
           >
             {node.content}
           </Text>
         ),
-        fence: (node) => {
-          // Block code blocks
-          const codeText = node.content ? node.content.trim() : "";
+        fence: (node: RenderNode) => {
+          const codeText = node.content ? node.content.replace(/\n$/, "") : "";
+          const language = node.sourceInfo ? node.sourceInfo.trim() : "";
           return (
-            <View key={node.key} className="bg-card border border-border rounded-xl p-3 my-2">
-              <Text className="text-foreground font-mono text-xs leading-5" selectable>
-                {codeText}
-              </Text>
+            <View
+              key={node.key}
+              className="my-2.5 rounded-xl overflow-hidden"
+              style={{ backgroundColor: "#101113", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" }}
+            >
+              <CodeBlockHeader language={language} code={codeText} />
+              <View className="px-3.5 py-3">
+                <Text className="text-foreground font-mono text-[12.5px] leading-5" selectable>
+                  {codeText}
+                </Text>
+              </View>
             </View>
           );
         },
-        code_block: (node) => (
-          <View key={node.key} className="bg-card border border-border rounded-xl p-3 my-2">
-            <Text className="text-foreground font-mono text-xs leading-5" selectable>
-              {node.content ? node.content.trim() : ""}
-            </Text>
-          </View>
-        ),
+        code_block: (node: RenderNode) => {
+          const codeText = node.content ? node.content.replace(/\n$/, "") : "";
+          const language = node.sourceInfo ? node.sourceInfo.trim() : "";
+          return (
+            <View
+              key={node.key}
+              className="my-2.5 rounded-xl overflow-hidden"
+              style={{ backgroundColor: "#101113", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" }}
+            >
+              <CodeBlockHeader language={language} code={codeText} />
+              <View className="px-3.5 py-3">
+                <Text className="text-foreground font-mono text-[12.5px] leading-5" selectable>
+                  {codeText}
+                </Text>
+              </View>
+            </View>
+          );
+        },
         strong: (node, children) => (
-          <Text key={node.key} className="font-bold">
+          <Text key={node.key} className="font-bold text-foreground">
             {children}
           </Text>
         ),
@@ -95,11 +177,17 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
           </Text>
         ),
         block_quote: (node, children) => (
-          <View key={node.key} className="border-l-2 border-border pl-3 my-2 italic">
+          <View
+            key={node.key}
+            className="border-l-[3px] pl-3 my-2 rounded-r-lg py-1 pr-2"
+            style={{ borderColor: "rgba(255,255,255,0.15)", backgroundColor: "rgba(255,255,255,0.03)" }}
+          >
             {children}
           </View>
         ),
-        hr: (node) => <View key={node.key} className="border-b border-border my-3" />,
+        hr: (node) => (
+          <View key={node.key} className="my-4" style={{ height: 1, backgroundColor: "rgba(255,255,255,0.1)" }} />
+        ),
       }}
     >
       {content}
