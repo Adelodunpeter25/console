@@ -176,7 +176,12 @@ export function ToolActivityRow({
 
 export function ToolResultItem({ result }: { result: ToolResult }) {
   const isError = result.isError;
-  const detail = String(result.content ?? "");
+  const detail =
+    typeof result.content === "string"
+      ? result.content
+      : result.content === null || result.content === undefined
+        ? ""
+        : JSON.stringify(result.content, null, 2);
   return (
     <ToolActivityRow name={result.toolName ?? "tool"} isError={isError} detail={detail} />
   );
@@ -223,20 +228,11 @@ export function AssistantBubble({
 
   return (
     <View className="mb-4">
-      <View className="flex-row items-center gap-2 mb-2">
-        <View
-          className="w-6 h-6 rounded-lg items-center justify-center"
-          style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
-        >
-          <Bot size={13} color={theme.colors.text.primary} />
-        </View>
-        <Text className="text-[13px] font-semibold text-foreground">{label}</Text>
-        {createdAt ? (
-          <Text className="text-[11px] text-foreground-secondary/70">
-            {formatMessageTime(createdAt)}
-          </Text>
-        ) : null}
-      </View>
+      {createdAt ? (
+        <Text className="text-[11px] text-foreground-secondary/70 mb-1.5">
+          {formatMessageTime(createdAt)}
+        </Text>
+      ) : null}
 
       {showTyping ? <TypingDots /> : null}
 
