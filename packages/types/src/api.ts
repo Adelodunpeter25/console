@@ -14,6 +14,7 @@ export interface CreateSessionDto {
   modelId?: string;
   provider?: ProviderId;
   title?: string;
+  approvalMode?: "always-ask" | "accept-edits" | "plan-mode" | "full-access";
 }
 
 export interface UpdateSessionDto {

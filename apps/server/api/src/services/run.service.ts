@@ -136,7 +136,9 @@ export class RunService {
       session.header.approvalMode ||
       "always-ask") as ApprovalMode;
 
-    // Persist the chosen approvalMode to the DB so it survives reloads.
+    // Persist the chosen model/provider and approval mode so the session
+    // configuration survives reloads and remains consistent with this run.
+    this.sessionStorage.updateModel(sessionId, modelId, provider);
     this.sessionStorage.updateApprovalMode(sessionId, approvalMode);
 
     const model: Model = {

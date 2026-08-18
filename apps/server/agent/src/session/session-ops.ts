@@ -139,8 +139,8 @@ export function loadSession(
     globalDb
       .prepare(
         `INSERT INTO sessions
-          (id, title, cwd, project_id, model_id, provider, message_count, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, title, cwd, project_id, model_id, provider, message_count, approval_mode, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         sessionId,
@@ -150,6 +150,7 @@ export function loadSession(
         modelId,
         provider,
         messages.length,
+        approvalMode,
         createdAt,
         updatedAt,
       );
@@ -204,6 +205,7 @@ export function listSessions(
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     messageCount: r.message_count,
+    approvalMode: r.approval_mode ?? "always-ask",
     status: r.status ?? "idle",
     deletedAt: r.deleted_at ?? undefined,
   }));

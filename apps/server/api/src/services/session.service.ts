@@ -34,6 +34,7 @@ export class SessionService {
       projectId,
       modelId,
       provider,
+      approvalMode: dto.approvalMode,
     });
   }
 
