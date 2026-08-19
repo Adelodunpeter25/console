@@ -1,20 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React from "react";
 import { Alert, Text, View, Pressable, ScrollView } from "react-native";
-import { GitBranch } from "lucide-react-native";
-import { useCreateSession, useProjects, useSessions } from "@console/api";
-import { SessionHeader } from "@console/types";
+import { Folder, MessageSquare } from "lucide-react-native";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { SearchBar } from "../../components/common/search-bar";
-import { useAppStore } from "../../stores";
-import { useProjectBranches } from "../../hooks";
+import { useHomeSessions } from "../../hooks";
 import { formatRelativeTime } from "../../utils/time";
 import { theme } from "../../styles/theme";
-
-interface GroupedSection {
-  projectId: string | null;
-  projectName: string;
-  data: SessionHeader[];
-}
 
 function getStatusStyle(status?: string): {
   label: string;
@@ -54,94 +45,30 @@ function shortRelativeTime(dateInput?: number): string {
   return full.replace(" ago", "").replace("just now", "now");
 }
 
-function folderName(path?: string): string {
-  if (!path) return "";
-  const trimmed = path.replace(/\/+$/, "");
-  return trimmed.slice(trimmed.lastIndexOf("/") + 1);
-}
-
 export function HomeScreen() {
-  const { data: projects = [] } = useProjects();
-  const { data: sessions = [] } = useSessions();
-  const { data: branches = {} } = useProjectBranches(projects);
-  const createSession = useCreateSession();
-  const setActiveTab = useAppStore((state) => state.setActiveTab);
-  const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
-  const [searchQuery, setSearchQuery] = useState("");
+  const {
+    sections,
+    searchQuery,
+    setSearchQuery,
+    openSession,
+    composeSession,
+    isCreatingSession,
+    getProjectNameForSession,
+    getBranchForSession,
+    navigateToSettings,
+  } = useHomeSessions();
 
-  // Filter sessions by search query
-  const filteredSessions = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return sessions;
-    return sessions.filter((s) => (s.title || "").toLowerCase().includes(q));
-  }, [sessions, searchQuery]);
-
-  // Group filtered sessions by project (by projectId or fallback to cwd folder)
-  const sections = useMemo<GroupedSection[]>(() => {
-    const byProject = new Map<string, { projectId: string | null; projectName: string; list: SessionHeader[] }>();
-
-    for (const session of filteredSessions) {
-      // Find matching project by projectId or by matching project.path === session.cwd
-      const project =
-        (session.projectId ? projects.find((p) => p.id === session.projectId) : undefined) ??
-        projects.find((p) => p.path && session.cwd && p.path === session.cwd);
-
-      const groupKey = project ? project.id : (folderName(session.cwd) || "draft").toLowerCase();
-      const groupName = project ? project.name.toUpperCase() : (folderName(session.cwd) || "DRAFT").toUpperCase();
-
-      const existing = byProject.get(groupKey);
-      if (existing) {
-        existing.list.push(session);
-      } else {
-        byProject.set(groupKey, {
-          projectId: project?.id ?? session.projectId ?? null,
-          projectName: groupName,
-          list: [session],
-        });
-      }
-    }
-
-    const result: GroupedSection[] = [];
-    for (const [, group] of byProject) {
-      result.push({
-        projectId: group.projectId,
-        projectName: group.projectName,
-        data: group.list.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)),
-      });
-    }
-    return result.sort((a, b) => a.projectName.localeCompare(b.projectName));
-  }, [filteredSessions, projects]);
-
-  const openSession = (sessionId: string) => {
-    setSelectedSessionId(sessionId);
-    setActiveTab("chat");
-  };
-
-  const composeSession = async () => {
-    if (createSession.isPending) return;
-
-    // Prefer the first configured project. The server accepts an empty cwd and
-    // falls back to its own working directory when no project exists yet.
-    const project = projects[0];
+  const handleCompose = async () => {
     try {
-      const session = await createSession.mutateAsync({
-        cwd: project?.path ?? "",
-        ...(project ? { projectId: project.id } : {}),
-        title: "New Chat",
-      });
-      setSelectedSessionId(session.id);
-      setActiveTab("chat");
-    } catch (error) {
-      console.error("Failed to create session:", error);
+      await composeSession();
+    } catch {
       Alert.alert("Unable to start chat", "Check the backend connection and try again.");
     }
   };
 
   return (
-    // Bottom SearchBar uses KeyboardStickyView so it rides the keyboard on
-    // edge-to-edge Android (adjustResize is a no-op there).
     <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
-      <ScreenHeader title="Console" showSettings onSettingsPress={() => setActiveTab("settings")} />
+      <ScreenHeader title="Console" showSettings onSettingsPress={navigateToSettings} />
 
       <ScrollView
         style={{ flex: 1 }}
@@ -158,24 +85,26 @@ export function HomeScreen() {
           </View>
         ) : (
           sections.map((section) => (
-            <View key={section.projectId ?? "draft"} className="mb-5">
+            <View key={section.projectId ?? section.projectName} className="mb-5">
               {/* Section Header */}
               <View className="flex-row justify-between items-center mb-2 px-1">
-                <Text className="text-xs font-bold text-foreground-secondary tracking-widest">
-                  📁 {section.projectName}
-                </Text>
+                <View className="flex-row items-center gap-1.5">
+                  <Folder size={14} color="#71717a" />
+                  <Text className="text-xs font-bold text-foreground-secondary tracking-widest">
+                    {section.projectName}
+                  </Text>
+                </View>
                 <Text className="text-xs text-foreground-secondary opacity-60">
-                  {section.data.length} more
+                  {section.data.length} {section.data.length === 1 ? "chat" : "chats"}
                 </Text>
               </View>
 
               {/* Session Cards grouped into one card */}
               <View className="bg-card border border-border rounded-2xl overflow-hidden">
                 {section.data.map((session, index) => {
-                  const project = projects.find((p) => p.id === session.projectId);
                   const status = getStatusStyle(session.status);
-                  const projectName = project?.name ?? folderName(session.cwd);
-                  const branch = branches[session.projectId ?? ""];
+                  const projectName = getProjectNameForSession(session);
+                  const branch = getBranchForSession(session);
                   const isLast = index === section.data.length - 1;
 
                   return (
@@ -185,12 +114,12 @@ export function HomeScreen() {
                       style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
                       onPress={() => openSession(session.id)}
                     >
-                      {/* Avatar icon with status colour */}
+                      {/* Chat message avatar icon with status colour */}
                       <View
                         className="w-9 h-9 rounded-xl items-center justify-center mr-3"
                         style={{ backgroundColor: status.bgColor }}
                       >
-                        <GitBranch size={16} color={status.color} />
+                        <MessageSquare size={16} color={status.color} />
                       </View>
 
                       {/* Title + project/branch */}
@@ -238,12 +167,12 @@ export function HomeScreen() {
         )}
       </ScrollView>
 
-      {/* Sticky so it rides above the keyboard without resizing the list. */}
+      {/* Sticky search bar */}
       <SearchBar
         value={searchQuery}
         onChangeText={setSearchQuery}
-        onComposePress={composeSession}
-        disabled={createSession.isPending}
+        onComposePress={handleCompose}
+        disabled={isCreatingSession}
       />
     </View>
   );
