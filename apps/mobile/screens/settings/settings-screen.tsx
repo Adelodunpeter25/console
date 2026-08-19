@@ -48,12 +48,13 @@ export function SettingsScreen() {
       <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
         {section === "projects" ? (
           <ProjectsSettings onBack={() => setSection(null)} />
+        ) : section === "deleted-chats" ? (
+          <DeletedChatsSettings onBack={() => setSection(null)} />
         ) : (
           <>
             <ScreenHeader title={meta.title} onBack={() => setSection(null)} />
             {section === "connection" ? <ConnectionSettings /> : null}
             {section === "account" ? <AccountSettings /> : null}
-            {section === "deleted-chats" ? <DeletedChatsSettings /> : null}
           </>
         )}
       </View>

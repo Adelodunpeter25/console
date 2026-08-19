@@ -1,11 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { Alert, FlatList, Pressable, Text, View, ActivityIndicator } from "react-native";
-import { RotateCcw, Trash2, MessageSquare, AlertTriangle } from "lucide-react-native";
+import { RotateCcw, Trash2, MessageSquare } from "lucide-react-native";
+import { ScreenHeader } from "../../components/layout/screen-header";
 import { useProjectStore } from "../../stores";
 import { formatRelativeTime, folderName } from "../../utils";
 import { theme } from "../../styles/theme";
 
-export function DeletedChatsSettings() {
+interface DeletedChatsSettingsProps {
+  onBack?: () => void;
+}
+
+export function DeletedChatsSettings({ onBack }: DeletedChatsSettingsProps) {
   const deletedSessions = useProjectStore((state) => state.deletedSessions);
   const loading = useProjectStore((state) => state.deletedSessionsLoading);
   const loadDeletedSessions = useProjectStore((state) => state.loadDeletedSessions);
@@ -106,66 +111,61 @@ export function DeletedChatsSettings() {
     );
   };
 
+  const headerActions = deletedSessions.length > 0 ? (
+    <View className="flex-row items-center gap-1.5">
+      <Pressable
+        className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-full bg-card border border-border"
+        style={({ pressed }) => ({
+          opacity: pressed || busyId !== null ? 0.5 : 1,
+        })}
+        disabled={busyId !== null}
+        onPress={handleRestoreAll}
+      >
+        {busyId === "all" ? (
+          <ActivityIndicator size="small" color="#ffffff" style={{ transform: [{ scale: 0.7 }] }} />
+        ) : (
+          <RotateCcw size={12} color="#ffffff" />
+        )}
+        <Text className="text-[11px] font-semibold text-foreground">Restore all</Text>
+      </Pressable>
+
+      <Pressable
+        className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-full bg-red-500/10 border border-red-500/20"
+        style={({ pressed }) => ({
+          opacity: pressed || busyId !== null ? 0.5 : 1,
+        })}
+        disabled={busyId !== null}
+        onPress={handlePermanentDeleteAll}
+      >
+        <Trash2 size={12} color="#f87171" />
+        <Text className="text-[11px] font-semibold text-red-400">Delete all</Text>
+      </Pressable>
+    </View>
+  ) : null;
+
   return (
-    <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 8 }}>
-      {/* Top Header Actions */}
-      <View className="flex-row items-center justify-between mb-3">
-        <Text className="text-xs text-foreground-secondary flex-1 pr-2">
-          Restore soft-deleted chats or purge them permanently.
-        </Text>
-        <View className="flex-row items-center gap-2">
-          <Pressable
-            className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg bg-card-alt border border-border"
-            style={({ pressed }) => ({
-              opacity: pressed || busyId !== null || deletedSessions.length === 0 ? 0.5 : 1,
-            })}
-            disabled={busyId !== null || deletedSessions.length === 0}
-            onPress={handleRestoreAll}
-          >
-            {busyId === "all" ? (
-              <ActivityIndicator size="small" color="#ffffff" style={{ transform: [{ scale: 0.7 }] }} />
-            ) : (
-              <RotateCcw size={12} color="#ffffff" />
-            )}
-            <Text className="text-[11px] font-semibold text-foreground">Restore all</Text>
-          </Pressable>
+    <View style={{ flex: 1 }}>
+      <ScreenHeader
+        title="Deleted Chats"
+        onBack={onBack}
+        rightAction={headerActions}
+      />
 
-          <Pressable
-            className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20"
-            style={({ pressed }) => ({
-              opacity: pressed || busyId !== null || deletedSessions.length === 0 ? 0.5 : 1,
-            })}
-            disabled={busyId !== null || deletedSessions.length === 0}
-            onPress={handlePermanentDeleteAll}
-          >
-            <Trash2 size={12} color={theme.colors.status.error} />
-            <Text className="text-[11px] font-semibold text-red-400">Delete all</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {/* Info notice banner */}
-      <View className="flex-row items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 mb-3">
-        <AlertTriangle size={14} color="#f59e0b" className="mt-0.5 shrink-0" />
-        <Text className="text-xs text-foreground-secondary flex-1 leading-4">
-          Chats are initially soft-deleted and can be restored. Permanent deletion removes the message history forever.
-        </Text>
-      </View>
-
-      {loading && deletedSessions.length === 0 ? (
-        <View className="items-center justify-center py-16">
-          <ActivityIndicator size="small" color="#ffffff" />
-          <Text className="text-xs text-foreground-secondary mt-3">Loading deleted chats…</Text>
-        </View>
-      ) : deletedSessions.length === 0 ? (
-        <View className="items-center justify-center py-20 bg-card border border-border rounded-2xl p-6">
-          <MessageSquare size={28} color={theme.colors.text.muted} />
-          <Text className="text-sm font-semibold text-foreground mt-3">No deleted chats</Text>
-          <Text className="text-xs text-foreground-secondary text-center mt-1">
-            Chats you delete will appear here until permanently purged.
-          </Text>
-        </View>
-      ) : (
+      <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 4 }}>
+        {loading && deletedSessions.length === 0 ? (
+          <View className="items-center justify-center py-16">
+            <ActivityIndicator size="small" color="#ffffff" />
+            <Text className="text-xs text-foreground-secondary mt-3">Loading deleted chats…</Text>
+          </View>
+        ) : deletedSessions.length === 0 ? (
+          <View className="items-center justify-center py-20 bg-card border border-border rounded-2xl p-6">
+            <MessageSquare size={28} color={theme.colors.text.muted} />
+            <Text className="text-sm font-semibold text-foreground mt-3">No deleted chats</Text>
+            <Text className="text-xs text-foreground-secondary text-center mt-1">
+              Chats you delete will appear here until permanently purged.
+            </Text>
+          </View>
+        ) : (
         <FlatList
           data={deletedSessions}
           keyExtractor={(item) => item.id}
@@ -217,6 +217,7 @@ export function DeletedChatsSettings() {
           }}
         />
       )}
+      </View>
     </View>
   );
 }
