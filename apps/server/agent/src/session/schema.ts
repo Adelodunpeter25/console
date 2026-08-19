@@ -77,6 +77,7 @@ export function initSessionDatabase(db: Database.Database): void {
       model_id TEXT NOT NULL,
       provider TEXT NOT NULL,
       approval_mode TEXT NOT NULL DEFAULT 'always-ask',
+      repaired INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
@@ -90,6 +91,12 @@ export function initSessionDatabase(db: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
   `);
+
+  // Migration: add repair state to pre-existing per-session databases.
+  const cols = db.prepare("PRAGMA table_info(session_meta)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "repaired")) {
+    db.exec("ALTER TABLE session_meta ADD COLUMN repaired INTEGER NOT NULL DEFAULT 0");
+  }
 }
 
 export function initProjectDatabase(db: Database.Database): void {

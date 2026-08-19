@@ -36,11 +36,27 @@ sessionRoutes.post("/sessions", async (c) => {
 });
 
 /**
- * GET /api/sessions/:id — Load session header and complete message history.
+ * GET /api/sessions/:id — Load session header and a page of message history.
  */
 sessionRoutes.get("/sessions/:id", (c) => {
   const id = c.req.param("id");
-  const session = sessionService.getSession(id);
+  const rawLimit = c.req.query("limit");
+  const rawBefore = c.req.query("before");
+  const limit = rawLimit === undefined ? 50 : Number(rawLimit);
+  const before = rawBefore === undefined ? undefined : Number(rawBefore);
+
+  if (
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    (before !== undefined && (!Number.isSafeInteger(before) || before < 1))
+  ) {
+    return c.json(
+      { success: false, error: "'limit' and 'before' must be positive integers." },
+      400,
+    );
+  }
+
+  const session = sessionService.getSession(id, { limit, before });
 
   if (!session) {
     return c.json({ success: false, error: `Session '${id}' not found.` }, 404);

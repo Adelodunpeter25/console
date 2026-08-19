@@ -112,12 +112,32 @@ export class SqliteSessionStorage {
     Sessions.replaceMessages(this.state, sessionId, messages);
   }
 
+  repairSession(sessionId: string): boolean {
+    return Sessions.repairSession(this.state, sessionId);
+  }
+
+  markSessionNeedsRepair(sessionId: string): void {
+    Sessions.markSessionNeedsRepair(this.state, sessionId);
+  }
+
   upsertToolResult(sessionId: string, persistenceId: string, result: ToolResult): void {
     Sessions.upsertToolResult(this.state, sessionId, persistenceId, result);
   }
 
   loadSession(sessionId: string): { header: SessionHeader; messages: AgentMessage[] } | null {
     return Sessions.loadSession(this.state, sessionId);
+  }
+
+  loadSessionPage(
+    sessionId: string,
+    options: { limit?: number; before?: number },
+  ): {
+    header: SessionHeader;
+    messages: AgentMessage[];
+    hasMore: boolean;
+    nextCursor: number | null;
+  } | null {
+    return Sessions.loadSession(this.state, sessionId, options);
   }
 
   listSessions(options?: { cwd?: string; projectId?: string; limit?: number; onlyDeleted?: boolean }): SessionHeader[] {

@@ -113,7 +113,12 @@ export type AuthStatusResponse = Record<OAuthProviderId, ProviderAuthStatus> & {
 
 export interface SessionDetailResponse {
   header: SessionHeader;
+  /** The requested message batch, kept in chronological order. */
   messages: AgentMessage[];
+  /** Whether older messages are available before `nextCursor`. */
+  hasMore: boolean;
+  /** Rowid cursor for loading the next older batch, or null at history start. */
+  nextCursor: number | null;
 }
 
 export interface FsTreeEntry {

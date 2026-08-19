@@ -3,6 +3,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { AgentMessage, SessionHeader } from "../types/index.js";
+import { repairToolCallHistory } from "../utils/tool-history.js";
+import { replaceMessages } from "./session-messages.js";
 import {
   findSessionDbPath,
   getProjectIdBySessionId,
@@ -76,7 +78,13 @@ export function createSession(state: StorageState, options: CreateSessionOptions
 export function loadSession(
   state: StorageState,
   sessionId: string,
-): { header: SessionHeader; messages: AgentMessage[] } | null {
+  options?: { limit?: number; before?: number },
+): {
+  header: SessionHeader;
+  messages: AgentMessage[];
+  hasMore: boolean;
+  nextCursor: number | null;
+} | null {
   const { globalDb, storageDir } = state;
   const indexRow = globalDb.prepare(`SELECT * FROM sessions WHERE id = ?`).get(sessionId) as
     | SessionIndexRow
@@ -106,24 +114,62 @@ export function loadSession(
 
   let meta: SessionMetaRow | null = null;
   let messages: AgentMessage[] = [];
+  let hasMore = false;
+  let nextCursor: number | null = null;
+  let storedMessageCount: number | undefined = indexRow?.message_count;
 
   if (hasDbFile && projectId) {
     const sessionDb = getSessionDb(state, sessionId, projectId);
     meta =
       (sessionDb
         .prepare(
-          `SELECT title, cwd, project_id, model_id, provider, approval_mode, created_at, updated_at FROM session_meta WHERE id = 1`,
+          `SELECT title, cwd, project_id, model_id, provider, approval_mode, repaired, created_at, updated_at FROM session_meta WHERE id = 1`,
         )
         .get() as SessionMetaRow | undefined) ?? null;
 
-    const messageRows = sessionDb
-      .prepare(`SELECT content, created_at FROM messages ORDER BY rowid ASC`)
-      .all() as Array<{ content: string; created_at: number }>;
-    messages = messageRows.map((r) => {
-      const msg = JSON.parse(r.content) as AgentMessage;
-      msg.createdAt = r.created_at;
-      return msg;
-    });
+    if (options) {
+      const limit = Math.max(1, Math.floor(options.limit ?? 50));
+      const rows = (options.before === undefined
+        ? sessionDb
+            .prepare(
+              `SELECT content, created_at, rowid AS rowid FROM messages ORDER BY rowid DESC LIMIT ?`,
+            )
+            .all(limit + 1)
+        : sessionDb
+            .prepare(
+              `SELECT content, created_at, rowid AS rowid FROM messages WHERE rowid < ? ORDER BY rowid DESC LIMIT ?`,
+            )
+            .all(options.before, limit + 1)) as Array<{
+        content: string;
+        created_at: number;
+        rowid: number;
+      }>;
+
+      hasMore = rows.length > limit;
+      const pageRows = (hasMore ? rows.slice(0, limit) : rows).reverse();
+      messages = pageRows.map((r) => {
+        const msg = JSON.parse(r.content) as AgentMessage;
+        msg.createdAt = r.created_at;
+        return msg;
+      });
+      nextCursor = hasMore ? (pageRows[0]?.rowid ?? null) : null;
+
+      if (storedMessageCount === undefined) {
+        const countRow = sessionDb.prepare(`SELECT COUNT(*) AS count FROM messages`).get() as {
+          count: number;
+        };
+        storedMessageCount = countRow.count;
+      }
+    } else {
+      const messageRows = sessionDb
+        .prepare(`SELECT content, created_at FROM messages ORDER BY rowid ASC`)
+        .all() as Array<{ content: string; created_at: number }>;
+      messages = messageRows.map((r) => {
+        const msg = JSON.parse(r.content) as AgentMessage;
+        msg.createdAt = r.created_at;
+        return msg;
+      });
+    }
   }
 
   const title = meta?.title ?? indexRow?.title ?? "New Session";
@@ -149,7 +195,7 @@ export function loadSession(
         resolvedProjectId,
         modelId,
         provider,
-        messages.length,
+        storedMessageCount ?? messages.length,
         approvalMode,
         createdAt,
         updatedAt,
@@ -167,11 +213,54 @@ export function loadSession(
       approvalMode,
       createdAt,
       updatedAt,
-      messageCount: messages.length,
+      messageCount: storedMessageCount ?? messages.length,
       status: indexRow?.status ?? "idle",
     },
     messages,
+    hasMore,
+    nextCursor,
   };
+}
+
+/** Repair an interrupted tool history once, then remember that the check ran. */
+export function repairSession(state: StorageState, sessionId: string): boolean {
+  let projectId = getProjectIdBySessionId(state.globalDb, sessionId);
+  if (!projectId) {
+    const dbPath = findSessionDbPath(state.storageDir, sessionId);
+    const sessionsIdx = dbPath?.indexOf(`${path.sep}sessions${path.sep}`) ?? -1;
+    if (dbPath && sessionsIdx > 0) {
+      projectId = path.basename(dbPath.slice(0, sessionsIdx));
+    }
+  }
+  if (!projectId) return false;
+
+  const sessionDbPath = getSessionDbPath(state.storageDir, projectId, sessionId);
+  if (!state.sessionDbs.has(sessionId) && !fs.existsSync(sessionDbPath)) return false;
+
+  const sessionDb = getSessionDb(state, sessionId, projectId);
+  const meta = sessionDb.prepare(`SELECT repaired FROM session_meta WHERE id = 1`).get() as
+    | { repaired: number }
+    | undefined;
+  if (!meta || meta.repaired === 1) return false;
+
+  const session = loadSession(state, sessionId);
+  if (!session) return false;
+
+  const repaired = repairToolCallHistory(session.messages);
+  if (repaired.repaired) {
+    replaceMessages(state, sessionId, repaired.messages);
+  }
+  sessionDb.prepare(`UPDATE session_meta SET repaired = 1 WHERE id = 1`).run();
+  return true;
+}
+
+/** Mark a session dirty before a new run so its final history is checked. */
+export function markSessionNeedsRepair(state: StorageState, sessionId: string): void {
+  const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
+  if (!projectId) return;
+
+  const sessionDb = getSessionDb(state, sessionId, projectId);
+  sessionDb.prepare(`UPDATE session_meta SET repaired = 0 WHERE id = 1`).run();
 }
 
 export function listSessions(

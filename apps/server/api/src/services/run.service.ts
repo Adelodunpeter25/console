@@ -21,7 +21,6 @@ import { bindToolCwd } from "@console/types";
 import type { RunPromptDto } from "../types/index.js";
 import { expandPromptRefs } from "./assist.service.js";
 import { randomUUID } from "node:crypto";
-import { repairToolCallHistory } from "../../../agent/src/utils/tool-history.js";
 import {
   attentionNotification,
   doneNotification,
@@ -118,10 +117,11 @@ export class RunService {
       }
     }
 
-    const repairedHistory = repairToolCallHistory(session.messages);
-    if (repairedHistory.repaired) {
-      session.messages = repairedHistory.messages;
-      this.sessionStorage.replaceMessages(sessionId, session.messages);
+    // Recover histories left dirty by a crashed process before loading them
+    // into the agent. Settled runs mark the session repaired below, so this
+    // path is only a recovery check for interrupted runs.
+    if (session.messages.length > 0 && this.sessionStorage.repairSession(sessionId)) {
+      session = this.sessionStorage.loadSession(sessionId) ?? session;
     }
 
     const provider = dto.provider || session.header.provider || "antigravity";
@@ -221,6 +221,9 @@ export class RunService {
 
     agent.loadHistory(session.messages);
 
+    // A new run can create an interrupted tool turn, so its final persistence
+    // pass must inspect the history even when the previous run was clean.
+    this.sessionStorage.markSessionNeedsRepair(sessionId);
     this.sessionStorage.updateSessionStatus(sessionId, "working");
     const runPersistenceId = randomUUID();
     let toolBatchNumber = 0;
@@ -301,6 +304,9 @@ export class RunService {
         throw err;
       }
     } finally {
+      // Repair once after the run settles, rather than on every session read.
+      this.sessionStorage.repairSession(sessionId);
+
       // Reject any unresolved pending questions/approvals so the agent
       // loop doesn't hang forever after the run ends.
       for (const [requestId, pending] of this.pendingQuestions) {

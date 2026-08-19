@@ -70,6 +70,27 @@ if (toolMessage?.role === "toolResult") {
 }
 console.log("  ✅ Incremental tool-result upsert");
 
+// 2c. Cursor pagination returns the newest batch and older cursor.
+const latestPage = storage.loadSessionPage(header.id, { limit: 2 });
+assert.ok(latestPage);
+assert.equal(latestPage.messages.length, 2);
+assert.equal(latestPage.messages[0]?.role, "assistant");
+assert.equal(latestPage.messages[1]?.role, "toolResult");
+assert.equal(latestPage.hasMore, true);
+assert.equal(typeof latestPage.nextCursor, "number");
+if (latestPage.nextCursor !== null) {
+  const olderPage = storage.loadSessionPage(header.id, {
+    limit: 2,
+    before: latestPage.nextCursor,
+  });
+  assert.ok(olderPage);
+  assert.equal(olderPage.messages.length, 1);
+  assert.equal(olderPage.messages[0]?.role, "user");
+  assert.equal(olderPage.hasMore, false);
+  assert.equal(olderPage.nextCursor, null);
+}
+console.log("  ✅ Cursor-paginated session history");
+
 // 3. Load session
 const loaded = storage.loadSession(header.id);
 assert.ok(loaded);
@@ -119,6 +140,31 @@ const restored = storage.loadSession(header.id);
 assert.ok(restored);
 assert.equal(restored.header.title, "Renamed Session");
 console.log("  ✅ Restore session");
+
+// 8. Repair interrupted tool history once and skip subsequent checks.
+const repairHeader = storage.createSession({
+  cwd: "/projects/test",
+  modelId: "gemini-3.1-pro",
+  provider: "antigravity",
+  title: "Repair Test",
+});
+storage.appendMessage(repairHeader.id, {
+  role: "assistant",
+  content: [
+    {
+      type: "toolCall",
+      call: { id: "repair-call", name: "readFile", arguments: { path: "missing" } },
+    },
+  ],
+});
+assert.equal(storage.repairSession(repairHeader.id), true);
+const repaired = storage.loadSession(repairHeader.id);
+assert.ok(repaired);
+assert.equal(repaired.messages.length, 2);
+assert.equal(repaired.messages[1]?.role, "toolResult");
+assert.equal(storage.repairSession(repairHeader.id), false);
+assert.equal(storage.deleteSession(repairHeader.id), true);
+console.log("  ✅ One-time interrupted-history repair");
 
 storage.close();
 console.log("SqliteSessionStorage tests passed!\n");

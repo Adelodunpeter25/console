@@ -33,6 +33,7 @@ export interface SessionMetaRow {
   model_id: string;
   provider: string;
   approval_mode: string | null;
+  repaired: number;
   created_at: number;
   updated_at: number;
 }
