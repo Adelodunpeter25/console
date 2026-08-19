@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Alert, FlatList, Pressable, Text, View, ActivityIndicator } from "react-native";
+import { Alert, FlatList, Pressable, Text, View, ActivityIndicator, Modal } from "react-native";
 import { Folder, Trash2, Plus } from "lucide-react-native";
 import { useProjectStore } from "../../stores";
 import { AddProjectScreen } from "../projects/add-project-screen";
-import { theme } from "../../styles/theme";
 
 export function ProjectsSettings() {
   const projects = useProjectStore((state) => state.projects);
@@ -42,18 +41,6 @@ export function ProjectsSettings() {
     );
   };
 
-  if (showAddProject) {
-    return (
-      <AddProjectScreen
-        onClose={() => setShowAddProject(false)}
-        onProjectAdded={() => {
-          setShowAddProject(false);
-          void loadProjects();
-        }}
-      />
-    );
-  }
-
   return (
     <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 8 }}>
       <View className="flex-row items-center justify-between mb-4">
@@ -79,7 +66,7 @@ export function ProjectsSettings() {
         </View>
       ) : projects.length === 0 ? (
         <View className="items-center justify-center py-20 bg-card border border-border rounded-2xl p-6">
-          <Folder size={28} color={theme.colors.text.muted} />
+          <Folder size={28} color="#71717a" />
           <Text className="text-sm font-semibold text-foreground mt-3">No project folders</Text>
           <Text className="text-xs text-foreground-secondary text-center mt-1">
             Add a project folder from your host filesystem to start creating sessions.
@@ -97,7 +84,7 @@ export function ProjectsSettings() {
               <View className="flex-row items-center justify-between bg-card border border-border rounded-xl p-3.5 mb-2">
                 <View className="flex-row items-center gap-3 flex-1 pr-3">
                   <View className="w-8 h-8 rounded-lg items-center justify-center bg-card-alt border border-border/60">
-                    <Folder size={16} color={theme.colors.text.secondary} />
+                    <Folder size={16} color="#a1a1aa" />
                   </View>
                   <View className="flex-1">
                     <Text className="text-sm font-semibold text-foreground" numberOfLines={1}>
@@ -110,16 +97,16 @@ export function ProjectsSettings() {
                 </View>
 
                 <Pressable
-                  className="w-8 h-8 rounded-lg items-center justify-center bg-card-alt/80 border border-border/40"
+                  className="w-8 h-8 rounded-lg items-center justify-center bg-red-500/10 border border-red-500/20"
                   style={({ pressed }) => ({ opacity: pressed || busy ? 0.6 : 1 })}
                   hitSlop={8}
                   disabled={busy}
                   onPress={() => handleDelete(item.id, item.name)}
                 >
                   {busy ? (
-                    <ActivityIndicator size="small" color={theme.colors.status.error} />
+                    <ActivityIndicator size="small" color="#f87171" />
                   ) : (
-                    <Trash2 size={14} color={theme.colors.status.error} />
+                    <Trash2 size={14} color="#f87171" />
                   )}
                 </Pressable>
               </View>
@@ -127,8 +114,25 @@ export function ProjectsSettings() {
           }}
         />
       )}
+
+      {/* Add Project Full Screen Modal */}
+      <Modal
+        visible={showAddProject}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setShowAddProject(false)}
+      >
+        <AddProjectScreen
+          onClose={() => setShowAddProject(false)}
+          onProjectAdded={() => {
+            setShowAddProject(false);
+            void loadProjects();
+          }}
+        />
+      </Modal>
     </View>
   );
 }
 
 export default ProjectsSettings;
+
