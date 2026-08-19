@@ -17,6 +17,11 @@ export const fsService = {
     return res.data.data;
   },
 
+  async deleteProject(projectId: string): Promise<{ id: string; deleted: boolean }> {
+    const res = await getConsoleApiClient().delete(`/api/projects/${encodeURIComponent(projectId)}`);
+    return res.data.data;
+  },
+
   async getFsBrowse(
     path?: string,
   ): Promise<{ currentPath: string; parentPath: string | null; entries: FsTreeEntry[] }> {

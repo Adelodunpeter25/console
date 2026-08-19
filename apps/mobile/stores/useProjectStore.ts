@@ -11,8 +11,9 @@ interface ProjectState {
   sessionsLoading: boolean;
   deletedSessions: SessionHeader[];
   deletedSessionsLoading: boolean;
-  loadProjects: () => Promise<void>;
+  loadProjects: () => Promise<ProjectInfo[]>;
   addProject: (path: string) => Promise<ProjectInfo>;
+  deleteProject: (projectId: string) => Promise<void>;
   loadSessions: () => Promise<void>;
   loadDeletedSessions: () => Promise<void>;
   createSession: (cwd: string, projectId: string, title?: string) => Promise<SessionHeader>;
@@ -36,8 +37,10 @@ export const useProjectStore = create<ProjectState>((set) => ({
     try {
       const projects = await fsService.getProjects();
       set({ projects, loading: false });
+      return projects;
     } catch {
       set({ loading: false });
+      return [];
     }
   },
 
@@ -45,6 +48,11 @@ export const useProjectStore = create<ProjectState>((set) => ({
     const project = await fsService.addProject(path);
     set((s) => ({ projects: [...s.projects, project] }));
     return project;
+  },
+
+  deleteProject: async (projectId: string) => {
+    await fsService.deleteProject(projectId);
+    set((s) => ({ projects: s.projects.filter((p) => p.id !== projectId) }));
   },
 
   loadSessions: async () => {

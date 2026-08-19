@@ -39,3 +39,23 @@ projectRoutes.post("/projects", async (c) => {
     return c.json({ success: false, error: errorMsg }, 400);
   }
 });
+
+/**
+ * DELETE /api/projects/:id — Remove a project workspace by ID.
+ */
+projectRoutes.delete("/projects/:id", async (c) => {
+  const projectId = c.req.param("id");
+  try {
+    const deleted = await projectService.deleteProject(projectId);
+    if (!deleted) {
+      return c.json({ success: false, error: `Project '${projectId}' not found.` }, 404);
+    }
+    return c.json({
+      success: true,
+      data: { id: projectId, deleted: true },
+    });
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return c.json({ success: false, error: errorMsg }, 500);
+  }
+});

@@ -25,6 +25,16 @@ export function useAddProject() {
   });
 }
 
+export function useDeleteProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: string) => fsService.deleteProject(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: fsKeys.projects });
+    },
+  });
+}
+
 export function usePickNativeFolder() {
   return useMutation({
     mutationFn: () => fsService.pickNativeFolder(),

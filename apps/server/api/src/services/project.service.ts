@@ -56,4 +56,11 @@ export class ProjectService {
       dir: resolvedPath,
     });
   }
+
+  /**
+   * Delete a project by ID from the database.
+   */
+  async deleteProject(projectId: string): Promise<boolean> {
+    return this.storage.deleteProject(projectId);
+  }
 }
