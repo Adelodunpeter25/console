@@ -1,245 +1,80 @@
 import React, { useState } from "react";
-import {
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
-} from "react-native";
-import { useProviderModels } from "@console/api";
-import type { OAuthProviderId, ProviderId } from "@console/types";
-import { GlassSurface } from "../../components/layout/glass-surface";
+import { Text, View, TouchableOpacity, Pressable } from "react-native";
+import { ChevronRight, Wifi, User, Info } from "lucide-react-native";
 import { ScreenHeader } from "../../components/layout/screen-header";
+import { useAppStore } from "../../stores";
 import { useServerConnection } from "../../hooks";
 import { useAuth } from "../../hooks";
-import { useProviderCatalog } from "../../hooks";
-import { useAppStore } from "../../stores";
+import { ConnectionSettings } from "./connection-settings";
+import { AccountSettings } from "./account-settings";
+import { AboutSettings } from "./about-settings";
+
+type SettingsSection = "connection" | "account" | "about";
+
+const SECTION_META: Record<
+  SettingsSection,
+  { title: string; icon: React.ComponentType<{ size?: number; color?: string }> }
+> = {
+  connection: { title: "Connection", icon: Wifi },
+  account: { title: "Account", icon: User },
+  about: { title: "About", icon: Info },
+};
 
 export function SettingsScreen() {
-  const {
-    backendUrl,
-    inputUrl,
-    setInputUrl,
-    isSaving,
-    testingStatus,
-    saveConnection,
-    testConnection,
-    disconnect,
-  } = useServerConnection();
   const setActiveTab = useAppStore((state) => state.setActiveTab);
+  const [section, setSection] = useState<SettingsSection | null>(null);
 
+  const { backendUrl } = useServerConnection();
   const auth = useAuth();
-  const catalog = useProviderCatalog();
-  const [selectedProvider, setSelectedProvider] = useState<ProviderId>("antigravity");
 
-  const handleLogin = async (provider: OAuthProviderId) => {
-    try {
-      await auth.login(provider);
-    } catch (err) {
-      console.error("Failed to open login URL:", err);
-    }
+  // Summary text under each landing row.
+  const summary: Record<SettingsSection, string> = {
+    connection: backendUrl ? "Connected" : "Not connected",
+    account:
+      auth.status && Object.values(auth.status).some((s) => s.loggedIn)
+        ? "Signed in"
+        : "No providers connected",
+    about: "Console Mobile",
   };
 
-  const modelsData = useProviderModels(selectedProvider);
-  const models = modelsData.data?.models ?? [];
-  const loadingModels = modelsData.isLoading;
+  if (section) {
+    const meta = SECTION_META[section];
+    return (
+      <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
+        <ScreenHeader title={meta.title} onBack={() => setSection(null)} />
+        {section === "connection" ? <ConnectionSettings /> : null}
+        {section === "account" ? <AccountSettings /> : null}
+        {section === "about" ? <AboutSettings /> : null}
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
-      <ScreenHeader title="Console Settings" onBack={() => setActiveTab("home")} />
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 }}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
-      >
-        <View className="mb-5 px-1">
-          <Text className="text-sm text-foreground-secondary">
-            Configure server connections & app environment
-          </Text>
-        </View>
-
-      {/* Connection Endpoint Card */}
-      <GlassSurface className="mb-4 p-5">
-        <View className="flex-row items-center justify-between mb-3">
-          <Text className="text-base font-semibold text-foreground">Backend Server Endpoint</Text>
-          <View className="flex-row items-center gap-1.5 px-3 py-1 rounded-full bg-foreground/10 border border-border">
-            <View className="w-2 h-2 rounded-full bg-foreground" />
-            <Text className="text-xs font-bold text-foreground">
-              {backendUrl ? "Connected" : "Disconnected"}
-            </Text>
-          </View>
-        </View>
-
-        <Text className="text-sm text-foreground-secondary mb-4">
-          HTTP URL of your running Console backend server instance:
-        </Text>
-
-        <TextInput
-          className="h-12 bg-card border border-border rounded-xl px-4 text-foreground text-sm font-mono mb-4"
-          value={inputUrl}
-          onChangeText={setInputUrl}
-          placeholder="http://192.168.1.X:3000"
-          placeholderTextColor="#71717a"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-
-        <View className="flex-row gap-3 justify-end">
-          <TouchableOpacity
-            className="px-4 py-2.5 rounded-full bg-transparent border border-border items-center justify-center"
-            onPress={testConnection}
-          >
-            <Text className="text-sm font-semibold text-foreground">
-              {testingStatus === "testing"
-                ? "Testing..."
-                : testingStatus === "success"
-                  ? "✅ Online"
-                  : testingStatus === "error"
-                    ? "❌ Offline"
-                    : "Test Connection"}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            className="px-5 py-2.5 rounded-full bg-foreground items-center justify-center flex-row gap-2"
-            onPress={saveConnection}
-            disabled={isSaving}
-          >
-            {isSaving ? (
-              <ActivityIndicator size="small" color="#000000" />
-            ) : (
-              <Text className="text-sm font-bold text-black">Save Changes</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </GlassSurface>
-
-      {/* Provider / Model Card */}
-      <GlassSurface className="mb-4 p-5">
-        <Text className="text-base font-semibold text-foreground mb-3">Provider & Model</Text>
-
-        <Text className="text-xs font-bold text-foreground-secondary uppercase tracking-wider mb-2">
-          Provider
-        </Text>
-        <View className="flex-row gap-2 mb-4">
-          {catalog.providers.map((p) => {
-            const active = selectedProvider === p.name;
-            return (
-              <TouchableOpacity
-                key={p.name}
-                className={`flex-1 py-2.5 rounded-full items-center justify-center border ${
-                  active ? "bg-foreground border-foreground" : "bg-transparent border-border"
-                }`}
-                onPress={() => setSelectedProvider(p.name)}
-              >
-                <Text className={`text-sm font-bold ${active ? "text-black" : "text-foreground"}`}>
-                  {p.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <Text className="text-xs font-bold text-foreground-secondary uppercase tracking-wider mb-2">
-          Model
-        </Text>
-        {catalog.loadingProviders || loadingModels ? (
-          <ActivityIndicator size="small" color="#ffffff" />
-        ) : (
-          <View className="gap-1.5">
-            {models.map((m) => (
-              <View key={m.id} className="py-2 px-3 rounded-lg bg-card border border-border">
-                <Text className="text-sm text-foreground">{m.id}</Text>
+      <ScreenHeader title="Settings" onBack={() => setActiveTab("home")} />
+      <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 8 }}>
+        {(Object.keys(SECTION_META) as SettingsSection[]).map((key) => {
+          const meta = SECTION_META[key];
+          const Icon = meta.icon;
+          return (
+            <Pressable
+              key={key}
+              onPress={() => setSection(key)}
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              className="flex-row items-center bg-card border border-border rounded-2xl px-4 py-4 mb-3"
+            >
+              <View className="w-10 h-10 rounded-xl bg-foreground/10 items-center justify-center mr-3">
+                <Icon size={18} color="#ffffff" />
               </View>
-            ))}
-          </View>
-        )}
-      </GlassSurface>
-
-      {/* Account / OAuth Card */}
-      <GlassSurface className="mb-4 p-5">
-        <Text className="text-base font-semibold text-foreground mb-3">Account</Text>
-        {catalog.providers
-          .filter((p) => p.authMethod === "oauth")
-          .map((p) => {
-            const provider = p.name as OAuthProviderId;
-            const loggedIn = auth.isLoggedIn(provider);
-            return (
-              <View
-                key={provider}
-                className="flex-row items-center justify-between py-2.5 border-b border-border last:border-b-0"
-              >
-                <View className="flex-1 pr-3">
-                  <Text className="text-sm font-semibold text-foreground">{p.name}</Text>
-                  <Text className="text-xs text-foreground-secondary mt-0.5">
-                    {loggedIn ? (auth.status?.[provider]?.email ?? "Logged in") : "Not logged in"}
-                  </Text>
-                </View>
-                {loggedIn ? (
-                  <View className="px-3 py-1 rounded-full bg-foreground/10 border border-border">
-                    <Text className="text-xs font-bold text-foreground">✓ Connected</Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    className="px-4 py-2 rounded-full bg-foreground items-center justify-center"
-                    onPress={() => handleLogin(provider)}
-                    disabled={auth.isFetchingLoginUrl}
-                  >
-                    {auth.isFetchingLoginUrl ? (
-                      <ActivityIndicator size="small" color="#000000" />
-                    ) : (
-                      <Text className="text-xs font-bold text-black">Log In</Text>
-                    )}
-                  </TouchableOpacity>
-                )}
+              <View className="flex-1">
+                <Text className="text-base font-semibold text-foreground">{meta.title}</Text>
+                <Text className="text-xs text-foreground-secondary mt-0.5">{summary[key]}</Text>
               </View>
-            );
-          })}
-      </GlassSurface>
-
-      {/* App Info Card */}
-      <GlassSurface className="mb-4 p-5">
-        <Text className="text-base font-semibold text-foreground mb-3">App Info & Diagnostics</Text>
-
-        <View className="flex-row justify-between py-2.5 border-b border-border">
-          <Text className="text-sm text-foreground-secondary">Console Mobile Version</Text>
-          <Text className="text-sm font-mono text-foreground">1.0.0 (Build 2026)</Text>
-        </View>
-
-        <View className="flex-row justify-between py-2.5 border-b border-border">
-          <Text className="text-sm text-foreground-secondary">Expo Framework</Text>
-          <Text className="text-sm font-mono text-foreground">SDK 54</Text>
-        </View>
-
-        <View className="flex-row justify-between py-2.5 border-b border-border">
-          <Text className="text-sm text-foreground-secondary">React Native Engine</Text>
-          <Text className="text-sm font-mono text-foreground">0.81.5 (Hermes)</Text>
-        </View>
-
-        <View className="flex-row justify-between py-2.5">
-          <Text className="text-sm text-foreground-secondary">State Management</Text>
-          <Text className="text-sm font-mono text-foreground">Zustand v5</Text>
-        </View>
-      </GlassSurface>
-
-      {/* Danger Zone Card */}
-      <GlassSurface className="mb-8 p-5 border-red-500/30 bg-red-500/5">
-        <Text className="text-base font-semibold text-red-400 mb-1">Server Connection Reset</Text>
-        <Text className="text-sm text-foreground-secondary mb-4">
-          Clear the saved backend URL and reset connection preferences.
-        </Text>
-
-        <TouchableOpacity
-          className="py-2.5 px-5 rounded-full bg-transparent border border-red-500/40 items-center justify-center self-start"
-          onPress={disconnect}
-        >
-          <Text className="text-sm font-bold text-red-400">Disconnect Backend Endpoint</Text>
-        </TouchableOpacity>
-      </GlassSurface>
-      </ScrollView>
+              <ChevronRight size={20} color="#71717a" />
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
