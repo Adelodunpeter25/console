@@ -27,8 +27,8 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
   const modelsByProvider = useProviderStore((state) => state.modelsByProvider);
   const loadProviders = useProviderStore((state) => state.loadProviders);
   const loadModels = useProviderStore((state) => state.loadModels);
+  const loadingModels = useProviderStore((state) => state.loadingModels);
   const loadingProviders = useProviderStore((state) => state.loadingProviders);
-
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
@@ -52,6 +52,9 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
       void loadModels(provName).catch(() => {});
     }
   };
+
+  const isModelsLoading = Boolean(activeProvider && loadingModels[activeProvider]);
+  const isFetching = loadingProviders || isModelsLoading;
 
   const currentModels: Model[] = activeProvider ? modelsByProvider[activeProvider] ?? [] : [];
   const query = search.trim().toLowerCase();
@@ -84,10 +87,11 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
             >
               {providers.map((p) => {
                 const isSelected = p.name === activeProvider;
+                const isProvLoading = Boolean(loadingModels[p.name]);
                 return (
                   <Pressable
                     key={p.name}
-                    className={`px-3 py-1.5 rounded-lg border ${
+                    className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg border ${
                       isSelected
                         ? "bg-card-alt border-border"
                         : "bg-transparent border-transparent"
@@ -101,6 +105,9 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
                     >
                       {p.displayName || p.name}
                     </Text>
+                    {isProvLoading && isSelected ? (
+                      <ActivityIndicator size="small" color={theme.colors.text.muted} style={{ transform: [{ scale: 0.7 }] }} />
+                    ) : null}
                   </Pressable>
                 );
               })}
@@ -120,14 +127,17 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
           </View>
 
           {/* Models list */}
-          {loadingProviders ? (
-            <View className="items-center justify-center py-10">
-              <ActivityIndicator size="small" color={theme.colors.text.muted} />
+          {isFetching && currentModels.length === 0 ? (
+            <View className="items-center justify-center py-16">
+              <ActivityIndicator size="large" color="#ffffff" />
+              <Text className="text-xs text-foreground-secondary mt-3">Loading models…</Text>
             </View>
           ) : filteredModels.length === 0 ? (
-            <View className="items-center justify-center py-10">
-              <Bot size={20} color={theme.colors.text.muted} />
-              <Text className="text-xs text-foreground-secondary mt-1">No models available</Text>
+            <View className="items-center justify-center py-16">
+              <Bot size={24} color={theme.colors.text.muted} />
+              <Text className="text-xs text-foreground-secondary mt-2">
+                {search ? "No matching models found" : "No models available"}
+              </Text>
             </View>
           ) : (
             <BottomSheetScrollView showsVerticalScrollIndicator={false} className="flex-1">
