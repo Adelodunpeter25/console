@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { FlatList, Pressable, Text, View, ActivityIndicator } from "react-native";
 import { RotateCcw, Trash2, MessageSquare } from "lucide-react-native";
 import { ScreenHeader } from "../../components/layout/screen-header";
-import { confirmAlert } from "../../components/common/confirm-dialog";
+import { confirmAlert, EmptyState } from "../../components/common";
 import { useProjectStore } from "../../stores";
 import { formatRelativeTime, folderName } from "../../utils";
 import { theme } from "../../styles/theme";
@@ -159,13 +159,11 @@ export function DeletedChatsSettings({ onBack }: DeletedChatsSettingsProps) {
             <Text className="text-xs text-foreground-secondary mt-3">Loading deleted chats…</Text>
           </View>
         ) : deletedSessions.length === 0 ? (
-          <View className="items-center justify-center py-20 bg-card border border-border rounded-2xl p-6">
-            <MessageSquare size={28} color={theme.colors.text.muted} />
-            <Text className="text-sm font-semibold text-foreground mt-3">No deleted chats</Text>
-            <Text className="text-xs text-foreground-secondary text-center mt-1">
-              Chats you delete will appear here until permanently purged.
-            </Text>
-          </View>
+          <EmptyState
+            icon={<MessageSquare size={32} color="#71717a" />}
+            title="No deleted chats"
+            description="Chats you delete will appear here until permanently purged."
+          />
         ) : (
         <FlatList
           data={deletedSessions}

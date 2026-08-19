@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { FlatList, Pressable, Text, View, ActivityIndicator, Modal } from "react-native";
 import { Folder, Trash2, Plus } from "lucide-react-native";
 import { ScreenHeader } from "../../components/layout/screen-header";
-import { confirmAlert } from "../../components/common/confirm-dialog";
+import { confirmAlert, EmptyState } from "../../components/common";
 import { useProjectStore } from "../../stores";
 import { AddProjectScreen } from "../projects/add-project-screen";
 
@@ -73,13 +73,11 @@ export function ProjectsSettings({ onBack }: ProjectsSettingsProps) {
           <Text className="text-xs text-foreground-secondary mt-3">Loading projects…</Text>
         </View>
       ) : projects.length === 0 ? (
-        <View className="items-center justify-center py-20 bg-card border border-border rounded-2xl p-6">
-          <Folder size={28} color="#71717a" />
-          <Text className="text-sm font-semibold text-foreground mt-3">No project folders</Text>
-          <Text className="text-xs text-foreground-secondary text-center mt-1">
-            Add a project folder from your host filesystem to start creating sessions.
-          </Text>
-        </View>
+        <EmptyState
+          icon={<Folder size={32} color="#71717a" />}
+          title="No project folders"
+          description="Add a project folder from your host filesystem to start creating sessions."
+        />
       ) : (
         <FlatList
           data={projects}

@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFsBrowse, useAddProject } from "@console/api";
 import { Folder, FolderUp, ChevronRight, Check } from "lucide-react-native";
 import { ScreenHeader } from "../../components/layout/screen-header";
-import { confirmAlert } from "../../components/common/confirm-dialog";
+import { confirmAlert, EmptyState } from "../../components/common";
 import { theme } from "../../styles/theme";
 
 interface AddProjectScreenProps {
@@ -136,12 +136,11 @@ export function AddProjectScreen({ onClose, onProjectAdded }: AddProjectScreenPr
               ) : null
             }
             ListEmptyComponent={
-              <View className="items-center justify-center py-16">
-                <Folder size={24} color={theme.colors.text.muted} />
-                <Text className="text-xs text-foreground-secondary mt-2">
-                  No subdirectories in this folder
-                </Text>
-              </View>
+              <EmptyState
+                icon={<Folder size={28} color="#71717a" />}
+                title="No subdirectories"
+                description="There are no folders in this directory."
+              />
             }
             renderItem={({ item }) => (
               <Pressable
