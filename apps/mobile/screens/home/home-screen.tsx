@@ -60,6 +60,7 @@ export function HomeScreen() {
     setSearchQuery,
     openSession,
     composeSession,
+    deleteSession,
     isCreatingSession,
     isRefreshing,
     onRefresh,
@@ -101,8 +102,26 @@ export function HomeScreen() {
       icon: <Trash2 size={18} color="#f87171" />,
       destructive: true,
       onPress: () => {
-        // TODO: delete session
-        Alert.alert("Delete", `Delete "${activeSession?.title || "Untitled Session"}" — coming soon`);
+        if (!activeSession) return;
+        const targetSession = activeSession;
+        Alert.alert(
+          "Delete Chat",
+          `Are you sure you want to delete "${targetSession.title || "Untitled Session"}"?`,
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Delete",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  await deleteSession(targetSession.id);
+                } catch (err) {
+                  Alert.alert("Failed", err instanceof Error ? err.message : "Unable to delete chat.");
+                }
+              },
+            },
+          ],
+        );
       },
     },
   ];

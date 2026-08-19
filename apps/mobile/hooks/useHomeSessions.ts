@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { useCreateSession, useProjects, useSessions } from "@console/api";
+import { useCreateSession, useDeleteSession, useProjects, useSessions } from "@console/api";
 import { useQueryClient } from "@tanstack/react-query";
 import type { SessionHeader } from "@console/types";
 import { useAppStore } from "../stores";
@@ -20,6 +20,7 @@ export function useHomeSessions() {
   const { data: sessions = [], isLoading: isLoadingSessions, refetch: refetchSessions } = useSessions();
   const { data: branches = {} } = useProjectBranches(projects);
   const createSession = useCreateSession();
+  const deleteSessionMutation = useDeleteSession();
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
   const [searchQuery, setSearchQuery] = useState("");
@@ -138,6 +139,7 @@ export function useHomeSessions() {
     setSearchQuery,
     openSession,
     composeSession,
+    deleteSession: (id: string) => deleteSessionMutation.mutateAsync(id),
     isCreatingSession: createSession.isPending,
     isLoadingSessions,
     isRefreshing,
