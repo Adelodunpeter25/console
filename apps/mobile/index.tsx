@@ -12,31 +12,13 @@ import {
   JetBrainsMono_700Bold,
 } from "@expo-google-fonts/jetbrains-mono";
 import { ConsoleApiProvider } from "@console/api";
-import { QueryClient } from "@tanstack/react-query";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { MainContent } from "./components/layout/main-content";
 import { ConfirmDialog } from "./components/common/confirm-dialog";
 import { useServerConnection } from "./hooks";
-
-// QueryClient tuned for mobile: 5-minute staleTime (no refetch-on-mount
-// within that window) and refetchOnWindowFocus disabled (prevents a full
-// refetch storm every time the app foregrounds). Imported directly from
-// @tanstack/react-query — NOT via the @console/api factory — so Metro
-// resolves react-query against the same React copy the app uses. Importing
-// the factory from @console/api shifted the module graph and left
-// react-query's `React` default import null inside ConsoleApiProvider
-// ("Cannot read property 'useEffect' of null").
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5,
-      retry: 2,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+import { queryClient } from "./query-client";
 
 function OnboardingScreen() {
   const { inputUrl, setInputUrl, saveConnection, isSaving } = useServerConnection();

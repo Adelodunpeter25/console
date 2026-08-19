@@ -94,7 +94,7 @@ export function ChatScreen() {
     ({ item, index }: { item: AgentMessage; index: number }) => {
       const run = userMessageRunMap.get(index);
       return (
-        <View className="mb-2">
+        <View className="mb-1">
           <MessageBubble item={item} />
           {run ? (
             <RunActivity

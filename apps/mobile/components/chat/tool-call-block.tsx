@@ -3,72 +3,11 @@ import { View, Text, Pressable, ActivityIndicator, ScrollView } from "react-nati
 import { AlertTriangle, CheckCircle2, ChevronRight, ChevronDown } from "lucide-react-native";
 import type { ToolCall, ToolResult } from "@console/types";
 import { ToolResultContent } from "./tool-result-content";
+import { getToolMeta, formatUnknown, argSummary } from "../../utils";
 
 interface ToolCallBlockProps {
   calls: ToolCall[];
   results?: ToolResult[];
-}
-
-const TOOL_META: Record<string, { label: string }> = {
-  readFile: { label: "Read File" },
-  writeFile: { label: "Write File" },
-  batchWrite: { label: "Batch Write" },
-  editFile: { label: "Edit File" },
-  bash: { label: "Run Command" },
-  grep: { label: "Search Code" },
-  glob: { label: "Find Files" },
-  listDir: { label: "List Directory" },
-  fetch: { label: "Fetch URL" },
-  webSearch: { label: "Web Search" },
-  subagent: { label: "Subagent" },
-  ask: { label: "Ask Question" },
-  todo: { label: "Todo" },
-};
-
-function getToolMeta(name: string) {
-  return TOOL_META[name] ?? { label: name };
-}
-
-function formatUnknown(val: unknown): string {
-  if (val === undefined) return "undefined";
-  if (val === null) return "null";
-  if (typeof val === "string") return val;
-  try {
-    return JSON.stringify(val, null, 2);
-  } catch {
-    return String(val);
-  }
-}
-
-/** Extract a short summary string from the tool arguments (e.g. file path, command, query). */
-function argSummary(call: ToolCall): string | null {
-  const args = call.arguments;
-  if (!args || typeof args !== "object") return null;
-  const obj = args as Record<string, unknown>;
-  if (typeof obj.path === "string") return obj.path;
-  if (typeof obj.filePath === "string") return obj.filePath;
-  if (typeof obj.command === "string") {
-    const cmd = obj.command as string;
-    return cmd.length > 45 ? cmd.slice(0, 42) + "…" : cmd;
-  }
-  if (typeof obj.pattern === "string") return obj.pattern;
-  if (typeof obj.query === "string") {
-    const q = obj.query as string;
-    return q.length > 45 ? q.slice(0, 42) + "…" : q;
-  }
-  if (typeof obj.url === "string") return obj.url;
-  if (typeof obj.directory === "string") return obj.directory;
-  if (typeof obj.question === "string") {
-    const q = obj.question as string;
-    return q.length > 45 ? q.slice(0, 42) + "…" : q;
-  }
-  if (Array.isArray(obj.paths) && obj.paths.length > 0) {
-    return `${(obj.paths as unknown[]).length} files`;
-  }
-  if (Array.isArray(obj.operations) && obj.operations.length > 0) {
-    return `${(obj.operations as unknown[]).length} operations`;
-  }
-  return null;
 }
 
 interface ToolCallRowProps {

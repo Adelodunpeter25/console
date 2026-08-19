@@ -5,18 +5,12 @@ import type { ActivityEvent, RunActivityState } from "../../types/chat";
 import type { ToolCall, ToolResult } from "@console/types";
 import { ToolCallBlock } from "./tool-call-block";
 import { MarkdownRenderer } from "../common/markdown-renderer";
+import { formatDuration } from "../../utils";
 
 interface RunActivityProps {
   activity: RunActivityState;
   /** True only for the latest run while the session is actively running. */
   running: boolean;
-}
-
-function formatDuration(milliseconds: number): string {
-  const seconds = Math.max(0, Math.round(milliseconds / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes}m ${String(seconds % 60).padStart(2, "0")}s`;
 }
 
 type RenderGroup =
@@ -120,7 +114,7 @@ export const RunActivity = memo(function RunActivity({
         : `Worked for ${formatDuration(elapsed)}`;
 
   return (
-    <View className="border-b border-white/[0.06] pb-2 mb-3">
+    <View className="border-b border-white/[0.06] pb-1 mb-1.5">
       <Pressable
         onPress={() => setExpanded((current) => !current)}
         className="flex-row items-center gap-2 py-1.5 px-1"

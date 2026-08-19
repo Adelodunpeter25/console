@@ -71,6 +71,7 @@ export function applyChatEvent(
             ...session.messages,
             {
               role: "assistant",
+              createdAt: Date.now(),
               content: [
                 ...(session.streamingThinking
                   ? [{ type: "thinking" as const, text: session.streamingThinking }]
@@ -86,10 +87,15 @@ export function applyChatEvent(
         };
       }
 
+      const normalizedTurn = {
+        ...turn,
+        createdAt: turn.createdAt ?? Date.now(),
+      };
+
       // Always append the turn to messages for persistence.
       const baseResult: ChatSessionState = {
         ...session,
-        messages: [...session.messages, turn],
+        messages: [...session.messages, normalizedTurn],
         streamingText: "",
         streamingThinking: "",
       };

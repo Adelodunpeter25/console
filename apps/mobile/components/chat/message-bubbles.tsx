@@ -228,7 +228,7 @@ export const UserBubble = memo(function UserBubble({
   createdAt?: number;
 }) {
   return (
-    <View className="items-end mb-4">
+    <View className="items-end mb-2.5">
       <View
         className="max-w-[85%] px-4 py-2.5 rounded-[20px] rounded-br-md"
         style={{ backgroundColor: theme.colors.surfaceElevated }}
@@ -238,11 +238,9 @@ export const UserBubble = memo(function UserBubble({
         </Text>
       </View>
       <View className="flex-row items-center gap-1.5 mt-1 mr-0.5">
-        {createdAt ? (
-          <Text className="text-[11px] text-foreground-secondary/70">
-            {formatMessageTime(createdAt)}
-          </Text>
-        ) : null}
+        <Text className="text-[11px] text-foreground-secondary/70">
+          {formatMessageTime(createdAt ?? Date.now())}
+        </Text>
         <MessageCopyButton text={content} />
       </View>
     </View>
@@ -268,7 +266,7 @@ export const AssistantBubble = memo(function AssistantBubble({
     .join("\n\n");
 
   return (
-    <View className="mb-4">
+    <View className="mb-2.5">
       {showTyping ? <TypingDots /> : null}
 
       {thinkingContent ? <ThinkingBlock text={thinkingContent} isStreaming={isStreaming} /> : null}
@@ -291,11 +289,9 @@ export const AssistantBubble = memo(function AssistantBubble({
       {/* Time and Copy Button rendered at the end of the assistant message */}
       {!isStreaming && (createdAt || copyableText) ? (
         <View className="flex-row items-center gap-1.5 mt-1.5 ml-0.5">
-          {createdAt ? (
-            <Text className="text-[11px] text-foreground-secondary/70">
-              {formatMessageTime(createdAt)}
-            </Text>
-          ) : null}
+          <Text className="text-[11px] text-foreground-secondary/70">
+            {formatMessageTime(createdAt ?? Date.now())}
+          </Text>
           {copyableText ? <MessageCopyButton text={copyableText} /> : null}
         </View>
       ) : null}

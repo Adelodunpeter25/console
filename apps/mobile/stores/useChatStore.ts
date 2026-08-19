@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { AgentMessage, AgentSessionEvent, ImageAttachment } from "@console/types";
-import { runService } from "@console/api";
+import { runService, sessionKeys } from "@console/api";
 import type { ChatSessionState, ChatSnapshot } from "../types";
 import { createChatSessionState, EMPTY_CHAT_SESSION } from "../types/chat-state";
 import { createSseParser } from "../utils/sse";
@@ -9,6 +9,7 @@ import { startNativeChatStream } from "../utils/native-stream";
 import { applyChatEvent, toChatSnapshot } from "../utils/chat-events";
 import { reconstructRuns } from "../utils/reconstruct-runs";
 import { debouncedAsyncStorage } from "../utils/debounced-storage";
+import { queryClient } from "../query-client";
 import { useAppStore } from "./useAppStore";
 import { useSessionStore } from "./useSessionStore";
 import { useProviderStore } from "./useProviderStore";
@@ -196,6 +197,7 @@ export const useChatStore = create<ChatStoreState>()(
           {
             role: "user",
             content: prompt,
+            createdAt: Date.now(),
             ...(attachments.length > 0
               ? {
                   attachments: attachments.map((a) => ({ type: "image" as const, ...a })),
@@ -229,6 +231,7 @@ export const useChatStore = create<ChatStoreState>()(
             ...sessionState.messages,
             {
               role: "assistant",
+              createdAt: Date.now(),
               content: [{ type: "text", text: `Error: ${msg}` }],
             },
           ],
@@ -454,6 +457,9 @@ function finalizeRun(sessionId: string, hadError: boolean): void {
   // Refresh the header so a first-prompt auto-rename of the title shows up
   // in the sidebar/list (the server renames it in the DB when the run starts).
   useProjectStore.getState().refreshSessionHeader(sessionId).catch(() => {});
+  // Invalidate query caches so session lists and detail re-fetch cleanly.
+  queryClient.invalidateQueries({ queryKey: sessionKeys.all }).catch(() => {});
+  queryClient.invalidateQueries({ queryKey: sessionKeys.detail(sessionId) }).catch(() => {});
 }
 
 function randomUUID(): string {
