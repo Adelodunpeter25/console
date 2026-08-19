@@ -17,18 +17,19 @@ interface PermissionPanelProps {
 
 function PermissionPanel({ request, sessionId }: PermissionPanelProps) {
   const approvePermission = useChatStore((s) => s.approvePermission);
-  const [submitting, setSubmitting] = useState(false);
+  const [submittingAction, setSubmittingAction] = useState<"allow" | "deny" | null>(null);
 
   const handleApprove = async (allow: boolean) => {
-    setSubmitting(true);
+    setSubmittingAction(allow ? "allow" : "deny");
     try {
       await approvePermission(sessionId, request.requestId, allow);
     } finally {
-      setSubmitting(false);
+      setSubmittingAction(null);
     }
   };
 
   const argsString = request.args != null ? JSON.stringify(request.args, null, 2) : "";
+  const isBusy = submittingAction !== null;
 
   return (
     <View className="mx-4 mb-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 gap-3">
@@ -65,13 +66,13 @@ function PermissionPanel({ request, sessionId }: PermissionPanelProps) {
       <View className="flex-row items-center gap-2.5 pl-6 pt-1">
         <Pressable
           onPress={() => handleApprove(true)}
-          disabled={submitting}
+          disabled={isBusy}
           className="flex-row items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30"
           style={({ pressed }) => ({
-            opacity: pressed || submitting ? 0.6 : 1,
+            opacity: pressed || isBusy ? 0.6 : 1,
           })}
         >
-          {submitting ? (
+          {submittingAction === "allow" ? (
             <ActivityIndicator size="small" color="#34d399" />
           ) : (
             <ShieldCheck size={14} color="#34d399" />
@@ -83,13 +84,13 @@ function PermissionPanel({ request, sessionId }: PermissionPanelProps) {
 
         <Pressable
           onPress={() => handleApprove(false)}
-          disabled={submitting}
+          disabled={isBusy}
           className="flex-row items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/15 border border-red-500/30"
           style={({ pressed }) => ({
-            opacity: pressed || submitting ? 0.6 : 1,
+            opacity: pressed || isBusy ? 0.6 : 1,
           })}
         >
-          {submitting ? (
+          {submittingAction === "deny" ? (
             <ActivityIndicator size="small" color="#f87171" />
           ) : (
             <ShieldX size={14} color="#f87171" />

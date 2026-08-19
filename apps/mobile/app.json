@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "Console",
+    "slug": "console",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -30,9 +30,17 @@
         "react-native-enriched-markdown",
         {
           "enableMath": true,
-          "codeHighlight": { "enabled": true }
+          "codeHighlight": {
+            "enabled": true
+          }
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a36051f3-16f4-4f62-9de3-ceaf89aceb36"
+      }
+    },
+    "owner": "adelodunpeter"
   }
 }

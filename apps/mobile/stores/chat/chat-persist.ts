@@ -1,4 +1,4 @@
-import type { PersistOptions } from "zustand/middleware";
+import { createJSONStorage } from "zustand/middleware";
 import type { ChatSessionState } from "../../types";
 import { createChatSessionState } from "../../types/chat-state";
 import { debouncedAsyncStorage } from "../../utils/debounced-storage";
@@ -14,20 +14,7 @@ export interface ChatStorePersistedState {
 
 export const chatPersistConfig = {
   name: PERSIST_NAME,
-  storage: {
-    getItem: async (name: string) => {
-      const storage = debouncedAsyncStorage(PERSIST_DEBOUNCE_MS);
-      return storage.getItem(name);
-    },
-    setItem: async (name: string, value: string) => {
-      const storage = debouncedAsyncStorage(PERSIST_DEBOUNCE_MS);
-      return storage.setItem(name, value);
-    },
-    removeItem: async (name: string) => {
-      const storage = debouncedAsyncStorage(PERSIST_DEBOUNCE_MS);
-      return storage.removeItem(name);
-    },
-  },
+  storage: createJSONStorage(() => debouncedAsyncStorage(PERSIST_DEBOUNCE_MS)),
   partialize: (state: ChatStorePersistedState) => ({
     sessions: Object.fromEntries(
       Object.entries(state.sessions)
