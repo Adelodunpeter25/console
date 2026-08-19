@@ -78,6 +78,8 @@ export type ChatSnapshot = {
   liveToolResults: ToolResult[];
   pendingPermission: PendingPermission | null;
   pendingQuestion: PendingQuestion | null;
+  pendingPermissions: PendingPermission[];
+  pendingQuestions: PendingQuestion[];
   running: boolean;
   runs: RunActivityState[];
 };

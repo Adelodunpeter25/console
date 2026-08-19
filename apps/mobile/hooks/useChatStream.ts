@@ -114,6 +114,8 @@ export function useChatStream() {
     liveToolResults: snapshot?.liveToolResults ?? [],
     pendingPermission: snapshot?.pendingPermission ?? null,
     pendingQuestion: snapshot?.pendingQuestion ?? null,
+    pendingPermissions: snapshot?.pendingPermissions ?? [],
+    pendingQuestions: snapshot?.pendingQuestions ?? [],
     running: snapshot?.running ?? false,
     runs: snapshot?.runs ?? [],
     inputVal: input,

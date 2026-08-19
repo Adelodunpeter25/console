@@ -9,7 +9,7 @@ import { ScreenHeader } from "../../components/layout/screen-header";
 import { MessageBubble } from "../../components/chat/message-bubbles";
 import { RunActivity } from "../../components/chat/run-activity";
 import { Composer } from "../../components/chat/composer";
-import { ApprovalPanel } from "../../components/chat/approval-panel";
+import { InteractionPanel } from "../../components/chat/interaction-panel";
 import { reconstructRuns } from "../../utils/reconstruct-runs";
 import { theme } from "../../styles/theme";
 
@@ -174,18 +174,7 @@ export function ChatScreen() {
         />
       )}
 
-      <ApprovalPanel
-        pendingPermission={stream.pendingPermission}
-        pendingQuestion={stream.pendingQuestion}
-        onApprove={async (allow) => {
-          const req = stream.pendingPermission?.request;
-          if (req) await decisions.approve(req.requestId, allow);
-        }}
-        onAnswer={async (answer) => {
-          const req = stream.pendingQuestion?.request;
-          if (req) await decisions.answer(req.requestId, answer);
-        }}
-      />
+      <InteractionPanel sessionId={selectedSessionId} />
 
       <Composer
         value={stream.inputVal}

@@ -5,3 +5,5 @@ export * from "./message-bubbles";
 export * from "./tool-result-content";
 export * from "./tool-call-block";
 export * from "./run-activity";
+export * from "./question-panel";
+export * from "./interaction-panel";

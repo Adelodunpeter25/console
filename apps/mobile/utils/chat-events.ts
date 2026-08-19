@@ -271,6 +271,8 @@ export function toChatSnapshot(session: ChatSessionState): ChatSnapshot {
       .map((event) => event.result!),
     pendingPermission: session.pendingPermissions[session.pendingPermissions.length - 1] ?? null,
     pendingQuestion: session.pendingQuestions[session.pendingQuestions.length - 1] ?? null,
+    pendingPermissions: session.pendingPermissions,
+    pendingQuestions: session.pendingQuestions,
     running: session.running,
     runs: session.runs,
   };
