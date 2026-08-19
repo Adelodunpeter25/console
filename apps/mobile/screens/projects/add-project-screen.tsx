@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { Text, View, TouchableOpacity, FlatList, ActivityIndicator, Alert } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Text, View, Pressable, FlatList, ActivityIndicator, Alert, ScrollView } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFsBrowse, useAddProject } from "@console/api";
-import { Folder } from "lucide-react-native";
-import { GlassSurface } from "../../components/layout/glass-surface";
+import { Folder, FolderUp, ChevronRight, Check } from "lucide-react-native";
+import { ScreenHeader } from "../../components/layout/screen-header";
+import { theme } from "../../styles/theme";
 
 interface AddProjectScreenProps {
   onClose: () => void;
@@ -11,6 +12,7 @@ interface AddProjectScreenProps {
 }
 
 export function AddProjectScreen({ onClose, onProjectAdded }: AddProjectScreenProps) {
+  const insets = useSafeAreaInsets();
   const [currentPath, setCurrentPath] = useState<string | undefined>(undefined);
   const { data: browseData, isLoading, isError, refetch } = useFsBrowse(currentPath);
   const addProjectMutation = useAddProject();
@@ -36,32 +38,55 @@ export function AddProjectScreen({ onClose, onProjectAdded }: AddProjectScreenPr
     }
   };
 
-  const pathSegments = activePath.split("/").filter(Boolean);
+  // Build breadcrumb segments with cumulative path
+  const pathParts = activePath.split("/").filter(Boolean);
+  const breadcrumbs: Array<{ name: string; path: string }> = [
+    { name: "/", path: "/" },
+    ...pathParts.map((part, index) => ({
+      name: part,
+      path: "/" + pathParts.slice(0, index + 1).join("/"),
+    })),
+  ];
+
+  const currentFolder = pathParts[pathParts.length - 1] || "/";
 
   return (
-    <SafeAreaView className="flex-1 bg-[#0a0a0b]" edges={["top", "bottom", "left", "right"]}>
-      {/* Screen Header with Back Button */}
-      <View className="px-4 py-3.5 border-b border-white/10 flex-row items-center justify-between bg-[#0d0d0e]">
-        <TouchableOpacity
-          className="flex-row items-center gap-1.5 py-2 px-4 rounded-full bg-transparent border border-white/20"
-          onPress={onClose}
+    <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
+      {/* Shared Screen Header */}
+      <ScreenHeader title="Add Project" onBack={onClose} />
+
+      {/* Horizontal Path Breadcrumbs */}
+      <View className="border-b border-border bg-card/60 px-4 py-2.5">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ alignItems: "center", gap: 4 }}
         >
-          <Text className="text-sm font-semibold text-white">← Back</Text>
-        </TouchableOpacity>
-
-        <Text className="text-base font-bold text-white tracking-tight">
-          Browse Host Filesystem
-        </Text>
-
-        <View className="w-16" />
-      </View>
-
-      {/* Path Breadcrumb Bar */}
-      <View className="px-4 py-3.5 bg-[#121316]/60 border-b border-white/10 flex-row items-center gap-2.5">
-        <Folder size={18} color="#ffffff" />
-        <Text className="text-sm font-mono text-white flex-1" numberOfLines={1}>
-          {activePath}
-        </Text>
+          {breadcrumbs.map((crumb, idx) => {
+            const isLast = idx === breadcrumbs.length - 1;
+            return (
+              <React.Fragment key={crumb.path}>
+                <Pressable
+                  onPress={() => !isLast && setCurrentPath(crumb.path)}
+                  className={`px-2 py-1 rounded-md ${
+                    isLast ? "bg-card-alt border border-border/80" : ""
+                  }`}
+                  style={({ pressed }) => ({ opacity: pressed && !isLast ? 0.6 : 1 })}
+                  disabled={isLast}
+                >
+                  <Text
+                    className={`text-xs font-mono ${
+                      isLast ? "text-foreground font-semibold" : "text-foreground-secondary"
+                    }`}
+                  >
+                    {crumb.name}
+                  </Text>
+                </Pressable>
+                {!isLast && <ChevronRight size={12} color={theme.colors.text.muted} />}
+              </React.Fragment>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* Directory Content List */}
@@ -69,88 +94,112 @@ export function AddProjectScreen({ onClose, onProjectAdded }: AddProjectScreenPr
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator size="large" color="#ffffff" />
-            <Text className="text-sm text-zinc-400 mt-3">Reading host directories...</Text>
+            <Text className="text-xs text-foreground-secondary mt-3">Reading host directories…</Text>
           </View>
         ) : isError ? (
           <View className="flex-1 items-center justify-center p-6">
-            <Text className="text-base font-semibold text-red-400 mb-2">
+            <Text className="text-sm font-semibold text-red-400 mb-2">
               Failed to load directory
             </Text>
-            <TouchableOpacity
-              className="px-5 py-2.5 bg-white/10 border border-white/20 rounded-full"
+            <Pressable
+              className="px-4 py-2 bg-card-alt border border-border rounded-xl"
               onPress={() => refetch()}
             >
-              <Text className="text-sm text-white font-medium">Retry</Text>
-            </TouchableOpacity>
+              <Text className="text-xs text-foreground font-medium">Retry</Text>
+            </Pressable>
           </View>
         ) : (
           <FlatList
             data={directories}
             keyExtractor={(item) => item.path}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 16 }}
             ListHeaderComponent={
               parentPath !== null && parentPath !== undefined ? (
-                <TouchableOpacity
-                  className="flex-row items-center gap-3.5 p-4 mb-2.5 bg-white/5 border border-white/15 rounded-xl"
+                <Pressable
+                  className="flex-row items-center gap-3 p-3.5 mb-2 bg-card-alt/40 border border-border/40 rounded-xl"
+                  style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
                   onPress={() => setCurrentPath(parentPath)}
                 >
-                  <Text className="text-lg">⬆️</Text>
-                  <View>
-                    <Text className="text-sm font-semibold text-white">.. (Parent Directory)</Text>
-                    <Text className="text-xs text-zinc-400 font-mono mt-0.5">{parentPath}</Text>
+                  <View className="w-8 h-8 rounded-lg items-center justify-center bg-card-alt border border-border/60">
+                    <FolderUp size={16} color={theme.colors.text.secondary} />
                   </View>
-                </TouchableOpacity>
+                  <View className="flex-1">
+                    <Text className="text-xs font-semibold text-foreground">.. (Parent Directory)</Text>
+                    <Text className="text-[10px] text-foreground-secondary font-mono mt-0.5" numberOfLines={1}>
+                      {parentPath}
+                    </Text>
+                  </View>
+                </Pressable>
               ) : null
             }
             ListEmptyComponent={
-              <View className="items-center justify-center py-12">
-                <Text className="text-sm text-zinc-400 italic">
-                  No subdirectories found in this folder.
+              <View className="items-center justify-center py-16">
+                <Folder size={24} color={theme.colors.text.muted} />
+                <Text className="text-xs text-foreground-secondary mt-2">
+                  No subdirectories in this folder
                 </Text>
               </View>
             }
             renderItem={({ item }) => (
-              <TouchableOpacity
-                className="flex-row items-center justify-between p-4 mb-2.5 bg-[#121316] border border-white/10 rounded-xl active:bg-white/10"
+              <Pressable
+                className="flex-row items-center justify-between p-3.5 mb-2 bg-card border border-border/60 rounded-xl"
+                style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
                 onPress={() => setCurrentPath(item.path)}
               >
-                <View className="flex-row items-center gap-3.5 flex-1 pr-2">
-                  <Folder size={20} color="#ffffff" />
-                  <Text className="text-base font-medium text-white flex-1" numberOfLines={1}>
+                <View className="flex-row items-center gap-3 flex-1 pr-2">
+                  <View className="w-8 h-8 rounded-lg items-center justify-center bg-card-alt/80 border border-border/40">
+                    <Folder size={16} color={theme.colors.text.secondary} />
+                  </View>
+                  <Text className="text-sm font-medium text-foreground flex-1" numberOfLines={1}>
                     {item.name}
                   </Text>
                 </View>
-                <Text className="text-sm text-zinc-400">›</Text>
-              </TouchableOpacity>
+                <ChevronRight size={15} color={theme.colors.text.muted} />
+              </Pressable>
             )}
           />
         )}
       </View>
 
-      {/* Floating Liquid-Glass Confirm Action Bar */}
-      <GlassSurface className="m-4 mt-2 p-3.5 rounded-full bg-[#121316]/95 border-white/20 shadow-2xl flex-row items-center justify-between">
+      {/* Sticky Bottom Action Bar */}
+      <View
+        className="px-4 pt-3 bg-card border-t border-border flex-row items-center justify-between"
+        style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+      >
         <View className="flex-1 pr-3">
-          <Text className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+          <Text className="text-[10px] font-bold text-foreground-secondary uppercase tracking-wider">
             Selected Folder
           </Text>
-          <Text className="text-sm font-semibold text-white mt-0.5" numberOfLines={1}>
-            {pathSegments[pathSegments.length - 1] || activePath}
+          <Text className="text-sm font-semibold text-foreground mt-0.5" numberOfLines={1}>
+            {currentFolder}
+          </Text>
+          <Text className="text-[10px] text-foreground-secondary font-mono mt-0.5" numberOfLines={1}>
+            {activePath}
           </Text>
         </View>
 
-        <TouchableOpacity
-          className={`py-3.5 px-6 rounded-full bg-white items-center justify-center flex-row gap-2 ${
+        <Pressable
+          className={`py-3 px-5 rounded-full bg-foreground items-center justify-center flex-row gap-1.5 ${
             addProjectMutation.isPending ? "opacity-50" : ""
           }`}
+          style={({ pressed }) => ({ opacity: pressed && !addProjectMutation.isPending ? 0.8 : 1 })}
           onPress={handleConfirmAdd}
           disabled={addProjectMutation.isPending}
         >
           {addProjectMutation.isPending ? (
             <ActivityIndicator size="small" color="#000000" />
           ) : (
-            <Text className="text-sm font-bold text-black tracking-wide">+ Add Directory</Text>
+            <>
+              <Check size={14} color="#000000" />
+              <Text className="text-xs font-bold text-black tracking-wide">Add Folder</Text>
+            </>
           )}
-        </TouchableOpacity>
-      </GlassSurface>
-    </SafeAreaView>
+        </Pressable>
+      </View>
+    </View>
   );
 }
+
+export default AddProjectScreen;
+
