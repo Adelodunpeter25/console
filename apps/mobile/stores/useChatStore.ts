@@ -1,6 +1,5 @@
 import { create } from "zustand";
-import { persist, createJSONStorage, type StateStorage } from "zustand/middleware";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { persist, createJSONStorage } from "zustand/middleware";
 import type { AgentMessage, AgentSessionEvent, ImageAttachment } from "@console/types";
 import { runService } from "@console/api";
 import type { ChatSessionState, ChatSnapshot } from "../types";
@@ -9,6 +8,7 @@ import { createSseParser } from "../utils/sse";
 import { startNativeChatStream } from "../utils/native-stream";
 import { applyChatEvent, toChatSnapshot } from "../utils/chat-events";
 import { reconstructRuns } from "../utils/reconstruct-runs";
+import { debouncedAsyncStorage } from "../utils/debounced-storage";
 import { useAppStore } from "./useAppStore";
 import { useSessionStore } from "./useSessionStore";
 import { useProviderStore } from "./useProviderStore";
@@ -81,40 +81,14 @@ function updateSession(
 // functions or transient streaming state), and the persisted blob is capped
 // to avoid overflowing AsyncStorage's per-key size limit on Android.
 //
-// Writes are debounced (2s) so the rapid state changes during SSE streaming
-// don't trigger a JSON.stringify + native bridge call on every token.
+// Writes are debounced (2s) via the debouncedAsyncStorage util so the rapid
+// state changes during SSE streaming don't trigger a JSON.stringify + native
+// bridge call on every token.
 
 const PERSIST_NAME = "console-chat-cache";
+const PERSIST_DEBOUNCE_MS = 2000;
 const MAX_PERSISTED_SESSIONS = 25;
 const MAX_PERSISTED_MESSAGES = 50;
-
-/** AsyncStorage wrapper that coalesces rapid setItem calls into one write. */
-function debouncedStorage(delayMs: number): StateStorage {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let pending: { name: string; value: string } | null = null;
-  return {
-    getItem: (name) => AsyncStorage.getItem(name),
-    setItem: (name, value) => {
-      pending = { name, value };
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        if (pending) {
-          void AsyncStorage.setItem(pending.name, pending.value).catch(() => {});
-          pending = null;
-        }
-        timer = null;
-      }, delayMs);
-    },
-    removeItem: (name) => {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-        pending = null;
-      }
-      void AsyncStorage.removeItem(name).catch(() => {});
-    },
-  };
-}
 
 export const useChatStore = create<ChatStoreState>()(
   persist(
@@ -411,7 +385,7 @@ export const useChatStore = create<ChatStoreState>()(
     }),
     {
       name: PERSIST_NAME,
-      storage: createJSONStorage(() => debouncedStorage(2000)),
+      storage: createJSONStorage(() => debouncedAsyncStorage(PERSIST_DEBOUNCE_MS)),
       // Only persist the data that matters for cold-start: messages, runs
       // (the run timeline), and the current input draft. Transient fields
       // (running, streaming buffers, pending queues, attachments) are
