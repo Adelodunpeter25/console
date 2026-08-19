@@ -12,7 +12,16 @@ import type { AgentTool } from "@console/types";
 import type { ToolSet } from "ai";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
-/** Console tool id → freebuff signature tool name (injective). */
+/** Console tool id → freebuff signature tool name (injective).
+ *
+ * Only tools with a direct freebuff equivalent are aliased. Tools without an
+ * entry pass through under their own console name; the freebuff server still
+ * sees the signature names from the mapped tools, so the foreign_toolset
+ * downgrade (triggered only when *none* of the offered tools match a signature
+ * name) is not a concern. Keeping the map injective is essential — a shared
+ * alias would collide in the ToolSet object (last write wins) and break the
+ * reverse map used to dispatch calls back to the correct console tool.
+ */
 export const CODEBUFF_TOOL_ALIASES: Record<string, string> = {
   bash: "run_terminal_command",
   readFile: "read_files",
