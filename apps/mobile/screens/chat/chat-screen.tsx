@@ -26,6 +26,7 @@ export function ChatScreen() {
   const { abort, isAborting } = useAbort();
   const decisions = useChatDecisions();
   const setActiveTab = useAppStore((state) => state.setActiveTab);
+  const selectedSessionId = useAppStore((state) => state.selectedSessionId);
   const chatTitle = stream.chatTitle;
   const listRef = useRef<FlashListRef<AgentMessage>>(null);
 
@@ -34,6 +35,12 @@ export function ChatScreen() {
     (Boolean(stream.streamingText) ||
       Boolean(stream.streamingThinking) ||
       stream.activeToolCalls.length > 0);
+
+  const hasPendingInteraction =
+    (stream.pendingPermissions?.length ?? 0) > 0 ||
+    (stream.pendingQuestions?.length ?? 0) > 0 ||
+    Boolean(stream.pendingPermission) ||
+    Boolean(stream.pendingQuestion);
 
   const displayMessages = useMemo(() => {
     return stream.messages.filter(isVisibleMessage);
@@ -174,19 +181,21 @@ export function ChatScreen() {
         />
       )}
 
-      <InteractionPanel sessionId={selectedSessionId} />
-
-      <Composer
-        value={stream.inputVal}
-        onChangeText={stream.setInputVal}
-        onSend={() => {
-          Keyboard.dismiss();
-          handleScrollToEnd();
-          stream.sendMessage();
-        }}
-        onStop={isAborting ? undefined : handleStop}
-        running={stream.running}
-      />
+      {hasPendingInteraction ? (
+        <InteractionPanel sessionId={selectedSessionId} />
+      ) : (
+        <Composer
+          value={stream.inputVal}
+          onChangeText={stream.setInputVal}
+          onSend={() => {
+            Keyboard.dismiss();
+            handleScrollToEnd();
+            stream.sendMessage();
+          }}
+          onStop={isAborting ? undefined : handleStop}
+          running={stream.running}
+        />
+      )}
     </View>
   );
 }

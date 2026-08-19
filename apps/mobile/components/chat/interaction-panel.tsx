@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ShieldCheck, ShieldX } from "lucide-react-native";
 import type { AskQuestionRequest, PermissionRequest } from "@console/types";
 import { useChatStore } from "../../stores";
@@ -173,6 +174,7 @@ export function InteractionPanel({
   pendingPermissions: propPermissions,
   pendingQuestions: propQuestions,
 }: InteractionPanelProps) {
+  const insets = useSafeAreaInsets();
   const currentSessionId = sessionId ?? "";
   const storePermissions = useChatStore(
     (s) => s.sessions[currentSessionId]?.pendingPermissions ?? [],
@@ -184,25 +186,23 @@ export function InteractionPanel({
   const permissions = propPermissions ?? storePermissions;
   const questions = propQuestions ?? storeQuestions;
 
-  if (permissions.length > 0) {
-    return (
-      <PermissionPanel
-        key={permissions[0]!.request.requestId}
-        request={permissions[0]!.request}
-        sessionId={currentSessionId}
-      />
-    );
-  }
+  if (permissions.length === 0 && questions.length === 0) return null;
 
-  if (questions.length > 0) {
-    return (
-      <QuestionWizard
-        key={questions[0]!.request.batchId ?? questions[0]!.request.requestId}
-        questions={questions.map((q) => q.request)}
-        sessionId={currentSessionId}
-      />
-    );
-  }
-
-  return null;
+  return (
+    <View style={{ paddingBottom: Math.max(insets.bottom, 8) + 4 }}>
+      {permissions.length > 0 ? (
+        <PermissionPanel
+          key={permissions[0]!.request.requestId}
+          request={permissions[0]!.request}
+          sessionId={currentSessionId}
+        />
+      ) : (
+        <QuestionWizard
+          key={questions[0]!.request.batchId ?? questions[0]!.request.requestId}
+          questions={questions.map((q) => q.request)}
+          sessionId={currentSessionId}
+        />
+      )}
+    </View>
+  );
 }
