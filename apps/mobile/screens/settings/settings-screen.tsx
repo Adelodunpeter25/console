@@ -1,14 +1,16 @@
 import React, { useState } from "react";
 import { Text, View, Pressable } from "react-native";
-import { ChevronRight, Wifi, User } from "lucide-react-native";
+import { ChevronRight, Wifi, User, Folder, Trash2 } from "lucide-react-native";
 import { ScreenHeader } from "../../components/layout/screen-header";
-import { useAppStore } from "../../stores";
+import { useAppStore, useProjectStore } from "../../stores";
 import { useServerConnection } from "../../hooks";
 import { useAuth } from "../../hooks";
 import { ConnectionSettings } from "./connection-settings";
 import { AccountSettings } from "./account-settings";
+import { ProjectsSettings } from "./projects-settings";
+import { DeletedChatsSettings } from "./deleted-chats-settings";
 
-type SettingsSection = "connection" | "account";
+type SettingsSection = "connection" | "account" | "projects" | "deleted-chats";
 
 const SECTION_META: Record<
   SettingsSection,
@@ -16,6 +18,8 @@ const SECTION_META: Record<
 > = {
   connection: { title: "Connection", icon: Wifi },
   account: { title: "Account", icon: User },
+  projects: { title: "Projects", icon: Folder },
+  "deleted-chats": { title: "Deleted Chats", icon: Trash2 },
 };
 
 export function SettingsScreen() {
@@ -24,6 +28,8 @@ export function SettingsScreen() {
 
   const { backendUrl } = useServerConnection();
   const auth = useAuth();
+  const projects = useProjectStore((state) => state.projects);
+  const deletedSessions = useProjectStore((state) => state.deletedSessions);
 
   // Summary text under each landing row.
   const summary: Record<SettingsSection, string> = {
@@ -32,6 +38,8 @@ export function SettingsScreen() {
       auth.status && Object.values(auth.status).some((s) => s.loggedIn)
         ? "Signed in"
         : "No providers connected",
+    projects: `${projects.length} project folder${projects.length === 1 ? "" : "s"}`,
+    "deleted-chats": `${deletedSessions.length} deleted chat${deletedSessions.length === 1 ? "" : "s"}`,
   };
 
   if (section) {
@@ -41,6 +49,8 @@ export function SettingsScreen() {
         <ScreenHeader title={meta.title} onBack={() => setSection(null)} />
         {section === "connection" ? <ConnectionSettings /> : null}
         {section === "account" ? <AccountSettings /> : null}
+        {section === "projects" ? <ProjectsSettings /> : null}
+        {section === "deleted-chats" ? <DeletedChatsSettings /> : null}
       </View>
     );
   }

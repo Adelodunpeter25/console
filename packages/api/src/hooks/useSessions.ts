@@ -64,3 +64,13 @@ export function useRestoreSession() {
     },
   });
 }
+
+export function usePermanentlyDeleteSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => sessionService.permanentlyDeleteSession(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: sessionKeys.all });
+    },
+  });
+}

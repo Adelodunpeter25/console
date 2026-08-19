@@ -54,4 +54,12 @@ export const sessionService = {
     }
     return { success: true };
   },
+
+  async permanentlyDeleteSession(id: string): Promise<{ success: boolean }> {
+    const res = await getConsoleApiClient().delete(`/api/sessions/${id}/permanent`);
+    if (res.data?.success === false) {
+      throw new Error(res.data?.error || "Failed to permanently delete session");
+    }
+    return { success: true };
+  },
 };
