@@ -27,7 +27,7 @@ export function Composer({ value, onChangeText, onSend, onStop, running }: Compo
         className="flex-row items-end gap-2 px-4 pt-2.5 bg-screen border-t border-border"
         style={{ paddingBottom }}
       >
-        <View className="flex-1 flex-row items-center bg-card border border-border rounded-[22px] px-4 min-h-[48px]">
+        <View className="flex-1 bg-card border border-border rounded-[18px] px-3.5 min-h-[88px] justify-start">
           <TextInput
             style={styles.input}
             value={value}
@@ -35,7 +35,7 @@ export function Composer({ value, onChangeText, onSend, onStop, running }: Compo
             placeholder="Message the agent…"
             placeholderTextColor={theme.colors.text.muted}
             multiline
-            textAlignVertical="center"
+            textAlignVertical="top"
           />
         </View>
         {running && onStop ? (
@@ -70,15 +70,13 @@ export function Composer({ value, onChangeText, onSend, onStop, running }: Compo
 const styles = StyleSheet.create({
   input: {
     flex: 1,
-    maxHeight: 132,
-    // Equal vertical padding keeps the single-line placeholder centered in the
-    // 48px pill; multiline grows downward from there.
-    paddingTop: 12,
-    paddingBottom: 12,
+    minHeight: 76,
+    maxHeight: 160,
+    paddingTop: 10,
+    paddingBottom: 10,
     color: theme.colors.text.primary,
     fontSize: 15,
-    lineHeight: 20,
-    // Android otherwise adds extra font padding that shifts placeholder up.
+    lineHeight: 22,
     includeFontPadding: false,
   },
 });
