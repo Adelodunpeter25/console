@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { Alert, Platform, Text, View, Pressable, ScrollView } from "react-native";
+import { Alert, Text, View, Pressable, ScrollView } from "react-native";
 import { GitBranch } from "lucide-react-native";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useCreateSession, useProjects, useSessions } from "@console/api";
 import { SessionHeader } from "@console/types";
 import { ScreenHeader } from "../../components/layout/screen-header";
@@ -127,13 +126,9 @@ export function HomeScreen() {
   };
 
   return (
-    // Android already resizes the window (adjustResize). Extra KAV padding
-    // double-counts and shoves the search bar too high / off-screen.
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#0a0a0b" }}
-      behavior="padding"
-      enabled={Platform.OS === "ios"}
-    >
+    // Bottom SearchBar uses KeyboardStickyView so it rides the keyboard on
+    // edge-to-edge Android (adjustResize is a no-op there).
+    <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
       <ScreenHeader title="Console" showSettings onSettingsPress={() => setActiveTab("settings")} />
 
       <ScrollView
@@ -231,14 +226,14 @@ export function HomeScreen() {
         )}
       </ScrollView>
 
-      {/* Keep the composer outside the list so it stays anchored to the resized window. */}
+      {/* Sticky so it rides above the keyboard without resizing the list. */}
       <SearchBar
         value={searchQuery}
         onChangeText={setSearchQuery}
         onComposePress={composeSession}
         disabled={createSession.isPending}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
