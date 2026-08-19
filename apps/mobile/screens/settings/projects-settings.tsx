@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Alert, FlatList, Pressable, Text, View, ActivityIndicator, Modal } from "react-native";
 import { Folder, Trash2, Plus } from "lucide-react-native";
+import { ScreenHeader } from "../../components/layout/screen-header";
 import { useProjectStore } from "../../stores";
 import { AddProjectScreen } from "../projects/add-project-screen";
 
