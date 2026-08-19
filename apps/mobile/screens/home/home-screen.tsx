@@ -76,25 +76,37 @@ export function HomeScreen() {
     return sessions.filter((s) => (s.title || "").toLowerCase().includes(q));
   }, [sessions, searchQuery]);
 
-  // Group filtered sessions by project
+  // Group filtered sessions by project (by projectId or fallback to cwd folder)
   const sections = useMemo<GroupedSection[]>(() => {
-    const byProject = new Map<string | null, SessionHeader[]>();
+    const byProject = new Map<string, { projectId: string | null; projectName: string; list: SessionHeader[] }>();
+
     for (const session of filteredSessions) {
-      const key = session.projectId ?? null;
-      const list = byProject.get(key) ?? [];
-      list.push(session);
-      byProject.set(key, list);
+      // Find matching project by projectId or by matching project.path === session.cwd
+      const project =
+        (session.projectId ? projects.find((p) => p.id === session.projectId) : undefined) ??
+        projects.find((p) => p.path && session.cwd && p.path === session.cwd);
+
+      const groupKey = project ? project.id : (folderName(session.cwd) || "draft").toLowerCase();
+      const groupName = project ? project.name.toUpperCase() : (folderName(session.cwd) || "DRAFT").toUpperCase();
+
+      const existing = byProject.get(groupKey);
+      if (existing) {
+        existing.list.push(session);
+      } else {
+        byProject.set(groupKey, {
+          projectId: project?.id ?? session.projectId ?? null,
+          projectName: groupName,
+          list: [session],
+        });
+      }
     }
 
     const result: GroupedSection[] = [];
-    for (const [projectId, list] of byProject) {
-      const project = projects.find((p) => p.id === projectId);
+    for (const [, group] of byProject) {
       result.push({
-        projectId,
-        projectName: project
-          ? project.name.toUpperCase()
-          : (folderName(list[0]?.cwd) || "DRAFT").toUpperCase(),
-        data: list.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)),
+        projectId: group.projectId,
+        projectName: group.projectName,
+        data: group.list.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)),
       });
     }
     return result.sort((a, b) => a.projectName.localeCompare(b.projectName));
