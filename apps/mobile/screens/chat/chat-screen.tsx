@@ -1,5 +1,5 @@
 import React, { useCallback, useRef } from "react";
-import { View, Text, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { View, Text, Keyboard, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { MessageSquareText } from "lucide-react-native";
 import { useChatStream, useAbort, useChatDecisions } from "../../hooks";
@@ -144,6 +144,7 @@ export function ChatScreen() {
         value={stream.inputVal}
         onChangeText={stream.setInputVal}
         onSend={() => {
+          Keyboard.dismiss();
           handleScrollToEnd();
           stream.sendMessage();
         }}
