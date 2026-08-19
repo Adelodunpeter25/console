@@ -7,6 +7,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
+import { CheckCircle2, XCircle, LoaderCircle } from "lucide-react-native";
 import { GlassSurface } from "../../components/layout/glass-surface";
 import { useServerConnection } from "../../hooks";
 
@@ -62,16 +63,23 @@ export function ConnectionSettings() {
 
         <View className="flex-row gap-3 justify-end">
           <TouchableOpacity
-            className="px-4 py-2.5 rounded-full bg-transparent border border-border items-center justify-center"
+            className="px-4 py-2.5 rounded-full bg-transparent border border-border flex-row items-center justify-center gap-1.5"
             onPress={testConnection}
           >
+            {testingStatus === "testing" ? (
+              <LoaderCircle size={15} color="#ffffff" />
+            ) : testingStatus === "success" ? (
+              <CheckCircle2 size={15} color="#34d399" />
+            ) : testingStatus === "error" ? (
+              <XCircle size={15} color="#f87171" />
+            ) : null}
             <Text className="text-sm font-semibold text-foreground">
               {testingStatus === "testing"
-                ? "Testing..."
+                ? "Testing"
                 : testingStatus === "success"
-                  ? "✅ Online"
+                  ? "Online"
                   : testingStatus === "error"
-                    ? "❌ Offline"
+                    ? "Offline"
                     : "Test Connection"}
             </Text>
           </TouchableOpacity>

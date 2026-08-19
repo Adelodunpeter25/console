@@ -1,6 +1,7 @@
 import React from "react";
 import { Text, View, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 import type { OAuthProviderId } from "@console/types";
+import { Check } from "lucide-react-native";
 import { GlassSurface } from "../../components/layout/glass-surface";
 import { useAuth } from "../../hooks";
 import { useProviderCatalog } from "../../hooks";
@@ -56,8 +57,9 @@ export function AccountSettings() {
                   </Text>
                 </View>
                 {loggedIn ? (
-                  <View className="px-3 py-1 rounded-full bg-foreground/10 border border-border">
-                    <Text className="text-xs font-bold text-foreground">✓ Connected</Text>
+                  <View className="flex-row items-center gap-1 px-3 py-1 rounded-full bg-foreground/10 border border-border">
+                    <Check size={12} color="#34d399" />
+                    <Text className="text-xs font-bold text-foreground">Connected</Text>
                   </View>
                 ) : (
                   <TouchableOpacity
