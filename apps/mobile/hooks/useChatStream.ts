@@ -61,14 +61,23 @@ export function useChatStream() {
   const loadMessages = useChatStore((state) => state.loadMessages);
 
   // When fresh session data arrives from the server, push the messages into
-  // the store. We do NOT wipe first — the store keeps whatever it already has
-  // (cached from a previous visit or restored from persist) so the UI never
-  // blanks. `loadMessages` itself guards against replacing an active run.
-  // The `sessionQuery.data` dependency is stable per TanStack's structural
-  // sharing, so this only fires when the data genuinely changes.
+  // the chat store and sync the session view state (model, cwd, approval mode).
   useEffect(() => {
     if (selectedSessionId && sessionQuery.data) {
       loadMessages(selectedSessionId, sessionQuery.data.messages);
+
+      const header = sessionQuery.data.header;
+      useSessionStore.setState((state) => ({
+        sessions: {
+          ...state.sessions,
+          [selectedSessionId]: {
+            sessionModelId: header.modelId ?? null,
+            sessionProvider: header.provider ?? null,
+            sessionCwd: header.cwd ?? null,
+            approvalMode: (header.approvalMode as import("@console/types").ApprovalMode) ?? "always-ask",
+          },
+        },
+      }));
     }
   }, [selectedSessionId, sessionQuery.data, loadMessages]);
 

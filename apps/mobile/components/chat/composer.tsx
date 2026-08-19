@@ -32,7 +32,9 @@ export function Composer({ value, onChangeText, onSend, onStop, running }: Compo
   const changeProject = useSessionStore((state) => state.changeProject);
   const setApprovalMode = useSessionStore((state) => state.setApprovalMode);
 
-  const selectedProject = projects.find((p) => p.path === sessionView?.sessionCwd);
+  const selectedProject = projects.find(
+    (p) => p.path === sessionView?.sessionCwd || (sessionView?.sessionCwd && p.path.endsWith(sessionView.sessionCwd)),
+  );
 
   return (
     <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
