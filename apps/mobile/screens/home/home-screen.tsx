@@ -1,7 +1,6 @@
 import React from "react";
 import { Alert, Text, View, Pressable, ScrollView } from "react-native";
-import { MessageSquare } from "lucide-react-native";
-import { Folder02Icon } from "hugeicons-react-native";
+import { Folder, MessageSquare } from "lucide-react-native";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { SearchBar } from "../../components/common/search-bar";
 import { useHomeSessions } from "../../hooks";
@@ -90,7 +89,7 @@ export function HomeScreen() {
               {/* Section Header */}
               <View className="flex-row justify-between items-center mb-2 px-1">
                 <View className="flex-row items-center gap-1.5">
-                  <Folder02Icon size={14} color="#71717a" />
+                  <Folder size={14} color="#71717a" />
                   <Text className="text-xs font-bold text-foreground-secondary tracking-widest">
                     {section.projectName}
                   </Text>

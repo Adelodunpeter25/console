@@ -53,6 +53,42 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
 
   return (
     <Markdown
+      style={{
+        body: { color: "#ffffff" },
+        text: { color: "#ffffff" },
+        paragraph: { color: "#ffffff" },
+        blockquote: {
+          backgroundColor: "#16171a",
+          borderLeftColor: "rgba(255, 255, 255, 0.2)",
+          borderLeftWidth: 3,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          marginVertical: 6,
+          borderRadius: 6,
+        },
+        code_inline: {
+          backgroundColor: "#1c1d22",
+          borderColor: "rgba(255, 255, 255, 0.15)",
+          color: "#fdba74",
+        },
+        code_block: {
+          backgroundColor: "#101113",
+          borderColor: "rgba(255, 255, 255, 0.1)",
+        },
+        fence: {
+          backgroundColor: "#101113",
+          borderColor: "rgba(255, 255, 255, 0.1)",
+        },
+        list_item: {
+          color: "#e4e4e7",
+        },
+        bullet_list: {
+          color: "#e4e4e7",
+        },
+        ordered_list: {
+          color: "#e4e4e7",
+        },
+      }}
       rules={{
         body: (node, children) => (
           <View key={node.key} className="w-full">
@@ -96,10 +132,10 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
         ),
         list_item: (node, children, parent) => {
           const isOrdered = parent && parent[0]?.type === "ordered_list";
-          const bullet = isOrdered ? node.index !== undefined ? `${node.index + 1}.` : "•" : "•";
+          const bullet = isOrdered ? (node.index !== undefined ? `${node.index + 1}.` : "•") : "•";
           return (
             <View key={node.key} className="flex-row items-start my-[3px]">
-              <Text className="text-foreground-secondary mr-2.5 mt-0.5 text-[13px] font-semibold">
+              <Text className="text-foreground/70 mr-2.5 mt-0.5 text-[14px] font-semibold">
                 {bullet}
               </Text>
               <View className="flex-1">{children}</View>
@@ -124,8 +160,8 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
         code_inline: (node) => (
           <Text
             key={node.key}
-            className="font-mono text-[12px] text-orange-300 px-1.5 py-0.5 rounded-md"
-            style={{ backgroundColor: "rgba(255,255,255,0.06)" }}
+            className="font-mono text-[12.5px] text-orange-300 px-1.5 py-0.5 rounded-md"
+            style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
           >
             {node.content}
           </Text>
@@ -172,15 +208,30 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
           </Text>
         ),
         em: (node, children) => (
-          <Text key={node.key} className="italic">
+          <Text key={node.key} className="italic text-foreground/90">
             {children}
           </Text>
+        ),
+        blockquote: (node, children) => (
+          <View
+            key={node.key}
+            className="border-l-[3px] pl-3.5 my-2.5 rounded-r-xl py-2 pr-3"
+            style={{
+              borderColor: "rgba(255, 255, 255, 0.25)",
+              backgroundColor: "rgba(255, 255, 255, 0.05)",
+            }}
+          >
+            {children}
+          </View>
         ),
         block_quote: (node, children) => (
           <View
             key={node.key}
-            className="border-l-[3px] pl-3 my-2 rounded-r-lg py-1 pr-2"
-            style={{ borderColor: "rgba(255,255,255,0.15)", backgroundColor: "rgba(255,255,255,0.03)" }}
+            className="border-l-[3px] pl-3.5 my-2.5 rounded-r-xl py-2 pr-3"
+            style={{
+              borderColor: "rgba(255, 255, 255, 0.25)",
+              backgroundColor: "rgba(255, 255, 255, 0.05)",
+            }}
           >
             {children}
           </View>
