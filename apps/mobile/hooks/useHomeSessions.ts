@@ -75,14 +75,17 @@ export function useHomeSessions() {
     setActiveTab("chat");
   };
 
-  const composeSession = async () => {
+  const composeSession = async (targetProjectId?: string | null) => {
     if (createSession.isPending) return;
 
-    const project = projects[0];
+    const project = targetProjectId
+      ? projects.find((p) => p.id === targetProjectId)
+      : projects[0];
+
     try {
       const session = await createSession.mutateAsync({
         cwd: project?.path ?? "",
-        ...(project ? { projectId: project.id } : {}),
+        ...(project ? { projectId: project.id } : targetProjectId ? { projectId: targetProjectId } : {}),
         title: "New Chat",
       });
       setSelectedSessionId(session.id);

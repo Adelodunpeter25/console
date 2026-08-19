@@ -13,55 +13,54 @@ interface ComposerProps {
   running?: boolean;
 }
 
-/** Chat input row. Shows a stop button while a run is in progress. */
+/** Chat input row matching unified pill with internal send button. */
 export function Composer({ value, onChangeText, onSend, onStop, running }: ComposerProps) {
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardState((s) => s.isVisible);
   const canSend = value.trim().length > 0;
-  // Home-indicator clearance when idle; flush above the keys when open.
   const paddingBottom = keyboardVisible ? 8 : Math.max(insets.bottom, 8) + 4;
 
   return (
     <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
       <View
-        className="flex-row items-end gap-2 px-4 pt-2.5 bg-screen border-t border-border"
+        className="px-4 pt-2 bg-screen border-t border-border"
         style={{ paddingBottom }}
       >
-        <View className="flex-1 bg-card border border-border rounded-[18px] px-3.5 min-h-[88px] justify-start">
+        <View className="flex-row items-center bg-card border border-border/80 rounded-full pl-4 pr-1.5 py-1 min-h-[48px]">
           <TextInput
             style={styles.input}
             value={value}
             onChangeText={onChangeText}
-            placeholder="Message the agent…"
+            placeholder="Ask the repo agent, or run a command…"
             placeholderTextColor={theme.colors.text.muted}
             multiline
-            textAlignVertical="top"
+            textAlignVertical="center"
           />
+          {running && onStop ? (
+            <Pressable
+              className="w-8 h-8 rounded-full items-center justify-center ml-1.5"
+              style={({ pressed }) => ({
+                backgroundColor: "rgba(255,255,255,0.12)",
+                opacity: pressed ? 0.7 : 1,
+              })}
+              onPress={onStop}
+            >
+              <Square size={13} color={theme.colors.text.primary} />
+            </Pressable>
+          ) : (
+            <Pressable
+              className="w-8 h-8 rounded-full items-center justify-center ml-1.5"
+              style={({ pressed }) => ({
+                backgroundColor: canSend ? theme.colors.text.primary : "rgba(255,255,255,0.08)",
+                opacity: pressed && canSend ? 0.8 : 1,
+              })}
+              onPress={onSend}
+              disabled={!canSend}
+            >
+              <ArrowUp size={16} color={canSend ? theme.colors.text.dark : theme.colors.text.muted} />
+            </Pressable>
+          )}
         </View>
-        {running && onStop ? (
-          <Pressable
-            className="w-11 h-11 rounded-full items-center justify-center"
-            style={({ pressed }) => ({
-              backgroundColor: "rgba(255,255,255,0.08)",
-              opacity: pressed ? 0.7 : 1,
-            })}
-            onPress={onStop}
-          >
-            <Square size={16} color={theme.colors.text.primary} />
-          </Pressable>
-        ) : (
-          <Pressable
-            className="w-11 h-11 rounded-full items-center justify-center"
-            style={({ pressed }) => ({
-              backgroundColor: canSend ? theme.colors.text.primary : "rgba(255,255,255,0.08)",
-              opacity: pressed && canSend ? 0.8 : 1,
-            })}
-            onPress={onSend}
-            disabled={!canSend}
-          >
-            <ArrowUp size={20} color={canSend ? theme.colors.text.dark : theme.colors.text.muted} />
-          </Pressable>
-        )}
       </View>
     </KeyboardStickyView>
   );
@@ -70,13 +69,12 @@ export function Composer({ value, onChangeText, onSend, onStop, running }: Compo
 const styles = StyleSheet.create({
   input: {
     flex: 1,
-    minHeight: 76,
-    maxHeight: 160,
-    paddingTop: 10,
-    paddingBottom: 10,
+    maxHeight: 120,
+    paddingTop: 8,
+    paddingBottom: 8,
     color: theme.colors.text.primary,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 19,
     includeFontPadding: false,
   },
 });

@@ -1,6 +1,6 @@
 import React from "react";
 import { Alert, Text, View, Pressable, ScrollView } from "react-native";
-import { MessageSquare } from "lucide-react-native";
+import { Plus } from "lucide-react-native";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import { Folder02Icon } from "@hugeicons/core-free-icons";
 import { ScreenHeader } from "../../components/layout/screen-header";
@@ -88,7 +88,7 @@ export function HomeScreen() {
         ) : (
           sections.map((section) => (
             <View key={section.projectId ?? section.projectName} className="mb-5">
-              {/* Section Header */}
+              {/* Section Header with + button */}
               <View className="flex-row justify-between items-center mb-2 px-1">
                 <View className="flex-row items-center gap-1.5">
                   <HugeiconsIcon icon={Folder02Icon} size={14} color="#71717a" />
@@ -96,9 +96,21 @@ export function HomeScreen() {
                     {section.projectName}
                   </Text>
                 </View>
-                <Text className="text-xs text-foreground-secondary opacity-60">
-                  {section.data.length} {section.data.length === 1 ? "chat" : "chats"}
-                </Text>
+                <Pressable
+                  className="w-6 h-6 rounded-md items-center justify-center bg-card-alt/80 border border-border/40"
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  hitSlop={8}
+                  onPress={async () => {
+                    try {
+                      await composeSession(section.projectId);
+                    } catch {
+                      Alert.alert("Unable to start chat", "Check the backend connection and try again.");
+                    }
+                  }}
+                  disabled={isCreatingSession}
+                >
+                  <Plus size={14} color={theme.colors.text.secondary} />
+                </Pressable>
               </View>
 
               {/* Session Cards grouped into one card */}
@@ -116,14 +128,6 @@ export function HomeScreen() {
                       style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
                       onPress={() => openSession(session.id)}
                     >
-                      {/* Chat message avatar icon with status colour */}
-                      <View
-                        className="w-9 h-9 rounded-xl items-center justify-center mr-3"
-                        style={{ backgroundColor: status.bgColor }}
-                      >
-                        <MessageSquare size={16} color={status.color} />
-                      </View>
-
                       {/* Title + project/branch */}
                       <View className="flex-1 mr-2">
                         <Text
