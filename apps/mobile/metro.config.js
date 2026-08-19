@@ -22,7 +22,7 @@ config.resolver.extraNodeModules = {
   "react/jsx-runtime": path.resolve(projectRoot, "node_modules/react/jsx-runtime"),
   "react-native": path.resolve(projectRoot, "node_modules/react-native"),
   "@tanstack/react-query": path.resolve(
-    workspaceRoot,
+    projectRoot,
     "node_modules/@tanstack/react-query"
   ),
   "react-native-safe-area-context": path.resolve(
