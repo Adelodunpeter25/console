@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
-import { HelpCircle } from "lucide-react-native";
+import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-controller";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { HelpCircle, Check } from "lucide-react-native";
 import type { AskQuestionRequest } from "@console/types";
-import { theme } from "../../styles/theme";
 
 interface QuestionPanelProps {
   request: AskQuestionRequest;
@@ -28,6 +29,10 @@ export function QuestionPanel({
   onAnswer,
   onSkip,
 }: QuestionPanelProps) {
+  const insets = useSafeAreaInsets();
+  const keyboardVisible = useKeyboardState((s) => s.isVisible);
+  const paddingBottom = keyboardVisible ? 8 : Math.max(insets.bottom, 8) + 4;
+
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [customAnswer, setCustomAnswer] = useState("");
 
@@ -60,117 +65,133 @@ export function QuestionPanel({
   };
 
   return (
-    <View className="mx-4 mb-2 rounded-2xl border border-white/15 bg-card p-4 gap-3">
-      {/* Header */}
-      <View className="flex-row items-center gap-2.5">
-        <HelpCircle size={17} color={theme.colors.accent} />
-        <Text className="text-sm font-semibold text-foreground flex-1">
-          {request.question}
-        </Text>
-        {total > 1 && (
-          <Text className="text-[11px] font-mono text-foreground-secondary">
-            {index} of {total}
-          </Text>
-        )}
-      </View>
+    <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
+      <View className="px-3 pt-2 bg-screen" style={{ paddingBottom }}>
+        <View className="rounded-2xl border border-white/15 bg-[#18181b] p-4 gap-3">
+          {/* Header */}
+          <View className="flex-row items-center gap-2.5">
+            <HelpCircle size={18} color="#ffffff" />
+            <Text className="text-sm font-semibold text-white flex-1">
+              {request.question}
+            </Text>
+            {total > 1 && (
+              <Text className="text-[11px] font-mono text-foreground-secondary">
+                {index} of {total}
+              </Text>
+            )}
+          </View>
 
-      {/* Options */}
-      {hasOptions && (
-        <View className="gap-2 pl-6">
-          {request.options!.map((option) => {
-            const isSelected = selected.has(option);
-            return (
-              <Pressable
-                key={option}
-                onPress={() => toggle(option)}
-                className={`w-full flex-row items-center gap-2.5 px-3 py-2.5 rounded-xl border ${
-                  isSelected
-                    ? "border-accent bg-accent/15"
-                    : "border-white/10 bg-white/[0.02]"
-                }`}
-                style={({ pressed }) => ({
-                  opacity: pressed ? 0.75 : 1,
-                })}
-              >
-                <View
-                  className={`w-4 h-4 items-center justify-center border-2 ${
-                    request.isMultiSelect ? "rounded-sm" : "rounded-full"
-                  } ${isSelected ? "border-accent bg-accent/20" : "border-foreground-secondary/50"}`}
+          {/* Multiple-choice Options */}
+          {hasOptions && (
+            <View className="gap-2 pl-6">
+              {request.options!.map((option) => {
+                const isSelected = selected.has(option);
+                return (
+                  <Pressable
+                    key={option}
+                    onPress={() => toggle(option)}
+                    className={`w-full flex-row items-center gap-3 px-3.5 py-2.5 rounded-xl border ${
+                      isSelected
+                        ? "border-white/40 bg-white/[0.09]"
+                        : "border-white/10 bg-white/[0.02]"
+                    }`}
+                    style={({ pressed }) => ({
+                      opacity: pressed ? 0.75 : 1,
+                    })}
+                  >
+                    {/* Checkbox / Radio indicator */}
+                    <View
+                      className={`w-4 h-4 items-center justify-center ${
+                        request.isMultiSelect ? "rounded" : "rounded-full"
+                      } ${
+                        isSelected
+                          ? "bg-white"
+                          : "border border-white/40 bg-transparent"
+                      }`}
+                    >
+                      {isSelected ? (
+                        request.isMultiSelect ? (
+                          <Check size={11} color="#000000" strokeWidth={3.5} />
+                        ) : (
+                          <View className="w-1.5 h-1.5 rounded-full bg-black" />
+                        )
+                      ) : null}
+                    </View>
+
+                    <Text
+                      className={`text-sm flex-1 ${
+                        isSelected ? "text-white font-medium" : "text-foreground-secondary"
+                      }`}
+                    >
+                      {option}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Custom Text Input */}
+          <View className="pl-6">
+            <TextInput
+              value={customAnswer}
+              onChangeText={setCustomAnswer}
+              onSubmitEditing={() => {
+                if (hasAnswer) handlePrimary();
+              }}
+              placeholder={hasOptions ? "Or type your own answer…" : "Type your answer…"}
+              placeholderTextColor="#71717a"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-white/10 bg-black/40 text-sm text-white"
+              returnKeyType="send"
+            />
+          </View>
+
+          {/* Action Buttons */}
+          <View className="flex-row items-center justify-between pl-6 pt-1">
+            <View>
+              {request.skippable !== false && (
+                <Pressable
+                  onPress={onSkip}
+                  disabled={submitting}
+                  className="px-4 py-2 rounded-full border border-white/15 bg-transparent"
+                  style={({ pressed }) => ({
+                    opacity: pressed || submitting ? 0.5 : 1,
+                  })}
                 >
-                  {isSelected && (
-                    <View className="w-1.5 h-1.5 rounded-full bg-accent" />
-                  )}
-                </View>
-                <Text
-                  className={`text-sm flex-1 ${
-                    isSelected
-                      ? "text-foreground font-medium"
-                      : "text-foreground-secondary"
-                  }`}
-                >
-                  {option}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
+                  <Text className="text-xs font-semibold text-foreground-secondary">
+                    Skip
+                  </Text>
+                </Pressable>
+              )}
+            </View>
 
-      {/* Custom Text Input */}
-      <View className="pl-6">
-        <TextInput
-          value={customAnswer}
-          onChangeText={setCustomAnswer}
-          onSubmitEditing={() => {
-            if (hasAnswer) handlePrimary();
-          }}
-          placeholder={hasOptions ? "Or type your own answer…" : "Type your answer…"}
-          placeholderTextColor="#71717a"
-          className="w-full px-3.5 py-2.5 rounded-xl border border-white/10 bg-black/40 text-sm text-foreground"
-          returnKeyType="send"
-        />
-      </View>
-
-      {/* Action Buttons */}
-      <View className="flex-row items-center justify-between pl-6 pt-1">
-        <View>
-          {request.skippable !== false && (
             <Pressable
-              onPress={onSkip}
-              disabled={submitting}
-              className="px-4 py-2 rounded-xl border border-white/10 bg-white/[0.02]"
+              onPress={handlePrimary}
+              disabled={!hasAnswer || submitting}
+              className={`px-5 py-2.5 rounded-full ${
+                hasAnswer && !submitting
+                  ? "bg-white"
+                  : "bg-white/10 opacity-40"
+              }`}
               style={({ pressed }) => ({
-                opacity: pressed || submitting ? 0.5 : 1,
+                opacity: pressed && hasAnswer && !submitting ? 0.8 : undefined,
               })}
             >
-              <Text className="text-xs font-semibold text-foreground-secondary">
-                Skip
-              </Text>
+              {submitting ? (
+                <ActivityIndicator size="small" color="#000000" />
+              ) : (
+                <Text
+                  className={`text-xs font-bold ${
+                    hasAnswer && !submitting ? "text-black" : "text-white/60"
+                  }`}
+                >
+                  {isLast ? (total > 1 ? "Submit all" : "Submit") : "Next"}
+                </Text>
+              )}
             </Pressable>
-          )}
+          </View>
         </View>
-
-        <Pressable
-          onPress={handlePrimary}
-          disabled={!hasAnswer || submitting}
-          className={`px-5 py-2 rounded-xl border ${
-            hasAnswer && !submitting
-              ? "border-accent/40 bg-accent/20"
-              : "border-white/10 bg-white/[0.04] opacity-40"
-          }`}
-          style={({ pressed }) => ({
-            opacity: pressed && hasAnswer && !submitting ? 0.75 : undefined,
-          })}
-        >
-          {submitting ? (
-            <ActivityIndicator size="small" color={theme.colors.accent} />
-          ) : (
-            <Text className="text-xs font-bold text-accent">
-              {isLast ? (total > 1 ? "Submit all" : "Submit") : "Next"}
-            </Text>
-          )}
-        </Pressable>
       </View>
-    </View>
+    </KeyboardStickyView>
   );
 }

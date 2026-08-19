@@ -188,21 +188,23 @@ export function InteractionPanel({
 
   if (permissions.length === 0 && questions.length === 0) return null;
 
-  return (
-    <View style={{ paddingBottom: Math.max(insets.bottom, 8) + 4 }}>
-      {permissions.length > 0 ? (
+  if (permissions.length > 0) {
+    return (
+      <View style={{ paddingBottom: Math.max(insets.bottom, 8) + 4 }}>
         <PermissionPanel
           key={permissions[0]!.request.requestId}
           request={permissions[0]!.request}
           sessionId={currentSessionId}
         />
-      ) : (
-        <QuestionWizard
-          key={questions[0]!.request.batchId ?? questions[0]!.request.requestId}
-          questions={questions.map((q) => q.request)}
-          sessionId={currentSessionId}
-        />
-      )}
-    </View>
+      </View>
+    );
+  }
+
+  return (
+    <QuestionWizard
+      key={questions[0]!.request.batchId ?? questions[0]!.request.requestId}
+      questions={questions.map((q) => q.request)}
+      sessionId={currentSessionId}
+    />
   );
 }

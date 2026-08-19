@@ -106,7 +106,7 @@ export const RunActivity = memo(function RunActivity({
   const elapsed = isWorking && activity.startedAt ? now - activity.startedAt : activity.elapsedMs;
 
   const summaryLabel = isWorking
-    ? `Working (${formatDuration(elapsed)})…`
+    ? `Working for ${formatDuration(elapsed)}…`
     : activity.status === "aborted"
       ? `Aborted after ${formatDuration(elapsed)}`
       : activity.status === "failed"
