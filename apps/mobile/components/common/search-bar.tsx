@@ -2,7 +2,7 @@ import React from "react";
 import { View, TextInput, Pressable, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-controller";
-import { Search, Plus } from "lucide-react-native";
+import { Search, Pencil } from "lucide-react-native";
 
 interface SearchBarProps {
   value: string;
@@ -53,7 +53,7 @@ export function SearchBar({
           onPress={onComposePress}
           disabled={disabled}
         >
-          <Plus size={20} color="#000000" />
+          <Pencil size={18} color="#000000" />
         </Pressable>
       </View>
     </KeyboardStickyView>

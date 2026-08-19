@@ -1,5 +1,5 @@
 import React, { useRef, useCallback } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Pressable, StyleSheet } from "react-native";
 import {
   BottomSheetModal,
   BottomSheetBackdrop,
@@ -19,11 +19,10 @@ export interface ActionSheetItem {
 
 interface SessionActionSheetProps {
   children: (onLongPress: () => void) => React.ReactNode;
-  title?: string;
   items: ActionSheetItem[];
 }
 
-export function SessionActionSheet({ children, title, items }: SessionActionSheetProps) {
+export function SessionActionSheet({ children, items }: SessionActionSheetProps) {
   const sheetRef = useRef<BottomSheetModal>(null);
 
   const open = useCallback(() => {
@@ -60,12 +59,6 @@ export function SessionActionSheet({ children, title, items }: SessionActionShee
         enablePanDownToClose
       >
         <BottomSheetView style={styles.container}>
-          {title ? (
-            <View style={styles.titleRow}>
-              <Text style={styles.title} numberOfLines={1}>{title}</Text>
-            </View>
-          ) : null}
-
           {items.map((item, index) => {
             const isLast = index === items.length - 1;
             return (

@@ -135,7 +135,6 @@ export function HomeScreen() {
                   return (
                     <SessionActionSheet
                       key={session.id}
-                      title={session.title || "Untitled Session"}
                       items={[
                         {
                           key: "rename",
