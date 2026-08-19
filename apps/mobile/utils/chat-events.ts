@@ -266,6 +266,7 @@ export function toChatSnapshot(session: ChatSessionState): ChatSnapshot {
     pendingPermission: session.pendingPermissions[session.pendingPermissions.length - 1] ?? null,
     pendingQuestion: session.pendingQuestions[session.pendingQuestions.length - 1] ?? null,
     running: session.running,
+    runs: session.runs,
   };
 
   snapshotCache.set(session, snapshot);

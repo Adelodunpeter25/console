@@ -1,35 +1,67 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useMemo, useRef } from "react";
 import { View, Text, Keyboard, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { MessageSquareText } from "lucide-react-native";
+import type { AgentMessage } from "@console/types";
 import { useChatStream, useAbort, useChatDecisions } from "../../hooks";
 import { useAppStore } from "../../stores";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { MessageBubble } from "../../components/chat/message-bubbles";
-import { LiveToolResults } from "../../components/chat/live-tool-results";
+import { RunActivity } from "../../components/chat/run-activity";
 import { Composer } from "../../components/chat/composer";
 import { ApprovalPanel } from "../../components/chat/approval-panel";
+import { reconstructRuns } from "../../utils/reconstruct-runs";
 import { theme } from "../../styles/theme";
+
+function isVisibleMessage(msg: AgentMessage): boolean {
+  if (msg.role === "toolResult") return false;
+  if (msg.role === "assistant" && msg.content.some((c) => c.type === "toolCall")) {
+    return false;
+  }
+  return true;
+}
 
 export function ChatScreen() {
   const stream = useChatStream();
   const { abort, isAborting } = useAbort();
   const decisions = useChatDecisions();
   const setActiveTab = useAppStore((state) => state.setActiveTab);
-  const selectedSessionId = useAppStore((state) => state.selectedSessionId);
-  // Title comes from the shared TanStack Query cache inside useChatStream —
-  // no separate `useSession` fetch here (that was the second of two identical
-  // GET /api/sessions/:id calls on every chat open).
   const chatTitle = stream.chatTitle;
-  const listRef = useRef<FlashListRef<(typeof stream.messages)[number]>>(null);
+  const listRef = useRef<FlashListRef<AgentMessage>>(null);
 
   const isStreaming =
     stream.running &&
-    (!!stream.streamingText || !!stream.streamingThinking || stream.activeToolCalls.length > 0);
+    (Boolean(stream.streamingText) ||
+      Boolean(stream.streamingThinking) ||
+      stream.activeToolCalls.length > 0);
 
-  // The user is "at the bottom" (the list's end) by default. While streaming we
-  // follow the growing message regardless; when idle we only auto-scroll if the
-  // user never scrolled away, so reading older history isn't yanked.
+  const displayMessages = useMemo(() => {
+    return stream.messages.filter(isVisibleMessage);
+  }, [stream.messages]);
+
+  const effectiveRuns = useMemo(() => {
+    if (stream.runs && stream.runs.length > 0) return stream.runs;
+    return reconstructRuns(stream.messages);
+  }, [stream.runs, stream.messages]);
+
+  const userMessageRunMap = useMemo(() => {
+    const map = new Map<number, (typeof effectiveRuns)[number]>();
+    let userCount = 0;
+    for (let i = 0; i < displayMessages.length; i++) {
+      if (displayMessages[i]!.role === "user") {
+        const run = effectiveRuns[userCount];
+        if (run) map.set(i, run);
+        userCount++;
+      }
+    }
+    return map;
+  }, [displayMessages, effectiveRuns]);
+
+  const latestUserIndex = useMemo(
+    () => displayMessages.findLastIndex((message) => message.role === "user"),
+    [displayMessages],
+  );
+
   const isAtEndRef = useRef(true);
   const followRef = useRef(true);
 
@@ -59,20 +91,29 @@ export function ChatScreen() {
   }, [stream, abort]);
 
   const renderItem = useCallback(
-    ({ item, index }: { item: (typeof stream.messages)[number]; index: number }) => (
-      <MessageBubble key={index} item={item} />
-    ),
-    [],
+    ({ item, index }: { item: AgentMessage; index: number }) => {
+      const run = userMessageRunMap.get(index);
+      return (
+        <View className="mb-2">
+          <MessageBubble item={item} />
+          {run ? (
+            <RunActivity
+              activity={run}
+              running={stream.running && index === latestUserIndex}
+            />
+          ) : null}
+        </View>
+      );
+    },
+    [userMessageRunMap, stream.running, latestUserIndex],
   );
 
   return (
-    // Composer uses KeyboardStickyView so it rides the keyboard on edge-to-edge
-    // Android (adjustResize is a no-op there).
-    <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
+    <View className="flex-1 bg-screen">
       <ScreenHeader title={chatTitle} onBack={() => setActiveTab("home")} />
 
-      {stream.messages.length === 0 && !isStreaming ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
+      {displayMessages.length === 0 && !isStreaming ? (
+        <View className="flex-1 items-center justify-center px-8">
           <View
             className="w-14 h-14 rounded-2xl items-center justify-center mb-4"
             style={{ backgroundColor: "rgba(255,255,255,0.06)" }}
@@ -89,8 +130,8 @@ export function ChatScreen() {
       ) : (
         <FlashList
           ref={listRef}
-          style={{ flex: 1 }}
-          data={stream.messages}
+          className="flex-1"
+          data={displayMessages}
           keyExtractor={(_, i) => i.toString()}
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16 }}
           keyboardShouldPersistTaps="handled"
@@ -105,8 +146,14 @@ export function ChatScreen() {
           renderItem={renderItem}
           ListFooterComponent={
             <View>
-              <LiveToolResults results={stream.liveToolResults} />
-              {isStreaming ? (
+              {/* If running without a user message row yet, show latest run activity */}
+              {latestUserIndex === -1 && effectiveRuns.length > 0 ? (
+                <RunActivity
+                  activity={effectiveRuns[effectiveRuns.length - 1]!}
+                  running={stream.running}
+                />
+              ) : null}
+              {isStreaming && (Boolean(stream.streamingText) || Boolean(stream.streamingThinking)) ? (
                 <MessageBubble
                   isStreaming
                   item={{

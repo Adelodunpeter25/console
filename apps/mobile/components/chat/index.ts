@@ -2,3 +2,6 @@ export * from "./approval-panel";
 export * from "./composer";
 export * from "./live-tool-results";
 export * from "./message-bubbles";
+export * from "./tool-result-content";
+export * from "./tool-call-block";
+export * from "./run-activity";

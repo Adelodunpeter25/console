@@ -115,6 +115,7 @@ export function useChatStream() {
     pendingPermission: snapshot?.pendingPermission ?? null,
     pendingQuestion: snapshot?.pendingQuestion ?? null,
     running: snapshot?.running ?? false,
+    runs: snapshot?.runs ?? [],
     inputVal: input,
     setInputVal: (text: string) => {
       if (selectedSessionId) setInput(selectedSessionId, text);

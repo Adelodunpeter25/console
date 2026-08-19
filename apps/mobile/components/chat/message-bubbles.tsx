@@ -252,18 +252,15 @@ export const UserBubble = memo(function UserBubble({
 export const AssistantBubble = memo(function AssistantBubble({
   textContent,
   thinkingContent,
-  toolCalls,
   isStreaming,
   createdAt,
 }: {
   textContent?: string;
   thinkingContent?: string;
-  toolCalls?: { name: string }[];
   isStreaming?: boolean;
   createdAt?: number;
 }) {
-  const hasContent =
-    Boolean(textContent) || Boolean(thinkingContent) || (toolCalls && toolCalls.length > 0);
+  const hasContent = Boolean(textContent) || Boolean(thinkingContent);
   const showTyping = isStreaming && !hasContent;
 
   const copyableText = [thinkingContent ? `Thought:\n${thinkingContent}` : "", textContent ?? ""]
@@ -278,21 +275,13 @@ export const AssistantBubble = memo(function AssistantBubble({
 
       {textContent ? <MarkdownRenderer content={textContent} /> : null}
 
-      {toolCalls && toolCalls.length > 0 ? (
-        <View className="mt-1.5">
-          {toolCalls.map((call, idx) => (
-            <ToolActivityRow key={idx} name={call.name} isRunning={isStreaming} detail="Running…" />
-          ))}
-        </View>
-      ) : null}
-
       {isStreaming && textContent ? (
         <View className="mt-1 flex-row items-center gap-1.5">
           <ActivityIndicator size="small" color={theme.colors.text.muted} />
         </View>
       ) : null}
 
-      {!isStreaming && !showTyping && !textContent && !thinkingContent && (!toolCalls || toolCalls.length === 0) ? (
+      {!isStreaming && !showTyping && !textContent && !thinkingContent ? (
         <View className="flex-row items-center gap-1.5">
           <Check size={13} color={theme.colors.status.ready} />
           <Text className="text-xs text-foreground-secondary">Done</Text>
@@ -327,16 +316,17 @@ export const MessageBubble = memo(function MessageBubble({
   }
 
   if (item.role === "toolResult") {
-    return (
-      <View className="mb-4">
-        {item.results.map((res, i) => (
-          <ToolResultItem key={i} result={res} />
-        ))}
-      </View>
-    );
+    return null;
   }
 
   const content = item.content as Array<{ type: string; text?: string; call?: { name: string } }>;
+  const hasToolCalls = (content ?? []).some((c) => c.type === "toolCall");
+
+  // If this turn has tool calls, suppress text here — it is shown in RunActivity
+  if (hasToolCalls && !isStreaming) {
+    return null;
+  }
+
   const textContent = (content ?? [])
     .filter((c) => c.type === "text")
     .map((c) => c.text ?? "")
@@ -345,15 +335,11 @@ export const MessageBubble = memo(function MessageBubble({
     .filter((c) => c.type === "thinking")
     .map((c) => c.text ?? "")
     .join("\n\n");
-  const toolCalls = (content ?? [])
-    .filter((c) => c.type === "toolCall" && c.call)
-    .map((c) => c.call as { name: string });
 
   return (
     <AssistantBubble
       textContent={textContent}
       thinkingContent={thinkingContent}
-      toolCalls={toolCalls}
       isStreaming={isStreaming}
       createdAt={item.createdAt}
     />

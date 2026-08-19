@@ -79,6 +79,7 @@ export type ChatSnapshot = {
   pendingPermission: PendingPermission | null;
   pendingQuestion: PendingQuestion | null;
   running: boolean;
+  runs: RunActivityState[];
 };
 
 /** Reducer contract: given the current snapshot and an agent event, produce the next snapshot. */
