@@ -31,7 +31,7 @@ export function SearchBar({
   return (
     <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
       <View
-        className="flex-row items-center px-4 pt-3 bg-screen border-t border-border"
+        className="flex-row items-center px-4 pt-3 bg-screen"
         style={{ paddingBottom }}
       >
         <View className="flex-1 flex-row items-center bg-card border border-border rounded-full px-4 h-12 mr-3">
@@ -54,7 +54,7 @@ export function SearchBar({
           style={({ pressed }) => ({
             backgroundColor: pressed && !disabled ? "#1a1a1a" : "#000000",
             borderWidth: 1.5,
-            borderColor: "rgba(255,255,255,0.35)",
+            borderColor: "rgba(255,255,255,0.18)",
           })}
           onPress={onComposePress}
           disabled={disabled}
