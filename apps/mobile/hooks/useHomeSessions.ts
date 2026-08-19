@@ -8,6 +8,8 @@ export interface GroupedProjectSection {
   projectId: string | null;
   projectName: string;
   data: SessionHeader[];
+  /** Timestamp of the most-recent session in this section (for section sorting). */
+  latestAt: number;
 }
 
 function folderName(path?: string): string {
@@ -61,13 +63,19 @@ export function useHomeSessions() {
 
     const result: GroupedProjectSection[] = [];
     for (const [, group] of byProject) {
+      const sorted = group.list.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
       result.push({
         projectId: group.projectId,
         projectName: group.projectName,
-        data: group.list.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)),
+        data: sorted,
+        // Track the newest activity in this section so sections themselves
+        // sort by recency — the project with the latest session comes first.
+        latestAt: sorted[0]?.updatedAt ?? 0,
       });
     }
-    return result.sort((a, b) => a.projectName.localeCompare(b.projectName));
+    // Sort sections by their most-recent session (descending), so the latest
+    // activity overall always sits at the top of the list.
+    return result.sort((a, b) => b.latestAt - a.latestAt);
   }, [filteredSessions, projects]);
 
   const openSession = (sessionId: string) => {
