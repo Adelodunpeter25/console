@@ -1,15 +1,14 @@
 import React, { useState } from "react";
-import { Text, View, TouchableOpacity, Pressable } from "react-native";
-import { ChevronRight, Wifi, User, Info } from "lucide-react-native";
+import { Text, View, Pressable } from "react-native";
+import { ChevronRight, Wifi, User } from "lucide-react-native";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { useAppStore } from "../../stores";
 import { useServerConnection } from "../../hooks";
 import { useAuth } from "../../hooks";
 import { ConnectionSettings } from "./connection-settings";
 import { AccountSettings } from "./account-settings";
-import { AboutSettings } from "./about-settings";
 
-type SettingsSection = "connection" | "account" | "about";
+type SettingsSection = "connection" | "account";
 
 const SECTION_META: Record<
   SettingsSection,
@@ -17,7 +16,6 @@ const SECTION_META: Record<
 > = {
   connection: { title: "Connection", icon: Wifi },
   account: { title: "Account", icon: User },
-  about: { title: "About", icon: Info },
 };
 
 export function SettingsScreen() {
@@ -34,7 +32,6 @@ export function SettingsScreen() {
       auth.status && Object.values(auth.status).some((s) => s.loggedIn)
         ? "Signed in"
         : "No providers connected",
-    about: "Console Mobile",
   };
 
   if (section) {
@@ -44,7 +41,6 @@ export function SettingsScreen() {
         <ScreenHeader title={meta.title} onBack={() => setSection(null)} />
         {section === "connection" ? <ConnectionSettings /> : null}
         {section === "account" ? <AccountSettings /> : null}
-        {section === "about" ? <AboutSettings /> : null}
       </View>
     );
   }
