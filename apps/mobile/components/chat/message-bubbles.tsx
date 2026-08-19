@@ -10,9 +10,11 @@ import {
   AlertTriangle,
   Check,
   ChevronDown,
+  Copy,
   Sparkles,
   Wrench,
 } from "lucide-react-native";
+import { setStringAsync } from "expo-clipboard";
 import type { AgentMessage, ToolResult } from "@console/types";
 import { MarkdownRenderer } from "../common/markdown-renderer";
 import { theme } from "../../styles/theme";
@@ -192,6 +194,32 @@ export const ToolResultItem = memo(function ToolResultItem({ result }: { result:
   );
 });
 
+const MessageCopyButton = memo(function MessageCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    if (!text) return;
+    await setStringAsync(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <Pressable
+      onPress={handleCopy}
+      hitSlop={8}
+      className="flex-row items-center p-1 rounded-md"
+      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+    >
+      {copied ? (
+        <Check size={12} color={theme.colors.status.ready} />
+      ) : (
+        <Copy size={12} color={theme.colors.text.muted} />
+      )}
+    </Pressable>
+  );
+});
+
 export const UserBubble = memo(function UserBubble({
   content,
   createdAt,
@@ -209,11 +237,14 @@ export const UserBubble = memo(function UserBubble({
           {content}
         </Text>
       </View>
-      {createdAt ? (
-        <Text className="text-[11px] text-foreground-secondary/70 mt-1 mr-0.5">
-          {formatMessageTime(createdAt)}
-        </Text>
-      ) : null}
+      <View className="flex-row items-center gap-1.5 mt-1 mr-0.5">
+        {createdAt ? (
+          <Text className="text-[11px] text-foreground-secondary/70">
+            {formatMessageTime(createdAt)}
+          </Text>
+        ) : null}
+        <MessageCopyButton text={content} />
+      </View>
     </View>
   );
 });
@@ -235,14 +266,12 @@ export const AssistantBubble = memo(function AssistantBubble({
     Boolean(textContent) || Boolean(thinkingContent) || (toolCalls && toolCalls.length > 0);
   const showTyping = isStreaming && !hasContent;
 
+  const copyableText = [thinkingContent ? `Thought:\n${thinkingContent}` : "", textContent ?? ""]
+    .filter(Boolean)
+    .join("\n\n");
+
   return (
     <View className="mb-4">
-      {createdAt ? (
-        <Text className="text-[11px] text-foreground-secondary/70 mb-1.5">
-          {formatMessageTime(createdAt)}
-        </Text>
-      ) : null}
-
       {showTyping ? <TypingDots /> : null}
 
       {thinkingContent ? <ThinkingBlock text={thinkingContent} isStreaming={isStreaming} /> : null}
@@ -267,6 +296,18 @@ export const AssistantBubble = memo(function AssistantBubble({
         <View className="flex-row items-center gap-1.5">
           <Check size={13} color={theme.colors.status.ready} />
           <Text className="text-xs text-foreground-secondary">Done</Text>
+        </View>
+      ) : null}
+
+      {/* Time and Copy Button rendered at the end of the assistant message */}
+      {!isStreaming && (createdAt || copyableText) ? (
+        <View className="flex-row items-center gap-1.5 mt-1.5 ml-0.5">
+          {createdAt ? (
+            <Text className="text-[11px] text-foreground-secondary/70">
+              {formatMessageTime(createdAt)}
+            </Text>
+          ) : null}
+          {copyableText ? <MessageCopyButton text={copyableText} /> : null}
         </View>
       ) : null}
     </View>
