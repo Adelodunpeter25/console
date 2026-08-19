@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { persist, createJSONStorage, type StateStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { AgentMessage, AgentSessionEvent, ImageAttachment } from "@console/types";
 import { runService } from "@console/api";
 import type { ChatSessionState, ChatSnapshot } from "../types";
@@ -69,7 +71,54 @@ function updateSession(
   };
 }
 
-export const useChatStore = create<ChatStoreState>((set, get) => ({
+/* ------------------------------------------------------------------ */
+/* Local persistence (cold-start cache)                                */
+/* ------------------------------------------------------------------ */
+//
+// The chat store is persisted to AsyncStorage so that after an app restart
+// the last-seen messages for each session render instantly — before the
+// server has responded. Only data fields are persisted (never the action
+// functions or transient streaming state), and the persisted blob is capped
+// to avoid overflowing AsyncStorage's per-key size limit on Android.
+//
+// Writes are debounced (2s) so the rapid state changes during SSE streaming
+// don't trigger a JSON.stringify + native bridge call on every token.
+
+const PERSIST_NAME = "console-chat-cache";
+const MAX_PERSISTED_SESSIONS = 25;
+const MAX_PERSISTED_MESSAGES = 50;
+
+/** AsyncStorage wrapper that coalesces rapid setItem calls into one write. */
+function debouncedStorage(delayMs: number): StateStorage {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let pending: { name: string; value: string } | null = null;
+  return {
+    getItem: (name) => AsyncStorage.getItem(name),
+    setItem: (name, value) => {
+      pending = { name, value };
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (pending) {
+          void AsyncStorage.setItem(pending.name, pending.value).catch(() => {});
+          pending = null;
+        }
+        timer = null;
+      }, delayMs);
+    },
+    removeItem: (name) => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+        pending = null;
+      }
+      void AsyncStorage.removeItem(name).catch(() => {});
+    },
+  };
+}
+
+export const useChatStore = create<ChatStoreState>()(
+  persist(
+    (set, get) => ({
   sessions: {},
 
   loadMessages: (sessionId, messages) => {
@@ -359,7 +408,48 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   getSession: (sessionId) => get().sessions[sessionId] ?? EMPTY_CHAT_SESSION,
 
   getSnapshot: (sessionId) => toChatSnapshot(get().getSession(sessionId)),
-}));
+    }),
+    {
+      name: PERSIST_NAME,
+      storage: createJSONStorage(() => debouncedStorage(2000)),
+      // Only persist the data that matters for cold-start: messages, runs
+      // (the run timeline), and the current input draft. Transient fields
+      // (running, streaming buffers, pending queues, attachments) are
+      // stripped — they're meaningless after a restart.
+      partialize: (state) => ({
+        sessions: Object.fromEntries(
+          Object.entries(state.sessions)
+            .filter(([, s]) => s.messages.length > 0)
+            // Keep the sessions with the most messages (rough proxy for
+            // "most recently active") and cap to stay under AsyncStorage's
+            // per-key size limit on Android.
+            .sort((a, b) => b[1].messages.length - a[1].messages.length)
+            .slice(0, MAX_PERSISTED_SESSIONS)
+            .map(([id, s]) => [
+              id,
+              {
+                messages: s.messages.slice(-MAX_PERSISTED_MESSAGES),
+                runs: s.runs,
+                input: s.input,
+              },
+            ]),
+        ),
+      }),
+      // Merge rehydrated partial sessions over the full default state so
+      // every session has all ChatSessionState fields (running, streaming,
+      // etc.) — not just the three we persisted.
+      merge: (persisted, current) => {
+        const p = persisted as { sessions?: Record<string, Partial<ChatSessionState>> };
+        if (!p?.sessions) return current as ChatStoreState;
+        const sessions: Record<string, ChatSessionState> = {};
+        for (const [id, partial] of Object.entries(p.sessions)) {
+          sessions[id] = { ...createChatSessionState(), ...partial };
+        }
+        return { ...(current as ChatStoreState), sessions };
+      },
+    },
+  ),
+);
 
 /** Finalize the latest run after the stream settles. */
 function finalizeRun(sessionId: string, hadError: boolean): void {

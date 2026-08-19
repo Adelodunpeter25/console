@@ -3,8 +3,17 @@ import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { configureConsoleApi } from "@console/api";
 import { useAppStore } from "../stores/useAppStore";
+import { useChatStore } from "../stores/useChatStore";
 
 const BACKEND_URL_KEY = "@console_backend_url";
+
+/** Clear the local chat cache (in-memory + persisted). Called when the
+ *  backend URL changes so stale messages from a different server don't
+ *  leak into the new connection. */
+function clearChatCache() {
+  useChatStore.setState({ sessions: {} });
+  void useChatStore.persist.clearStorage();
+}
 
 export function useServerConnection() {
   const backendUrl = useAppStore((state) => state.backendUrl);
@@ -43,6 +52,11 @@ export function useServerConnection() {
     setIsSaving(true);
     try {
       const url = inputUrl.trim();
+      // If switching to a different server, drop the local chat cache so
+      // stale messages from the old server don't render against the new one.
+      if (backendUrl && backendUrl !== url) {
+        clearChatCache();
+      }
       await AsyncStorage.setItem(BACKEND_URL_KEY, url);
       configureConsoleApi({ baseUrl: url });
       setBackendUrl(url);
@@ -52,7 +66,7 @@ export function useServerConnection() {
     } finally {
       setIsSaving(false);
     }
-  }, [inputUrl, setBackendUrl]);
+  }, [inputUrl, backendUrl, setBackendUrl]);
 
   const testConnection = useCallback(async () => {
     if (!inputUrl.trim()) return;
@@ -73,6 +87,7 @@ export function useServerConnection() {
         style: "destructive",
         onPress: async () => {
           await AsyncStorage.removeItem(BACKEND_URL_KEY);
+          clearChatCache();
           setBackendUrl(null);
           setActiveTab("home");
         },

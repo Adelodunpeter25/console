@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import type { ImageAttachment } from "@console/types";
-import { sessionService } from "@console/api";
+import { useSession } from "@console/api";
 import { useAppStore } from "../stores/useAppStore";
 import { useChatStore } from "../stores/useChatStore";
 import { useSessionStore } from "../stores/useSessionStore";
@@ -12,10 +12,23 @@ import { useSessionStore } from "../stores/useSessionStore";
  * reads the derived snapshot for the *selected* session, sends messages
  * through the store's `sendMessage`, and exposes the same surface the mobile
  * chat screen already consumes (messages, streaming buffers, pending items,
- * input value, send/stop/refetch).
+ * input value, send/stop).
+ *
+ * Message loading uses TanStack Query's `useSession` so the fetch is shared
+ * with any other caller of `useSession(id)` (e.g. the chat header). The
+ * 5-minute staleTime on the QueryClient means re-opening a chat within that
+ * window is instant with no network round trip. The store is keyed by
+ * sessionId, so switching sessions does NOT wipe the previously loaded
+ * messages — the cached state renders instantly and is refreshed in the
+ * background when TanStack returns fresh data.
  */
 export function useChatStream() {
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
+
+  // Single shared fetch for both the message history and the session title.
+  // TanStack Query dedupes this with any other `useSession(id)` caller, so
+  // the chat header and the message list never double-fetch.
+  const sessionQuery = useSession(selectedSessionId ?? "");
 
   // Derive the UI snapshot for the selected session.
   const snapshot = useChatStore(
@@ -36,28 +49,18 @@ export function useChatStream() {
   const abort = useChatStore((state) => state.abort);
   const setInput = useChatStore((state) => state.setInput);
   const loadMessages = useChatStore((state) => state.loadMessages);
-  const reset = useChatStore((state) => state.reset);
 
-  // Reset + load persisted messages when the selected session changes.
+  // When fresh session data arrives from the server, push the messages into
+  // the store. We do NOT wipe first — the store keeps whatever it already has
+  // (cached from a previous visit or restored from persist) so the UI never
+  // blanks. `loadMessages` itself guards against replacing an active run.
+  // The `sessionQuery.data` dependency is stable per TanStack's structural
+  // sharing, so this only fires when the data genuinely changes.
   useEffect(() => {
-    if (selectedSessionId) {
-      reset(selectedSessionId);
-      fetchSessionMessages(selectedSessionId).catch(() => {});
+    if (selectedSessionId && sessionQuery.data) {
+      loadMessages(selectedSessionId, sessionQuery.data.messages);
     }
-  }, [selectedSessionId, reset, loadMessages]);
-
-  const fetchSessionMessages = useCallback(
-    async (sessionId: string) => {
-      if (!sessionId) return;
-      try {
-        const detail = await sessionService.getSession(sessionId);
-        loadMessages(sessionId, detail.messages);
-      } catch (e) {
-        console.error("Failed to load session messages:", e);
-      }
-    },
-    [loadMessages],
-  );
+  }, [selectedSessionId, sessionQuery.data, loadMessages]);
 
   const handleSend = useCallback(
     async (attachments?: ImageAttachment[]) => {
@@ -77,11 +80,8 @@ export function useChatStream() {
   }, [selectedSessionId, abort]);
 
   const refetchMessages = useCallback(() => {
-    if (selectedSessionId) {
-      return fetchSessionMessages(selectedSessionId);
-    }
-    return Promise.resolve();
-  }, [selectedSessionId, fetchSessionMessages]);
+    return sessionQuery.refetch();
+  }, [sessionQuery]);
 
   const sessionView = selectedSessionId
     ? useSessionStore.getState().getSession(selectedSessionId)
@@ -103,6 +103,8 @@ export function useChatStream() {
     sendMessage: handleSend,
     stop,
     refetchMessages,
+    // Title from the shared TanStack Query cache — no separate fetch.
+    chatTitle: sessionQuery.data?.header.title ?? "Console",
     // Extra runtime surfaces (desktop parity).
     sessionView,
   };

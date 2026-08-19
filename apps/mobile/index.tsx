@@ -11,13 +11,17 @@ import {
   JetBrainsMono_600SemiBold,
   JetBrainsMono_700Bold,
 } from "@expo-google-fonts/jetbrains-mono";
-import { ConsoleApiProvider } from "@console/api";
-import { QueryClient } from "@tanstack/react-query";
+import { ConsoleApiProvider, createConsoleQueryClient } from "@console/api";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { MainContent } from "./components/layout/main-content";
 import { useServerConnection } from "./hooks";
 
-const queryClient = new QueryClient();
+// Use the shared QueryClient tuned for mobile: 5-minute staleTime (no
+// refetch-on-mount within that window) and refetchOnWindowFocus disabled
+// (prevents a full refetch storm every time the app foregrounds). The bare
+// `new QueryClient()` defaults to staleTime 0 + refetchOnWindowFocus true,
+// which re-fetched every session on every chat open.
+const queryClient = createConsoleQueryClient();
 
 function OnboardingScreen() {
   const { inputUrl, setInputUrl, saveConnection, isSaving } = useServerConnection();

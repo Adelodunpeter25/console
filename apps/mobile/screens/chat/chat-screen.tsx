@@ -2,7 +2,6 @@ import React, { useCallback, useRef } from "react";
 import { View, Text, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { MessageSquareText } from "lucide-react-native";
-import { useSession } from "@console/api";
 import { useChatStream, useAbort, useChatDecisions } from "../../hooks";
 import { useAppStore } from "../../stores";
 import { ScreenHeader } from "../../components/layout/screen-header";
@@ -18,8 +17,10 @@ export function ChatScreen() {
   const decisions = useChatDecisions();
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
-  const { data: sessionDetail } = useSession(selectedSessionId ?? "");
-  const chatTitle = sessionDetail?.header.title ?? "Console";
+  // Title comes from the shared TanStack Query cache inside useChatStream —
+  // no separate `useSession` fetch here (that was the second of two identical
+  // GET /api/sessions/:id calls on every chat open).
+  const chatTitle = stream.chatTitle;
   const listRef = useRef<FlashListRef<(typeof stream.messages)[number]>>(null);
 
   const isStreaming =
