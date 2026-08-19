@@ -75,7 +75,7 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
         </Text>
       </Pressable>
 
-      <SharedBottomSheet ref={bottomSheetRef} title="Select Model" snapPoints={["70%"]}>
+      <SharedBottomSheet ref={bottomSheetRef} title="Select Model" snapPoints={["60%", "88%"]}>
         <View className="flex-1">
           {/* Provider tabs */}
           <View className="mb-3">
@@ -140,7 +140,11 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
               </Text>
             </View>
           ) : (
-            <BottomSheetScrollView showsVerticalScrollIndicator={false} className="flex-1">
+            <BottomSheetScrollView
+              showsVerticalScrollIndicator={false}
+              className="flex-1"
+              contentContainerStyle={{ paddingBottom: 40 }}
+            >
               {filteredModels.map((model) => {
                 const isSelected = model.id === value;
                 return (
