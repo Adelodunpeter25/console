@@ -21,36 +21,36 @@ export const fsService = {
     path?: string,
   ): Promise<{ currentPath: string; parentPath: string | null; entries: FsTreeEntry[] }> {
     const res = await getConsoleApiClient().get("/api/fs/browse", { params: { path } });
-    return res.data;
+    return res.data.data ?? res.data;
   },
 
   async getFsTree(path?: string): Promise<FsTreeEntry[]> {
     const res = await getConsoleApiClient().get("/api/fs/tree", { params: { path } });
-    return res.data;
+    return res.data.data ?? res.data;
   },
 
   async readFile(path: string): Promise<{ content: string; path: string }> {
     const res = await getConsoleApiClient().get("/api/fs/file", { params: { path } });
-    return res.data;
+    return res.data.data ?? res.data;
   },
 
   async writeFile(path: string, content: string): Promise<{ success: boolean }> {
     const res = await getConsoleApiClient().post("/api/fs/file", { path, content });
-    return res.data;
+    return res.data.data ?? res.data;
   },
 
   async deleteFile(path: string): Promise<{ success: boolean }> {
     const res = await getConsoleApiClient().delete("/api/fs/file", { params: { path } });
-    return res.data;
+    return res.data.data ?? res.data;
   },
 
   async createDir(path: string): Promise<{ success: boolean }> {
     const res = await getConsoleApiClient().post("/api/fs/dir", { path });
-    return res.data;
+    return res.data.data ?? res.data;
   },
 
   async deleteDir(path: string): Promise<{ success: boolean }> {
     const res = await getConsoleApiClient().delete("/api/fs/dir", { params: { path } });
-    return res.data;
+    return res.data.data ?? res.data;
   },
 };

@@ -3,6 +3,7 @@
  * Implements business logic for browsing system directories, reading/writing files, creating/deleting folders.
  */
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { listDirTool, readFileTool, writeFileTool } from "../../../agent/src/tools/index.js";
 import type { FsTreeEntry, GitFileStatus } from "@console/types";
@@ -11,23 +12,28 @@ import { GitService } from "./git.service.js";
 export class FsService {
   /**
    * Browse a system directory for the mobile/desktop file picker UI.
+   * Defaults to user's home directory ($HOME) when no path is provided.
    */
   async browseDirectory(
     targetPath?: string,
-  ): Promise<{ path: string; parentPath: string | null; entries: FsTreeEntry[] }> {
-    const resolvedPath = targetPath ? path.resolve(targetPath) : process.cwd();
+  ): Promise<{ currentPath: string; parentPath: string | null; entries: FsTreeEntry[] }> {
+    const home = os.homedir();
+    const resolvedPath = targetPath ? path.resolve(targetPath) : home;
     const parentPath =
       path.dirname(resolvedPath) !== resolvedPath ? path.dirname(resolvedPath) : null;
 
     const dirEntries = await fs.readdir(resolvedPath, { withFileTypes: true });
     const entries: FsTreeEntry[] = [];
 
-    const gitService = new GitService();
-    const parentDir = path.dirname(resolvedPath);
-    const gitStatusSummary = await gitService.getGitStatus(targetPath ? resolvedPath : process.cwd());
     const gitStatusMap = new Map<string, GitFileStatus>();
-    for (const f of gitStatusSummary.files) {
-      gitStatusMap.set(f.path, f.status);
+    try {
+      const gitService = new GitService();
+      const gitStatusSummary = await gitService.getGitStatus(resolvedPath);
+      for (const f of gitStatusSummary.files) {
+        gitStatusMap.set(f.path, f.status);
+      }
+    } catch {
+      // Ignored if target directory is not a git repo or has no git
     }
 
     for (const entry of dirEntries) {
