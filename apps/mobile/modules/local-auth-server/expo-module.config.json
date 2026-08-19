@@ -1,0 +1,7 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "package": "expo.modules.localauthserver",
+    "modules": ["expo.modules.localauthserver.LocalAuthServerModule"]
+  }
+}

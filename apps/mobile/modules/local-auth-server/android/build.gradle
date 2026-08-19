@@ -1,0 +1,21 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.localauthserver'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.localauthserver"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+dependencies {
+  // NanoHTTPD: tiny single-file embedded HTTP server used to catch the OAuth
+  // loopback redirect on the device's own localhost. ~50KB, MIT.
+  implementation "org.nanohttpd:nanohttpd:2.3.1"
+}

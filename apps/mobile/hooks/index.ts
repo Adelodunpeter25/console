@@ -3,6 +3,7 @@ export * from "./useServerConnection";
 export * from "./useProjectSessions";
 export * from "./useAbort";
 export * from "./useAuth";
+export * from "./useLocalOAuthLogin";
 export * from "./useChatDecisions";
 export * from "./useProviders";
 export * from "./useSlashCommands";
