@@ -5,7 +5,7 @@ import { HugeiconsIcon } from "@hugeicons/react-native";
 import { Folder02Icon } from "@hugeicons/core-free-icons";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { SearchBar } from "../../components/common/search-bar";
-import { SessionActionSheet } from "../../components/context-menu/session-context-menu";
+import { SessionActionSheet } from "../../components/context-menu/session-action-sheet";
 import { useHomeSessions } from "../../hooks";
 import { formatRelativeTime } from "../../utils/time";
 import { theme } from "../../styles/theme";
