@@ -28,7 +28,7 @@ export function ApprovalModePickerSheet({ value, onChange }: ApprovalModePickerS
   return (
     <>
       <Pressable
-        className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card-alt/70 border border-border/50"
+        className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card-alt/70 border border-border/50 shrink-0"
         style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         onPress={() => {
           if (approvalModes.length === 0) void loadApprovalModes();

@@ -65,12 +65,12 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
   return (
     <>
       <Pressable
-        className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card-alt/70 border border-border/50"
+        className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card-alt/70 border border-border/50 shrink-0"
         style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         onPress={handleOpen}
       >
         <Sparkles size={13} color={theme.colors.text.secondary} />
-        <Text className="text-xs font-medium text-foreground max-w-[120px]" numberOfLines={1}>
+        <Text className="text-xs font-medium text-foreground">
           {value ? formatModelName(value) : "Default Model"}
         </Text>
       </Pressable>

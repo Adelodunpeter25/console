@@ -36,7 +36,7 @@ export function ProjectPickerSheet({
   return (
     <>
       <Pressable
-        className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card-alt/70 border border-border/50"
+        className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card-alt/70 border border-border/50 shrink-0"
         style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         onPress={() => {
           if (projects.length === 0) void loadProjects();
@@ -44,7 +44,7 @@ export function ProjectPickerSheet({
         }}
       >
         <Folder size={13} color={theme.colors.text.secondary} />
-        <Text className="text-xs font-medium text-foreground max-w-[110px]" numberOfLines={1}>
+        <Text className="text-xs font-medium text-foreground">
           {displayLabel}
         </Text>
       </Pressable>

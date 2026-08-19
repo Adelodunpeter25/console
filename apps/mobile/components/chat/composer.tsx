@@ -36,13 +36,19 @@ export function Composer({ value, onChangeText, onSend, onStop, running }: Compo
     (p) => p.path === sessionView?.sessionCwd || (sessionView?.sessionCwd && p.path.endsWith(sessionView.sessionCwd)),
   );
 
+  const [isMultiline, setIsMultiline] = React.useState(false);
+
   return (
     <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
       <View
         className="px-4 pt-2 bg-screen border-t border-border"
         style={{ paddingBottom }}
       >
-        <View className="flex-row items-center bg-card border border-border/80 rounded-full pl-4 pr-1.5 py-1 min-h-[48px]">
+        <View
+          className={`flex-row items-end bg-card border border-border/80 pl-4 pr-1.5 py-1 min-h-[48px] ${
+            isMultiline ? "rounded-2xl" : "rounded-full"
+          }`}
+        >
           <TextInput
             style={styles.input}
             value={value}
@@ -50,32 +56,38 @@ export function Composer({ value, onChangeText, onSend, onStop, running }: Compo
             placeholder="Ask the repo agent, or run a command…"
             placeholderTextColor={theme.colors.text.muted}
             multiline
-            textAlignVertical="center"
+            textAlignVertical={isMultiline ? "top" : "center"}
+            onContentSizeChange={(e) => {
+              const height = e.nativeEvent.contentSize.height;
+              setIsMultiline(height > 36 || value.includes("\n"));
+            }}
           />
-          {running && onStop ? (
-            <Pressable
-              className="w-8 h-8 rounded-full items-center justify-center ml-1.5"
-              style={({ pressed }) => ({
-                backgroundColor: "rgba(255,255,255,0.12)",
-                opacity: pressed ? 0.7 : 1,
-              })}
-              onPress={onStop}
-            >
-              <Square size={13} color={theme.colors.text.primary} />
-            </Pressable>
-          ) : (
-            <Pressable
-              className="w-8 h-8 rounded-full items-center justify-center ml-1.5"
-              style={({ pressed }) => ({
-                backgroundColor: canSend ? theme.colors.text.primary : "rgba(255,255,255,0.08)",
-                opacity: pressed && canSend ? 0.8 : 1,
-              })}
-              onPress={onSend}
-              disabled={!canSend}
-            >
-              <ArrowUp size={16} color={canSend ? theme.colors.text.dark : theme.colors.text.muted} />
-            </Pressable>
-          )}
+          <View className="pb-1">
+            {running && onStop ? (
+              <Pressable
+                className="w-8 h-8 rounded-full items-center justify-center ml-1.5"
+                style={({ pressed }) => ({
+                  backgroundColor: "rgba(255,255,255,0.12)",
+                  opacity: pressed ? 0.7 : 1,
+                })}
+                onPress={onStop}
+              >
+                <Square size={13} color={theme.colors.text.primary} />
+              </Pressable>
+            ) : (
+              <Pressable
+                className="w-8 h-8 rounded-full items-center justify-center ml-1.5"
+                style={({ pressed }) => ({
+                  backgroundColor: canSend ? theme.colors.text.primary : "rgba(255,255,255,0.08)",
+                  opacity: pressed && canSend ? 0.8 : 1,
+                })}
+                onPress={onSend}
+                disabled={!canSend}
+              >
+                <ArrowUp size={16} color={canSend ? theme.colors.text.dark : theme.colors.text.muted} />
+              </Pressable>
+            )}
+          </View>
         </View>
 
         {/* Bottom Selector Strip: Project, Model, Approval Mode */}
