@@ -73,8 +73,9 @@ class LocalAuthServerModule : Module() {
       stopped != null
     }
 
-    AsyncFunction("isRunning") ->
+    AsyncFunction("isRunning") {
       activeServer.get()?.isAlive() == true
+    }
   }
 
   /**
