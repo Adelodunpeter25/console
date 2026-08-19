@@ -13,7 +13,8 @@ import {
 } from "@expo-google-fonts/jetbrains-mono";
 import { ConsoleApiProvider } from "@console/api";
 import { QueryClient } from "@tanstack/react-query";
-import { KeyboardProvider } from "react-native-keyboard-controller";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { MainContent } from "./components/layout/main-content";
 import { useServerConnection } from "./hooks";
 
@@ -90,23 +91,23 @@ function AppRoot() {
   }
 
   return (
-    <SafeAreaProvider>
-      <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
-        <StatusBar style="light" />
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
+          <StatusBar style="light" />
 
-        {backendUrl ? (
-          // Edge-to-edge is already on via react-native-edge-to-edge; do not
-          // pass statusBarTranslucent / navigationBarTranslucent (they warn).
-          <KeyboardProvider>
+          {backendUrl ? (
             <ConsoleApiProvider baseUrl={backendUrl} queryClient={queryClient}>
-              <MainContent />
+              <BottomSheetModalProvider>
+                <MainContent />
+              </BottomSheetModalProvider>
             </ConsoleApiProvider>
-          </KeyboardProvider>
-        ) : (
-          <OnboardingScreen />
-        )}
-      </View>
-    </SafeAreaProvider>
+          ) : (
+            <OnboardingScreen />
+          )}
+        </View>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 

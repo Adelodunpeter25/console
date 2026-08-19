@@ -4,6 +4,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-controller";
 import { ArrowUp, Square } from "lucide-react-native";
 import { theme } from "../../styles/theme";
+import { useAppStore, useProjectStore, useSessionStore } from "../../stores";
+
+import { ComposerBottomStrip } from "./composer-bottom-strip";
 
 interface ComposerProps {
   value: string;
@@ -13,12 +16,23 @@ interface ComposerProps {
   running?: boolean;
 }
 
-/** Chat input row matching unified pill with internal send button. */
+/** Chat input row matching unified pill with bottom selectors strip. */
 export function Composer({ value, onChangeText, onSend, onStop, running }: ComposerProps) {
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardState((s) => s.isVisible);
   const canSend = value.trim().length > 0;
   const paddingBottom = keyboardVisible ? 8 : Math.max(insets.bottom, 8) + 4;
+
+  const selectedSessionId = useAppStore((state) => state.selectedSessionId);
+  const projects = useProjectStore((state) => state.projects);
+  const sessionView = useSessionStore((state) =>
+    selectedSessionId ? state.getSession(selectedSessionId) : undefined,
+  );
+  const changeModel = useSessionStore((state) => state.changeModel);
+  const changeProject = useSessionStore((state) => state.changeProject);
+  const setApprovalMode = useSessionStore((state) => state.setApprovalMode);
+
+  const selectedProject = projects.find((p) => p.path === sessionView?.sessionCwd);
 
   return (
     <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
@@ -61,6 +75,20 @@ export function Composer({ value, onChangeText, onSend, onStop, running }: Compo
             </Pressable>
           )}
         </View>
+
+        {/* Bottom Selector Strip: Project, Model, Approval Mode */}
+        {selectedSessionId ? (
+          <ComposerBottomStrip
+            projects={projects}
+            selectedProjectId={selectedProject?.id ?? null}
+            onProjectChange={(project) => changeProject(selectedSessionId, project)}
+            selectedModel={sessionView?.sessionModelId ?? null}
+            selectedProvider={sessionView?.sessionProvider ?? null}
+            onModelChange={(modelId) => changeModel(selectedSessionId, modelId)}
+            approvalMode={sessionView?.approvalMode ?? "always-ask"}
+            onApprovalModeChange={(mode) => setApprovalMode(selectedSessionId, mode)}
+          />
+        ) : null}
       </View>
     </KeyboardStickyView>
   );
