@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { NotificationEvent } from "@console/types";
 import { useAppStore } from "../stores/useAppStore";
+import { startNativeNotificationStream } from "../utils/native-stream";
 
 /**
  * Subscribes to the backend's notification SSE stream
@@ -17,46 +18,19 @@ export function useNotificationStream(onNotification?: (event: NotificationEvent
 
   useEffect(() => {
     if (!backendUrl) return;
-    let cancelled = false;
-    let controller: AbortController | null = null;
 
-    const connect = async () => {
-      controller = new AbortController();
-      try {
-        const res = await fetch(`${backendUrl}/api/notifications/stream`, {
-          signal: controller.signal,
-        });
-        if (!res.ok || !res.body) return;
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (!cancelled) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          let idx: number;
-          while ((idx = buffer.indexOf("\n")) !== -1) {
-            const line = buffer.slice(0, idx).trim();
-            buffer = buffer.slice(idx + 1);
-            if (!line.startsWith("data: ")) continue;
-            try {
-              const payload = JSON.parse(line.slice(6)) as NotificationEvent;
-              onNotificationRef.current?.(payload);
-            } catch {
-              // ignore malformed frames
-            }
-          }
-        }
-      } catch {
-        // Abort or network error — stop silently.
+    const stopStream = startNativeNotificationStream(
+      `notifications-${Date.now()}`,
+      `${backendUrl}/api/notifications/stream`,
+      {
+        onNotification: (payload) => {
+          onNotificationRef.current?.(payload);
+        },
       }
-    };
+    );
 
-    connect();
     return () => {
-      cancelled = true;
-      controller?.abort();
+      stopStream();
     };
   }, [backendUrl]);
 }

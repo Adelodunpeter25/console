@@ -4,6 +4,7 @@ import { runService } from "@console/api";
 import type { ChatSessionState, ChatSnapshot } from "../types";
 import { createChatSessionState, EMPTY_CHAT_SESSION } from "../types/chat-state";
 import { createSseParser } from "../utils/sse";
+import { startNativeChatStream } from "../utils/native-stream";
 import { applyChatEvent, toChatSnapshot } from "../utils/chat-events";
 import { reconstructRuns } from "../utils/reconstruct-runs";
 import { useAppStore } from "./useAppStore";
@@ -216,53 +217,38 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
 
     try {
       const baseUrl = useAppStore.getState().backendUrl ?? "";
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", `${baseUrl}/api/sessions/${sessionId}/run`);
-      xhr.setRequestHeader("Content-Type", "application/json");
-
-      const parser = createSseParser();
-      let offset = 0;
       let hadError = false;
 
-      xhr.onprogress = () => {
-        if (!xhr) return;
-        const chunk = xhr.responseText.slice(offset);
-        offset = xhr.responseText.length;
-        const events = parser.push(chunk);
-        for (const event of events) {
-          if (event.type === "error" && !isAbortError(event.error.message)) {
-            hadError = true;
-          }
-          if (event.type === "askQuestion" || event.type === "permissionRequest") {
-            syncSessionStatus(sessionId, "needs_attention");
-          }
-          get().handleEvent(sessionId, event);
-        }
-      };
-
-      xhr.onload = () => {
-        parser.flush();
-        if (xhr.status >= 400) {
-          markError(`Server responded with status ${xhr.status}`);
-          hadError = true;
-        }
-        finalizeRun(sessionId, hadError);
-      };
-
-      xhr.onerror = () => {
-        parser.flush();
-        markError("Failed to connect to the backend.");
-        finalizeRun(sessionId, true);
-      };
-
-      xhr.send(
-        JSON.stringify({
+      startNativeChatStream(
+        `chat-${sessionId}-${Date.now()}`,
+        `${baseUrl}/api/sessions/${sessionId}/run`,
+        {
           prompt,
           ...(attachments.length > 0 ? { attachments: session.attachments } : {}),
           ...(sessionModelId ? { modelId: sessionModelId } : {}),
           ...(sessionProvider ? { provider: sessionProvider } : {}),
           ...(approvalMode ? { approvalMode } : {}),
-        }),
+        },
+        {
+          onEvent: (event) => {
+            if (event.type === "error" && !isAbortError(event.error.message)) {
+              hadError = true;
+            }
+            if (event.type === "askQuestion" || event.type === "permissionRequest") {
+              syncSessionStatus(sessionId, "needs_attention");
+            }
+            get().handleEvent(sessionId, event);
+          },
+          onError: (errMsg) => {
+            if (!isAbortError(errMsg)) {
+              hadError = true;
+              markError(errMsg);
+            }
+          },
+          onEnd: (aborted) => {
+            finalizeRun(sessionId, hadError && !aborted);
+          },
+        }
       );
     } catch (err) {
       const msg =
