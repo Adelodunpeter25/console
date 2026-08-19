@@ -112,33 +112,33 @@ export function DeletedChatsSettings({ onBack }: DeletedChatsSettingsProps) {
   };
 
   const headerActions = deletedSessions.length > 0 ? (
-    <View className="flex-row items-center gap-1.5">
+    <View className="flex-row items-center gap-2">
       <Pressable
-        className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-full bg-card border border-border"
+        className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center"
         style={({ pressed }) => ({
           opacity: pressed || busyId !== null ? 0.5 : 1,
         })}
         disabled={busyId !== null}
         onPress={handleRestoreAll}
+        hitSlop={6}
       >
         {busyId === "all" ? (
-          <ActivityIndicator size="small" color="#ffffff" style={{ transform: [{ scale: 0.7 }] }} />
+          <ActivityIndicator size="small" color="#ffffff" style={{ transform: [{ scale: 0.75 }] }} />
         ) : (
-          <RotateCcw size={12} color="#ffffff" />
+          <RotateCcw size={17} color="#ffffff" />
         )}
-        <Text className="text-[11px] font-semibold text-foreground">Restore all</Text>
       </Pressable>
 
       <Pressable
-        className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-full bg-red-500/10 border border-red-500/20"
+        className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/25 items-center justify-center"
         style={({ pressed }) => ({
           opacity: pressed || busyId !== null ? 0.5 : 1,
         })}
         disabled={busyId !== null}
         onPress={handlePermanentDeleteAll}
+        hitSlop={6}
       >
-        <Trash2 size={12} color="#f87171" />
-        <Text className="text-[11px] font-semibold text-red-400">Delete all</Text>
+        <Trash2 size={17} color="#f87171" />
       </Pressable>
     </View>
   ) : null;
