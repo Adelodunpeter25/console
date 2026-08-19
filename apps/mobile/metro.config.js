@@ -10,19 +10,24 @@ const config = getDefaultConfig(projectRoot);
 // 1. Watch all workspace folders within the monorepo
 config.watchFolders = [workspaceRoot];
 
-// 2. Let Metro resolve packages from workspace root node_modules first, then local
+// 2. Let Metro resolve packages from local node_modules first, then workspace root
 config.resolver.nodeModulesPaths = [
-  path.resolve(workspaceRoot, "node_modules"),
   path.resolve(projectRoot, "node_modules"),
+  path.resolve(workspaceRoot, "node_modules"),
 ];
 
 // 3. Force single instance of react & react-native across all monorepo dependencies
 config.resolver.extraNodeModules = {
-  react: path.resolve(workspaceRoot, "node_modules/react"),
-  "react-native": path.resolve(workspaceRoot, "node_modules/react-native"),
-  "react-native-safe-area-context": path.resolve(
+  react: path.resolve(projectRoot, "node_modules/react"),
+  "react/jsx-runtime": path.resolve(projectRoot, "node_modules/react/jsx-runtime"),
+  "react-native": path.resolve(projectRoot, "node_modules/react-native"),
+  "@tanstack/react-query": path.resolve(
     workspaceRoot,
-    "node_modules/react-native-safe-area-context",
+    "node_modules/@tanstack/react-query"
+  ),
+  "react-native-safe-area-context": path.resolve(
+    projectRoot,
+    "node_modules/react-native-safe-area-context"
   ),
   "@console/api": path.resolve(workspaceRoot, "packages/api/src"),
   "@console/types": path.resolve(workspaceRoot, "packages/types/src"),
