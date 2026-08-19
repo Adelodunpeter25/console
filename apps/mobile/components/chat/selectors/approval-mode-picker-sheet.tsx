@@ -12,14 +12,6 @@ interface ApprovalModePickerSheetProps {
   onChange: (mode: ApprovalMode) => void;
 }
 
-const FALLBACK_LABELS: Record<string, string> = {
-  "always-ask": "Always ask",
-  "accept-edits": "Accept Edits",
-  "plan-mode": "Plan Mode",
-  "full-access": "Full Access",
-  "auto": "Full auto",
-};
-
 export function ApprovalModePickerSheet({ value, onChange }: ApprovalModePickerSheetProps) {
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const approvalModes = useProviderStore((state) => state.approvalModes);
@@ -31,14 +23,17 @@ export function ApprovalModePickerSheet({ value, onChange }: ApprovalModePickerS
   }, [loadApprovalModes]);
 
   const activeModeObj = approvalModes.find((m) => m.value === value);
-  const currentLabel = activeModeObj?.label ?? FALLBACK_LABELS[value] ?? value;
+  const currentLabel = activeModeObj?.label ?? value;
 
   return (
     <>
       <Pressable
         className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card-alt/70 border border-border/50"
         style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-        onPress={() => bottomSheetRef.current?.present()}
+        onPress={() => {
+          if (approvalModes.length === 0) void loadApprovalModes();
+          bottomSheetRef.current?.present();
+        }}
       >
         <ShieldCheck size={13} color={theme.colors.text.secondary} />
         <Text className="text-xs font-medium text-foreground">{currentLabel}</Text>
