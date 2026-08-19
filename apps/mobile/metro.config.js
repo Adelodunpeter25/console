@@ -33,6 +33,36 @@ config.resolver.extraNodeModules = {
   "@console/types": path.resolve(workspaceRoot, "packages/types/src"),
 };
 
+// 4. Force resolution of 'react', 'react-native', and '@tanstack/react-query' to apps/mobile
+const defaultResolver = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === "react") {
+    return {
+      filePath: path.resolve(projectRoot, "node_modules/react/index.js"),
+      type: "sourceFile",
+    };
+  }
+  if (moduleName === "react/jsx-runtime") {
+    return {
+      filePath: path.resolve(projectRoot, "node_modules/react/jsx-runtime.js"),
+      type: "sourceFile",
+    };
+  }
+  if (moduleName === "@tanstack/react-query") {
+    return {
+      filePath: path.resolve(
+        projectRoot,
+        "node_modules/@tanstack/react-query/build/legacy/index.js"
+      ),
+      type: "sourceFile",
+    };
+  }
+  if (defaultResolver) {
+    return defaultResolver(context, moduleName, platform);
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = withUniwindConfig(config, {
   cssEntryFile: "./global.css",
   dtsFile: "./uniwind-types.d.ts",
