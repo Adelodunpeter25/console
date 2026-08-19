@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
-import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator } from "react-native";
-import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { View, Text, Pressable, TextInput, ActivityIndicator } from "react-native";
+import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { ScrollView } from "react-native-gesture-handler";
 import { Sparkles, Check, Search, Bot } from "lucide-react-native";
 import type { Model, ProviderId } from "@console/types";
 import { SharedBottomSheet } from "../../common/shared-bottom-sheet";
@@ -71,11 +72,16 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
         </Text>
       </Pressable>
 
-      <SharedBottomSheet ref={bottomSheetRef} title="Select Model" snapPoints={["65%"]}>
+      <SharedBottomSheet ref={bottomSheetRef} title="Select Model" snapPoints={["70%"]}>
         <View className="flex-1">
           {/* Provider tabs */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-3">
-            <View className="flex-row gap-1.5">
+          <View className="mb-3">
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              nestedScrollEnabled
+              contentContainerStyle={{ gap: 6, paddingRight: 16 }}
+            >
               {providers.map((p) => {
                 const isSelected = p.name === activeProvider;
                 return (
@@ -83,8 +89,8 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
                     key={p.name}
                     className={`px-3 py-1.5 rounded-lg border ${
                       isSelected
-                        ? "bg-card-alt border-border text-foreground"
-                        : "bg-transparent border-transparent text-foreground-secondary"
+                        ? "bg-card-alt border-border"
+                        : "bg-transparent border-transparent"
                     }`}
                     onPress={() => handleSelectProvider(p.name)}
                   >
@@ -98,8 +104,8 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
                   </Pressable>
                 );
               })}
-            </View>
-          </ScrollView>
+            </ScrollView>
+          </View>
 
           {/* Search bar */}
           <View className="flex-row items-center bg-card-alt rounded-xl px-3 py-2 border border-border/50 mb-3">
@@ -114,18 +120,18 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
           </View>
 
           {/* Models list */}
-          <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
-            {loadingProviders ? (
-              <View className="items-center justify-center py-10">
-                <ActivityIndicator size="small" color={theme.colors.text.muted} />
-              </View>
-            ) : filteredModels.length === 0 ? (
-              <View className="items-center justify-center py-10">
-                <Bot size={20} color={theme.colors.text.muted} />
-                <Text className="text-xs text-foreground-secondary mt-1">No models available</Text>
-              </View>
-            ) : (
-              filteredModels.map((model) => {
+          {loadingProviders ? (
+            <View className="items-center justify-center py-10">
+              <ActivityIndicator size="small" color={theme.colors.text.muted} />
+            </View>
+          ) : filteredModels.length === 0 ? (
+            <View className="items-center justify-center py-10">
+              <Bot size={20} color={theme.colors.text.muted} />
+              <Text className="text-xs text-foreground-secondary mt-1">No models available</Text>
+            </View>
+          ) : (
+            <BottomSheetScrollView showsVerticalScrollIndicator={false} className="flex-1">
+              {filteredModels.map((model) => {
                 const isSelected = model.id === value;
                 return (
                   <Pressable
@@ -148,9 +154,9 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
                     {isSelected ? <Check size={14} color={theme.colors.status.ready} /> : null}
                   </Pressable>
                 );
-              })
-            )}
-          </ScrollView>
+              })}
+            </BottomSheetScrollView>
+          )}
         </View>
       </SharedBottomSheet>
     </>
