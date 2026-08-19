@@ -53,8 +53,8 @@ export function SearchBar({
           className={`w-12 h-12 rounded-full items-center justify-center ${disabled ? "opacity-50" : ""}`}
           style={({ pressed }) => ({
             backgroundColor: pressed && !disabled ? "#1a1a1a" : "#000000",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.1)",
+            borderWidth: 1.5,
+            borderColor: "rgba(255,255,255,0.35)",
           })}
           onPress={onComposePress}
           disabled={disabled}

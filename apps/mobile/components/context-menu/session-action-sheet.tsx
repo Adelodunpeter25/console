@@ -55,7 +55,7 @@ export const SessionActionSheet = React.forwardRef<
       ref={sheetRef}
       enableDynamicSizing
       backdropComponent={renderBackdrop}
-      handleIndicatorStyle={{ backgroundColor: theme.colors.text.muted, width: 36, height: 4 }}
+      handleStyle={{ display: "none" }}
       backgroundStyle={styles.sheet}
       enablePanDownToClose
     >
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   },
   container: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 16,
   },
   item: {
     flexDirection: "row",
@@ -124,6 +124,6 @@ const styles = StyleSheet.create({
     color: "#f87171",
   },
   bottomPad: {
-    height: 24,
+    height: 44,
   },
 });
