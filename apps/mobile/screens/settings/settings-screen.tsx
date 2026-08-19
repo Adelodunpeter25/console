@@ -46,11 +46,16 @@ export function SettingsScreen() {
     const meta = SECTION_META[section];
     return (
       <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
-        <ScreenHeader title={meta.title} onBack={() => setSection(null)} />
-        {section === "connection" ? <ConnectionSettings /> : null}
-        {section === "account" ? <AccountSettings /> : null}
-        {section === "projects" ? <ProjectsSettings /> : null}
-        {section === "deleted-chats" ? <DeletedChatsSettings /> : null}
+        {section === "projects" ? (
+          <ProjectsSettings onBack={() => setSection(null)} />
+        ) : (
+          <>
+            <ScreenHeader title={meta.title} onBack={() => setSection(null)} />
+            {section === "connection" ? <ConnectionSettings /> : null}
+            {section === "account" ? <AccountSettings /> : null}
+            {section === "deleted-chats" ? <DeletedChatsSettings /> : null}
+          </>
+        )}
       </View>
     );
   }

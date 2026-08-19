@@ -4,7 +4,11 @@ import { Folder, Trash2, Plus } from "lucide-react-native";
 import { useProjectStore } from "../../stores";
 import { AddProjectScreen } from "../projects/add-project-screen";
 
-export function ProjectsSettings() {
+interface ProjectsSettingsProps {
+  onBack?: () => void;
+}
+
+export function ProjectsSettings({ onBack }: ProjectsSettingsProps) {
   const projects = useProjectStore((state) => state.projects);
   const loading = useProjectStore((state) => state.loading);
   const loadProjects = useProjectStore((state) => state.loadProjects);
@@ -41,23 +45,25 @@ export function ProjectsSettings() {
     );
   };
 
+  const addFolderButton = (
+    <Pressable
+      className="flex-row items-center gap-1.5 px-3 py-2 rounded-full bg-card border border-border"
+      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+      onPress={() => setShowAddProject(true)}
+    >
+      <Plus size={15} color="#ffffff" />
+      <Text className="text-xs font-semibold text-foreground">Add Folder</Text>
+    </Pressable>
+  );
+
   return (
-    <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 8 }}>
-      <View className="flex-row items-center justify-between mb-4">
-        <View className="flex-1 pr-3">
-          <Text className="text-sm text-foreground-secondary">
-            Workspace folders tracked for agent sessions.
-          </Text>
-        </View>
-        <Pressable
-          className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card-alt border border-border"
-          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-          onPress={() => setShowAddProject(true)}
-        >
-          <Plus size={14} color="#ffffff" />
-          <Text className="text-xs font-semibold text-foreground">Add Folder</Text>
-        </Pressable>
-      </View>
+    <View style={{ flex: 1 }}>
+      <ScreenHeader
+        title="Projects"
+        onBack={onBack}
+        rightAction={addFolderButton}
+      />
+      <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 4 }}>
 
       {loading && projects.length === 0 ? (
         <View className="items-center justify-center py-16">
@@ -114,6 +120,7 @@ export function ProjectsSettings() {
           }}
         />
       )}
+      </View>
 
       {/* Add Project Full Screen Modal */}
       <Modal

@@ -8,9 +8,16 @@ interface ScreenHeaderProps {
   onBack?: () => void;
   showSettings?: boolean;
   onSettingsPress?: () => void;
+  rightAction?: React.ReactNode;
 }
 
-export function ScreenHeader({ title, onBack, showSettings, onSettingsPress }: ScreenHeaderProps) {
+export function ScreenHeader({
+  title,
+  onBack,
+  showSettings,
+  onSettingsPress,
+  rightAction,
+}: ScreenHeaderProps) {
   const insets = useSafeAreaInsets();
   // Tight gap under the status bar: system inset + a small breathing room.
   const paddingTop = insets.top + 6;
@@ -38,7 +45,9 @@ export function ScreenHeader({ title, onBack, showSettings, onSettingsPress }: S
         </Text>
       </View>
 
-      {showSettings ? (
+      {rightAction ? (
+        rightAction
+      ) : showSettings ? (
         <Pressable
           className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center"
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
