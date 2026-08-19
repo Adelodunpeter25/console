@@ -84,7 +84,7 @@ export function ProjectPickerSheet({
             <BottomSheetScrollView
               showsVerticalScrollIndicator={false}
               className="flex-1"
-              contentContainerStyle={{ paddingBottom: 40 }}
+              contentContainerStyle={{ paddingBottom: 80 }}
             >
               {projects.map((project) => {
                 const isSelected = project.id === selectedId;

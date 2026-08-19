@@ -143,7 +143,7 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
             <BottomSheetScrollView
               showsVerticalScrollIndicator={false}
               className="flex-1"
-              contentContainerStyle={{ paddingBottom: 40 }}
+              contentContainerStyle={{ paddingBottom: 80 }}
             >
               {filteredModels.map((model) => {
                 const isSelected = model.id === value;

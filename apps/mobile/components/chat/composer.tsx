@@ -41,7 +41,7 @@ export function Composer({ value, onChangeText, onSend, onStop, running }: Compo
   return (
     <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
       <View
-        className="px-4 pt-2 bg-screen border-t border-border"
+        className="px-2.5 pt-2 bg-screen"
         style={{ paddingBottom }}
       >
         <View
