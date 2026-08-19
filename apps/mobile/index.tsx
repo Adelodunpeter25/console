@@ -13,6 +13,7 @@ import {
 } from "@expo-google-fonts/jetbrains-mono";
 import { ConsoleApiProvider } from "@console/api";
 import { QueryClient } from "@tanstack/react-query";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { MainContent } from "./components/layout/main-content";
@@ -98,9 +99,11 @@ function AppRoot() {
 
           {backendUrl ? (
             <ConsoleApiProvider baseUrl={backendUrl} queryClient={queryClient}>
-              <BottomSheetModalProvider>
-                <MainContent />
-              </BottomSheetModalProvider>
+              <KeyboardProvider>
+                <BottomSheetModalProvider>
+                  <MainContent />
+                </BottomSheetModalProvider>
+              </KeyboardProvider>
             </ConsoleApiProvider>
           ) : (
             <OnboardingScreen />

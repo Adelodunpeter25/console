@@ -1,9 +1,10 @@
-import React, { useRef } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import React, { useRef, useEffect } from "react";
+import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { Folder, Check } from "lucide-react-native";
 import type { ProjectInfo } from "@console/types";
 import { SharedBottomSheet } from "../../common/shared-bottom-sheet";
+import { useProjectStore } from "../../../stores";
 import { theme } from "../../../styles/theme";
 
 interface ProjectPickerSheetProps {
@@ -20,6 +21,14 @@ export function ProjectPickerSheet({
   onSelect,
 }: ProjectPickerSheetProps) {
   const bottomSheetRef = useRef<BottomSheetModal>(null);
+  const loadProjects = useProjectStore((state) => state.loadProjects);
+  const loadingProjects = useProjectStore((state) => state.loading);
+
+  useEffect(() => {
+    if (projects.length === 0) {
+      void loadProjects();
+    }
+  }, [projects.length, loadProjects]);
 
   const selectedProject = projects.find((p) => p.id === selectedId);
   const displayLabel = selectedProject?.name ?? fallbackLabel;
@@ -29,7 +38,10 @@ export function ProjectPickerSheet({
       <Pressable
         className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card-alt/70 border border-border/50"
         style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-        onPress={() => bottomSheetRef.current?.present()}
+        onPress={() => {
+          if (projects.length === 0) void loadProjects();
+          bottomSheetRef.current?.present();
+        }}
       >
         <Folder size={13} color={theme.colors.text.secondary} />
         <Text className="text-xs font-medium text-foreground max-w-[110px]" numberOfLines={1}>
@@ -37,9 +49,14 @@ export function ProjectPickerSheet({
         </Text>
       </Pressable>
 
-      <SharedBottomSheet ref={bottomSheetRef} title="Working Directory" snapPoints={["45%"]}>
+      <SharedBottomSheet ref={bottomSheetRef} title="Working Directory" snapPoints={["50%"]}>
         <ScrollView showsVerticalScrollIndicator={false}>
-          {projects.map((project) => {
+          {loadingProjects && projects.length === 0 ? (
+            <View className="items-center justify-center py-10">
+              <ActivityIndicator size="small" color={theme.colors.text.muted} />
+            </View>
+          ) : (
+            projects.map((project) => {
             const isSelected = project.id === selectedId;
             return (
               <Pressable

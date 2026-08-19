@@ -43,7 +43,7 @@ export const SharedBottomSheet = forwardRef<BottomSheetModal, SharedBottomSheetP
               <Text className="text-base font-semibold text-foreground">{title}</Text>
             </View>
           ) : null}
-          <View className="flex-1 px-4 py-3">{children}</View>
+          <View style={styles.body}>{children}</View>
         </BottomSheetView>
       </BottomSheetModal>
     );
@@ -53,5 +53,10 @@ export const SharedBottomSheet = forwardRef<BottomSheetModal, SharedBottomSheetP
 const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
+  },
+  body: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
 });
