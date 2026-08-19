@@ -93,7 +93,7 @@ export function DeletedChatsSettings({ onBack }: DeletedChatsSettingsProps) {
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Delete All Permanently",
+          text: "Delete All",
           style: "destructive",
           onPress: async () => {
             setBusyId("all");

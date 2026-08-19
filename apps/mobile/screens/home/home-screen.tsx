@@ -6,6 +6,7 @@ import { Folder02Icon } from "@hugeicons/core-free-icons";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { SearchBar } from "../../components/common/search-bar";
 import { confirmAlert } from "../../components/common/confirm-dialog";
+import { SessionListSkeleton } from "../../components/common/skeleton";
 import {
   SessionActionSheet,
   type SessionActionSheetHandle,
@@ -63,6 +64,7 @@ export function HomeScreen() {
     composeSession,
     deleteSession,
     isCreatingSession,
+    isLoadingSessions,
     isRefreshing,
     onRefresh,
     getProjectNameForSession,
@@ -146,7 +148,9 @@ export function HomeScreen() {
           />
         }
       >
-        {sections.length === 0 ? (
+        {isLoadingSessions && sections.length === 0 ? (
+          <SessionListSkeleton />
+        ) : sections.length === 0 ? (
           <View className="items-center justify-center py-20">
             <Text className="text-foreground-secondary text-sm">
               {searchQuery ? "No matching sessions" : "No sessions yet"}

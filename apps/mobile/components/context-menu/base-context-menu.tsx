@@ -4,7 +4,6 @@ import {
   Text,
   Modal,
   Pressable,
-  StyleSheet,
   Animated,
   Dimensions,
 } from "react-native";
@@ -74,13 +73,14 @@ export function BaseContextMenu({
       onRequestClose={handleClose}
     >
       {/* Blur scrim */}
-      <Pressable style={StyleSheet.absoluteFill} onPress={handleClose}>
-        <BlurView intensity={14} tint="dark" style={StyleSheet.absoluteFill} />
+      <Pressable className="absolute inset-0" onPress={handleClose}>
+        <BlurView intensity={14} tint="dark" className="absolute inset-0" />
       </Pressable>
 
       {/* Menu card */}
       <Animated.View
-        style={[styles.card, { top, left, opacity, transform: [{ scale }] }]}
+        style={{ position: "absolute", width: MENU_WIDTH, top, left, opacity, transform: [{ scale }] }}
+        className="bg-[#1c1c1e] rounded-[14px] border border-white/[0.08] overflow-hidden shadow-2xl"
         pointerEvents="box-none"
       >
         {items.map((item, index) => {
@@ -88,18 +88,23 @@ export function BaseContextMenu({
           return (
             <Pressable
               key={item.key}
-              style={({ pressed }) => [
-                styles.item,
-                !isLast && styles.itemBorder,
-                pressed && styles.itemPressed,
-              ]}
+              className={`flex-row items-center px-4 h-[46px] ${
+                !isLast ? "border-b border-white/[0.08]" : ""
+              }`}
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? "rgba(255, 255, 255, 0.06)" : "transparent",
+              })}
               onPress={() => {
                 handleClose();
                 setTimeout(item.onPress, 150);
               }}
             >
-              {item.icon ? <View style={styles.iconWrap}>{item.icon}</View> : null}
-              <Text style={[styles.label, item.destructive && styles.labelDestructive]}>
+              {item.icon ? <View className="mr-2.5">{item.icon}</View> : null}
+              <Text
+                className={`text-[15px] font-medium ${
+                  item.destructive ? "text-red-400" : "text-foreground"
+                }`}
+              >
                 {item.label}
               </Text>
             </Pressable>
@@ -109,44 +114,3 @@ export function BaseContextMenu({
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    position: "absolute",
-    width: MENU_WIDTH,
-    backgroundColor: "#1c1c1e",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 20,
-  },
-  item: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    height: ITEM_HEIGHT,
-  },
-  itemBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,0.08)",
-  },
-  itemPressed: {
-    backgroundColor: "rgba(255,255,255,0.06)",
-  },
-  iconWrap: {
-    marginRight: 10,
-  },
-  label: {
-    fontSize: 15,
-    color: "#ffffff",
-    fontWeight: "500",
-  },
-  labelDestructive: {
-    color: "#f87171",
-  },
-});

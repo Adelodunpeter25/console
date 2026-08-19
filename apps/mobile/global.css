@@ -5,10 +5,16 @@
   --color-screen: #0a0a0b;
   --color-card: #121316;
   --color-card-alt: #18191c;
+  --color-surface: #16171a;
+  --color-surface-elevated: #1f2024;
+  --color-surface-card: #1c1c1e;
   --color-border: rgba(255, 255, 255, 0.12);
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
   --color-foreground: #ffffff;
   --color-foreground-secondary: #a1a1aa;
+  --color-foreground-muted: #71717a;
   --color-primary: #ffffff;
+  --color-destructive: #f87171;
   --font-mono: "JetBrainsMono";
   --font-sans: system-ui, sans-serif;
 }

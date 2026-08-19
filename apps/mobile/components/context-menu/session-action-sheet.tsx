@@ -1,12 +1,11 @@
 import React, { useRef, useCallback } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import {
   BottomSheetModal,
   BottomSheetBackdrop,
   BottomSheetView,
   type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
-import { theme } from "../../styles/theme";
 
 export interface ActionSheetItem {
   key: string;
@@ -56,74 +55,41 @@ export const SessionActionSheet = React.forwardRef<
       enableDynamicSizing
       backdropComponent={renderBackdrop}
       handleStyle={{ display: "none" }}
-      backgroundStyle={styles.sheet}
+      backgroundStyle={{
+        backgroundColor: "#141518",
+        borderWidth: 1,
+        borderColor: "rgba(255, 255, 255, 0.08)",
+      }}
       enablePanDownToClose
     >
-      <BottomSheetView style={styles.container}>
+      <BottomSheetView className="px-4 pt-4">
         {items.map((item, index) => {
           const isLast = index === items.length - 1;
           return (
             <Pressable
               key={item.key}
-              style={({ pressed }) => [
-                styles.item,
-                !isLast && styles.itemBorder,
-                pressed && styles.itemPressed,
-              ]}
+              className={`flex-row items-center py-4 gap-3.5 ${
+                !isLast ? "border-b border-white/[0.08]" : ""
+              }`}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
               onPress={() => {
                 close();
                 setTimeout(item.onPress, 200);
               }}
             >
-              <View style={styles.iconWrap}>{item.icon}</View>
-              <Text style={[styles.label, item.destructive && styles.labelDestructive]}>
+              <View className="w-6 items-center">{item.icon}</View>
+              <Text
+                className={`text-base font-medium ${
+                  item.destructive ? "text-red-400" : "text-foreground"
+                }`}
+              >
                 {item.label}
               </Text>
             </Pressable>
           );
         })}
-        <View style={styles.bottomPad} />
+        <View className="h-11" />
       </BottomSheetView>
     </BottomSheetModal>
   );
-});
-
-const styles = StyleSheet.create({
-  sheet: {
-    backgroundColor: "#141518",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-  },
-  container: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  item: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 16,
-    gap: 14,
-  },
-  itemBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,0.08)",
-  },
-  itemPressed: {
-    opacity: 0.6,
-  },
-  iconWrap: {
-    width: 24,
-    alignItems: "center",
-  },
-  label: {
-    fontSize: 16,
-    color: "#ffffff",
-    fontWeight: "500",
-  },
-  labelDestructive: {
-    color: "#f87171",
-  },
-  bottomPad: {
-    height: 44,
-  },
 });

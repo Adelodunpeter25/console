@@ -1,12 +1,10 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useRef } from "react";
 import {
   Modal,
   View,
   Text,
   Pressable,
-  StyleSheet,
   Animated,
-  Dimensions,
 } from "react-native";
 import { create } from "zustand";
 
@@ -116,25 +114,27 @@ export function ConfirmDialog() {
       onShow={onShow}
       onRequestClose={() => handleClose()}
     >
-      <Pressable style={styles.overlay} onPress={() => handleClose()}>
+      <Pressable
+        className="flex-1 bg-black/65 justify-center items-center px-6"
+        onPress={() => handleClose()}
+      >
         <Animated.View
-          style={[
-            styles.card,
-            {
-              opacity,
-              transform: [{ scale }],
-            },
-          ]}
+          style={{ opacity, transform: [{ scale }] }}
+          className="w-full max-w-[330px] bg-[#16171a] rounded-[20px] border border-white/10 p-5 shadow-2xl"
           onStartShouldSetResponder={() => true}
         >
-          <View style={styles.content}>
-            <Text style={styles.title}>{options.title}</Text>
+          <View className="mb-5">
+            <Text className="text-[17px] font-semibold text-foreground text-center tracking-tight">
+              {options.title}
+            </Text>
             {options.message ? (
-              <Text style={styles.message}>{options.message}</Text>
+              <Text className="text-sm text-foreground-secondary text-center mt-2 leading-5">
+                {options.message}
+              </Text>
             ) : null}
           </View>
 
-          <View style={[styles.buttonsContainer, isRowLayout && styles.buttonsRow]}>
+          <View className={isRowLayout ? "flex-row gap-2.5" : "gap-2"}>
             {buttons.map((btn, index) => {
               const isDestructive = btn.style === "destructive";
               const isCancel = btn.style === "cancel";
@@ -143,23 +143,26 @@ export function ConfirmDialog() {
               return (
                 <Pressable
                   key={`${btn.text}-${index}`}
-                  style={({ pressed }) => [
-                    styles.button,
-                    isRowLayout && styles.buttonFlex,
-                    isPrimary && styles.primaryButton,
-                    isCancel && styles.cancelButton,
-                    isDestructive && styles.destructiveButton,
-                    pressed && styles.buttonPressed,
-                  ]}
+                  className={`h-11 rounded-xl items-center justify-center px-4 ${
+                    isRowLayout ? "flex-1" : "w-full"
+                  } ${
+                    isPrimary
+                      ? "bg-foreground"
+                      : isCancel
+                        ? "bg-[#222327] border border-white/10"
+                        : "bg-red-500/15 border border-red-500/30"
+                  }`}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
                   onPress={() => handleClose(btn.onPress)}
                 >
                   <Text
-                    style={[
-                      styles.buttonText,
-                      isPrimary && styles.primaryButtonText,
-                      isCancel && styles.cancelButtonText,
-                      isDestructive && styles.destructiveButtonText,
-                    ]}
+                    className={`text-sm ${
+                      isPrimary
+                        ? "text-black font-semibold"
+                        : isCancel
+                          ? "text-[#d4d4d8] font-medium"
+                          : "text-red-400 font-semibold"
+                    }`}
                   >
                     {btn.text}
                   </Text>
@@ -172,96 +175,3 @@ export function ConfirmDialog() {
     </Modal>
   );
 }
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.65)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 24,
-  },
-  card: {
-    width: Math.min(SCREEN_WIDTH - 48, 330),
-    backgroundColor: "#16171a",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 24,
-  },
-  content: {
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#ffffff",
-    textAlign: "center",
-    letterSpacing: -0.2,
-  },
-  message: {
-    fontSize: 14,
-    color: "#a1a1aa",
-    textAlign: "center",
-    marginTop: 8,
-    lineHeight: 20,
-  },
-  buttonsContainer: {
-    gap: 8,
-  },
-  buttonsRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  button: {
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 16,
-  },
-  buttonFlex: {
-    flex: 1,
-  },
-  buttonPressed: {
-    opacity: 0.75,
-  },
-  primaryButton: {
-    backgroundColor: "#ffffff",
-  },
-  primaryButtonText: {
-    color: "#0a0a0b",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  cancelButton: {
-    backgroundColor: "#222327",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-  },
-  cancelButtonText: {
-    color: "#d4d4d8",
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  destructiveButton: {
-    backgroundColor: "rgba(239, 68, 68, 0.15)",
-    borderWidth: 1,
-    borderColor: "rgba(239, 68, 68, 0.25)",
-  },
-  destructiveButtonText: {
-    color: "#f87171",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  buttonText: {
-    fontSize: 14,
-  },
-});
