@@ -57,7 +57,7 @@ function renderSkills(skills: Skill[]): string {
   });
   return [
     "# Skills",
-    "Skills are specialized knowledge. If one matches the task, read its file path before proceeding.",
+    "Skills are specialized knowledge. When one matches the current task, call the `readSkill` tool with the skill name to load its full instructions before proceeding.",
     "<skills>",
     ...lines,
     "</skills>",

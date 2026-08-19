@@ -7,6 +7,7 @@ export * from "./glob.js";
 export * from "./grep.js";
 export * from "./list-dir.js";
 export * from "./read-file.js";
+export * from "./read-skill.js";
 export * from "./subagent.js";
 export * from "./todo.js";
 export * from "./web-search.js";
@@ -21,6 +22,7 @@ import { globTool } from "./glob.js";
 import { grepTool } from "./grep.js";
 import { listDirTool } from "./list-dir.js";
 import { readFileTool } from "./read-file.js";
+import { readSkillTool } from "./read-skill.js";
 import { subagentTool } from "./subagent.js";
 import { todoTool } from "./todo.js";
 import { webSearchTool } from "./web-search.js";
@@ -33,6 +35,7 @@ import { writeFileTool } from "./write-file.js";
 export const allTools = [
   // File system — read
   readFileTool,
+  readSkillTool,
   listDirTool,
   globTool, // fff-powered (Rust native, warm-indexed)
   grepTool, // fff-powered (Rust native, warm-indexed)
