@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { configureConsoleApi } from "@console/api";
+import { confirmAlert } from "../components/common/confirm-dialog";
 import { useAppStore } from "../stores/useAppStore";
 import { useChatStore } from "../stores/useChatStore";
 
@@ -20,18 +20,18 @@ export function useServerConnection() {
   const setBackendUrl = useAppStore((state) => state.setBackendUrl);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
 
-  const [inputUrl, setInputUrl] = useState(backendUrl || "http://localhost:3000");
+  const [inputUrl, setInputUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [testingStatus, setTestingStatus] = useState<string | null>(null);
+  const [testingStatus, setTestingStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
 
   const loadBackendUrl = useCallback(async () => {
     try {
       const stored = await AsyncStorage.getItem(BACKEND_URL_KEY);
       if (stored) {
+        configureConsoleApi({ baseUrl: stored });
         setBackendUrl(stored);
         setInputUrl(stored);
-        configureConsoleApi({ baseUrl: stored });
       }
     } catch {
       // No URL stored — onboarding screen will show
@@ -46,7 +46,7 @@ export function useServerConnection() {
 
   const saveConnection = useCallback(async () => {
     if (!inputUrl.trim()) {
-      Alert.alert("Invalid URL", "Backend server endpoint cannot be empty.");
+      confirmAlert("Invalid URL", "Backend server endpoint cannot be empty.");
       return;
     }
     setIsSaving(true);
@@ -60,9 +60,9 @@ export function useServerConnection() {
       await AsyncStorage.setItem(BACKEND_URL_KEY, url);
       configureConsoleApi({ baseUrl: url });
       setBackendUrl(url);
-      Alert.alert("Success", "Console backend server endpoint updated successfully!");
+      confirmAlert("Success", "Console backend server endpoint updated successfully!");
     } catch {
-      Alert.alert("Error", "Failed to save endpoint URL.");
+      confirmAlert("Error", "Failed to save endpoint URL.");
     } finally {
       setIsSaving(false);
     }
@@ -80,7 +80,7 @@ export function useServerConnection() {
   }, [inputUrl]);
 
   const disconnect = useCallback(async () => {
-    Alert.alert("Disconnect Backend", "Are you sure you want to clear the saved backend URL?", [
+    confirmAlert("Disconnect Backend", "Are you sure you want to clear the saved backend URL?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Disconnect",

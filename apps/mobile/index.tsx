@@ -17,6 +17,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { MainContent } from "./components/layout/main-content";
+import { ConfirmDialog } from "./components/common/confirm-dialog";
 import { useServerConnection } from "./hooks";
 
 // QueryClient tuned for mobile: 5-minute staleTime (no refetch-on-mount
@@ -108,6 +109,8 @@ function AppRoot() {
           ) : (
             <OnboardingScreen />
           )}
+
+          <ConfirmDialog />
         </View>
       </SafeAreaProvider>
     </GestureHandlerRootView>

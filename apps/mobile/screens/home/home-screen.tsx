@@ -1,10 +1,11 @@
 import React, { useRef, useState } from "react";
-import { Alert, Text, View, Pressable, ScrollView, RefreshControl } from "react-native";
+import { Text, View, Pressable, ScrollView, RefreshControl } from "react-native";
 import { Plus, Pencil, Trash2 } from "lucide-react-native";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import { Folder02Icon } from "@hugeicons/core-free-icons";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { SearchBar } from "../../components/common/search-bar";
+import { confirmAlert } from "../../components/common/confirm-dialog";
 import {
   SessionActionSheet,
   type SessionActionSheetHandle,
@@ -82,7 +83,7 @@ export function HomeScreen() {
     try {
       await composeSession();
     } catch {
-      Alert.alert("Unable to start chat", "Check the backend connection and try again.");
+      confirmAlert("Unable to start chat", "Check the backend connection and try again.");
     }
   };
 
@@ -93,7 +94,7 @@ export function HomeScreen() {
       icon: <Pencil size={18} color="#a1a1aa" />,
       onPress: () => {
         // TODO: rename session
-        Alert.alert("Rename", `Rename "${activeSession?.title || "Untitled Session"}" — coming soon`);
+        confirmAlert("Rename", `Rename "${activeSession?.title || "Untitled Session"}" — coming soon`);
       },
     },
     {
@@ -104,7 +105,7 @@ export function HomeScreen() {
       onPress: () => {
         if (!activeSession) return;
         const targetSession = activeSession;
-        Alert.alert(
+        confirmAlert(
           "Delete Chat",
           `Are you sure you want to delete "${targetSession.title || "Untitled Session"}"?`,
           [
@@ -116,7 +117,7 @@ export function HomeScreen() {
                 try {
                   await deleteSession(targetSession.id);
                 } catch (err) {
-                  Alert.alert("Failed", err instanceof Error ? err.message : "Unable to delete chat.");
+                  confirmAlert("Failed", err instanceof Error ? err.message : "Unable to delete chat.");
                 }
               },
             },
@@ -170,7 +171,7 @@ export function HomeScreen() {
                     try {
                       await composeSession(section.projectId);
                     } catch {
-                      Alert.alert("Unable to start chat", "Check the backend connection and try again.");
+                      confirmAlert("Unable to start chat", "Check the backend connection and try again.");
                     }
                   }}
                   disabled={isCreatingSession}

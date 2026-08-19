@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { Text, View, Pressable, FlatList, ActivityIndicator, Alert, ScrollView } from "react-native";
+import { Text, View, Pressable, FlatList, ActivityIndicator, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFsBrowse, useAddProject } from "@console/api";
 import { Folder, FolderUp, ChevronRight, Check } from "lucide-react-native";
 import { ScreenHeader } from "../../components/layout/screen-header";
+import { confirmAlert } from "../../components/common/confirm-dialog";
 import { theme } from "../../styles/theme";
 
 interface AddProjectScreenProps {
@@ -32,7 +33,7 @@ export function AddProjectScreen({ onClose, onProjectAdded }: AddProjectScreenPr
       onProjectAdded(added.id);
       onClose();
     } catch (e) {
-      Alert.alert(
+      confirmAlert(
         "Failed to Add Project",
         e instanceof Error ? e.message : "Directory could not be added as a project.",
       );

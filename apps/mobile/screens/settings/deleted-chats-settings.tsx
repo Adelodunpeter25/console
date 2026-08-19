@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Alert, FlatList, Pressable, Text, View, ActivityIndicator } from "react-native";
+import { FlatList, Pressable, Text, View, ActivityIndicator } from "react-native";
 import { RotateCcw, Trash2, MessageSquare } from "lucide-react-native";
 import { ScreenHeader } from "../../components/layout/screen-header";
+import { confirmAlert } from "../../components/common/confirm-dialog";
 import { useProjectStore } from "../../stores";
 import { formatRelativeTime, folderName } from "../../utils";
 import { theme } from "../../styles/theme";
@@ -28,14 +29,14 @@ export function DeletedChatsSettings({ onBack }: DeletedChatsSettingsProps) {
     try {
       await restoreSession(id);
     } catch (err) {
-      Alert.alert("Failed", err instanceof Error ? err.message : "Unable to restore chat.");
+      confirmAlert("Failed", err instanceof Error ? err.message : "Unable to restore chat.");
     } finally {
       setBusyId(null);
     }
   };
 
   const handlePermanentDelete = (id: string, title: string) => {
-    Alert.alert(
+    confirmAlert(
       "Delete Chat Permanently",
       `"${title}" and its message history will be permanently deleted. This cannot be undone.`,
       [
@@ -48,7 +49,7 @@ export function DeletedChatsSettings({ onBack }: DeletedChatsSettingsProps) {
             try {
               await permanentlyDeleteSession(id);
             } catch (err) {
-              Alert.alert("Failed", err instanceof Error ? err.message : "Unable to delete chat.");
+              confirmAlert("Failed", err instanceof Error ? err.message : "Unable to delete chat.");
             } finally {
               setBusyId(null);
             }
@@ -60,7 +61,7 @@ export function DeletedChatsSettings({ onBack }: DeletedChatsSettingsProps) {
 
   const handleRestoreAll = () => {
     if (deletedSessions.length === 0) return;
-    Alert.alert(
+    confirmAlert(
       "Restore All Chats",
       `Restore all ${deletedSessions.length} deleted chats back to your workspace?`,
       [
@@ -74,7 +75,7 @@ export function DeletedChatsSettings({ onBack }: DeletedChatsSettingsProps) {
                 await restoreSession(s.id);
               }
             } catch (err) {
-              Alert.alert("Failed", err instanceof Error ? err.message : "Unable to restore all chats.");
+              confirmAlert("Failed", err instanceof Error ? err.message : "Unable to restore all chats.");
             } finally {
               setBusyId(null);
             }
@@ -86,7 +87,7 @@ export function DeletedChatsSettings({ onBack }: DeletedChatsSettingsProps) {
 
   const handlePermanentDeleteAll = () => {
     if (deletedSessions.length === 0) return;
-    Alert.alert(
+    confirmAlert(
       "Delete All Chats Permanently",
       `All ${deletedSessions.length} deleted chats and their entire message history will be permanently removed. This cannot be undone.`,
       [
@@ -101,7 +102,7 @@ export function DeletedChatsSettings({ onBack }: DeletedChatsSettingsProps) {
                 await permanentlyDeleteSession(s.id);
               }
             } catch (err) {
-              Alert.alert("Failed", err instanceof Error ? err.message : "Unable to permanently delete chats.");
+              confirmAlert("Failed", err instanceof Error ? err.message : "Unable to permanently delete chats.");
             } finally {
               setBusyId(null);
             }

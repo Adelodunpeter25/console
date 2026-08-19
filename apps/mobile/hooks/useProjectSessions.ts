@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { Alert } from "react-native";
 import { useAppStore } from "../stores/useAppStore";
 import { useProjectStore } from "../stores/useProjectStore";
 import { useSessionStatusStore } from "../stores/useSessionStatusStore";
+import { confirmAlert } from "../components/common/confirm-dialog";
 
 /**
  * Project-scoped session management backed by `useProjectStore`.
@@ -42,13 +42,13 @@ export function useProjectSessions(projectId: string, projectPath: string) {
       setSelectedSessionId(sess.id);
       setActiveTab("chat");
     } catch {
-      Alert.alert("Error", "Failed to create session");
+      confirmAlert("Error", "Failed to create session");
     }
   }, [createSession, projectId, projectPath, setActiveTab, setSelectedSessionId]);
 
   const handleDelete = useCallback(
     async (id: string) => {
-      Alert.alert("Delete", "Delete this chat session?", [
+      confirmAlert("Delete", "Delete this chat session?", [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
@@ -60,7 +60,7 @@ export function useProjectSessions(projectId: string, projectPath: string) {
                 setSelectedSessionId(null);
               }
             } catch {
-              Alert.alert("Error", "Failed to delete session");
+              confirmAlert("Error", "Failed to delete session");
             }
           },
         },

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Alert, FlatList, Pressable, Text, View, ActivityIndicator, Modal } from "react-native";
+import { FlatList, Pressable, Text, View, ActivityIndicator, Modal } from "react-native";
 import { Folder, Trash2, Plus } from "lucide-react-native";
 import { ScreenHeader } from "../../components/layout/screen-header";
+import { confirmAlert } from "../../components/common/confirm-dialog";
 import { useProjectStore } from "../../stores";
 import { AddProjectScreen } from "../projects/add-project-screen";
 
@@ -23,7 +24,7 @@ export function ProjectsSettings({ onBack }: ProjectsSettingsProps) {
   }, [loadProjects]);
 
   const handleDelete = (id: string, name: string) => {
-    Alert.alert(
+    confirmAlert(
       "Remove Project",
       `Are you sure you want to remove "${name}" from your project workspace list? The folder on disk will not be deleted.`,
       [
@@ -36,7 +37,7 @@ export function ProjectsSettings({ onBack }: ProjectsSettingsProps) {
             try {
               await deleteProject(id);
             } catch (err) {
-              Alert.alert("Failed", err instanceof Error ? err.message : "Unable to remove project.");
+              confirmAlert("Failed", err instanceof Error ? err.message : "Unable to remove project.");
             } finally {
               setBusyId(null);
             }
