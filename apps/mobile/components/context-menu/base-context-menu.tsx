@@ -8,7 +8,6 @@ import {
   Animated,
   Dimensions,
 } from "react-native";
-import { BlurView } from "expo-blur";
 
 export interface ContextMenuItem {
   key: string;
@@ -78,11 +77,7 @@ export function BaseContextMenu({
     >
       {/* Scrim — tap anywhere to dismiss */}
       <Pressable style={StyleSheet.absoluteFill} onPress={handleClose}>
-        <BlurView
-          intensity={12}
-          tint="dark"
-          style={StyleSheet.absoluteFill}
-        />
+        <View style={[StyleSheet.absoluteFill, styles.scrim]} />
       </Pressable>
 
       {/* Menu card */}
@@ -129,6 +124,9 @@ export function BaseContextMenu({
 }
 
 const styles = StyleSheet.create({
+  scrim: {
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
   card: {
     position: "absolute",
     width: MENU_WIDTH,
