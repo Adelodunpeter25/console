@@ -1,11 +1,11 @@
 import React from "react";
 import { Alert, Text, View, Pressable, ScrollView, RefreshControl } from "react-native";
-import { Plus } from "lucide-react-native";
+import { Plus, Pencil, Trash2 } from "lucide-react-native";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import { Folder02Icon } from "@hugeicons/core-free-icons";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { SearchBar } from "../../components/common/search-bar";
-import { SessionContextMenu } from "../../components/context-menu/session-context-menu";
+import { SessionActionSheet } from "../../components/context-menu/session-context-menu";
 import { useHomeSessions } from "../../hooks";
 import { formatRelativeTime } from "../../utils/time";
 import { theme } from "../../styles/theme";
@@ -133,16 +133,30 @@ export function HomeScreen() {
                   const isLast = index === section.data.length - 1;
 
                   return (
-                    <SessionContextMenu
+                    <SessionActionSheet
                       key={session.id}
-                      onRename={() => {
-                        // TODO: rename session
-                        Alert.alert("Rename", `Rename "${session.title || "Untitled Session"}" — coming soon`);
-                      }}
-                      onDelete={() => {
-                        // TODO: delete session
-                        Alert.alert("Delete", `Delete "${session.title || "Untitled Session"}" — coming soon`);
-                      }}
+                      title={session.title || "Untitled Session"}
+                      items={[
+                        {
+                          key: "rename",
+                          label: "Rename",
+                          icon: <Pencil size={18} color="#a1a1aa" />,
+                          onPress: () => {
+                            // TODO: rename session
+                            Alert.alert("Rename", `Rename "${session.title || "Untitled Session"}" — coming soon`);
+                          },
+                        },
+                        {
+                          key: "delete",
+                          label: "Delete",
+                          icon: <Trash2 size={18} color="#f87171" />,
+                          destructive: true,
+                          onPress: () => {
+                            // TODO: delete session
+                            Alert.alert("Delete", `Delete "${session.title || "Untitled Session"}" — coming soon`);
+                          },
+                        },
+                      ]}
                     >
                       {(onLongPress) => (
                         <Pressable
@@ -190,7 +204,7 @@ export function HomeScreen() {
                           </View>
                         </Pressable>
                       )}
-                    </SessionContextMenu>
+                    </SessionActionSheet>
                   );
                 })}
               </View>

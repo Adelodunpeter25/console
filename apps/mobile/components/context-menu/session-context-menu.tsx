@@ -1,63 +1,150 @@
-import React, { useState, useRef, useCallback } from "react";
-import { View } from "react-native";
+import React, { useRef, useCallback } from "react";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+import {
+  BottomSheetModal,
+  BottomSheetBackdrop,
+  BottomSheetView,
+  type BottomSheetBackdropProps,
+} from "@gorhom/bottom-sheet";
 import { Pencil, Trash2 } from "lucide-react-native";
-import { BaseContextMenu, type ContextMenuItem } from "./base-context-menu";
+import { theme } from "../../styles/theme";
 
-interface SessionContextMenuProps {
-  children: (onLongPress: () => void) => React.ReactNode;
-  onRename: () => void;
-  onDelete: () => void;
+export interface ActionSheetItem {
+  key: string;
+  label: string;
+  icon: React.ReactNode;
+  destructive?: boolean;
+  onPress: () => void;
 }
 
-export function SessionContextMenu({
-  children,
-  onRename,
-  onDelete,
-}: SessionContextMenuProps) {
-  const [visible, setVisible] = useState(false);
-  const [anchor, setAnchor] = useState<{
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  } | null>(null);
-  const triggerRef = useRef<View>(null);
+interface SessionActionSheetProps {
+  children: (onLongPress: () => void) => React.ReactNode;
+  title?: string;
+  items: ActionSheetItem[];
+}
 
-  const handleLongPress = useCallback(() => {
-    triggerRef.current?.measure((_fx, _fy, width, height, px, py) => {
-      setAnchor({ x: px, y: py, width, height });
-      setVisible(true);
-    });
+export function SessionActionSheet({ children, title, items }: SessionActionSheetProps) {
+  const sheetRef = useRef<BottomSheetModal>(null);
+
+  const open = useCallback(() => {
+    sheetRef.current?.present();
   }, []);
 
-  const items: ContextMenuItem[] = [
-    {
-      key: "rename",
-      label: "Rename",
-      icon: <Pencil size={16} color="#a1a1aa" />,
-      onPress: onRename,
-    },
-    {
-      key: "delete",
-      label: "Delete",
-      icon: <Trash2 size={16} color="#f87171" />,
-      destructive: true,
-      onPress: onDelete,
-    },
-  ];
+  const close = useCallback(() => {
+    sheetRef.current?.dismiss();
+  }, []);
+
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+        opacity={0.55}
+        pressBehavior="close"
+      />
+    ),
+    [],
+  );
 
   return (
     <>
-      <View ref={triggerRef} collapsable={false}>
-        {children(handleLongPress)}
-      </View>
+      {children(open)}
 
-      <BaseContextMenu
-        visible={visible}
-        onClose={() => setVisible(false)}
-        anchor={anchor}
-        items={items}
-      />
+      <BottomSheetModal
+        ref={sheetRef}
+        enableDynamicSizing
+        backdropComponent={renderBackdrop}
+        handleIndicatorStyle={{ backgroundColor: theme.colors.text.muted, width: 36, height: 4 }}
+        backgroundStyle={styles.sheet}
+        enablePanDownToClose
+      >
+        <BottomSheetView style={styles.container}>
+          {title ? (
+            <View style={styles.titleRow}>
+              <Text style={styles.title} numberOfLines={1}>{title}</Text>
+            </View>
+          ) : null}
+
+          {items.map((item, index) => {
+            const isLast = index === items.length - 1;
+            return (
+              <Pressable
+                key={item.key}
+                style={({ pressed }) => [
+                  styles.item,
+                  !isLast && styles.itemBorder,
+                  pressed && styles.itemPressed,
+                ]}
+                onPress={() => {
+                  close();
+                  setTimeout(item.onPress, 200);
+                }}
+              >
+                <View style={styles.iconWrap}>{item.icon}</View>
+                <Text style={[styles.label, item.destructive && styles.labelDestructive]}>
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+
+          {/* Safe area bottom padding */}
+          <View style={styles.bottomPad} />
+        </BottomSheetView>
+      </BottomSheetModal>
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  sheet: {
+    backgroundColor: "#141518",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  container: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  titleRow: {
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+    marginBottom: 4,
+  },
+  title: {
+    fontSize: 13,
+    color: "#71717a",
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  item: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 16,
+    gap: 14,
+  },
+  itemBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+  },
+  itemPressed: {
+    opacity: 0.6,
+  },
+  iconWrap: {
+    width: 24,
+    alignItems: "center",
+  },
+  label: {
+    fontSize: 16,
+    color: "#ffffff",
+    fontWeight: "500",
+  },
+  labelDestructive: {
+    color: "#f87171",
+  },
+  bottomPad: {
+    height: 24,
+  },
+});

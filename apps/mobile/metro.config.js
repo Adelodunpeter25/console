@@ -29,10 +29,6 @@ config.resolver.extraNodeModules = {
     projectRoot,
     "node_modules/react-native-safe-area-context"
   ),
-  zeego: path.resolve(workspaceRoot, "node_modules/zeego"),
-  "react-native-ios-context-menu": path.resolve(workspaceRoot, "node_modules/react-native-ios-context-menu"),
-  "react-native-ios-utilities": path.resolve(workspaceRoot, "node_modules/react-native-ios-utilities"),
-  "@react-native-menu/menu": path.resolve(workspaceRoot, "node_modules/@react-native-menu/menu"),
   "@console/api": path.resolve(workspaceRoot, "packages/api/src"),
   "@console/types": path.resolve(workspaceRoot, "packages/types/src"),
 };
