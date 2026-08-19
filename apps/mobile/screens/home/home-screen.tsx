@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert, Text, View, Pressable, ScrollView } from "react-native";
+import { Alert, Text, View, Pressable, ScrollView, RefreshControl } from "react-native";
 import { Plus } from "lucide-react-native";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import { Folder02Icon } from "@hugeicons/core-free-icons";
@@ -55,6 +55,8 @@ export function HomeScreen() {
     openSession,
     composeSession,
     isCreatingSession,
+    isRefreshing,
+    onRefresh,
     getProjectNameForSession,
     getBranchForSession,
     navigateToSettings,
@@ -78,6 +80,14 @@ export function HomeScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor="#71717a"
+            colors={["#71717a"]}
+          />
+        }
       >
         {sections.length === 0 ? (
           <View className="items-center justify-center py-20">

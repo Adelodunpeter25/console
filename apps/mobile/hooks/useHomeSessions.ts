@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useCreateSession, useProjects, useSessions } from "@console/api";
+import { useQueryClient } from "@tanstack/react-query";
 import type { SessionHeader } from "@console/types";
 import { useAppStore } from "../stores";
 import { useProjectBranches } from "./useProjectBranches";
@@ -14,13 +15,15 @@ export interface GroupedProjectSection {
 }
 
 export function useHomeSessions() {
-  const { data: projects = [] } = useProjects();
-  const { data: sessions = [], isLoading: isLoadingSessions } = useSessions();
+  const queryClient = useQueryClient();
+  const { data: projects = [], refetch: refetchProjects } = useProjects();
+  const { data: sessions = [], isLoading: isLoadingSessions, refetch: refetchSessions } = useSessions();
   const { data: branches = {} } = useProjectBranches(projects);
   const createSession = useCreateSession();
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Filter sessions by search query
   const filteredSessions = useMemo(() => {
@@ -115,6 +118,20 @@ export function useHomeSessions() {
     return branches[session.projectId ?? ""];
   };
 
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        refetchProjects(),
+        refetchSessions(),
+        queryClient.invalidateQueries({ queryKey: ["sessions"] }),
+        queryClient.invalidateQueries({ queryKey: ["projects"] }),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetchProjects, refetchSessions, queryClient]);
+
   return {
     sections,
     searchQuery,
@@ -123,6 +140,8 @@ export function useHomeSessions() {
     composeSession,
     isCreatingSession: createSession.isPending,
     isLoadingSessions,
+    isRefreshing,
+    onRefresh,
     getProjectNameForSession,
     getBranchForSession,
     navigateToSettings: () => setActiveTab("settings"),
