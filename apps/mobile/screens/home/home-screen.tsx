@@ -144,52 +144,48 @@ export function HomeScreen() {
                         Alert.alert("Delete", `Delete "${session.title || "Untitled Session"}" — coming soon`);
                       }}
                     >
-                      {(onLongPress) => (
-                        <Pressable
-                          className={`flex-row items-center px-4 py-3.5 ${!isLast ? "border-b border-border/40" : ""}`}
-                          style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
-                          onPress={() => openSession(session.id)}
-                          onLongPress={onLongPress}
-                          delayLongPress={350}
-                        >
-                          {/* Title + project/branch */}
-                          <View className="flex-1 mr-2">
-                            <Text
-                              className="text-sm font-semibold text-foreground mb-0.5"
-                              numberOfLines={1}
-                            >
-                              {session.title || "Untitled Session"}
-                            </Text>
-                            <View className="flex-row items-center gap-1">
-                              <Text className="text-xs text-foreground-secondary">{projectName}</Text>
-                              {branch ? (
-                                <>
-                                  <Text className="text-xs text-foreground-secondary">•</Text>
-                                  <Text className="text-xs text-foreground-secondary">{branch}</Text>
-                                </>
-                              ) : null}
-                            </View>
+                      <Pressable
+                        className={`flex-row items-center px-4 py-3.5 ${!isLast ? "border-b border-border/40" : ""}`}
+                        style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+                        onPress={() => openSession(session.id)}
+                      >
+                        {/* Title + project/branch */}
+                        <View className="flex-1 mr-2">
+                          <Text
+                            className="text-sm font-semibold text-foreground mb-0.5"
+                            numberOfLines={1}
+                          >
+                            {session.title || "Untitled Session"}
+                          </Text>
+                          <View className="flex-row items-center gap-1">
+                            <Text className="text-xs text-foreground-secondary">{projectName}</Text>
+                            {branch ? (
+                              <>
+                                <Text className="text-xs text-foreground-secondary">•</Text>
+                                <Text className="text-xs text-foreground-secondary">{branch}</Text>
+                              </>
+                            ) : null}
                           </View>
+                        </View>
 
-                          {/* Status badge + time */}
-                          <View className="items-end gap-1.5">
-                            <View
-                              className="px-2 py-0.5 rounded-full"
-                              style={{ backgroundColor: status.bgColor }}
+                        {/* Status badge + time */}
+                        <View className="items-end gap-1.5">
+                          <View
+                            className="px-2 py-0.5 rounded-full"
+                            style={{ backgroundColor: status.bgColor }}
+                          >
+                            <Text
+                              className="text-[9px] font-bold tracking-wide"
+                              style={{ color: status.color }}
                             >
-                              <Text
-                                className="text-[9px] font-bold tracking-wide"
-                                style={{ color: status.color }}
-                              >
-                                {status.label}
-                              </Text>
-                            </View>
-                            <Text className="text-[10px] text-foreground-secondary">
-                              {shortRelativeTime(session.updatedAt ?? session.createdAt)}
+                              {status.label}
                             </Text>
                           </View>
-                        </Pressable>
-                      )}
+                          <Text className="text-[10px] text-foreground-secondary">
+                            {shortRelativeTime(session.updatedAt ?? session.createdAt)}
+                          </Text>
+                        </View>
+                      </Pressable>
                     </SessionContextMenu>
                   );
                 })}
