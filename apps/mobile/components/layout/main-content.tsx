@@ -1,4 +1,5 @@
 import React from "react";
+import { View } from "react-native";
 import { AppShell } from "./app-shell";
 import { HomeScreen, ChatScreen, SettingsScreen } from "../../screens";
 import { useAppStore } from "../../stores";
@@ -8,13 +9,19 @@ export function MainContent() {
 
   return (
     <AppShell>
-      {activeTab === "home" ? (
+      {/*
+        Home stays mounted across tab switches so the session list, scroll
+        position, and rendered component tree aren't destroyed and rebuilt
+        on every chat → home round-trip. Hidden via display:none when
+        inactive — hooks keep running (cheap with the 5-min query cache) but
+        no layout work or visual flash. Chat and Settings are conditionally
+        rendered because they carry heavier per-screen side effects.
+      */}
+      <View style={{ flex: 1, display: activeTab === "home" ? "flex" : "none" }}>
         <HomeScreen />
-      ) : activeTab === "chat" ? (
-        <ChatScreen />
-      ) : (
-        <SettingsScreen />
-      )}
+      </View>
+      {activeTab === "chat" ? <ChatScreen /> : null}
+      {activeTab === "settings" ? <SettingsScreen /> : null}
     </AppShell>
   );
 }
