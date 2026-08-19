@@ -50,12 +50,16 @@ export function SearchBar({
           />
         </View>
         <Pressable
-          className={`w-12 h-12 rounded-full bg-foreground items-center justify-center ${disabled ? "opacity-50" : ""}`}
-          style={({ pressed }) => (pressed && !disabled ? { opacity: 0.8 } : null)}
+          className={`w-12 h-12 rounded-full items-center justify-center ${disabled ? "opacity-50" : ""}`}
+          style={({ pressed }) => ({
+            backgroundColor: pressed && !disabled ? "#1a1a1a" : "#000000",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.1)",
+          })}
           onPress={onComposePress}
           disabled={disabled}
         >
-          <HugeiconsIcon icon={PencilEdit02Icon} size={19} color="#000000" />
+          <HugeiconsIcon icon={PencilEdit02Icon} size={19} color="#ffffff" />
         </Pressable>
       </View>
     </KeyboardStickyView>

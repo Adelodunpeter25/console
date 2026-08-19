@@ -1,12 +1,11 @@
 import React, { useRef, useCallback } from "react";
-import { View, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import {
   BottomSheetModal,
   BottomSheetBackdrop,
   BottomSheetView,
   type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
-import { Pencil, Trash2 } from "lucide-react-native";
 import { theme } from "../../styles/theme";
 
 export interface ActionSheetItem {
@@ -18,20 +17,25 @@ export interface ActionSheetItem {
 }
 
 interface SessionActionSheetProps {
-  children: (onLongPress: () => void) => React.ReactNode;
   items: ActionSheetItem[];
 }
 
-export function SessionActionSheet({ children, items }: SessionActionSheetProps) {
+export interface SessionActionSheetHandle {
+  open: () => void;
+}
+
+/** Single shared action sheet — render once at page level, call open() imperatively. */
+export const SessionActionSheet = React.forwardRef<
+  SessionActionSheetHandle,
+  SessionActionSheetProps
+>(function SessionActionSheet({ items }, ref) {
   const sheetRef = useRef<BottomSheetModal>(null);
 
-  const open = useCallback(() => {
-    sheetRef.current?.present();
-  }, []);
+  React.useImperativeHandle(ref, () => ({
+    open: () => sheetRef.current?.present(),
+  }));
 
-  const close = useCallback(() => {
-    sheetRef.current?.dismiss();
-  }, []);
+  const close = useCallback(() => sheetRef.current?.dismiss(), []);
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
@@ -47,48 +51,42 @@ export function SessionActionSheet({ children, items }: SessionActionSheetProps)
   );
 
   return (
-    <>
-      {children(open)}
-
-      <BottomSheetModal
-        ref={sheetRef}
-        enableDynamicSizing
-        backdropComponent={renderBackdrop}
-        handleIndicatorStyle={{ backgroundColor: theme.colors.text.muted, width: 36, height: 4 }}
-        backgroundStyle={styles.sheet}
-        enablePanDownToClose
-      >
-        <BottomSheetView style={styles.container}>
-          {items.map((item, index) => {
-            const isLast = index === items.length - 1;
-            return (
-              <Pressable
-                key={item.key}
-                style={({ pressed }) => [
-                  styles.item,
-                  !isLast && styles.itemBorder,
-                  pressed && styles.itemPressed,
-                ]}
-                onPress={() => {
-                  close();
-                  setTimeout(item.onPress, 200);
-                }}
-              >
-                <View style={styles.iconWrap}>{item.icon}</View>
-                <Text style={[styles.label, item.destructive && styles.labelDestructive]}>
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-
-          {/* Safe area bottom padding */}
-          <View style={styles.bottomPad} />
-        </BottomSheetView>
-      </BottomSheetModal>
-    </>
+    <BottomSheetModal
+      ref={sheetRef}
+      enableDynamicSizing
+      backdropComponent={renderBackdrop}
+      handleIndicatorStyle={{ backgroundColor: theme.colors.text.muted, width: 36, height: 4 }}
+      backgroundStyle={styles.sheet}
+      enablePanDownToClose
+    >
+      <BottomSheetView style={styles.container}>
+        {items.map((item, index) => {
+          const isLast = index === items.length - 1;
+          return (
+            <Pressable
+              key={item.key}
+              style={({ pressed }) => [
+                styles.item,
+                !isLast && styles.itemBorder,
+                pressed && styles.itemPressed,
+              ]}
+              onPress={() => {
+                close();
+                setTimeout(item.onPress, 200);
+              }}
+            >
+              <View style={styles.iconWrap}>{item.icon}</View>
+              <Text style={[styles.label, item.destructive && styles.labelDestructive]}>
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+        <View style={styles.bottomPad} />
+      </BottomSheetView>
+    </BottomSheetModal>
   );
-}
+});
 
 const styles = StyleSheet.create({
   sheet: {
@@ -99,18 +97,6 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     paddingTop: 8,
-  },
-  titleRow: {
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,0.08)",
-    marginBottom: 4,
-  },
-  title: {
-    fontSize: 13,
-    color: "#71717a",
-    fontWeight: "500",
-    textAlign: "center",
   },
   item: {
     flexDirection: "row",

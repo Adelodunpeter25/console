@@ -1,14 +1,19 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 import { Alert, Text, View, Pressable, ScrollView, RefreshControl } from "react-native";
 import { Plus, Pencil, Trash2 } from "lucide-react-native";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import { Folder02Icon } from "@hugeicons/core-free-icons";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { SearchBar } from "../../components/common/search-bar";
-import { SessionActionSheet } from "../../components/context-menu/session-action-sheet";
+import {
+  SessionActionSheet,
+  type SessionActionSheetHandle,
+  type ActionSheetItem,
+} from "../../components/context-menu/session-action-sheet";
 import { useHomeSessions } from "../../hooks";
 import { formatRelativeTime } from "../../utils/time";
 import { theme } from "../../styles/theme";
+import type { SessionHeader } from "@console/types";
 
 function getStatusStyle(status?: string): {
   label: string;
@@ -63,6 +68,15 @@ export function HomeScreen() {
     navigateToSettings,
   } = useHomeSessions();
 
+  // Single shared action sheet — imperative ref + active session state
+  const actionSheetRef = useRef<SessionActionSheetHandle>(null);
+  const [activeSession, setActiveSession] = useState<SessionHeader | null>(null);
+
+  const handleLongPress = (session: SessionHeader) => {
+    setActiveSession(session);
+    actionSheetRef.current?.open();
+  };
+
   const handleCompose = async () => {
     try {
       await composeSession();
@@ -70,6 +84,28 @@ export function HomeScreen() {
       Alert.alert("Unable to start chat", "Check the backend connection and try again.");
     }
   };
+
+  const actionSheetItems: ActionSheetItem[] = [
+    {
+      key: "rename",
+      label: "Rename",
+      icon: <Pencil size={18} color="#a1a1aa" />,
+      onPress: () => {
+        // TODO: rename session
+        Alert.alert("Rename", `Rename "${activeSession?.title || "Untitled Session"}" — coming soon`);
+      },
+    },
+    {
+      key: "delete",
+      label: "Delete",
+      icon: <Trash2 size={18} color="#f87171" />,
+      destructive: true,
+      onPress: () => {
+        // TODO: delete session
+        Alert.alert("Delete", `Delete "${activeSession?.title || "Untitled Session"}" — coming soon`);
+      },
+    },
+  ];
 
   return (
     <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
@@ -98,12 +134,12 @@ export function HomeScreen() {
           </View>
         ) : (
           sections.map((section) => (
-            <View key={section.projectId ?? section.projectName} className="mb-5">
-              {/* Section Header with + button */}
-              <View className="flex-row justify-between items-center mb-2 px-1">
-                <View className="flex-row items-center gap-1.5">
+            <View key={section.projectId ?? "no-project"} className="mb-6">
+              {/* Section header */}
+              <View className="flex-row items-center justify-between mb-2 px-1">
+                <View className="flex-row items-center gap-2">
                   <HugeiconsIcon icon={Folder02Icon} size={14} color="#71717a" />
-                  <Text className="text-xs font-bold text-foreground-secondary tracking-widest">
+                  <Text className="text-xs font-semibold text-foreground-secondary uppercase tracking-wider">
                     {section.projectName}
                   </Text>
                 </View>
@@ -124,7 +160,7 @@ export function HomeScreen() {
                 </Pressable>
               </View>
 
-              {/* Session Cards grouped into one card */}
+              {/* Session cards */}
               <View className="bg-card border border-border rounded-2xl overflow-hidden">
                 {section.data.map((session, index) => {
                   const status = getStatusStyle(session.status);
@@ -133,77 +169,51 @@ export function HomeScreen() {
                   const isLast = index === section.data.length - 1;
 
                   return (
-                    <SessionActionSheet
+                    <Pressable
                       key={session.id}
-                      items={[
-                        {
-                          key: "rename",
-                          label: "Rename",
-                          icon: <Pencil size={18} color="#a1a1aa" />,
-                          onPress: () => {
-                            // TODO: rename session
-                            Alert.alert("Rename", `Rename "${session.title || "Untitled Session"}" — coming soon`);
-                          },
-                        },
-                        {
-                          key: "delete",
-                          label: "Delete",
-                          icon: <Trash2 size={18} color="#f87171" />,
-                          destructive: true,
-                          onPress: () => {
-                            // TODO: delete session
-                            Alert.alert("Delete", `Delete "${session.title || "Untitled Session"}" — coming soon`);
-                          },
-                        },
-                      ]}
+                      className={`flex-row items-center px-4 py-3.5 ${!isLast ? "border-b border-border/40" : ""}`}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+                      onPress={() => openSession(session.id)}
+                      onLongPress={() => handleLongPress(session)}
+                      delayLongPress={200}
                     >
-                      {(onLongPress) => (
-                        <Pressable
-                          className={`flex-row items-center px-4 py-3.5 ${!isLast ? "border-b border-border/40" : ""}`}
-                          style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
-                          onPress={() => openSession(session.id)}
-                          onLongPress={onLongPress}
-                          delayLongPress={350}
+                      {/* Title + project/branch */}
+                      <View className="flex-1 mr-2">
+                        <Text
+                          className="text-sm font-semibold text-foreground mb-0.5"
+                          numberOfLines={1}
                         >
-                          {/* Title + project/branch */}
-                          <View className="flex-1 mr-2">
-                            <Text
-                              className="text-sm font-semibold text-foreground mb-0.5"
-                              numberOfLines={1}
-                            >
-                              {session.title || "Untitled Session"}
-                            </Text>
-                            <View className="flex-row items-center gap-1">
-                              <Text className="text-xs text-foreground-secondary">{projectName}</Text>
-                              {branch ? (
-                                <>
-                                  <Text className="text-xs text-foreground-secondary">•</Text>
-                                  <Text className="text-xs text-foreground-secondary">{branch}</Text>
-                                </>
-                              ) : null}
-                            </View>
-                          </View>
+                          {session.title || "Untitled Session"}
+                        </Text>
+                        <View className="flex-row items-center gap-1">
+                          <Text className="text-xs text-foreground-secondary">{projectName}</Text>
+                          {branch ? (
+                            <>
+                              <Text className="text-xs text-foreground-secondary">•</Text>
+                              <Text className="text-xs text-foreground-secondary">{branch}</Text>
+                            </>
+                          ) : null}
+                        </View>
+                      </View>
 
-                          {/* Status badge + time */}
-                          <View className="items-end gap-1.5">
-                            <View
-                              className="px-2 py-0.5 rounded-full"
-                              style={{ backgroundColor: status.bgColor }}
-                            >
-                              <Text
-                                className="text-[9px] font-bold tracking-wide"
-                                style={{ color: status.color }}
-                              >
-                                {status.label}
-                              </Text>
-                            </View>
-                            <Text className="text-[10px] text-foreground-secondary">
-                              {shortRelativeTime(session.updatedAt ?? session.createdAt)}
-                            </Text>
-                          </View>
-                        </Pressable>
-                      )}
-                    </SessionActionSheet>
+                      {/* Status badge + time */}
+                      <View className="items-end gap-1.5">
+                        <View
+                          className="px-2 py-0.5 rounded-full"
+                          style={{ backgroundColor: status.bgColor }}
+                        >
+                          <Text
+                            className="text-[9px] font-bold tracking-wide"
+                            style={{ color: status.color }}
+                          >
+                            {status.label}
+                          </Text>
+                        </View>
+                        <Text className="text-[10px] text-foreground-secondary">
+                          {shortRelativeTime(session.updatedAt ?? session.createdAt)}
+                        </Text>
+                      </View>
+                    </Pressable>
                   );
                 })}
               </View>
@@ -211,6 +221,9 @@ export function HomeScreen() {
           ))
         )}
       </ScrollView>
+
+      {/* Single shared action sheet — rendered once outside the list */}
+      <SessionActionSheet ref={actionSheetRef} items={actionSheetItems} />
 
       {/* Sticky search bar */}
       <SearchBar
