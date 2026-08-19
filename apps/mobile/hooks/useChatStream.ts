@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { ImageAttachment } from "@console/types";
-import { useSession } from "@console/api";
+import { sessionService, sessionKeys } from "@console/api";
 import { useAppStore } from "../stores/useAppStore";
 import { useChatStore } from "../stores/useChatStore";
 import { useSessionStore } from "../stores/useSessionStore";
@@ -14,21 +15,30 @@ import { useSessionStore } from "../stores/useSessionStore";
  * chat screen already consumes (messages, streaming buffers, pending items,
  * input value, send/stop).
  *
- * Message loading uses TanStack Query's `useSession` so the fetch is shared
- * with any other caller of `useSession(id)` (e.g. the chat header). The
- * 5-minute staleTime on the QueryClient means re-opening a chat within that
- * window is instant with no network round trip. The store is keyed by
- * sessionId, so switching sessions does NOT wipe the previously loaded
- * messages — the cached state renders instantly and is refreshed in the
- * background when TanStack returns fresh data.
+ * Message loading uses a LOCAL `useQuery` (from mobile's own
+ * @tanstack/react-query) with the shared `sessionKeys.detail` cache key, so
+ * it dedupes with any other `useSession(id)` caller while keeping the hook
+ * execution on mobile's React copy. Importing the `useSession` hook from
+ * @console/api instead shifted the module graph and triggered a dual-React
+ * "Invalid hook call" inside ConsoleApiProvider. The 5-minute staleTime on
+ * the QueryClient means re-opening a chat within that window is instant with
+ * no network round trip. The store is keyed by sessionId, so switching
+ * sessions does NOT wipe the previously loaded messages — the cached state
+ * renders instantly and is refreshed in the background when fresh data lands.
  */
 export function useChatStream() {
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
 
   // Single shared fetch for both the message history and the session title.
-  // TanStack Query dedupes this with any other `useSession(id)` caller, so
-  // the chat header and the message list never double-fetch.
-  const sessionQuery = useSession(selectedSessionId ?? "");
+  // The query key matches @console/api's `sessionKeys.detail`, so this
+  // dedupes with any other caller of `useSession(id)` (e.g. the chat header
+  // if it ever uses the hook) — one network round trip per session per
+  // staleTime window.
+  const sessionQuery = useQuery({
+    queryKey: sessionKeys.detail(selectedSessionId ?? ""),
+    queryFn: () => sessionService.getSession(selectedSessionId!),
+    enabled: Boolean(selectedSessionId),
+  });
 
   // Derive the UI snapshot for the selected session.
   const snapshot = useChatStore(
