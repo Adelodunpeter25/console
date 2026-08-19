@@ -6,19 +6,13 @@ import { Sparkles, Check, Search, Bot } from "lucide-react-native";
 import type { Model, ProviderId } from "@console/types";
 import { SharedBottomSheet } from "../../common/shared-bottom-sheet";
 import { useProviderStore } from "../../../stores";
+import { formatModelName } from "../../../utils";
 import { theme } from "../../../styles/theme";
 
 interface ModelPickerSheetProps {
   value: string | null;
   provider?: string | null;
-  onChange: (modelId: string, provider?: ProviderId) => void;
-}
-
-function formatModelName(modelId: string): string {
-  return modelId
-    .split(/[-_]/g)
-    .map((part) => (part.length > 0 ? part[0]!.toUpperCase() + part.slice(1) : part))
-    .join(" ");
+  onChange: (modelId: string, providerId?: ProviderId) => void;
 }
 
 export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheetProps) {

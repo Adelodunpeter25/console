@@ -2,14 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Alert, FlatList, Pressable, Text, View, ActivityIndicator } from "react-native";
 import { RotateCcw, Trash2, MessageSquare, AlertTriangle } from "lucide-react-native";
 import { useProjectStore } from "../../stores";
-import { formatRelativeTime } from "../../utils/time";
+import { formatRelativeTime, folderName } from "../../utils";
 import { theme } from "../../styles/theme";
-
-function folderName(path?: string): string {
-  if (!path) return "";
-  const trimmed = path.replace(/\/+$/, "");
-  return trimmed.slice(trimmed.lastIndexOf("/") + 1);
-}
 
 export function DeletedChatsSettings() {
   const deletedSessions = useProjectStore((state) => state.deletedSessions);

@@ -3,6 +3,7 @@ import { useCreateSession, useProjects, useSessions } from "@console/api";
 import type { SessionHeader } from "@console/types";
 import { useAppStore } from "../stores";
 import { useProjectBranches } from "./useProjectBranches";
+import { folderName } from "../utils";
 
 export interface GroupedProjectSection {
   projectId: string | null;
@@ -10,12 +11,6 @@ export interface GroupedProjectSection {
   data: SessionHeader[];
   /** Timestamp of the most-recent session in this section (for section sorting). */
   latestAt: number;
-}
-
-function folderName(path?: string): string {
-  if (!path) return "";
-  const trimmed = path.replace(/\/+$/, "");
-  return trimmed.slice(trimmed.lastIndexOf("/") + 1);
 }
 
 export function useHomeSessions() {
