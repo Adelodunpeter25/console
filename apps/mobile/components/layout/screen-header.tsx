@@ -1,5 +1,6 @@
 import React from "react";
 import { Text, View, Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft, Settings } from "lucide-react-native";
 
 interface ScreenHeaderProps {
@@ -10,9 +11,16 @@ interface ScreenHeaderProps {
 }
 
 export function ScreenHeader({ title, onBack, showSettings, onSettingsPress }: ScreenHeaderProps) {
+  const insets = useSafeAreaInsets();
+  // Tight gap under the status bar: system inset + a small breathing room.
+  const paddingTop = insets.top + 6;
+
   return (
-    <View className="flex-row justify-between items-center px-4 pt-4 pb-3">
-      <View className="flex-row items-center flex-1">
+    <View
+      className="flex-row justify-between items-center px-4 pb-2.5"
+      style={{ paddingTop }}
+    >
+      <View className="flex-row items-center flex-1 min-w-0 mr-2">
         {onBack ? (
           <Pressable
             className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center mr-3"
@@ -22,7 +30,12 @@ export function ScreenHeader({ title, onBack, showSettings, onSettingsPress }: S
             <ChevronLeft size={20} color="#ffffff" />
           </Pressable>
         ) : null}
-        <Text className="text-[22px] font-bold text-foreground tracking-tight">{title}</Text>
+        <Text
+          className="text-[22px] font-bold text-foreground tracking-tight flex-shrink"
+          numberOfLines={1}
+        >
+          {title}
+        </Text>
       </View>
 
       {showSettings ? (

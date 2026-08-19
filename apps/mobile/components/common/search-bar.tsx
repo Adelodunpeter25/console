@@ -1,5 +1,6 @@
 import React from "react";
 import { View, TextInput, Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Search, Plus } from "lucide-react-native";
 
 interface SearchBarProps {
@@ -17,8 +18,17 @@ export function SearchBar({
   disabled = false,
   placeholder = "Search threads",
 }: SearchBarProps) {
+  const insets = useSafeAreaInsets();
+  // Keep clear of the home indicator / nav bar when the keyboard is closed.
+  // When the keyboard is open, Android adjustResize shrinks the window and
+  // the bottom inset typically drops to 0 so we sit flush above the keys.
+  const paddingBottom = Math.max(insets.bottom, 10) + 6;
+
   return (
-    <View className="flex-row items-center px-4 pt-3 pb-6 bg-screen/95 border-t border-border">
+    <View
+      className="flex-row items-center px-4 pt-3 bg-screen/95 border-t border-border"
+      style={{ paddingBottom }}
+    >
       <View className="flex-1 flex-row items-center bg-card border border-border rounded-full px-4 h-12 mr-3">
         <Search size={18} color="#71717a" />
         <TextInput
@@ -29,6 +39,8 @@ export function SearchBar({
           onChangeText={onChangeText}
           autoCapitalize="none"
           autoCorrect={false}
+          returnKeyType="search"
+          blurOnSubmit={false}
         />
       </View>
       <Pressable

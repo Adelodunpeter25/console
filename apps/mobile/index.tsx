@@ -79,7 +79,9 @@ function AppRoot() {
         <StatusBar style="light" />
 
         {backendUrl ? (
-          <KeyboardProvider>
+          // Edge-to-edge Android (see android/gradle.properties) needs these
+          // flags so keyboard height math matches the visible frame.
+          <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
             <ConsoleApiProvider baseUrl={backendUrl} queryClient={queryClient}>
               <MainContent />
             </ConsoleApiProvider>

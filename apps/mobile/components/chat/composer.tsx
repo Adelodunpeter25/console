@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, TextInput, Pressable } from "react-native";
+import { View, TextInput, Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowUp, Square } from "lucide-react-native";
 import { theme } from "../../styles/theme";
 
@@ -13,10 +14,17 @@ interface ComposerProps {
 
 /** Chat input row. Shows a stop button while a run is in progress. */
 export function Composer({ value, onChangeText, onSend, onStop, running }: ComposerProps) {
+  const insets = useSafeAreaInsets();
   const canSend = value.trim().length > 0;
+  // Same bottom-inset pattern as SearchBar: clear of the home indicator when
+  // idle; flush above the keyboard once the window has resized.
+  const paddingBottom = Math.max(insets.bottom, 8) + 4;
 
   return (
-    <View className="flex-row items-end gap-2 px-4 pt-2.5 pb-3 bg-screen border-t border-border">
+    <View
+      className="flex-row items-end gap-2 px-4 pt-2.5 bg-screen border-t border-border"
+      style={{ paddingBottom }}
+    >
       <View className="flex-1 flex-row items-end bg-card border border-border rounded-[22px] px-4 min-h-[48px]">
         <TextInput
           className="flex-1 max-h-[132px] py-2.5 text-foreground text-[15px] leading-[22px]"
@@ -25,6 +33,7 @@ export function Composer({ value, onChangeText, onSend, onStop, running }: Compo
           placeholder="Message the agent…"
           placeholderTextColor={theme.colors.text.muted}
           multiline
+          textAlignVertical="center"
         />
       </View>
       {running && onStop ? (

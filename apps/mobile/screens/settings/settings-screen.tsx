@@ -46,13 +46,20 @@ export function SettingsScreen() {
   const loadingModels = modelsData.isLoading;
 
   return (
-    <ScrollView style={{ flex: 1, paddingHorizontal: 16, paddingTop: 16 }}>
-      <View className="mb-5">
-        <ScreenHeader title="Console Settings" onBack={() => setActiveTab("home")} />
-        <Text className="text-sm text-foreground-secondary mt-1 ml-4">
-          Configure server connections & app environment
-        </Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
+      <ScreenHeader title="Console Settings" onBack={() => setActiveTab("home")} />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="mb-5 px-1">
+          <Text className="text-sm text-foreground-secondary">
+            Configure server connections & app environment
+          </Text>
+        </View>
 
       {/* Connection Endpoint Card */}
       <GlassSurface className="mb-4 p-5">
@@ -232,7 +239,8 @@ export function SettingsScreen() {
           <Text className="text-sm font-bold text-red-400">Disconnect Backend Endpoint</Text>
         </TouchableOpacity>
       </GlassSurface>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 

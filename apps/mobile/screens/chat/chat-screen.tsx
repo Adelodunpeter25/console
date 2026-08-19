@@ -1,5 +1,11 @@
 import React, { useCallback, useRef } from "react";
-import { View, Text, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import {
+  Platform,
+  View,
+  Text,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { MessageSquareText } from "lucide-react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
@@ -66,7 +72,13 @@ export function ChatScreen() {
   );
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
+    // Android already resizes the window (adjustResize). Extra KAV padding
+    // double-counts and leaves the composer floating mid-screen.
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: "#0a0a0b" }}
+      behavior="padding"
+      enabled={Platform.OS === "ios"}
+    >
       <ScreenHeader title={chatTitle} onBack={() => setActiveTab("home")} />
 
       {stream.messages.length === 0 && !isStreaming ? (

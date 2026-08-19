@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Alert, Text, View, Pressable, ScrollView } from "react-native";
+import { Alert, Platform, Text, View, Pressable, ScrollView } from "react-native";
 import { GitBranch } from "lucide-react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useCreateSession, useProjects, useSessions } from "@console/api";
@@ -127,13 +127,20 @@ export function HomeScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#0a0a0b" }} behavior="padding" keyboardVerticalOffset={0}>
+    // Android already resizes the window (adjustResize). Extra KAV padding
+    // double-counts and shoves the search bar too high / off-screen.
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: "#0a0a0b" }}
+      behavior="padding"
+      enabled={Platform.OS === "ios"}
+    >
       <ScreenHeader title="Console" showSettings onSettingsPress={() => setActiveTab("settings")} />
 
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         {sections.length === 0 ? (

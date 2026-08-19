@@ -1,20 +1,12 @@
-import React from "react";
+import type { PropsWithChildren } from "react";
 import { View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { StatusBar } from "expo-status-bar";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 
-interface AppShellProps {
-  children: React.ReactNode;
-}
-
-export function AppShell({ children }: AppShellProps) {
-  return (
-    <KeyboardProvider>
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
-        <StatusBar style="light" />
-        <View style={{ flex: 1 }}>{children}</View>
-      </SafeAreaView>
-    </KeyboardProvider>
-  );
+/**
+ * Root chrome for authenticated screens. Top/bottom safe areas are applied by
+ * ScreenHeader and the bottom bars (SearchBar / Composer) so we don't stack
+ * SafeAreaView padding on top of manual insets (which left a large gap under
+ * the Android status bar). KeyboardProvider lives once in index.tsx.
+ */
+export function AppShell({ children }: PropsWithChildren) {
+  return <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>{children}</View>;
 }
