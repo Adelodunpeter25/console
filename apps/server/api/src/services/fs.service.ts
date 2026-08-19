@@ -37,6 +37,11 @@ export class FsService {
     }
 
     for (const entry of dirEntries) {
+      // Ignore hidden files and directories (starting with '.') by default
+      if (entry.name.startsWith(".")) {
+        continue;
+      }
+
       const entryPath = path.join(resolvedPath, entry.name);
       let size: number | undefined;
 
@@ -66,6 +71,7 @@ export class FsService {
     });
 
     return {
+      currentPath: resolvedPath,
       path: resolvedPath,
       parentPath,
       entries,
