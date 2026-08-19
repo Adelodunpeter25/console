@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { ProjectInfo, SessionHeader, UpdateSessionDto } from "@console/types";
-import { sessionService, fsService } from "@console/api";
+import { sessionService, fsService, sessionKeys } from "@console/api";
+import { queryClient } from "../query-client";
 import { useSessionStatusStore } from "./useSessionStatusStore";
 
 interface ProjectState {
@@ -48,12 +49,14 @@ export const useProjectStore = create<ProjectState>((set) => ({
   addProject: async (path: string) => {
     const project = await fsService.addProject(path);
     set((s) => ({ projects: [...s.projects, project] }));
+    queryClient.invalidateQueries({ queryKey: ["projects"] }).catch(() => {});
     return project;
   },
 
   deleteProject: async (projectId: string) => {
     await fsService.deleteProject(projectId);
     set((s) => ({ projects: s.projects.filter((p) => p.id !== projectId) }));
+    queryClient.invalidateQueries({ queryKey: ["projects"] }).catch(() => {});
   },
 
   loadSessions: async () => {
@@ -85,6 +88,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     });
     set((s) => ({ sessions: [session, ...s.sessions] }));
     useSessionStatusStore.getState().setStatus(session.id, session.status ?? "idle");
+    queryClient.invalidateQueries({ queryKey: sessionKeys.all }).catch(() => {});
     return session;
   },
 
@@ -93,6 +97,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     set((s) => ({
       sessions: s.sessions.map((sess) => (sess.id === id ? { ...sess, ...updated } : sess)),
     }));
+    queryClient.invalidateQueries({ queryKey: sessionKeys.all }).catch(() => {});
     return updated;
   },
 
@@ -100,6 +105,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     await sessionService.deleteSession(id);
     set((s) => ({ sessions: s.sessions.filter((sess) => sess.id !== id) }));
     useSessionStatusStore.getState().clearStatus(id);
+    queryClient.invalidateQueries({ queryKey: sessionKeys.all }).catch(() => {});
   },
 
   restoreSession: async (id: string) => {
@@ -115,6 +121,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
       return { deletedSessions: filteredDeleted };
     });
+    queryClient.invalidateQueries({ queryKey: sessionKeys.all }).catch(() => {});
   },
 
   permanentlyDeleteSession: async (id: string) => {
@@ -122,6 +129,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     set((s) => ({
       deletedSessions: s.deletedSessions.filter((sess) => sess.id !== id),
     }));
+    queryClient.invalidateQueries({ queryKey: sessionKeys.all }).catch(() => {});
   },
 
   refreshSessionHeader: async (sessionId) => {
@@ -137,3 +145,4 @@ export const useProjectStore = create<ProjectState>((set) => ({
     }
   },
 }));
+
