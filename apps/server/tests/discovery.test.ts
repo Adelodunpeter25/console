@@ -74,4 +74,26 @@ console.log("Running Model Discovery tests...");
   console.log("  ✅ provider-registry dynamic fetch & bundled static fallbacks");
 }
 
+// 3. Test ProviderService favorites prioritization
+{
+  const { ProviderService } = await import("../api/src/services/provider.service.js");
+  const mockStorage: any = {
+    listModelFavorites: () => [
+      { provider: "antigravity", modelId: "gemini-3.1-pro-low" },
+    ],
+  };
+
+  const service = new ProviderService(mockStorage);
+  const providers = service.getProviders();
+  const antigravity = providers.find((p) => p.name === "antigravity");
+  assert.ok(antigravity);
+  // Originally 4th in AVAILABLE_MODELS, now sorted to 1st
+  assert.equal(antigravity.models[0]?.id, "gemini-3.1-pro-low");
+
+  const models = await service.getModels("antigravity");
+  assert.ok(models.length > 0);
+  assert.equal(models[0]?.id, "gemini-3.1-pro-low");
+  console.log("  ✅ ProviderService models list prioritizes favorites first");
+}
+
 console.log("Model Discovery tests passed!\n");
