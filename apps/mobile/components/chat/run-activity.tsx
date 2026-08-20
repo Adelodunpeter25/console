@@ -117,18 +117,18 @@ export const RunActivity = memo(function RunActivity({
     <View className="border-b border-white/[0.06] pb-1 mb-1.5">
       <Pressable
         onPress={() => setExpanded((current) => !current)}
-        className="flex-row items-center gap-2 py-1.5 px-1"
+        className="flex-row items-center gap-1.5 self-start py-1.5 px-1"
         style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
       >
         {isWorking ? <ActivityIndicator size="small" color="#71717a" /> : null}
-        <Text className="text-xs font-medium text-foreground-secondary flex-1">
+        <Text className="text-xs font-medium text-foreground-secondary">
           {summaryLabel}
         </Text>
-        {expanded ? (
-          <ChevronDown size={14} color="#71717a" />
-        ) : (
-          <ChevronRight size={14} color="#71717a" />
-        )}
+        <ChevronDown
+          size={14}
+          color="#71717a"
+          style={{ transform: [{ rotate: expanded ? "0deg" : "-90deg" }] }}
+        />
       </Pressable>
 
       {expanded && groups.length > 0 ? (
