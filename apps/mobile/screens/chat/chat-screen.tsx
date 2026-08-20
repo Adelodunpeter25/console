@@ -194,6 +194,7 @@ export function ChatScreen() {
           }}
           onStop={isAborting ? undefined : handleStop}
           running={stream.running}
+          projectLocked={stream.messages.length > 0}
         />
       )}
     </View>

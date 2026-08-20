@@ -14,10 +14,11 @@ interface ComposerProps {
   onSend: () => void;
   onStop?: () => void;
   running?: boolean;
+  projectLocked?: boolean;
 }
 
 /** Chat input row matching unified pill with bottom selectors strip. */
-export function Composer({ value, onChangeText, onSend, onStop, running }: ComposerProps) {
+export function Composer({ value, onChangeText, onSend, onStop, running, projectLocked }: ComposerProps) {
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardState((s) => s.isVisible);
   const canSend = value.trim().length > 0;
@@ -96,6 +97,7 @@ export function Composer({ value, onChangeText, onSend, onStop, running }: Compo
             projects={projects}
             selectedProjectId={selectedProject?.id ?? null}
             onProjectChange={(project) => changeProject(selectedSessionId, project)}
+            projectLocked={projectLocked}
             selectedModel={sessionView?.sessionModelId ?? null}
             selectedProvider={sessionView?.sessionProvider ?? null}
             onModelChange={(modelId) => changeModel(selectedSessionId, modelId)}

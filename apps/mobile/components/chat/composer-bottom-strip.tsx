@@ -9,6 +9,7 @@ interface ComposerBottomStripProps {
   projects: ProjectInfo[];
   selectedProjectId: string | null;
   onProjectChange: (project: ProjectInfo) => void;
+  projectLocked?: boolean;
 
   selectedModel: string | null;
   selectedProvider?: string | null;
@@ -22,6 +23,7 @@ export function ComposerBottomStrip({
   projects,
   selectedProjectId,
   onProjectChange,
+  projectLocked,
   selectedModel,
   selectedProvider,
   onModelChange,
@@ -39,6 +41,7 @@ export function ComposerBottomStrip({
           projects={projects}
           selectedId={selectedProjectId}
           onSelect={onProjectChange}
+          locked={projectLocked}
         />
         <ModelPickerSheet
           value={selectedModel}

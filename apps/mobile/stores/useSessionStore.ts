@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { ApprovalMode, ProjectInfo, SessionDetailResponse } from "@console/types";
 import { sessionService } from "@console/api";
+import { useChatStore } from "./useChatStore";
 import { useProjectStore } from "./useProjectStore";
 import { useProviderStore } from "./useProviderStore";
 import { useSessionStatusStore } from "./useSessionStatusStore";
@@ -84,6 +85,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   changeProject: (sessionId, project) => {
+    // Lock the working directory once a chat has messages. Each run reloads
+    // header.cwd for prompt-ref expansion, project context, and all tool
+    // paths — changing it mid-chat mixes old context with a new project.
+    if (useChatStore.getState().getSession(sessionId).messages.length > 0) return;
     const current = get().getSession(sessionId);
     set((state) => ({
       sessions: {
