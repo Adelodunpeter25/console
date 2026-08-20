@@ -7,16 +7,16 @@
  */
 export const OPENCODE_BASE_URL = "https://opencode.ai/zen/v1";
 
-/** Models confirmed free on the OpenCode Zen tier. */
+/** Models confirmed free on the OpenCode Zen tier. Most free models use the
+ *  `-free` id suffix and are auto-discovered by `isOpencodeFreeModelId`.
+ *  This list only needs to cover free models that DON'T follow that convention
+ *  (currently just "big-pickle") — it also serves as the offline fallback. */
 export const OPENCODE_FREE_MODEL_IDS = [
   "big-pickle",
   "deepseek-v4-flash-free",
   "mimo-v2.5-free",
-  "ling-3.0-flash-free",
   "nemotron-3-ultra-free",
-  "north-mini-code-free",
   "laguna-s-2.1-free",
-  "longcat-2.0-free",
 ] as const;
 
 export const OPENCODE_CONTEXT_WINDOW = 200_000;

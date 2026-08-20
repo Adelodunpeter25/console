@@ -18,6 +18,7 @@ import {
   codexCredentialExists,
   loadCodexCredential,
   refreshCodexIfNeeded,
+  OPENCODE_FREE_MODEL_IDS,
 } from "../../../providers/src/index.js";
 import { codexModelsUrl } from "../../../providers/src/codex/constants.js";
 import type { StreamFn } from "../service/agent-loop.js";
@@ -56,16 +57,11 @@ export const DEFAULT_ANTIGRAVITY_MODELS: Model[] = AVAILABLE_MODELS.map((id) => 
   contextWindow: id.startsWith("claude-") ? 250_000 : 1_048_576,
 }));
 
-export const DEFAULT_OPENCODE_MODELS: Model[] = [
-  "big-pickle",
-  "deepseek-v4-flash-free",
-  "mimo-v2.5-free",
-  "ling-3.0-flash-free",
-  "nemotron-3-ultra-free",
-  "north-mini-code-free",
-  "laguna-s-2.1-free",
-  "longcat-2.0-free",
-].map((id) => ({ id, provider: "opencode", contextWindow: 200_000 }));
+export const DEFAULT_OPENCODE_MODELS: Model[] = OPENCODE_FREE_MODEL_IDS.map((id) => ({
+  id,
+  provider: "opencode" as const,
+  contextWindow: 200_000,
+}));
 
 export const DEFAULT_CODEBUFF_MODELS: Model[] = CODEBUFF_MODEL_SPECS.map(
   (spec) => ({
