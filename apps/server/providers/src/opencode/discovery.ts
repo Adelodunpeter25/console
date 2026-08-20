@@ -14,8 +14,12 @@ interface OpenCodeModelsResponse {
   data?: Array<{ id: string }>;
 }
 
-/** True when a model id is on the free tier (id suffix "-free", plus "big-pickle"). */
+/** True when a model id is on the free tier. Matches the known free IDs
+ *  (including "big-pickle" which doesn't follow the `-free` suffix convention)
+ *  plus any model whose id ends with "-free", so newly added free models are
+ *  discovered automatically without a code change. */
 export function isOpencodeFreeModelId(id: string): boolean {
+  if (id.endsWith("-free")) return true;
   return OPENCODE_FREE_MODEL_IDS.includes(
     id as (typeof OPENCODE_FREE_MODEL_IDS)[number],
   );
