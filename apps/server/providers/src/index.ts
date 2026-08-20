@@ -6,7 +6,7 @@ export type { AntigravitySessionState } from "./antigravity/index.js";
 export { geminiStreamFn } from "./gemini/index.js";
 
 /** OpenCode Zen provider — free OpenAI-compatible endpoint */
-export { opencodeStreamFn, fetchOpencodeFreeModels } from "./opencode/index.js";
+export { opencodeStreamFn, fetchOpencodeFreeModels, OPENCODE_FREE_MODEL_IDS } from "./opencode/index.js";
 
 /** OpenAI Codex provider — ChatGPT OAuth and Codex Responses API. */
 export { codexStreamFn } from "./codex/stream-fn.js";
