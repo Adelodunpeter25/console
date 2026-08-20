@@ -17,6 +17,11 @@ export function useAuth() {
   const loggingIn = useAuthStore((state) => state.loggingIn);
   const loadStatus = useAuthStore((state) => state.loadStatus);
   const loginWithBrowser = useAuthStore((state) => state.loginWithBrowser);
+  const loginCodebuff = useAuthStore((state) => state.loginCodebuff);
+  const projectIds = useAuthStore((state) => state.projectIds);
+  const saveProjectId = useAuthStore((state) => state.saveProjectId);
+  const savingProjectId = useAuthStore((state) => state.savingProjectId);
+  const error = useAuthStore((state) => state.error);
   const reset = useAuthStore((state) => state.reset);
 
   // Load auth status on mount.
@@ -46,6 +51,11 @@ export function useAuth() {
     isLoggedIn,
     getLoginUrlFor: handleLogin,
     login: handleLogin,
+    loginCodebuff,
+    projectIds,
+    saveProjectId,
+    savingProjectId,
+    error,
     submitCallback: async (
       provider: OAuthProviderId,
       code: string,

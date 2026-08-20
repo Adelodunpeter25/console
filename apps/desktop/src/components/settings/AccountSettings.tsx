@@ -2,7 +2,7 @@ import React from "react";
 import { CheckCircle2, Circle, Loader2, LogIn, RefreshCw, Save } from "lucide-react";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useProviderStore } from "../../store/useProviderStore";
-import type { ProviderId } from "../../store/useAuthStore";
+import type { ProviderId, OAuthProviderId } from "../../store/useAuthStore";
 import { GlassSurface } from "../common/GlassSurface";
 
 /**
@@ -82,9 +82,7 @@ export function AccountSettings() {
               {providers.map((provider) => {
                 const id = provider.name as ProviderId;
                 const label = provider.displayName;
-                const providerStatus = status
-                  ? (status as unknown as Record<string, { loggedIn?: boolean; email?: string } | undefined>)[id]
-                  : undefined;
+                const providerStatus = status?.[id as OAuthProviderId];
                 const loggedIn = providerStatus?.loggedIn;
                 const email = providerStatus?.email;
                 const isLoggingIn = loggingIn === id;
