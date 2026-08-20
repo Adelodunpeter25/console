@@ -1,16 +1,22 @@
 import { QueryClient } from "@tanstack/react-query";
+import { setupAppFocusManager } from "./utils/app-focus-manager";
+
+// Initialize AppState event listener for automatic focus & stale refetching on mobile
+setupAppFocusManager();
 
 /**
  * Shared QueryClient for mobile.
- * 5-minute staleTime (no refetch-on-mount within that window) and
- * refetchOnWindowFocus disabled (prevents a full refetch storm when app foregrounds).
+ * Configured with 15-second staleTime and refetchOnWindowFocus enabled,
+ * allowing automatic syncing when foregrounding the app while preserving
+ * battery with refetchIntervalInBackground: false.
  */
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5,
+      staleTime: 15_000,
       retry: 2,
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
     },
   },
 });

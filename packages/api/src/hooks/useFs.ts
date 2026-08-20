@@ -12,6 +12,11 @@ export function useProjects() {
   return useQuery({
     queryKey: fsKeys.projects,
     queryFn: () => fsService.getProjects(),
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
   });
 }
 

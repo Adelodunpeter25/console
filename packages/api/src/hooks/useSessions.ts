@@ -13,6 +13,11 @@ export function useSessions(params?: { cwd?: string; projectId?: string; onlyDel
   return useQuery({
     queryKey: sessionKeys.lists(params),
     queryFn: () => sessionService.getSessions(params),
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -21,6 +26,11 @@ export function useSession(id: string) {
     queryKey: sessionKeys.detail(id),
     queryFn: () => sessionService.getSession(id),
     enabled: Boolean(id),
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
   });
 }
 

@@ -6,3 +6,4 @@ export * from "./time";
 export * from "./format";
 export * from "./tool-helpers";
 export * from "./diff";
+export * from "./app-focus-manager";
