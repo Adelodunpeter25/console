@@ -7,7 +7,11 @@ import type { CreateSessionDto, SessionDetailResponse, UpdateSessionDto } from "
 import { RunService } from "./run.service.js";
 
 export class SessionService {
-  private storage = new SqliteSessionStorage();
+  private storage: SqliteSessionStorage;
+
+  constructor(storage?: SqliteSessionStorage) {
+    this.storage = storage ?? new SqliteSessionStorage();
+  }
 
   listSessions(cwd?: string, projectId?: string, onlyDeleted?: boolean): SessionHeader[] {
     return this.storage.listSessions({ cwd, projectId, onlyDeleted });
@@ -59,7 +63,19 @@ export class SessionService {
       this.storage.updateTitle(sessionId, dto.title);
     }
     if (dto.cwd) {
-      this.storage.updateCwd(sessionId, dto.cwd);
+      // Lock the project/cwd once a chat has messages. Each run reloads
+      // header.cwd and uses it for prompt-ref expansion, system/project
+      // context, and all tool paths (run.service.ts), so changing it
+      // mid-chat would mix old conversation context with a new project.
+      // Silently ignore the change instead of erroring: the client's
+      // changeProject path is `.updateSession(...).then(refreshHeader)
+      // .catch(() => {})`, so an error would be swallowed AND skip the
+      // header refresh. A no-op keeps the refresh running, which
+      // reconciles the session list back to the real cwd.
+      const existing = this.storage.loadSession(sessionId);
+      if (existing && existing.messages.length === 0) {
+        this.storage.updateCwd(sessionId, dto.cwd);
+      }
     }
     if (dto.modelId) {
       const current = this.storage.loadSession(sessionId);
