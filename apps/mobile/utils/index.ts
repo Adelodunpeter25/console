@@ -5,3 +5,4 @@ export * from "./debounced-storage";
 export * from "./time";
 export * from "./format";
 export * from "./tool-helpers";
+export * from "./diff";

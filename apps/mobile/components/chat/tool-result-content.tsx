@@ -362,6 +362,9 @@ function FetchResult({ text }: { text: string }) {
   );
 }
 
+import { DiffView } from "./diff-view";
+import { computeLineDiff, computeNewFileDiff } from "../../utils/diff";
+
 /* ------------------------------------------------------------------ */
 /* writeFile / editFile / ask                                          */
 /* ------------------------------------------------------------------ */
@@ -392,9 +395,10 @@ interface ToolResultContentProps {
   toolName?: string;
   result: ToolResult;
   callFilePath?: string;
+  callArgs?: unknown;
 }
 
-export function ToolResultContent({ toolName, result, callFilePath }: ToolResultContentProps) {
+export function ToolResultContent({ toolName, result, callFilePath, callArgs }: ToolResultContentProps) {
   const text = resultText(result);
   const isError = result.isError;
 
@@ -406,6 +410,45 @@ export function ToolResultContent({ toolName, result, callFilePath }: ToolResult
         return <EditFileResult text={text} isError />;
       default:
         return <RawResult text={text} isError />;
+    }
+  }
+
+  // Check if we have file-diff arguments available for editFile
+  if (toolName === "editFile" && callArgs && typeof callArgs === "object") {
+    const args = callArgs as Record<string, unknown>;
+    if (typeof args.oldContent === "string" && typeof args.newContent === "string") {
+      const diff = computeLineDiff(args.oldContent, args.newContent);
+      const filePath = typeof args.path === "string" ? args.path : callFilePath;
+      return <DiffView diff={diff} filePath={filePath} />;
+    }
+  }
+
+  // Check if we have file content available for writeFile
+  if (toolName === "writeFile" && callArgs && typeof callArgs === "object") {
+    const args = callArgs as Record<string, unknown>;
+    if (typeof args.content === "string") {
+      const diff = computeNewFileDiff(args.content);
+      const filePath = typeof args.path === "string" ? args.path : callFilePath;
+      return <DiffView diff={diff} filePath={filePath} />;
+    }
+  }
+
+  // Check if we have batch files available for batchWrite
+  if (toolName === "batchWrite" && callArgs && typeof callArgs === "object") {
+    const args = callArgs as Record<string, unknown>;
+    if (Array.isArray(args.files) && args.files.length > 0) {
+      return (
+        <View className="gap-2">
+          {args.files.map((file: unknown, index: number) => {
+            if (!file || typeof file !== "object") return null;
+            const f = file as Record<string, unknown>;
+            const filePath = typeof f.path === "string" ? f.path : `file-${index + 1}`;
+            const content = typeof f.content === "string" ? f.content : "";
+            const diff = computeNewFileDiff(content);
+            return <DiffView key={filePath} diff={diff} filePath={filePath} />;
+          })}
+        </View>
+      );
     }
   }
 

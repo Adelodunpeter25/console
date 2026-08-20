@@ -7,3 +7,4 @@ export * from "./tool-call-block";
 export * from "./run-activity";
 export * from "./question-panel";
 export * from "./interaction-panel";
+export * from "./diff-view";

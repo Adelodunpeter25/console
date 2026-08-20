@@ -3,7 +3,8 @@ import { View, Text, Pressable, ActivityIndicator, ScrollView } from "react-nati
 import { AlertTriangle, CheckCircle2, ChevronRight, ChevronDown } from "lucide-react-native";
 import type { ToolCall, ToolResult } from "@console/types";
 import { ToolResultContent } from "./tool-result-content";
-import { getToolMeta, formatUnknown, argSummary } from "../../utils";
+import { DiffSummaryBadge } from "./diff-view";
+import { getToolMeta, formatUnknown, argSummary, computeLineDiff, computeNewFileDiff } from "../../utils";
 
 interface ToolCallBlockProps {
   calls: ToolCall[];
@@ -27,6 +28,24 @@ const ToolCallRow = memo(function ToolCallRow({
   const hasResult = Boolean(result);
   const isError = result?.isError;
 
+  const diffStats = useMemo(() => {
+    if (!result || result.isError || !call.arguments || typeof call.arguments !== "object") {
+      return null;
+    }
+    const args = call.arguments as Record<string, unknown>;
+    if (
+      call.name === "editFile" &&
+      typeof args.oldContent === "string" &&
+      typeof args.newContent === "string"
+    ) {
+      return computeLineDiff(args.oldContent, args.newContent);
+    }
+    if (call.name === "writeFile" && typeof args.content === "string") {
+      return computeNewFileDiff(args.content);
+    }
+    return null;
+  }, [call.name, call.arguments, result]);
+
   return (
     <View className="border-b border-white/[0.06] last:border-b-0">
       <Pressable
@@ -45,6 +64,12 @@ const ToolCallRow = memo(function ToolCallRow({
           </Text>
         ) : null}
         <View className="ml-auto shrink-0 flex-row items-center gap-1.5">
+          {diffStats ? (
+            <DiffSummaryBadge
+              addedCount={diffStats.addedCount}
+              removedCount={diffStats.removedCount}
+            />
+          ) : null}
           {isError ? (
             <AlertTriangle size={13} color="#f87171" />
           ) : hasResult ? (
@@ -62,7 +87,7 @@ const ToolCallRow = memo(function ToolCallRow({
 
       {open ? (
         <View className="px-3 pb-3 pt-1 gap-2 border-t border-white/[0.04] bg-black/20">
-          {call.arguments != null ? (
+          {call.arguments != null && !diffStats ? (
             <View>
               <Text className="text-[10px] uppercase tracking-wide text-foreground-secondary/70 mb-1 font-semibold">
                 Arguments
@@ -84,6 +109,7 @@ const ToolCallRow = memo(function ToolCallRow({
               <ToolResultContent
                 toolName={call.name}
                 result={result}
+                callArgs={call.arguments}
                 callFilePath={
                   call.arguments &&
                   typeof call.arguments === "object" &&

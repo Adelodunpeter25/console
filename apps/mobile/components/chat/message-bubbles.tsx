@@ -105,17 +105,24 @@ const ThinkingBlock = memo(function ThinkingBlock({
   );
 });
 
+import { DiffView, DiffSummaryBadge } from "./diff-view";
+import type { DiffResult } from "../../utils/diff";
+
 /** Compact collapsible tool-activity row (running / done / failed). */
 export const ToolActivityRow = memo(function ToolActivityRow({
   name,
   isRunning,
   isError,
   detail,
+  diff,
+  filePath,
 }: {
   name: string;
   isRunning?: boolean;
   isError?: boolean;
   detail?: string;
+  diff?: DiffResult | null;
+  filePath?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const statusColor = isError
@@ -152,6 +159,9 @@ export const ToolActivityRow = memo(function ToolActivityRow({
         <Text className="flex-1 text-[13px] font-mono text-foreground" numberOfLines={1}>
           {name}
         </Text>
+        {diff ? (
+          <DiffSummaryBadge addedCount={diff.addedCount} removedCount={diff.removedCount} />
+        ) : null}
         {isRunning ? (
           <Text className="text-[11px] font-semibold text-foreground-secondary">{detail ?? "Running"}</Text>
         ) : (
@@ -170,12 +180,18 @@ export const ToolActivityRow = memo(function ToolActivityRow({
           </View>
         )}
       </View>
-      {expanded && detail ? (
-        <View className="px-3.5 pb-2.5 pt-1" style={{ backgroundColor: "rgba(255,255,255,0.02)" }}>
-          <Text className="text-[12px] font-mono text-foreground-secondary leading-4" selectable>
-            {detail}
-          </Text>
-        </View>
+      {expanded ? (
+        diff ? (
+          <View className="p-2">
+            <DiffView diff={diff} filePath={filePath} />
+          </View>
+        ) : detail ? (
+          <View className="px-3.5 pb-2.5 pt-1" style={{ backgroundColor: "rgba(255,255,255,0.02)" }}>
+            <Text className="text-[12px] font-mono text-foreground-secondary leading-4" selectable>
+              {detail}
+            </Text>
+          </View>
+        ) : null
       ) : null}
     </Pressable>
   );
