@@ -11,8 +11,12 @@ const BACKEND_URL_KEY = "@console_backend_url";
  *  backend URL changes so stale messages from a different server don't
  *  leak into the new connection. */
 function clearChatCache() {
-  useChatStore.setState({ sessions: {} });
-  void useChatStore.persist.clearStorage();
+  try {
+    useChatStore.setState({ sessions: {} });
+    useChatStore.persist?.clearStorage?.();
+  } catch (err) {
+    console.warn("Could not clear persisted chat storage:", err);
+  }
 }
 
 export function useServerConnection() {
@@ -63,9 +67,14 @@ export function useServerConnection() {
       appStorage.set(BACKEND_URL_KEY, url);
       configureConsoleApi({ baseUrl: url });
       setBackendUrl(url);
+      setInputUrl(url);
       confirmAlert("Success", "Console backend server endpoint updated successfully!");
-    } catch {
-      confirmAlert("Error", "Failed to save endpoint URL.");
+    } catch (err) {
+      console.error("Failed to save endpoint URL:", err);
+      confirmAlert(
+        "Error",
+        `Failed to save endpoint URL: ${err instanceof Error ? err.message : String(err)}`,
+      );
     } finally {
       setIsSaving(false);
     }
@@ -75,7 +84,14 @@ export function useServerConnection() {
     if (!inputUrl.trim()) return;
     setTestingStatus("testing");
     try {
-      const res = await fetch(`${inputUrl.trim()}/api/projects`);
+      let url = inputUrl.trim().replace(/\/+$/, "");
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = `http://${url}`;
+      }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(`${url}/api/projects`, { signal: controller.signal });
+      clearTimeout(timeoutId);
       setTestingStatus(res.ok ? "success" : "error");
     } catch {
       setTestingStatus("error");
