@@ -2,6 +2,7 @@ import React, { memo, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Image,
   Pressable,
   Text,
   View,
@@ -27,76 +28,90 @@ const TypingDots = memo(function TypingDots() {
   const dot3 = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
-    const animate = (value: Animated.Value, delay: number) => {
-      const loop = Animated.loop(
+    const pulse = (anim: Animated.Value, delay: number) =>
+      Animated.loop(
         Animated.sequence([
-          Animated.timing(value, {
-            toValue: 1,
-            duration: 500,
-            delay,
-            useNativeDriver: true,
-          }),
-          Animated.timing(value, {
-            toValue: 0.3,
-            duration: 500,
-            useNativeDriver: true,
-          }),
+          Animated.delay(delay),
+          Animated.timing(anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0.3, duration: 400, useNativeDriver: true }),
+          Animated.delay(800 - delay),
         ]),
       );
-      loop.start();
-      return loop;
+
+    const a1 = pulse(dot1, 0);
+    const a2 = pulse(dot2, 200);
+    const a3 = pulse(dot3, 400);
+
+    a1.start();
+    a2.start();
+    a3.start();
+
+    return () => {
+      a1.stop();
+      a2.stop();
+      a3.stop();
     };
-    const loops = [dot1, dot2, dot3].map((v, i) => animate(v, i * 160));
-    return () => loops.forEach((l) => l.stop());
   }, [dot1, dot2, dot3]);
 
-  const dotStyle = (value: Animated.Value) => ({
-    opacity: value,
-  });
-
   return (
-    <View className="flex-row items-center gap-1.5 py-2">
-      {[dot1, dot2, dot3].map((v, i) => (
-        <Animated.View
-          key={i}
-          className="w-1.5 h-1.5 rounded-full"
-          style={[{ backgroundColor: theme.colors.text.muted }, dotStyle(v)]}
-        />
-      ))}
+    <View className="flex-row items-center gap-1 py-1 px-0.5">
+      <Animated.View
+        className="w-1.5 h-1.5 rounded-full"
+        style={{ opacity: dot1, backgroundColor: theme.colors.text.secondary }}
+      />
+      <Animated.View
+        className="w-1.5 h-1.5 rounded-full"
+        style={{ opacity: dot2, backgroundColor: theme.colors.text.secondary }}
+      />
+      <Animated.View
+        className="w-1.5 h-1.5 rounded-full"
+        style={{ opacity: dot3, backgroundColor: theme.colors.text.secondary }}
+      />
     </View>
   );
 });
 
-/** Collapsible "Thought" block. Expands while streaming so the user sees live reasoning. */
-const ThinkingBlock = memo(function ThinkingBlock({
+/** Thinking collapsible section for assistant messages. */
+export const ThinkingBlock = memo(function ThinkingBlock({
   text,
   isStreaming,
 }: {
   text: string;
   isStreaming?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(Boolean(isStreaming));
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <View className="mb-3">
+    <View className="mb-2">
       <Pressable
         onPress={() => setExpanded((v) => !v)}
-        className="flex-row items-center gap-1.5 self-start"
-        hitSlop={8}
+        className="flex-row items-center gap-1.5 py-1 px-2 rounded-lg self-start"
+        style={{ backgroundColor: "rgba(255,255,255,0.06)" }}
+        hitSlop={4}
       >
-        <Sparkles size={13} color={theme.colors.text.muted} />
-        <Text className="text-xs font-semibold text-foreground-secondary">
+        <Sparkles size={13} color={theme.colors.accent} />
+        <Text className="text-xs font-medium text-foreground-secondary">
           {isStreaming ? "Thinking…" : "Thought"}
         </Text>
         <ChevronDown
-          size={14}
+          size={12}
           color={theme.colors.text.muted}
           style={{ transform: [{ rotate: expanded ? "0deg" : "-90deg" }] }}
         />
       </Pressable>
-      {expanded && text ? (
-        <View className="mt-2 border-l-2 pl-3.5" style={{ borderColor: theme.colors.borderSubtle }}>
-          <Text className="text-[13px] text-foreground-secondary leading-5" selectable>
+
+      {expanded ? (
+        <View
+          className="mt-1.5 px-3 py-2.5 rounded-xl border-l-2"
+          style={{
+            backgroundColor: "rgba(255,255,255,0.03)",
+            borderColor: theme.colors.accent,
+          }}
+        >
+          <Text
+            className="text-[13px] text-foreground-secondary leading-5 font-mono"
+            selectable
+          >
             {text}
           </Text>
         </View>
@@ -239,25 +254,41 @@ const MessageCopyButton = memo(function MessageCopyButton({ text }: { text: stri
 export const UserBubble = memo(function UserBubble({
   content,
   createdAt,
+  attachments,
 }: {
   content: string;
   createdAt?: number;
+  attachments?: Array<{ type?: string; data: string; mimeType?: string }>;
 }) {
   return (
     <View className="items-end mb-2.5">
       <View
-        className="max-w-[85%] px-4 py-2.5 rounded-[20px] rounded-br-md"
+        className="max-w-[85%] px-4 py-2.5 rounded-[20px] rounded-br-md gap-2"
         style={{ backgroundColor: theme.colors.surfaceElevated }}
       >
-        <Text className="text-foreground text-[15px] leading-[22px]" selectable>
-          {content}
-        </Text>
+        {attachments && attachments.length > 0 && (
+          <View className="flex-row flex-wrap gap-1.5 pb-1">
+            {attachments.map((att, idx) => (
+              <Image
+                key={idx}
+                source={{ uri: `data:${att.mimeType ?? "image/jpeg"};base64,${att.data}` }}
+                className="w-20 h-20 rounded-xl"
+                resizeMode="cover"
+              />
+            ))}
+          </View>
+        )}
+        {content ? (
+          <Text className="text-foreground text-[15px] leading-[22px]" selectable>
+            {content}
+          </Text>
+        ) : null}
       </View>
       <View className="flex-row items-center gap-1.5 mt-1 mr-0.5">
         <Text className="text-[11px] text-foreground-secondary/70">
           {formatMessageTime(createdAt ?? Date.now())}
         </Text>
-        <MessageCopyButton text={content} />
+        {content ? <MessageCopyButton text={content} /> : null}
       </View>
     </View>
   );
@@ -324,7 +355,13 @@ export const MessageBubble = memo(function MessageBubble({
   isStreaming?: boolean;
 }) {
   if (item.role === "user") {
-    return <UserBubble content={item.content} createdAt={item.createdAt} />;
+    return (
+      <UserBubble
+        content={item.content}
+        createdAt={item.createdAt}
+        attachments={(item as any).attachments}
+      />
+    );
   }
 
   if (item.role === "toolResult") {
