@@ -11,6 +11,8 @@ import { theme } from "../../styles/theme";
 import { confirmAlert } from "../common/confirm-dialog";
 import { EmptyState } from "../common/empty-state";
 import { SessionListSkeleton } from "../common/skeleton";
+import { useChatStore } from "../../stores";
+import { draftPreview, isDraftSession } from "../../stores/chat/draft";
 
 function getStatusStyle(status?: string): {
   label: string;
@@ -75,6 +77,7 @@ export function SessionList({
   getProjectNameForSession,
   getBranchForSession,
 }: SessionListProps) {
+  const chatSessions = useChatStore((s) => s.sessions);
   if (isLoading && sections.length === 0) {
     return <SessionListSkeleton />;
   }
@@ -129,6 +132,9 @@ export function SessionList({
               const projectName = getProjectNameForSession(session);
               const branch = getBranchForSession(session);
               const isLast = index === section.data.length - 1;
+              const draft = chatSessions[session.id];
+              const isDraft = draft ? isDraftSession(draft) : false;
+              const preview = isDraft && draft ? draftPreview(draft) : null;
 
               return (
                 <Pressable
@@ -144,12 +150,26 @@ export function SessionList({
                 >
                   {/* Title + project/branch */}
                   <View className="flex-1 mr-2">
-                    <Text
-                      className="text-sm font-semibold text-foreground mb-0.5"
-                      numberOfLines={1}
-                    >
-                      {session.title || "Untitled Session"}
-                    </Text>
+                    <View className="flex-row items-center gap-1.5">
+                      <Text
+                        className="text-sm font-semibold text-foreground mb-0.5 flex-shrink"
+                        numberOfLines={1}
+                      >
+                        {session.title || "Untitled Session"}
+                      </Text>
+                      {isDraft ? (
+                        <View className="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30">
+                          <Text className="text-[8px] font-bold tracking-widest text-amber-400">
+                            DRAFT
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    {isDraft && preview ? (
+                      <Text className="text-xs text-amber-300/90 mb-0.5" numberOfLines={1}>
+                        {preview}
+                      </Text>
+                    ) : null}
                     <View className="flex-row items-center gap-1">
                       <Text className="text-xs text-foreground-secondary">{projectName}</Text>
                       {branch ? (

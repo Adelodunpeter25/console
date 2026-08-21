@@ -10,6 +10,7 @@ import { useAppStore } from "./useAppStore";
 import { useSessionStore, registerSessionHasMessagesChecker } from "./useSessionStore";
 import { useProviderStore } from "./useProviderStore";
 import { chatPersistConfig } from "./chat/chat-persist";
+import { trimDraftAttachments } from "./chat/draft";
 import {
   updateSession,
   syncSessionStatus,
@@ -68,25 +69,37 @@ export const useChatStore = create<ChatStoreState>()(
 
       setInput: (sessionId, input) =>
         set((state) => ({
-          sessions: updateSession(state.sessions, sessionId, (current) => ({ ...current, input })),
+          sessions: updateSession(state.sessions, sessionId, (current) => ({
+            ...current,
+            input,
+            draftUpdatedAt: input.trim().length > 0 || current.attachments.length > 0 ? Date.now() : undefined,
+          })),
         })),
 
       addAttachments: (sessionId, attachments) => {
         if (attachments.length === 0) return;
         set((state) => ({
-          sessions: updateSession(state.sessions, sessionId, (current) => ({
-            ...current,
-            attachments: [...current.attachments, ...attachments],
-          })),
+          sessions: updateSession(state.sessions, sessionId, (current) => {
+            const merged = trimDraftAttachments([...current.attachments, ...attachments]);
+            return {
+              ...current,
+              attachments: merged,
+              draftUpdatedAt: Date.now(),
+            };
+          }),
         }));
       },
 
       removeAttachment: (sessionId, index) =>
         set((state) => ({
-          sessions: updateSession(state.sessions, sessionId, (current) => ({
-            ...current,
-            attachments: current.attachments.filter((_, i) => i !== index),
-          })),
+          sessions: updateSession(state.sessions, sessionId, (current) => {
+            const next = current.attachments.filter((_, i) => i !== index);
+            return {
+              ...current,
+              attachments: next,
+              draftUpdatedAt: current.input.trim().length > 0 || next.length > 0 ? Date.now() : undefined,
+            };
+          }),
         })),
 
       clearAttachments: (sessionId) =>
@@ -94,6 +107,7 @@ export const useChatStore = create<ChatStoreState>()(
           sessions: updateSession(state.sessions, sessionId, (current) => ({
             ...current,
             attachments: [],
+            draftUpdatedAt: current.input.trim().length > 0 ? Date.now() : undefined,
           })),
         })),
 
@@ -139,6 +153,7 @@ export const useChatStore = create<ChatStoreState>()(
           sessions: updateSession(state.sessions, sessionId, (sessionState) => ({
             ...sessionState,
             input: "",
+            draftUpdatedAt: undefined,
             running: true,
             messages: [
               ...sessionState.messages,

@@ -2,9 +2,10 @@ import { useMemo, useState, useCallback, useEffect } from "react";
 import { useCreateSession, useDeleteSession, useProjects, useSessions, prefetchSession } from "./queries";
 import { useQueryClient } from "@tanstack/react-query";
 import type { SessionHeader } from "@console/types";
-import { useAppStore } from "../stores";
+import { useAppStore, useChatStore } from "../stores";
 import { useProjectBranches } from "./useProjectBranches";
 import { folderName } from "../utils";
+import { draftPreview, isDraftSession } from "../stores/chat/draft";
 
 export interface GroupedProjectSection {
   projectId: string | null;
@@ -46,6 +47,51 @@ export function useHomeSessions() {
     return sessions.filter((s) => (s.title || "").toLowerCase().includes(q));
   }, [sessions, searchQuery]);
 
+  // Draft map: per-session unsent input/attachments (max 2 images via draft.ts)
+  // isDraftSession true for sessions with input.trim or attachments
+  const draftSessions = useChatStore((s) => s.sessions);
+
+  // Build DRAFT section for never-sent / unsent drafts (0 messages but has input)
+  const draftSection = useMemo<GroupedProjectSection | null>(() => {
+    const drafts: SessionHeader[] = [];
+    for (const [id, state] of Object.entries(draftSessions)) {
+      if (state.messages.length !== 0) continue;
+      if (!isDraftSession(state)) continue;
+      // Find server header for this id (if it was created via composeSession)
+      const serverHeader = sessions.find((h) => h.id === id);
+      if (serverHeader) {
+        drafts.push({
+          ...serverHeader,
+          updatedAt: state.draftUpdatedAt ?? serverHeader.updatedAt,
+        });
+      } else {
+        // Ephemeral local draft with no server session yet — synthesize
+        // Use selected project as fallback cwd/projectId
+        const fallbackProject = projects[0];
+        drafts.push({
+          id,
+          title: draftPreview(state, 32),
+          cwd: fallbackProject?.path ?? "",
+          projectId: fallbackProject?.id,
+          modelId: "",
+          provider: "",
+          createdAt: state.draftUpdatedAt ?? Date.now(),
+          updatedAt: state.draftUpdatedAt ?? Date.now(),
+          messageCount: 0,
+          status: "idle" as const,
+        });
+      }
+    }
+    if (drafts.length === 0) return null;
+    drafts.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+    return {
+      projectId: null,
+      projectName: "DRAFT",
+      data: drafts,
+      latestAt: drafts[0]?.updatedAt ?? 0,
+    };
+  }, [draftSessions, sessions, projects]);
+
   // Group filtered sessions by project (by projectId or matching cwd path)
   const sections = useMemo<GroupedProjectSection[]>(() => {
     const byProject = new Map<
@@ -53,7 +99,15 @@ export function useHomeSessions() {
       { projectId: string | null; projectName: string; list: SessionHeader[] }
     >();
 
-    for (const session of filteredSessions) {
+    // Exclude drafts with 0 messages from normal grouping — they live in DRAFT section
+    const nonDraftSessions = filteredSessions.filter((s) => {
+      const st = draftSessions[s.id];
+      if (!st) return true;
+      if (st.messages.length !== 0) return true;
+      return !isDraftSession(st);
+    });
+
+    for (const session of nonDraftSessions) {
       const project =
         (session.projectId ? projects.find((p) => p.id === session.projectId) : undefined) ??
         projects.find((p) => p.path && session.cwd && p.path === session.cwd);
@@ -85,10 +139,10 @@ export function useHomeSessions() {
         latestAt: sorted[0]?.updatedAt ?? 0,
       });
     }
-    // Sort sections by their most-recent session (descending), so the latest
-    // activity overall always sits at the top of the list.
-    return result.sort((a, b) => b.latestAt - a.latestAt);
-  }, [filteredSessions, projects]);
+    const sortedRest = result.sort((a, b) => b.latestAt - a.latestAt);
+    if (draftSection) return [draftSection, ...sortedRest];
+    return sortedRest;
+  }, [filteredSessions, projects, draftSessions, draftSection]);
 
   const openSession = (sessionId: string) => {
     setSelectedSessionId(sessionId);

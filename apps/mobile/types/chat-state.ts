@@ -13,6 +13,7 @@ export function createChatSessionState(): ChatSessionState {
     todoItems: [],
     runs: [],
     attachments: [],
+    draftUpdatedAt: undefined,
   };
 }
 

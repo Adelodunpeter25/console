@@ -47,6 +47,8 @@ export interface ChatSessionState {
   todoItems: TodoItem[];
   runs: RunActivityState[];
   attachments: ImageAttachment[];
+  /** Last time draft (input/attachments) changed — for DRAFT sorting. */
+  draftUpdatedAt?: number;
 }
 
 export interface ChatStoreState {
