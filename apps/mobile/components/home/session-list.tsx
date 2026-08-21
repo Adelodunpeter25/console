@@ -103,7 +103,7 @@ export function SessionList({
           <View className="flex-row items-center justify-between mb-2 px-1">
             <View className="flex-row items-center gap-2">
               <HugeiconsIcon icon={Folder02Icon} size={14} color="#71717a" />
-              <Text className="text-xs font-semibold text-foreground-secondary uppercase tracking-wider">
+              <Text className="text-xs font-semibold text-foreground-secondary tracking-wide">
                 {section.projectName}
               </Text>
             </View>

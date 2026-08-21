@@ -103,7 +103,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       },
     }));
     sessionService
-      .updateSession(sessionId, { cwd: project.path })
+      .updateSession(sessionId, { cwd: project.path, projectId: project.id })
       .then(() => useProjectStore.getState().refreshSessionHeader(sessionId))
       .catch(() => {});
   },

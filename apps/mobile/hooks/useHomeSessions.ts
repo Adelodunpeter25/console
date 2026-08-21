@@ -15,6 +15,14 @@ export interface GroupedProjectSection {
   latestAt: number;
 }
 
+function formatProjectTitle(name: string): string {
+  if (!name) return "";
+  return name
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+}
+
 export function useHomeSessions() {
   const queryClient = useQueryClient();
   const { data: projects = [], refetch: refetchProjects } = useProjects();
@@ -86,7 +94,7 @@ export function useHomeSessions() {
     drafts.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
     return {
       projectId: null,
-      projectName: "DRAFT",
+      projectName: "Drafts",
       data: drafts,
       latestAt: drafts[0]?.updatedAt ?? 0,
     };
@@ -109,11 +117,12 @@ export function useHomeSessions() {
 
     for (const session of nonDraftSessions) {
       const project =
-        (session.projectId ? projects.find((p) => p.id === session.projectId) : undefined) ??
-        projects.find((p) => p.path && session.cwd && p.path === session.cwd);
+        projects.find((p) => p.path && session.cwd && p.path === session.cwd) ??
+        (session.projectId ? projects.find((p) => p.id === session.projectId) : undefined);
 
       const groupKey = project ? project.id : (folderName(session.cwd) || "draft").toLowerCase();
-      const groupName = project ? project.name.toUpperCase() : (folderName(session.cwd) || "DRAFT").toUpperCase();
+      const rawName = project ? project.name : (folderName(session.cwd) || "Drafts");
+      const groupName = formatProjectTitle(rawName);
 
       const existing = byProject.get(groupKey);
       if (existing) {
@@ -172,8 +181,8 @@ export function useHomeSessions() {
 
   const getProjectForSession = (session: SessionHeader) => {
     return (
-      (session.projectId ? projects.find((p) => p.id === session.projectId) : undefined) ??
-      projects.find((p) => p.path && session.cwd && p.path === session.cwd)
+      projects.find((p) => p.path && session.cwd && p.path === session.cwd) ??
+      (session.projectId ? projects.find((p) => p.id === session.projectId) : undefined)
     );
   };
 
