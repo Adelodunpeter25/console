@@ -3,7 +3,7 @@ import { View, TextInput, Pressable, StyleSheet, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-controller";
 import * as ImagePicker from "expo-image-picker";
-import { ArrowUp, Square, FolderUp, X } from "lucide-react-native";
+import { ArrowUp, Square, Plus, X } from "lucide-react-native";
 import type { ImageAttachment } from "@console/types";
 import { theme } from "../../styles/theme";
 import { useAppStore, useChatStore, useProjectStore, useSessionStore } from "../../stores";
@@ -58,6 +58,10 @@ export function Composer({
   const handlePickImages = async () => {
     if (!selectedSessionId) return;
     try {
+      if (!ImagePicker?.launchImageLibraryAsync) {
+        console.warn("ImagePicker native module not found in binary");
+        return;
+      }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsMultipleSelection: true,
@@ -115,7 +119,7 @@ export function Composer({
             isMultiline || attachments.length > 0 ? "rounded-2xl" : "rounded-full"
           }`}
         >
-          {/* Left Side Folder Attach Button */}
+          {/* Left Side Attach Button (+) */}
           <View className="pb-1">
             <Pressable
               onPress={handlePickImages}
@@ -126,7 +130,7 @@ export function Composer({
               })}
               hitSlop={6}
             >
-              <FolderUp size={17} color={theme.colors.text.secondary} />
+              <Plus size={19} color={theme.colors.text.secondary} />
             </Pressable>
           </View>
 
