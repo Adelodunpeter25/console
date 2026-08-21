@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useRef } from "react";
-import { View, Text, Keyboard, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import { View, Text, Keyboard, BackHandler, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { MessageSquareText } from "lucide-react-native";
 import type { AgentMessage } from "@console/types";
@@ -26,9 +26,24 @@ export function ChatScreen() {
   const { abort, isAborting } = useAbort();
   const decisions = useChatDecisions();
   const setActiveTab = useAppStore((state) => state.setActiveTab);
+  const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
   const chatTitle = stream.chatTitle;
   const listRef = useRef<FlashListRef<AgentMessage>>(null);
+
+  const handleBackToHome = useCallback(() => {
+    setSelectedSessionId(null);
+    setActiveTab("home");
+  }, [setSelectedSessionId, setActiveTab]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBackToHome();
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [handleBackToHome]);
 
   const isStreaming =
     stream.running &&
@@ -117,7 +132,7 @@ export function ChatScreen() {
 
   return (
     <View className="flex-1 bg-screen">
-      <ScreenHeader title={chatTitle} onBack={() => setActiveTab("home")} />
+      <ScreenHeader title={chatTitle} onBack={handleBackToHome} />
 
       {displayMessages.length === 0 && !isStreaming ? (
         <View className="flex-1 items-center justify-center px-8">

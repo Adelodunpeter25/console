@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Text, View, Pressable, FlatList, ActivityIndicator, ScrollView } from "react-native";
+import React, { useState, useEffect } from "react";
+import { Text, View, Pressable, FlatList, ActivityIndicator, ScrollView, BackHandler } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFsBrowse, useAddProject } from "../../hooks";
 import { Folder, FolderUp, ChevronRight, Check } from "lucide-react-native";
@@ -22,6 +22,19 @@ export function AddProjectScreen({ onClose, onProjectAdded }: AddProjectScreenPr
     browseData?.currentPath || browseData?.path || currentPath || "";
   const parentPath = browseData?.parentPath;
   const entries = browseData?.entries || [];
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (parentPath !== null && parentPath !== undefined && currentPath) {
+        setCurrentPath(parentPath);
+        return true;
+      }
+      onClose();
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [parentPath, currentPath, onClose]);
 
   // Filter only directories for project selection
   const directories = entries.filter((e) => e.isDir);

@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Text, View, Pressable } from "react-native";
+import React, { useState, useEffect } from "react";
+import { Text, View, Pressable, BackHandler } from "react-native";
 import { ChevronRight, Wifi, User, Folder, Trash2 } from "lucide-react-native";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { useAppStore, useProjectStore } from "../../stores";
@@ -25,6 +25,19 @@ const SECTION_META: Record<
 export function SettingsScreen() {
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const [section, setSection] = useState<SettingsSection | null>(null);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (section !== null) {
+        setSection(null);
+        return true;
+      }
+      setActiveTab("home");
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [section, setActiveTab]);
 
   const { backendUrl } = useServerConnection();
   const auth = useAuth();

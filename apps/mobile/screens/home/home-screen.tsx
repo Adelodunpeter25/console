@@ -1,5 +1,5 @@
-import React, { useRef, useState } from "react";
-import { View, ScrollView, RefreshControl } from "react-native";
+import React, { useRef, useState, useEffect } from "react";
+import { View, ScrollView, RefreshControl, BackHandler, Keyboard } from "react-native";
 import { Pencil, Trash2 } from "lucide-react-native";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { SearchBar } from "../../components/common/search-bar";
@@ -29,6 +29,19 @@ export function HomeScreen() {
     getBranchForSession,
     navigateToSettings,
   } = useHomeSessions();
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (searchQuery.trim().length > 0) {
+        setSearchQuery("");
+        Keyboard.dismiss();
+        return true;
+      }
+      return false; // Let Android exit/minimize app at home screen root
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [searchQuery, setSearchQuery]);
 
   // Single shared action sheet — imperative ref + active session state
   const actionSheetRef = useRef<SessionActionSheetHandle>(null);
