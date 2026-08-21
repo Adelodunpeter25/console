@@ -6,12 +6,6 @@ import { useChatStore } from "../stores/useChatStore";
 export function useAbort() {
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
   const abort = useChatStore((state) => state.abort);
-  const running = useChatStore(
-    useCallback(
-      (state) => (selectedSessionId ? state.sessions[selectedSessionId]?.running : false),
-      [selectedSessionId],
-    ),
-  );
 
   const handleAbort = useCallback(async () => {
     if (!selectedSessionId) return;
@@ -24,6 +18,6 @@ export function useAbort() {
 
   return {
     abort: handleAbort,
-    isAborting: Boolean(running),
   };
 }
+

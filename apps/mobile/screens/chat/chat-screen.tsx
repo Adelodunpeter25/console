@@ -16,7 +16,7 @@ import { ChatScreenSkeleton } from "../../components/common";
 
 export function ChatScreen() {
   const stream = useChatStream();
-  const { abort, isAborting } = useAbort();
+  const { abort } = useAbort();
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
@@ -98,7 +98,6 @@ export function ChatScreen() {
           }}
           onStop={handleStop}
           running={stream.running}
-          isAborting={isAborting}
           projectLocked={stream.messages.length > 0}
         />
       )}
