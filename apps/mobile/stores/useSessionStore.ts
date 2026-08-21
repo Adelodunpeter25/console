@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import type { ApprovalMode, ProjectInfo, SessionDetailResponse } from "@console/types";
 import { sessionService } from "@console/api";
-import { useChatStore } from "./useChatStore";
 import { useProjectStore } from "./useProjectStore";
 import { useProviderStore } from "./useProviderStore";
 import { useSessionStatusStore } from "./useSessionStatusStore";
@@ -29,6 +28,13 @@ interface SessionState {
   changeProject: (sessionId: string, project: ProjectInfo) => void;
   setApprovalMode: (sessionId: string, mode: ApprovalMode) => void;
   clear: () => void;
+}
+
+type SessionHasMessagesChecker = (sessionId: string) => boolean;
+let hasMessagesChecker: SessionHasMessagesChecker | null = null;
+
+export function registerSessionHasMessagesChecker(checker: SessionHasMessagesChecker) {
+  hasMessagesChecker = checker;
 }
 
 function resolveProvider(modelId: string, fallback: string | null): string | null {
@@ -88,7 +94,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // Lock the working directory once a chat has messages. Each run reloads
     // header.cwd for prompt-ref expansion, project context, and all tool
     // paths — changing it mid-chat mixes old context with a new project.
-    if (useChatStore.getState().getSession(sessionId).messages.length > 0) return;
+    if (hasMessagesChecker && hasMessagesChecker(sessionId)) return;
     const current = get().getSession(sessionId);
     set((state) => ({
       sessions: {

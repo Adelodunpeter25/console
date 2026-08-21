@@ -16,8 +16,11 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, "node_modules"),
 ];
 
-// 3. Map workspace packages
+// 3. Map workspace packages and pin critical singletons to mobile's node_modules
 config.resolver.extraNodeModules = {
+  react: path.resolve(projectRoot, "node_modules/react"),
+  "react-native": path.resolve(projectRoot, "node_modules/react-native"),
+  "@tanstack/react-query": path.resolve(projectRoot, "node_modules/@tanstack/react-query"),
   "@console/api": path.resolve(workspaceRoot, "packages/api/src"),
   "@console/types": path.resolve(workspaceRoot, "packages/types/src"),
 };

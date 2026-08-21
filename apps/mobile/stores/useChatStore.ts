@@ -7,7 +7,7 @@ import { applyChatEvent, toChatSnapshot } from "../utils/chat-events";
 import { reconstructRuns } from "../utils/reconstruct-runs";
 import { startNativeChatStream } from "../utils/native-stream";
 import { useAppStore } from "./useAppStore";
-import { useSessionStore } from "./useSessionStore";
+import { useSessionStore, registerSessionHasMessagesChecker } from "./useSessionStore";
 import { useProviderStore } from "./useProviderStore";
 import { chatPersistConfig } from "./chat/chat-persist";
 import {
@@ -287,3 +287,8 @@ export const useChatStore = create<ChatStoreState>()(
     chatPersistConfig,
   ),
 );
+
+// Register checker to avoid cyclic import in useSessionStore
+registerSessionHasMessagesChecker((sessionId) => {
+  return useChatStore.getState().getSession(sessionId).messages.length > 0;
+});

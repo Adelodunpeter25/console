@@ -1,5 +1,5 @@
 import "./global.css";
-import React from "react";
+import React, { useEffect } from "react";
 import { registerRootComponent } from "expo";
 import { StatusBar } from "expo-status-bar";
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from "react-native";
@@ -11,7 +11,8 @@ import {
   JetBrainsMono_600SemiBold,
   JetBrainsMono_700Bold,
 } from "@expo-google-fonts/jetbrains-mono";
-import { ConsoleApiProvider } from "@console/api";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { configureConsoleApi } from "@console/api";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
@@ -66,6 +67,12 @@ function AppRoot() {
     "JetBrainsMono-Bold": JetBrainsMono_700Bold,
   });
 
+  useEffect(() => {
+    if (backendUrl) {
+      configureConsoleApi({ baseUrl: backendUrl });
+    }
+  }, [backendUrl]);
+
   if (loading || !fontsLoaded) {
     return (
       <View className="flex-1 bg-screen items-center justify-center">
@@ -81,13 +88,13 @@ function AppRoot() {
           <StatusBar style="light" />
 
           {backendUrl ? (
-            <ConsoleApiProvider baseUrl={backendUrl} queryClient={queryClient}>
+            <QueryClientProvider client={queryClient}>
               <KeyboardProvider>
                 <BottomSheetModalProvider>
                   <MainContent />
                 </BottomSheetModalProvider>
               </KeyboardProvider>
-            </ConsoleApiProvider>
+            </QueryClientProvider>
           ) : (
             <OnboardingScreen />
           )}
