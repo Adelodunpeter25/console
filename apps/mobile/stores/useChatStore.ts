@@ -61,7 +61,9 @@ export const useChatStore = create<ChatStoreState>()(
               pendingQuestions: [],
               pendingPermissions: [],
               runs: reconstructRuns(messages),
-              attachments: [],
+              // Keep draft input/attachments across reloads so image drafts
+              // survive going back to home and re-entering the chat.
+              // sendMessage and explicit clear/attachment actions manage them.
             };
           }),
         }));
