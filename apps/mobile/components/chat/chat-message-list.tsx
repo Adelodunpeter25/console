@@ -67,17 +67,14 @@ export const ChatMessageList = forwardRef<FlashListRef<AgentMessage>, ChatMessag
           contentSize.height - (layoutMeasurement.height + contentOffset.y);
         const atEnd = distanceFromEnd < 96;
         isAtEndRef.current = atEnd;
+        followRef.current = atEnd;
         onScrollBottomVisibilityChange(!atEnd && displayMessages.length > 2);
-        if (!isStreaming) {
-          followRef.current = atEnd;
-        }
         // Top reached: auto-paginate earlier messages
         if (contentOffset.y < 60 && stream.hasEarlierMessages && !stream.isFetchingEarlierMessages) {
           stream.fetchEarlierMessages();
         }
       },
       [
-        isStreaming,
         displayMessages.length,
         stream.hasEarlierMessages,
         stream.isFetchingEarlierMessages,
@@ -125,7 +122,7 @@ export const ChatMessageList = forwardRef<FlashListRef<AgentMessage>, ChatMessag
         onScroll={handleScroll}
         scrollEventThrottle={32}
         onContentSizeChange={() => {
-          if (followRef.current || isStreaming) {
+          if (followRef.current) {
             handleScrollToEnd();
           }
         }}
