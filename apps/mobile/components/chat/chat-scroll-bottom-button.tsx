@@ -19,7 +19,7 @@ export const ChatScrollBottomButton = memo(function ChatScrollBottomButton({
   return (
     <View
       className="absolute left-0 right-0 items-center z-30 pointer-events-box-none"
-      style={{ bottom: hasInteraction ? 160 : 96 }}
+      style={{ bottom: hasInteraction ? 180 : 148 }}
       pointerEvents="box-none"
     >
       <Pressable

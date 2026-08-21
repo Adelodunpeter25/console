@@ -5,6 +5,7 @@ import type { ToolCall, ToolResult } from "@console/types";
 import { ToolResultContent } from "./tool-result-content";
 import { DiffSummaryBadge } from "./diff-view";
 import { getToolMeta, formatUnknown, argSummary, computeLineDiff, computeNewFileDiff } from "../../utils";
+import { useAppStore, useSessionStore } from "../../stores";
 
 interface ToolCallBlockProps {
   calls: ToolCall[];
@@ -23,8 +24,12 @@ const ToolCallRow = memo(function ToolCallRow({
   defaultOpen = false,
 }: ToolCallRowProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const selectedSessionId = useAppStore((state) => state.selectedSessionId);
+  const sessionCwd = useSessionStore((state) =>
+    selectedSessionId ? state.sessions[selectedSessionId]?.sessionCwd : null,
+  );
   const meta = getToolMeta(call.name);
-  const summary = argSummary(call);
+  const summary = argSummary(call, sessionCwd);
   const hasResult = Boolean(result);
   const isError = result?.isError;
 
@@ -152,8 +157,12 @@ const ToolCallGroup = memo(function ToolCallGroup({
   );
   const hasError = groupResults.some((result) => result.isError);
   const complete = groupResults.length === calls.length;
+  const selectedSessionId = useAppStore((state) => state.selectedSessionId);
+  const sessionCwd = useSessionStore((state) =>
+    selectedSessionId ? state.sessions[selectedSessionId]?.sessionCwd : null,
+  );
   const meta = getToolMeta(name);
-  const summary = calls.length === 1 ? argSummary(calls[0]!) : `${calls.length} calls`;
+  const summary = calls.length === 1 ? argSummary(calls[0]!, sessionCwd) : `${calls.length} calls`;
 
   return (
     <View className="border-b border-white/[0.06] last:border-b-0">
