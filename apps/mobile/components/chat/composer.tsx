@@ -142,7 +142,7 @@ export function Composer({
               })}
               hitSlop={6}
             >
-              <Plus size={20} color={theme.colors.text.secondary} />
+              <Plus size={21} color={theme.colors.text.secondary} />
             </Pressable>
 
             <TextInput
