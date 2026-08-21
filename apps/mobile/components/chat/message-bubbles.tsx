@@ -18,6 +18,7 @@ import {
 import { setStringAsync } from "expo-clipboard";
 import type { AgentMessage, ToolResult } from "@console/types";
 import { MarkdownRenderer } from "../common/markdown-renderer";
+import { ImagePreviewModal } from "../common/image-preview-modal";
 import { theme } from "../../styles/theme";
 import { formatMessageTime } from "../../utils/time";
 
@@ -260,37 +261,55 @@ export const UserBubble = memo(function UserBubble({
   createdAt?: number;
   attachments?: Array<{ type?: string; data: string; mimeType?: string }>;
 }) {
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
+
   return (
-    <View className="items-end mb-2.5">
-      <View
-        className="max-w-[85%] px-4 py-2.5 rounded-[20px] rounded-br-md gap-2"
-        style={{ backgroundColor: theme.colors.surfaceElevated }}
-      >
-        {attachments && attachments.length > 0 && (
-          <View className="flex-row flex-wrap gap-1.5 pb-1">
-            {attachments.map((att, idx) => (
-              <Image
-                key={idx}
-                source={{ uri: `data:${att.mimeType ?? "image/jpeg"};base64,${att.data}` }}
-                className="w-20 h-20 rounded-xl"
-                resizeMode="cover"
-              />
-            ))}
-          </View>
-        )}
-        {content ? (
-          <Text className="text-foreground text-[15px] leading-[22px]" selectable>
-            {content}
+    <>
+      <View className="items-end mb-2.5">
+        <View
+          className="max-w-[85%] px-4 py-2.5 rounded-[20px] rounded-br-md gap-2"
+          style={{ backgroundColor: theme.colors.surfaceElevated }}
+        >
+          {attachments && attachments.length > 0 && (
+            <View className="flex-row flex-wrap gap-1.5 pb-1">
+              {attachments.map((att, idx) => {
+                const uri = `data:${att.mimeType ?? "image/jpeg"};base64,${att.data}`;
+                return (
+                  <Pressable
+                    key={idx}
+                    onPress={() => setPreviewUri(uri)}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+                  >
+                    <Image
+                      source={{ uri }}
+                      className="w-20 h-20 rounded-xl"
+                      resizeMode="cover"
+                    />
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+          {content ? (
+            <Text className="text-foreground text-[15px] leading-[22px]" selectable>
+              {content}
+            </Text>
+          ) : null}
+        </View>
+        <View className="flex-row items-center gap-1.5 mt-1 mr-0.5">
+          <Text className="text-[11px] text-foreground-secondary/70">
+            {formatMessageTime(createdAt ?? Date.now())}
           </Text>
-        ) : null}
+          {content ? <MessageCopyButton text={content} /> : null}
+        </View>
       </View>
-      <View className="flex-row items-center gap-1.5 mt-1 mr-0.5">
-        <Text className="text-[11px] text-foreground-secondary/70">
-          {formatMessageTime(createdAt ?? Date.now())}
-        </Text>
-        {content ? <MessageCopyButton text={content} /> : null}
-      </View>
-    </View>
+
+      <ImagePreviewModal
+        visible={Boolean(previewUri)}
+        imageUri={previewUri}
+        onClose={() => setPreviewUri(null)}
+      />
+    </>
   );
 });
 
