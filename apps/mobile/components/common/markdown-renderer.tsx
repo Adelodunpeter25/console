@@ -5,6 +5,8 @@ import { Check, Copy, FileCode } from "lucide-react-native";
 import { theme } from "../../styles/theme";
 import { setStringAsync } from "expo-clipboard";
 
+import { SyntaxHighlighter } from "./syntax-highlighter";
+
 interface MarkdownRendererProps {
   content: string;
 }
@@ -177,9 +179,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
             >
               <CodeBlockHeader language={language} code={codeText} />
               <View className="px-3.5 py-3">
-                <Text className="text-foreground font-mono text-[12.5px] leading-5" selectable>
-                  {codeText}
-                </Text>
+                <SyntaxHighlighter code={codeText} language={language} />
               </View>
             </View>
           );
@@ -195,9 +195,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
             >
               <CodeBlockHeader language={language} code={codeText} />
               <View className="px-3.5 py-3">
-                <Text className="text-foreground font-mono text-[12.5px] leading-5" selectable>
-                  {codeText}
-                </Text>
+                <SyntaxHighlighter code={codeText} language={language} />
               </View>
             </View>
           );

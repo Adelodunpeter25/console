@@ -30,6 +30,7 @@
     "expo-status-bar": "~3.0.9",
     "hugeicons-react-native": "^0.0.2",
     "lucide-react-native": "^0.474.0",
+    "prismjs": "^1.29.0",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-enriched-markdown": "^1.0.1",
@@ -46,6 +47,7 @@
   },
   "devDependencies": {
     "@types/diff": "^7.0.0",
+    "@types/prismjs": "^1.26.5",
     "@types/react": "~19.1.10",
     "babel-preset-expo": "~54.0.10",
     "typescript": "~5.9.2"
