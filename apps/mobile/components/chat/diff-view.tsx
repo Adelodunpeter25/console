@@ -1,7 +1,8 @@
-import React, { memo, useState } from "react";
+import React, { memo, useState, useMemo } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import { ChevronDown, ChevronUp } from "lucide-react-native";
 import type { DiffResult, DiffLine } from "../../utils/diff";
+import { getLanguageFromPath, renderHighlightedLine } from "../common/syntax-highlighter";
 
 interface DiffViewProps {
   diff: DiffResult;
@@ -10,7 +11,15 @@ interface DiffViewProps {
   filePath?: string;
 }
 
-const DiffLineRow = memo(function DiffLineRow({ line }: { line: DiffLine }) {
+const DiffLineRow = memo(function DiffLineRow({
+  line,
+  language,
+  lineIndex,
+}: {
+  line: DiffLine;
+  language?: string;
+  lineIndex: number;
+}) {
   const isAdded = line.type === "added";
   const isRemoved = line.type === "removed";
 
@@ -20,16 +29,21 @@ const DiffLineRow = memo(function DiffLineRow({ line }: { line: DiffLine }) {
       ? "bg-red-500/10"
       : "bg-transparent";
 
-  const textColor = isAdded
-    ? "text-emerald-400"
+  const gutterColor = isAdded
+    ? "text-emerald-400 font-bold"
     : isRemoved
-      ? "text-red-400"
-      : "text-foreground-secondary/80";
+      ? "text-red-400 font-bold"
+      : "text-foreground-secondary/40";
 
   const gutterChar = isAdded ? "+" : isRemoved ? "-" : " ";
 
   const oldNo = line.oldLineNo != null ? String(line.oldLineNo) : "";
   const newNo = line.newLineNo != null ? String(line.newLineNo) : "";
+
+  const highlighted = useMemo(
+    () => renderHighlightedLine(line.text, language, `dl-${lineIndex}`),
+    [line.text, language, lineIndex],
+  );
 
   return (
     <View className={`flex-row items-stretch py-0.5 px-2 ${rowBg}`}>
@@ -41,17 +55,21 @@ const DiffLineRow = memo(function DiffLineRow({ line }: { line: DiffLine }) {
         <Text className="w-6 text-[10px] font-mono text-foreground-secondary/40 text-right pr-1">
           {newNo}
         </Text>
-        <Text className={`w-2 text-[10px] font-mono font-bold ${textColor}`}>
+        <Text className={`w-2 text-[10px] font-mono ${gutterColor}`}>
           {gutterChar}
         </Text>
       </View>
 
-      {/* Code Text */}
+      {/* Code Text with Syntax Highlighting */}
       <Text
-        className={`text-[11px] font-mono leading-4 flex-1 ${textColor}`}
+        className="text-[11px] font-mono leading-4 flex-1"
+        style={{
+          opacity: isRemoved ? 0.75 : 1,
+          color: isAdded ? "#4ade80" : isRemoved ? "#f87171" : "#e4e4e7",
+        }}
         selectable
       >
-        {line.text || " "}
+        {highlighted}
       </Text>
     </View>
   );
@@ -91,6 +109,7 @@ export const DiffView = memo(function DiffView({
   filePath,
 }: DiffViewProps) {
   const [expanded, setExpanded] = useState(false);
+  const language = useMemo(() => getLanguageFromPath(filePath), [filePath]);
   const totalLines = diff.lines.length;
   const isTruncated = totalLines > maxCollapsedLines;
   const visibleLines = isTruncated && !expanded
@@ -130,7 +149,12 @@ export const DiffView = memo(function DiffView({
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View className="min-w-full py-1">
           {visibleLines.map((line, idx) => (
-            <DiffLineRow key={`${line.type}-${idx}-${line.oldLineNo}-${line.newLineNo}`} line={line} />
+            <DiffLineRow
+              key={`${line.type}-${idx}-${line.oldLineNo}-${line.newLineNo}`}
+              line={line}
+              language={language}
+              lineIndex={idx}
+            />
           ))}
         </View>
       </ScrollView>

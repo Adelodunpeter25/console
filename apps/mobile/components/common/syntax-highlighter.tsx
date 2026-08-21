@@ -74,6 +74,43 @@ const LANGUAGE_ALIASES: Record<string, string> = {
   svg: "markup",
 };
 
+export function getLanguageFromPath(filePath?: string): string {
+  if (!filePath) return "";
+  const normalized = filePath.trim().toLowerCase();
+  const filename = normalized.split(/[/\\]/).pop() ?? "";
+
+  if (filename === "dockerfile") return "docker";
+  if (filename === "makefile") return "bash";
+  if (filename.startsWith(".env") || filename.startsWith(".git") || filename.endsWith("rc")) return "bash";
+
+  const dotIdx = filename.lastIndexOf(".");
+  if (dotIdx === -1) return "";
+  const ext = filename.slice(dotIdx + 1);
+  return LANGUAGE_ALIASES[ext] || ext;
+}
+
+export function renderHighlightedLine(
+  line: string,
+  language = "",
+  keyPrefix = "l",
+): React.ReactNode {
+  if (!line) return " ";
+  const normalizedLang = language.trim().toLowerCase();
+  const canonicalLang = LANGUAGE_ALIASES[normalizedLang] || normalizedLang;
+  const grammar = getOrLoadGrammar(canonicalLang);
+
+  if (!grammar) {
+    return line;
+  }
+
+  try {
+    const tokens = Prism.tokenize(line, grammar);
+    return renderPrismTokens(tokens, keyPrefix);
+  } catch {
+    return line;
+  }
+}
+
 interface TokenStyle {
   color: string;
   fontStyle?: "italic" | "normal";
