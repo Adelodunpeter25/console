@@ -10,7 +10,7 @@
   "scripts": {
     "dev:server": "npm run dev --workspace=@console/server",
     "start:server": "npm run start --workspace=@console/server",
-    "dev:mobile": "npm run start --workspace=@console/mobile",
+    "dev:mobile": "npm run android --workspace=@console/mobile",
     "dev:desktop": "npm run dev --workspace=@console/desktop",
     "build:desktop": "npm run build --workspace=@console/desktop",
     "build:desktop:mac": "npm run build:mac --workspace=@console/desktop",
