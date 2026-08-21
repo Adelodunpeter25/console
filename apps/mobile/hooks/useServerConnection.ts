@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { configureConsoleApi } from "@console/api";
 import { confirmAlert } from "../components/common/confirm-dialog";
 import { useAppStore } from "../stores/useAppStore";
@@ -98,21 +99,31 @@ export function useServerConnection() {
     }
   }, [inputUrl]);
 
+  const queryClient = useQueryClient();
+
   const disconnect = useCallback(() => {
-    confirmAlert("Disconnect Backend", "Are you sure you want to clear the saved backend URL?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Disconnect",
-        style: "destructive",
-        onPress: () => {
-          appStorage.delete(BACKEND_URL_KEY);
-          clearChatCache();
-          setBackendUrl(null);
-          setActiveTab("home");
+    confirmAlert(
+      "Disconnect Backend",
+      "Are you sure you want to clear the saved backend URL and reset connection data?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Disconnect",
+          style: "destructive",
+          onPress: () => {
+            appStorage.delete(BACKEND_URL_KEY);
+            clearChatCache();
+            configureConsoleApi({ baseUrl: "" });
+            queryClient.clear();
+            setBackendUrl(null);
+            setInputUrl("");
+            setTestingStatus("idle");
+            setActiveTab("home");
+          },
         },
-      },
-    ]);
-  }, [setActiveTab, setBackendUrl]);
+      ],
+    );
+  }, [setActiveTab, setBackendUrl, queryClient]);
 
   return {
     backendUrl,
