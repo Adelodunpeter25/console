@@ -1,8 +1,8 @@
 import React from "react";
-import { View, TextInput, Pressable, StyleSheet } from "react-native";
+import { View, TextInput, Pressable, StyleSheet, Keyboard } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-controller";
-import { Search } from "lucide-react-native";
+import { Search, X } from "lucide-react-native";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import { PencilEdit02Icon } from "@hugeicons/core-free-icons";
 
@@ -28,6 +28,11 @@ export function SearchBar({
   // edge-to-edge Android where adjustResize does not shrink the window).
   const paddingBottom = keyboardVisible ? 10 : Math.max(insets.bottom, 10) + 6;
 
+  const handleClear = () => {
+    onChangeText("");
+    Keyboard.dismiss();
+  };
+
   return (
     <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
       <View
@@ -48,6 +53,16 @@ export function SearchBar({
             blurOnSubmit={false}
             textAlignVertical="center"
           />
+          {value.trim().length > 0 ? (
+            <Pressable
+              onPress={handleClear}
+              hitSlop={8}
+              className="w-6 h-6 rounded-full bg-white/10 items-center justify-center ml-1"
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            >
+              <X size={13} color="#a1a1aa" />
+            </Pressable>
+          ) : null}
         </View>
         <Pressable
           className={`w-12 h-12 rounded-full items-center justify-center ${disabled ? "opacity-50" : ""}`}
