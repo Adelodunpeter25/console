@@ -67,7 +67,7 @@ export function ProjectPickerSheet({
         </Text>
       </Pressable>
 
-      <SharedBottomSheet ref={bottomSheetRef} title="Working Directory" snapPoints={["55%", "88%"]}>
+      <SharedBottomSheet ref={bottomSheetRef} title="Working Directory" snapPoints={["55%", "90%"]}>
         <View className="flex-1">
           {/* Add Project trigger row */}
           <Pressable
@@ -90,9 +90,10 @@ export function ProjectPickerSheet({
             </View>
           ) : (
             <BottomSheetScrollView
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
               className="flex-1"
-              contentContainerStyle={{ paddingBottom: 80 }}
+              contentContainerStyle={{ paddingBottom: 40 }}
             >
               {projects.map((project) => {
                 const isSelected = project.id === selectedId;

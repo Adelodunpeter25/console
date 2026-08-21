@@ -15,7 +15,7 @@ interface SharedBottomSheetProps {
 }
 
 export const SharedBottomSheet = forwardRef<BottomSheetModal, SharedBottomSheetProps>(
-  function SharedBottomSheet({ title, snapPoints = ["50%", "85%"], children }, ref) {
+  function SharedBottomSheet({ title, snapPoints = ["55%", "90%"], children }, ref) {
     const renderBackdrop = useCallback(
       (props: BottomSheetBackdropProps) => (
         <BottomSheetBackdrop
@@ -33,19 +33,20 @@ export const SharedBottomSheet = forwardRef<BottomSheetModal, SharedBottomSheetP
       <BottomSheetModal
         ref={ref}
         snapPoints={snapPoints}
+        enableDynamicSizing={false}
         backdropComponent={renderBackdrop}
         handleIndicatorStyle={{ backgroundColor: theme.colors.text.muted, width: 36, height: 4 }}
         backgroundStyle={{ backgroundColor: "#141518", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}
         enablePanDownToClose
       >
-        <BottomSheetView style={styles.container}>
+        <View style={styles.container}>
           {title ? (
             <View className="px-5 py-3 border-b border-border/40">
               <Text className="text-base font-semibold text-foreground">{title}</Text>
             </View>
           ) : null}
           <View style={styles.body}>{children}</View>
-        </BottomSheetView>
+        </View>
       </BottomSheetModal>
     );
   },

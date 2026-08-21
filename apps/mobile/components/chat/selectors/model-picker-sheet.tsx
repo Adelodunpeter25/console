@@ -1,6 +1,6 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import { View, Text, Pressable, TextInput, ActivityIndicator } from "react-native";
-import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { BottomSheetModal, BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { ScrollView } from "react-native-gesture-handler";
 import { Sparkles, Check, Search, Bot } from "lucide-react-native";
 import type { Model, ProviderId } from "@console/types";
@@ -56,6 +56,33 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
     (m) => !query || m.id.toLowerCase().includes(query) || (m.name && m.name.toLowerCase().includes(query)),
   );
 
+  const renderModelItem = useCallback(
+    ({ item: model }: { item: Model }) => {
+      const isSelected = model.id === value;
+      return (
+        <Pressable
+          className={`flex-row items-center justify-between px-3.5 py-2.5 rounded-xl mb-1.5 ${
+            isSelected ? "bg-card-alt border border-border/60" : ""
+          }`}
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          onPress={() => {
+            onChange(model.id, (activeProvider ?? undefined) as ProviderId | undefined);
+            bottomSheetRef.current?.dismiss();
+          }}
+        >
+          <View className="flex-1 mr-2">
+            <Text className="text-xs font-semibold text-foreground">{formatModelName(model.id)}</Text>
+            <Text className="text-[10px] text-foreground-secondary" numberOfLines={1}>
+              {model.id}
+            </Text>
+          </View>
+          {isSelected ? <Check size={14} color={theme.colors.status.ready} /> : null}
+        </Pressable>
+      );
+    },
+    [value, activeProvider, onChange],
+  );
+
   return (
     <>
       <Pressable
@@ -69,7 +96,7 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
         </Text>
       </Pressable>
 
-      <SharedBottomSheet ref={bottomSheetRef} title="Select Model" snapPoints={["60%", "88%"]}>
+      <SharedBottomSheet ref={bottomSheetRef} title="Select Model" snapPoints={["60%", "92%"]}>
         <View className="flex-1">
           {/* Provider tabs */}
           <View className="mb-3">
@@ -134,36 +161,17 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
               </Text>
             </View>
           ) : (
-            <BottomSheetScrollView
-              showsVerticalScrollIndicator={false}
-              className="flex-1"
-              contentContainerStyle={{ paddingBottom: 80 }}
-            >
-              {filteredModels.map((model) => {
-                const isSelected = model.id === value;
-                return (
-                  <Pressable
-                    key={model.id}
-                    className={`flex-row items-center justify-between px-3.5 py-2.5 rounded-xl mb-1.5 ${
-                      isSelected ? "bg-card-alt border border-border/60" : ""
-                    }`}
-                    style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                    onPress={() => {
-                      onChange(model.id, (activeProvider ?? undefined) as ProviderId | undefined);
-                      bottomSheetRef.current?.dismiss();
-                    }}
-                  >
-                    <View className="flex-1 mr-2">
-                      <Text className="text-xs font-semibold text-foreground">{formatModelName(model.id)}</Text>
-                      <Text className="text-[10px] text-foreground-secondary" numberOfLines={1}>
-                        {model.id}
-                      </Text>
-                    </View>
-                    {isSelected ? <Check size={14} color={theme.colors.status.ready} /> : null}
-                  </Pressable>
-                );
-              })}
-            </BottomSheetScrollView>
+            <BottomSheetFlatList
+              data={filteredModels}
+              keyExtractor={(item) => item.id}
+              renderItem={renderModelItem}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              initialNumToRender={25}
+              maxToRenderPerBatch={25}
+              windowSize={11}
+              contentContainerStyle={{ paddingBottom: 40 }}
+            />
           )}
         </View>
       </SharedBottomSheet>
