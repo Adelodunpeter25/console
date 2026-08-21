@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { useCreateSession, useDeleteSession, useProjects, useSessions } from "@console/api";
+import { useCreateSession, useDeleteSession, useProjects, useSessions } from "./queries";
 import { useQueryClient } from "@tanstack/react-query";
 import type { SessionHeader } from "@console/types";
 import { useAppStore } from "../stores";

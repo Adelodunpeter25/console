@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Text, View, Pressable, FlatList, ActivityIndicator, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useFsBrowse, useAddProject } from "@console/api";
+import { useFsBrowse, useAddProject } from "../../hooks";
 import { Folder, FolderUp, ChevronRight, Check } from "lucide-react-native";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { confirmAlert, EmptyState } from "../../components/common";
