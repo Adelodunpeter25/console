@@ -51,7 +51,10 @@ export function useServerConnection() {
     }
     setIsSaving(true);
     try {
-      const url = inputUrl.trim();
+      let url = inputUrl.trim().replace(/\/+$/, "");
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = `http://${url}`;
+      }
       // If switching to a different server, drop the local chat cache so
       // stale messages from the old server don't render against the new one.
       if (backendUrl && backendUrl !== url) {
