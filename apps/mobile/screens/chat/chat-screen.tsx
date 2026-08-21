@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
-import { MessageSquareText } from "lucide-react-native";
+import { MessageSquareText, ArrowDown } from "lucide-react-native";
 import type { AgentMessage } from "@console/types";
 import { useChatStream, useAbort, useChatDecisions } from "../../hooks";
 import { useAppStore } from "../../stores";
@@ -94,6 +94,7 @@ export function ChatScreen() {
     [displayMessages],
   );
 
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
   const isAtEndRef = useRef(true);
   const followRef = useRef(true);
 
@@ -104,6 +105,7 @@ export function ChatScreen() {
         contentSize.height - (layoutMeasurement.height + contentOffset.y);
       const atEnd = distanceFromEnd < 96;
       isAtEndRef.current = atEnd;
+      setShowScrollBottom(!atEnd && displayMessages.length > 2);
       if (!isStreaming) {
         followRef.current = atEnd;
       }
@@ -112,12 +114,13 @@ export function ChatScreen() {
         stream.fetchEarlierMessages();
       }
     },
-    [isStreaming, stream.hasEarlierMessages, stream.isFetchingEarlierMessages, stream.fetchEarlierMessages],
+    [isStreaming, displayMessages.length, stream.hasEarlierMessages, stream.isFetchingEarlierMessages, stream.fetchEarlierMessages],
   );
 
   const handleScrollToEnd = useCallback(() => {
     isAtEndRef.current = true;
     followRef.current = true;
+    setShowScrollBottom(false);
     listRef.current?.scrollToEnd({ animated: true });
   }, []);
 
@@ -233,6 +236,27 @@ export function ChatScreen() {
           }
         />
       )}
+
+      {/* Floating scroll to bottom button */}
+      {showScrollBottom ? (
+        <View
+          className="absolute right-4 z-30"
+          style={{ bottom: hasPendingInteraction ? 160 : 96 }}
+          pointerEvents="box-none"
+        >
+          <Pressable
+            onPress={handleScrollToEnd}
+            className="w-10 h-10 rounded-full bg-card-alt border border-border items-center justify-center shadow-lg shadow-black/70 active:bg-surfaceElevated"
+            style={({ pressed }) => ({
+              opacity: pressed ? 0.8 : 1,
+              transform: [{ scale: pressed ? 0.94 : 1 }],
+            })}
+            hitSlop={10}
+          >
+            <ArrowDown size={18} color={theme.colors.text.primary} />
+          </Pressable>
+        </View>
+      ) : null}
 
       {hasPendingInteraction ? (
         <InteractionPanel sessionId={selectedSessionId} />

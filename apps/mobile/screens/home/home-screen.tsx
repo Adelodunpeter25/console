@@ -109,6 +109,7 @@ export function HomeScreen() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        onScrollBeginDrag={() => Keyboard.dismiss()}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
