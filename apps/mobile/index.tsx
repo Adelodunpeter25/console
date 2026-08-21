@@ -82,27 +82,27 @@ function AppRoot() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
-          <StatusBar style="light" />
+    <QueryClientProvider client={queryClient}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
+            <StatusBar style="light" />
 
-          {backendUrl ? (
-            <QueryClientProvider client={queryClient}>
+            {backendUrl ? (
               <KeyboardProvider>
                 <BottomSheetModalProvider>
                   <MainContent />
                 </BottomSheetModalProvider>
               </KeyboardProvider>
-            </QueryClientProvider>
-          ) : (
-            <OnboardingScreen />
-          )}
+            ) : (
+              <OnboardingScreen />
+            )}
 
-          <ConfirmDialog />
-        </View>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+            <ConfirmDialog />
+          </View>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </QueryClientProvider>
   );
 }
 

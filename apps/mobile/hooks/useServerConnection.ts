@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { configureConsoleApi } from "@console/api";
 import { confirmAlert } from "../components/common/confirm-dialog";
 import { useAppStore } from "../stores/useAppStore";
 import { useChatStore } from "../stores/useChatStore";
 import { appStorage } from "../utils/storage";
+import { queryClient } from "../query-client";
 
 const BACKEND_URL_KEY = "@console_backend_url";
 
@@ -99,8 +99,6 @@ export function useServerConnection() {
     }
   }, [inputUrl]);
 
-  const queryClient = useQueryClient();
-
   const disconnect = useCallback(() => {
     confirmAlert(
       "Disconnect Backend",
@@ -123,7 +121,7 @@ export function useServerConnection() {
         },
       ],
     );
-  }, [setActiveTab, setBackendUrl, queryClient]);
+  }, [setActiveTab, setBackendUrl]);
 
   return {
     backendUrl,
