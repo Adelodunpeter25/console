@@ -1,6 +1,6 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import type { ImageAttachment } from "@console/types";
-import { useSession } from "./queries";
+import { useInfiniteSession } from "./queries";
 import { useAppStore } from "../stores/useAppStore";
 import { useChatStore } from "../stores/useChatStore";
 import { useSessionStore } from "../stores/useSessionStore";
@@ -12,17 +12,16 @@ import { useSessionStore } from "../stores/useSessionStore";
  * reads the derived snapshot for the *selected* session, sends messages
  * through the store's `sendMessage`, and exposes the same surface the mobile
  * chat screen already consumes (messages, streaming buffers, pending items,
- * input value, send/stop).
+ * input value, send/stop, backward pagination).
  *
- * Message loading uses local `useSession(id)` from `./queries`, so
- * it dedupes with any other `useSession(id)` caller while keeping the hook
- * execution on mobile's local React instance.
+ * Message loading uses local `useInfiniteSession(id)` from `./queries`, so
+ * older message batches are loaded as the user scrolls up.
  */
 export function useChatStream() {
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
 
-  // Single shared fetch for both the message history and the session title.
-  const sessionQuery = useSession(selectedSessionId ?? "");
+  // Infinite shared fetch for paginating messages backwards.
+  const sessionQuery = useInfiniteSession(selectedSessionId ?? "", 100);
 
   // Derive the UI snapshot for the selected session.
   const snapshot = useChatStore(
@@ -44,26 +43,36 @@ export function useChatStream() {
   const setInput = useChatStore((state) => state.setInput);
   const loadMessages = useChatStore((state) => state.loadMessages);
 
+  // Flatten all pages in ascending chronological order
+  const allMessages = useMemo(() => {
+    if (!sessionQuery.data?.pages || sessionQuery.data.pages.length === 0) return null;
+    return [...sessionQuery.data.pages].reverse().flatMap((p) => p.messages);
+  }, [sessionQuery.data?.pages]);
+
+  // Header metadata from the latest page
+  const latestHeader = sessionQuery.data?.pages[0]?.header;
+
   // When fresh session data arrives from the server, push the messages into
   // the chat store and sync the session view state (model, cwd, approval mode).
   useEffect(() => {
-    if (selectedSessionId && sessionQuery.data) {
-      loadMessages(selectedSessionId, sessionQuery.data.messages);
+    if (selectedSessionId && allMessages) {
+      loadMessages(selectedSessionId, allMessages);
 
-      const header = sessionQuery.data.header;
-      useSessionStore.setState((state) => ({
-        sessions: {
-          ...state.sessions,
-          [selectedSessionId]: {
-            sessionModelId: header.modelId ?? null,
-            sessionProvider: header.provider ?? null,
-            sessionCwd: header.cwd ?? null,
-            approvalMode: (header.approvalMode as import("@console/types").ApprovalMode) ?? "always-ask",
+      if (latestHeader) {
+        useSessionStore.setState((state) => ({
+          sessions: {
+            ...state.sessions,
+            [selectedSessionId]: {
+              sessionModelId: latestHeader.modelId ?? null,
+              sessionProvider: latestHeader.provider ?? null,
+              sessionCwd: latestHeader.cwd ?? null,
+              approvalMode: (latestHeader.approvalMode as import("@console/types").ApprovalMode) ?? "always-ask",
+            },
           },
-        },
-      }));
+        }));
+      }
     }
-  }, [selectedSessionId, sessionQuery.data, loadMessages]);
+  }, [selectedSessionId, allMessages, latestHeader, loadMessages]);
 
   const handleSend = useCallback(
     async (attachments?: ImageAttachment[]) => {
@@ -84,6 +93,12 @@ export function useChatStream() {
 
   const refetchMessages = useCallback(() => {
     return sessionQuery.refetch();
+  }, [sessionQuery]);
+
+  const fetchEarlierMessages = useCallback(() => {
+    if (sessionQuery.hasNextPage && !sessionQuery.isFetchingNextPage) {
+      void sessionQuery.fetchNextPage();
+    }
   }, [sessionQuery]);
 
   const sessionView = selectedSessionId
@@ -109,9 +124,12 @@ export function useChatStream() {
     sendMessage: handleSend,
     stop,
     refetchMessages,
+    hasEarlierMessages: Boolean(sessionQuery.hasNextPage),
+    isFetchingEarlierMessages: sessionQuery.isFetchingNextPage,
+    fetchEarlierMessages,
     isLoadingMessages: sessionQuery.isLoading,
     // Title from the shared TanStack Query cache — no separate fetch.
-    chatTitle: sessionQuery.data?.header.title ?? "Console",
+    chatTitle: latestHeader?.title ?? "Console",
     // Extra runtime surfaces (desktop parity).
     sessionView,
   };

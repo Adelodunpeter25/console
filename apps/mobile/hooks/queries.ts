@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { sessionService, fsService, sessionKeys, fsKeys } from "@console/api";
 import type { CreateSessionDto, UpdateSessionDto } from "@console/types";
 
@@ -16,10 +16,10 @@ export function useSessions(params?: { cwd?: string; projectId?: string; onlyDel
   });
 }
 
-export function useSession(id: string) {
+export function useSession(id: string, params?: { limit?: number; before?: number }) {
   return useQuery({
-    queryKey: sessionKeys.detail(id),
-    queryFn: () => sessionService.getSession(id),
+    queryKey: [...sessionKeys.detail(id), params],
+    queryFn: () => sessionService.getSession(id, { limit: 100, ...params }),
     enabled: Boolean(id),
     staleTime: 15_000,
     refetchOnWindowFocus: true,
@@ -29,11 +29,28 @@ export function useSession(id: string) {
   });
 }
 
+export function useInfiniteSession(id: string, limit = 100) {
+  return useInfiniteQuery({
+    queryKey: [...sessionKeys.detail(id), "infinite", limit],
+    queryFn: ({ pageParam }) =>
+      sessionService.getSession(id, {
+        limit,
+        before: pageParam as number | undefined,
+      }),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? (lastPage.nextCursor ?? undefined) : undefined),
+    enabled: Boolean(id),
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+  });
+}
+
 export function prefetchSession(queryClient: ReturnType<typeof useQueryClient>, id: string) {
   if (!id) return;
   void queryClient.prefetchQuery({
     queryKey: sessionKeys.detail(id),
-    queryFn: () => sessionService.getSession(id),
+    queryFn: () => sessionService.getSession(id, { limit: 100 }),
     staleTime: 60_000,
   });
 }

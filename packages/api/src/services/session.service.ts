@@ -23,8 +23,8 @@ export const sessionService = {
     return unwrapData(res.data, "list sessions");
   },
 
-  async getSession(id: string): Promise<SessionDetailResponse> {
-    const res = await getConsoleApiClient().get(`/api/sessions/${id}`);
+  async getSession(id: string, params?: { limit?: number; before?: number }): Promise<SessionDetailResponse> {
+    const res = await getConsoleApiClient().get(`/api/sessions/${id}`, { params });
     return unwrapData(res.data, "load session");
   },
 

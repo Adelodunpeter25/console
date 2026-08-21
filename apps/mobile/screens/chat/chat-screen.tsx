@@ -1,5 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
-import { View, Text, Keyboard, BackHandler, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import {
+  View,
+  Text,
+  Keyboard,
+  BackHandler,
+  ActivityIndicator,
+  Pressable,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { MessageSquareText } from "lucide-react-native";
 import type { AgentMessage } from "@console/types";
@@ -98,8 +107,12 @@ export function ChatScreen() {
       if (!isStreaming) {
         followRef.current = atEnd;
       }
+      // Top reached: auto-paginate earlier messages
+      if (contentOffset.y < 60 && stream.hasEarlierMessages && !stream.isFetchingEarlierMessages) {
+        stream.fetchEarlierMessages();
+      }
     },
-    [isStreaming],
+    [isStreaming, stream.hasEarlierMessages, stream.isFetchingEarlierMessages, stream.fetchEarlierMessages],
   );
 
   const handleScrollToEnd = useCallback(() => {
@@ -171,6 +184,26 @@ export function ChatScreen() {
             }
           }}
           renderItem={renderItem}
+          ListHeaderComponent={
+            stream.hasEarlierMessages ? (
+              <View className="py-2.5 items-center justify-center">
+                {stream.isFetchingEarlierMessages ? (
+                  <View className="flex-row items-center gap-2 py-1">
+                    <ActivityIndicator size="small" color={theme.colors.text.muted} />
+                    <Text className="text-xs text-foreground-secondary">Loading earlier messages…</Text>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={stream.fetchEarlierMessages}
+                    className="py-1.5 px-3.5 rounded-full bg-surfaceElevated border border-border/60"
+                    style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                  >
+                    <Text className="text-xs font-medium text-foreground-secondary">Load earlier messages</Text>
+                  </Pressable>
+                )}
+              </View>
+            ) : null
+          }
           ListFooterComponent={
             <View>
               {/* If running without a user message row yet, show latest run activity */}
