@@ -163,12 +163,13 @@ export function Composer({
               <Pressable
                 className="w-8 h-8 rounded-full items-center justify-center ml-1.5"
                 style={({ pressed }) => ({
-                  backgroundColor: "rgba(255,255,255,0.12)",
-                  opacity: pressed ? 0.7 : 1,
+                  backgroundColor: pressed ? theme.colors.dangerPressed : theme.colors.danger,
+                  opacity: pressed ? 0.9 : 1,
                 })}
                 onPress={onStop}
+                accessibilityLabel="Stop"
               >
-                <Square size={13} color={theme.colors.text.primary} />
+                <Square size={13} color="#ffffff" fill="#ffffff" />
               </Pressable>
             ) : (
               <Pressable

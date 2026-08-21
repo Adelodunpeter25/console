@@ -26,6 +26,10 @@ export const theme = {
       idle: "#a1a1aa",
       idleBg: "rgba(161, 161, 170, 0.1)",
     },
+
+    // Destructive
+    danger: "#ef4444",
+    dangerPressed: "#dc2626",
   },
 
   fonts: {
