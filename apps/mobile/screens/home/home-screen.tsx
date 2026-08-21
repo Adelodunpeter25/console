@@ -27,6 +27,7 @@ export function HomeScreen() {
     onRefresh,
     getProjectNameForSession,
     getBranchForSession,
+    prefetchSession,
     navigateToSettings,
   } = useHomeSessions();
 
