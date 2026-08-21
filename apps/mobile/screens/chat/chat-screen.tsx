@@ -10,6 +10,7 @@ import { MessageBubble } from "../../components/chat/message-bubbles";
 import { RunActivity } from "../../components/chat/run-activity";
 import { Composer } from "../../components/chat/composer";
 import { InteractionPanel } from "../../components/chat/interaction-panel";
+import { ChatScreenSkeleton } from "../../components/common";
 import { reconstructRuns } from "../../utils/reconstruct-runs";
 import { theme } from "../../styles/theme";
 
@@ -134,7 +135,9 @@ export function ChatScreen() {
     <View className="flex-1 bg-screen">
       <ScreenHeader title={chatTitle} onBack={handleBackToHome} />
 
-      {displayMessages.length === 0 && !isStreaming ? (
+      {stream.isLoadingMessages && displayMessages.length === 0 ? (
+        <ChatScreenSkeleton />
+      ) : displayMessages.length === 0 && !isStreaming ? (
         <View className="flex-1 items-center justify-center px-8">
           <View
             className="w-14 h-14 rounded-2xl items-center justify-center mb-4"
@@ -154,7 +157,8 @@ export function ChatScreen() {
           ref={listRef}
           className="flex-1"
           data={displayMessages}
-          keyExtractor={(_, i) => i.toString()}
+          estimatedItemSize={110}
+          keyExtractor={(item, i) => (item as any).id ?? `${(item as any).createdAt ?? i}-${i}`}
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16 }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"

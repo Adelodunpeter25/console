@@ -2,31 +2,48 @@ import React, { memo, useMemo } from "react";
 import { View, Text, ScrollView } from "react-native";
 import Prism from "prismjs";
 
-// Load standard language grammars
+// Load primary/core language grammars statically
 import "prismjs/components/prism-clike";
 import "prismjs/components/prism-javascript";
 import "prismjs/components/prism-typescript";
 import "prismjs/components/prism-jsx";
 import "prismjs/components/prism-tsx";
 import "prismjs/components/prism-python";
-import "prismjs/components/prism-rust";
-import "prismjs/components/prism-go";
 import "prismjs/components/prism-bash";
 import "prismjs/components/prism-json";
-import "prismjs/components/prism-yaml";
-import "prismjs/components/prism-markdown";
-import "prismjs/components/prism-c";
-import "prismjs/components/prism-cpp";
-import "prismjs/components/prism-csharp";
-import "prismjs/components/prism-java";
-import "prismjs/components/prism-kotlin";
-import "prismjs/components/prism-swift";
-import "prismjs/components/prism-sql";
-import "prismjs/components/prism-css";
-import "prismjs/components/prism-markup";
-import "prismjs/components/prism-ruby";
-import "prismjs/components/prism-php";
-import "prismjs/components/prism-docker";
+
+// Extended language loaders — loaded on demand when encountered in code blocks
+const EXTENDED_GRAMMAR_LOADERS: Record<string, () => void> = {
+  rust: () => require("prismjs/components/prism-rust"),
+  go: () => require("prismjs/components/prism-go"),
+  c: () => require("prismjs/components/prism-c"),
+  cpp: () => require("prismjs/components/prism-cpp"),
+  csharp: () => require("prismjs/components/prism-csharp"),
+  java: () => require("prismjs/components/prism-java"),
+  kotlin: () => require("prismjs/components/prism-kotlin"),
+  swift: () => require("prismjs/components/prism-swift"),
+  sql: () => require("prismjs/components/prism-sql"),
+  yaml: () => require("prismjs/components/prism-yaml"),
+  markdown: () => require("prismjs/components/prism-markdown"),
+  ruby: () => require("prismjs/components/prism-ruby"),
+  php: () => require("prismjs/components/prism-php"),
+  docker: () => require("prismjs/components/prism-docker"),
+  css: () => require("prismjs/components/prism-css"),
+  markup: () => require("prismjs/components/prism-markup"),
+};
+
+function getOrLoadGrammar(lang: string) {
+  if (Prism.languages[lang]) return Prism.languages[lang];
+  const loader = EXTENDED_GRAMMAR_LOADERS[lang];
+  if (loader) {
+    try {
+      loader();
+    } catch {
+      // Ignore if loader fails
+    }
+  }
+  return Prism.languages[lang];
+}
 
 interface SyntaxHighlighterProps {
   code: string;
@@ -161,7 +178,7 @@ export const SyntaxHighlighter = memo(function SyntaxHighlighter({
 }: SyntaxHighlighterProps) {
   const normalizedLang = language.trim().toLowerCase();
   const canonicalLang = LANGUAGE_ALIASES[normalizedLang] || normalizedLang;
-  const grammar = Prism.languages[canonicalLang];
+  const grammar = getOrLoadGrammar(canonicalLang);
 
   const tokenElements = useMemo(() => {
     if (!code) return null;

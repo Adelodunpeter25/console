@@ -128,3 +128,37 @@ export function SessionListSkeleton() {
     </View>
   );
 }
+
+/**
+ * Chat screen loading skeleton showing simulated alternating message bubbles
+ */
+export function ChatScreenSkeleton() {
+  return (
+    <View className="flex-1 px-4 pt-3 gap-4">
+      {/* User message skeleton */}
+      <View className="items-end">
+        <Skeleton className="h-12 w-3/5 rounded-[20px] rounded-br-md" />
+        <Skeleton className="h-3 w-12 rounded-sm mt-1.5 mr-1" />
+      </View>
+
+      {/* Assistant message skeleton */}
+      <View className="items-start gap-2 max-w-[85%]">
+        <Skeleton className="h-4 w-28 rounded-md" />
+        <Skeleton className="h-20 w-full rounded-2xl" />
+        <Skeleton className="h-3 w-16 rounded-sm mt-0.5 ml-1" />
+      </View>
+
+      {/* Another User message skeleton */}
+      <View className="items-end">
+        <Skeleton className="h-10 w-2/5 rounded-[20px] rounded-br-md" />
+        <Skeleton className="h-3 w-12 rounded-sm mt-1.5 mr-1" />
+      </View>
+
+      {/* Another Assistant message with tool skeleton */}
+      <View className="items-start gap-2 w-full">
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-16 w-4/5 rounded-2xl" />
+      </View>
+    </View>
+  );
+}

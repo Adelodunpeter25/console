@@ -109,6 +109,7 @@ export function useChatStream() {
     sendMessage: handleSend,
     stop,
     refetchMessages,
+    isLoadingMessages: sessionQuery.isLoading,
     // Title from the shared TanStack Query cache — no separate fetch.
     chatTitle: sessionQuery.data?.header.title ?? "Console",
     // Extra runtime surfaces (desktop parity).

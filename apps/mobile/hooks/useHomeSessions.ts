@@ -1,5 +1,5 @@
-import { useMemo, useState, useCallback } from "react";
-import { useCreateSession, useDeleteSession, useProjects, useSessions } from "./queries";
+import { useMemo, useState, useCallback, useEffect } from "react";
+import { useCreateSession, useDeleteSession, useProjects, useSessions, prefetchSession } from "./queries";
 import { useQueryClient } from "@tanstack/react-query";
 import type { SessionHeader } from "@console/types";
 import { useAppStore } from "../stores";
@@ -25,6 +25,19 @@ export function useHomeSessions() {
   const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
   const [searchQuery, setSearchQuery] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Background prefetch top 5 most recent sessions so opening any recent chat is instant
+  useEffect(() => {
+    if (sessions.length > 0) {
+      const topSessions = sessions.slice(0, 5);
+      const timer = setTimeout(() => {
+        for (const s of topSessions) {
+          prefetchSession(queryClient, s.id);
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [sessions, queryClient]);
 
   // Filter sessions by search query
   const filteredSessions = useMemo(() => {
@@ -146,6 +159,7 @@ export function useHomeSessions() {
     onRefresh,
     getProjectNameForSession,
     getBranchForSession,
+    prefetchSession: (id: string) => prefetchSession(queryClient, id),
     navigateToSettings: () => setActiveTab("settings"),
   };
 }

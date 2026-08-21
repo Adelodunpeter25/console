@@ -124,6 +124,7 @@ export function HomeScreen() {
           isLoading={isLoadingSessions}
           isCreatingSession={isCreatingSession}
           openSession={openSession}
+          prefetchSession={prefetchSession}
           composeSession={composeSession}
           onLongPressSession={handleLongPress}
           getProjectNameForSession={getProjectNameForSession}

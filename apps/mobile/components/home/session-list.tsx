@@ -56,6 +56,7 @@ interface SessionListProps {
   isLoading: boolean;
   isCreatingSession?: boolean;
   openSession: (id: string) => void;
+  prefetchSession?: (id: string) => void;
   composeSession: (projectId?: string | null) => Promise<any>;
   onLongPressSession: (session: SessionHeader) => void;
   getProjectNameForSession: (session: SessionHeader) => string;
@@ -68,6 +69,7 @@ export function SessionList({
   isLoading,
   isCreatingSession,
   openSession,
+  prefetchSession,
   composeSession,
   onLongPressSession,
   getProjectNameForSession,
@@ -135,6 +137,7 @@ export function SessionList({
                     !isLast ? "border-b border-border/40" : ""
                   }`}
                   style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+                  onPressIn={() => prefetchSession?.(session.id)}
                   onPress={() => openSession(session.id)}
                   onLongPress={() => onLongPressSession(session)}
                   delayLongPress={200}

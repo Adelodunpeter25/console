@@ -25,12 +25,14 @@ async function fetchBranches(projects: ProjectInfo[]): Promise<Record<string, st
 /**
  * Fetch the current git branch for every project path in one pass.
  * Returns a map of projectId -> branch (empty when the folder isn't a git repo).
- * Cached by TanStack Query; refetch on demand via `refetch`.
+ * Cached by TanStack Query with a 60s stale time to avoid repetitive git processes.
  */
 export function useProjectBranches(projects: ProjectInfo[]) {
   return useQuery({
     queryKey: ["git", "branches", projectKey(projects)],
     queryFn: () => fetchBranches(projects),
+    enabled: projects.length > 0,
+    staleTime: 60_000,
     placeholderData: (previous) => previous ?? {},
   });
 }

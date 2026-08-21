@@ -29,6 +29,15 @@ export function useSession(id: string) {
   });
 }
 
+export function prefetchSession(queryClient: ReturnType<typeof useQueryClient>, id: string) {
+  if (!id) return;
+  void queryClient.prefetchQuery({
+    queryKey: sessionKeys.detail(id),
+    queryFn: () => sessionService.getSession(id),
+    staleTime: 60_000,
+  });
+}
+
 export function useCreateSession() {
   const queryClient = useQueryClient();
   return useMutation({
