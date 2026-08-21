@@ -1,9 +1,8 @@
 import React from "react";
 import { View, Text, Pressable } from "react-native";
-import { Plus } from "lucide-react-native";
+import { Plus, MessageSquare, Image as ImageIcon } from "lucide-react-native";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import { Folder02Icon } from "@hugeicons/core-free-icons";
-import { MessageSquare } from "lucide-react-native";
 import type { SessionHeader } from "@console/types";
 import type { GroupedProjectSection } from "../../hooks/useHomeSessions";
 import { formatRelativeTime } from "../../utils/time";
@@ -166,9 +165,14 @@ export function SessionList({
                       ) : null}
                     </View>
                     {isDraft && preview ? (
-                      <Text className="text-xs text-amber-300/90 mb-0.5" numberOfLines={1}>
-                        {preview}
-                      </Text>
+                      <View className="flex-row items-center gap-1 mb-0.5">
+                        {draft && draft.input.trim().length === 0 && draft.attachments.length > 0 ? (
+                          <ImageIcon size={10} color="#fcd34d" />
+                        ) : null}
+                        <Text className="text-xs text-amber-300/90" numberOfLines={1}>
+                          {preview}
+                        </Text>
+                      </View>
                     ) : null}
                     <View className="flex-row items-center gap-1">
                       <Text className="text-xs text-foreground-secondary">{projectName}</Text>

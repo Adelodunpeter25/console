@@ -37,7 +37,7 @@ export function draftPreview(state: ChatSessionState, maxLen = 48): string {
   }
   if (state.attachments.length > 0) {
     const n = state.attachments.length;
-    return n === 1 ? "Draft: 📎 1 image" : `Draft: 📎 ${n} images`;
+    return n === 1 ? "Draft: 1 image" : `Draft: ${n} images`;
   }
   return "Draft";
 }
