@@ -95,13 +95,43 @@ export function formatUnknown(val: unknown): string {
   }
 }
 
+/** Extracts just the file name from a path. */
+export function getFileName(filePath?: string): string {
+  if (!filePath) return "";
+  const clean = filePath.replace(/\\/g, "/");
+  const parts = clean.split("/");
+  return parts[parts.length - 1] || filePath;
+}
+
+/** Formats a path cleanly for mobile display: strips common workspace/home prefixes to show relative project path. */
+export function formatDisplayPath(filePath?: string): string {
+  if (!filePath) return "";
+  const clean = filePath.replace(/\\/g, "/");
+
+  // If path contains standard workspace or project markers, take relative path from project root
+  const projectMatch = clean.match(/(?:Documents\/Projects\/|projects\/|workspace\/|workspace\/[^/]+\/)([^/]+)\/(.+)$/i);
+  if (projectMatch && projectMatch[2]) {
+    return projectMatch[2];
+  }
+
+  // If it's a long absolute path (e.g. /Users/name/... or /home/name/...), take last 2-3 segments
+  const segments = clean.split("/").filter(Boolean);
+  if (segments.length > 3 && (clean.startsWith("/Users/") || clean.startsWith("/home/"))) {
+    return segments.slice(-3).join("/");
+  }
+
+  return clean;
+}
+
 /** Extract a short summary string from tool arguments. */
 export function argSummary(call: ToolCall): string | null {
   const args = call.arguments;
   if (!args || typeof args !== "object") return null;
   const obj = args as Record<string, unknown>;
-  if (typeof obj.path === "string") return obj.path;
-  if (typeof obj.filePath === "string") return obj.filePath;
+  if (typeof obj.path === "string") return formatDisplayPath(obj.path);
+  if (typeof obj.filePath === "string") return formatDisplayPath(obj.filePath);
+  if (typeof obj.targetFile === "string") return formatDisplayPath(obj.targetFile);
+  if (typeof obj.absolutePath === "string") return formatDisplayPath(obj.absolutePath);
   if (typeof obj.command === "string") {
     const cmd = obj.command as string;
     return cmd.length > 45 ? cmd.slice(0, 42) + "…" : cmd;
@@ -112,7 +142,7 @@ export function argSummary(call: ToolCall): string | null {
     return q.length > 45 ? q.slice(0, 42) + "…" : q;
   }
   if (typeof obj.url === "string") return obj.url;
-  if (typeof obj.directory === "string") return obj.directory;
+  if (typeof obj.directory === "string") return formatDisplayPath(obj.directory);
   if (typeof obj.question === "string") {
     const q = obj.question as string;
     return q.length > 45 ? q.slice(0, 42) + "…" : q;

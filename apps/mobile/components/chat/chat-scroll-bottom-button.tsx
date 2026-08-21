@@ -18,20 +18,20 @@ export const ChatScrollBottomButton = memo(function ChatScrollBottomButton({
 
   return (
     <View
-      className="absolute right-4 z-30"
+      className="absolute left-0 right-0 items-center z-30 pointer-events-box-none"
       style={{ bottom: hasInteraction ? 160 : 96 }}
       pointerEvents="box-none"
     >
       <Pressable
         onPress={onPress}
-        className="w-10 h-10 rounded-full bg-card-alt border border-border items-center justify-center shadow-lg shadow-black/70 active:bg-surfaceElevated"
+        className="w-9 h-9 rounded-full bg-card-alt border border-border items-center justify-center shadow-lg shadow-black/80 active:bg-surfaceElevated"
         style={({ pressed }) => ({
           opacity: pressed ? 0.8 : 1,
           transform: [{ scale: pressed ? 0.94 : 1 }],
         })}
         hitSlop={10}
       >
-        <ArrowDown size={18} color={theme.colors.text.primary} />
+        <ArrowDown size={17} color={theme.colors.text.primary} />
       </Pressable>
     </View>
   );

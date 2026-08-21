@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, TextInput, Pressable, StyleSheet, Image } from "react-native";
+import { View, TextInput, Pressable, StyleSheet, Image, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-controller";
 import * as ImagePicker from "expo-image-picker";
@@ -16,6 +16,7 @@ interface ComposerProps {
   onSend: () => void;
   onStop?: () => void;
   running?: boolean;
+  isAborting?: boolean;
   projectLocked?: boolean;
 }
 
@@ -26,6 +27,7 @@ export function Composer({
   onSend,
   onStop,
   running,
+  isAborting,
   projectLocked,
 }: ComposerProps) {
   const insets = useSafeAreaInsets();
@@ -159,17 +161,22 @@ export function Composer({
               }}
             />
 
-            {running && onStop ? (
+            {running || isAborting ? (
               <Pressable
                 className="w-8 h-8 rounded-full items-center justify-center ml-1.5"
                 style={({ pressed }) => ({
-                  backgroundColor: pressed ? theme.colors.dangerPressed : theme.colors.danger,
-                  opacity: pressed ? 0.9 : 1,
+                  backgroundColor: "#ef4444",
+                  opacity: pressed || isAborting ? 0.7 : 1,
                 })}
                 onPress={onStop}
+                disabled={isAborting}
                 accessibilityLabel="Stop"
               >
-                <Square size={13} color="#ffffff" fill="#ffffff" />
+                {isAborting ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Square size={12} color="#ffffff" fill="#ffffff" />
+                )}
               </Pressable>
             ) : (
               <Pressable

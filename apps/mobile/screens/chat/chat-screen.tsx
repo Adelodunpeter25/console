@@ -96,8 +96,9 @@ export function ChatScreen() {
             handleScrollToEnd();
             stream.sendMessage();
           }}
-          onStop={isAborting ? undefined : handleStop}
+          onStop={handleStop}
           running={stream.running}
+          isAborting={isAborting}
           projectLocked={stream.messages.length > 0}
         />
       )}
