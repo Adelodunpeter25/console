@@ -98,27 +98,27 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
           </View>
         ),
         paragraph: (node, children) => (
-          <Text key={node.key} className="text-foreground text-[15px] leading-[23px] my-[3px]">
+          <Text key={node.key} className="text-foreground text-[15px] leading-[23px] my-[3px]" selectable>
             {children}
           </Text>
         ),
         heading1: (node, children) => (
-          <Text key={node.key} className="text-foreground text-lg font-bold mt-4 mb-2">
+          <Text key={node.key} className="text-foreground text-lg font-bold mt-4 mb-2" selectable>
             {children}
           </Text>
         ),
         heading2: (node, children) => (
-          <Text key={node.key} className="text-foreground text-base font-bold mt-3 mb-1.5">
+          <Text key={node.key} className="text-foreground text-base font-bold mt-3 mb-1.5" selectable>
             {children}
           </Text>
         ),
         heading3: (node, children) => (
-          <Text key={node.key} className="text-foreground text-[15px] font-bold mt-2.5 mb-1">
+          <Text key={node.key} className="text-foreground text-[15px] font-bold mt-2.5 mb-1" selectable>
             {children}
           </Text>
         ),
         heading4: (node, children) => (
-          <Text key={node.key} className="text-foreground text-sm font-bold mt-2 mb-0.5">
+          <Text key={node.key} className="text-foreground text-sm font-bold mt-2 mb-0.5" selectable>
             {children}
           </Text>
         ),
@@ -137,7 +137,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
           const bullet = isOrdered ? (node.index !== undefined ? `${node.index + 1}.` : "•") : "•";
           return (
             <View key={node.key} className="flex-row items-start my-[3px]">
-              <Text className="text-foreground/70 mr-2.5 mt-0.5 text-[14px] font-semibold">
+              <Text className="text-foreground/70 mr-2.5 mt-0.5 text-[14px] font-semibold" selectable>
                 {bullet}
               </Text>
               <View className="flex-1">{children}</View>
@@ -149,6 +149,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
             key={node.key}
             className="underline text-[15px]"
             style={{ color: "#7da7ff" }}
+            selectable
             onPress={() => {
               const href = node.attributes?.href;
               if (typeof href === "string") {
@@ -164,6 +165,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
             key={node.key}
             className="font-mono text-[12.5px] text-orange-300 px-1.5 py-0.5 rounded-md"
             style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
+            selectable
           >
             {node.content}
           </Text>
@@ -201,12 +203,12 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
           );
         },
         strong: (node, children) => (
-          <Text key={node.key} className="font-bold text-foreground">
+          <Text key={node.key} className="font-bold text-foreground" selectable>
             {children}
           </Text>
         ),
         em: (node, children) => (
-          <Text key={node.key} className="italic text-foreground/90">
+          <Text key={node.key} className="italic text-foreground/90" selectable>
             {children}
           </Text>
         ),
