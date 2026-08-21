@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { configureConsoleApi } from "@console/api";
 import { confirmAlert } from "../components/common/confirm-dialog";
 import { useAppStore } from "../stores/useAppStore";
 import { useChatStore } from "../stores/useChatStore";
+import { appStorage } from "../utils/storage";
 
 const BACKEND_URL_KEY = "@console_backend_url";
 
@@ -25,9 +25,9 @@ export function useServerConnection() {
   const [isSaving, setIsSaving] = useState(false);
   const [testingStatus, setTestingStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
 
-  const loadBackendUrl = useCallback(async () => {
+  const loadBackendUrl = useCallback(() => {
     try {
-      const stored = await AsyncStorage.getItem(BACKEND_URL_KEY);
+      const stored = appStorage.getString(BACKEND_URL_KEY);
       if (stored) {
         configureConsoleApi({ baseUrl: stored });
         setBackendUrl(stored);
@@ -44,7 +44,7 @@ export function useServerConnection() {
     loadBackendUrl();
   }, [loadBackendUrl]);
 
-  const saveConnection = useCallback(async () => {
+  const saveConnection = useCallback(() => {
     if (!inputUrl.trim()) {
       confirmAlert("Invalid URL", "Backend server endpoint cannot be empty.");
       return;
@@ -60,7 +60,7 @@ export function useServerConnection() {
       if (backendUrl && backendUrl !== url) {
         clearChatCache();
       }
-      await AsyncStorage.setItem(BACKEND_URL_KEY, url);
+      appStorage.set(BACKEND_URL_KEY, url);
       configureConsoleApi({ baseUrl: url });
       setBackendUrl(url);
       confirmAlert("Success", "Console backend server endpoint updated successfully!");
@@ -82,14 +82,14 @@ export function useServerConnection() {
     }
   }, [inputUrl]);
 
-  const disconnect = useCallback(async () => {
+  const disconnect = useCallback(() => {
     confirmAlert("Disconnect Backend", "Are you sure you want to clear the saved backend URL?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Disconnect",
         style: "destructive",
-        onPress: async () => {
-          await AsyncStorage.removeItem(BACKEND_URL_KEY);
+        onPress: () => {
+          appStorage.delete(BACKEND_URL_KEY);
           clearChatCache();
           setBackendUrl(null);
           setActiveTab("home");

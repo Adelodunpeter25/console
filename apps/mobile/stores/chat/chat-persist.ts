@@ -1,10 +1,9 @@
 import { createJSONStorage } from "zustand/middleware";
 import type { ChatSessionState } from "../../types";
 import { createChatSessionState } from "../../types/chat-state";
-import { debouncedAsyncStorage } from "../../utils/debounced-storage";
+import { mmkvZustandStorage } from "../../utils/storage";
 
 export const PERSIST_NAME = "console-chat-cache";
-export const PERSIST_DEBOUNCE_MS = 2000;
 export const MAX_PERSISTED_SESSIONS = 25;
 export const MAX_PERSISTED_MESSAGES = 50;
 
@@ -14,7 +13,7 @@ export interface ChatStorePersistedState {
 
 export const chatPersistConfig = {
   name: PERSIST_NAME,
-  storage: createJSONStorage(() => debouncedAsyncStorage(PERSIST_DEBOUNCE_MS)),
+  storage: createJSONStorage(() => mmkvZustandStorage),
   partialize: (state: ChatStorePersistedState) => ({
     sessions: Object.fromEntries(
       Object.entries(state.sessions)
