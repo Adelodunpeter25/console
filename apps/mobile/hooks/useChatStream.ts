@@ -49,30 +49,61 @@ export function useChatStream() {
     return [...sessionQuery.data.pages].reverse().flatMap((p) => p.messages);
   }, [sessionQuery.data?.pages]);
 
+  // Compute a stable fingerprint of messages to prevent unnecessary reload cascades
+  const messagesFingerprint = useMemo(() => {
+    if (!allMessages) return "";
+    const firstId = (allMessages[0] as any)?.id ?? "";
+    const lastId = (allMessages[allMessages.length - 1] as any)?.id ?? "";
+    return `${allMessages.length}:${firstId}:${lastId}`;
+  }, [allMessages]);
+
   // Header metadata from the latest page
   const latestHeader = sessionQuery.data?.pages[0]?.header;
 
   // When fresh session data arrives from the server, push the messages into
   // the chat store and sync the session view state (model, cwd, approval mode).
+  // Skip loadMessages if the chat session is currently actively streaming/running.
   useEffect(() => {
-    if (selectedSessionId && allMessages) {
-      loadMessages(selectedSessionId, allMessages);
+    if (!selectedSessionId || !allMessages) return;
 
-      if (latestHeader) {
-        useSessionStore.setState((state) => ({
+    const isRunning = useChatStore.getState().sessions[selectedSessionId]?.running;
+    if (!isRunning) {
+      loadMessages(selectedSessionId, allMessages);
+    }
+
+    if (latestHeader) {
+      useSessionStore.setState((state) => {
+        const current = state.sessions[selectedSessionId];
+        const nextModel = latestHeader.modelId ?? null;
+        const nextProvider = latestHeader.provider ?? null;
+        const nextCwd = latestHeader.cwd ?? null;
+        const nextApproval =
+          (latestHeader.approvalMode as import("@console/types").ApprovalMode) ?? "always-ask";
+
+        if (
+          current &&
+          current.sessionModelId === nextModel &&
+          current.sessionProvider === nextProvider &&
+          current.sessionCwd === nextCwd &&
+          current.approvalMode === nextApproval
+        ) {
+          return state;
+        }
+
+        return {
           sessions: {
             ...state.sessions,
             [selectedSessionId]: {
-              sessionModelId: latestHeader.modelId ?? null,
-              sessionProvider: latestHeader.provider ?? null,
-              sessionCwd: latestHeader.cwd ?? null,
-              approvalMode: (latestHeader.approvalMode as import("@console/types").ApprovalMode) ?? "always-ask",
+              sessionModelId: nextModel,
+              sessionProvider: nextProvider,
+              sessionCwd: nextCwd,
+              approvalMode: nextApproval,
             },
           },
-        }));
-      }
+        };
+      });
     }
-  }, [selectedSessionId, allMessages, latestHeader, loadMessages]);
+  }, [selectedSessionId, messagesFingerprint, latestHeader, loadMessages, allMessages]);
 
   const handleSend = useCallback(
     async (attachments?: ImageAttachment[]) => {

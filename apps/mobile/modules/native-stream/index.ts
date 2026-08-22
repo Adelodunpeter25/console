@@ -36,8 +36,22 @@ export function startNativeChatStream(
   callbacks: StreamCallbacks,
   headers: Record<string, string> = { "Content-Type": "application/json" }
 ): () => void {
+  let finished = false;
+
+  const emitError = (err: string) => {
+    if (finished) return;
+    finished = true;
+    callbacks.onError(err);
+    callbacks.onEnd(true);
+  };
+
+  const emitEnd = (aborted = false) => {
+    if (finished) return;
+    finished = true;
+    callbacks.onEnd(aborted);
+  };
+
   if (isNativeStreamAvailable()) {
-    let finished = false;
     const subscriptions: Subscription[] = [];
 
     const eventSub = emitter!.addListener(
@@ -59,9 +73,8 @@ export function startNativeChatStream(
       "onStreamError",
       (data: { streamId: string; error: string; statusCode?: number }) => {
         if (data.streamId === streamId && !finished) {
-          finished = true;
           cleanup();
-          callbacks.onError(data.error);
+          emitError(data.error);
         }
       }
     );
@@ -71,16 +84,22 @@ export function startNativeChatStream(
       "onStreamEnd",
       (data: { streamId: string; aborted?: boolean }) => {
         if (data.streamId === streamId && !finished) {
-          finished = true;
           cleanup();
-          callbacks.onEnd(Boolean(data.aborted));
+          emitEnd(Boolean(data.aborted));
         }
       }
     );
     subscriptions.push(endSub);
 
     const cleanup = () => {
-      subscriptions.forEach((sub) => sub.remove());
+      subscriptions.forEach((sub) => {
+        try {
+          sub.remove();
+        } catch {
+          // ignore
+        }
+      });
+      subscriptions.length = 0;
     };
 
     NativeStreamModule.startChatStream(
@@ -90,16 +109,15 @@ export function startNativeChatStream(
       headers
     ).catch((err: Error) => {
       if (!finished) {
-        finished = true;
         cleanup();
-        callbacks.onError(err?.message || "Failed to start native stream");
+        emitError(err?.message || "Failed to start native stream");
       }
     });
 
     return () => {
       if (!finished) {
-        finished = true;
         cleanup();
+        emitEnd(true);
         NativeStreamModule.abortStream(streamId).catch(() => {});
       }
     };
@@ -112,10 +130,9 @@ export function startNativeChatStream(
 
   let offset = 0;
   let buffer = "";
-  let hadError = false;
 
   xhr.onprogress = () => {
-    if (!xhr) return;
+    if (finished || !xhr) return;
     const chunk = xhr.responseText.slice(offset);
     offset = xhr.responseText.length;
     buffer += chunk;
@@ -135,25 +152,29 @@ export function startNativeChatStream(
   };
 
   xhr.onload = () => {
+    if (finished) return;
     if (xhr.status >= 400) {
-      hadError = true;
-      callbacks.onError(`Server responded with status ${xhr.status}`);
+      emitError(`Server responded with status ${xhr.status}`);
+    } else {
+      emitEnd(false);
     }
-    callbacks.onEnd(hadError);
   };
 
   xhr.onerror = () => {
-    callbacks.onError("Failed to connect to the backend.");
-    callbacks.onEnd(true);
+    if (finished) return;
+    emitError("Failed to connect to the backend.");
   };
 
   xhr.send(JSON.stringify(body));
 
   return () => {
-    try {
-      xhr.abort();
-    } catch {
-      // ignore
+    if (!finished) {
+      emitEnd(true);
+      try {
+        xhr.abort();
+      } catch {
+        // ignore
+      }
     }
   };
 }

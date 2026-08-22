@@ -18,7 +18,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { MainContent } from "./components/layout/main-content";
 import { ConfirmDialog } from "./components/common/confirm-dialog";
-import { useServerConnection } from "./hooks";
+import { useServerConnection, useOAuthDeepLink } from "./hooks";
 import { queryClient } from "./query-client";
 
 function OnboardingScreen() {
@@ -28,11 +28,10 @@ function OnboardingScreen() {
     <SafeAreaView className="flex-1 bg-screen justify-center p-6">
       <Text className="text-foreground text-2xl font-bold mb-2 tracking-tight">Console Mobile</Text>
       <Text className="text-foreground-secondary text-sm mb-8 leading-6">
-        Enter your Console backend server URL to get started.
+        Enter your Console server URL to connect.
       </Text>
 
       <TextInput
-        className="h-12 bg-card border border-border rounded-xl px-4 text-foreground text-sm font-mono mb-4"
         value={inputUrl}
         onChangeText={setInputUrl}
         placeholder="http://192.168.1.X:3000"
@@ -40,12 +39,15 @@ function OnboardingScreen() {
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType="url"
+        className="bg-card border border-border rounded-xl px-4 py-3.5 text-foreground text-sm mb-4"
       />
 
       <TouchableOpacity
-        className="bg-foreground py-3.5 px-6 rounded-full items-center"
-        onPress={saveConnection}
-        disabled={isSaving}
+        onPress={() => saveConnection()}
+        disabled={isSaving || !inputUrl.trim()}
+        className={`bg-foreground rounded-xl py-3.5 items-center justify-center ${
+          isSaving || !inputUrl.trim() ? "opacity-50" : "active:opacity-80"
+        }`}
       >
         {isSaving ? (
           <ActivityIndicator size="small" color="#000000" />
@@ -59,6 +61,7 @@ function OnboardingScreen() {
 
 function AppRoot() {
   const { backendUrl, loading } = useServerConnection();
+  useOAuthDeepLink();
 
   const [fontsLoaded] = useFonts({
     JetBrainsMono: JetBrainsMono_400Regular,
