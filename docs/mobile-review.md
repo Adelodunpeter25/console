@@ -1,6 +1,7 @@
 # Mobile Review — `apps/mobile`
 
 > **Date:** 2026-08-22  
+> **Re-verified:** against current repo — resolved checklist items (OAuth, stream lifecycle) confirmed fixed; stale dependency/config claims corrected inline.
 > **Scope:** Full scan of `apps/mobile` — config, deps, Metro, state, hooks, stores, components, screens, native modules, persistence, streaming, theming, build.  
 > **Stack:** Expo **54.0.0** / React Native **0.81.5** / React **19.1.0** / TypeScript **5.9** (strict) / Zustand **5.0** / TanStack Query **5.101** / MMKV **4.3** / Uniwind + Tailwind **4.3**  
 > **Entry:** `apps/mobile/index.tsx` → `AppRoot` (Onboarding vs `MainContent`)  
@@ -45,6 +46,7 @@ apps/mobile/
 │   ├── common/              # confirm-dialog, markdown-renderer, syntax-highlighter, search-bar, session-sub-list, skeleton, image-preview
 │   ├── context-menu/        # base-context-menu, file-context-menu, session-action-sheet
 │   ├── home/session-list.tsx
+│   ├── icons/               # provider-icon.tsx, file-icon.tsx (SvgXml wrappers over utils/icons registries)
 │   └── layout/              # app-shell, main-content, screen-header, glass-surface
 ├── hooks/                   # 17 files (see Architecture)
 ├── stores/                  # useAppStore, useChatStore + chat/{persist,stream-runner,decisions,draft}, useSessionStore, useProjectStore, useAuthStore, +3
@@ -53,6 +55,7 @@ apps/mobile/
 │   ├── native-stream/       # Android OkHttp SSE (NativeStreamModule) + XHR fallback
 │   └── local-auth-server/   # Android localhost OAuth redirect server (LocalAuthServerModule)
 ├── utils/                   # storage(MMKV), chat-events, reconstruct-runs, native-stream, tool-helpers, sse/diff/format/time
+├── utils/icons/             # generated SVG XML registries (provider-icons, file-type-registry) + file-type-mapping resolver (regen via `make generate-icons`)
 ├── styles/theme.ts          # JS theme tokens
 ├── assets/                  # icon, splash-icon, android adaptive icons, favicon
 └── android/                 # Prebuilt (gradle, mipmap-*, MainActivity.kt) — committed
@@ -66,12 +69,12 @@ Monorepo aliases (`tsconfig.json:7`): `@console/api → packages/api/src`, `@con
 
 **`package.json` highlights**
 
-- Expo SDK 54, RN 0.81.5, React 19.1, reanimated 4.1, gesture-handler 2.28, safe-area 5.6, screens 4.16, mmkv 4.3, flash-list 2.0.2, bottom-sheet 5.2, keyboard-controller 1.18, enriched-markdown + markdown-display, prismjs, diff, zustand, react-query.
+- Expo SDK 54, RN 0.81.5, React 19.1, reanimated 4.1, gesture-handler 2.28, safe-area 5.6, screens 4.16, mmkv 4.3, flash-list 2.0.2, bottom-sheet 5.2, keyboard-controller 1.18, markdown-display, prismjs, diff, zustand, react-query.
 - Dev: `babel-preset-expo`, `typescript`, `@types/*`.
 
 **Notable config**
 
-- `app.json`: `name Console`, `slug console`, `orientation portrait`, `icon ./assets/icon.png`, `userInterfaceStyle light`, `ios.bundleIdentifier com.console.mobile`, `android.package com.console.mobile`, `android.usesCleartextTraffic true`, adaptive icons (foreground/background/monochrome), `predictiveBackGestureEnabled false`, plugins `expo-font` + `react-native-enriched-markdown` (math + codeHighlight), `extra.eas.projectId`, `owner adelodunpeter`, `sdkVersion 54.0.0` (deprecated — SDK now inferred from `expo`).
+- `app.json`: `name Console`, `slug console`, `scheme console` (+ Android intentFilters for OAuth deep links), `orientation portrait`, `icon ./assets/icon.png`, `userInterfaceStyle light`, `ios.bundleIdentifier com.console.mobile`, `android.package com.console.mobile`, `android.usesCleartextTraffic true`, adaptive icons (foreground/background/monochrome), `predictiveBackGestureEnabled false`, plugins `expo-font`, `extra.eas.projectId`, `owner adelodunpeter`. (`sdkVersion` has been removed — SDK is now inferred from `expo`.)
 - `eas.json`: `cli >=14`, `appVersionSource remote`, builds `development` (devClient apk), `preview` (apk), `release` (autoIncrement, apk) — all `apk` (should be `aab` for Play Store), `submit.production {}`.
 - `metro.config.js`: watches `workspaceRoot`, `nodeModulesPaths` local then workspace, `extraNodeModules` pins `react`, `react-native`, `react-query` to mobile's node_modules + maps `@console/api|types`, wraps `withUniwindConfig(cssEntry ./global.css, dts ./uniwind-types.d.ts)`.
 - `babel.config.js`: `babel-preset-expo` only (no explicit `react-native-reanimated/plugin` — works via Expo but be explicit).
@@ -199,10 +202,10 @@ Monorepo aliases (`tsconfig.json:7`): `@console/api → packages/api/src`, `@con
 - **Risk:** Disk waste, accidental commit; Play Store rejects `apk` for new apps (requires `aab`), remote version needs EAS project linkage.
 - **Fix:** Delete `build-*.apk` (already gitignored), set `release.buildType: app-bundle`, configure `submit` or remove `appVersionSource: remote` if not using EAS Updates.
 
-#### 5. Duplicate deps — bundle bloat
-- **Where:** `package.json:17` `@hugeicons/core-free-icons` + `31` `hugeicons-react-native` (legacy `0.0.2`), `18` `@hugeicons/react-native` (current), `36` `react-native-enriched-markdown` + `39` `react-native-markdown-display`, `32` `lucide-react-native` vs hugeicons, `33` `prismjs` (+ `51` `@types`) unused if enriched-markdown handles highlighting.
-- **Risk:** Larger bundle, duplicate icon sets, conflicting markdown renderers.
-- **Fix:** Keep `@hugeicons/react-native` + `@hugeicons/core-free-icons`, remove `hugeicons-react-native`; pick one markdown lib (likely `react-native-enriched-markdown` with `codeHighlight`); remove unused `prismjs`/`lucide` if not used.
+#### 5. Dependency cleanup — one legacy dep left
+- **Where:** `package.json:33` `hugeicons-react-native@0.0.2` (legacy, **never imported** — only `@hugeicons/react-native` + `@hugeicons/core-free-icons` are used). ~~Duplicate markdown libs~~ resolved: `react-native-enriched-markdown` was removed; `react-native-markdown-display` is the single renderer. `prismjs` is used (`syntax-highlighter.tsx`) and `lucide-react-native` is used in 27 files — both must stay.
+- **Risk:** Minor install weight; confusing dep list.
+- **Fix:** Remove `hugeicons-react-native`. Nothing else to dedupe.
 
 #### 6. No error boundary / offline UX
 - **Where:** `index.tsx:60` no `ErrorBoundary`; `hooks/useChatStream.ts` / `hooks/queries.ts` no offline banner; `hooks/useServerConnection.ts:84` `testConnection` (6s timeout) never shown in `OnboardingScreen` (`index.tsx:24`).
@@ -232,8 +235,8 @@ Monorepo aliases (`tsconfig.json:7`): `@console/api → packages/api/src`, `@con
 - **Fix:** Select `isDraftSession` map or `Object.keys` length, use `useShallow` / memoized selectors, memoize derived booleans.
 
 #### 11. Config hygiene
-- **Where:** `app.json:9` `sdkVersion 54.0.0` deprecated, `babel.config.js` missing explicit `react-native-reanimated/plugin`, `utils/sse.ts` (1.2 KB) unused (native-stream handles SSE), `assets/splash-icon.png` legacy.
-- **Fix:** Remove `sdkVersion`, add reanimated plugin if needed, delete or wire `utils/sse.ts`, use `expo-splash-screen` config.
+- **Where:** ~~`sdkVersion` deprecated~~ (removed); `babel.config.js` missing explicit `react-native-reanimated/plugin`, `utils/sse.ts` (1.2 KB) unused (native-stream handles SSE), `assets/splash-icon.png` legacy.
+- **Fix:** Add reanimated plugin if needed, delete or wire `utils/sse.ts`, use `expo-splash-screen` config.
 
 #### 12. Minor code
 - **Where:** `hooks/useHomeSessions.ts:198 onRefresh` invalidates `["sessions"]`/`["projects"]` (string keys) vs `sessionKeys.all` / `fsKeys.projects` — inconsistent; `stores/useProjectStore.ts:52` also invalidates `["projects"]`. `utils/tool-helpers.ts` `as any` in `resultText:186`, `stores/chat/chat-decisions.ts` swallows errors with `console.error` only.
@@ -257,7 +260,7 @@ Monorepo aliases (`tsconfig.json:7`): `@console/api → packages/api/src`, `@con
 **P1 — Next**
 
 4. Delete `build-*.apk`, set `eas.json release.buildType: "app-bundle"`.
-5. Dedupe deps: remove `hugeicons-react-native`, pick one markdown lib, remove unused `prismjs`/`lucide` if unused.
+5. Dedupe deps: remove unused `hugeicons-react-native` (markdown libs already deduped; `prismjs`/`lucide` are used and stay).
 6. Add `ErrorBoundary` + `NetInfo` banner, wire `testConnection` to onboarding UI.
 7. Add persist `version`/`migrate` + Zod validation, `queryClient.clear()` on URL change, cap bytes.
 8. Add `eslint` + `tsc --noEmit` CI, type `chatPersistConfig`, pin `bun` or remove installer.
@@ -275,7 +278,7 @@ Monorepo aliases (`tsconfig.json:7`): `@console/api → packages/api/src`, `@con
 - [x] P0: `expo.scheme` + intentFilters + `useOAuthDeepLink` mounted + login unified (Resolved 2026-08-22)
 - [x] P0: Stream lifecycle idempotent + single `onEnd` + pagination guard (Resolved 2026-08-22)
 - [ ] P1: Remove `build-*.apk`, `eas release → app-bundle`
-- [ ] P1: Dedupe markdown/icon/prismjs deps
+- [ ] P1: Remove unused `hugeicons-react-native` dep
 - [ ] P1: ErrorBoundary + offline banner + Test Connection UI
 - [ ] P1: Persist version/migrate + validation + query clear on URL switch
 - [ ] P1: ESLint + `tsc --noEmit` + typed persist
