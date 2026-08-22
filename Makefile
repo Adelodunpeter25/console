@@ -1,4 +1,4 @@
-.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop build-desktop-mac typecheck check help
+.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop build-desktop-mac typecheck check generate-icons help
 
 # Default target
 .DEFAULT_GOAL := help
@@ -37,6 +37,10 @@ build-desktop-mac:
 typecheck:
 	npm run typecheck
 
+## generate-icons: Regenerate mobile SVG icon registries from console-rs assets
+generate-icons:
+	npm run icons:generate
+
 ## check: Run vp check for code formatting and linting
 check:
 	npm run check
@@ -51,4 +55,5 @@ help:
 	@echo "  make build-desktop     - Build the Electron desktop app for production"
 	@echo "  make build-desktop-mac - Build and package macOS DMG & ZIP installers"
 	@echo "  make typecheck         - Run TypeScript typechecking"
+	@echo "  make generate-icons    - Regenerate mobile SVG icon registries from console-rs"
 	@echo "  make check             - Run Vite+ code format and lint checks"
