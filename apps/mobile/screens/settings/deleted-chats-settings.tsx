@@ -160,7 +160,7 @@ export function DeletedChatsSettings({ onBack }: DeletedChatsSettingsProps) {
           </View>
         ) : deletedSessions.length === 0 ? (
           <EmptyState
-            icon={<MessageSquare size={32} color="#71717a" />}
+            icon={<MessageSquare size={32} color={theme.colors.text.muted} />}
             title="No deleted chats"
             description="Chats you delete will appear here until permanently purged."
           />

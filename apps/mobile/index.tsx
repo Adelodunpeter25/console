@@ -21,6 +21,7 @@ import { ConfirmDialog } from "./components/common/confirm-dialog";
 import { ErrorBoundary } from "./components/common/error-boundary";
 import { useServerConnection, useOAuthDeepLink } from "./hooks";
 import { queryClient } from "./query-client";
+import { theme } from "./styles/theme";
 
 function OnboardingScreen() {
   const { inputUrl, setInputUrl, saveConnection, isSaving, testConnection, testingStatus } =
@@ -110,7 +111,7 @@ function AppRoot() {
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
-          <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
+          <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
             <StatusBar style="light" />
 
             {backendUrl ? (

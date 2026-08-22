@@ -84,7 +84,7 @@ export function SessionList({
   if (sections.length === 0) {
     return (
       <EmptyState
-        icon={<MessageSquare size={32} color="#71717a" />}
+        icon={<MessageSquare size={32} color={theme.colors.text.muted} />}
         title={searchQuery ? "No matching sessions" : "No chat sessions"}
         description={
           searchQuery
@@ -102,7 +102,7 @@ export function SessionList({
           {/* Section header */}
           <View className="flex-row items-center justify-between mb-2 px-1">
             <View className="flex-row items-center gap-2">
-              <HugeiconsIcon icon={Folder02Icon} size={14} color="#71717a" />
+              <HugeiconsIcon icon={Folder02Icon} size={14} color={theme.colors.text.muted} />
               <Text className="text-xs font-semibold text-foreground-secondary tracking-wide">
                 {section.projectName}
               </Text>

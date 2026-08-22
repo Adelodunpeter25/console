@@ -1,5 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { View } from "react-native";
+import { theme } from "../../styles/theme";
 
 /**
  * Root chrome for authenticated screens. Top/bottom safe areas are applied by
@@ -8,5 +9,5 @@ import { View } from "react-native";
  * the Android status bar). KeyboardProvider lives once in index.tsx.
  */
 export function AppShell({ children }: PropsWithChildren) {
-  return <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>{children}</View>;
+  return <View style={{ flex: 1, backgroundColor: theme.colors.background }}>{children}</View>;
 }

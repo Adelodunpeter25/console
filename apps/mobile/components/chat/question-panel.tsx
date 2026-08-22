@@ -4,6 +4,7 @@ import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-cont
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { HelpCircle, Check } from "lucide-react-native";
 import type { AskQuestionRequest } from "@console/types";
+import { theme } from "../../styles/theme";
 
 interface QuestionPanelProps {
   request: AskQuestionRequest;
@@ -140,7 +141,7 @@ export function QuestionPanel({
                 if (hasAnswer) handlePrimary();
               }}
               placeholder={hasOptions ? "Or type your own answer…" : "Type your answer…"}
-              placeholderTextColor="#71717a"
+              placeholderTextColor={theme.colors.text.muted}
               className="w-full px-3.5 py-2.5 rounded-xl border border-white/10 bg-black/40 text-sm text-white"
               returnKeyType="send"
             />

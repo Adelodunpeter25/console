@@ -12,6 +12,7 @@ import {
 } from "../../components/context-menu/session-action-sheet";
 import { useHomeSessions } from "../../hooks";
 import type { SessionHeader } from "@console/types";
+import { theme } from "../../styles/theme";
 
 export function HomeScreen() {
   const {
@@ -65,7 +66,7 @@ export function HomeScreen() {
     {
       key: "rename",
       label: "Rename",
-      icon: <Pencil size={18} color="#a1a1aa" />,
+      icon: <Pencil size={18} color={theme.colors.text.secondary} />,
       onPress: () => {
         confirmAlert("Rename", `Rename "${activeSession?.title || "Untitled Session"}" — coming soon`);
       },
@@ -115,8 +116,8 @@ export function HomeScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={onRefresh}
-            tintColor="#71717a"
-            colors={["#71717a"]}
+            tintColor={theme.colors.text.muted}
+            colors={[theme.colors.text.muted]}
           />
         }
       >

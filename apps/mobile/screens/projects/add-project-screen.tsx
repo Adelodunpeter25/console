@@ -66,7 +66,7 @@ export function AddProjectScreen({ onClose, onProjectAdded }: AddProjectScreenPr
   const currentFolder = pathParts[pathParts.length - 1] || "/";
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       {/* Shared Screen Header */}
       <ScreenHeader title="Add Project" onBack={onClose} />
 
@@ -150,7 +150,7 @@ export function AddProjectScreen({ onClose, onProjectAdded }: AddProjectScreenPr
             }
             ListEmptyComponent={
               <EmptyState
-                icon={<Folder size={28} color="#71717a" />}
+                icon={<Folder size={28} color={theme.colors.text.muted} />}
                 title="No subdirectories"
                 description="There are no folders in this directory."
               />

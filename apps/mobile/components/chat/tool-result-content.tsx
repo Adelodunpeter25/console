@@ -216,7 +216,7 @@ function ListDirResult({ text }: { text: string }) {
     <View className="gap-1.5">
       {parsed.dirPath ? (
         <View className="flex-row items-center gap-1.5">
-          <FolderTree size={11} color="#71717a" />
+          <FolderTree size={11} color={theme.colors.text.muted} />
           <Text className="text-[10px] font-mono text-foreground-secondary flex-1" numberOfLines={1}>
             {parsed.dirPath}
           </Text>
@@ -252,7 +252,7 @@ function GrepResult({ text }: { text: string }) {
   return (
     <View className="gap-1.5">
       <View className="flex-row items-center gap-1.5">
-        <Search size={11} color="#71717a" />
+        <Search size={11} color={theme.colors.text.muted} />
         <Text className="text-[10px] font-mono text-foreground-secondary">{parsed.header}</Text>
       </View>
       <View className="max-h-48 rounded bg-black/40 p-2 overflow-hidden">
@@ -285,7 +285,7 @@ function GlobResult({ text }: { text: string }) {
   return (
     <View className="gap-1.5">
       <View className="flex-row items-center gap-1.5">
-        <FolderTree size={11} color="#71717a" />
+        <FolderTree size={11} color={theme.colors.text.muted} />
         <Text className="text-[10px] font-mono text-foreground-secondary">{parsed.header}</Text>
       </View>
       <View className="max-h-40 rounded bg-black/40 p-2 overflow-hidden">
@@ -331,7 +331,7 @@ function FetchResult({ text }: { text: string }) {
   return (
     <View className="gap-1.5">
       <View className="flex-row flex-wrap items-center gap-1.5">
-        <Globe size={11} color="#71717a" />
+        <Globe size={11} color={theme.colors.text.muted} />
         {parsed.url ? (
           <Text className="text-[10px] font-mono text-foreground-secondary flex-1" numberOfLines={1}>
             {parsed.url}
@@ -364,6 +364,7 @@ function FetchResult({ text }: { text: string }) {
 
 import { DiffView } from "./diff-view";
 import { computeLineDiff, computeNewFileDiff } from "../../utils/diff";
+import { theme } from "../../styles/theme";
 
 /* ------------------------------------------------------------------ */
 /* writeFile / editFile / ask                                          */

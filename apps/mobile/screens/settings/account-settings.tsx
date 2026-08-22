@@ -20,6 +20,7 @@ import {
 import { GlassSurface } from "../../components/layout/glass-surface";
 import { useAuth, useLocalOAuthLogin } from "../../hooks";
 import { useProviderCatalog } from "../../hooks";
+import { theme } from "../../styles/theme";
 
 export function AccountSettings() {
   const auth = useAuth();
@@ -107,7 +108,7 @@ export function AccountSettings() {
                     {loggedIn ? (
                       <Check size={14} color="#34d399" />
                     ) : (
-                      <Circle size={14} color="#71717a" />
+                      <Circle size={14} color={theme.colors.text.muted} />
                     )}
                     <View className="flex-1 ml-2.5">
                       <Text className="text-sm font-semibold text-foreground">
@@ -168,7 +169,7 @@ export function AccountSettings() {
                         value={geminiProjectId}
                         onChangeText={setGeminiProjectId}
                         placeholder="my-project-id"
-                        placeholderTextColor="#71717a"
+                        placeholderTextColor={theme.colors.text.muted}
                         autoCapitalize="none"
                         autoCorrect={false}
                       />

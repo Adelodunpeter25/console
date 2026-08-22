@@ -5,6 +5,7 @@ import { ScreenHeader } from "../../components/layout/screen-header";
 import { confirmAlert, EmptyState } from "../../components/common";
 import { useProjectStore } from "../../stores";
 import { AddProjectScreen } from "../projects/add-project-screen";
+import { theme } from "../../styles/theme";
 
 interface ProjectsSettingsProps {
   onBack?: () => void;
@@ -74,7 +75,7 @@ export function ProjectsSettings({ onBack }: ProjectsSettingsProps) {
         </View>
       ) : projects.length === 0 ? (
         <EmptyState
-          icon={<Folder size={32} color="#71717a" />}
+          icon={<Folder size={32} color={theme.colors.text.muted} />}
           title="No project folders"
           description="Add a project folder from your host filesystem to start creating sessions."
         />
@@ -90,7 +91,7 @@ export function ProjectsSettings({ onBack }: ProjectsSettingsProps) {
               <View className="flex-row items-center justify-between bg-card border border-border rounded-xl p-3.5 mb-2">
                 <View className="flex-row items-center gap-3 flex-1 pr-3">
                   <View className="w-8 h-8 rounded-lg items-center justify-center bg-card-alt border border-border/60">
-                    <Folder size={16} color="#a1a1aa" />
+                    <Folder size={16} color={theme.colors.text.secondary} />
                   </View>
                   <View className="flex-1">
                     <Text className="text-sm font-semibold text-foreground" numberOfLines={1}>

@@ -9,6 +9,7 @@ import { ConnectionSettings } from "./connection-settings";
 import { AccountSettings } from "./account-settings";
 import { ProjectsSettings } from "./projects-settings";
 import { DeletedChatsSettings } from "./deleted-chats-settings";
+import { theme } from "../../styles/theme";
 
 type SettingsSection = "connection" | "account" | "projects" | "deleted-chats";
 
@@ -58,7 +59,7 @@ export function SettingsScreen() {
   if (section) {
     const meta = SECTION_META[section];
     return (
-      <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
         {section === "projects" ? (
           <ProjectsSettings onBack={() => setSection(null)} />
         ) : section === "deleted-chats" ? (
@@ -75,7 +76,7 @@ export function SettingsScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#0a0a0b" }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <ScreenHeader title="Settings" onBack={() => setActiveTab("home")} />
       <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 8 }}>
         {(Object.keys(SECTION_META) as SettingsSection[]).map((key) => {
@@ -95,7 +96,7 @@ export function SettingsScreen() {
                 <Text className="text-base font-semibold text-foreground">{meta.title}</Text>
                 <Text className="text-xs text-foreground-secondary mt-0.5">{summary[key]}</Text>
               </View>
-              <ChevronRight size={20} color="#71717a" />
+              <ChevronRight size={20} color={theme.colors.text.muted} />
             </Pressable>
           );
         })}

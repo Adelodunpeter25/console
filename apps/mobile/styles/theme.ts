@@ -1,16 +1,31 @@
+/**
+ * JS mirror of the design tokens in ../global.css (@theme block).
+ * global.css is the single source of truth — when changing a color,
+ * update BOTH files (or better, add a CSS token and consume it via
+ * className utilities). Values here must never diverge from it.
+ */
 export const theme = {
   colors: {
-    background: "#0d0d0e",
+    /** --color-screen */
+    background: "#0a0a0b",
+    /** --color-screen (alias kept for existing call sites) */
     backgroundAlt: "#0a0a0b",
+    /** --color-surface */
     surface: "#16171a",
+    /** --color-surface-elevated */
     surfaceElevated: "#1f2024",
-    border: "rgba(255, 255, 255, 0.1)",
-    borderSubtle: "rgba(255, 255, 255, 0.05)",
+    /** --color-border */
+    border: "rgba(255, 255, 255, 0.12)",
+    /** --color-border-subtle */
+    borderSubtle: "rgba(255, 255, 255, 0.06)",
 
     // Text colors
     text: {
+      /** --color-foreground */
       primary: "#ffffff",
+      /** --color-foreground-secondary */
       secondary: "#a1a1aa",
+      /** --color-foreground-muted */
       muted: "#71717a",
       dark: "#000000",
     },
@@ -27,8 +42,8 @@ export const theme = {
       idleBg: "rgba(161, 161, 170, 0.1)",
     },
 
-    // Destructive
-    danger: "#ef4444",
+    // Destructive — matches --color-destructive
+    danger: "#f87171",
     dangerPressed: "#dc2626",
   },
 

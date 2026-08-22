@@ -3,6 +3,7 @@ import { View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { Copy, FolderOpen } from "lucide-react-native";
 import { BaseContextMenu, type ContextMenuItem } from "./base-context-menu";
+import { theme } from "../../styles/theme";
 
 interface FileContextMenuProps {
   /** Absolute path to the file or folder */
@@ -33,7 +34,7 @@ export function FileContextMenu({ path, relativePath, children }: FileContextMen
     {
       key: "copy-path",
       label: "Copy Path",
-      icon: <Copy size={15} color="#a1a1aa" />,
+      icon: <Copy size={15} color={theme.colors.text.secondary} />,
       onPress: () => Clipboard.setStringAsync(path),
     },
     ...(relativePath
@@ -41,7 +42,7 @@ export function FileContextMenu({ path, relativePath, children }: FileContextMen
           {
             key: "copy-relative-path",
             label: "Copy Relative Path",
-            icon: <FolderOpen size={15} color="#a1a1aa" />,
+            icon: <FolderOpen size={15} color={theme.colors.text.secondary} />,
             onPress: () => Clipboard.setStringAsync(relativePath),
           },
         ]

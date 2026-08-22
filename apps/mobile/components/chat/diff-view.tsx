@@ -5,6 +5,7 @@ import type { DiffResult, DiffLine } from "../../utils/diff";
 import { getFileName } from "../../utils/tool-helpers";
 import { FileIcon } from "../icons";
 import { getLanguageFromPath, renderHighlightedLine } from "../common/syntax-highlighter";
+import { theme } from "../../styles/theme";
 
 interface DiffViewProps {
   diff: DiffResult;
@@ -177,9 +178,9 @@ export const DiffView = memo(function DiffView({
               : `Show full diff (+${totalLines - maxCollapsedLines} lines)`}
           </Text>
           {expanded ? (
-            <ChevronUp size={13} color="#a1a1aa" />
+            <ChevronUp size={13} color={theme.colors.text.secondary} />
           ) : (
-            <ChevronDown size={13} color="#a1a1aa" />
+            <ChevronDown size={13} color={theme.colors.text.secondary} />
           )}
         </Pressable>
       )}

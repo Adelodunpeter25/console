@@ -6,6 +6,7 @@ import type { ToolCall, ToolResult } from "@console/types";
 import { ToolCallBlock } from "./tool-call-block";
 import { MarkdownRenderer } from "../common/markdown-renderer";
 import { formatDuration } from "../../utils";
+import { theme } from "../../styles/theme";
 
 interface RunActivityProps {
   activity: RunActivityState;
@@ -63,11 +64,11 @@ const CollapsibleThinking = memo(function CollapsibleThinking({ text }: { text: 
         className="flex-row items-center gap-1.5 self-start py-1"
         hitSlop={8}
       >
-        <Sparkles size={12} color="#71717a" />
+        <Sparkles size={12} color={theme.colors.text.muted} />
         <Text className="text-xs font-semibold text-foreground-secondary">Thought</Text>
         <ChevronDown
           size={13}
-          color="#71717a"
+          color={theme.colors.text.muted}
           style={{ transform: [{ rotate: expanded ? "0deg" : "-90deg" }] }}
         />
       </Pressable>
@@ -120,13 +121,13 @@ export const RunActivity = memo(function RunActivity({
         className="flex-row items-center gap-1.5 self-start py-1.5 px-1"
         style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
       >
-        {isWorking ? <ActivityIndicator size="small" color="#71717a" /> : null}
+        {isWorking ? <ActivityIndicator size="small" color={theme.colors.text.muted} /> : null}
         <Text className="text-xs font-medium text-foreground-secondary">
           {summaryLabel}
         </Text>
         <ChevronDown
           size={14}
-          color="#71717a"
+          color={theme.colors.text.muted}
           style={{ transform: [{ rotate: expanded ? "0deg" : "-90deg" }] }}
         />
       </Pressable>

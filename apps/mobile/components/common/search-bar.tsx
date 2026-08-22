@@ -5,6 +5,7 @@ import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-cont
 import { Search, X } from "lucide-react-native";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import { PencilEdit02Icon } from "@hugeicons/core-free-icons";
+import { theme } from "../../styles/theme";
 
 interface SearchBarProps {
   value: string;
@@ -40,11 +41,11 @@ export function SearchBar({
         style={{ paddingBottom }}
       >
         <View className="flex-1 flex-row items-center bg-card border border-border rounded-full px-4 h-12 mr-3">
-          <Search size={18} color="#71717a" />
+          <Search size={18} color={theme.colors.text.muted} />
           <TextInput
             style={styles.input}
             placeholder={placeholder}
-            placeholderTextColor="#71717a"
+            placeholderTextColor={theme.colors.text.muted}
             value={value}
             onChangeText={onChangeText}
             autoCapitalize="none"
@@ -60,7 +61,7 @@ export function SearchBar({
               className="w-6 h-6 rounded-full bg-white/10 items-center justify-center ml-1"
               style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             >
-              <X size={13} color="#a1a1aa" />
+              <X size={13} color={theme.colors.text.secondary} />
             </Pressable>
           ) : null}
         </View>

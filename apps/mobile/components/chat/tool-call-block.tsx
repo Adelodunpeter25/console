@@ -6,6 +6,7 @@ import { ToolResultContent } from "./tool-result-content";
 import { DiffSummaryBadge } from "./diff-view";
 import { getToolMeta, formatUnknown, argSummary, computeLineDiff, computeNewFileDiff } from "../../utils";
 import { useAppStore, useSessionStore } from "../../stores";
+import { theme } from "../../styles/theme";
 
 interface ToolCallBlockProps {
   calls: ToolCall[];
@@ -80,12 +81,12 @@ const ToolCallRow = memo(function ToolCallRow({
           ) : hasResult ? (
             <CheckCircle2 size={13} color="#34d399" />
           ) : (
-            <ActivityIndicator size="small" color="#71717a" />
+            <ActivityIndicator size="small" color={theme.colors.text.muted} />
           )}
           {open ? (
-            <ChevronDown size={13} color="#71717a" />
+            <ChevronDown size={13} color={theme.colors.text.muted} />
           ) : (
-            <ChevronRight size={13} color="#71717a" />
+            <ChevronRight size={13} color={theme.colors.text.muted} />
           )}
         </View>
       </Pressable>
@@ -185,12 +186,12 @@ const ToolCallGroup = memo(function ToolCallGroup({
           ) : complete ? (
             <CheckCircle2 size={13} color="#34d399" />
           ) : (
-            <ActivityIndicator size="small" color="#71717a" />
+            <ActivityIndicator size="small" color={theme.colors.text.muted} />
           )}
           {open ? (
-            <ChevronDown size={13} color="#71717a" />
+            <ChevronDown size={13} color={theme.colors.text.muted} />
           ) : (
-            <ChevronRight size={13} color="#71717a" />
+            <ChevronRight size={13} color={theme.colors.text.muted} />
           )}
         </View>
       </Pressable>

@@ -10,6 +10,7 @@ import {
 import { CheckCircle2, XCircle, LoaderCircle } from "lucide-react-native";
 import { GlassSurface } from "../../components/layout/glass-surface";
 import { useServerConnection } from "../../hooks";
+import { theme } from "../../styles/theme";
 
 export function ConnectionSettings() {
   const {
@@ -56,7 +57,7 @@ export function ConnectionSettings() {
           value={inputUrl}
           onChangeText={setInputUrl}
           placeholder="http://192.168.1.X:3000"
-          placeholderTextColor="#71717a"
+          placeholderTextColor={theme.colors.text.muted}
           autoCapitalize="none"
           autoCorrect={false}
         />
