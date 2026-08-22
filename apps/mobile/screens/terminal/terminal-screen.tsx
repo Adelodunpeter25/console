@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Text, View, Pressable, BackHandler, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft, Keyboard, Trash2 } from "lucide-react-native";
+import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { useAppStore, useProjectStore, useTerminalStore } from "../../stores";
 import { ConsoleTerminalSurface } from "../../modules/console-terminal/src/terminal-surface";
@@ -92,6 +93,17 @@ export function TerminalScreen() {
     [terminalId],
   );
 
+  const handleExtraKey = useCallback(
+    (bytes: string) => {
+      handleInput(bytes);
+      // Extra keys live outside the native EditText; without an explicit focus
+      // request the inputView loses focus and the terminal flicks to its
+      // unfocused background until the user taps again.
+      setFocusRequest((n) => n + 1);
+    },
+    [handleInput],
+  );
+
   // Coalesce resize storms (rotation, keyboard) into one PTY resize.
   const handleResize = useCallback(
     (size: { cols: number; rows: number }) => {
@@ -178,41 +190,45 @@ export function TerminalScreen() {
       </View>
 
       {terminalId && isRunning ? (
-        <View
-          className="flex-row items-center gap-1.5 px-2 pt-1.5 border-t border-border-subtle"
-          style={{ paddingBottom: insets.bottom + 6 }}
-        >
-          <Pressable
-            className="h-8 px-2.5 rounded-md bg-card border border-border items-center justify-center"
-            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-            onPress={() => setFocusRequest((n) => n + 1)}
+        <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
+          <View
+            className="flex-row items-center gap-1.5 px-2 pt-1.5 border-t border-border-subtle bg-screen"
+            style={{ paddingBottom: insets.bottom + 6 }}
           >
-            <Keyboard size={15} color="#a1a1aa" />
-          </Pressable>
-          {EXTRA_KEYS.map((key) => (
             <Pressable
-              key={key.label}
-              className="h-8 min-w-9 px-2 rounded-md bg-card border border-border items-center justify-center"
+              className="h-8 px-2.5 rounded-md bg-card border border-border items-center justify-center"
               style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-              onPress={() => handleInput(key.bytes)}
+              onPress={() => setFocusRequest((n) => n + 1)}
             >
-              <Text className="text-xs font-mono text-foreground-secondary">{key.label}</Text>
+              <Keyboard size={15} color="#a1a1aa" />
             </Pressable>
-          ))}
-        </View>
+            {EXTRA_KEYS.map((key) => (
+              <Pressable
+                key={key.label}
+                className="h-8 min-w-9 px-2 rounded-md bg-card border border-border items-center justify-center"
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                onPress={() => handleExtraKey(key.bytes)}
+              >
+                <Text className="text-xs font-mono text-foreground-secondary">{key.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </KeyboardStickyView>
       ) : terminalId && !isRunning && term ? (
-        <View
-          className="flex-row items-center justify-center px-4 pt-3 border-t border-border-subtle"
-          style={{ paddingBottom: insets.bottom + 10 }}
-        >
-          <Pressable
-            className="px-4 py-2.5 rounded-full bg-foreground items-center justify-center"
-            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-            onPress={handleKill}
+        <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
+          <View
+            className="flex-row items-center justify-center px-4 pt-3 border-t border-border-subtle bg-screen"
+            style={{ paddingBottom: insets.bottom + 10 }}
           >
-            <Text className="text-xs font-semibold text-background">Restart shell</Text>
-          </Pressable>
-        </View>
+            <Pressable
+              className="px-4 py-2.5 rounded-full bg-foreground items-center justify-center"
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              onPress={handleKill}
+            >
+              <Text className="text-xs font-semibold text-background">Restart shell</Text>
+            </Pressable>
+          </View>
+        </KeyboardStickyView>
       ) : null}
     </View>
   );
