@@ -21,7 +21,7 @@ import {
 } from "./chat/chat-stream-runner";
 import { answerSessionQuestion, approveSessionPermission } from "./chat/chat-decisions";
 
-interface ChatStoreState {
+export interface ChatStoreState {
   sessions: Record<string, ChatSessionState>;
   loadMessages: (sessionId: string, messages: AgentMessage[]) => void;
   setInput: (sessionId: string, value: string) => void;

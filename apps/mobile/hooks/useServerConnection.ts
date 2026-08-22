@@ -60,10 +60,12 @@ export function useServerConnection() {
       if (!url.startsWith("http://") && !url.startsWith("https://")) {
         url = `http://${url}`;
       }
-      // If switching to a different server, drop the local chat cache so
-      // stale messages from the old server don't render against the new one.
+      // If switching to a different server, drop the local chat cache AND the
+      // react-query cache so stale messages/sessions from the old server don't
+      // leak into the new connection.
       if (backendUrl && backendUrl !== url) {
         clearChatCache();
+        queryClient.clear();
       }
       appStorage.set(BACKEND_URL_KEY, url);
       configureConsoleApi({ baseUrl: url });

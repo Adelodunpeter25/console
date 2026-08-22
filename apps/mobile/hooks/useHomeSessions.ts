@@ -64,14 +64,19 @@ export function useHomeSessions() {
     return sessions.filter((s) => (s.title || "").toLowerCase().includes(q));
   }, [sessions, searchQuery]);
 
-  // Selective subscription: only track 0-message sessions with active drafts
-  // Prevents re-rendering the Home Screen on every keystroke inside active chats
-  const draftSessions = useChatStore(
+  // Selective subscription: only track 0-message sessions with active drafts.
+  // Returns primitives (preview text + timestamp) instead of full state objects
+  // so Home doesn't re-render on unrelated draft state changes (running flag,
+  // streaming, etc.) — only when the visible preview actually changes.
+  const draftSummaries = useChatStore(
     useShallow((s) => {
-      const drafts: Record<string, (typeof s.sessions)[string]> = {};
+      const drafts: Record<string, { preview: string; draftUpdatedAt?: number }> = {};
       for (const [id, state] of Object.entries(s.sessions)) {
         if (state.messages.length === 0 && isDraftSession(state)) {
-          drafts[id] = state;
+          drafts[id] = {
+            preview: draftPreview(state, 32),
+            draftUpdatedAt: state.draftUpdatedAt,
+          };
         }
       }
       return drafts;
@@ -81,15 +86,13 @@ export function useHomeSessions() {
   // Build DRAFT section for never-sent / unsent drafts (0 messages but has input)
   const draftSection = useMemo<GroupedProjectSection | null>(() => {
     const drafts: SessionHeader[] = [];
-    for (const [id, state] of Object.entries(draftSessions)) {
-      if (state.messages.length !== 0) continue;
-      if (!isDraftSession(state)) continue;
+    for (const [id, summary] of Object.entries(draftSummaries)) {
       // Find server header for this id (if it was created via composeSession)
       const serverHeader = sessions.find((h) => h.id === id);
       if (serverHeader) {
         drafts.push({
           ...serverHeader,
-          updatedAt: state.draftUpdatedAt ?? serverHeader.updatedAt,
+          updatedAt: summary.draftUpdatedAt ?? serverHeader.updatedAt,
         });
       } else {
         // Ephemeral local draft with no server session yet — synthesize
@@ -97,13 +100,13 @@ export function useHomeSessions() {
         const fallbackProject = projects[0];
         drafts.push({
           id,
-          title: draftPreview(state, 32),
+          title: summary.preview,
           cwd: fallbackProject?.path ?? "",
           projectId: fallbackProject?.id,
           modelId: "",
           provider: "",
-          createdAt: state.draftUpdatedAt ?? Date.now(),
-          updatedAt: state.draftUpdatedAt ?? Date.now(),
+          createdAt: summary.draftUpdatedAt ?? Date.now(),
+          updatedAt: summary.draftUpdatedAt ?? Date.now(),
           messageCount: 0,
           status: "idle" as const,
         });
@@ -117,7 +120,7 @@ export function useHomeSessions() {
       data: drafts,
       latestAt: drafts[0]?.updatedAt ?? 0,
     };
-  }, [draftSessions, sessions, projects]);
+  }, [draftSummaries, sessions, projects]);
 
   // Group filtered sessions by project (by projectId or matching cwd path)
   const sections = useMemo<GroupedProjectSection[]>(() => {
@@ -128,10 +131,7 @@ export function useHomeSessions() {
 
     // Exclude drafts with 0 messages from normal grouping — they live in DRAFT section
     const nonDraftSessions = filteredSessions.filter((s) => {
-      const st = draftSessions[s.id];
-      if (!st) return true;
-      if (st.messages.length !== 0) return true;
-      return !isDraftSession(st);
+      return !(s.id in draftSummaries);
     });
 
     for (const session of nonDraftSessions) {
@@ -170,7 +170,7 @@ export function useHomeSessions() {
     const sortedRest = result.sort((a, b) => b.latestAt - a.latestAt);
     if (draftSection) return [draftSection, ...sortedRest];
     return sortedRest;
-  }, [filteredSessions, projects, draftSessions, draftSection]);
+  }, [filteredSessions, projects, draftSummaries, draftSection]);
 
   const openSession = (sessionId: string) => {
     setSelectedSessionId(sessionId);

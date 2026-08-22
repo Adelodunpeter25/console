@@ -3,6 +3,7 @@ export * from "./syntax-highlighter";
 export * from "./search-bar";
 export * from "./session-sub-list";
 export * from "./confirm-dialog";
+export * from "./error-boundary";
 export * from "./skeleton";
 export * from "./empty-state";
 export * from "./image-preview-modal";

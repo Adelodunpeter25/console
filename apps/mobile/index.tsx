@@ -18,11 +18,13 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { MainContent } from "./components/layout/main-content";
 import { ConfirmDialog } from "./components/common/confirm-dialog";
+import { ErrorBoundary } from "./components/common/error-boundary";
 import { useServerConnection, useOAuthDeepLink } from "./hooks";
 import { queryClient } from "./query-client";
 
 function OnboardingScreen() {
-  const { inputUrl, setInputUrl, saveConnection, isSaving } = useServerConnection();
+  const { inputUrl, setInputUrl, saveConnection, isSaving, testConnection, testingStatus } =
+    useServerConnection();
 
   return (
     <SafeAreaView className="flex-1 bg-screen justify-center p-6">
@@ -45,7 +47,7 @@ function OnboardingScreen() {
       <TouchableOpacity
         onPress={() => saveConnection()}
         disabled={isSaving || !inputUrl.trim()}
-        className={`bg-foreground rounded-xl py-3.5 items-center justify-center ${
+        className={`bg-foreground rounded-xl py-3.5 items-center justify-center mb-3 ${
           isSaving || !inputUrl.trim() ? "opacity-50" : "active:opacity-80"
         }`}
       >
@@ -53,6 +55,26 @@ function OnboardingScreen() {
           <ActivityIndicator size="small" color="#000000" />
         ) : (
           <Text className="text-sm font-bold text-black">Connect</Text>
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() => void testConnection()}
+        disabled={!inputUrl.trim() || testingStatus === "testing"}
+        className={`border border-border rounded-xl py-3.5 items-center justify-center ${
+          !inputUrl.trim() || testingStatus === "testing" ? "opacity-50" : "active:opacity-80"
+        }`}
+      >
+        {testingStatus === "testing" ? (
+          <ActivityIndicator size="small" color="#a1a1aa" />
+        ) : (
+          <Text className="text-sm font-semibold text-foreground-secondary">
+            {testingStatus === "success"
+              ? "✓ Connection successful"
+              : testingStatus === "error"
+                ? "✕ Connection failed — try again"
+                : "Test Connection"}
+          </Text>
         )}
       </TouchableOpacity>
     </SafeAreaView>
@@ -94,11 +116,15 @@ function AppRoot() {
             {backendUrl ? (
               <KeyboardProvider>
                 <BottomSheetModalProvider>
-                  <MainContent />
+                  <ErrorBoundary>
+                    <MainContent />
+                  </ErrorBoundary>
                 </BottomSheetModalProvider>
               </KeyboardProvider>
             ) : (
-              <OnboardingScreen />
+              <ErrorBoundary>
+                <OnboardingScreen />
+              </ErrorBoundary>
             )}
 
             <ConfirmDialog />
