@@ -29,9 +29,9 @@ class ConsoleTerminalView(context: Context, appContext: AppContext) : ExpoView(c
   private var rows = 0
   private var clearingInput = false
   private var isCleanedUp = false
-  private var backgroundColorValue = Color.parseColor("#24292E")
-  private var foregroundColorValue = Color.parseColor("#D1D5DA")
-  private var mutedForegroundColorValue = Color.parseColor("#959DA5")
+  private var backgroundColorValue = Color.parseColor("#0a0a0b")
+  private var foregroundColorValue = Color.parseColor("#ffffff")
+  private var mutedForegroundColorValue = Color.parseColor("#71717a")
   private var cursorColorValue = Color.parseColor("#009FFF")
   private var paletteColors = IntArray(0)
 
@@ -87,21 +87,21 @@ class ConsoleTerminalView(context: Context, appContext: AppContext) : ExpoView(c
       }
     }
 
-  var backgroundColorHex: String = "#24292E"
+  var backgroundColorHex: String = "#0a0a0b"
     set(value) {
       field = value
       backgroundColorValue = parseColor(value, backgroundColorValue)
       applyTheme()
     }
 
-  var foregroundColorHex: String = "#D1D5DA"
+  var foregroundColorHex: String = "#ffffff"
     set(value) {
       field = value
       foregroundColorValue = parseColor(value, foregroundColorValue)
       applyTheme()
     }
 
-  var mutedForegroundColorHex: String = "#959DA5"
+  var mutedForegroundColorHex: String = "#71717a"
     set(value) {
       field = value
       mutedForegroundColorValue = parseColor(value, mutedForegroundColorValue)
@@ -411,7 +411,10 @@ class ConsoleTerminalView(context: Context, appContext: AppContext) : ExpoView(c
       val key = parts[0].trim()
       val value = parts[1].trim()
       when (key) {
+        "background" -> backgroundColorValue = parseColor(value, backgroundColorValue)
+        "foreground" -> foregroundColorValue = parseColor(value, foregroundColorValue)
         "cursor-color" -> cursorColorValue = parseColor(value, cursorColorValue)
+        "cursor-text" -> { /* cursorBackground handled via JS props; ignore here */ }
         "palette" -> {
           val paletteParts = value.split('=', limit = 2)
           val index = paletteParts.firstOrNull()?.trim()?.toIntOrNull() ?: continue
