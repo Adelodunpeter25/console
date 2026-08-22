@@ -21,7 +21,7 @@ The JavaScript contract is intentionally small:
   `TerminalFrame`, `GhosttyBridge`)
 - `android/src/main/cpp/console_terminal_jni.cpp` — JNI bridge to `libghostty-vt`
   (symbol prefix must match the Kotlin package: rebuild via CMake on app build)
-- `android/src/main/cpp/include/` — vendored libghostty-vt C headers
+- `android/src/main/cpp/include/` — vendored libghostty-vt C headers (revision pinned in `GHOSTTY_REVISION`; must match the `libghostty-vt.so` builds)
 - `android/src/main/jniLibs/` — prebuilt `libghostty-vt.so` per ABI
 - `android/src/main/assets/fonts/` — MesloLGS NF fonts
 
