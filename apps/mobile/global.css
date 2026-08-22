@@ -2,8 +2,9 @@
 @import "uniwind";
 
 @theme {
-  /* Single source of truth for colors. styles/theme.ts mirrors these values
-     for use in inline styles / icon color props — keep both in sync. */
+  /* Single source of truth for colors. styles/theme.ts is AUTO-GENERATED from
+     this block — edit colors HERE, then run `npm run theme:generate`.
+     Never edit theme.ts by hand. */
   --color-screen: #0a0a0b;
   --color-card: #121316;
   --color-card-alt: #18191c;

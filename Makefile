@@ -1,4 +1,4 @@
-.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop build-desktop-mac typecheck check generate-icons help
+.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop build-desktop-mac typecheck check generate-icons generate-theme help
 
 # Default target
 .DEFAULT_GOAL := help
@@ -41,6 +41,10 @@ typecheck:
 generate-icons:
 	npm run icons:generate
 
+## generate-theme: Regenerate mobile JS theme from global.css tokens
+generate-theme:
+	npm run theme:generate
+
 ## check: Run vp check for code formatting and linting
 check:
 	npm run check
@@ -56,4 +60,5 @@ help:
 	@echo "  make build-desktop-mac - Build and package macOS DMG & ZIP installers"
 	@echo "  make typecheck         - Run TypeScript typechecking"
 	@echo "  make generate-icons    - Regenerate mobile SVG icon registries from console-rs"
+	@echo "  make generate-theme    - Regenerate mobile JS theme from global.css tokens"
 	@echo "  make check             - Run Vite+ code format and lint checks"
