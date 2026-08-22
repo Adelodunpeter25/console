@@ -97,28 +97,75 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
             {children}
           </View>
         ),
+        // Leaf inline text — parent paragraph is selectable but RN requires
+        // selectable on the leaf Text that directly holds the string.
+        text: (node: RenderNode) => (
+          <Text key={node.key} selectable>
+            {node.content}
+          </Text>
+        ),
+        textgroup: (node, children) => (
+          <Text key={node.key} selectable>
+            {children}
+          </Text>
+        ),
+        softbreak: (node) => (
+          <Text key={node.key} selectable>
+            {"\n"}
+          </Text>
+        ),
+        hardbreak: (node) => (
+          <Text key={node.key} selectable>
+            {"\n"}
+          </Text>
+        ),
         paragraph: (node, children) => (
-          <Text key={node.key} className="text-foreground text-[15px] leading-[23px] my-[3px]" selectable>
+          <Text
+            key={node.key}
+            className="text-foreground text-[15px] leading-[23px] my-[3px]"
+            selectable
+            selectionColor="rgba(255,255,255,0.3)"
+          >
             {children}
           </Text>
         ),
         heading1: (node, children) => (
-          <Text key={node.key} className="text-foreground text-lg font-bold mt-4 mb-2" selectable>
+          <Text
+            key={node.key}
+            className="text-foreground text-lg font-bold mt-4 mb-2"
+            selectable
+            selectionColor="rgba(255,255,255,0.3)"
+          >
             {children}
           </Text>
         ),
         heading2: (node, children) => (
-          <Text key={node.key} className="text-foreground text-base font-bold mt-3 mb-1.5" selectable>
+          <Text
+            key={node.key}
+            className="text-foreground text-base font-bold mt-3 mb-1.5"
+            selectable
+            selectionColor="rgba(255,255,255,0.3)"
+          >
             {children}
           </Text>
         ),
         heading3: (node, children) => (
-          <Text key={node.key} className="text-foreground text-[15px] font-bold mt-2.5 mb-1" selectable>
+          <Text
+            key={node.key}
+            className="text-foreground text-[15px] font-bold mt-2.5 mb-1"
+            selectable
+            selectionColor="rgba(255,255,255,0.3)"
+          >
             {children}
           </Text>
         ),
         heading4: (node, children) => (
-          <Text key={node.key} className="text-foreground text-sm font-bold mt-2 mb-0.5" selectable>
+          <Text
+            key={node.key}
+            className="text-foreground text-sm font-bold mt-2 mb-0.5"
+            selectable
+            selectionColor="rgba(255,255,255,0.3)"
+          >
             {children}
           </Text>
         ),
@@ -137,10 +184,17 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
           const bullet = isOrdered ? (node.index !== undefined ? `${node.index + 1}.` : "•") : "•";
           return (
             <View key={node.key} className="flex-row items-start my-[3px]">
-              <Text className="text-foreground/70 mr-2.5 mt-0.5 text-[14px] font-semibold" selectable>
+              <Text
+                className="text-foreground/70 mr-2.5 mt-0.5 text-[14px] font-semibold"
+                selectable
+                selectionColor="rgba(255,255,255,0.3)"
+              >
                 {bullet}
               </Text>
-              <View className="flex-1">{children}</View>
+              <View className="flex-1">
+                {/* Children are block Text nodes (paragraphs) — keep selectable per item */}
+                {children}
+              </View>
             </View>
           );
         },
@@ -150,6 +204,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
             className="underline text-[15px]"
             style={{ color: "#7da7ff" }}
             selectable
+            selectionColor="rgba(125,167,255,0.35)"
             onPress={() => {
               const href = node.attributes?.href;
               if (typeof href === "string") {
@@ -166,6 +221,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
             className="font-mono text-[12.5px] text-orange-300 px-1.5 py-0.5 rounded-md"
             style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
             selectable
+            selectionColor="rgba(255,255,255,0.3)"
           >
             {node.content}
           </Text>
@@ -203,12 +259,22 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
           );
         },
         strong: (node, children) => (
-          <Text key={node.key} className="font-bold text-foreground" selectable>
+          <Text
+            key={node.key}
+            className="font-bold text-foreground"
+            selectable
+            selectionColor="rgba(255,255,255,0.3)"
+          >
             {children}
           </Text>
         ),
         em: (node, children) => (
-          <Text key={node.key} className="italic text-foreground/90" selectable>
+          <Text
+            key={node.key}
+            className="italic text-foreground/90"
+            selectable
+            selectionColor="rgba(255,255,255,0.3)"
+          >
             {children}
           </Text>
         ),
