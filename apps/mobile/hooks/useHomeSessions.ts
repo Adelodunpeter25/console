@@ -1,5 +1,14 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
-import { useCreateSession, useDeleteSession, useProjects, useSessions, prefetchSession } from "./queries";
+import { useShallow } from "zustand/react/shallow";
+import {
+  useCreateSession,
+  useDeleteSession,
+  useProjects,
+  useSessions,
+  prefetchSession,
+  sessionKeys,
+  fsKeys,
+} from "./queries";
 import { useQueryClient } from "@tanstack/react-query";
 import type { SessionHeader } from "@console/types";
 import { useAppStore, useChatStore } from "../stores";
@@ -55,9 +64,19 @@ export function useHomeSessions() {
     return sessions.filter((s) => (s.title || "").toLowerCase().includes(q));
   }, [sessions, searchQuery]);
 
-  // Draft map: per-session unsent input/attachments (max 2 images via draft.ts)
-  // isDraftSession true for sessions with input.trim or attachments
-  const draftSessions = useChatStore((s) => s.sessions);
+  // Selective subscription: only track 0-message sessions with active drafts
+  // Prevents re-rendering the Home Screen on every keystroke inside active chats
+  const draftSessions = useChatStore(
+    useShallow((s) => {
+      const drafts: Record<string, (typeof s.sessions)[string]> = {};
+      for (const [id, state] of Object.entries(s.sessions)) {
+        if (state.messages.length === 0 && isDraftSession(state)) {
+          drafts[id] = state;
+        }
+      }
+      return drafts;
+    }),
+  );
 
   // Build DRAFT section for never-sent / unsent drafts (0 messages but has input)
   const draftSection = useMemo<GroupedProjectSection | null>(() => {
@@ -201,8 +220,8 @@ export function useHomeSessions() {
       await Promise.all([
         refetchProjects(),
         refetchSessions(),
-        queryClient.invalidateQueries({ queryKey: ["sessions"] }),
-        queryClient.invalidateQueries({ queryKey: ["projects"] }),
+        queryClient.invalidateQueries({ queryKey: sessionKeys.all }),
+        queryClient.invalidateQueries({ queryKey: fsKeys.projects }),
       ]);
     } finally {
       setIsRefreshing(false);

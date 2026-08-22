@@ -39,16 +39,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font",
-      [
-        "react-native-enriched-markdown",
-        {
-          "enableMath": true,
-          "codeHighlight": {
-            "enabled": true
-          }
-        }
-      ]
+      "expo-font"
     ],
     "extra": {
       "eas": {

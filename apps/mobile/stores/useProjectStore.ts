@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { ProjectInfo, SessionHeader, UpdateSessionDto } from "@console/types";
-import { sessionService, fsService, sessionKeys } from "@console/api";
+import { sessionService, fsService, sessionKeys, fsKeys } from "@console/api";
 import { queryClient } from "../query-client";
 import { useSessionStatusStore } from "./useSessionStatusStore";
 
@@ -49,14 +49,14 @@ export const useProjectStore = create<ProjectState>((set) => ({
   addProject: async (path: string) => {
     const project = await fsService.addProject(path);
     set((s) => ({ projects: [...s.projects, project] }));
-    queryClient.invalidateQueries({ queryKey: ["projects"] }).catch(() => {});
+    queryClient.invalidateQueries({ queryKey: fsKeys.projects }).catch(() => {});
     return project;
   },
 
   deleteProject: async (projectId: string) => {
     await fsService.deleteProject(projectId);
     set((s) => ({ projects: s.projects.filter((p) => p.id !== projectId) }));
-    queryClient.invalidateQueries({ queryKey: ["projects"] }).catch(() => {});
+    queryClient.invalidateQueries({ queryKey: fsKeys.projects }).catch(() => {});
   },
 
   loadSessions: async () => {

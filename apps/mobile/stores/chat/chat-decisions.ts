@@ -13,6 +13,7 @@ export async function answerSessionQuestion(
     await runService.answerQuestion(sessionId, { requestId, answer });
   } catch (err) {
     console.error("answerQuestion error:", err);
+    throw err;
   } finally {
     setSessions((sessions) =>
       updateSession(sessions, sessionId, (sessionState) => ({
@@ -38,6 +39,7 @@ export async function approveSessionPermission(
     await runService.approvePermission(sessionId, { requestId, allow });
   } catch (err) {
     console.error("approvePermission error:", err);
+    throw err;
   } finally {
     setSessions((sessions) =>
       updateSession(sessions, sessionId, (sessionState) => ({

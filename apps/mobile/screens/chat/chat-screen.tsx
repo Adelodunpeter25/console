@@ -47,19 +47,30 @@ export function ChatScreen() {
     abort();
   }, [stream, abort]);
 
-  const hasPendingInteraction =
-    (stream.pendingPermissions?.length ?? 0) > 0 ||
-    (stream.pendingQuestions?.length ?? 0) > 0 ||
-    Boolean(stream.pendingPermission) ||
-    Boolean(stream.pendingQuestion);
+  const hasPendingInteraction = useMemo(
+    () =>
+      (stream.pendingPermissions?.length ?? 0) > 0 ||
+      (stream.pendingQuestions?.length ?? 0) > 0 ||
+      Boolean(stream.pendingPermission) ||
+      Boolean(stream.pendingQuestion),
+    [
+      stream.pendingPermissions?.length,
+      stream.pendingQuestions?.length,
+      stream.pendingPermission,
+      stream.pendingQuestion,
+    ],
+  );
 
-  const isStreaming =
-    stream.running &&
-    (Boolean(stream.streamingText) ||
-      Boolean(stream.streamingThinking) ||
-      stream.activeToolCalls.length > 0);
+  const isStreaming = useMemo(
+    () =>
+      stream.running &&
+      (Boolean(stream.streamingText) ||
+        Boolean(stream.streamingThinking) ||
+        stream.activeToolCalls.length > 0),
+    [stream.running, stream.streamingText, stream.streamingThinking, stream.activeToolCalls.length],
+  );
 
-  const hasMessages = stream.messages.length > 0;
+  const hasMessages = useMemo(() => stream.messages.length > 0, [stream.messages.length]);
 
   return (
     <View className="flex-1 bg-screen">

@@ -184,8 +184,15 @@ export function resultText(result: ToolResult): string {
     return content
       .map((c) => {
         if (typeof c === "string") return c;
-        if (c && typeof c === "object" && "type" in c && c.type === "text" && typeof (c as any).text === "string") {
-          return (c as any).text;
+        if (
+          c &&
+          typeof c === "object" &&
+          "type" in c &&
+          (c as { type: unknown }).type === "text" &&
+          "text" in c &&
+          typeof (c as { text: unknown }).text === "string"
+        ) {
+          return (c as { text: string }).text;
         }
         return "";
       })
