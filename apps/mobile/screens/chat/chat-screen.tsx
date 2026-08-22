@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { View, Keyboard, BackHandler } from "react-native";
 import type { FlashListRef } from "@shopify/flash-list";
 import type { AgentMessage } from "@console/types";
