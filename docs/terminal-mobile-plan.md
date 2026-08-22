@@ -28,7 +28,7 @@ Data flow:
 server PTY ──ws frames──▶ useTerminalStore (append raw buffer)
                                 │ buffer prop
                                 ▼
-              T3TerminalView (libghostty-vt parse ──▶ Canvas snapshot)
+              ConsoleTerminalView (libghostty-vt parse ──▶ Canvas snapshot)
                                 │ onInput / onResize events
                                 ▼
                 useTerminalStore.write() / resize() ──ws──▶ server PTY
@@ -52,24 +52,41 @@ Create `apps/mobile/modules/console-terminal/` by copying
   ANDROID_NDK_HOME + Zig 0.15.2)
 - `T3TerminalNative.podspec`
 
-**Keep unchanged (minimal-diff rule):**
+**Full rebrand — no T3 names anywhere (user requirement).**
 
-- Kotlin package `expo.modules.t3terminal` and native view name `Name("T3TerminalSurface")`.
-  Renaming would require touching JNI symbol names in `t3_terminal_jni.cpp`; not worth it.
-  JS references the same string, kept consistent below.
-- `expo-module.config.json`: remove the `ios.modules` block, keep android
-  `expo.modules.t3terminal.T3TerminalModule`.
-- `android/` entirely: `build.gradle` (externalNativeBuild cmake 3.22.1, C++17),
-  `src/main/cpp/{CMakeLists.txt,t3_terminal_jni.cpp}`,
-  `src/main/java/expo/modules/t3terminal/*.kt` (module + view + canvas + frame + bridge),
-  `src/main/jniLibs/{arm64-v8a,armeabi-v7a,x86,x86_64}/libghostty-vt.so`,
-  `src/main/assets/fonts/MesloLGS-NF-{Regular,Bold}.ttf`.
-- Update module `package.json` name to `@console/mobile-terminal-native` (private, 0.0.0).
-- Copy `THIRD_PARTY_NOTICES.md` (preserve Ghostty + T3 attribution; MIT).
+1. Kotlin package: `expo.modules.t3terminal` → `expo.modules.consoleterminal`
+   - Move dir `android/src/main/java/expo/modules/t3terminal/` →
+     `android/src/main/java/expo/modules/consoleterminal/`
+   - Rename classes: `T3TerminalModule` → `ConsoleTerminalModule`,
+     `T3TerminalView` → `ConsoleTerminalView`; keep descriptive class names
+     (`TerminalCanvasView`, `TerminalFrame`, `GhosttyBridge`) as-is.
+2. JNI symbols (the one real coupling): rewrite all 13 exports in
+   `src/main/cpp/t3_terminal_jni.cpp` from
+   `Java_expo_modules_t3terminal_GhosttyBridge_nativeX(...)` to
+   `Java_expo_modules_consoleterminal_GhosttyBridge_nativeX(...)`
+   (nativeCreate, nativeDestroy, nativeFeed, nativeResize, nativeScroll,
+   nativeSetTheme, nativeSelectWordAt, nativeExtendSelection, nativeSelectAll,
+   nativeClearSelection, nativeGetSelectionText, nativeSnapshot, + any remaining).
+   ⚠️ A mismatched symbol compiles fine but throws `UnsatisfiedLinkError` at first
+   view mount — the Phase 5 device run catches it immediately.
+3. View name: `Name("T3TerminalSurface")` → `Name("ConsoleTerminalSurface")`
+   in `ConsoleTerminalModule.kt`; JS side uses `requireNativeView("ConsoleTerminalSurface")`.
+4. `expo-module.config.json`: remove `ios.modules` block; android entry becomes
+   `expo.modules.consoleterminal.ConsoleTerminalModule`.
+5. `build.gradle`: `namespace 'expo.modules.consoleterminal'`, group `com.console.terminal`.
+6. Module `package.json`: name `@console/mobile-terminal-native` (private, 0.0.0).
+7. Copy `THIRD_PARTY_NOTICES.md` (Ghostty + T3 attribution stays — license obligation;
+   branding elsewhere is fully ours). Also rename `t3_terminal_jni.cpp` →
+   `console_terminal_jni.cpp` and update `CMakeLists.txt`.
+
+**Keep unchanged:** `android/` build mechanics (`build.gradle` cmake 3.22.1 / C++17 flags),
+`jniLibs/{arm64-v8a,armeabi-v7a,x86,x86_64}/libghostty-vt.so`, Meslo fonts, and the
+view/prop/event contract itself (props `terminalKey`, `initialBuffer`, `fontSize`,
+`themeConfig`, ...; events `onInput`, `onResize`) so the t3-derived JS glue ports cleanly.
 
 Register in `apps/mobile/package.json` dependencies:
 `"@console/mobile-terminal-native": "file:./modules/console-terminal"`.
-No JS export needed — JS uses `requireNativeView("T3TerminalSurface")` from `expo`.
+No JS export needed — JS uses `requireNativeView("ConsoleTerminalSurface")` from `expo`.
 
 Build requirements: NDK + CMake 3.22.1 via Android Studio SDK Manager (standard Expo setup).
 
@@ -80,7 +97,7 @@ New `apps/mobile/features/terminal/` directory:
 1. `native-terminal-module.ts` — adapted from
    `t3code/.../src/features/terminal/nativeTerminalModule.ts`:
    - keep `resolveNativeTerminalSurfaceView()` + `hasNativeTerminalSurface()`
-     (`requireNativeView("T3TerminalSurface")` behind a `getViewConfig` guard);
+     (`requireNativeView("ConsoleTerminalSurface")` behind a `getViewConfig` guard);
    - drop t3-specific bits (`NativeViewResolutionError`, hardware-key revision debug);
      console.error on resolution failure is enough.
 2. `terminal-theme.ts` — small standalone rewrite (do NOT port t3's theme system):
@@ -167,5 +184,4 @@ Commit per phase (single-line messages, staged files only) per AGENTS.md.
   slices later if APK size matters (keep arm64-v8a + x86_64 for emulator).
 - **License**: MIT throughout — keep T3 Tools + Ghostty notices in the module dir.
 - **Out of scope for MVP**: multi-terminal UI (store supports it; screen starts with one),
-  font-size setting persistence, iOS support (contract is platform-neutral; revisit later),
-  renaming the native package/module name.
+  font-size setting persistence, iOS support (contract is platform-neutral; revisit later).
