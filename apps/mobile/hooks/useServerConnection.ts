@@ -109,7 +109,9 @@ export function useServerConnection() {
           text: "Disconnect",
           style: "destructive",
           onPress: () => {
-            appStorage.delete(BACKEND_URL_KEY);
+            const anyStorage = appStorage as unknown as { remove?: (k: string) => unknown; delete?: (k: string) => unknown };
+            if (typeof anyStorage.remove === "function") anyStorage.remove(BACKEND_URL_KEY);
+            else if (typeof anyStorage.delete === "function") anyStorage.delete(BACKEND_URL_KEY);
             clearChatCache();
             configureConsoleApi({ baseUrl: "" });
             queryClient.clear();

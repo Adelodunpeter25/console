@@ -18,6 +18,12 @@ export const mmkvZustandStorage: StateStorage = {
     appStorage.set(name, value);
   },
   removeItem: (name: string): void => {
-    appStorage.delete(name);
+    // MMKV v4 renamed delete -> remove. Keep fallback for older builds/tests
+    const anyStorage = appStorage as unknown as { remove?: (k: string) => unknown; delete?: (k: string) => unknown };
+    if (typeof anyStorage.remove === "function") {
+      anyStorage.remove(name);
+    } else if (typeof anyStorage.delete === "function") {
+      anyStorage.delete(name);
+    }
   },
 };
