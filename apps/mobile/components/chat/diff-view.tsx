@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView } from "react-native";
 import { ChevronDown, ChevronUp } from "lucide-react-native";
 import type { DiffResult, DiffLine } from "../../utils/diff";
 import { getFileName } from "../../utils/tool-helpers";
+import { FileIcon } from "../icons";
 import { getLanguageFromPath, renderHighlightedLine } from "../common/syntax-highlighter";
 
 interface DiffViewProps {
@@ -132,9 +133,12 @@ export const DiffView = memo(function DiffView({
       {/* Header Bar */}
       <View className="flex-row items-center justify-between px-3 py-2 bg-white/[0.03] border-b border-white/[0.06]">
         {filePath ? (
-          <Text className="text-xs font-mono text-foreground font-medium flex-1 mr-2" numberOfLines={1}>
-            {getFileName(filePath)}
-          </Text>
+          <View className="flex-row items-center gap-1.5 flex-1 mr-2">
+            <FileIcon filename={filePath} size={13} />
+            <Text className="text-xs font-mono text-foreground font-medium flex-1" numberOfLines={1}>
+              {getFileName(filePath)}
+            </Text>
+          </View>
         ) : (
           <Text className="text-xs font-mono text-foreground-secondary/70">
             Changes

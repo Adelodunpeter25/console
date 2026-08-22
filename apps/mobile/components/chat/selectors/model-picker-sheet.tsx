@@ -8,6 +8,7 @@ import { SharedBottomSheet } from "../../common/shared-bottom-sheet";
 import { useProviderStore } from "../../../stores";
 import { formatModelName } from "../../../utils";
 import { theme } from "../../../styles/theme";
+import { ProviderIcon } from "../../icons";
 
 interface ModelPickerSheetProps {
   value: string | null;
@@ -120,6 +121,7 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
                     }`}
                     onPress={() => handleSelectProvider(p.name)}
                   >
+                    <ProviderIcon provider={p.name} size={13} />
                     <Text
                       className={`text-xs font-medium ${
                         isSelected ? "text-foreground font-semibold" : "text-foreground-secondary"

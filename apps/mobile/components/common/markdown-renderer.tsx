@@ -1,11 +1,13 @@
 import React, { useState } from "react";
 import { Linking, Pressable, Text, View } from "react-native";
 import Markdown, { type ASTNode } from "react-native-markdown-display";
-import { Check, Copy, FileCode } from "lucide-react-native";
+import { Check, Copy } from "lucide-react-native";
 import { theme } from "../../styles/theme";
 import { setStringAsync } from "expo-clipboard";
 
 import { SyntaxHighlighter } from "./syntax-highlighter";
+import { FileIcon } from "../icons";
+import { getLanguageIconKey } from "../../assets/icons/file-types/mapping";
 
 interface MarkdownRendererProps {
   content: string;
@@ -14,6 +16,11 @@ interface MarkdownRendererProps {
 /** Extension of ASTNode with the fields tokensToAST actually attaches. */
 interface RenderNode extends ASTNode {
   sourceInfo?: string;
+}
+
+/** File-type icon for a code-fence language (falls back to generic file). */
+function FileLanguageIcon({ language }: { language: string }) {
+  return <FileIcon iconKey={getLanguageIconKey(language)} size={13} />;
 }
 
 function CodeBlockHeader({
@@ -34,7 +41,7 @@ function CodeBlockHeader({
   return (
     <View className="flex-row items-center justify-between px-3.5 py-2 border-b border-border/60 bg-card-alt/40">
       <View className="flex-row items-center gap-1.5">
-        <FileCode size={13} color={theme.colors.text.secondary} />
+        <FileLanguageIcon language={language} />
         <Text className="text-[11px] font-mono font-semibold text-foreground-secondary">
           {language || "code"}
         </Text>
@@ -100,22 +107,28 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
         // Leaf inline text — parent paragraph is selectable but RN requires
         // selectable on the leaf Text that directly holds the string.
         text: (node: RenderNode) => (
-          <Text key={node.key} selectable>
+          <Text
+            key={node.key}
+            className="text-foreground"
+            selectable
+            selectionColor="rgba(255,255,255,0.3)"
+            style={{ color: "#ffffff" }}
+          >
             {node.content}
           </Text>
         ),
         textgroup: (node, children) => (
-          <Text key={node.key} selectable>
+          <Text key={node.key} className="text-foreground" selectable selectionColor="rgba(255,255,255,0.3)" style={{ color: "#ffffff" }}>
             {children}
           </Text>
         ),
         softbreak: (node) => (
-          <Text key={node.key} selectable>
+          <Text key={node.key} className="text-foreground" selectable selectionColor="rgba(255,255,255,0.3)">
             {"\n"}
           </Text>
         ),
         hardbreak: (node) => (
-          <Text key={node.key} selectable>
+          <Text key={node.key} className="text-foreground" selectable selectionColor="rgba(255,255,255,0.3)">
             {"\n"}
           </Text>
         ),
