@@ -9,6 +9,7 @@ This plan outlines how to integrate the desktop app's SVG icon library (`provide
 ### A. Provider Icons (`assets/icons/providers/`)
 * **Available**: `antigravity.svg`, `codebuff.svg`, `gemini.svg`, `openai.svg`, `opencode.svg`
 * **Format**: Pure monochrome / dual-tone SVG vectors with `viewBox="0 0 24 24"`.
+* **Alias**: `codex` reuses `openai.svg` (matches desktop's `ModelSelector.tsx` mapping), so Codex models render correctly in the picker.
 
 ### B. File-Type Icons (`assets/icons/file-types/`)
 * **Available**: ~100 optimized Material Icon Theme SVGs.
@@ -23,11 +24,11 @@ This plan outlines how to integrate the desktop app's SVG icon library (`provide
 
 1. **Provider Selector & Model Switcher**:
    * Model picker bottom sheet (`components/chat/composer.tsx`).
-   * Provider settings screen (`screens/settings/provider-settings-screen.tsx`).
+   * Provider settings screen (`screens/settings/settings-screen.tsx`).
    * Run Activity & Thinking headers (badge showing which AI provider generated the turn).
 
 2. **Chat Tool Runs & Diff Views**:
-   * File badges in `ToolCallRow` & `ToolResultContent` when executing `readFile`, `editFile`, `writeFile`, `batchWrite`.
+   * File badges in `ToolCallBlock` & `ToolResultContent` when executing `readFile`, `editFile`, `writeFile`, `batchWrite`.
    * Header icon in `DiffView` (`components/chat/diff-view.tsx`).
 
 3. **Markdown Code Blocks**:
@@ -97,7 +98,6 @@ export function getFileIconXml(pathOrName: string): string {
   const ext = filename.split(".").pop() ?? "";
   switch (ext) {
     case "ts":
-    case "d.ts":
       return FILE_ICONS.typescript;
     case "tsx":
       return FILE_ICONS.react;
@@ -152,13 +152,14 @@ import { getProviderIconXml } from "../../assets/icons/providers";
 interface ProviderIconProps {
   provider: string;
   size?: number;
-  color?: string;
 }
 
-export function ProviderIcon({ provider, size = 16, color }: ProviderIconProps) {
+export function ProviderIcon({ provider, size = 16 }: ProviderIconProps) {
   const xml = getProviderIconXml(provider);
   if (!xml) return null;
-  return <SvgXml xml={xml} width={size} height={size} color={color} />;
+  // Note: SvgXml has no `color` tint prop. To tint monochrome icons,
+  // string-replace fill/stroke attributes in the XML before rendering.
+  return <SvgXml xml={xml} width={size} height={size} />;
 }
 ```
 
