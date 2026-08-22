@@ -1,0 +1,12 @@
+{
+  "name": "@console/mobile-terminal-native",
+  "version": "0.0.0",
+  "private": true,
+  "expo-module": {
+    "android": {
+      "modules": [
+        "expo.modules.consoleterminal.ConsoleTerminalModule"
+      ]
+    }
+  }
+}
