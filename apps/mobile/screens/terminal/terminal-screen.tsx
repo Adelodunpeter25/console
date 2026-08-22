@@ -105,10 +105,24 @@ export function TerminalScreen() {
   );
 
   const handleKill = useCallback(() => {
-    if (terminalId) {
-      useTerminalStore.getState().kill(terminalId).catch(() => {});
-    }
-  }, [terminalId]);
+    if (!terminalId || !project) return;
+    const idToKill = terminalId;
+    // Clear UI first so the spawn spinner shows while the old PTY tears down
+    setTerminalId(null);
+    setSpawnError(null);
+    useTerminalStore
+      .getState()
+      .kill(idToKill)
+      .catch(() => {})
+      .finally(() => {
+        // Respawn a fresh PTY for the same project so the user lands back in a shell
+        useTerminalStore
+          .getState()
+          .openTerminal({ projectId: project.id, cwd: project.path })
+          .then((spawned) => setTerminalId(spawned.id))
+          .catch((cause) => setSpawnError(cause instanceof Error ? cause.message : String(cause)));
+      });
+  }, [terminalId, project]);
 
   const isRunning = term?.status === "running" || term?.status === "spawning";
 
@@ -185,6 +199,19 @@ export function TerminalScreen() {
               <Text className="text-xs font-mono text-foreground-secondary">{key.label}</Text>
             </Pressable>
           ))}
+        </View>
+      ) : terminalId && !isRunning && term ? (
+        <View
+          className="flex-row items-center justify-center px-4 pt-3 border-t border-border-subtle"
+          style={{ paddingBottom: insets.bottom + 10 }}
+        >
+          <Pressable
+            className="px-4 py-2.5 rounded-full bg-foreground items-center justify-center"
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+            onPress={handleKill}
+          >
+            <Text className="text-xs font-semibold text-background">Restart shell</Text>
+          </Pressable>
         </View>
       ) : null}
     </View>

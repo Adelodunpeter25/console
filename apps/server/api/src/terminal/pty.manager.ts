@@ -39,6 +39,7 @@ interface PtySession {
   cols: number;
   rows: number;
   callbacks?: PtyCallbacks;
+  pending: string[];
   killed: boolean;
 }
 
@@ -104,16 +105,23 @@ export class TerminalPtyManager {
       cwd,
       cols,
       rows,
+      pending: [],
       killed: false,
     };
     this.sessions.set(id, session);
 
-    // Forward process events once the route has attached callbacks. Output
-    // always begins flowing immediately; a session with no callbacks yet just
-    // buffers nothing and drops early output (acceptable: the spawn event is
-    // what matters; the shell prompt arrives after the client binds).
+    // Buffer output that arrives before the WebSocket route has attached
+    // callbacks so the initial shell prompt is never dropped.
     instance.onData((data) => {
-      session.callbacks?.onData({ type: "output", data });
+      if (session.callbacks) {
+        session.callbacks.onData({ type: "output", data });
+      } else {
+        session.pending.push(data);
+        // Cap buffered early output to avoid unbounded growth if attach never happens
+        if (session.pending.length > 100) {
+          session.pending.shift();
+        }
+      }
     });
     instance.onExit(({ exitCode }) => {
       if (session.killed) return;
@@ -130,6 +138,14 @@ export class TerminalPtyManager {
     const session = this.sessions.get(id);
     if (!session) throw new Error(`No terminal session found for id: ${id}`);
     session.callbacks = callbacks;
+    // Flush any output that arrived between spawn and attach (e.g. shell prompt)
+    if (session.pending.length > 0) {
+      const queued = [...session.pending];
+      session.pending.length = 0;
+      for (const data of queued) {
+        callbacks.onData({ type: "output", data });
+      }
+    }
   }
 
   /** Write raw bytes into the PTY (keystrokes, pasted text). */

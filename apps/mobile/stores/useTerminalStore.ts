@@ -116,14 +116,59 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
     if (existing) return existing;
 
     const promise = (async () => {
+      // Buffer output that arrives before we know the terminal id (should not happen
+      // for well-ordered servers, but guards against the spawned→output race where
+      // the shell prompt arrives before the spawned handler has run).
+      const earlyOutput: string[] = [];
+
       const sink = connectTerminal({
         baseUrl: getBaseUrl(),
         params: { cwd, cols, rows, label, shell },
         onEvent: (message) => {
-          // Route messages to the correct terminal via the sink's own id
-          // (assigned on the "spawned" frame).
+          // Spawned must be handled first: it defines the terminal id for every
+          // subsequent output/exit/error frame from this sink.
+          if (message.type === "spawned") {
+            const id = message.id;
+            if (!sinkTerminalId(sink)) {
+              sinkTerminalId(sink, id);
+              terminalSinks[id] = sink;
+              // Flush any early output that slipped in before the spawned frame
+              // was processed (defensive).
+              if (earlyOutput.length > 0) {
+                for (const data of earlyOutput) appendOutput(id, data);
+                earlyOutput.length = 0;
+              }
+              set((state) => {
+                if (state.terminals[id]) return state;
+                return {
+                  terminals: {
+                    ...state.terminals,
+                    [id]: {
+                      id,
+                      projectId,
+                      status: "running",
+                      pid: message.pid,
+                      shell: message.shell,
+                      cwd: message.cwd,
+                      cols: message.cols,
+                      rows: message.rows,
+                      revision: 0,
+                    },
+                  },
+                  buffers: { ...state.buffers, [id]: state.buffers[id] ?? "" },
+                  opening: { ...state.opening, [cacheKey]: undefined },
+                };
+              });
+            }
+            emit(id, message);
+            return;
+          }
+
           const terminalId = sinkTerminalId(sink);
-          if (!terminalId) return;
+          if (!terminalId) {
+            if (message.type === "output") earlyOutput.push(message.data);
+            return;
+          }
 
           if (message.type === "output") {
             appendOutput(terminalId, message.data);
@@ -137,34 +182,66 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
           }
         },
         onClose: () => {
+          let closedId: string | undefined;
           for (const key of Object.keys(terminalSinks)) {
-            if (terminalSinks[key] === sink) delete terminalSinks[key];
+            if (terminalSinks[key] === sink) {
+              closedId = key;
+              delete terminalSinks[key];
+            }
+          }
+          const knownId = closedId ?? sinkTerminalId(sink);
+          if (knownId) {
+            const term = get().terminals[knownId];
+            // If we still think it's running/spawning, the socket died
+            // unexpectedly — surface as exited so the UI can respawn.
+            if (term && (term.status === "running" || term.status === "spawning")) {
+              get().markStatus(knownId, "exited");
+              emit(knownId, { type: "exit", code: null });
+            }
           }
         },
       });
 
       const spawned = await sink.open();
-      terminalSinks[spawned.id] = sink;
-      sinkTerminalId(sink, spawned.id);
+      // Idempotent: onEvent already registered the terminal on the spawned frame.
+      // This flush covers any earlyOutput that arrived between spawn and the
+      // onEvent microtask, and handles the case where onEvent fired after await.
+      if (!sinkTerminalId(sink)) {
+        sinkTerminalId(sink, spawned.id);
+        terminalSinks[spawned.id] = sink;
+      }
+      if (earlyOutput.length > 0) {
+        for (const data of earlyOutput) appendOutput(spawned.id, data);
+        earlyOutput.length = 0;
+      }
 
-      set((state) => ({
-        terminals: {
-          ...state.terminals,
-          [spawned.id]: {
-            id: spawned.id,
-            projectId,
-            status: "running",
-            pid: spawned.pid,
-            shell: spawned.shell,
-            cwd: spawned.cwd,
-            cols: spawned.cols,
-            rows: spawned.rows,
-            revision: 0,
+      set((state) => {
+        if (state.terminals[spawned.id]) {
+          // Already created in onEvent — just clear the opening flag.
+          if (state.opening[cacheKey] !== undefined) {
+            return { opening: { ...state.opening, [cacheKey]: undefined } };
+          }
+          return state;
+        }
+        return {
+          terminals: {
+            ...state.terminals,
+            [spawned.id]: {
+              id: spawned.id,
+              projectId,
+              status: "running",
+              pid: spawned.pid,
+              shell: spawned.shell,
+              cwd: spawned.cwd,
+              cols: spawned.cols,
+              rows: spawned.rows,
+              revision: 0,
+            },
           },
-        },
-        buffers: { ...state.buffers, [spawned.id]: state.buffers[spawned.id] ?? "" },
-        opening: { ...state.opening, [cacheKey]: undefined },
-      }));
+          buffers: { ...state.buffers, [spawned.id]: state.buffers[spawned.id] ?? "" },
+          opening: { ...state.opening, [cacheKey]: undefined },
+        };
+      });
       return spawned;
     })().catch((err) => {
       set((state) => ({ opening: { ...state.opening, [cacheKey]: undefined } }));

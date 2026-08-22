@@ -183,7 +183,7 @@ export const ConsoleTerminalSurface = memo(function ConsoleTerminalSurface(
 
   if (NativeSurfaceView) {
     return (
-      <View style={props.style}>
+      <View style={[{ flex: 1 }, props.style]}>
         <NativeSurfaceView
           appearanceScheme="dark"
           autoFocus={props.autoFocus ?? true}
