@@ -4,7 +4,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-VENDOR_DIR="${MODULE_DIR}/../../../../native/libghostty-vt"
+# Headers live in-repo next to the JNI bridge; they must always come from the
+# same Ghostty revision as the .so files or the C++ layer won't compile.
+INCLUDE_DIR="${MODULE_DIR}/android/src/main/cpp/include"
 PATCH_DIR="${SCRIPT_DIR}/libghostty-android-patches"
 
 GHOSTTY_REVISION="${GHOSTTY_REVISION:-9f62873bf195e4d8a762d768a1405a5f2f7b1697}"
@@ -120,7 +122,7 @@ targets=(
 
 build_root="$(mktemp -d)"
 trap 'rm -rf "${build_root}"' EXIT
-mkdir -p "${VENDOR_DIR}/include"
+mkdir -p "${INCLUDE_DIR}"
 
 for entry in "${targets[@]}"; do
   abi="${entry%%:*}"
@@ -145,8 +147,10 @@ for entry in "${targets[@]}"; do
     "${MODULE_DIR}/android/src/main/jniLibs/${abi}/libghostty-vt.so"
 done
 
-rm -rf "${VENDOR_DIR}/include/ghostty"
-cp -R "${build_root}/arm64-v8a/include/ghostty" "${VENDOR_DIR}/include/ghostty"
-cp "${GHOSTTY_SOURCE_DIR}/LICENSE" "${VENDOR_DIR}/LICENSE"
-printf '%s\n' "${GHOSTTY_REVISION}" > "${VENDOR_DIR}/VERSION"
-log "done"
+# Refresh the vendored headers together with the .so files so they can never
+# drift apart (mismatched headers fail the CMake build with confusing
+# "unknown type name" errors).
+rm -rf "${INCLUDE_DIR}/ghostty"
+cp -R "${build_root}/arm64-v8a/include/ghostty" "${INCLUDE_DIR}/ghostty"
+printf '%s\n' "${GHOSTTY_REVISION}" > "${INCLUDE_DIR}/GHOSTTY_REVISION"
+log "done — commit the updated android/src/main/cpp/include/ and jniLibs/ together"
