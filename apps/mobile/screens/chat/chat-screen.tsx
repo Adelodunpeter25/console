@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { View, Keyboard, BackHandler } from "react-native";
+import { View, Keyboard, BackHandler, Pressable } from "react-native";
+import { SquareTerminal } from "lucide-react-native";
 import type { FlashListRef } from "@shopify/flash-list";
 import type { AgentMessage } from "@console/types";
 import { useChatStream, useAbort } from "../../hooks";
@@ -20,6 +21,18 @@ export function ChatScreen() {
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
+
+  // Header action: jump to the terminal screen (see screenshot ref — single
+  // icon button on the right edge instead of T3's three-button pill).
+  const headerTerminalButton = (
+    <Pressable
+      className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center"
+      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+      onPress={() => setActiveTab("terminal")}
+    >
+      <SquareTerminal size={18} color="#ffffff" />
+    </Pressable>
+  );
   const listRef = useRef<FlashListRef<AgentMessage>>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
 
@@ -74,7 +87,7 @@ export function ChatScreen() {
 
   return (
     <View className="flex-1 bg-screen">
-      <ScreenHeader title={stream.chatTitle} onBack={handleBackToHome} />
+      <ScreenHeader title={stream.chatTitle} onBack={handleBackToHome} rightAction={headerTerminalButton} />
 
       {stream.isLoadingMessages && !hasMessages ? (
         <ChatScreenSkeleton />
