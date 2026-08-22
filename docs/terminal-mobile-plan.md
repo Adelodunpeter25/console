@@ -36,10 +36,6 @@ server PTY ──ws frames──▶ useTerminalStore (append raw buffer)
 
 ---
 
-## Phase 0 — Copy plan into repo
-
-Copy this file to `docs/terminal-mobile-plan.md` (user wants it in-repo).
-
 ## Phase 1 — Port the native module (Android-only)
 
 Create `apps/mobile/modules/console-terminal/` by copying
@@ -66,7 +62,7 @@ Create `apps/mobile/modules/console-terminal/` by copying
    `Java_expo_modules_consoleterminal_GhosttyBridge_nativeX(...)`
    (nativeCreate, nativeDestroy, nativeFeed, nativeResize, nativeScroll,
    nativeSetTheme, nativeSelectWordAt, nativeExtendSelection, nativeSelectAll,
-   nativeClearSelection, nativeGetSelectionText, nativeSnapshot, + any remaining).
+   nativeClearSelection, nativeGetSelectionText, nativeSnapshot).
    ⚠️ A mismatched symbol compiles fine but throws `UnsatisfiedLinkError` at first
    view mount — the Phase 5 device run catches it immediately.
 3. View name: `Name("T3TerminalSurface")` → `Name("ConsoleTerminalSurface")`
@@ -125,10 +121,21 @@ New `apps/mobile/features/terminal/` directory:
 Modify `apps/mobile/stores/useTerminalStore.ts` (additive):
 
 - New state `buffers: Record<string, string>` (NOT persisted; memory only).
-- In `openTerminal`'s `onEvent`, on `message.type === "output"` append `data` to
-  `buffers[terminalId]` with a cap (~400k chars, trim head) before `emit`.
+- In `openTerminal`'s `onEvent`, on `message.type === "output"` append `data` to a
+  pending-append accumulator and flush to `buffers[terminalId]` at most every ~50–100ms
+  (coalescing), then `emit`. Rationale: each flush ships the whole buffer string across the
+  RN bridge as the `initialBuffer` prop; per-frame appends would flood the bridge under
+  high-throughput output (`yes`, large `cat`).
+- No head-trimming cap. The native view recreates itself whenever `initialBuffer` is not a
+  prefix-extension of what it already fed (`startsWith` check in `T3TerminalView.kt`), so
+  trimming the head would force a full teardown/recreate mid-session. Buffers are bounded
+  in practice by terminal lifetime: deleted on `end`/`kill` (see Risks for growth notes).
 - On `end`/`kill`, delete `buffers[id]`.
 - Screen reads it via `useTerminalStore(s => s.buffers[id] ?? "")`.
+- Add selector `findLiveTerminal(projectId, cwd?)`: returns the id of an existing terminal
+  with status `spawning`/`running` for that project (prefer matching cwd). The screen must
+  call this BEFORE `openTerminal` — `openTerminal`'s dedup cache only covers in-flight
+  spawns, so without this lookup every revisit of the tab leaks a new PTY server-side.
 
 Rationale: the native view diffs `initialBuffer` against what it already fed
 (`feedPendingBuffer` in `T3TerminalView.kt` feeds only the suffix; recreates on non-prefix
@@ -140,7 +147,9 @@ change), so appending raw ANSI output straight through is correct and gives repl
    (`ScreenHeader`, `BackHandler`):
    - Pick cwd: selected/default project path from `useProjectStore` (fallback sensible);
      pass through `openTerminal({ projectId, cwd })`.
-   - On mount / when no terminal for the current project: `openTerminal(...)`.
+   - On mount: first try `findLiveTerminal(projectId)` (replay from buffer); only if none,
+     `openTerminal({ projectId, cwd, cols, rows })` using the grid estimator so spawn size
+     matches the viewport instead of defaulting 80×24.
    - Subscribe: `const unsub = useTerminalStore.subscribe(id, msg => {...})` in `useEffect`;
      status from `terminals[id].status` (spawning/running/exited/error banners).
    - Render `<ConsoleTerminalSurface>` filling flex-1 above an extra-keys row
@@ -184,4 +193,10 @@ Commit per phase (single-line messages, staged files only) per AGENTS.md.
   slices later if APK size matters (keep arm64-v8a + x86_64 for emulator).
 - **License**: MIT throughout — keep T3 Tools + Ghostty notices in the module dir.
 - **Out of scope for MVP**: multi-terminal UI (store supports it; screen starts with one),
+  copy/paste UX (long-press menu, paste button — native selection APIs exist but are unwired),
   font-size setting persistence, iOS support (contract is platform-neutral; revisit later).
+- **WS drop mid-session**: `onClose` cleans up the sink silently; there is no reconnect
+  path. A dropped socket means a dead terminal — user kills from header and respawns.
+- **Unbounded buffer growth**: no cap by design (see Phase 3). A single very long-lived
+  session piping huge output could grow memory; acceptable for MVP since terminals are
+  killed on exit. Revisit trim-on-background if it bites.
