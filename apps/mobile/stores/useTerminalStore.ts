@@ -24,6 +24,8 @@ export type TerminalSink = ReturnType<typeof connectTerminal>;
 
 interface TerminalStoreState {
   terminals: Record<string, TerminalRecord>;
+  /** Raw PTY output (incl. ANSI escapes) per terminal id. Memory only, not persisted. */
+  buffers: Record<string, string>;
   /** Promise cache so concurrent open calls spawn only one PTY per terminal. */
   opening: Record<string, Promise<TerminalSpawnedEvent> | undefined>;
   openTerminal: (opts: {
@@ -37,6 +39,8 @@ interface TerminalStoreState {
   write: (id: string, data: string) => void;
   resize: (id: string, cols: number, rows: number) => void;
   kill: (id: string) => Promise<void>;
+  /** Find a live (spawning/running) terminal for a project, preferring one with matching cwd. */
+  findLiveTerminal: (projectId: string, cwd?: string) => string | undefined;
   markStatus: (id: string, status: TerminalStatus, extra?: Partial<TerminalRecord>) => void;
   end: (id: string) => void;
   /** Subscribe to a terminal's server events (output/exit/error). Returns an unsubscribe fn. */
@@ -48,6 +52,14 @@ const terminalSinks: Record<string, TerminalSink> = {};
 
 /** Per-terminal event listener registry. */
 const listeners: Record<string, Set<(message: TerminalServerMessage) => void>> = {};
+
+/**
+ * Coalesces output appends so high-throughput PTYs don't ship the whole buffer
+ * across the RN bridge on every frame. Flushed at most every FLUSH_INTERVAL_MS.
+ */
+const FLUSH_INTERVAL_MS = 80;
+const pendingAppends: Record<string, string[]> = {};
+let flushTimer: ReturnType<typeof setInterval> | null = null;
 
 function getBaseUrl(): string {
   return useAppStore.getState().backendUrl ?? "http://localhost:3000";
@@ -61,8 +73,39 @@ function emit(terminalId: string, message: TerminalServerMessage): void {
   }
 }
 
+/** Queue raw output for `terminalId`; flushed to `buffers` on the shared interval. */
+function appendOutput(terminalId: string, data: string): void {
+  (pendingAppends[terminalId] ??= []).push(data);
+  if (!flushTimer) {
+    flushTimer = setInterval(flushBuffers, FLUSH_INTERVAL_MS);
+  }
+}
+
+function flushBuffers(): void {
+  if (Object.keys(pendingAppends).length === 0) return;
+  useTerminalStore.setState((state) => {
+    const next = { ...state.buffers };
+    for (const [id, chunks] of Object.entries(pendingAppends)) {
+      next[id] = (next[id] ?? "") + chunks.join("");
+    }
+    return { buffers: next };
+  });
+  for (const id of Object.keys(pendingAppends)) delete pendingAppends[id];
+}
+
+function dropBuffer(id: string): void {
+  delete pendingAppends[id];
+  useTerminalStore.setState((state) => {
+    if (!(id in state.buffers)) return state;
+    const next = { ...state.buffers };
+    delete next[id];
+    return { buffers: next };
+  });
+}
+
 export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
   terminals: {},
+  buffers: {},
   opening: {},
 
   openTerminal: async ({ projectId, cwd, cols = 80, rows = 24, label, shell }) => {
@@ -83,6 +126,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
           if (!terminalId) return;
 
           if (message.type === "output") {
+            appendOutput(terminalId, message.data);
             emit(terminalId, message);
           } else if (message.type === "exit") {
             get().markStatus(terminalId, "exited");
@@ -118,6 +162,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
             revision: 0,
           },
         },
+        buffers: { ...state.buffers, [spawned.id]: state.buffers[spawned.id] ?? "" },
         opening: { ...state.opening, [cacheKey]: undefined },
       }));
       return spawned;
@@ -157,6 +202,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       sink.close();
       delete terminalSinks[id];
     }
+    dropBuffer(id);
     get().end(id);
   },
 
@@ -184,11 +230,23 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
       sink.close();
       delete terminalSinks[id];
     }
+    dropBuffer(id);
     set((state) => {
       const next = { ...state.terminals };
       delete next[id];
       return { terminals: next };
     });
+  },
+
+  findLiveTerminal: (projectId, cwd) => {
+    const candidates = Object.values(get().terminals).filter(
+      (t) => t.projectId === projectId && (t.status === "spawning" || t.status === "running"),
+    );
+    if (cwd) {
+      const match = candidates.find((t) => t.cwd === cwd);
+      if (match) return match.id;
+    }
+    return candidates[0]?.id;
   },
 
   subscribe: (id, listener) => {

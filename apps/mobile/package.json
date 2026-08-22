@@ -50,7 +50,7 @@
   "devDependencies": {
     "@types/diff": "^7.0.0",
     "@types/prismjs": "^1.26.5",
-    "@types/react": "~19.1.10",
+    "@types/react": "19.1.0",
     "babel-preset-expo": "~54.0.10",
     "typescript": "~5.9.2"
   }
