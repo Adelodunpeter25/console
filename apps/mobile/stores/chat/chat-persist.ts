@@ -1,5 +1,6 @@
 import { createJSONStorage, type PersistOptions } from "zustand/middleware";
-import type { ChatSessionState, ImageAttachment } from "../../types";
+import type { ImageAttachment } from "@console/types";
+import type { ChatSessionState } from "../../types";
 import { createChatSessionState } from "../../types/chat-state";
 import { mmkvZustandStorage } from "../../utils/storage";
 import { hasPersistableDraft, trimDraftAttachments } from "./draft";
@@ -10,8 +11,12 @@ export const PERSIST_VERSION = 1;
 export const MAX_PERSISTED_SESSIONS = 25;
 export const MAX_PERSISTED_MESSAGES = 50;
 
+/**
+ * Shape of what partialize writes: per session only a subset of
+ * ChatSessionState fields is persisted.
+ */
 export interface ChatStorePersistedState {
-  sessions: Record<string, ChatSessionState>;
+  sessions: Record<string, Partial<ChatSessionState>>;
 }
 
 /** Fields persisted per session — anything else is dropped on rehydrate. */
