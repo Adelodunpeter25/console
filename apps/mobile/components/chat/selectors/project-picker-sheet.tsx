@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from "react";
-import { View, Text, Pressable, ActivityIndicator, Modal } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, Modal, Keyboard } from "react-native";
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Folder, Check, Plus, Lock } from "lucide-react-native";
 import type { ProjectInfo } from "@console/types";
@@ -53,6 +53,7 @@ export function ProjectPickerSheet({
         disabled={locked}
         onPress={() => {
           if (locked) return;
+          Keyboard.dismiss();
           if (projects.length === 0) void loadProjects();
           bottomSheetRef.current?.present();
         }}

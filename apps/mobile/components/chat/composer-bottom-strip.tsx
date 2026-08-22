@@ -35,6 +35,7 @@ export function ComposerBottomStrip({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
       >
         <ProjectPickerSheet

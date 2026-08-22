@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ScrollView, ActivityIndicator, Keyboard } from "react-native";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { ShieldCheck, Check } from "lucide-react-native";
 import type { ApprovalMode } from "@console/types";
@@ -31,6 +31,7 @@ export function ApprovalModePickerSheet({ value, onChange }: ApprovalModePickerS
         className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card-alt/70 border border-border/50 shrink-0"
         style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         onPress={() => {
+          Keyboard.dismiss();
           if (approvalModes.length === 0) void loadApprovalModes();
           bottomSheetRef.current?.present();
         }}

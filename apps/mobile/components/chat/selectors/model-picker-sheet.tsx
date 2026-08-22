@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
-import { View, Text, Pressable, TextInput, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, TextInput, ActivityIndicator, Keyboard } from "react-native";
 import { BottomSheetModal, BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { ScrollView } from "react-native-gesture-handler";
 import { Sparkles, Check, Search, Bot } from "lucide-react-native";
@@ -31,6 +31,7 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
   }, [loadProviders]);
 
   const handleOpen = () => {
+    Keyboard.dismiss();
     const defaultProv = provider || providers[0]?.name || null;
     setActiveProvider(defaultProv);
     setSearch("");
