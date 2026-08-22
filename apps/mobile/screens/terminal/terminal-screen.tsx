@@ -89,6 +89,13 @@ export function TerminalScreen() {
   const handleInput = useCallback(
     (data: string) => {
       if (terminalId) useTerminalStore.getState().write(terminalId, data);
+      // Keep the soft keyboard up after sending a command; otherwise the IME
+      // hides on IME_ACTION_SEND and the user must tap the terminal again.
+      if (data.includes("\r") || data.includes("\n")) {
+        // Delay a tick so the native side's onEditorAction can finish its hide
+        // animation before we re-assert focus.
+        setTimeout(() => setFocusRequest((n) => n + 1), 40);
+      }
     },
     [terminalId],
   );
@@ -137,6 +144,13 @@ export function TerminalScreen() {
   }, [terminalId, project]);
 
   const isRunning = term?.status === "running" || term?.status === "spawning";
+
+  // Auto-focus after spawn so the prompt is immediately typable without a tap.
+  useEffect(() => {
+    if (!terminalId || !isRunning) return;
+    const timer = setTimeout(() => setFocusRequest((n) => n + 1), 350);
+    return () => clearTimeout(timer);
+  }, [terminalId, isRunning]);
 
   const statusBanner = (() => {
     if (spawnError) return `Failed to start terminal: ${spawnError}`;

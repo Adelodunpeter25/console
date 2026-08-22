@@ -223,8 +223,8 @@ class ConsoleTerminalView(context: Context, appContext: AppContext) : ExpoView(c
         // Enter must send CR: raw-mode TUIs treat LF as Ctrl+J (insert newline).
         onInput(mapOf("data" to "\r"))
         // Keep focus after sending command so the prompt stays ready; without this
-        // the IME hides and the terminal flicks to its unfocused background.
-        inputView.post { requestKeyboardFocus() }
+        // the IME hides and the user has to tap the terminal again to type.
+        keepFocusAfterInput()
         true
       } else {
         false
@@ -235,7 +235,7 @@ class ConsoleTerminalView(context: Context, appContext: AppContext) : ExpoView(c
       when {
         keyCode == KeyEvent.KEYCODE_DEL -> {
           onInput(mapOf("data" to "\u007F"))
-          inputView.post { requestKeyboardFocus() }
+          keepFocusAfterInput()
           true
         }
         // Hardware keyboard Ctrl+A..Z -> control bytes 0x01..0x1A (Ctrl+C, Ctrl+Z, ...).
@@ -243,7 +243,7 @@ class ConsoleTerminalView(context: Context, appContext: AppContext) : ExpoView(c
           onInput(
             mapOf("data" to (keyCode - KeyEvent.KEYCODE_A + 1).toChar().toString()),
           )
-          inputView.post { requestKeyboardFocus() }
+          keepFocusAfterInput()
           true
         }
         else -> false
@@ -382,6 +382,13 @@ class ConsoleTerminalView(context: Context, appContext: AppContext) : ExpoView(c
       Context.INPUT_METHOD_SERVICE
     ) as? InputMethodManager
     inputMethodManager?.showSoftInput(inputView, InputMethodManager.SHOW_IMPLICIT)
+  }
+
+  /** Re-assert focus after an input event. The IME hides on IME_ACTION_SEND;
+   * posting twice covers the hide animation so the next prompt is immediately typable. */
+  private fun keepFocusAfterInput() {
+    inputView.post { requestKeyboardFocus() }
+    inputView.postDelayed({ requestKeyboardFocus() }, 80)
   }
 
   private fun hideKeyboard() {
