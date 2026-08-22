@@ -7,7 +7,7 @@ import { setStringAsync } from "expo-clipboard";
 
 import { SyntaxHighlighter } from "./syntax-highlighter";
 import { FileIcon } from "../icons";
-import { getLanguageIconKey } from "../../assets/icons/file-types/mapping";
+import { getLanguageIconKey } from "../../utils/icons/file-type-mapping";
 
 interface MarkdownRendererProps {
   content: string;

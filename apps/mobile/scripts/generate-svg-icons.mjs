@@ -3,8 +3,8 @@
  * Generates in-memory SVG XML registries for react-native-svg (`SvgXml`)
  * from the desktop/console-rs icon library:
  *
- *   assets/icons/providers/index.ts      — provider SVG XML + resolver
- *   assets/icons/file-types/registry.ts  — FILE_ICONS map (icon name -> XML)
+ *   utils/icons/provider-icons.ts     — provider SVG XML + resolver
+ *   utils/icons/file-type-registry.ts — FILE_ICONS map (icon name -> XML)
  *
  * Usage: node scripts/generate-svg-icons.mjs [path/to/console-rs]
  */
@@ -12,7 +12,7 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.argv[2] ?? join(process.env.HOME ?? "", "Documents/Projects/gpui-ui/console-rs");
-const outDir = new URL("../assets/icons/", import.meta.url).pathname;
+const outDir = new URL("../utils/icons/", import.meta.url).pathname;
 
 const svgToXml = (file) => readFileSync(file, "utf8").trim().replace(/`/g, "\\`");
 
@@ -30,7 +30,7 @@ const providerTs = `/**
  * Provider icons as raw SVG XML strings for \`SvgXml\` (react-native-svg).
  */
 export const PROVIDER_ICONS = {
-${providers.map(([name, xml]) => `  ${name}: \`\n${xml}\`,`).join("\n")}
+${providers.map(([name, xml]) => `  ${name}: \`${xml}\`,`).join("\n")}
 } as const;
 
 export type ProviderIconName = keyof typeof PROVIDER_ICONS;
@@ -50,7 +50,7 @@ export function getProviderIconXml(provider?: string | null): string | null {
   return key ? (PROVIDER_ICONS as Record<string, string>)[key] ?? null : null;
 }
 `;
-writeFileSync(join(outDir, "providers/index.ts"), providerTs);
+writeFileSync(join(outDir, "provider-icons.ts"), providerTs);
 
 // --- File types ---
 const fileTypes = collect(join(root, "assets/icons/file-types"));
@@ -60,11 +60,11 @@ const registryTs = `/**
  * for \`SvgXml\` (react-native-svg), keyed by icon name.
  */
 export const FILE_ICONS = {
-${fileTypes.map(([name, xml]) => `  ${name}: \`\n${xml}\`,`).join("\n")}
+${fileTypes.map(([name, xml]) => `  ${name}: \`${xml}\`,`).join("\n")}
 } as const;
 
 export type FileIconName = keyof typeof FILE_ICONS;
 `;
-writeFileSync(join(outDir, "file-types/registry.ts"), registryTs);
+writeFileSync(join(outDir, "file-type-registry.ts"), registryTs);
 
 console.log(`Wrote ${providers.length} provider icons and ${fileTypes.length} file-type icons.`);

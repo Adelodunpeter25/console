@@ -27,6 +27,8 @@ import "prismjs/components/prism-ruby";
 import "prismjs/components/prism-docker";
 import "prismjs/components/prism-css";
 
+import { getFileTypeLanguage } from "../../utils/icons/file-type-mapping";
+
 function getOrLoadGrammar(lang: string) {
   if (!lang) return null;
   return Prism.languages[lang] ?? null;
@@ -61,19 +63,13 @@ const LANGUAGE_ALIASES: Record<string, string> = {
   svg: "markup",
 };
 
+/**
+ * Resolves a file path to a canonical language id for highlighting.
+ * Delegates to the shared file-type mapping in utils/icons.
+ */
 export function getLanguageFromPath(filePath?: string): string {
   if (!filePath) return "";
-  const normalized = filePath.trim().toLowerCase();
-  const filename = normalized.split(/[/\\]/).pop() ?? "";
-
-  if (filename === "dockerfile") return "docker";
-  if (filename === "makefile") return "bash";
-  if (filename.startsWith(".env") || filename.startsWith(".git") || filename.endsWith("rc")) return "bash";
-
-  const dotIdx = filename.lastIndexOf(".");
-  if (dotIdx === -1) return "";
-  const ext = filename.slice(dotIdx + 1);
-  return LANGUAGE_ALIASES[ext] || ext;
+  return getFileTypeLanguage(filePath);
 }
 
 export function renderHighlightedLine(

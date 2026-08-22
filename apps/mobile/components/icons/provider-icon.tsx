@@ -1,6 +1,6 @@
 import React, { memo } from "react";
 import { SvgXml } from "react-native-svg";
-import { getProviderIconXml } from "../../assets/icons/providers";
+import { getProviderIconXml } from "../../utils/icons/provider-icons";
 
 interface ProviderIconProps {
   provider: string;
