@@ -272,8 +272,8 @@ Monorepo aliases (`tsconfig.json:7`): `@console/api → packages/api/src`, `@con
 ## Checklist
 
 - [ ] P0: HTTPS-by-default + cleartext scoping + placeholder
-- [ ] P0: `expo.scheme` + intentFilters + `useOAuthDeepLink` mounted + login unified
-- [ ] P0: Stream lifecycle idempotent + single `onEnd` + pagination guard
+- [x] P0: `expo.scheme` + intentFilters + `useOAuthDeepLink` mounted + login unified (Resolved 2026-08-22)
+- [x] P0: Stream lifecycle idempotent + single `onEnd` + pagination guard (Resolved 2026-08-22)
 - [ ] P1: Remove `build-*.apk`, `eas release → app-bundle`
 - [ ] P1: Dedupe markdown/icon/prismjs deps
 - [ ] P1: ErrorBoundary + offline banner + Test Connection UI
