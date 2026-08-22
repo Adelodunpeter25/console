@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback } from "react";
+import React, { forwardRef, useCallback, useMemo } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import {
   BottomSheetModal,
@@ -15,7 +15,14 @@ interface SharedBottomSheetProps {
 }
 
 export const SharedBottomSheet = forwardRef<BottomSheetModal, SharedBottomSheetProps>(
-  function SharedBottomSheet({ title, snapPoints = ["55%", "90%"], children }, ref) {
+  function SharedBottomSheet({ title, snapPoints, children }, ref) {
+    const defaultSnapPoints = useMemo(() => ["55%", "90%"], []);
+    const snapPointsKey = Array.isArray(snapPoints) ? snapPoints.join(",") : "";
+    const memoizedSnapPoints = useMemo(
+      () => (snapPoints && snapPoints.length > 0 ? snapPoints : defaultSnapPoints),
+      [snapPointsKey, defaultSnapPoints],
+    );
+
     const renderBackdrop = useCallback(
       (props: BottomSheetBackdropProps) => (
         <BottomSheetBackdrop
@@ -32,21 +39,29 @@ export const SharedBottomSheet = forwardRef<BottomSheetModal, SharedBottomSheetP
     return (
       <BottomSheetModal
         ref={ref}
-        snapPoints={snapPoints}
+        index={0}
+        snapPoints={memoizedSnapPoints}
         enableDynamicSizing={false}
         backdropComponent={renderBackdrop}
         handleIndicatorStyle={{ backgroundColor: theme.colors.text.muted, width: 36, height: 4 }}
-        backgroundStyle={{ backgroundColor: "#141518", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}
+        backgroundStyle={{
+          backgroundColor: "#141518",
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,0.08)",
+        }}
         enablePanDownToClose
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
+        android_keyboardInputMode="adjustResize"
       >
-        <View style={styles.container}>
+        <BottomSheetView style={styles.container}>
           {title ? (
             <View className="px-5 py-3 border-b border-border/40">
               <Text className="text-base font-semibold text-foreground">{title}</Text>
             </View>
           ) : null}
           <View style={styles.body}>{children}</View>
-        </View>
+        </BottomSheetView>
       </BottomSheetModal>
     );
   },
