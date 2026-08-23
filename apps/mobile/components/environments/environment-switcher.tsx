@@ -3,7 +3,6 @@ import { View, Text, Pressable } from "react-native";
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Server, Check, Plus, ChevronLeft } from "lucide-react-native";
 import { SharedBottomSheet } from "@/components/common/shared-bottom-sheet";
-import { confirmAlert } from "@/components/common/confirm-dialog";
 import { EnvironmentEditor } from "@/components/environments/environment-editor";
 import { useEnvironmentsStore } from "@/stores/useEnvironmentsStore";
 import { urlHost } from "@/utils/url";
@@ -16,9 +15,9 @@ function StatusDot({ ok, checkedAt }: { ok?: boolean; checkedAt?: number }) {
 /**
  * Home-header environment switcher: a server-icon trigger that opens a
  * bottom sheet listing environments with their probe status. Tapping another
- * environment (after confirmation) activates it and clears server-scoped
- * caches. The "+ Add environment" row opens the EnvironmentEditor inline
- * inside the sheet — no navigation required.
+ * environment activates it and clears server-scoped caches. The "+ Add
+ * environment" row opens the EnvironmentEditor inline inside the sheet — no
+ * navigation required.
  */
 export function EnvironmentSwitcher() {
   const sheetRef = useRef<BottomSheetModal>(null);
@@ -44,21 +43,8 @@ export function EnvironmentSwitcher() {
       sheetRef.current?.dismiss();
       return;
     }
-    const env = environments.find((e) => e.id === envId);
-    confirmAlert(
-      "Switch environment?",
-      `Connecting to "${env?.name ?? "this environment"}" clears cached chats for the current server.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Switch",
-          onPress: () => {
-            useEnvironmentsStore.getState().activateEnvironment(envId);
-            sheetRef.current?.dismiss();
-          },
-        },
-      ],
-    );
+    useEnvironmentsStore.getState().activateEnvironment(envId);
+    sheetRef.current?.dismiss();
   };
 
   return (
