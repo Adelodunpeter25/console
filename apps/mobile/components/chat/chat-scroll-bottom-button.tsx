@@ -1,7 +1,7 @@
 import React, { memo } from "react";
 import { View, Pressable } from "react-native";
 import { ArrowDown } from "lucide-react-native";
-import { theme } from "../../styles/theme";
+import { theme } from "@/styles/theme";
 
 interface ChatScrollBottomButtonProps {
   visible: boolean;

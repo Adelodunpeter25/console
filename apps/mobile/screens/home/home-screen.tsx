@@ -1,18 +1,18 @@
 import React, { useRef, useState, useEffect } from "react";
 import { View, ScrollView, RefreshControl, BackHandler, Keyboard } from "react-native";
 import { Pencil, Trash2 } from "lucide-react-native";
-import { ScreenHeader } from "../../components/layout/screen-header";
-import { SearchBar } from "../../components/common/search-bar";
-import { confirmAlert } from "../../components/common/confirm-dialog";
-import { SessionList } from "../../components/home/session-list";
+import { ScreenHeader } from "@/components/layout/screen-header";
+import { SearchBar } from "@/components/common/search-bar";
+import { confirmAlert } from "@/components/common/confirm-dialog";
+import { SessionList } from "@/components/home/session-list";
 import {
   SessionActionSheet,
   type SessionActionSheetHandle,
   type ActionSheetItem,
-} from "../../components/context-menu/session-action-sheet";
-import { useHomeSessions } from "../../hooks";
+} from "@/components/context-menu/session-action-sheet";
+import { useHomeSessions } from "@/hooks";
 import type { SessionHeader } from "@console/types";
-import { theme } from "../../styles/theme";
+import { theme } from "@/styles/theme";
 
 export function HomeScreen() {
   const {

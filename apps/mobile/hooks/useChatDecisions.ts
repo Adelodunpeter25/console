@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { useAppStore } from "../stores/useAppStore";
-import { useChatStore } from "../stores/useChatStore";
+import { useAppStore } from "@/stores/useAppStore";
+import { useChatStore } from "@/stores/useChatStore";
 
 /**
  * Posts agent decisions (question answers / permission approvals) to the

@@ -1,7 +1,7 @@
 import React, { memo } from "react";
 import { SvgXml } from "react-native-svg";
-import { FILE_ICONS, type FileIconName } from "../../utils/icons/file-type-registry";
-import { getFileIconXml } from "../../utils/icons/file-type-mapping";
+import { FILE_ICONS, type FileIconName } from "@/utils/icons/file-type-registry";
+import { getFileIconXml } from "@/utils/icons/file-type-mapping";
 
 interface FileIconProps {
   /** Filename or full path — resolved via extension / exact-name rules. */

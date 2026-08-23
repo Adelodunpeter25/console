@@ -1,5 +1,5 @@
 import type { AgentMessage } from "@console/types";
-import type { RunActivityState } from "../types/chat";
+import type { RunActivityState } from "@/types/chat";
 
 /**
  * Rebuild run timelines from persisted messages.

@@ -1,6 +1,6 @@
 import React, { memo } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
-import { theme } from "../../styles/theme";
+import { theme } from "@/styles/theme";
 
 interface ChatPaginationHeaderProps {
   hasEarlierMessages: boolean;

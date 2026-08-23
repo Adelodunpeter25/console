@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { useAppStore } from "../stores/useAppStore";
-import { useProjectStore } from "../stores/useProjectStore";
-import { useSessionStatusStore } from "../stores/useSessionStatusStore";
-import { confirmAlert } from "../components/common/confirm-dialog";
+import { useAppStore } from "@/stores/useAppStore";
+import { useProjectStore } from "@/stores/useProjectStore";
+import { useSessionStatusStore } from "@/stores/useSessionStatusStore";
+import { confirmAlert } from "@/components/common/confirm-dialog";
 
 /**
  * Project-scoped session management backed by `useProjectStore`.

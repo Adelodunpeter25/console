@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { ProjectInfo, SessionHeader, UpdateSessionDto } from "@console/types";
 import { sessionService, fsService, sessionKeys, fsKeys } from "@console/api";
-import { queryClient } from "../query-client";
+import { queryClient } from "@/query-client";
 import { useSessionStatusStore } from "./useSessionStatusStore";
 import { useAppStore } from "./useAppStore";
 

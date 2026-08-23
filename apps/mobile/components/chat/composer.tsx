@@ -5,9 +5,9 @@ import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-cont
 import * as ImagePicker from "expo-image-picker";
 import { ArrowUp, Square, Plus, X } from "lucide-react-native";
 import type { ImageAttachment } from "@console/types";
-import { theme } from "../../styles/theme";
-import { useAppStore, useChatStore, useProjectStore, useSessionStore } from "../../stores";
-import { ImagePreviewModal } from "../common/image-preview-modal";
+import { theme } from "@/styles/theme";
+import { useAppStore, useChatStore, useProjectStore, useSessionStore } from "@/stores";
+import { ImagePreviewModal } from "@/components/common/image-preview-modal";
 import { ComposerBottomStrip } from "./composer-bottom-strip";
 
 interface ComposerProps {

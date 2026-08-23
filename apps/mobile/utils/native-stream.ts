@@ -4,4 +4,4 @@ export {
   isNativeStreamAvailable,
   type StreamCallbacks,
   type NotificationCallbacks,
-} from "../modules/native-stream";
+} from "@/modules/native-stream";

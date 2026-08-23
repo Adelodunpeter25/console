@@ -3,10 +3,10 @@ import { View, Text, Pressable, ActivityIndicator, Modal, Keyboard } from "react
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Folder, Check, Plus, Lock } from "lucide-react-native";
 import type { ProjectInfo } from "@console/types";
-import { SharedBottomSheet } from "../../common/shared-bottom-sheet";
-import { AddProjectScreen } from "../../../screens/projects/add-project-screen";
-import { useProjectStore } from "../../../stores";
-import { theme } from "../../../styles/theme";
+import { SharedBottomSheet } from "@/components/common/shared-bottom-sheet";
+import { AddProjectScreen } from "@/screens/projects/add-project-screen";
+import { useProjectStore } from "@/stores";
+import { theme } from "@/styles/theme";
 
 interface ProjectPickerSheetProps {
   projects: ProjectInfo[];

@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { Text, View, Pressable, BackHandler } from "react-native";
 import { ChevronRight, Wifi, User, Folder, Trash2 } from "lucide-react-native";
-import { ScreenHeader } from "../../components/layout/screen-header";
-import { useAppStore, useProjectStore } from "../../stores";
-import { useServerConnection } from "../../hooks";
-import { useAuth } from "../../hooks";
+import { ScreenHeader } from "@/components/layout/screen-header";
+import { useAppStore, useProjectStore } from "@/stores";
+import { useServerConnection } from "@/hooks";
+import { useAuth } from "@/hooks";
 import { ConnectionSettings } from "./connection-settings";
 import { AccountSettings } from "./account-settings";
 import { ProjectsSettings } from "./projects-settings";
 import { DeletedChatsSettings } from "./deleted-chats-settings";
-import { theme } from "../../styles/theme";
+import { theme } from "@/styles/theme";
 
 type SettingsSection = "connection" | "account" | "projects" | "deleted-chats";
 

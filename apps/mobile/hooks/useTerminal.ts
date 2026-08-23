@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { TerminalServerMessage } from "@console/types";
-import { useTerminalStore } from "../stores/useTerminalStore";
+import { useTerminalStore } from "@/stores/useTerminalStore";
 
 /**
  * Subscribe a component to a terminal's server events (output/exit/error).

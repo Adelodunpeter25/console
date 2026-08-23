@@ -5,7 +5,7 @@ import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-cont
 import { Search, X } from "lucide-react-native";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import { PencilEdit02Icon } from "@hugeicons/core-free-icons";
-import { theme } from "../../styles/theme";
+import { theme } from "@/styles/theme";
 
 interface SearchBarProps {
   value: string;

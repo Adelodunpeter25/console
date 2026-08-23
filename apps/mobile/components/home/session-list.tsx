@@ -4,14 +4,14 @@ import { Plus, MessageSquare, Image as ImageIcon } from "lucide-react-native";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import { Folder02Icon } from "@hugeicons/core-free-icons";
 import type { SessionHeader } from "@console/types";
-import type { GroupedProjectSection } from "../../hooks/useHomeSessions";
-import { formatRelativeTime } from "../../utils/time";
-import { theme } from "../../styles/theme";
-import { confirmAlert } from "../common/confirm-dialog";
-import { EmptyState } from "../common/empty-state";
-import { SessionListSkeleton } from "../common/skeleton";
-import { useChatStore } from "../../stores";
-import { draftPreview, isDraftSession } from "../../stores/chat/draft";
+import type { GroupedProjectSection } from "@/hooks/useHomeSessions";
+import { formatRelativeTime } from "@/utils/time";
+import { theme } from "@/styles/theme";
+import { confirmAlert } from "@/components/common/confirm-dialog";
+import { EmptyState } from "@/components/common/empty-state";
+import { SessionListSkeleton } from "@/components/common/skeleton";
+import { useChatStore } from "@/stores";
+import { draftPreview, isDraftSession } from "@/stores/chat/draft";
 
 function getStatusStyle(status?: string): {
   label: string;

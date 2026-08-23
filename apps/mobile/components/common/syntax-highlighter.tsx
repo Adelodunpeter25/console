@@ -27,7 +27,7 @@ import "prismjs/components/prism-ruby";
 import "prismjs/components/prism-docker";
 import "prismjs/components/prism-css";
 
-import { getFileTypeLanguage } from "../../utils/icons/file-type-mapping";
+import { getFileTypeLanguage } from "@/utils/icons/file-type-mapping";
 
 function getOrLoadGrammar(lang: string) {
   if (!lang) return null;

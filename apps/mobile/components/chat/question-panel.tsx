@@ -4,7 +4,7 @@ import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-cont
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { HelpCircle, Check } from "lucide-react-native";
 import type { AskQuestionRequest } from "@console/types";
-import { theme } from "../../styles/theme";
+import { theme } from "@/styles/theme";
 
 interface QuestionPanelProps {
   request: AskQuestionRequest;

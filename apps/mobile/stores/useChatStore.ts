@@ -1,11 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { AgentMessage, AgentSessionEvent, ImageAttachment } from "@console/types";
-import type { ChatSessionState, ChatSnapshot } from "../types";
-import { createChatSessionState, EMPTY_CHAT_SESSION } from "../types/chat-state";
-import { applyChatEvent, toChatSnapshot } from "../utils/chat-events";
-import { reconstructRuns } from "../utils/reconstruct-runs";
-import { startNativeChatStream } from "../utils/native-stream";
+import type { ChatSessionState, ChatSnapshot } from "@/types";
+import { createChatSessionState, EMPTY_CHAT_SESSION } from "@/types/chat-state";
+import { applyChatEvent, toChatSnapshot } from "@/utils/chat-events";
+import { reconstructRuns } from "@/utils/reconstruct-runs";
+import { startNativeChatStream } from "@/utils/native-stream";
 import { useAppStore } from "./useAppStore";
 import { useSessionStore, registerSessionHasMessagesChecker } from "./useSessionStore";
 import { useProviderStore } from "./useProviderStore";

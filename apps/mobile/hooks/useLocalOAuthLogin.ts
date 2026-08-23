@@ -9,8 +9,8 @@ import {
   startAuthServer,
   stopAuthServer,
   type AuthCallbackResult,
-} from "../modules/local-auth-server";
-import { useAuthStore } from "../stores/useAuthStore";
+} from "@/modules/local-auth-server";
+import { useAuthStore } from "@/stores/useAuthStore";
 
 /**
  * Orchestrates the full mobile OAuth login flow on Android using a native

@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { FlatList, Pressable, Text, View, ActivityIndicator, Modal } from "react-native";
 import { Folder, Trash2, Plus } from "lucide-react-native";
-import { ScreenHeader } from "../../components/layout/screen-header";
-import { confirmAlert, EmptyState } from "../../components/common";
-import { useProjectStore } from "../../stores";
-import { AddProjectScreen } from "../projects/add-project-screen";
-import { theme } from "../../styles/theme";
+import { ScreenHeader } from "@/components/layout/screen-header";
+import { confirmAlert, EmptyState } from "@/components/common";
+import { useProjectStore } from "@/stores";
+import { AddProjectScreen } from "@/screens/projects/add-project-screen";
+import { theme } from "@/styles/theme";
 
 interface ProjectsSettingsProps {
   onBack?: () => void;

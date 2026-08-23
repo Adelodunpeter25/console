@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useFsStore } from "../stores/useFsStore";
+import { useFsStore } from "@/stores/useFsStore";
 
 /**
  * Real-time project filesystem watching.

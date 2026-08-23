@@ -11,8 +11,8 @@ import {
   XCircle,
 } from "lucide-react-native";
 import type { ToolResult } from "@console/types";
-import { MarkdownRenderer } from "../common/markdown-renderer";
-import { langFromPath, resultText } from "../../utils";
+import { MarkdownRenderer } from "@/components/common/markdown-renderer";
+import { langFromPath, resultText } from "@/utils";
 
 /* ------------------------------------------------------------------ */
 /* Status badge — reusable one-liner for write/edit/ask results        */
@@ -363,8 +363,8 @@ function FetchResult({ text }: { text: string }) {
 }
 
 import { DiffView } from "./diff-view";
-import { computeLineDiff, computeNewFileDiff } from "../../utils/diff";
-import { theme } from "../../styles/theme";
+import { computeLineDiff, computeNewFileDiff } from "@/utils/diff";
+import { theme } from "@/styles/theme";
 
 /* ------------------------------------------------------------------ */
 /* writeFile / editFile / ask                                          */

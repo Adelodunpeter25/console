@@ -4,9 +4,9 @@ import { AlertTriangle, CheckCircle2, ChevronRight, ChevronDown } from "lucide-r
 import type { ToolCall, ToolResult } from "@console/types";
 import { ToolResultContent } from "./tool-result-content";
 import { DiffSummaryBadge } from "./diff-view";
-import { getToolMeta, formatUnknown, argSummary, computeLineDiff, computeNewFileDiff } from "../../utils";
-import { useAppStore, useSessionStore } from "../../stores";
-import { theme } from "../../styles/theme";
+import { getToolMeta, formatUnknown, argSummary, computeLineDiff, computeNewFileDiff } from "@/utils";
+import { useAppStore, useSessionStore } from "@/stores";
+import { theme } from "@/styles/theme";
 
 interface ToolCallBlockProps {
   calls: ToolCall[];

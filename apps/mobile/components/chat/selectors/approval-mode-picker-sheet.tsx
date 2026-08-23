@@ -3,9 +3,9 @@ import { View, Text, Pressable, ScrollView, ActivityIndicator, Keyboard } from "
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { ShieldCheck, Check } from "lucide-react-native";
 import type { ApprovalMode } from "@console/types";
-import { SharedBottomSheet } from "../../common/shared-bottom-sheet";
-import { useProviderStore } from "../../../stores";
-import { theme } from "../../../styles/theme";
+import { SharedBottomSheet } from "@/components/common/shared-bottom-sheet";
+import { useProviderStore } from "@/stores";
+import { theme } from "@/styles/theme";
 
 interface ApprovalModePickerSheetProps {
   value: ApprovalMode;

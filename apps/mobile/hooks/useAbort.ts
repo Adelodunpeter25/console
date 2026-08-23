@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { useAppStore } from "../stores/useAppStore";
-import { useChatStore } from "../stores/useChatStore";
+import { useAppStore } from "@/stores/useAppStore";
+import { useChatStore } from "@/stores/useChatStore";
 
 /** Wraps the chat-store abort for the mobile stop button. */
 export function useAbort() {

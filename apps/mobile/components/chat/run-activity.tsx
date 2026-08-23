@@ -1,12 +1,12 @@
 import React, { memo, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { ChevronRight, ChevronDown, Sparkles } from "lucide-react-native";
-import type { ActivityEvent, RunActivityState } from "../../types/chat";
+import type { ActivityEvent, RunActivityState } from "@/types/chat";
 import type { ToolCall, ToolResult } from "@console/types";
 import { ToolCallBlock } from "./tool-call-block";
-import { MarkdownRenderer } from "../common/markdown-renderer";
-import { formatDuration } from "../../utils";
-import { theme } from "../../styles/theme";
+import { MarkdownRenderer } from "@/components/common/markdown-renderer";
+import { formatDuration } from "@/utils";
+import { theme } from "@/styles/theme";
 
 interface RunActivityProps {
   activity: RunActivityState;

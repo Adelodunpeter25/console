@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-nati
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ShieldCheck, ShieldX } from "lucide-react-native";
 import type { AskQuestionRequest, PermissionRequest } from "@console/types";
-import { useChatStore } from "../../stores";
+import { useChatStore } from "@/stores";
 import { QuestionPanel } from "./question-panel";
 
 /* ------------------------------------------------------------------ */

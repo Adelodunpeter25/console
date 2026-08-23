@@ -2,12 +2,12 @@ import React from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
-import { ScreenHeader } from "../../components/layout/screen-header";
-import { ConsoleTerminalSurface } from "../../modules/console-terminal/src/terminal-surface";
-import { ExtraKeysBar } from "../../components/terminal/extra-keys-bar";
-import { ProjectPicker } from "../../components/terminal/project-picker";
-import { RestartShellBar } from "../../components/terminal/restart-shell-bar";
-import { useTerminalScreen } from "../../hooks/useTerminalScreen";
+import { ScreenHeader } from "@/components/layout/screen-header";
+import { ConsoleTerminalSurface } from "@/modules/console-terminal/src/terminal-surface";
+import { ExtraKeysBar } from "@/components/terminal/extra-keys-bar";
+import { ProjectPicker } from "@/components/terminal/project-picker";
+import { RestartShellBar } from "@/components/terminal/restart-shell-bar";
+import { useTerminalScreen } from "@/hooks/useTerminalScreen";
 
 const TERMINAL_FONT_SIZE = 13;
 

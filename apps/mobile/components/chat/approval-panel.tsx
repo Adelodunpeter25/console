@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { Check, ShieldAlert, X } from "lucide-react-native";
-import type { PendingPermission, PendingQuestion } from "../../types";
-import { theme } from "../../styles/theme";
+import type { PendingPermission, PendingQuestion } from "@/types";
+import { theme } from "@/styles/theme";
 
 interface ApprovalPanelProps {
   pendingPermission: PendingPermission | null;

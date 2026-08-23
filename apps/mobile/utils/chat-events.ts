@@ -4,7 +4,7 @@ import type {
   ChatSessionState,
   ChatSnapshot,
   RunActivityState,
-} from "../types/chat";
+} from "@/types/chat";
 
 /** Update the latest run in the session's runs array. */
 function updateLatestRun(

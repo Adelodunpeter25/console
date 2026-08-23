@@ -1,5 +1,5 @@
 import { runService } from "@console/api";
-import type { ChatSessionState } from "../../types";
+import type { ChatSessionState } from "@/types";
 import { updateSession, syncSessionStatus } from "./chat-stream-runner";
 
 export async function answerSessionQuestion(

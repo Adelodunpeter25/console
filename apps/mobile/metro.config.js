@@ -7,6 +7,9 @@ const workspaceRoot = path.resolve(projectRoot, "../..");
 
 const config = getDefaultConfig(projectRoot);
 
+// 0. Honor tsconfig.json "paths" aliases (e.g. "@/*" -> app root)
+config.experiments = { ...config.experiments, tsconfigPaths: true };
+
 // 1. Watch all workspace folders within the monorepo
 config.watchFolders = [workspaceRoot];
 

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo } from "react";
 import type { ImageAttachment } from "@console/types";
 import { useInfiniteSession } from "./queries";
-import { useAppStore } from "../stores/useAppStore";
-import { useChatStore } from "../stores/useChatStore";
-import { useSessionStore } from "../stores/useSessionStore";
+import { useAppStore } from "@/stores/useAppStore";
+import { useChatStore } from "@/stores/useChatStore";
+import { useSessionStore } from "@/stores/useSessionStore";
 
 /**
  * Drives a single chat session's SSE stream against the backend.

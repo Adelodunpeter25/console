@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { Text, View, Pressable, FlatList, ActivityIndicator, ScrollView, BackHandler } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useFsBrowse, useAddProject } from "../../hooks";
+import { useFsBrowse, useAddProject } from "@/hooks";
 import { Folder, FolderUp, ChevronRight, Check } from "lucide-react-native";
-import { ScreenHeader } from "../../components/layout/screen-header";
-import { confirmAlert, EmptyState } from "../../components/common";
-import { theme } from "../../styles/theme";
+import { ScreenHeader } from "@/components/layout/screen-header";
+import { confirmAlert, EmptyState } from "@/components/common";
+import { theme } from "@/styles/theme";
 
 interface AddProjectScreenProps {
   onClose: () => void;

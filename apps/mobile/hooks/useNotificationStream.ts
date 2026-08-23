@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { NotificationEvent } from "@console/types";
-import { useAppStore } from "../stores/useAppStore";
-import { startNativeNotificationStream } from "../utils/native-stream";
+import { useAppStore } from "@/stores/useAppStore";
+import { startNativeNotificationStream } from "@/utils/native-stream";
 
 /**
  * Subscribes to the backend's notification SSE stream

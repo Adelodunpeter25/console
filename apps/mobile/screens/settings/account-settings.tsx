@@ -17,10 +17,10 @@ import {
   LoaderCircle,
   Save,
 } from "lucide-react-native";
-import { GlassSurface } from "../../components/layout/glass-surface";
-import { useAuth, useLocalOAuthLogin } from "../../hooks";
-import { useProviderCatalog } from "../../hooks";
-import { theme } from "../../styles/theme";
+import { GlassSurface } from "@/components/layout/glass-surface";
+import { useAuth, useLocalOAuthLogin } from "@/hooks";
+import { useProviderCatalog } from "@/hooks";
+import { theme } from "@/styles/theme";
 
 export function AccountSettings() {
   const auth = useAuth();

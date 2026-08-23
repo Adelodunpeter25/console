@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import * as Linking from "expo-linking";
 import type { OAuthProviderId, ProviderId } from "@console/types";
-import { useAuthStore } from "../stores/useAuthStore";
+import { useAuthStore } from "@/stores/useAuthStore";
 
 /**
  * Auth status + OAuth login flow for mobile.

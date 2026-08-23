@@ -17,10 +17,10 @@ import {
 } from "lucide-react-native";
 import { setStringAsync } from "expo-clipboard";
 import type { AgentMessage, ToolResult } from "@console/types";
-import { MarkdownRenderer } from "../common/markdown-renderer";
-import { ImagePreviewModal } from "../common/image-preview-modal";
-import { theme } from "../../styles/theme";
-import { formatMessageTime } from "../../utils/time";
+import { MarkdownRenderer } from "@/components/common/markdown-renderer";
+import { ImagePreviewModal } from "@/components/common/image-preview-modal";
+import { theme } from "@/styles/theme";
+import { formatMessageTime } from "@/utils/time";
 
 /** Animated three-dot typing indicator for streaming states. */
 const TypingDots = memo(function TypingDots() {
@@ -122,7 +122,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
 });
 
 import { DiffView, DiffSummaryBadge } from "./diff-view";
-import type { DiffResult } from "../../utils/diff";
+import type { DiffResult } from "@/utils/diff";
 
 /** Compact collapsible tool-activity row (running / done / failed). */
 export const ToolActivityRow = memo(function ToolActivityRow({

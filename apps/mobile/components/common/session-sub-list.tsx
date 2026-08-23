@@ -1,8 +1,8 @@
 import React from "react";
 import { Text, View, TouchableOpacity, ActivityIndicator } from "react-native";
-import { formatRelativeTime } from "../../utils/time";
-import { useProjectSessions } from "../../hooks";
-import { theme } from "../../styles/theme";
+import { formatRelativeTime } from "@/utils/time";
+import { useProjectSessions } from "@/hooks";
+import { theme } from "@/styles/theme";
 
 interface SessionSubListProps {
   projectId: string;

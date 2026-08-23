@@ -6,8 +6,8 @@ import { MessageBubble } from "./message-bubbles";
 import { RunActivity } from "./run-activity";
 import { ChatPaginationHeader } from "./chat-pagination-header";
 import { ChatStreamingFooter } from "./chat-streaming-footer";
-import { reconstructRuns } from "../../utils/reconstruct-runs";
-import type { useChatStream } from "../../hooks/useChatStream";
+import { reconstructRuns } from "@/utils/reconstruct-runs";
+import type { useChatStream } from "@/hooks/useChatStream";
 
 function isVisibleMessage(msg: AgentMessage): boolean {
   if (msg.role === "toolResult") return false;

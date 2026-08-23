@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getConsoleApiClient } from "@console/api";
 import type { FileSearchResult } from "@console/types";
-import { useAppStore } from "../stores/useAppStore";
+import { useAppStore } from "@/stores/useAppStore";
 
 /** FFF-backed fuzzy file search for a session's working directory (@ refs). */
 export function useFileSearch(sessionId?: string) {

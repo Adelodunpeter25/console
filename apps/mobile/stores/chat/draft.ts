@@ -9,7 +9,7 @@
  */
 
 import type { ImageAttachment, SessionHeader } from "@console/types";
-import type { ChatSessionState } from "../../types/chat";
+import type { ChatSessionState } from "@/types/chat";
 
 /** Max image attachments kept in a draft (most-recent 2). */
 export const MAX_DRAFT_IMAGES = 2;

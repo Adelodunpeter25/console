@@ -6,7 +6,7 @@ import {
   BottomSheetView,
   type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
-import { theme } from "../../styles/theme";
+import { theme } from "@/styles/theme";
 
 interface SharedBottomSheetProps {
   title?: string;

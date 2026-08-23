@@ -10,11 +10,11 @@ import {
 } from "./queries";
 import { useQueryClient } from "@tanstack/react-query";
 import type { SessionHeader } from "@console/types";
-import { useAppStore, useChatStore } from "../stores";
-import type { ChatStoreState } from "../stores/useChatStore";
+import { useAppStore, useChatStore } from "@/stores";
+import type { ChatStoreState } from "@/stores/useChatStore";
 import { useProjectBranches } from "./useProjectBranches";
-import { folderName } from "../utils";
-import { draftPreview, isDraftSession } from "../stores/chat/draft";
+import { folderName } from "@/utils";
+import { draftPreview, isDraftSession } from "@/stores/chat/draft";
 
 type DraftSummaries = Record<string, { preview: string; draftUpdatedAt?: number }>;
 

@@ -1,11 +1,11 @@
 import React, { memo, useState, useMemo } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import { ChevronDown, ChevronUp } from "lucide-react-native";
-import type { DiffResult, DiffLine } from "../../utils/diff";
-import { getFileName } from "../../utils/tool-helpers";
-import { FileIcon } from "../icons";
-import { getLanguageFromPath, renderHighlightedLine } from "../common/syntax-highlighter";
-import { theme } from "../../styles/theme";
+import type { DiffResult, DiffLine } from "@/utils/diff";
+import { getFileName } from "@/utils/tool-helpers";
+import { FileIcon } from "@/components/icons";
+import { getLanguageFromPath, renderHighlightedLine } from "@/components/common/syntax-highlighter";
+import { theme } from "@/styles/theme";
 
 interface DiffViewProps {
   diff: DiffResult;

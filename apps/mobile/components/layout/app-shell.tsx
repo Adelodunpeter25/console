@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { View } from "react-native";
-import { theme } from "../../styles/theme";
+import { theme } from "@/styles/theme";
 
 /**
  * Root chrome for authenticated screens. Top/bottom safe areas are applied by

@@ -3,21 +3,21 @@ import { View, Keyboard, BackHandler, Pressable } from "react-native";
 import { SquareTerminal } from "lucide-react-native";
 import type { FlashListRef } from "@shopify/flash-list";
 import type { AgentMessage } from "@console/types";
-import { useChatStream, useAbort } from "../../hooks";
+import { useChatStream, useAbort } from "@/hooks";
 import {
   useAppStore,
   useSessionStore,
   useProjectStore,
-} from "../../stores";
-import { ScreenHeader } from "../../components/layout/screen-header";
+} from "@/stores";
+import { ScreenHeader } from "@/components/layout/screen-header";
 import {
   ChatMessageList,
   ChatEmptyState,
   ChatScrollBottomButton,
   Composer,
   InteractionPanel,
-} from "../../components/chat";
-import { ChatScreenSkeleton } from "../../components/common";
+} from "@/components/chat";
+import { ChatScreenSkeleton } from "@/components/common";
 
 export function ChatScreen() {
   const stream = useChatStream();

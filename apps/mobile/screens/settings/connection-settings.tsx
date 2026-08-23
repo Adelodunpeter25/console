@@ -8,9 +8,9 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { CheckCircle2, XCircle, LoaderCircle } from "lucide-react-native";
-import { GlassSurface } from "../../components/layout/glass-surface";
-import { useServerConnection } from "../../hooks";
-import { theme } from "../../styles/theme";
+import { GlassSurface } from "@/components/layout/glass-surface";
+import { useServerConnection } from "@/hooks";
+import { theme } from "@/styles/theme";
 
 export function ConnectionSettings() {
   const {

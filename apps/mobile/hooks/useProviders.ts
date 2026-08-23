@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useProviderStore } from "../stores/useProviderStore";
+import { useProviderStore } from "@/stores/useProviderStore";
 
 /** Provider + approval-mode catalog backed by `useProviderStore`. */
 export function useProviderCatalog() {

@@ -1,10 +1,10 @@
 import { createJSONStorage, type PersistOptions } from "zustand/middleware";
 import type { ImageAttachment } from "@console/types";
-import type { ChatSessionState } from "../../types";
-import { createChatSessionState } from "../../types/chat-state";
-import { mmkvZustandStorage } from "../../utils/storage";
+import type { ChatSessionState } from "@/types";
+import { createChatSessionState } from "@/types/chat-state";
+import { mmkvZustandStorage } from "@/utils/storage";
 import { hasPersistableDraft, trimDraftAttachments } from "./draft";
-import type { ChatStoreState } from "../useChatStore";
+import type { ChatStoreState } from "@/stores/useChatStore";
 
 export const PERSIST_NAME = "console-chat-cache";
 export const PERSIST_VERSION = 1;

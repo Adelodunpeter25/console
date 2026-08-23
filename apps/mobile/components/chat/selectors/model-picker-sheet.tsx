@@ -4,11 +4,11 @@ import { BottomSheetModal, BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { ScrollView } from "react-native-gesture-handler";
 import { Sparkles, Check, Search, Bot } from "lucide-react-native";
 import type { Model, ProviderId } from "@console/types";
-import { SharedBottomSheet } from "../../common/shared-bottom-sheet";
-import { useProviderStore } from "../../../stores";
-import { formatModelName } from "../../../utils";
-import { theme } from "../../../styles/theme";
-import { ProviderIcon } from "../../icons";
+import { SharedBottomSheet } from "@/components/common/shared-bottom-sheet";
+import { useProviderStore } from "@/stores";
+import { formatModelName } from "@/utils";
+import { theme } from "@/styles/theme";
+import { ProviderIcon } from "@/components/icons";
 
 interface ModelPickerSheetProps {
   value: string | null;

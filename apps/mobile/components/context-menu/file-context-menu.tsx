@@ -3,7 +3,7 @@ import { View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { Copy, FolderOpen } from "lucide-react-native";
 import { BaseContextMenu, type ContextMenuItem } from "./base-context-menu";
-import { theme } from "../../styles/theme";
+import { theme } from "@/styles/theme";
 
 interface FileContextMenuProps {
   /** Absolute path to the file or folder */

@@ -1,13 +1,13 @@
 import { runService, sessionKeys } from "@console/api";
-import { queryClient } from "../../query-client";
-import { startNativeChatStream } from "../../utils/native-stream";
-import { useAppStore } from "../useAppStore";
-import { useSessionStore } from "../useSessionStore";
-import { useProviderStore } from "../useProviderStore";
-import { useSessionStatusStore } from "../useSessionStatusStore";
-import { useProjectStore } from "../useProjectStore";
-import type { ChatSessionState } from "../../types";
-import { EMPTY_CHAT_SESSION } from "../../types/chat-state";
+import { queryClient } from "@/query-client";
+import { startNativeChatStream } from "@/utils/native-stream";
+import { useAppStore } from "@/stores/useAppStore";
+import { useSessionStore } from "@/stores/useSessionStore";
+import { useProviderStore } from "@/stores/useProviderStore";
+import { useSessionStatusStore } from "@/stores/useSessionStatusStore";
+import { useProjectStore } from "@/stores/useProjectStore";
+import type { ChatSessionState } from "@/types";
+import { EMPTY_CHAT_SESSION } from "@/types/chat-state";
 
 export const ABORT_MESSAGES = [
   "This operation was aborted.",

@@ -1,8 +1,8 @@
 import React from "react";
 import { View } from "react-native";
 import { AppShell } from "./app-shell";
-import { HomeScreen, ChatScreen, SettingsScreen, TerminalScreen } from "../../screens";
-import { useAppStore } from "../../stores";
+import { HomeScreen, ChatScreen, SettingsScreen, TerminalScreen } from "@/screens";
+import { useAppStore } from "@/stores";
 
 export function MainContent() {
   const activeTab = useAppStore((state) => state.activeTab);

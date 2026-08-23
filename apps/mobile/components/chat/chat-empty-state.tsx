@@ -1,7 +1,7 @@
 import React, { memo } from "react";
 import { View, Text } from "react-native";
 import { MessageSquareText } from "lucide-react-native";
-import { theme } from "../../styles/theme";
+import { theme } from "@/styles/theme";
 
 export const ChatEmptyState = memo(function ChatEmptyState() {
   return (

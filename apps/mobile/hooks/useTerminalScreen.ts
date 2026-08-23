@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackHandler } from "react-native";
 import { useKeyboardState } from "react-native-keyboard-controller";
-import { useAppStore, useProjectStore, useTerminalStore } from "../stores";
+import { useAppStore, useProjectStore, useTerminalStore } from "@/stores";
 
 /**
  * All terminal-screen state and side effects: project scoping, PTY spawn/reuse/

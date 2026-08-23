@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { FlatList, Pressable, Text, View, ActivityIndicator } from "react-native";
 import { RotateCcw, Trash2, MessageSquare } from "lucide-react-native";
-import { ScreenHeader } from "../../components/layout/screen-header";
-import { confirmAlert, EmptyState } from "../../components/common";
-import { useProjectStore } from "../../stores";
-import { formatRelativeTime, folderName } from "../../utils";
-import { theme } from "../../styles/theme";
+import { ScreenHeader } from "@/components/layout/screen-header";
+import { confirmAlert, EmptyState } from "@/components/common";
+import { useProjectStore } from "@/stores";
+import { formatRelativeTime, folderName } from "@/utils";
+import { theme } from "@/styles/theme";
 
 interface DeletedChatsSettingsProps {
   onBack?: () => void;

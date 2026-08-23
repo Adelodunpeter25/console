@@ -2,12 +2,12 @@ import React, { useState } from "react";
 import { Linking, Pressable, Text, View } from "react-native";
 import Markdown, { type ASTNode } from "react-native-markdown-display";
 import { Check, Copy } from "lucide-react-native";
-import { theme } from "../../styles/theme";
+import { theme } from "@/styles/theme";
 import { setStringAsync } from "expo-clipboard";
 
 import { SyntaxHighlighter } from "./syntax-highlighter";
-import { FileIcon } from "../icons";
-import { getLanguageIconKey } from "../../utils/icons/file-type-mapping";
+import { FileIcon } from "@/components/icons";
+import { getLanguageIconKey } from "@/utils/icons/file-type-mapping";
 
 interface MarkdownRendererProps {
   content: string;

@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { configureConsoleApi } from "@console/api";
-import { confirmAlert } from "../components/common/confirm-dialog";
-import { useAppStore } from "../stores/useAppStore";
-import { useChatStore } from "../stores/useChatStore";
-import { appStorage } from "../utils/storage";
-import { queryClient } from "../query-client";
+import { confirmAlert } from "@/components/common/confirm-dialog";
+import { useAppStore } from "@/stores/useAppStore";
+import { useChatStore } from "@/stores/useChatStore";
+import { appStorage } from "@/utils/storage";
+import { queryClient } from "@/query-client";
 
 const BACKEND_URL_KEY = "@console_backend_url";
 
