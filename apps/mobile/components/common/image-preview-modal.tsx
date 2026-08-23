@@ -1,7 +1,11 @@
 import React, { useCallback } from "react";
 import { Modal, View, Pressable, Text, Dimensions, StatusBar } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { GestureDetector, Gesture } from "react-native-gesture-handler";
+import {
+  GestureDetector,
+  Gesture,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -74,8 +78,18 @@ export function ImagePreviewModal({
     .averageTouches(true)
     .onUpdate((e) => {
       if (scale.value > 1) {
-        translateX.value = savedTranslateX.value + e.translationX;
-        translateY.value = savedTranslateY.value + e.translationY;
+        // Clamp live so the image can't be dragged fully off-screen; onEnd
+        // still springs back anything left out of bounds after scale changes.
+        const maxTranslateX = (width * (scale.value - 1)) / 2;
+        const maxTranslateY = (height * 0.72 * (scale.value - 1)) / 2;
+        translateX.value = Math.max(
+          -maxTranslateX,
+          Math.min(savedTranslateX.value + e.translationX, maxTranslateX),
+        );
+        translateY.value = Math.max(
+          -maxTranslateY,
+          Math.min(savedTranslateY.value + e.translationY, maxTranslateY),
+        );
       }
     })
     .onEnd(() => {
@@ -122,10 +136,13 @@ export function ImagePreviewModal({
       }
     });
 
-  const composedGestures = Gesture.Race(
-    doubleTapGesture,
-    Gesture.Simultaneous(pinchGesture, panGesture),
-    singleTapGesture,
+  // Exclusive so single-tap dismiss can't win the race and swallow the
+  // double-tap zoom; the tap pair then runs simultaneously with pinch/pan.
+  // (Race alone let Tap(1) activate on the first release, blocking double-tap.)
+  const composedGestures = Gesture.Simultaneous(
+    Gesture.Exclusive(doubleTapGesture, singleTapGesture),
+    pinchGesture,
+    panGesture,
   );
 
   const animatedImageStyle = useAnimatedStyle(() => ({
@@ -147,6 +164,9 @@ export function ImagePreviewModal({
       onRequestClose={handleClose}
     >
       <StatusBar barStyle="light-content" />
+      {/* RN Modals render outside the app's GestureHandlerRootView — gestures
+          are completely dead inside a Modal unless it has its own root. */}
+      <GestureHandlerRootView style={{ flex: 1 }}>
       <View className="flex-1 bg-black/95 justify-between">
         {/* Top Header Bar */}
         <View
@@ -196,6 +216,7 @@ export function ImagePreviewModal({
           </Text>
         </View>
       </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
