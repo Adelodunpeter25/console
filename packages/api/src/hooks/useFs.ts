@@ -5,6 +5,8 @@ export const fsKeys = {
   projects: ["projects"] as const,
   browse: (path?: string) => ["fs", "browse", path || "root"] as const,
   tree: (path?: string) => ["fs", "tree", path || "root"] as const,
+  entries: (path?: string, depth?: number) =>
+    ["fs", "entries", path || "root", depth ?? 6] as const,
   file: (path: string) => ["fs", "file", path] as const,
 };
 
@@ -57,6 +59,15 @@ export function useFsTree(path?: string) {
   return useQuery({
     queryKey: fsKeys.tree(path),
     queryFn: () => fsService.getFsTree(path),
+  });
+}
+
+export function useFsEntries(path: string | null, depth = 6) {
+  return useQuery({
+    queryKey: fsKeys.entries(path ?? undefined, depth),
+    queryFn: () => fsService.getFsEntries(path!, depth),
+    enabled: Boolean(path),
+    staleTime: 15_000,
   });
 }
 

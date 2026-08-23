@@ -32,6 +32,11 @@ export const fsService = {
   async getFsTree(path?: string): Promise<FsTreeEntry[]> {
     const res = await getConsoleApiClient().get("/api/fs/tree", { params: { path } });
     return res.data.data ?? res.data;
+  }
+
+  async getFsEntries(path: string, depth = 6): Promise<FsTreeEntry[]> {
+    const res = await getConsoleApiClient().get("/api/fs/entries", { params: { path, depth } });
+    return res.data.data ?? res.data;
   },
 
   async readFile(path: string): Promise<{ content: string; path: string }> {
