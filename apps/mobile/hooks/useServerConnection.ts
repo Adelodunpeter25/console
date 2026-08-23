@@ -65,7 +65,6 @@ export function useServerConnection() {
           store.addEnvironment(name?.trim() || "Default", url);
         }
         setInputUrl(url);
-        confirmAlert("Success", "Console backend server endpoint updated successfully!");
       } catch (err) {
         console.error("Failed to save endpoint URL:", err);
         confirmAlert(
