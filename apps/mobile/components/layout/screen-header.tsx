@@ -9,6 +9,8 @@ interface ScreenHeaderProps {
   showSettings?: boolean;
   onSettingsPress?: () => void;
   rightAction?: React.ReactNode;
+  /** Extra actions rendered left of the settings button (e.g. env switcher). */
+  headerActions?: React.ReactNode;
 }
 
 export function ScreenHeader({
@@ -17,6 +19,7 @@ export function ScreenHeader({
   showSettings,
   onSettingsPress,
   rightAction,
+  headerActions,
 }: ScreenHeaderProps) {
   const insets = useSafeAreaInsets();
   // Tight gap under the status bar: system inset + a small breathing room.
@@ -47,14 +50,19 @@ export function ScreenHeader({
 
       {rightAction ? (
         rightAction
-      ) : showSettings ? (
-        <Pressable
-          className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center"
-          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-          onPress={onSettingsPress}
-        >
-          <Settings size={18} color="#ffffff" />
-        </Pressable>
+      ) : showSettings || headerActions ? (
+        <View className="flex-row items-center">
+          {headerActions}
+          {showSettings ? (
+            <Pressable
+              className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center"
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              onPress={onSettingsPress}
+            >
+              <Settings size={18} color="#ffffff" />
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
     </View>
   );

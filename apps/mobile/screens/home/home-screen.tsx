@@ -5,6 +5,7 @@ import { ScreenHeader } from "@/components/layout/screen-header";
 import { SearchBar } from "@/components/common/search-bar";
 import { confirmAlert } from "@/components/common/confirm-dialog";
 import { SessionList } from "@/components/home/session-list";
+import { EnvironmentSwitcher } from "@/components/environments/environment-switcher";
 import {
   SessionActionSheet,
   type SessionActionSheetHandle,
@@ -103,7 +104,12 @@ export function HomeScreen() {
 
   return (
     <View className="flex-1 bg-screen">
-      <ScreenHeader title="Console" showSettings onSettingsPress={navigateToSettings} />
+      <ScreenHeader
+        title="Console"
+        showSettings
+        onSettingsPress={navigateToSettings}
+        headerActions={<EnvironmentSwitcher />}
+      />
 
       <ScrollView
         className="flex-1"

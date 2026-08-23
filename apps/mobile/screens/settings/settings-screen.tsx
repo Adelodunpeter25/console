@@ -3,9 +3,8 @@ import { Text, View, Pressable, BackHandler } from "react-native";
 import { ChevronRight, Wifi, User, Folder, Trash2 } from "lucide-react-native";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { useAppStore, useProjectStore } from "@/stores";
-import { useServerConnection } from "@/hooks";
 import { useAuth } from "@/hooks";
-import { ConnectionSettings } from "./connection-settings";
+import { EnvironmentsSettings } from "./environments-settings";
 import { AccountSettings } from "./account-settings";
 import { ProjectsSettings } from "./projects-settings";
 import { DeletedChatsSettings } from "./deleted-chats-settings";
@@ -39,8 +38,7 @@ export function SettingsScreen() {
     const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
     return () => sub.remove();
   }, [section, setActiveTab]);
-
-  const { backendUrl } = useServerConnection();
+  const backendUrl = useAppStore((state) => state.backendUrl);
   const auth = useAuth();
   const projects = useProjectStore((state) => state.projects);
   const deletedSessions = useProjectStore((state) => state.deletedSessions);
@@ -66,8 +64,7 @@ export function SettingsScreen() {
           <DeletedChatsSettings onBack={() => setSection(null)} />
         ) : (
           <>
-            <ScreenHeader title={meta.title} onBack={() => setSection(null)} />
-            {section === "connection" ? <ConnectionSettings /> : null}
+            {section === "connection" ? <EnvironmentsSettings /> : null}
             {section === "account" ? <AccountSettings /> : null}
           </>
         )}
