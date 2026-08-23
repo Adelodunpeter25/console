@@ -1,16 +1,12 @@
-import React, { useRef, useCallback } from "react";
-import { View, Text, Pressable } from "react-native";
+import React, { useRef, useCallback, useState } from "react";
+import { View, Text, Pressable, ScrollView } from "react-native";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { Server, Check, Plus } from "lucide-react-native";
+import { Server, Check, Plus, ChevronLeft } from "lucide-react-native";
 import { SharedBottomSheet } from "@/components/common/shared-bottom-sheet";
 import { confirmAlert } from "@/components/common/confirm-dialog";
+import { EnvironmentEditor } from "@/components/environments/environment-editor";
 import { useEnvironmentsStore } from "@/stores/useEnvironmentsStore";
 import { urlHost } from "@/utils/url";
-
-interface EnvironmentSwitcherProps {
-  /** Opens the editor in create mode instead of embedding a "+" row. */
-  onCreateEnvironment?: () => void;
-}
 
 function StatusDot({ ok, checkedAt }: { ok?: boolean; checkedAt?: number }) {
   const color = ok === undefined ? "#52525b" : ok ? "#34d399" : "#f87171";
@@ -21,15 +17,20 @@ function StatusDot({ ok, checkedAt }: { ok?: boolean; checkedAt?: number }) {
  * Home-header environment switcher: a server-icon trigger that opens a
  * bottom sheet listing environments with their probe status. Tapping another
  * environment (after confirmation) activates it and clears server-scoped
- * caches.
+ * caches. The "+ Add environment" row opens the EnvironmentEditor inline
+ * inside the sheet — no navigation required.
  */
-export function EnvironmentSwitcher({ onCreateEnvironment }: EnvironmentSwitcherProps) {
+export function EnvironmentSwitcher() {
   const sheetRef = useRef<BottomSheetModal>(null);
   const environments = useEnvironmentsStore((state) => state.environments);
   const activeId = useEnvironmentsStore((state) => state.activeId);
   const probes = useEnvironmentsStore((state) => state.probes);
 
+  // When true the sheet shows the create form instead of the list.
+  const [creating, setCreating] = useState(false);
+
   const open = useCallback(() => {
+    setCreating(false);
     sheetRef.current?.present();
     // Probe all environments so the dots are fresh while the sheet is open.
     const store = useEnvironmentsStore.getState();
@@ -70,46 +71,76 @@ export function EnvironmentSwitcher({ onCreateEnvironment }: EnvironmentSwitcher
         <Server size={18} color="#ffffff" />
       </Pressable>
 
-      <SharedBottomSheet ref={sheetRef} title="Environments" snapPoints={["45%", "70%"]}>
-        <View className="flex-1">
-          {environments.map((env) => {
-            const probe = probes[env.id];
-            const isActive = env.id === activeId;
-            return (
+      <SharedBottomSheet ref={sheetRef} snapPoints={["50%", "80%"]}>
+        {creating ? (
+          /* ── Create form ── */
+          <View style={{ flex: 1 }}>
+            {/* Mini header inside sheet */}
+            <View className="flex-row items-center mb-4">
               <Pressable
-                key={env.id}
-                onPress={() => handleSelect(env.id)}
+                onPress={() => setCreating(false)}
                 style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                className={`flex-row items-center rounded-2xl border px-4 py-3.5 mb-2 ${
-                  isActive ? "bg-card-alt border-border" : "bg-card border-border/50"
-                }`}
+                className="w-8 h-8 rounded-full bg-card border border-border items-center justify-center mr-3"
               >
-                <StatusDot ok={probe?.ok} checkedAt={probe?.checkedAt} />
-                <View className="flex-1">
-                  <Text className="text-sm font-semibold text-foreground">{env.name}</Text>
-                  <Text className="text-xs text-foreground-secondary mt-0.5" numberOfLines={1}>
-                    {urlHost(env.url)}
-                  </Text>
-                </View>
-                {isActive ? <Check size={16} color="#34d399" /> : null}
+                <ChevronLeft size={16} color="#ffffff" />
               </Pressable>
-            );
-          })}
+              <Text className="text-base font-semibold text-foreground">Add environment</Text>
+            </View>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 32 }}
+            >
+              <EnvironmentEditor
+                key="switcher-create"
+                mode="create"
+                onDone={() => {
+                  setCreating(false);
+                  sheetRef.current?.dismiss();
+                }}
+              />
+            </ScrollView>
+          </View>
+        ) : (
+          /* ── Environment list ── */
+          <View style={{ flex: 1 }}>
+            <Text className="text-base font-semibold text-foreground mb-3">Environments</Text>
+            {environments.map((env) => {
+              const probe = probes[env.id];
+              const isActive = env.id === activeId;
+              return (
+                <Pressable
+                  key={env.id}
+                  onPress={() => handleSelect(env.id)}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                  className={`flex-row items-center rounded-2xl border px-4 py-3.5 mb-2 ${
+                    isActive ? "bg-card-alt border-border" : "bg-card border-border/50"
+                  }`}
+                >
+                  <StatusDot ok={probe?.ok} checkedAt={probe?.checkedAt} />
+                  <View className="flex-1">
+                    <Text className="text-sm font-semibold text-foreground">{env.name}</Text>
+                    <Text className="text-xs text-foreground-secondary mt-0.5" numberOfLines={1}>
+                      {urlHost(env.url)}
+                    </Text>
+                  </View>
+                  {isActive ? <Check size={16} color="#34d399" /> : null}
+                </Pressable>
+              );
+            })}
 
-          <Pressable
-            onPress={() => {
-              sheetRef.current?.dismiss();
-              onCreateEnvironment?.();
-            }}
-            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-            className="flex-row items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-3.5 mt-1"
-          >
-            <Plus size={16} color="#a1a1aa" />
-            <Text className="text-sm font-medium text-foreground-secondary">
-              Add environment
-            </Text>
-          </Pressable>
-        </View>
+            <Pressable
+              onPress={() => setCreating(true)}
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              className="flex-row items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-3.5 mt-1"
+            >
+              <Plus size={16} color="#a1a1aa" />
+              <Text className="text-sm font-medium text-foreground-secondary">
+                Add environment
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </SharedBottomSheet>
     </>
   );
