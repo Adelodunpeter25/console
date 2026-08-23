@@ -102,6 +102,7 @@ const FallbackTerminalSurface = memo(function FallbackTerminalSurface(
           className="flex-1"
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+          onScrollBeginDrag={() => inputRef.current?.blur()}
         >
           <Text
             selectable

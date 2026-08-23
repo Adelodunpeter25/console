@@ -3,6 +3,7 @@ package expo.modules.consoleterminal
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
+import android.os.Build
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
@@ -133,6 +134,12 @@ class ConsoleTerminalView(context: Context, appContext: AppContext) : ExpoView(c
       if (terminalHandle != 0L) {
         GhosttyBridge.nativeScroll(terminalHandle, delta)
         renderSnapshot()
+      }
+      // Scrolling back through history collapses the keyboard to free screen
+      // space; negative rows are the finger-down / into-history direction.
+      if (delta < 0 && softKeyboardShowing()) {
+        hideKeyboard()
+        inputView.clearFocus()
       }
     }
     terminalCanvas.onCellMetricsChanged = { emitResize() }
@@ -418,6 +425,19 @@ class ConsoleTerminalView(context: Context, appContext: AppContext) : ExpoView(c
       Context.INPUT_METHOD_SERVICE
     ) as? InputMethodManager
     inputMethodManager?.hideSoftInputFromWindow(windowToken, 0)
+  }
+
+  /** True when a soft IME is actively editing. Hardware-keyboard sessions and
+   * already-dismissed IMEs report false, so scrolling never steals their focus. */
+  private fun softKeyboardShowing(): Boolean {
+    val inputMethodManager = context.getSystemService(
+      Context.INPUT_METHOD_SERVICE
+    ) as? InputMethodManager ?: return false
+    return if (Build.VERSION.SDK_INT >= 30) {
+      inputMethodManager.isAcceptingText
+    } else {
+      inputView.isFocused
+    }
   }
 
   /** Many soft keyboards delete via InputConnection.deleteSurroundingText instead of
