@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
+import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { CheckCircle2, XCircle, LoaderCircle } from "lucide-react-native";
 import { confirmAlert } from "@/components/common/confirm-dialog";
 import {
@@ -18,6 +19,8 @@ interface EnvironmentEditorProps {
   envId?: string;
   /** Called after a successful save or delete so hosts can close their sheet. */
   onDone?: () => void;
+  /** When rendered inside a Gorhom bottom sheet, swap TextInput for BottomSheetTextInput. */
+  insideBottomSheet?: boolean;
 }
 
 /**
@@ -25,7 +28,7 @@ interface EnvironmentEditorProps {
  * the environments settings screen and openable from the switcher's "+"
  * row. Tests the currently edited URL (not the stored one) in both modes.
  */
-export function EnvironmentEditor({ mode, envId, onDone }: EnvironmentEditorProps) {
+export function EnvironmentEditor({ mode, envId, onDone, insideBottomSheet }: EnvironmentEditorProps) {
   const environments = useEnvironmentsStore((state) => state.environments);
   const activeId = useEnvironmentsStore((state) => state.activeId);
   const addEnvironment = useEnvironmentsStore((state) => state.addEnvironment);
@@ -140,11 +143,13 @@ export function EnvironmentEditor({ mode, envId, onDone }: EnvironmentEditorProp
     );
   };
 
+  const Input = insideBottomSheet ? BottomSheetTextInput : TextInput;
+
   return (
     <View>
       {/* Name */}
       <Text className="text-xs font-medium text-foreground-secondary mb-1.5">Name</Text>
-      <TextInput
+      <Input
         value={name}
         onChangeText={setName}
         placeholder="My server"
@@ -156,7 +161,7 @@ export function EnvironmentEditor({ mode, envId, onDone }: EnvironmentEditorProp
 
       {/* URL */}
       <Text className="text-xs font-medium text-foreground-secondary mb-1.5">Backend URL</Text>
-      <TextInput
+      <Input
         value={url}
         onChangeText={setUrl}
         placeholder="http://100.82.16.5:3773"

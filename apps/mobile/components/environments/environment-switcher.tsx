@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, useState } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
-import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { View, Text, Pressable } from "react-native";
+import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Server, Check, Plus, ChevronLeft } from "lucide-react-native";
 import { SharedBottomSheet } from "@/components/common/shared-bottom-sheet";
 import { confirmAlert } from "@/components/common/confirm-dialog";
@@ -86,7 +86,7 @@ export function EnvironmentSwitcher() {
               </Pressable>
               <Text className="text-base font-semibold text-foreground">Add environment</Text>
             </View>
-            <ScrollView
+            <BottomSheetScrollView
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 32 }}
@@ -94,12 +94,13 @@ export function EnvironmentSwitcher() {
               <EnvironmentEditor
                 key="switcher-create"
                 mode="create"
+                insideBottomSheet
                 onDone={() => {
                   setCreating(false);
                   sheetRef.current?.dismiss();
                 }}
               />
-            </ScrollView>
+            </BottomSheetScrollView>
           </View>
         ) : (
           /* ── Environment list ── */
