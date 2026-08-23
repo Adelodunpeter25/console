@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { View, TextInput, Pressable, StyleSheet, Image, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-controller";
@@ -9,6 +9,7 @@ import { theme } from "@/styles/theme";
 import { useAppStore, useChatStore, useProjectStore, useSessionStore } from "@/stores";
 import { ImagePreviewModal } from "@/components/common/image-preview-modal";
 import { ComposerBottomStrip } from "./composer-bottom-strip";
+import { ComposerAutocomplete } from "./composer-autocomplete";
 
 interface ComposerProps {
   value: string;
@@ -57,6 +58,11 @@ export function Composer({
 
   const [isMultiline, setIsMultiline] = useState(false);
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
+  const [selection, setSelection] = useState<{ start: number; end: number }>({
+    start: value.length,
+    end: value.length,
+  });
+  const inputRef = useRef<TextInput>(null);
   const canSend = value.trim().length > 0 || attachments.length > 0;
 
   const handlePickImages = async () => {
@@ -90,10 +96,24 @@ export function Composer({
     }
   };
 
+  const handleAutocompletePick = (newValue: string) => {
+    onChangeText(newValue);
+    const newPos = newValue.length;
+    setSelection({ start: newPos, end: newPos });
+    // Keep focus after picking
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
   return (
     <>
       <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
         <View className="px-2.5 pt-2 bg-screen" style={{ paddingBottom }}>
+          <ComposerAutocomplete
+            value={value}
+            selectionStart={selection.start}
+            sessionId={selectedSessionId}
+            onPick={handleAutocompletePick}
+          />
           {/* Attachment Previews Strip */}
           {attachments.length > 0 ? (
             <View className="flex-row flex-wrap gap-2 px-2 pb-2">
@@ -148,13 +168,16 @@ export function Composer({
             </Pressable>
 
             <TextInput
+              ref={inputRef}
               style={styles.input}
               value={value}
               onChangeText={onChangeText}
-              placeholder="Ask the repo agent, or run a command…"
+              placeholder="Ask the repo agent, or run a command…  (/ for commands, @ for files)"
               placeholderTextColor={theme.colors.text.muted}
               multiline
               textAlignVertical={isMultiline ? "top" : "center"}
+              selection={selection}
+              onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
               onContentSizeChange={(e) => {
                 const height = e.nativeEvent.contentSize.height;
                 setIsMultiline(height > 36 || value.includes("\n"));
