@@ -82,7 +82,14 @@ function appendOutput(terminalId: string, data: string): void {
 }
 
 function flushBuffers(): void {
-  if (Object.keys(pendingAppends).length === 0) return;
+  if (Object.keys(pendingAppends).length === 0) {
+    // Idle: stop ticking until the next append re-arms the interval.
+    if (flushTimer) {
+      clearInterval(flushTimer);
+      flushTimer = null;
+    }
+    return;
+  }
   useTerminalStore.setState((state) => {
     const next = { ...state.buffers };
     for (const [id, chunks] of Object.entries(pendingAppends)) {

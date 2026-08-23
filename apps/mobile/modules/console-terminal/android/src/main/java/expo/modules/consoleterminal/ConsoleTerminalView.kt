@@ -9,6 +9,8 @@ import android.text.TextWatcher
 import android.view.KeyEvent
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputConnectionWrapper
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -20,7 +22,12 @@ import kotlin.math.max
 class ConsoleTerminalView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
   private val container = FrameLayout(context)
   private val terminalCanvas = TerminalCanvasView(context)
-  private val inputView = EditText(context)
+  private val inputView = object : EditText(context) {
+    override fun onCreateInputConnection(outAttrs: EditorInfo?): InputConnection? {
+      val connection = super.onCreateInputConnection(outAttrs) ?: return null
+      return PtyInputConnection(connection)
+    }
+  }
   private val onInput by EventDispatcher()
   private val onResize by EventDispatcher()
   private var terminalHandle = 0L
@@ -396,6 +403,23 @@ class ConsoleTerminalView(context: Context, appContext: AppContext) : ExpoView(c
       Context.INPUT_METHOD_SERVICE
     ) as? InputMethodManager
     inputMethodManager?.hideSoftInputFromWindow(windowToken, 0)
+  }
+
+  /** Many soft keyboards delete via InputConnection.deleteSurroundingText instead of
+   * KEYCODE_DEL key events; route those to raw DEL bytes so backspace reaches the PTY. */
+  private inner class PtyInputConnection(
+    delegate: InputConnection,
+  ) : InputConnectionWrapper(delegate, true) {
+    override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
+      if (afterLength == 0 && beforeLength > 0 && inputView.text.isNullOrEmpty()) {
+        repeat(beforeLength) {
+          onInput(mapOf("data" to "\u007F"))
+          keepFocusAfterInput()
+        }
+        return true
+      }
+      return super.deleteSurroundingText(beforeLength, afterLength)
+    }
   }
 
   private fun applyTheme() {

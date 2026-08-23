@@ -58,6 +58,7 @@ const FallbackTerminalSurface = memo(function FallbackTerminalSurface(
 ) {
   const fontSize = props.fontSize ?? DEFAULT_FONT_SIZE;
   const inputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
   const theme = props.theme;
 
   const handleLayout = (event: LayoutChangeEvent) => {
@@ -89,7 +90,12 @@ const FallbackTerminalSurface = memo(function FallbackTerminalSurface(
       onLayout={handleLayout}
     >
       <View className="flex-1 px-2.5 py-2">
-        <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+        <ScrollView
+          ref={scrollRef}
+          className="flex-1"
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+        >
           <Text
             selectable
             style={{
@@ -127,10 +133,13 @@ const FallbackTerminalSurface = memo(function FallbackTerminalSurface(
           }}
           onSubmitEditing={(event) => {
             const text = event.nativeEvent.text;
+            // blurOnSubmit is false, so clear after sending or the next return
+            // keypress resends the same command.
             if (text.length > 0) {
               // Terminal Enter is CR. LF is Ctrl+J and raw-mode TUIs can treat it as J.
               props.onInput(`${text}\r`);
             }
+            inputRef.current?.clear();
           }}
         />
         <Pressable

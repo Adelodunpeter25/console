@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Text, View, Pressable, BackHandler, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft, Keyboard, Trash2 } from "lucide-react-native";
-import { KeyboardStickyView } from "react-native-keyboard-controller";
+import { KeyboardAvoidingView, KeyboardStickyView, useKeyboardState } from "react-native-keyboard-controller";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { useAppStore, useProjectStore, useTerminalStore } from "../../stores";
 import { ConsoleTerminalSurface } from "../../modules/console-terminal/src/terminal-surface";
@@ -26,6 +26,7 @@ const EXTRA_KEYS: { label: string; bytes: string }[] = [
  */
 export function TerminalScreen() {
   const insets = useSafeAreaInsets();
+  const keyboardVisible = useKeyboardState((s) => s.isVisible);
   const previousTab = useAppStore((state) => state.previousTab);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
@@ -34,7 +35,10 @@ export function TerminalScreen() {
   const [terminalId, setTerminalId] = useState<string | null>(null);
   const [spawnError, setSpawnError] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState(0);
-  const resizeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resizeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Drop a pending debounced PTY resize when the screen unmounts.
+  useEffect(() => () => clearTimeout(resizeTimer.current), []);
 
   const project =
     projects.find((p) => p.id === selectedProjectId) ?? (projects.length > 0 ? projects[0] : null);
@@ -184,7 +188,11 @@ export function TerminalScreen() {
         </View>
       ) : null}
 
-      <View className="flex-1 px-2 pb-1">
+      {/* Edge-to-edge Android never resizes the window for the IME, so pad the
+          terminal surface by the keyboard height; the native view then resizes
+          and the PTY reflows with the prompt kept above the keys. */}
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+        <View className="flex-1 px-2 pb-1">
         {!project ? null : !terminalId && !spawnError ? (
           <View className="flex-1 items-center justify-center gap-2">
             <ActivityIndicator />
@@ -202,12 +210,13 @@ export function TerminalScreen() {
           />
         ) : null}
       </View>
+      </KeyboardAvoidingView>
 
       {terminalId && isRunning ? (
         <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
           <View
             className="flex-row items-center gap-1.5 px-2 pt-1.5 border-t border-border-subtle bg-screen"
-            style={{ paddingBottom: insets.bottom + 6 }}
+            style={{ paddingBottom: keyboardVisible ? 6 : insets.bottom + 6 }}
           >
             <Pressable
               className="h-8 px-2.5 rounded-md bg-card border border-border items-center justify-center"
@@ -232,7 +241,7 @@ export function TerminalScreen() {
         <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
           <View
             className="flex-row items-center justify-center px-4 pt-3 border-t border-border-subtle bg-screen"
-            style={{ paddingBottom: insets.bottom + 10 }}
+            style={{ paddingBottom: keyboardVisible ? 10 : insets.bottom + 10 }}
           >
             <Pressable
               className="px-4 py-2.5 rounded-full bg-foreground items-center justify-center"
