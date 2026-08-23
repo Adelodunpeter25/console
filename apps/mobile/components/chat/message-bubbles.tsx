@@ -90,7 +90,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
         style={{ backgroundColor: "rgba(255,255,255,0.06)" }}
         hitSlop={4}
       >
-        <Sparkles size={13} color={theme.colors.accent} />
+        <Sparkles size={13} color={theme.colors.status.running} />
         <Text className="text-xs font-medium text-foreground-secondary">
           {isStreaming ? "Thinking…" : "Thought"}
         </Text>
@@ -106,7 +106,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
           className="mt-1.5 px-3 py-2.5 rounded-xl border-l-2"
           style={{
             backgroundColor: "rgba(255,255,255,0.03)",
-            borderColor: theme.colors.accent,
+            borderColor: theme.colors.status.running,
           }}
         >
           <Text

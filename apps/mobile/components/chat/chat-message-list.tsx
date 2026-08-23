@@ -113,7 +113,6 @@ export const ChatMessageList = forwardRef<FlashListRef<AgentMessage>, ChatMessag
         ref={ref}
         className="flex-1"
         data={displayMessages}
-        estimatedItemSize={110}
         keyExtractor={(item, i) => (item as any).id ?? `${(item as any).createdAt ?? i}-${i}`}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16 }}
         keyboardShouldPersistTaps="handled"

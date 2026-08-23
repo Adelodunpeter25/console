@@ -1,12 +1,12 @@
 import React, { memo } from "react";
 import { View } from "react-native";
-import type { EffectiveRun } from "@console/types";
+import type { RunActivityState } from "@/types/chat";
 import { MessageBubble } from "./message-bubbles";
 import { RunActivity } from "./run-activity";
 
 interface ChatStreamingFooterProps {
   latestUserIndex: number;
-  effectiveRuns: EffectiveRun[];
+  effectiveRuns: RunActivityState[];
   running: boolean;
   isStreaming: boolean;
   streamingThinking?: string;

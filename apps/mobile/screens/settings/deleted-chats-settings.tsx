@@ -207,7 +207,7 @@ export function DeletedChatsSettings({ onBack }: DeletedChatsSettingsProps) {
                     disabled={busy}
                     onPress={() => handlePermanentDelete(item.id, title)}
                   >
-                    <Trash2 size={12} color={theme.colors.status.error} />
+                    <Trash2 size={12} color={theme.colors.danger} />
                     <Text className="text-xs font-semibold text-red-400">Delete</Text>
                   </Pressable>
                 </View>

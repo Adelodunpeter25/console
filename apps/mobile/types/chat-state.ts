@@ -27,6 +27,9 @@ export const emptyChatSnapshot: ChatSnapshot = {
   liveToolResults: [],
   pendingPermission: null,
   pendingQuestion: null,
+  pendingPermissions: [],
+  pendingQuestions: [],
+  runs: [],
   running: false,
 };
 

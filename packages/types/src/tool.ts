@@ -83,10 +83,10 @@ export function bindToolCwd<T extends z.ZodTypeAny>(
   }
 
   const originalExecute = tool.execute;
-  const modelInputSchema = (tool.inputSchema as z.AnyZodObject).omit({ cwd: true });
+  const modelInputSchema = (tool.inputSchema as unknown as z.AnyZodObject).omit({ cwd: true });
   return {
     ...tool,
-    inputSchema: modelInputSchema as T,
+    inputSchema: modelInputSchema as unknown as T,
     execute: async (args, signal) => originalExecute({ ...args, cwd } as z.infer<T>, signal),
   };
 }

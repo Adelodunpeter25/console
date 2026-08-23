@@ -55,7 +55,7 @@ export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheet
   const currentModels: Model[] = activeProvider ? modelsByProvider[activeProvider] ?? [] : [];
   const query = search.trim().toLowerCase();
   const filteredModels = currentModels.filter(
-    (m) => !query || m.id.toLowerCase().includes(query) || (m.name && m.name.toLowerCase().includes(query)),
+    (m) => !query || m.id.toLowerCase().includes(query),
   );
 
   const renderModelItem = useCallback(

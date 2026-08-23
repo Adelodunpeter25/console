@@ -18,8 +18,7 @@ export function AddProjectScreen({ onClose, onProjectAdded }: AddProjectScreenPr
   const { data: browseData, isLoading, isError, refetch } = useFsBrowse(currentPath);
   const addProjectMutation = useAddProject();
 
-  const activePath =
-    browseData?.currentPath || browseData?.path || currentPath || "";
+  const activePath = browseData?.currentPath || currentPath || "";
   const parentPath = browseData?.parentPath;
   const entries = browseData?.entries || [];
 

@@ -1,14 +1,24 @@
-import { requireNativeModule, EventEmitter, Subscription } from "expo-modules-core";
+import { requireNativeModule, type EventSubscription } from "expo-modules-core";
 import { Platform } from "react-native";
 import type { AgentSessionEvent, NotificationEvent } from "@console/types";
 
+/**
+ * expo-modules-core's EventEmitter/Subscription typings drift between SDK
+ * versions; this wrapper only relies on the stable runtime contract
+ * (addListener -> { remove }). In SDK 52+ the native module object itself is
+ * the event emitter.
+ */
+let emitter: {
+  addListener(eventName: string, listener: (event: never) => void): EventSubscription;
+} | null = null;
+
 let NativeStreamModule: any = null;
-let emitter: EventEmitter | null = null;
 
 try {
   NativeStreamModule = requireNativeModule("NativeStreamModule");
   if (NativeStreamModule) {
-    emitter = new EventEmitter(NativeStreamModule);
+    // SDK 52+: the native module object is already an EventEmitter.
+    emitter = NativeStreamModule;
   }
 } catch {
   // Falls back gracefully in web / test environments
@@ -52,7 +62,7 @@ export function startNativeChatStream(
   };
 
   if (isNativeStreamAvailable()) {
-    const subscriptions: Subscription[] = [];
+    const subscriptions: EventSubscription[] = [];
 
     const eventSub = emitter!.addListener(
       "onStreamEvent",
@@ -187,7 +197,7 @@ export function startNativeNotificationStream(
 ): () => void {
   if (isNativeStreamAvailable()) {
     let cancelled = false;
-    const subscriptions: Subscription[] = [];
+    const subscriptions: EventSubscription[] = [];
 
     const eventSub = emitter!.addListener(
       "onNotificationEvent",

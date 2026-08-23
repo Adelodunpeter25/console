@@ -87,9 +87,10 @@ export function applyChatEvent(
         };
       }
 
+      const turnWithMeta = turn as typeof turn & { createdAt?: number };
       const normalizedTurn = {
-        ...turn,
-        createdAt: turn.createdAt ?? Date.now(),
+        ...turnWithMeta,
+        createdAt: turnWithMeta.createdAt ?? Date.now(),
       };
 
       // Always append the turn to messages for persistence.

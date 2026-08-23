@@ -103,7 +103,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       },
     }));
     sessionService
-      .updateSession(sessionId, { cwd: project.path, projectId: project.id })
+      // projectId deliberately omitted: the server PATCH contract has no
+      // project field and would silently ignore it (see session.service.ts).
+      .updateSession(sessionId, { cwd: project.path })
       .then(() => useProjectStore.getState().refreshSessionHeader(sessionId))
       .catch(() => {});
   },

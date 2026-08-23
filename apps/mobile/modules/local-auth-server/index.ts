@@ -1,4 +1,4 @@
-import { requireNativeModule, type EventEmitter, type EventSubscription } from "expo-modules-core";
+import { requireNativeModule, type EventSubscription } from "expo-modules-core";
 import { Platform } from "react-native";
 
 /**
@@ -9,13 +9,15 @@ import { Platform } from "react-native";
  */
 
 let LocalAuthServerModule: any = null;
-let emitter: EventEmitter | null = null;
+let emitter: {
+  addListener(eventName: string, listener: (event: never) => void): EventSubscription;
+} | null = null;
 
 try {
   LocalAuthServerModule = requireNativeModule("LocalAuthServerModule");
   if (LocalAuthServerModule) {
     // In Expo SDK 52+ the native module object is already an EventEmitter.
-    emitter = LocalAuthServerModule as EventEmitter;
+    emitter = LocalAuthServerModule;
   }
 } catch {
   // Not available on web / test / iOS builds without the native module.
