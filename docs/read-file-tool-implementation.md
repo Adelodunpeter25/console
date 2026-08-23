@@ -151,11 +151,11 @@ Track a small ledger per canonical file path and agent/session. It should record
 
 - the canonical path;
 - file `mtimeMs` and size at read time;
-- optionally a content hash for stronger version detection;
+- a content hash of the observed bytes — **required**, not optional: `mtimeMs` + size can miss same-millisecond rewrites, and `editFile`'s exact-match-uniqueness guarantee depends on it;
 - the returned line or byte ranges;
 - whether the returned view was partial;
 - whether the file was classified as text, binary, PDF, image, or notebook;
-- the timestamp and request key for deduplication.
+- the observation timestamp;
 
 Example shape:
 
@@ -200,23 +200,18 @@ For `editFile`, a range-based edit can be allowed when the affected region was o
 
 New files with no prior version can be created normally. `batchWrite` must apply the same checks independently to every existing target.
 
-## 6. Deduplicate identical reads
+Never-read policy (previously unspecified, must be explicit):
 
-For an unchanged file, key duplicate reads by:
+- new files with no prior version -> create normally;
+- existing file with no observation -> `editFile` requires a fresh read first; `writeFile` / `batchWrite` fall through to the normal permission prompt instead of a hard block.
 
-- canonical path;
-- `startLine` and `endLine`;
-- encoding;
-- relevant ceiling configuration;
-- file `mtimeMs` and size.
+## 6. Deduplicate identical reads — deferred
 
-On an identical repeat, return:
+**Deferred — do not implement in v1.**
 
-```text
-Content unchanged since the last identical read; see the previous tool result.
-```
+The stub ("see the previous tool result") breaks after conversation compaction: the ledger lives on the Agent, compaction happens in the agent loop, and nothing tells the ledger its referenced tool result is gone. The "self-expiring" escape hatch had no defined trigger mechanism.
 
-The cache must be self-expiring and should consume the deduplication record after returning the stub. This avoids stale references after conversation compaction. If the previous result may no longer be visible, the tool should allow a fresh full read rather than trapping the model in repeated stubs.
+A repeated identical read costs tokens once; a stale stub can trap the model in a retry loop. Revisit only if repeated-read waste is observed in practice, and only with an explicit compaction-aware invalidation signal.
 
 ## 7. Repair common filename problems
 
@@ -240,11 +235,11 @@ Did you mean: src/service/index.ts?
 
 ### Images
 
-Attach a compressed representation when the provider supports image content. If downscaled, state the scale factor. Use a quality ladder and enforce an output-size ceiling.
+**Deferred to a separate task.** Attaching image content blocks requires multimodal plumbing through `normalizeToolOutput` and the `streamFn` message mapping — not tool-local work. v1 behavior: detect image MIME and return kind + size metadata.
 
 ### Notebooks
 
-For `.ipynb` files, render cells in a readable form, identify code/markdown/output cells, cap very large outputs, and attach plots as images when supported.
+**Deferred to a separate task.** v1 behavior: `.ipynb` is treated as structured JSON text under the normal ceilings.
 
 ### SVG
 
@@ -267,7 +262,7 @@ Block dangerous paths before any I/O, including examples such as:
 - `/proc/.../fd/*`
 - other special devices and unbounded pseudo-files
 
-Resolve and validate paths consistently for all filesystem tools. Decide explicitly whether symlinks are allowed. If they are allowed, verify the resolved target remains inside the permitted workspace where applicable.
+Resolved policy: symlinks are followed, but the resolved realpath must remain inside the permitted workspace root. Note macOS `/tmp` is itself a symlink — test fixtures must use realpath-resolved temp directories.
 
 Normalize text by:
 
@@ -276,11 +271,7 @@ Normalize text by:
 - preserving line numbering;
 - never splitting a UTF-8 character during truncation.
 
-Input aliases should be accepted where provider compatibility requires them:
-
-- `filePath` → `file_path`/canonical internal path
-- `target_file` → `file_path`
-- `absolutePath` → `file_path`
+**No input aliases in v1.** Add an alias only when a provider is observed actually emitting it; alias preprocessing weakens the strict Zod validation boundary.
 
 Type coercion must be strict. Reject values such as `"2abc"` rather than silently converting them to `2`. Zod schemas should remain the final validation boundary.
 
@@ -290,22 +281,26 @@ Type coercion must be strict. Reject values such as `"2abc"` rather than silentl
 
 The tool executor should continue to return actionable tool content. Expected read conditions such as truncation, empty files, PDFs, and binary files should generally not be marked as execution failures. Actual permission, I/O, or policy failures can continue to use `isError: true`.
 
-The `Agent` currently constructs the tools used for a run and dynamically replaces the `subagent` tool. This is an appropriate integration point for constructing or attaching the file context. Ensure the context lifetime matches the intended session lifetime, not only one individual turn.
+Integration point: tools are bound per run in `run.service.ts` via `boundTools` (which already swaps `ask` / `askMany` / `todo` onto shared instances). The file-tool factory is wired there; the resulting context must be keyed by session (like `todoLists`) so the ledger survives across runs within a session, and subagents get their own context unless intentionally sharing the parent's observations.
 
 ## 11. Recommended implementation order
 
-Implement the smallest safe vertical slice first:
+**Task 1 — contained in `read-file.ts` plus small shared path utils; no architectural change:**
 
-1. Add streaming reads.
-2. Add the three ceilings.
-3. Add exact truncation messages and resume lines.
-4. Add empty-file, EOF, BOM, CRLF, and dangerous-path handling.
-5. Add the per-agent observation ledger.
-6. Guard `writeFile`, `editFile`, and `batchWrite`.
-7. Add deduplication.
-8. Add filename repair.
-9. Add format-specific handling for binary files, PDFs, images, and notebooks.
-10. Add structured result metadata if provider conversions can preserve it.
+1. Streaming reads with safe cross-chunk decoding.
+2. The three independent ceilings.
+3. Exact truncation messages with computed resume lines.
+4. Empty-file, past-EOF, BOM/CRLF normalization, dangerous-path blocking.
+5. Binary/PDF/SVG classification messages (no attachments).
+6. Structured result metadata alongside rendered text.
+
+**Task 2 — ledger + guards; blocked on the never-read policy above; requires the `allTools` singleton → factory refactor:**
+
+1. Per-session observation ledger, wired in `run.service.ts`.
+2. Write guards in `writeFile`, `editFile`, `batchWrite` (never-read policy + version/hash checks).
+3. Filename repair with bounded suggestions.
+
+**Deferred:** deduplication (§6), image/notebook attachments (§8), input aliases (§9).
 
 ## 12. Focused tests
 
@@ -317,15 +312,16 @@ Extend `apps/server/tests/tools.test.ts`, or add a focused filesystem-tool test 
 - the line ceiling returns the exact next `startLine`;
 - the byte ceiling returns the exact next `startLine`;
 - a long line is visibly truncated without invalid UTF-8;
+- a multi-byte UTF-8 character straddling the byte-ceiling chunk boundary is not split and the resume point names the correct next line;
 - CRLF input is normalized and line numbers remain correct;
 - a UTF-8 BOM is removed from displayed content;
-- unchanged identical reads return the deduplication stub;
-- a changed file invalidates the observation and deduplication record;
+- a changed file invalidates the stored observation (hash/mtime mismatch);
 - a partial read prevents full-file `writeFile`;
 - a partial read prevents unsafe `batchWrite` replacement;
 - a covered, unchanged exact region can be edited safely;
 - an unchanged file with an ambiguous edit is rejected;
 - `/dev/zero` and similar special files are blocked;
+- a symlink resolving outside the workspace root is rejected;
 - missing filenames produce bounded `did you mean?` suggestions;
 - PDFs and binary files return actionable classification messages;
 - base64 output is bounded;
@@ -352,12 +348,11 @@ Do not run `run-all-tests.ts` or the full suite unless explicitly requested.
 - [ ] Identical unchanged reads are deduplicated with self-expiring state.
 - [ ] Filename normalization and bounded suggestions are implemented.
 - [ ] Reads are streamed and stop at the first ceiling.
-- [ ] Images, notebooks, SVG, PDFs, and binary files have defined behavior.
+- [ ] SVG, PDF, and binary files have defined v1 behavior; images/notebooks classified with metadata (attachments deferred).
 - [ ] Dangerous paths are blocked before I/O.
 - [ ] BOM and line endings are normalized.
 - [ ] UTF-8 characters are not split during truncation.
 - [ ] Line numbers are 1-indexed and match `cat -n`.
-- [ ] Common parameter aliases are supported where needed.
 - [ ] Numeric coercion is strict.
 - [ ] Focused tests cover all safety and recovery behavior.
 
