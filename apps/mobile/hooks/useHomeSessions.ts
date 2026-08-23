@@ -1,5 +1,4 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
-import { useShallow } from "zustand/react/shallow";
 import {
   useCreateSession,
   useDeleteSession,
@@ -12,9 +11,45 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import type { SessionHeader } from "@console/types";
 import { useAppStore, useChatStore } from "../stores";
+import type { ChatStoreState } from "../stores/useChatStore";
 import { useProjectBranches } from "./useProjectBranches";
 import { folderName } from "../utils";
 import { draftPreview, isDraftSession } from "../stores/chat/draft";
+
+type DraftSummaries = Record<string, { preview: string; draftUpdatedAt?: number }>;
+
+function draftSummariesEqual(a: DraftSummaries, b: DraftSummaries): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const k of aKeys) {
+    const av = a[k];
+    const bv = b[k];
+    if (!bv) return false;
+    if (av.preview !== bv.preview) return false;
+    if (av.draftUpdatedAt !== bv.draftUpdatedAt) return false;
+  }
+  return true;
+}
+
+// Cached selector — returns the same DraftSummaries reference when the
+// visible preview hasn't changed, so React's useSyncExternalStore sees a
+// stable snapshot and doesn't warn "getSnapshot should be cached".
+let cachedDrafts: DraftSummaries = {};
+function selectDraftSummaries(s: ChatStoreState): DraftSummaries {
+  const next: DraftSummaries = {};
+  for (const [id, state] of Object.entries(s.sessions)) {
+    if (state.messages.length === 0 && isDraftSession(state)) {
+      next[id] = {
+        preview: draftPreview(state, 32),
+        draftUpdatedAt: state.draftUpdatedAt,
+      };
+    }
+  }
+  if (draftSummariesEqual(cachedDrafts, next)) return cachedDrafts;
+  cachedDrafts = next;
+  return next;
+}
 
 export interface GroupedProjectSection {
   projectId: string | null;
@@ -68,20 +103,9 @@ export function useHomeSessions() {
   // Returns primitives (preview text + timestamp) instead of full state objects
   // so Home doesn't re-render on unrelated draft state changes (running flag,
   // streaming, etc.) — only when the visible preview actually changes.
-  const draftSummaries = useChatStore(
-    useShallow((s) => {
-      const drafts: Record<string, { preview: string; draftUpdatedAt?: number }> = {};
-      for (const [id, state] of Object.entries(s.sessions)) {
-        if (state.messages.length === 0 && isDraftSession(state)) {
-          drafts[id] = {
-            preview: draftPreview(state, 32),
-            draftUpdatedAt: state.draftUpdatedAt,
-          };
-        }
-      }
-      return drafts;
-    }),
-  );
+  // The selector is cached (returns same ref when equal) to satisfy
+  // useSyncExternalStore's "getSnapshot should be cached" invariant.
+  const draftSummaries = useChatStore(selectDraftSummaries);
 
   // Build DRAFT section for never-sent / unsent drafts (0 messages but has input)
   const draftSection = useMemo<GroupedProjectSection | null>(() => {
