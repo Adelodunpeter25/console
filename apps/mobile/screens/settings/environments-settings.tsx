@@ -65,7 +65,7 @@ export function EnvironmentsSettings({ onBack }: { onBack?: () => void }) {
         key={env.id}
         onPress={() => setEditing(env.id)}
         style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-        className="flex-row items-center rounded-xl px-3 py-3 mb-1"
+        className="flex-row items-center rounded-xl px-3 py-2 mb-0.5"
       >
         <View
           className="w-2 h-2 rounded-full mr-3"
