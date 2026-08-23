@@ -77,33 +77,57 @@ Reworks/replaces the endpoint editor in `connection-settings.tsx`:
 
 - List of environments: name, URL, status dot (green/red/gray from last probe),
   chevron to detail; tap row opens detail.
-- `+` button → add form: name, URL, "Test connection" button (inline ok/fail feedback,
-  existing iconography `CheckCircle2` / `XCircle` / `LoaderCircle`).
-- Save requires a passed test unless the user confirms saving untested.
+- `+` button → opens `EnvironmentEditorScreen` in **create mode**.
 
-### 5.2 Environment detail screen
+### 5.2 Environment editor — one screen, two modes
+(`screens/settings/environment-editor-screen.tsx`)
 
-Same form pre-filled, plus: "Set as active", "Test connection", "Delete"
-(delete disabled for the active env while it is the only one).
+A single screen serves both creating and editing; it takes a `mode: "create" | "edit"`
+(+ optional `envId`) prop/route param instead of duplicating a form:
 
-### 5.3 Home-screen switcher
+- **Create mode**: empty form (name, URL), primary action "Save".
+- **Edit mode**: form pre-filled from the store, primary action "Save changes",
+  plus "Set as active" and "Delete" (delete disabled for the active env while it is the
+  only one).
+- Shared internal states the screen moves through:
+  - `idle` — editing fields;
+  - `testing` — connection probe in flight (`LoaderCircle`);
+  - `test-ok` / `test-fail` — probe result with URL + status (`CheckCircle2` / `XCircle`),
+    re-entering `idle` on any field change;
+  - `saving` — persisting to the store.
+- "Test connection" button available in both modes (tests the currently edited URL,
+  not the stored one). Save requires a passed test unless the user confirms saving
+  untested.
 
-- `ScreenHeader` gains an optional `showEnvSwitcher` action (server icon next to the
-  settings gear, `home-screen.tsx:106`).
-- Opens the existing shared bottom sheet (`components/common/shared-bottom-sheet.tsx`)
-  listing environments: name + URL host + status dot; current env highlighted.
-- Tapping another env: `confirmAlert("Switch environment?", "...clears cached chats")`
+### 5.3 Home-screen switcher — `components/environments/environment-switcher.tsx`
+
+A dedicated component, not inline wiring in the home screen:
+
+- Renders inside the existing shared bottom sheet container
+  (`components/common/shared-bottom-sheet.tsx`); owns its open/close state via a prop or
+  the shared sheet's controller, matching how other sheets (model picker, approval mode)
+  are driven.
+- Content: environment list rows — status dot, name, URL host, check mark on the
+  current env; trailing "+" row that navigates to `EnvironmentEditorScreen`
+  in create mode.
+- Row tap on another env: `confirmAlert("Switch environment?", "...clears cached chats")`
   → `activateEnvironment(id)` → close sheet, stay on home (session list refetches).
+- `ScreenHeader` gains an optional `showEnvSwitcher` action (server icon next to the
+  settings gear, `home-screen.tsx:106`) that opens this sheet.
 
 ## 6. File changes
 
 - `apps/mobile/utils/url.ts` (new) — shared `normalizeBackendUrl`.
 - `apps/mobile/stores/useEnvironmentsStore.ts` (new) — model + actions above.
+- `apps/mobile/components/environments/environment-switcher.tsx` (new) — bottom-bar
+  switcher sheet component (§5.3).
 - `apps/mobile/hooks/useServerConnection.ts` — extract `resetServerState()` +
   normalization; delegate storage to the environments store; keep its public API intact
   for existing callers.
 - `apps/mobile/screens/settings/environments-settings.tsx` (new) — list + add.
-- `apps/mobile/screens/settings/environment-detail-screen.tsx` (new) — edit/test/delete.
+- `apps/mobile/screens/settings/environment-editor-screen.tsx` (new) — single
+  create/edit editor with `mode` prop and `idle/testing/test-ok/test-fail/saving`
+  states (§5.2).
 - `apps/mobile/screens/settings/connection-settings.tsx` — becomes a thin wrapper or is
   replaced by the environments screen in `settings-screen.tsx`.
 - `apps/mobile/components/layout/screen-header.tsx` + `home-screen.tsx` — env-switcher
