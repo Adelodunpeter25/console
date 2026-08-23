@@ -79,6 +79,27 @@ fsRoutes.post("/pick-file", async (c) => {
 });
 
 /**
+ * GET /api/fs/entries — List all entries recursively for building a file tree.
+ * Query: path=<project root>, depth=<max depth, default 6>, hidden=<include dotfiles>
+ */
+fsRoutes.get("/entries", async (c) => {
+  const dirPath = c.req.query("path");
+  if (!dirPath) {
+    return c.json({ success: false, error: "Query parameter 'path' is required." }, 400);
+  }
+  const maxDepth = Number.parseInt(c.req.query("depth") || "6", 10);
+  const showHidden = c.req.query("hidden") === "true";
+
+  try {
+    const entries = await fsService.listAllEntries(dirPath, maxDepth, showHidden);
+    return c.json({ success: true, data: entries });
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return c.json({ success: false, error: errorMsg }, 400);
+  }
+});
+
+/**
  * GET /api/fs/tree — Return structured directory tree summary.
  */
 fsRoutes.get("/tree", async (c) => {

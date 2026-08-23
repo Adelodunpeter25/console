@@ -94,6 +94,87 @@ export class FsService {
   }
 
   /**
+   * List all file and directory entries under a project path recursively.
+   * Returns a flat list (like T3's ProjectEntry[]) for building a client-side
+   * file tree. Used by the mobile file browser for search and full-tree views.
+   */
+  async listAllEntries(
+    targetPath: string,
+    maxDepth = 6,
+    showHidden = false,
+  ): Promise<FsTreeEntry[]> {
+    const resolvedRoot = path.resolve(targetPath);
+    const result: FsTreeEntry[] = [];
+
+    const gitStatusMap = new Map<string, GitFileStatus>();
+    try {
+      const gitService = new GitService();
+      const gitStatusSummary = await gitService.getGitStatus(resolvedRoot);
+      for (const f of gitStatusSummary.files) {
+        // gitService returns absolute paths or relative? normalize to absolute
+        const abs = path.isAbsolute(f.path) ? f.path : path.join(resolvedRoot, f.path);
+        gitStatusMap.set(abs, f.status);
+      }
+    } catch {
+      // not a git repo
+    }
+
+    async function walk(currentPath: string, depth: number): Promise<void> {
+      if (depth > maxDepth) return;
+      let dirEntries: import("node:fs").Dirent[];
+      try {
+        dirEntries = await fs.readdir(currentPath, { withFileTypes: true });
+      } catch {
+        return;
+      }
+
+      for (const entry of dirEntries) {
+        if (!showHidden && entry.name.startsWith(".")) continue;
+        // Skip massive ignored dirs for performance (like T3 does via searchRanking)
+        if (!showHidden && (entry.name === "node_modules" || entry.name === ".git")) {
+          // Still record the directory itself so it appears in the tree
+          const dirPath = path.join(currentPath, entry.name);
+          result.push({
+            name: entry.name,
+            path: dirPath,
+            isDir: true,
+            gitStatus: gitStatusMap.get(dirPath),
+          });
+          continue;
+        }
+
+        const entryPath = path.join(currentPath, entry.name);
+        const isDir = entry.isDirectory();
+
+        let size: number | undefined;
+        if (!isDir) {
+          try {
+            const stat = await fs.stat(entryPath);
+            size = stat.size;
+          } catch {
+            // ignore
+          }
+        }
+
+        result.push({
+          name: entry.name,
+          path: entryPath,
+          isDir,
+          size,
+          gitStatus: gitStatusMap.get(entryPath),
+        });
+
+        if (isDir) {
+          await walk(entryPath, depth + 1);
+        }
+      }
+    }
+
+    await walk(resolvedRoot, 1);
+    return result;
+  }
+
+  /**
    * Read file content with line range support.
    */
   async readFileContent(filePath: string, startLine?: number, endLine?: number): Promise<string> {
