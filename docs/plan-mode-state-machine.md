@@ -31,6 +31,7 @@ agent implements (full-access) and flips plan status frontmatter to done
 - Read-tier tools: allowed (unchanged).
 - Write-tier tools (`writeFile`, `editFile`, `batchWrite`): auto-allowed only when the resolved target path is inside `<cwd>/.agents/plans/`; anywhere else -> the existing `permissionRequest` prompt.
 - `bash` (exec tier): prompts for permission, as today.
+- `subagent` (read tier): allowed, but delegation must not escape plan-mode. When the parent's mode getter resolves to `plan-mode`, the spawned child loop runs with `plan-mode` + the same `plansDir` instead of the hardcoded `accept-edits`; reading the getter at spawn time means a mid-run escalation also propagates to later-spawned children. All other parent modes keep today's behavior.
 
 ## 4. Plan artifact
 
@@ -50,7 +51,7 @@ updated_at: 2026-08-18T12:00:00Z
 
 Body: objective, scope/non-goals, files to change, implementation steps, risks, validation/test commands, open questions.
 
-The agent updates `status` to `done` itself when the work is finished.
+The agent updates `status` to `approved` immediately after receiving "proceed" (before any implementation step), and to `done` when the work is finished. `status` is advisory metadata: the harness neither enforces nor validates transitions.
 
 ## 5. Question tool
 
@@ -79,10 +80,12 @@ When implementation is finished the agent edits the plan file and sets `status: 
 - `apps/server/agent/src/service/types.ts` — `AgentLoopConfig.approvalMode` accepts `ApprovalMode | (() => ApprovalMode)`; add `plansDir`.
 - `apps/server/agent/src/service/tool-executor.ts` — resolve the mode getter per call; pass `plansDir` into `resolveApproval`.
 - `apps/server/agent/src/service/agent.ts` — `run()` passes an `approvalMode` getter so mid-run `setApprovalMode` takes effect.
+- `apps/server/agent/src/tools/subagent.ts` — accept the parent's `approvalMode` getter + `plansDir`; when the parent resolves to `plan-mode`, spawn child loops with `plan-mode` + `plansDir` (replacing the hardcoded `accept-edits` in that case) so delegation cannot bypass the write policy.
 - `apps/server/api/src/services/run.service.ts` — compute `plansDir`, wire the getter + `plansDir`, escalate in the ask handler, emit `planApproved`.
-- `apps/server/agent/src/systemprompt/builder.ts` — rewrite plan-mode instructions (plan-dir writes, frontmatter convention, proceed/reject question, mark done).
+- `apps/server/agent/src/systemprompt/builder.ts` — rewrite plan-mode instructions (plan-dir writes, frontmatter convention, proceed/reject question, mark `approved` on proceed, mark `done` on completion).
 
 ## 9. Tests
 
 - Extend `apps/server/tests/permissions.test.ts`: plan-mode write inside `plansDir` -> allow; outside -> prompt; `batchWrite` all-inside -> allow / any-outside -> prompt.
 - New `apps/server/tests/plan-mode-flow.test.ts`: mode getter escalation — `ask` handler resolving `"proceed"` switches to `full-access` and a subsequent write outside `plansDir` runs without a permission prompt; `"reject"`/custom answers do not escalate.
+- Subagent containment (in `plan-mode-flow.test.ts`): with the parent in plan-mode, a spawned child attempting `writeFile` outside `plansDir` gets a permission prompt, not a silent allow; after escalation the same spawn runs `accept-edits`.
