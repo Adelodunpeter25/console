@@ -3,6 +3,7 @@ import type { ProjectInfo, SessionHeader, UpdateSessionDto } from "@console/type
 import { sessionService, fsService, sessionKeys, fsKeys } from "@console/api";
 import { queryClient } from "../query-client";
 import { useSessionStatusStore } from "./useSessionStatusStore";
+import { useAppStore } from "./useAppStore";
 
 interface ProjectState {
   projects: ProjectInfo[];
@@ -57,6 +58,11 @@ export const useProjectStore = create<ProjectState>((set) => ({
     await fsService.deleteProject(projectId);
     set((s) => ({ projects: s.projects.filter((p) => p.id !== projectId) }));
     queryClient.invalidateQueries({ queryKey: fsKeys.projects }).catch(() => {});
+    // A deleted project must never keep a dangling selection (the terminal
+    // would otherwise show a stale working directory).
+    if (useAppStore.getState().selectedProjectId === projectId) {
+      useAppStore.getState().setSelectedProjectId(null);
+    }
   },
 
   loadSessions: async () => {

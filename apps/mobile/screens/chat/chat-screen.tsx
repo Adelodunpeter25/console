@@ -4,7 +4,11 @@ import { SquareTerminal } from "lucide-react-native";
 import type { FlashListRef } from "@shopify/flash-list";
 import type { AgentMessage } from "@console/types";
 import { useChatStream, useAbort } from "../../hooks";
-import { useAppStore } from "../../stores";
+import {
+  useAppStore,
+  useSessionStore,
+  useProjectStore,
+} from "../../stores";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import {
   ChatMessageList,
@@ -21,14 +25,29 @@ export function ChatScreen() {
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
+  const setSelectedProjectId = useAppStore((state) => state.setSelectedProjectId);
 
-  // Header action: jump to the terminal screen (see screenshot ref — single
-  // icon button on the right edge instead of T3's three-button pill).
+  // Header action: jump to the terminal screen scoped to this session's project,
+  // so the shell opens in the session's cwd instead of an arbitrary fallback.
+  const openTerminal = useCallback(() => {
+    const session = selectedSessionId
+      ? useSessionStore.getState().getSession(selectedSessionId)
+      : undefined;
+    const cwd = session?.sessionCwd;
+    const match = cwd
+      ? useProjectStore
+          .getState()
+          .projects.find((p) => p.path === cwd || p.path.endsWith(cwd))
+      : undefined;
+    if (match) setSelectedProjectId(match.id);
+    setActiveTab("terminal");
+  }, [selectedSessionId, setSelectedProjectId, setActiveTab]);
+
   const headerTerminalButton = (
     <Pressable
       className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center"
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-      onPress={() => setActiveTab("terminal")}
+      onPress={openTerminal}
     >
       <SquareTerminal size={18} color="#ffffff" />
     </Pressable>

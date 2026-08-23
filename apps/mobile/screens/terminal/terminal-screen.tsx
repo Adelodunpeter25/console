@@ -30,6 +30,7 @@ export function TerminalScreen() {
   const previousTab = useAppStore((state) => state.previousTab);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
   const selectedProjectId = useAppStore((state) => state.selectedProjectId);
+  const setSelectedProjectId = useAppStore((state) => state.setSelectedProjectId);
   const projects = useProjectStore((state) => state.projects);
 
   const [terminalId, setTerminalId] = useState<string | null>(null);
@@ -41,8 +42,13 @@ export function TerminalScreen() {
   // Drop a pending debounced PTY resize when the screen unmounts.
   useEffect(() => () => clearTimeout(resizeTimer.current), []);
 
-  const project =
-    projects.find((p) => p.id === selectedProjectId) ?? (projects.length > 0 ? projects[0] : null);
+  // Strict lookup only: a dangling/deleted selection must never silently open
+  // another project's working directory.
+  const project = selectedProjectId
+    ? projects.find((p) => p.id === selectedProjectId) ?? null
+    : null;
+
+  const needsProjectPick = !project && projects.length > 0;
 
   // Back returns to wherever the user came from (never terminal itself).
   const goBack = useCallback(() => {
@@ -168,7 +174,7 @@ export function TerminalScreen() {
 
   const statusBanner = (() => {
     if (spawnError) return `Failed to start terminal: ${spawnError}`;
-    if (!project) return "No project selected — add a project first.";
+    if (!project) return projects.length === 0 ? "No projects yet — add a project first." : null;
     if (term?.status === "exited") return "Session ended.";
     if (term?.status === "error") return `Session error: ${term.error ?? "unknown"}`;
     return null;
@@ -204,7 +210,26 @@ export function TerminalScreen() {
           the floating bar overlays the cursor row. */}
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <View className="flex-1 px-2 pb-1">
-        {!project ? null : !terminalId && !spawnError ? (
+        {needsProjectPick ? (
+          <View className="flex-1 items-center justify-center gap-2 px-6">
+            <Text className="text-xs text-foreground-muted">
+              Select a project for this terminal
+            </Text>
+            {projects.map((p) => (
+              <Pressable
+                key={p.id}
+                className="w-full max-w-sm rounded-lg bg-card border border-border px-4 py-2.5 gap-0.5"
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                onPress={() => setSelectedProjectId(p.id)}
+              >
+                <Text className="text-sm font-semibold text-foreground">{p.name}</Text>
+                <Text className="text-xs font-mono text-foreground-muted" numberOfLines={1}>
+                  {p.path}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : !project ? null : !terminalId && !spawnError ? (
           <View className="flex-1 items-center justify-center gap-2">
             <ActivityIndicator />
             <Text className="text-xs text-foreground-muted">Starting shell…</Text>
