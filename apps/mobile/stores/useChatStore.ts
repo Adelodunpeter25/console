@@ -9,7 +9,7 @@ import { startNativeChatStream } from "@/utils/native-stream";
 import { useAppStore } from "./useAppStore";
 import { useSessionStore, registerSessionHasMessagesChecker } from "./useSessionStore";
 import { useProviderStore } from "./useProviderStore";
-import { chatPersistConfig } from "./chat/chat-persist";
+import { chatPersistConfig, setSuppressPersist } from "./chat/chat-persist";
 import { trimDraftAttachments } from "./chat/draft";
 import {
   updateSession,
@@ -42,6 +42,10 @@ export interface ChatStoreState {
   getSession: (sessionId: string) => ChatSessionState;
   getSnapshot: (sessionId: string) => ChatSnapshot;
 }
+
+// --- Streaming coalescing ---
+const _streamBuf: Record<string, { text: string; thinking: string }> = {};
+const _streamRaf: Record<string, ReturnType<typeof requestAnimationFrame>> = {};
 
 export const useChatStore = create<ChatStoreState>()(
   persist(
@@ -214,6 +218,7 @@ export const useChatStore = create<ChatStoreState>()(
           const baseUrl = useAppStore.getState().backendUrl ?? "";
           let hadError = false;
 
+          setSuppressPersist(true);
           startNativeChatStream(
             `chat-${sessionId}-${Date.now()}`,
             `${baseUrl}/api/sessions/${sessionId}/run`,
@@ -239,9 +244,11 @@ export const useChatStore = create<ChatStoreState>()(
                   hadError = true;
                   markError(errMsg);
                 }
+                setSuppressPersist(false);
               },
               onEnd: (aborted) => {
                 finalizeSessionRun(setSessions, sessionId, hadError && !aborted);
+                setSuppressPersist(false);
               },
             },
           );
@@ -256,6 +263,7 @@ export const useChatStore = create<ChatStoreState>()(
             markError(msg);
           }
           finalizeSessionRun(setSessions, sessionId, !isAbortError(msg));
+          setSuppressPersist(false);
         }
       },
 
@@ -290,12 +298,53 @@ export const useChatStore = create<ChatStoreState>()(
           sessions: updateSession(state.sessions, sessionId, () => createChatSessionState()),
         })),
 
-      handleEvent: (sessionId, event) =>
+      handleEvent: (sessionId, event) => {
+        if (event.type === 'modelStreamPart') {
+          // Accumulate into buffer
+          const buf = _streamBuf[sessionId] ?? { text: '', thinking: '' };
+          if (event.part?.text) buf.text += event.part.text;
+          if (event.part?.thinking) buf.thinking += event.part.thinking;
+          _streamBuf[sessionId] = buf;
+          // Cancel previous pending flush
+          if (_streamRaf[sessionId] != null) {
+            cancelAnimationFrame(_streamRaf[sessionId]!);
+          }
+          // Schedule a coalesced flush
+          _streamRaf[sessionId] = requestAnimationFrame(() => {
+            const pending = _streamBuf[sessionId];
+            if (!pending) return;
+            delete _streamBuf[sessionId];
+            delete _streamRaf[sessionId];
+            set((state) => ({
+              sessions: updateSession(state.sessions, sessionId, (s) => ({
+                ...s,
+                streamingText: s.streamingText + pending.text,
+                streamingThinking: s.streamingThinking + pending.thinking,
+              })),
+            }));
+          });
+          return;
+        }
+        // All other events flush any pending text buffer first, then apply immediately
+        if (_streamBuf[sessionId]) {
+          if (_streamRaf[sessionId] != null) cancelAnimationFrame(_streamRaf[sessionId]!);
+          const pending = _streamBuf[sessionId]!;
+          delete _streamBuf[sessionId];
+          delete _streamRaf[sessionId];
+          set((state) => ({
+            sessions: updateSession(state.sessions, sessionId, (s) => ({
+              ...s,
+              streamingText: s.streamingText + pending.text,
+              streamingThinking: s.streamingThinking + pending.thinking,
+            })),
+          }));
+        }
         set((state) => ({
           sessions: updateSession(state.sessions, sessionId, (sessionState) =>
             applyChatEvent(sessionState, event),
           ),
-        })),
+        }));
+      },
 
       getSession: (sessionId) => get().sessions[sessionId] ?? EMPTY_CHAT_SESSION,
 

@@ -1,10 +1,38 @@
-import { createJSONStorage, type PersistOptions } from "zustand/middleware";
+import { createJSONStorage, type StateStorage, type PersistOptions } from "zustand/middleware";
 import type { ImageAttachment } from "@console/types";
 import type { ChatSessionState } from "@/types";
 import { createChatSessionState } from "@/types/chat-state";
 import { mmkvZustandStorage } from "@/utils/storage";
 import { hasPersistableDraft, trimDraftAttachments } from "./draft";
 import type { ChatStoreState } from "@/stores/useChatStore";
+
+// --- Streaming persist suppression ---
+let _suppressPersist = false;
+let _pendingKey: string | null = null;
+let _pendingValue: string | null = null;
+
+/** Call with true when streaming starts, false when it ends (triggers a flush). */
+export function setSuppressPersist(suppress: boolean): void {
+  _suppressPersist = suppress;
+  if (!suppress && _pendingKey !== null && _pendingValue !== null) {
+    mmkvZustandStorage.setItem(_pendingKey, _pendingValue);
+    _pendingKey = null;
+    _pendingValue = null;
+  }
+}
+
+const debouncedStorage: StateStorage = {
+  getItem: (name) => mmkvZustandStorage.getItem(name),
+  setItem: (name, value) => {
+    if (_suppressPersist) {
+      _pendingKey = name;
+      _pendingValue = value;
+      return;
+    }
+    mmkvZustandStorage.setItem(name, value);
+  },
+  removeItem: (name) => mmkvZustandStorage.removeItem(name),
+};
 
 export const PERSIST_NAME = "console-chat-cache";
 export const PERSIST_VERSION = 1;
@@ -56,7 +84,7 @@ function sanitizePersistedSessions(persisted: unknown): Record<string, ChatSessi
 export const chatPersistConfig: PersistOptions<ChatStoreState, ChatStorePersistedState> = {
   name: PERSIST_NAME,
   version: PERSIST_VERSION,
-  storage: createJSONStorage(() => mmkvZustandStorage),
+  storage: createJSONStorage(() => debouncedStorage),
   // Payloads from older/unknown versions are re-validated field-by-field by
   // merge below; nothing to structurally migrate yet.
   migrate: (persisted) => persisted as ChatStorePersistedState,

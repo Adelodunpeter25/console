@@ -337,7 +337,18 @@ export const AssistantBubble = memo(function AssistantBubble({
 
       {thinkingContent ? <ThinkingBlock text={thinkingContent} isStreaming={isStreaming} /> : null}
 
-      {textContent ? <MarkdownRenderer content={textContent} /> : null}
+      {textContent ? (
+        isStreaming ? (
+          <Text
+            className="text-foreground text-[15px] leading-[22px]"
+            selectable
+          >
+            {textContent}
+          </Text>
+        ) : (
+          <MarkdownRenderer content={textContent} />
+        )
+      ) : null}
 
       {isStreaming && textContent ? (
         <View className="mt-1 flex-row items-center gap-1.5">
