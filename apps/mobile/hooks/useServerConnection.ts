@@ -33,6 +33,7 @@ export function useServerConnection() {
   useEffect(() => {
     if (activeEnv) {
       configureConsoleApi({ baseUrl: activeEnv.url });
+      useAppStore.getState().setBackendUrl(activeEnv.url);
     }
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
