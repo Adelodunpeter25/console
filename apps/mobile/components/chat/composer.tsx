@@ -172,7 +172,7 @@ export function Composer({
               style={styles.input}
               value={value}
               onChangeText={onChangeText}
-              placeholder="Ask the repo agent, or run a command…  (/ for commands, @ for files)"
+              placeholder="Ask anything…"
               placeholderTextColor={theme.colors.text.muted}
               multiline
               textAlignVertical={isMultiline ? "top" : "center"}

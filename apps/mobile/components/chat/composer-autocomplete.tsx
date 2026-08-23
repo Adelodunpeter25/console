@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, ScrollView } from "react-native";
-import { Command, FileText, Folder, Loader2 } from "lucide-react-native";
+import { Command, Folder, Loader2 } from "lucide-react-native";
 import type { FileSearchResult, SlashCommandInfo } from "@console/types";
 import { assistService } from "@console/api";
+import { FileIcon } from "@/components/icons/file-icon";
 import { theme } from "../../styles/theme";
 
 export interface SlashSuggestion {
@@ -176,7 +177,7 @@ export function ComposerAutocomplete({ value, selectionStart, sessionId, onPick 
               {s.item.isDir ? (
                 <Folder size={13} color={theme.colors.text.muted} />
               ) : (
-                <FileText size={13} color={theme.colors.text.muted} />
+                <FileIcon filename={s.item.relativePath} size={13} />
               )}
               <Text className="text-xs font-mono text-foreground flex-1" numberOfLines={1}>
                 {s.item.relativePath}

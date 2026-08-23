@@ -1,7 +1,8 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, View, Text } from "react-native";
 import { FlashList } from "@shopify/flash-list";
-import { ChevronDown, ChevronRight, Folder, FolderOpen, File as FileIcon } from "lucide-react-native";
+import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react-native";
+import { FileIcon } from "@/components/icons/file-icon";
 import { theme } from "../../styles/theme";
 import type { FsTreeEntry } from "@console/types";
 import {
@@ -64,7 +65,7 @@ const FileTreeRow = memo(function FileTreeRow(props: {
           <Folder size={17} color={theme.colors.text.secondary} />
         )
       ) : (
-        <FileIcon size={17} color={theme.colors.text.muted} />
+        <FileIcon filename={node.name} size={17} />
       )}
 
       <Text
