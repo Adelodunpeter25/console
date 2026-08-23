@@ -7,3 +7,4 @@ export * from "./model-favorites.service";
 export * from "./config.service";
 export * from "./run.service";
 export * from "./terminal.service";
+export * from "./assist.service";
