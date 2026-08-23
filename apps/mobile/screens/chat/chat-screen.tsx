@@ -1,14 +1,10 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { View, Keyboard, BackHandler, Pressable } from "react-native";
-import { SquareTerminal } from "lucide-react-native";
+import { SquareTerminal, Folder } from "lucide-react-native";
 import type { FlashListRef } from "@shopify/flash-list";
 import type { AgentMessage } from "@console/types";
 import { useChatStream, useAbort } from "@/hooks";
-import {
-  useAppStore,
-  useSessionStore,
-  useProjectStore,
-} from "@/stores";
+import { useAppStore, useSessionStore, useProjectStore } from "@/stores";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import {
   ChatMessageList,
@@ -26,31 +22,57 @@ export function ChatScreen() {
   const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
   const selectedSessionId = useAppStore((state) => state.selectedSessionId);
   const setSelectedProjectId = useAppStore((state) => state.setSelectedProjectId);
+  const projects = useProjectStore((state) => state.projects);
+  const sessionCwd = useSessionStore((state) =>
+    selectedSessionId ? state.sessions[selectedSessionId]?.sessionCwd ?? null : null,
+  );
 
-  // Header action: jump to the terminal screen scoped to this session's project,
-  // so the shell opens in the session's cwd instead of an arbitrary fallback.
+  const findProjectForCwd = useCallback(
+    (cwd: string | null) => {
+      if (!cwd) return undefined;
+      return projects.find((p) => p.path === cwd || cwd.startsWith(p.path + "/") || p.path.endsWith(cwd));
+    },
+    [projects],
+  );
+
   const openTerminal = useCallback(() => {
-    const session = selectedSessionId
-      ? useSessionStore.getState().getSession(selectedSessionId)
-      : undefined;
-    const cwd = session?.sessionCwd;
-    const match = cwd
-      ? useProjectStore
-          .getState()
-          .projects.find((p) => p.path === cwd || p.path.endsWith(cwd))
-      : undefined;
+    const match = findProjectForCwd(sessionCwd);
     if (match) setSelectedProjectId(match.id);
     setActiveTab("terminal");
-  }, [selectedSessionId, setSelectedProjectId, setActiveTab]);
+  }, [sessionCwd, findProjectForCwd, setSelectedProjectId, setActiveTab]);
 
-  const headerTerminalButton = (
-    <Pressable
-      className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center"
-      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-      onPress={openTerminal}
-    >
-      <SquareTerminal size={18} color="#ffffff" />
-    </Pressable>
+  const openFiles = useCallback(() => {
+    const match = findProjectForCwd(sessionCwd);
+    if (match) setSelectedProjectId(match.id);
+    setActiveTab("files");
+  }, [sessionCwd, findProjectForCwd, setSelectedProjectId, setActiveTab]);
+
+  const headerRightActions = useMemo(
+    () => (
+      <View className="flex-row items-center gap-2">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open file explorer"
+          hitSlop={8}
+          className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center"
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          onPress={openFiles}
+        >
+          <Folder size={18} color="#ffffff" />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open terminal"
+          hitSlop={8}
+          className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center"
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          onPress={openTerminal}
+        >
+          <SquareTerminal size={18} color="#ffffff" />
+        </Pressable>
+      </View>
+    ),
+    [openFiles, openTerminal],
   );
   const listRef = useRef<FlashListRef<AgentMessage>>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
@@ -106,7 +128,7 @@ export function ChatScreen() {
 
   return (
     <View className="flex-1 bg-screen">
-      <ScreenHeader title={stream.chatTitle} onBack={handleBackToHome} rightAction={headerTerminalButton} />
+      <ScreenHeader title={stream.chatTitle} onBack={handleBackToHome} rightAction={headerRightActions} />
 
       {stream.isLoadingMessages && !hasMessages ? (
         <ChatScreenSkeleton />
