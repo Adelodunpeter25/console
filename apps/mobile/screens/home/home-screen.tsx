@@ -12,6 +12,7 @@ import {
   type ActionSheetItem,
 } from "@/components/context-menu/session-action-sheet";
 import { useHomeSessions } from "@/hooks";
+import { useAppStore } from "@/stores";
 import type { SessionHeader } from "@console/types";
 import { theme } from "@/styles/theme";
 
@@ -108,7 +109,15 @@ export function HomeScreen() {
         title="Console"
         showSettings
         onSettingsPress={navigateToSettings}
-        headerActions={<EnvironmentSwitcher />}
+        headerActions={
+          <EnvironmentSwitcher
+            onCreateEnvironment={() => {
+              const app = useAppStore.getState();
+              app.setPendingConnectionSection(true);
+              app.setActiveTab("settings");
+            }}
+          />
+        }
       />
 
       <ScrollView

@@ -4,16 +4,16 @@ export type MobileTab = "home" | "chat" | "settings" | "terminal";
 
 interface AppState {
   activeTab: MobileTab;
-  /** Tab shown before the current one — used by screens whose "back" should
-   * return wherever the user came from (e.g. terminal entered from chat). */
   previousTab: MobileTab | null;
   selectedProjectId: string | null;
   selectedSessionId: string | null;
   backendUrl: string | null;
+  pendingConnectionSection: boolean;
   setActiveTab: (tab: MobileTab) => void;
   setSelectedProjectId: (id: string | null) => void;
   setSelectedSessionId: (id: string | null) => void;
   setBackendUrl: (url: string | null) => void;
+  setPendingConnectionSection: (pending: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -22,8 +22,7 @@ export const useAppStore = create<AppState>((set) => ({
   selectedProjectId: null,
   selectedSessionId: null,
   backendUrl: null,
-  // Remember the outgoing tab so screens can navigate back to where the user
-  // actually came from (self-transitions don't overwrite it).
+  pendingConnectionSection: false,
   setActiveTab: (activeTab) =>
     set((state) =>
       state.activeTab === activeTab
@@ -33,4 +32,5 @@ export const useAppStore = create<AppState>((set) => ({
   setSelectedProjectId: (selectedProjectId) => set({ selectedProjectId }),
   setSelectedSessionId: (selectedSessionId) => set({ selectedSessionId }),
   setBackendUrl: (backendUrl) => set({ backendUrl }),
+  setPendingConnectionSection: (pendingConnectionSection) => set({ pendingConnectionSection }),
 }));

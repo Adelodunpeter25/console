@@ -24,7 +24,18 @@ const SECTION_META: Record<
 
 export function SettingsScreen() {
   const setActiveTab = useAppStore((state) => state.setActiveTab);
+  const pendingConnectionSection = useAppStore((state) => state.pendingConnectionSection);
+  const setPendingConnectionSection = useAppStore((state) => state.setPendingConnectionSection);
   const [section, setSection] = useState<SettingsSection | null>(null);
+
+  // If the environment switcher's "Add environment" button sent us here, jump
+  // straight into the Connection sub-screen and clear the flag.
+  useEffect(() => {
+    if (pendingConnectionSection) {
+      setSection("connection");
+      setPendingConnectionSection(false);
+    }
+  }, [pendingConnectionSection, setPendingConnectionSection]);
 
   useEffect(() => {
     const onBackPress = () => {

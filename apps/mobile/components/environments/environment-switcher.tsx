@@ -98,11 +98,8 @@ export function EnvironmentSwitcher({ onCreateEnvironment }: EnvironmentSwitcher
 
           <Pressable
             onPress={() => {
-              if (onCreateEnvironment) {
-                onCreateEnvironment();
-              } else {
-                sheetRef.current?.dismiss();
-              }
+              sheetRef.current?.dismiss();
+              onCreateEnvironment?.();
             }}
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             className="flex-row items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-3.5 mt-1"
