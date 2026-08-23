@@ -44,37 +44,40 @@ export function useServerConnection() {
     }
   }, [activeEnv?.id]);
 
-  const saveConnection = useCallback(() => {
-    const url = normalizeBackendUrl(inputUrl);
-    if (!url) {
-      confirmAlert("Invalid URL", "Backend server endpoint cannot be empty.");
-      return;
-    }
-    setIsSaving(true);
-    try {
-      const store = useEnvironmentsStore.getState();
-      if (store.activeId && store.environments.some((e) => e.id === store.activeId)) {
-        // Editing the current environment's URL in place.
-        const previous = store.environments.find((e) => e.id === store.activeId);
-        if (previous && previous.url !== url) {
-          resetServerState();
-        }
-        store.updateEnvironment(store.activeId, { url });
-      } else {
-        store.addEnvironment("Default", url);
+  const saveConnection = useCallback(
+    (name?: string) => {
+      const url = normalizeBackendUrl(inputUrl);
+      if (!url) {
+        confirmAlert("Invalid URL", "Backend server endpoint cannot be empty.");
+        return;
       }
-      setInputUrl(url);
-      confirmAlert("Success", "Console backend server endpoint updated successfully!");
-    } catch (err) {
-      console.error("Failed to save endpoint URL:", err);
-      confirmAlert(
-        "Error",
-        `Failed to save endpoint URL: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    } finally {
-      setIsSaving(false);
-    }
-  }, [inputUrl]);
+      setIsSaving(true);
+      try {
+        const store = useEnvironmentsStore.getState();
+        if (store.activeId && store.environments.some((e) => e.id === store.activeId)) {
+          // Editing the current environment's URL in place.
+          const previous = store.environments.find((e) => e.id === store.activeId);
+          if (previous && previous.url !== url) {
+            resetServerState();
+          }
+          store.updateEnvironment(store.activeId, { url });
+        } else {
+          store.addEnvironment(name?.trim() || "Default", url);
+        }
+        setInputUrl(url);
+        confirmAlert("Success", "Console backend server endpoint updated successfully!");
+      } catch (err) {
+        console.error("Failed to save endpoint URL:", err);
+        confirmAlert(
+          "Error",
+          `Failed to save endpoint URL: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [inputUrl],
+  );
 
   const testConnection = useCallback(async () => {
     const url = normalizeBackendUrl(inputUrl);
@@ -94,7 +97,7 @@ export function useServerConnection() {
   const disconnect = useCallback(() => {
     confirmAlert(
       "Disconnect Backend",
-      "Are you sure you want to clear the saved backend URL and reset connection data?",
+      "Are you sure you want to disconnect? This removes all environments and connection data, like a clean install.",
       [
         { text: "Cancel", style: "cancel" },
         {

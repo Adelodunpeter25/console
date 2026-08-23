@@ -83,6 +83,12 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
 
   addEnvironment: (name, url) => {
     const state = get();
+    // Same normalized URL as an existing environment -> not a duplicate.
+    const existing = state.environments.find((e) => e.url === url);
+    if (existing) {
+      get().activateEnvironment(existing.id);
+      return existing;
+    }
     const previous = state.environments.find((e) => e.id === state.activeId);
     if (previous && previous.url !== url) {
       // The new environment replaces a different connected backend.
@@ -150,13 +156,15 @@ export const useEnvironmentsStore = create<EnvironmentsState>((set, get) => ({
     applyActive(env.url);
   },
 
+  /** Full reset — removes every environment and all connection config, like a
+   *  clean install. */
   deactivate: () => {
-    const state = get();
-    persist(state.environments, null, null);
+    appStorage.remove(ENVIRONMENTS_KEY);
+    appStorage.remove(BACKEND_URL_KEY);
     resetServerState();
     configureConsoleApi({ baseUrl: "" });
     useAppStore.getState().setBackendUrl(null);
-    set({ activeId: null });
+    set({ environments: [], activeId: null, probes: {} });
   },
 
   probeEnvironment: async (id) => {

@@ -1,5 +1,5 @@
 import "./global.css";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { registerRootComponent } from "expo";
 import { StatusBar } from "expo-status-bar";
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from "react-native";
@@ -26,6 +26,7 @@ import { theme } from "./styles/theme";
 function OnboardingScreen() {
   const { inputUrl, setInputUrl, saveConnection, isSaving, testConnection, testingStatus } =
     useServerConnection();
+  const [envName, setEnvName] = useState("");
 
   const insets = useSafeAreaInsets();
 
@@ -49,6 +50,19 @@ function OnboardingScreen() {
         Enter your Console server URL to connect.
       </Text>
 
+      {/* Environment name */}
+      <Text className="text-xs font-medium text-foreground-secondary mb-1.5">Name</Text>
+      <TextInput
+        value={envName}
+        onChangeText={setEnvName}
+        placeholder="My server"
+        placeholderTextColor="#71717a"
+        autoCapitalize="none"
+        autoCorrect={false}
+        className="bg-card border border-border rounded-xl px-4 py-3.5 text-foreground text-sm mb-4"
+      />
+
+      {/* Backend URL */}
       <TextInput
         value={inputUrl}
         onChangeText={setInputUrl}
@@ -61,7 +75,7 @@ function OnboardingScreen() {
       />
 
       <TouchableOpacity
-        onPress={() => saveConnection()}
+        onPress={() => saveConnection(envName)}
         disabled={isSaving || !inputUrl.trim()}
         className={`bg-foreground rounded-full py-3.5 items-center justify-center mb-3 ${
           isSaving || !inputUrl.trim() ? "opacity-50" : "active:opacity-80"
@@ -96,6 +110,7 @@ function OnboardingScreen() {
     </View>
   );
 }
+
 
 function AppRoot() {
   const { backendUrl, loading } = useServerConnection();

@@ -95,6 +95,18 @@ export function EnvironmentEditor({ mode, envId, onDone }: EnvironmentEditorProp
   };
 
   const commit = (normalized: string) => {
+    // Another environment already using this exact (normalized) URL?
+    const duplicate = useEnvironmentsStore
+      .getState()
+      .environments.find((e) => e.url === normalized && e.id !== envId);
+    if (duplicate) {
+      setStatus("idle");
+      confirmAlert(
+        "Duplicate environment",
+        `"${duplicate.name}" is already configured with ${normalized}.`,
+      );
+      return;
+    }
     setStatus("saving");
     try {
       if (mode === "edit" && envId) {
