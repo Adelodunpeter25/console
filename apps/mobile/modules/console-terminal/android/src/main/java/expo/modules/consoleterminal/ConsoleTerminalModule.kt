@@ -34,6 +34,10 @@ class ConsoleTerminalModule : Module() {
         view.autoFocus = autoFocus
       }
 
+      Prop("dismissKeyboard") { view: ConsoleTerminalView, dismissKeyboard: Double ->
+        view.dismissKeyboardRequest = dismissKeyboard
+      }
+
       Prop("appearanceScheme") { view: ConsoleTerminalView, appearanceScheme: String ->
         view.appearanceScheme = appearanceScheme
       }

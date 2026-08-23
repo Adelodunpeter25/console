@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Text, View, Pressable, BackHandler, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronLeft, Keyboard, Trash2 } from "lucide-react-native";
+import { ChevronLeft, Keyboard, KeyboardOff, Trash2 } from "lucide-react-native";
 import { KeyboardAvoidingView, useKeyboardState } from "react-native-keyboard-controller";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { useAppStore, useProjectStore, useTerminalStore } from "../../stores";
@@ -35,6 +35,7 @@ export function TerminalScreen() {
   const [terminalId, setTerminalId] = useState<string | null>(null);
   const [spawnError, setSpawnError] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState(0);
+  const [keyboardDismissRequest, setKeyboardDismissRequest] = useState(0);
   const resizeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Drop a pending debounced PTY resize when the screen unmounts.
@@ -47,6 +48,15 @@ export function TerminalScreen() {
   const goBack = useCallback(() => {
     setActiveTab(previousTab && previousTab !== "terminal" ? previousTab : "home");
   }, [previousTab, setActiveTab]);
+
+  // The keyboard button toggles: visible → dismiss+blur, hidden → focus+show.
+  const toggleKeyboard = useCallback(() => {
+    if (keyboardVisible) {
+      setKeyboardDismissRequest((n) => n + 1);
+    } else {
+      setFocusRequest((n) => n + 1);
+    }
+  }, [keyboardVisible]);
 
   // Spawn or reuse on mount (and if the selected project changes while mounted).
   useEffect(() => {
@@ -206,6 +216,7 @@ export function TerminalScreen() {
             fontSize={TERMINAL_FONT_SIZE}
             isRunning={Boolean(isRunning)}
             keyboardFocusRequest={focusRequest}
+            keyboardDismissRequest={keyboardDismissRequest}
             onInput={handleInput}
             onResize={handleResize}
           />
@@ -220,9 +231,13 @@ export function TerminalScreen() {
             <Pressable
               className="h-8 px-2.5 rounded-md bg-card border border-border items-center justify-center"
               style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-              onPress={() => setFocusRequest((n) => n + 1)}
+              onPress={toggleKeyboard}
             >
-              <Keyboard size={15} color="#a1a1aa" />
+              {keyboardVisible ? (
+                <KeyboardOff size={15} color="#a1a1aa" />
+              ) : (
+                <Keyboard size={15} color="#a1a1aa" />
+              )}
             </Pressable>
             {EXTRA_KEYS.map((key) => (
               <Pressable

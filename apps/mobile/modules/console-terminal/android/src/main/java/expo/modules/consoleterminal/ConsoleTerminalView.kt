@@ -94,6 +94,18 @@ class ConsoleTerminalView(context: Context, appContext: AppContext) : ExpoView(c
       }
     }
 
+  /** Nonce prop: bump to hide the IME and blur the hidden input (keyboard toggle).
+   * Mirrors focusRequest so JS can drive both directions. */
+  var dismissKeyboardRequest: Double = 0.0
+    set(value) {
+      val previous = field
+      field = value
+      if (value != previous && value > 0) {
+        hideKeyboard()
+        inputView.clearFocus()
+      }
+    }
+
   var backgroundColorHex: String = "#0a0a0b"
     set(value) {
       field = value

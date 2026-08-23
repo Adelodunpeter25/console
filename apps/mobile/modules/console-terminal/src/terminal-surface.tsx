@@ -32,6 +32,7 @@ export interface TerminalSurfaceProps extends ViewProps {
   readonly isRunning: boolean;
   readonly autoFocus?: boolean;
   readonly keyboardFocusRequest?: number;
+  readonly keyboardDismissRequest?: number;
   readonly theme?: TerminalTheme;
   readonly onInput: (data: string) => void;
   readonly onResize: (size: { readonly cols: number; readonly rows: number }) => void;
@@ -75,6 +76,12 @@ const FallbackTerminalSurface = memo(function FallbackTerminalSurface(
 
     return undefined;
   }, [props.keyboardFocusRequest]);
+
+  useEffect(() => {
+    if ((props.keyboardDismissRequest ?? 0) > 0) {
+      inputRef.current?.blur();
+    }
+  }, [props.keyboardDismissRequest]);
 
   return (
     <View
@@ -198,6 +205,7 @@ export const ConsoleTerminalSurface = memo(function ConsoleTerminalSurface(
           autoFocus={props.autoFocus ?? true}
           backgroundColor={theme.background}
           focusRequest={props.isRunning ? (props.keyboardFocusRequest ?? 0) : 0}
+          dismissKeyboard={props.keyboardDismissRequest ?? 0}
           foregroundColor={theme.foreground}
           mutedForegroundColor={theme.mutedForeground}
           terminalKey={props.terminalKey}
