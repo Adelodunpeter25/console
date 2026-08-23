@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Text, View, Pressable, BackHandler, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft, Keyboard, Trash2 } from "lucide-react-native";
-import { KeyboardAvoidingView, KeyboardStickyView, useKeyboardState } from "react-native-keyboard-controller";
+import { KeyboardAvoidingView, useKeyboardState } from "react-native-keyboard-controller";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { useAppStore, useProjectStore, useTerminalStore } from "../../stores";
 import { ConsoleTerminalSurface } from "../../modules/console-terminal/src/terminal-surface";
@@ -188,9 +188,10 @@ export function TerminalScreen() {
         </View>
       ) : null}
 
-      {/* Edge-to-edge Android never resizes the window for the IME, so pad the
-          terminal surface by the keyboard height; the native view then resizes
-          and the PTY reflows with the prompt kept above the keys. */}
+      {/* Edge-to-edge Android never resizes the window for the IME. The whole
+          column (surface + key bar) lives inside the avoiding view so the bar
+          sits flush on the keyboard and the PTY reflows above it — otherwise
+          the floating bar overlays the cursor row. */}
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <View className="flex-1 px-2 pb-1">
         {!project ? null : !terminalId && !spawnError ? (
@@ -210,10 +211,8 @@ export function TerminalScreen() {
           />
         ) : null}
       </View>
-      </KeyboardAvoidingView>
 
       {terminalId && isRunning ? (
-        <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
           <View
             className="flex-row items-center gap-1.5 px-2 pt-1.5 border-t border-border-subtle bg-screen"
             style={{ paddingBottom: keyboardVisible ? 6 : insets.bottom + 6 }}
@@ -236,9 +235,7 @@ export function TerminalScreen() {
               </Pressable>
             ))}
           </View>
-        </KeyboardStickyView>
       ) : terminalId && !isRunning && term ? (
-        <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
           <View
             className="flex-row items-center justify-center px-4 pt-3 border-t border-border-subtle bg-screen"
             style={{ paddingBottom: keyboardVisible ? 10 : insets.bottom + 10 }}
@@ -251,8 +248,8 @@ export function TerminalScreen() {
               <Text className="text-xs font-semibold text-background">Restart shell</Text>
             </Pressable>
           </View>
-        </KeyboardStickyView>
       ) : null}
+      </KeyboardAvoidingView>
     </View>
   );
 }
