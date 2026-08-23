@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type MobileTab = "home" | "chat" | "settings" | "terminal";
+export type MobileTab = "home" | "chat" | "settings" | "terminal" | "files";
 
 interface AppState {
   activeTab: MobileTab;

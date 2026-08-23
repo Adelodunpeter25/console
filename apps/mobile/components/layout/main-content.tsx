@@ -2,6 +2,7 @@ import React from "react";
 import { View } from "react-native";
 import { AppShell } from "./app-shell";
 import { HomeScreen, ChatScreen, SettingsScreen, TerminalScreen } from "@/screens";
+import { FilesScreen } from "@/screens/files/files-screen";
 import { useAppStore } from "@/stores";
 
 export function MainContent() {
@@ -24,6 +25,7 @@ export function MainContent() {
       {activeTab === "settings" ? <SettingsScreen /> : null}
       {/* Conditional like chat: the native terminal surface carries heavy side effects. */}
       {activeTab === "terminal" ? <TerminalScreen /> : null}
+      {activeTab === "files" ? <FilesScreen /> : null}
     </AppShell>
   );
 }
