@@ -76,20 +76,23 @@ Zustand store persisted via MMKV (same pattern as the chat cache):
 Reworks/replaces the endpoint editor in `connection-settings.tsx`:
 
 - List of environments: name, URL, status dot (green/red/gray from last probe),
-  chevron to detail; tap row opens detail.
-- `+` button → opens `EnvironmentEditorScreen` in **create mode**.
+  chevron to detail; tap row opens `EnvironmentEditor`.
+- `+` button → opens `EnvironmentEditor` in **create mode** (e.g. inside the shared
+  bottom sheet or a modal — same component, no separate screen).
 
-### 5.2 Environment editor — one screen, two modes
-(`screens/settings/environment-editor-screen.tsx`)
+### 5.2 Environment editor — one component, two modes
+(`components/environments/environment-editor.tsx`)
 
-A single screen serves both creating and editing; it takes a `mode: "create" | "edit"`
-(+ optional `envId`) prop/route param instead of duplicating a form:
+A single reusable component serves both creating and editing; it takes a
+`mode: "create" | "edit"` (+ optional `envId`) prop instead of duplicating a form.
+It is a **component**, not a settings screen: the environments screen hosts it in a
+sheet/modal for both entry points, and the home switcher's "+" row can reuse it too.
 
 - **Create mode**: empty form (name, URL), primary action "Save".
 - **Edit mode**: form pre-filled from the store, primary action "Save changes",
   plus "Set as active" and "Delete" (delete disabled for the active env while it is the
   only one).
-- Shared internal states the screen moves through:
+- Internal states the component moves through:
   - `idle` — editing fields;
   - `testing` — connection probe in flight (`LoaderCircle`);
   - `test-ok` / `test-fail` — probe result with URL + status (`CheckCircle2` / `XCircle`),
@@ -108,7 +111,7 @@ A dedicated component, not inline wiring in the home screen:
   the shared sheet's controller, matching how other sheets (model picker, approval mode)
   are driven.
 - Content: environment list rows — status dot, name, URL host, check mark on the
-  current env; trailing "+" row that navigates to `EnvironmentEditorScreen`
+  current env; trailing "+" row that opens `EnvironmentEditor`
   in create mode.
 - Row tap on another env: `confirmAlert("Switch environment?", "...clears cached chats")`
   → `activateEnvironment(id)` → close sheet, stay on home (session list refetches).
@@ -125,9 +128,10 @@ A dedicated component, not inline wiring in the home screen:
   normalization; delegate storage to the environments store; keep its public API intact
   for existing callers.
 - `apps/mobile/screens/settings/environments-settings.tsx` (new) — list + add.
-- `apps/mobile/screens/settings/environment-editor-screen.tsx` (new) — single
-  create/edit editor with `mode` prop and `idle/testing/test-ok/test-fail/saving`
-  states (§5.2).
+- `apps/mobile/components/environments/environment-editor.tsx` (new) — single
+  create/edit editor component with `mode` prop and
+  `idle/testing/test-ok/test-fail/saving` states (§5.2); hosted by the environments
+  screen in a sheet/modal, reusable from the switcher's "+" row.
 - `apps/mobile/screens/settings/connection-settings.tsx` — becomes a thin wrapper or is
   replaced by the environments screen in `settings-screen.tsx`.
 - `apps/mobile/components/layout/screen-header.tsx` + `home-screen.tsx` — env-switcher
