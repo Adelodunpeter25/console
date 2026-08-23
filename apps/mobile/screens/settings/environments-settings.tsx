@@ -13,10 +13,10 @@ import { theme } from "@/styles/theme";
 
 /**
  * Settings → Connection: the environment list replacing the old single-URL
- * endpoint editor. Tapping a row (or "+ Add") opens the shared
+ * endpoint editor. Tapping a row (or "+ Add" in the header) opens the shared
  * EnvironmentEditor as a full screen with back/cancel and save/delete.
  */
-export function EnvironmentsSettings() {
+export function EnvironmentsSettings({ onBack }: { onBack?: () => void }) {
   const environments = useEnvironmentsStore((state) => state.environments);
   const activeId = useEnvironmentsStore((state) => state.activeId);
   const probes = useEnvironmentsStore((state) => state.probes);
@@ -31,7 +31,7 @@ export function EnvironmentsSettings() {
         <ScreenHeader
           title={editing ? "Edit environment" : "Add environment"}
           onBack={() => setEditing(undefined)}
-          headerActions={
+          rightAction={
             <Pressable
               className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center"
               style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
@@ -90,45 +90,50 @@ export function EnvironmentsSettings() {
   };
 
   return (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 }}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
-    >
-      <GlassSurface className="mb-4 p-4">
-        <View className="flex-row items-center justify-between mb-2 px-1">
-          <Text className="text-sm font-semibold text-foreground">Environments</Text>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <ScreenHeader
+        title="Connection"
+        onBack={onBack}
+        rightAction={
           <Pressable
             onPress={() => setEditing(null)}
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-            className="flex-row items-center gap-1.5 rounded-lg bg-card-alt/70 border border-border/50 px-3 py-1.5"
+            className="flex-row items-center gap-1.5 rounded-full bg-card border border-border px-4 py-2"
           >
             <Plus size={14} color="#ffffff" />
-            <Text className="text-xs font-medium text-foreground">Add</Text>
+            <Text className="text-xs font-semibold text-foreground">Add</Text>
           </Pressable>
-        </View>
-        {environments.length === 0 ? (
-          <Text className="text-xs text-foreground-secondary px-1 py-3">
-            No environments yet. Add a backend URL to get started.
-          </Text>
-        ) : (
-          environments.map(renderRow)
-        )}
-      </GlassSurface>
-
-      {activeId ? (
-        <GlassSurface className="p-5 border-red-500/30 bg-red-500/5">
-          <Pressable
-            onPress={deactivate}
-            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-            className="flex-row items-center justify-center gap-2"
-          >
-            <Unplug size={16} color="#f87171" />
-            <Text className="text-sm font-medium text-red-400">Disconnect backend</Text>
-          </Pressable>
+        }
+      />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <GlassSurface className="mb-4 p-4">
+          {environments.length === 0 ? (
+            <Text className="text-xs text-foreground-secondary px-1 py-3">
+              No environments yet. Add a backend URL to get started.
+            </Text>
+          ) : (
+            environments.map(renderRow)
+          )}
         </GlassSurface>
-      ) : null}
-    </ScrollView>
+
+        {activeId ? (
+          <GlassSurface className="p-5 border-red-500/30 bg-red-500/5">
+            <Pressable
+              onPress={deactivate}
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              className="flex-row items-center justify-center gap-2"
+            >
+              <Unplug size={16} color="#f87171" />
+              <Text className="text-sm font-medium text-red-400">Disconnect backend</Text>
+            </Pressable>
+          </GlassSurface>
+        ) : null}
+      </ScrollView>
+    </View>
   );
 }

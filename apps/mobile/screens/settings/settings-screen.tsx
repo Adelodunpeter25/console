@@ -75,9 +75,13 @@ export function SettingsScreen() {
           <DeletedChatsSettings onBack={() => setSection(null)} />
         ) : (
           <>
-            <ScreenHeader title={meta.title} onBack={() => setSection(null)} />
-            {section === "connection" ? <EnvironmentsSettings /> : null}
-            {section === "account" ? <AccountSettings /> : null}
+            {section === "connection" ? <EnvironmentsSettings onBack={() => setSection(null)} /> : null}
+            {section === "account" ? (
+              <>
+                <ScreenHeader title={meta.title} onBack={() => setSection(null)} />
+                <AccountSettings />
+              </>
+            ) : null}
           </>
         )}
       </View>
