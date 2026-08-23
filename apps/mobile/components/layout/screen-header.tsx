@@ -22,8 +22,9 @@ export function ScreenHeader({
   headerActions,
 }: ScreenHeaderProps) {
   const insets = useSafeAreaInsets();
-  // Tight gap under the status bar: system inset + a small breathing room.
-  const paddingTop = insets.top + 6;
+  // Some Android devices report a 0 top inset — never let the header touch
+  // the status bar/camera cutout.
+  const paddingTop = Math.max(insets.top, 12) + 6;
 
   return (
     <View

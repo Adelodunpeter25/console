@@ -1,21 +1,20 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
-import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { ChevronRight, Plus, Unplug } from "lucide-react-native";
+import { ChevronRight, Plus, Unplug, X } from "lucide-react-native";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { GlassSurface } from "@/components/layout/glass-surface";
-import { SharedBottomSheet } from "@/components/common/shared-bottom-sheet";
+import { EnvironmentEditor } from "@/components/environments/environment-editor";
 import {
   useEnvironmentsStore,
   type Environment,
 } from "@/stores/useEnvironmentsStore";
-import { EnvironmentEditor } from "@/components/environments/environment-editor";
 import { urlHost } from "@/utils/url";
+import { theme } from "@/styles/theme";
 
 /**
  * Settings → Connection: the environment list replacing the old single-URL
- * endpoint editor. Rows open the shared EnvironmentEditor component in a
- * bottom sheet, in edit or create mode.
+ * endpoint editor. Tapping a row (or "+ Add") opens the shared
+ * EnvironmentEditor as a full screen with back/cancel and save/delete.
  */
 export function EnvironmentsSettings() {
   const environments = useEnvironmentsStore((state) => state.environments);
@@ -23,14 +22,40 @@ export function EnvironmentsSettings() {
   const probes = useEnvironmentsStore((state) => state.probes);
   const deactivate = useEnvironmentsStore((state) => state.deactivate);
 
-  const sheetRef = useRef<BottomSheetModal>(null);
-  // null = create mode.
-  const [editingId, setEditingId] = useState<string | null>(null);
+  // undefined = list view; null = create; string = edit that env.
+  const [editing, setEditing] = useState<string | null | undefined>(undefined);
 
-  const openEditor = (envId: string | null) => {
-    setEditingId(envId);
-    sheetRef.current?.present();
-  };
+  if (editing !== undefined) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        <ScreenHeader
+          title={editing ? "Edit environment" : "Add environment"}
+          onBack={() => setEditing(undefined)}
+          headerActions={
+            <Pressable
+              className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center"
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              onPress={() => setEditing(undefined)}
+            >
+              <X size={18} color="#ffffff" />
+            </Pressable>
+          }
+        />
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <EnvironmentEditor
+            key={editing ?? "__create__"}
+            mode={editing ? "edit" : "create"}
+            envId={editing ?? undefined}
+            onDone={() => setEditing(undefined)}
+          />
+        </ScrollView>
+      </View>
+    );
+  }
 
   const renderRow = (env: Environment) => {
     const probe = probes[env.id];
@@ -38,7 +63,7 @@ export function EnvironmentsSettings() {
     return (
       <Pressable
         key={env.id}
-        onPress={() => openEditor(env.id)}
+        onPress={() => setEditing(env.id)}
         style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         className="flex-row items-center rounded-xl px-3 py-3 mb-1"
       >
@@ -75,7 +100,7 @@ export function EnvironmentsSettings() {
         <View className="flex-row items-center justify-between mb-2 px-1">
           <Text className="text-sm font-semibold text-foreground">Environments</Text>
           <Pressable
-            onPress={() => openEditor(null)}
+            onPress={() => setEditing(null)}
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             className="flex-row items-center gap-1.5 rounded-lg bg-card-alt/70 border border-border/50 px-3 py-1.5"
           >
@@ -104,21 +129,6 @@ export function EnvironmentsSettings() {
           </Pressable>
         </GlassSurface>
       ) : null}
-
-      <SharedBottomSheet
-        ref={sheetRef}
-        title={editingId ? "Edit environment" : "Add environment"}
-        snapPoints={["70%", "85%"]}
-      >
-        {/* Keyed per target so form state resets between creates/edits. */}
-        <EnvironmentEditor
-          key={editingId ?? "__create__"}
-          mode={editingId ? "edit" : "create"}
-          envId={editingId ?? undefined}
-          onDone={() => sheetRef.current?.dismiss()}
-        />
-      </SharedBottomSheet>
     </ScrollView>
   );
 }
-

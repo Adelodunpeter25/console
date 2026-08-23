@@ -173,44 +173,46 @@ export function EnvironmentEditor({ mode, envId, onDone }: EnvironmentEditorProp
         <Text className="text-xs text-red-400 mt-1.5">Could not reach the backend</Text>
       ) : null}
 
-      {/* Save */}
-      <Pressable
-        disabled={!url.trim() || status === "saving"}
-        onPress={handleSave}
-        style={({ pressed }) => ({ opacity: pressed || !url.trim() ? 0.6 : 1 })}
-        className="flex-row items-center justify-center gap-2 rounded-xl bg-foreground py-3 mt-3"
-      >
-        {status === "saving" ? <LoaderCircle size={14} color="#18181b" /> : null}
-        <Text className="text-sm font-semibold text-background">
-          {mode === "edit" ? "Save changes" : "Save"}
-        </Text>
-      </Pressable>
+      {/* Set as active — only when editing a non-active environment */}
+      {mode === "edit" && !isActive ? (
+        <Pressable
+          onPress={() => {
+            if (envId) useEnvironmentsStore.getState().activateEnvironment(envId);
+            onDone?.();
+          }}
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          className="items-center rounded-xl border border-border py-2.5 mt-4"
+        >
+          <Text className="text-sm font-medium text-foreground">Set as active</Text>
+        </Pressable>
+      ) : null}
 
-      {/* Edit-mode actions */}
-      {mode === "edit" ? (
-        <View className="flex-row gap-3 mt-3">
-          {!isActive ? (
-            <Pressable
-              onPress={() => {
-                if (envId) useEnvironmentsStore.getState().activateEnvironment(envId);
-                onDone?.();
-              }}
-              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-              className="flex-1 items-center rounded-xl border border-border py-2.5"
-            >
-              <Text className="text-sm font-medium text-foreground">Set as active</Text>
-            </Pressable>
-          ) : null}
+      {/* Save + Delete share one row in edit mode; Save alone in create mode */}
+      <View className="flex-row gap-3 mt-5">
+        <Pressable
+          disabled={!url.trim() || status === "saving"}
+          onPress={handleSave}
+          style={({ pressed }) => ({ opacity: pressed || !url.trim() ? 0.6 : 1 })}
+          className={`flex-row items-center justify-center gap-2 rounded-xl bg-foreground py-3 ${
+            mode === "edit" ? "flex-1" : "flex-grow"
+          }`}
+        >
+          {status === "saving" ? <LoaderCircle size={14} color="#18181b" /> : null}
+          <Text className="text-sm font-semibold text-background">
+            {mode === "edit" ? "Save changes" : "Save"}
+          </Text>
+        </Pressable>
+        {mode === "edit" ? (
           <Pressable
             disabled={!canDelete}
             onPress={handleDelete}
             style={({ pressed }) => ({ opacity: pressed || !canDelete ? 0.5 : 1 })}
-            className={`flex-1 items-center rounded-xl border border-red-500/30 bg-red-500/5 py-2.5 ${!isActive ? "" : "ml-auto w-full"}`}
+            className="flex-1 items-center justify-center rounded-xl border border-red-500/30 bg-red-500/5 py-3"
           >
             <Text className="text-sm font-medium text-red-400">Delete</Text>
           </Pressable>
-        </View>
-      ) : null}
+        ) : null}
+      </View>
     </View>
   );
 }
