@@ -221,21 +221,22 @@ class ConsoleTerminalView(context: Context, appContext: AppContext) : ExpoView(c
       InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
     inputView.setPadding(0, 0, 0, 0)
     inputView.setOnEditorActionListener { _, actionId, event ->
-      val isKeyUp = event?.action == KeyEvent.ACTION_UP
-      val isImeSend = actionId == EditorInfo.IME_ACTION_SEND && !isKeyUp
-      val isHardwareEnter = event?.keyCode == KeyEvent.KEYCODE_ENTER &&
-        event.action == KeyEvent.ACTION_DOWN
-      val isEnter = isImeSend || isHardwareEnter
-      if (isEnter) {
+      val isImeSend = event == null && actionId == EditorInfo.IME_ACTION_SEND
+      val isEnterKey = event?.keyCode == KeyEvent.KEYCODE_ENTER
+      if (!isImeSend && !isEnterKey) {
+        return@setOnEditorActionListener false
+      }
+      // Send once per press: on the action itself, or the DOWN of a paired key
+      // event. The UP must still return true — falling through lets TextView's
+      // default Enter handling hide the IME and drop focus, leaving the terminal
+      // dead until the user taps it again.
+      if (event == null || event.action == KeyEvent.ACTION_DOWN) {
         // Enter must send CR: raw-mode TUIs treat LF as Ctrl+J (insert newline).
         onInput(mapOf("data" to "\r"))
-        // Keep focus after sending command so the prompt stays ready; without this
-        // the IME hides and the user has to tap the terminal again to type.
+        // Keep focus after sending command so the prompt stays ready.
         keepFocusAfterInput()
-        true
-      } else {
-        false
       }
+      true
     }
     inputView.setOnKeyListener { _, keyCode, event ->
       if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
@@ -391,11 +392,13 @@ class ConsoleTerminalView(context: Context, appContext: AppContext) : ExpoView(c
     inputMethodManager?.showSoftInput(inputView, InputMethodManager.SHOW_IMPLICIT)
   }
 
-  /** Re-assert focus after an input event. The IME hides on IME_ACTION_SEND;
-   * posting twice covers the hide animation so the next prompt is immediately typable. */
+  /** Re-assert focus after an input event. Some IMEs hide on IME_ACTION_SEND and
+   * OEM hide animations outlive a single retry; staggered re-requests land after
+   * the hide settles so the next prompt is immediately typable. */
   private fun keepFocusAfterInput() {
     inputView.post { requestKeyboardFocus() }
-    inputView.postDelayed({ requestKeyboardFocus() }, 80)
+    inputView.postDelayed({ requestKeyboardFocus() }, 120)
+    inputView.postDelayed({ requestKeyboardFocus() }, 300)
   }
 
   private fun hideKeyboard() {
