@@ -1,15 +1,14 @@
 import React, { useState, useRef } from "react";
-import { View, TextInput, Pressable, StyleSheet, Image, ActivityIndicator } from "react-native";
+import { View, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-controller";
 import * as ImagePicker from "expo-image-picker";
-import { ArrowUp, Square, Plus, X } from "lucide-react-native";
 import type { ImageAttachment } from "@console/types";
-import { theme } from "@/styles/theme";
 import { useAppStore, useChatStore, useProjectStore, useSessionStore } from "@/stores";
-import { ImagePreviewModal } from "@/components/common/image-preview-modal";
 import { ComposerBottomStrip } from "./composer-bottom-strip";
 import { ComposerAutocomplete } from "./composer-autocomplete";
+import { AttachmentStrip } from "./attachment-strip";
+import { ComposerInput } from "./composer-input";
 
 interface ComposerProps {
   value: string;
@@ -21,7 +20,6 @@ interface ComposerProps {
   projectLocked?: boolean;
 }
 
-/** Chat input row matching unified pill with left attachment button and bottom selectors strip. */
 export function Composer({
   value,
   onChangeText,
@@ -56,8 +54,6 @@ export function Composer({
       (sessionView?.sessionCwd && p.path.endsWith(sessionView.sessionCwd)),
   );
 
-  const [isMultiline, setIsMultiline] = useState(false);
-  const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
   const [selection, setSelection] = useState<{ start: number; end: number }>({
     start: value.length,
     end: value.length,
@@ -100,7 +96,6 @@ export function Composer({
     onChangeText(newValue);
     const newPos = newValue.length;
     setSelection({ start: newPos, end: newPos });
-    // Keep focus after picking
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
@@ -114,107 +109,25 @@ export function Composer({
             sessionId={selectedSessionId}
             onPick={handleAutocompletePick}
           />
-          {/* Attachment Previews Strip */}
-          {attachments.length > 0 ? (
-            <View className="flex-row flex-wrap gap-2 px-2 pb-2">
-              {attachments.map((att, idx) => {
-                const imageUri = `data:${att.mimeType};base64,${att.data}`;
-                return (
-                  <View
-                    key={idx}
-                    className="relative rounded-xl overflow-hidden border border-white/20 bg-card"
-                  >
-                    <Pressable
-                      onPress={() => setPreviewImageUri(imageUri)}
-                      style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-                    >
-                      <Image
-                        source={{ uri: imageUri }}
-                        className="w-14 h-14"
-                        resizeMode="cover"
-                      />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => removeAttachment(selectedSessionId!, idx)}
-                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/80 items-center justify-center border border-white/20"
-                      hitSlop={6}
-                    >
-                      <X size={11} color="#ffffff" />
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
-          ) : null}
 
-          <View
-            className={`flex-row ${
-              isMultiline ? "items-end pb-1" : "items-center"
-            } bg-card border border-border/80 pl-2 pr-1.5 py-1 min-h-[48px] ${
-              isMultiline || attachments.length > 0 ? "rounded-2xl" : "rounded-full"
-            }`}
-          >
-            {/* Left Side Attach Button (+) */}
-            <Pressable
-              onPress={handlePickImages}
-              className="w-8 h-8 rounded-full items-center justify-center mr-1"
-              style={({ pressed }) => ({
-                backgroundColor: pressed ? "rgba(255,255,255,0.08)" : "transparent",
-                opacity: pressed ? 0.7 : 0.9,
-              })}
-              hitSlop={6}
-            >
-              <Plus size={21} color={theme.colors.text.secondary} />
-            </Pressable>
+          <AttachmentStrip
+            attachments={attachments}
+            onRemove={(idx) => removeAttachment(selectedSessionId!, idx)}
+          />
 
-            <TextInput
-              ref={inputRef}
-              style={styles.input}
-              value={value}
-              onChangeText={onChangeText}
-              placeholder="Ask anything…"
-              placeholderTextColor={theme.colors.text.muted}
-              multiline
-              textAlignVertical={isMultiline ? "top" : "center"}
-              selection={selection}
-              onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
-              onContentSizeChange={(e) => {
-                const height = e.nativeEvent.contentSize.height;
-                setIsMultiline(height > 36 || value.includes("\n"));
-              }}
-            />
+          <ComposerInput
+            value={value}
+            onChangeText={onChangeText}
+            selection={selection}
+            onSelectionChange={setSelection}
+            inputRef={inputRef}
+            canSend={canSend}
+            running={running}
+            onSend={onSend}
+            onStop={onStop}
+            onPickImage={handlePickImages}
+          />
 
-            {running && onStop ? (
-              <Pressable
-                className="w-8 h-8 rounded-full items-center justify-center ml-1.5"
-                style={({ pressed }) => ({
-                  backgroundColor: theme.colors.text.primary,
-                  opacity: pressed ? 0.7 : 1,
-                })}
-                onPress={onStop}
-                accessibilityLabel="Stop"
-              >
-                <Square size={12} color="#000000" fill="#000000" />
-              </Pressable>
-            ) : (
-              <Pressable
-                className="w-8 h-8 rounded-full items-center justify-center ml-1.5"
-                style={({ pressed }) => ({
-                  backgroundColor: canSend ? theme.colors.text.primary : "rgba(255,255,255,0.08)",
-                  opacity: pressed && canSend ? 0.8 : 1,
-                })}
-                onPress={onSend}
-                disabled={!canSend}
-              >
-                <ArrowUp
-                  size={16}
-                  color={canSend ? theme.colors.text.dark : theme.colors.text.muted}
-                />
-              </Pressable>
-            )}
-          </View>
-
-          {/* Bottom Selector Strip: Project, Model, Approval Mode */}
           {selectedSessionId ? (
             <ComposerBottomStrip
               projects={projects}
@@ -230,26 +143,6 @@ export function Composer({
           ) : null}
         </View>
       </KeyboardStickyView>
-
-      {/* Full screen Image Preview Modal */}
-      <ImagePreviewModal
-        visible={Boolean(previewImageUri)}
-        imageUri={previewImageUri}
-        onClose={() => setPreviewImageUri(null)}
-      />
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  input: {
-    flex: 1,
-    maxHeight: 120,
-    paddingTop: 8,
-    paddingBottom: 8,
-    color: theme.colors.text.primary,
-    fontSize: 14,
-    lineHeight: 19,
-    includeFontPadding: false,
-  },
-});
