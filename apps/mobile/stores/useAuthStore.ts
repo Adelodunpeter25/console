@@ -84,12 +84,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loginCodebuff: async () => {
     set({ loggingIn: "codebuff", error: null });
     try {
-      // Codebuff uses a device-code flow; the backend handles the polling on
-      // its side. On mobile this is surfaced through the settings UI, which
-      // polls auth status until the user approves in the browser.
-      await get().loadStatus();
+      // Device-code flow: get a login URL + fingerprint params, open the
+      // system browser, then poll until the user approves or it expires.
+      const start = await authService.startCodebuffLogin();
+      await openAuthUrl(start.loginUrl);
+
+      const deadline = Number(start.expiresAt) * 1000;
+      while (Date.now() < deadline) {
+        await sleep(2000);
+        let completed = false;
+        try {
+          // Transient poll errors are retried until the deadline.
+          const poll = await authService.pollCodebuffStatus({
+            fingerprintId: start.fingerprintId,
+            fingerprintHash: start.fingerprintHash,
+            expiresAt: start.expiresAt,
+          });
+          completed = poll.completed;
+        } catch {}
+        if (completed) {
+          await get().loadStatus();
+          return;
+        }
+      }
+      throw new Error("Codebuff login timed out.");
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Login failed";
+      const message = e instanceof Error ? e.message : "Codebuff login failed";
       set({ error: message });
       throw e;
     } finally {
@@ -118,6 +138,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+
   reset: () =>
     set({
       loggingIn: null,
@@ -130,4 +151,11 @@ async function openAuthUrl(url: string): Promise<void> {
   // Use expo-linking if available; otherwise fall back to window.open on web.
   const { openURL } = await import("expo-linking");
   await openURL(url);
+}
+
+/** Poll-interval sleep built on Promise.withResolvers (project convention). */
+function sleep(ms: number): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  setTimeout(resolve, ms);
+  return promise;
 }
