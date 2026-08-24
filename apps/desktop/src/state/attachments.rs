@@ -155,23 +155,14 @@ impl ConsoleDesktopApp {
     /// Open the native file picker and stage the chosen image. Dismissing the
     /// dialog is a silent no-op, like the folder picker.
     pub fn pick_image(&mut self, cx: &mut Context<Self>) {
-        let client = self.client.clone();
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_entity, cx| {
-            let picked = client.fs.pick_file().await;
-            let path = match picked {
-                Ok(path) if path.trim().is_empty() => return,
-                Ok(path) => path,
-                Err(error) => {
-                    let message = format!("Unable to pick an image: {error}");
-                    cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| this.set_error(message, cx));
-                        }
-                    });
-                    return;
-                }
+            let Some(path) = crate::picker::pick_image_file().await else {
+                return;
             };
+            if path.trim().is_empty() {
+                return;
+            }
             let path = std::path::PathBuf::from(path);
             let attachment = cx
                 .background_executor()

@@ -1,6 +1,7 @@
 mod app_menu;
 mod assets;
 mod persistence;
+mod picker;
 mod state;
 mod types;
 mod view;

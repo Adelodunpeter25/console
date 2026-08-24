@@ -38,3 +38,4 @@ regex = "1"
 base64 = "0.22"
 similar = { version = "2", features = ["text"] }
 rust-embed = { version = "8.7.2", features = ["interpolate-folder-path", "include-exclude"] }
+rfd = "0.15"

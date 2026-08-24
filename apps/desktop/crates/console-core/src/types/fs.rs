@@ -39,15 +39,3 @@ pub struct WriteFileDto {
     pub path: String,
     pub content: String,
 }
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PickFolderResponse {
-    pub path: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PickFileResponse {
-    pub path: String,
-}

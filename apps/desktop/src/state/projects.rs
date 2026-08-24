@@ -189,31 +189,25 @@ impl ConsoleDesktopApp {
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_, cx| {
-            let picked = client.fs.pick_folder().await;
-            match picked {
-                Ok(path) if path.trim().is_empty() => {}
-                Ok(path) => match client.projects.add(&path).await {
-                    Ok(project) => cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                if !this.projects.iter().any(|p| p.id == project.id) {
-                                    Rc::make_mut(&mut this.projects).push(project.clone());
-                                }
-                                this.select_project_for_pane(pane_id.clone(), project.id, cx);
-                            });
-                        }
-                    }),
-                    Err(error) => {
-                        let message = format!("Unable to add project: {error}");
-                        cx.update(|cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| this.set_error(message, cx));
+            let Some(path) = crate::picker::pick_folder().await else {
+                return;
+            };
+            if path.trim().is_empty() {
+                return;
+            }
+            match client.projects.add(&path).await {
+                Ok(project) => cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if !this.projects.iter().any(|p| p.id == project.id) {
+                                Rc::make_mut(&mut this.projects).push(project.clone());
                             }
+                            this.select_project_for_pane(pane_id.clone(), project.id, cx);
                         });
                     }
-                },
+                }),
                 Err(error) => {
-                    let message = format!("Unable to pick a folder: {error}");
+                    let message = format!("Unable to add project: {error}");
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| this.set_error(message, cx));
