@@ -1,7 +1,6 @@
 # Bun API Review — replacing Node APIs with Bun-native equivalents
 
-Review of `apps/server` + `apps/cli` after the runtime migration (see
-`docs/bun-migration.md`). The codebase now *runs* on Bun, but most I/O still goes
+Review of `apps/server` + `apps/cli` after the runtime migration. The codebase now *runs* on Bun, but most I/O still goes
 through Node-compatibility shims. Every shimmed API works — the point of this
 review is where Bun's native APIs are meaningfully faster, lower-level, or let us
 delete dependencies outright.
