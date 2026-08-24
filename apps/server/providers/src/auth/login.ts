@@ -8,7 +8,6 @@
  * - Saves credential to ~/.console/{gemini,antigravity}-creds.json
  */
 
-import * as http from "node:http";
 import * as crypto from "node:crypto";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
@@ -120,14 +119,29 @@ function startCallbackServer(
   callbackPath: string,
 ): Promise<{ code: string; state: string; close: () => void }> {
   return new Promise((resolve, reject) => {
-    const server = http.createServer((req, res) => {
-      if (req.url?.startsWith(callbackPath)) {
-        const url = new URL(req.url, `http://localhost:${port}`);
-        const code = url.searchParams.get("code");
-        const state = url.searchParams.get("state");
+    let settled = false;
 
-        res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(`
+    try {
+      const server = Bun.serve({
+        port,
+        async fetch(req) {
+          const url = new URL(req.url);
+          if (!url.pathname.startsWith(callbackPath)) {
+            return new Response("Not found", { status: 404 });
+          }
+          const code = url.searchParams.get("code");
+          const state = url.searchParams.get("state");
+
+          if (code && state && !settled) {
+            settled = true;
+            resolve({ code, state, close: () => server.stop(true) });
+          } else if (!code || !state) {
+            settled = true;
+            reject(new Error("Invalid callback: missing code or state"));
+          }
+
+          return new Response(
+            `
           <!DOCTYPE html>
           <html>
           <head><title>Login Successful</title></head>
@@ -136,21 +150,17 @@ function startCallbackServer(
             <p>You can close this tab now.</p>
           </body>
           </html>
-        `);
+        `,
+            { headers: { "Content-Type": "text/html" } },
+          );
+        },
+      });
 
-        if (code && state) {
-          resolve({ code, state, close: () => server.close() });
-        } else {
-          reject(new Error("Invalid callback: missing code or state"));
-        }
-      }
-    });
-
-    server.listen(port, () => {
       console.log(`Callback server listening on http://localhost:${port}`);
-    });
-
-    server.on("error", reject);
+      void server;
+    } catch (error) {
+      reject(error instanceof Error ? error : new Error(String(error)));
+    }
   });
 }
 
