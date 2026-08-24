@@ -199,15 +199,14 @@ impl ConsoleDesktopApp {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
                             this.approval_menu.close(window, cx);
-                            // Eagerly fetch live models for every provider not
-                            // already cached or loading, so the picker shows
-                            // fresh models instead of the static catalog
-                            // defaults. Static models remain visible as a
-                            // fallback until each fetch lands.
-                            let names: Vec<String> =
-                                this.providers.iter().map(|p| p.name.clone()).collect();
-                            for name in &names {
-                                this.load_models_for_provider(name, cx);
+                            // Lazy: fetch only the active provider's live models.
+                            // Static catalog stays visible as fallback, so we
+                            // avoid N network calls on every open. Favorites
+                            // shows static until its tab is visited.
+                            if let PickerTab::Provider(name) =
+                                this.pane_picker_tab("pane-main")
+                            {
+                                this.load_models_for_provider(&name, cx);
                             }
                         });
                     }
@@ -356,7 +355,7 @@ impl ConsoleDesktopApp {
             models_by_provider: Rc::new(std::collections::HashMap::new()),
             loading_models: std::collections::HashSet::new(),
             selected_model: None,
-            active_picker_tab: PickerTab::Favorites,
+            active_picker_tab: PickerTab::Provider("gemini".to_string()),
             favorites: Rc::new(std::collections::HashSet::new()),
             approval_mode: ApprovalMode::AlwaysAsk,
             model_menu,
@@ -465,6 +464,30 @@ impl ConsoleDesktopApp {
                                     })
                                 });
                                 this.providers = Rc::new(providers);
+                                // Default to first provider instead of Favorites so the
+                                // popover only needs one live fetch. Favoriting
+                                // stays available via the star tab, but it no
+                                // longer forces N fetches on first open.
+                                if let Some(first) = this.providers.first() {
+                                    let first_name = first.name.clone();
+                                    let needs_init = match &this.active_picker_tab {
+                                        PickerTab::Favorites => true,
+                                        PickerTab::Provider(name) => !this
+                                            .providers
+                                            .iter()
+                                            .any(|p| &p.name == name),
+                                    };
+                                    if needs_init {
+                                        this.active_picker_tab =
+                                            PickerTab::Provider(first_name.clone());
+                                        if let Some(state) =
+                                            this.workspace_pane_states.get_mut("pane-main")
+                                        {
+                                            state.active_picker_tab =
+                                                PickerTab::Provider(first_name);
+                                        }
+                                    }
+                                }
                                 if this.selected_model.is_none() {
                                     this.selected_model = first_model.clone();
                                 }
@@ -621,18 +644,20 @@ impl ConsoleDesktopApp {
                 .placeholder("Search models...")
         });
         let entity = cx.entity().downgrade();
+        let pane_id_owned = pane_id.to_string();
         let model_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
             let search = model_search.clone();
+            let pane_id_owned = pane_id_owned.clone();
             move |open, window, cx| {
                 if open {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
                             this.approval_menu.close(window, cx);
-                            let names: Vec<String> =
-                                this.providers.iter().map(|p| p.name.clone()).collect();
-                            for name in &names {
-                                this.load_models_for_provider(name, cx);
+                            if let PickerTab::Provider(name) =
+                                this.pane_picker_tab(&pane_id_owned)
+                            {
+                                this.load_models_for_provider(&name, cx);
                             }
                         });
                     }
