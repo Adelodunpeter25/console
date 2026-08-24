@@ -42,12 +42,6 @@ export function useDeleteProject() {
   });
 }
 
-export function usePickNativeFolder() {
-  return useMutation({
-    mutationFn: () => fsService.pickNativeFolder(),
-  });
-}
-
 export function useFsBrowse(path?: string) {
   return useQuery({
     queryKey: fsKeys.browse(path),

@@ -25,60 +25,6 @@ fsRoutes.get("/browse", async (c) => {
 });
 
 /**
- * POST /api/fs/pick-folder — Opens native macOS Finder folder picker dialog.
- */
-fsRoutes.post("/pick-folder", async (c) => {
-  const { exec } = await import("node:child_process");
-  const { promisify } = await import("node:util");
-  const execAsync = promisify(exec);
-
-  try {
-    const script = `osascript -e 'POSIX path of (choose folder with prompt "Select Project Folder")'`;
-    const { stdout } = await execAsync(script);
-    const selectedPath = stdout.trim().replace(/\/$/, "");
-    return c.json({ success: true, data: { path: selectedPath } });
-  } catch (err) {
-    // osascript exits non-zero when the user dismisses the dialog; the
-    // "User canceled" marker (-128) is not a failure, just a cancelled pick.
-    const errMsg = err instanceof Error ? err.message : String(err);
-    const cancelled = /-128|User canceled|user cancelled/i.test(errMsg);
-    return c.json(
-      cancelled
-        ? { success: false, cancelled: true, error: "Folder selection cancelled." }
-        : { success: false, error: "Folder selection failed." },
-      400
-    );
-  }
-});
-
-/**
- * POST /api/fs/pick-file — Opens a native macOS file picker dialog and
- * returns the selected file's path. Dismissing the dialog is a cancelled
- * pick, not a failure.
- */
-fsRoutes.post("/pick-file", async (c) => {
-  const { exec } = await import("node:child_process");
-  const { promisify } = await import("node:util");
-  const execAsync = promisify(exec);
-
-  try {
-    const script = `osascript -e 'POSIX path of (choose file with prompt "Select an image")'`;
-    const { stdout } = await execAsync(script);
-    const selectedPath = stdout.trim();
-    return c.json({ success: true, data: { path: selectedPath } });
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    const cancelled = /-128|User canceled|user cancelled/i.test(errMsg);
-    return c.json(
-      cancelled
-        ? { success: false, cancelled: true, error: "File selection cancelled." }
-        : { success: false, error: "File selection failed." },
-      400
-    );
-  }
-});
-
-/**
  * GET /api/fs/entries — List all entries recursively for building a file tree.
  * Query: path=<project root>, depth=<max depth, default 6>, hidden=<include dotfiles>
  */

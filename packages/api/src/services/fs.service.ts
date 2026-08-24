@@ -7,11 +7,6 @@ export const fsService = {
     return res.data.data;
   },
 
-  async pickNativeFolder(): Promise<{ path: string }> {
-    const res = await getConsoleApiClient().post("/api/fs/pick-folder");
-    return res.data.data;
-  },
-
   async addProject(path: string): Promise<ProjectInfo> {
     const res = await getConsoleApiClient().post("/api/projects", { path });
     return res.data.data;

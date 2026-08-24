@@ -1,14 +1,12 @@
 import { create } from "zustand";
 import type { FsTreeEntry } from "@console/types";
 import { fsService } from "@console/api";
-import type { BrowseResult, DirectoryTreeResult, PickFolderResult, ReadFileResult } from "@/types";
+import type { BrowseResult, DirectoryTreeResult, ReadFileResult } from "@/types";
 
 interface FsState {
   /** Current browse location and its entries (file-picker navigation). */
   browse: BrowseResult | null;
   browsing: boolean;
-  /** Last folder picked via the native dialog. */
-  pickedFolder: PickFolderResult | null;
   /** Cached directory trees keyed by path. */
   treesByPath: Record<string, DirectoryTreeResult>;
   /** Cached file contents keyed by path (line-range-agnostic). */
@@ -18,7 +16,6 @@ interface FsState {
   error: string | null;
 
   browseDirectory: (path?: string) => Promise<BrowseResult>;
-  pickFolder: () => Promise<PickFolderResult>;
   getDirectoryTree: (path?: string, depth?: number) => Promise<DirectoryTreeResult>;
   readFile: (path: string, startLine?: number, endLine?: number) => Promise<ReadFileResult>;
   writeFile: (path: string, content: string) => Promise<void>;
@@ -41,7 +38,6 @@ function clearBusy(set: (partial: Partial<FsState>) => void, path: string): void
 export const useFsStore = create<FsState>((set, get) => ({
   browse: null,
   browsing: false,
-  pickedFolder: null,
   treesByPath: {},
   fileContentsByPath: {},
   busyPaths: {},
@@ -60,13 +56,6 @@ export const useFsStore = create<FsState>((set, get) => ({
       });
       throw e;
     }
-  },
-
-  pickFolder: async () => {
-    set({ error: null });
-    const result = await fsService.pickNativeFolder();
-    set({ pickedFolder: result });
-    return result;
   },
 
   getDirectoryTree: async (path?: string, depth?: number) => {

@@ -18,8 +18,3 @@ export interface ReadFileResult {
   path: string;
   content: string;
 }
-
-/** Native folder picker result (POST /api/fs/pick-folder). */
-export interface PickFolderResult {
-  path: string;
-}
