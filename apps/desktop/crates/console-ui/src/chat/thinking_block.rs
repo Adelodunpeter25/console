@@ -99,7 +99,7 @@ impl RenderOnce for ThinkingBlock {
         let header = div()
             .id(ElementId::Name(header_id.into()))
             .w_full()
-            .min_h(px(22.0))
+            .min_h(px(18.0))
             .flex()
             .items_center()
             .justify_between()
