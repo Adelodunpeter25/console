@@ -1,28 +1,24 @@
 /**
  * Terminal PTY Manager.
  *
- * Owns the lifecycle of every node-pty session on the server. A PTY is
- * identified by a random `terminalId`; the WebSocket route creates instances
- * here and streams their output/exit events back to the client.
+ * Owns the lifecycle of every terminal session on the server, backed by
+ * Bun.Terminal (native PTY built into the Bun runtime). A PTY is identified
+ * by a random `terminalId`; the WebSocket route creates instances here and
+ * streams their output/exit events back to the client.
  *
  * All instances are tracked so a server shutdown (or daemon restart) can kill
  * lingering shells deterministically instead of leaking processes.
  */
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { chmodSync } from "node:fs";
-import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
-import pty from "node-pty";
 import type {
   TerminalId,
   TerminalOutputEvent,
   TerminalSpawnParams,
   TerminalSpawnedEvent,
 } from "@console/types";
-
-const require = createRequire(import.meta.url);
 
 /** Callback the route registers to receive pty events for a session. */
 export interface PtyCallbacks {
@@ -31,9 +27,20 @@ export interface PtyCallbacks {
   onError: (message: string) => void;
 }
 
+/** Minimal shape of a Bun-spawned subprocess attached to a terminal. */
+interface PtyProcess {
+  pid: number;
+  exited: Promise<number>;
+  kill(code?: number): void;
+}
+
+/** Cap for output buffered while paused, so a flooding program can't balloon memory. */
+const PAUSED_BUFFER_LIMIT_BYTES = 8 * 1024 * 1024;
+
 interface PtySession {
   id: TerminalId;
-  pty: pty.IPty;
+  terminal: Bun.Terminal;
+  proc: PtyProcess;
   shell: string;
   cwd: string;
   cols: number;
@@ -41,41 +48,19 @@ interface PtySession {
   callbacks?: PtyCallbacks;
   pending: string[];
   killed: boolean;
+  paused: boolean;
+  pausedBuffer: string[];
+  pausedBufferBytes: number;
 }
 
 export class TerminalPtyManager {
   private sessions = new Map<TerminalId, PtySession>();
 
   /**
-   * Ensure node-pty's prebuilt native binaries are executable. npm can strip
-   * exec bits on install (the bundled spawn-helper must be +x or posix_spawn
-   * fails with "posix_spawnp failed").
-   */
-  private ensureExecutable(): void {
-    try {
-      for (const arch of [process.platform, `${process.platform}-${process.arch}`]) {
-        const dir = path.resolve(
-          path.dirname(require.resolve("node-pty/package.json")),
-          "prebuilds",
-          arch,
-        );
-        if (!existsSync(dir)) continue;
-        for (const bin of ["spawn-helper", "pty.node"]) {
-          const file = path.join(dir, bin);
-          if (existsSync(file)) chmodSync(file, 0o755);
-        }
-      }
-    } catch {
-      // Best-effort: ignore failures and let the spawn error surface instead.
-    }
-  }
-
-  /**
    * Spawn a new shell PTY in the given working directory.
    * Throws if `cwd` does not exist so clients get a clear spawn error.
    */
   spawn(params: TerminalSpawnParams): TerminalSpawnedEvent {
-    this.ensureExecutable();
     const cwd = path.resolve(params.cwd);
     if (!existsSync(cwd)) {
       throw new Error(`Cannot spawn terminal: working directory does not exist: ${cwd}`);
@@ -86,10 +71,37 @@ export class TerminalPtyManager {
     const rows = params.rows ?? 24;
 
     const id: TerminalId = randomUUID();
-    const instance = pty.spawn(shell, [], {
+    const session: PtySession = {
+      id,
+      // Assigned immediately after construction below.
+      terminal: undefined as unknown as Bun.Terminal,
+      // Assigned immediately after spawn below.
+      proc: undefined as unknown as PtyProcess,
+      shell,
+      cwd,
+      cols,
+      rows,
+      pending: [],
+      killed: false,
+      paused: false,
+      pausedBuffer: [],
+      pausedBufferBytes: 0,
+    };
+    this.sessions.set(id, session);
+
+    session.terminal = new Bun.Terminal({
       name: "xterm-256color",
       cols,
       rows,
+      // Buffer output that arrives before the WebSocket route has attached
+      // callbacks so the initial shell prompt is never dropped.
+      data: (_terminal, data) => {
+        this.handleOutput(session, new TextDecoder().decode(data));
+      },
+    });
+
+    const proc = Bun.spawn([shell], {
+      terminal: session.terminal,
       cwd,
       env: {
         ...process.env,
@@ -97,40 +109,45 @@ export class TerminalPtyManager {
         CONSOLE_TERMINAL: "true",
       } as Record<string, string>,
     });
-
-    const session: PtySession = {
-      id,
-      pty: instance,
-      shell,
-      cwd,
-      cols,
-      rows,
-      pending: [],
-      killed: false,
+    session.proc = {
+      pid: proc.pid,
+      exited: proc.exited,
+      kill: (code?: number) => proc.kill(code),
     };
-    this.sessions.set(id, session);
 
-    // Buffer output that arrives before the WebSocket route has attached
-    // callbacks so the initial shell prompt is never dropped.
-    instance.onData((data) => {
-      if (session.callbacks) {
-        session.callbacks.onData({ type: "output", data });
-      } else {
-        session.pending.push(data);
-        // Cap buffered early output to avoid unbounded growth if attach never happens
-        if (session.pending.length > 100) {
-          session.pending.shift();
-        }
-      }
-    });
-    instance.onExit(({ exitCode }) => {
+    proc.exited.then((code) => {
       if (session.killed) return;
       session.killed = true;
       this.sessions.delete(id);
-      session.callbacks?.onExit(exitCode);
+      session.callbacks?.onExit(code);
     });
 
-    return { type: "spawned", id, pid: instance.pid, shell, cwd, cols, rows };
+    return { type: "spawned", id, pid: proc.pid, shell, cwd, cols, rows };
+  }
+
+  /** Route PTY output to callbacks, honoring attach buffering and pause state. */
+  private handleOutput(session: PtySession, data: string): void {
+    if (session.killed) return;
+    if (session.paused) {
+      // Client send buffer saturated: hold output until resume().
+      session.pausedBuffer.push(data);
+      session.pausedBufferBytes += data.length;
+      if (session.pausedBufferBytes > PAUSED_BUFFER_LIMIT_BYTES) {
+        // Drop oldest to stay bounded; the client is already behind anyway.
+        const dropped = session.pausedBuffer.shift()!;
+        session.pausedBufferBytes -= dropped.length;
+      }
+      return;
+    }
+    if (session.callbacks) {
+      session.callbacks.onData({ type: "output", data });
+    } else {
+      session.pending.push(data);
+      // Cap buffered early output to avoid unbounded growth if attach never happens
+      if (session.pending.length > 100) {
+        session.pending.shift();
+      }
+    }
   }
 
   /** Attach a WebSocket-backed callback set to an existing session. */
@@ -153,7 +170,7 @@ export class TerminalPtyManager {
     const session = this.sessions.get(id);
     if (!session || session.killed) return false;
     try {
-      session.pty.write(data);
+      session.terminal.write(data);
       return true;
     } catch {
       return false;
@@ -165,7 +182,7 @@ export class TerminalPtyManager {
     const session = this.sessions.get(id);
     if (!session || session.killed) return false;
     try {
-      session.pty.resize(cols, rows);
+      session.terminal.resize(cols, rows);
       session.cols = cols;
       session.rows = rows;
       return true;
@@ -181,9 +198,15 @@ export class TerminalPtyManager {
     session.killed = true;
     this.sessions.delete(id);
     try {
-      session.pty.kill();
+      // Interactive shells ignore SIGTERM/SIGHUP; SIGKILL is deterministic.
+      session.proc.kill(9);
     } catch {
       // Already dead — fine.
+    }
+    try {
+      session.terminal.close();
+    } catch {
+      // Already closed — fine.
     }
     session.callbacks?.onExit(null);
   }
@@ -191,27 +214,26 @@ export class TerminalPtyManager {
   /**
    * Pause a PTY's output. Used when the client socket's send buffer is
    * saturated so a flooding program (`yes`, huge file cats) can't balloon
-   * memory; the child blocks on write until resume().
+   * memory; output is held here until resume(). Unlike node-pty's kernel-level
+   * flow control this buffers in-process, capped at PAUSED_BUFFER_LIMIT_BYTES.
    */
   pause(id: TerminalId): void {
     const session = this.sessions.get(id);
     if (session && !session.killed) {
-      try {
-        session.pty.pause();
-      } catch {
-        // Already paused or dying — fine.
-      }
+      session.paused = true;
     }
   }
 
   /** Resume a paused PTY's output (the send buffer drained). */
   resume(id: TerminalId): void {
     const session = this.sessions.get(id);
-    if (session && !session.killed) {
-      try {
-        session.pty.resume();
-      } catch {
-        // Already resumed or dying — fine.
+    if (session && !session.killed && session.paused) {
+      session.paused = false;
+      const buffered = session.pausedBuffer;
+      session.pausedBuffer = [];
+      session.pausedBufferBytes = 0;
+      for (const data of buffered) {
+        this.handleOutput(session, data);
       }
     }
   }
