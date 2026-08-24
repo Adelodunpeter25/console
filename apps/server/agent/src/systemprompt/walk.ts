@@ -65,7 +65,7 @@ export function getAncestorDirs(
 
 export async function readTextFile(filePath: string): Promise<string | null> {
   try {
-    return await fs.readFile(filePath, "utf8");
+    return await Bun.file(filePath).text();
   } catch (err: unknown) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code === "ENOENT" || code === "ENOTDIR") return null;

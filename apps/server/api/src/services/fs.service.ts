@@ -178,7 +178,7 @@ export class FsService {
    * Read file content with line range support.
    */
   async readFileContent(filePath: string, startLine?: number, endLine?: number): Promise<string> {
-    const raw = await fs.readFile(filePath, "utf-8");
+    const raw = await Bun.file(filePath).text();
     if (startLine === undefined && endLine === undefined) {
       return raw;
     }
@@ -193,7 +193,7 @@ export class FsService {
    */
   async writeFileContent(filePath: string, content: string): Promise<string> {
     await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, content, "utf-8");
+    await Bun.write(filePath, content);
     return "File written successfully.";
   }
 
