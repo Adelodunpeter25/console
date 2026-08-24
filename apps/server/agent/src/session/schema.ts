@@ -1,11 +1,11 @@
 /**
  * SQLite Schema & Initialization for Session Storage.
  */
-import type Database from "better-sqlite3";
+import type { Database } from "bun:sqlite";
 
-export function initGlobalDatabase(db: Database.Database): void {
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
+export function initGlobalDatabase(db: Database): void {
+  db.exec("PRAGMA journal_mode = WAL");
+  db.exec("PRAGMA foreign_keys = ON");
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS projects (
@@ -64,9 +64,9 @@ export function initGlobalDatabase(db: Database.Database): void {
  * Schema for a single session's SQLite database.
  * One row in `session_meta` holds the header; `messages` holds history.
  */
-export function initSessionDatabase(db: Database.Database): void {
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
+export function initSessionDatabase(db: Database): void {
+  db.exec("PRAGMA journal_mode = WAL");
+  db.exec("PRAGMA foreign_keys = ON");
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS session_meta (
@@ -99,9 +99,9 @@ export function initSessionDatabase(db: Database.Database): void {
   }
 }
 
-export function initProjectDatabase(db: Database.Database): void {
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
+export function initProjectDatabase(db: Database): void {
+  db.exec("PRAGMA journal_mode = WAL");
+  db.exec("PRAGMA foreign_keys = ON");
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS sessions (

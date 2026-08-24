@@ -59,7 +59,7 @@ export interface SessionIndexRow {
  * The `SqliteSessionStorage` class constructs and owns one of these.
  */
 export interface StorageState {
-  globalDb: import("better-sqlite3").Database;
-  sessionDbs: Map<string, import("better-sqlite3").Database>;
+  globalDb: import("bun:sqlite").Database;
+  sessionDbs: Map<string, import("bun:sqlite").Database>;
   storageDir: string;
 }

@@ -1,7 +1,7 @@
-import type Database from "better-sqlite3";
+import type { Database } from "bun:sqlite";
 import type { ModelFavorite } from "@console/types";
 
-export function listModelFavorites(db: Database.Database): ModelFavorite[] {
+export function listModelFavorites(db: Database): ModelFavorite[] {
   const rows = db
     .prepare("SELECT provider, model_id FROM model_favorites ORDER BY created_at ASC")
     .all() as Array<{ provider: ModelFavorite["provider"]; model_id: string }>;
@@ -10,7 +10,7 @@ export function listModelFavorites(db: Database.Database): ModelFavorite[] {
 }
 
 export function setModelFavorite(
-  db: Database.Database,
+  db: Database,
   favorite: ModelFavorite,
   isFavorite: boolean,
 ): void {

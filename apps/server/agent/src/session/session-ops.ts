@@ -1,4 +1,4 @@
-import { type Database as DatabaseType } from "better-sqlite3";
+import type { Database as DatabaseType } from "bun:sqlite";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";

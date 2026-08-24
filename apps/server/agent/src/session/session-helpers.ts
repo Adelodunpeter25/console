@@ -1,4 +1,4 @@
-import DatabaseConstructor, { type Database as DatabaseType } from "better-sqlite3";
+import { Database as DatabaseConstructor, type Database as DatabaseType } from "bun:sqlite";
 import fs from "node:fs";
 import path from "node:path";
 import { initSessionDatabase } from "./schema.js";
