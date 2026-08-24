@@ -41,7 +41,7 @@ export function appendMessages(
       const safeMsg = truncateForPersistence(msg);
       const msgId =
         (safeMsg as any).id ||
-        crypto.createHash("sha256").update(JSON.stringify(safeMsg)).digest("hex").slice(0, 32);
+        new Bun.CryptoHasher("sha256").update(JSON.stringify(safeMsg)).digest("hex").slice(0, 32);
       const info = insertMsg.run(msgId, safeMsg.role, JSON.stringify(safeMsg), now);
       if (info.changes > 0) inserted++;
     }
@@ -71,8 +71,7 @@ export function replaceMessages(
       const safeMessage = truncateForPersistence(message);
       const messageId =
         (safeMessage as any).id ||
-        crypto
-          .createHash("sha256")
+        new Bun.CryptoHasher("sha256")
           .update(`${index}:${JSON.stringify(safeMessage)}`)
           .digest("hex");
       insert.run(
