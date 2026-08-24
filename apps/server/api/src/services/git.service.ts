@@ -1,14 +1,11 @@
-import { exec as execCb } from "node:child_process";
-import { promisify } from "node:util";
 import path from "node:path";
+import { execShell as execAsync } from "../utils/exec.js";
 import type {
   GitBranchInfo,
   GitBranchesResponse,
   GitFileStatus,
   GitStatusSummary,
 } from "@console/types";
-
-const execAsync = promisify(execCb);
 
 function errorText(error: unknown): string {
   if (error instanceof Error) {

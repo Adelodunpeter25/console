@@ -1,6 +1,6 @@
-import { exec, type ChildProcess } from "node:child_process";
 import * as path from "node:path";
 import { z } from "zod";
+import { spawnCapture } from "../../../api/src/utils/exec.js";
 import type { AgentTool } from "../types/index.js";
 
 const MAX_OUTPUT_BYTES = 50 * 1024;
@@ -48,94 +48,25 @@ function truncateOutput(output: string, maxBytes: number, label: string): string
   );
 }
 
-function execWithSignal(
+async function execWithSignal(
   command: string,
   options: {
     cwd: string;
     env: NodeJS.ProcessEnv;
     timeout: number;
-    shell: string | undefined;
     signal?: AbortSignal;
   },
 ): Promise<ExecResult> {
-  return new Promise((resolve) => {
-    const child: ChildProcess = exec(command, {
-      cwd: options.cwd,
-      env: options.env,
-      timeout: options.timeout,
-      maxBuffer: 10 * 1024 * 1024,
-      shell: options.shell,
-    });
+  const argv =
+    process.platform === "win32"
+      ? ["cmd.exe", "/d", "/s", "/c", command]
+      : ["/bin/sh", "-c", command];
 
-    let stdout = "";
-    let stderr = "";
-    let resolved = false;
-    let abortedBySignal = false;
-
-    child.stdout?.on("data", (data) => {
-      stdout += data.toString();
-    });
-    child.stderr?.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    const cleanup = () => {
-      resolved = true;
-      if (options.signal) {
-        options.signal.removeEventListener("abort", onAbort);
-      }
-    };
-
-    const finish = (result: Omit<ExecResult, "aborted"> & { aborted?: boolean }) => {
-      if (resolved) return;
-      cleanup();
-      resolve({
-        stdout: result.stdout,
-        stderr: result.stderr,
-        exitCode: result.exitCode,
-        killed: result.killed,
-        aborted: result.aborted ?? abortedBySignal,
-      });
-    };
-
-    const onAbort = () => {
-      abortedBySignal = true;
-      if (child.exitCode === null && !child.killed) {
-        child.kill("SIGTERM");
-        setTimeout(() => {
-          if (child.exitCode === null && !child.killed) {
-            child.kill("SIGKILL");
-          }
-        }, 500).unref?.();
-      }
-    };
-
-    if (options.signal) {
-      if (options.signal.aborted) {
-        onAbort();
-      } else {
-        options.signal.addEventListener("abort", onAbort, { once: true });
-      }
-    }
-
-    child.on("error", (err) => {
-      finish({
-        stdout,
-        stderr: stderr + `\n[Process error: ${err.message}]`,
-        exitCode: 1,
-        killed: child.killed,
-      });
-    });
-
-    child.on("close", (code, signal) => {
-      const killed = child.killed || signal === "SIGTERM" || signal === "SIGKILL";
-      finish({
-        stdout,
-        stderr,
-        exitCode: typeof code === "number" ? code : 1,
-        killed,
-      });
-    });
+  return spawnCapture(argv, {
+    cwd: options.cwd,
+    env: options.env,
+    timeoutMs: options.timeout,
+    signal: options.signal,
   });
 }
 
@@ -159,7 +90,6 @@ stdout and stderr are each capped at 50KB.`,
       cwd,
       env,
       timeout: timeoutMs,
-      shell: process.platform === "win32" ? undefined : "/bin/sh",
       signal,
     });
 
