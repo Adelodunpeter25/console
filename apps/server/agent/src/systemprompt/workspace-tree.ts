@@ -4,7 +4,7 @@
  */
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { WorkspaceTree } from "../types/system-prompt.js";
+import type { WorkspaceTree } from "@/agent/src/types/system-prompt.js";
 
 const DEFAULTS = {
   maxDepth: 3,

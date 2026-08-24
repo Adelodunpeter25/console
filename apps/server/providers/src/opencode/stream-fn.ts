@@ -5,7 +5,7 @@
  */
 import { streamText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import type { StreamFn } from "../../../agent/src/service/agent-loop.js";
+import type { StreamFn } from "@/agent/src/service/agent-loop.js";
 import { OPENCODE_BASE_URL } from "./constants.js";
 import { convertOpencodeMessages } from "./convert-messages.js";
 import { convertOpencodeTools } from "./convert-tools.js";

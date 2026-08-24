@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import path from "node:path";
-import { createApiApp } from "../api/src/index.js";
+import { createApiApp } from "@/api/src/index.js";
 
 console.log("Running Hono API Layer & Service tests...");
 

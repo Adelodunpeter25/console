@@ -3,7 +3,7 @@
  * Monitors token usage and condenses old turns when approaching context limits.
  * Inspired by oh-my-pi/packages/agent/src/compaction/ & oh-my-pi/packages/coding-agent/src/compaction/.
  */
-import type { AgentMessage, Model } from "../types/index.js";
+import type { AgentMessage, Model } from "@/agent/src/types/index.js";
 
 export interface CompactionOptions {
   /** Maximum ratio of contextWindow before auto-compaction triggers. Default: 0.8 (80%) */

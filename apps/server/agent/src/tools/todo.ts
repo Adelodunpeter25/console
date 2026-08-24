@@ -4,7 +4,7 @@
  * other's tasks. The default singleton remains exported for offline tests.
  */
 import { z } from "zod";
-import type { AgentTool } from "../types/index.js";
+import type { AgentTool } from "@/agent/src/types/index.js";
 
 export interface TodoItem {
   id: number;

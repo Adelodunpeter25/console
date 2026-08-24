@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { z } from "zod";
-import { spawnCapture } from "../../../api/src/utils/exec.js";
-import type { AgentTool } from "../types/index.js";
+import { spawnCapture } from "@/api/src/utils/exec.js";
+import type { AgentTool } from "@/agent/src/types/index.js";
 
 const MAX_OUTPUT_BYTES = 50 * 1024;
 const DEFAULT_TIMEOUT_MS = 30_000;

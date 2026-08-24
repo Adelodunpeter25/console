@@ -6,7 +6,7 @@ import {
   pathString,
   validateToolInput,
   type AgentTool,
-} from "../agent/src/index.js";
+} from "@/agent/src/index.js";
 
 console.log("Running tool-input harness tests...");
 

@@ -18,14 +18,14 @@ import { join } from "node:path";
 import type { AgentMessage, AgentTool } from "@console/types";
 import { z } from "zod";
 
-import { listModelsForProvider, listProviders } from "../agent/src/commands/provider-registry.js";
+import { listModelsForProvider, listProviders } from "@/agent/src/commands/provider-registry.js";
 import {
   startCodebuffLogin,
   pollCodebuffLogin,
   codebuffStreamFn,
   loadCodebuffCredential,
   CODEBUFF_MODEL_SPECS,
-} from "../providers/src/index.js";
+} from "@/providers/src/index.js";
 
 console.log("Running Codebuff (Freebuff) provider tests...");
 

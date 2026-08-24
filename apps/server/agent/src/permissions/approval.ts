@@ -2,7 +2,7 @@
  * Permissions & Tool Approval Resolution Engine.
  * Mirrors oh-my-pi/packages/coding-agent/src/tools/approval.ts.
  */
-import type { AgentTool, ApprovalMode, ApprovalPolicy, ToolTier } from "../types/index.js";
+import type { AgentTool, ApprovalMode, ApprovalPolicy, ToolTier } from "@/agent/src/types/index.js";
 
 const TIER_RANK: Record<ToolTier, number> = {
   read: 0,

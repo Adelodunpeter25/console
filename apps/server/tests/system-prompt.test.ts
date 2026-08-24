@@ -3,7 +3,7 @@
  * Zero network/API calls — local filesystem & configuration discovery only.
  */
 import assert from "node:assert/strict";
-import { SystemPromptBuilder, buildSystemPrompt } from "../agent/src/systemprompt/index.js";
+import { SystemPromptBuilder, buildSystemPrompt } from "@/agent/src/systemprompt/index.js";
 
 console.log("Running SystemPromptBuilder tests...");
 

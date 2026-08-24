@@ -1,6 +1,6 @@
 import { extractThinkingFromText } from "./thinking.js";
-import { parseToolCallArguments } from "../utils/model-turn.js";
-import type { AgentSessionEvent, AssistantMessage, ToolCall } from "../types/index.js";
+import { parseToolCallArguments } from "@/agent/src/utils/model-turn.js";
+import type { AgentSessionEvent, AssistantMessage, ToolCall } from "@/agent/src/types/index.js";
 import type { StreamFn, StreamParams } from "./types.js";
 
 /**

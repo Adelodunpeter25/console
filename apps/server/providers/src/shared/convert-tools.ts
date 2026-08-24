@@ -4,7 +4,7 @@
  */
 import { zodToJsonSchema } from "zod-to-json-schema";
 import type { AgentTool } from "@console/types";
-import type { GeminiFunctionDeclaration } from "../types/index.js";
+import type { GeminiFunctionDeclaration } from "@/providers/src/types/index.js";
 
 /**
  * Simplified CCA schema normalization based on oh-my-pi reference.

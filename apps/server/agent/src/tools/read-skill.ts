@@ -9,8 +9,8 @@
  * agent access to the complete skill workflow when it matters.
  */
 import { z } from "zod";
-import type { AgentTool } from "../types/index.js";
-import { discoverSkills } from "../systemprompt/discover-skills.js";
+import type { AgentTool } from "@/agent/src/types/index.js";
+import { discoverSkills } from "@/agent/src/systemprompt/discover-skills.js";
 
 const inputSchema = z.object({
   name: z

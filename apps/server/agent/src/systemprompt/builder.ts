@@ -17,7 +17,7 @@ import type {
   DiscoveredContext,
   Rule,
   Skill,
-} from "../types/index.js";
+} from "@/agent/src/types/index.js";
 import { DEFAULT_IDENTITY, DEFAULT_TOOL_NAMES } from "./defaults.js";
 import { discoverContextFiles } from "./discover-agents-md.js";
 import { discoverCommands } from "./discover-commands.js";

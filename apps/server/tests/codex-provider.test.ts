@@ -3,11 +3,11 @@
  * Deterministic tests use mocked SSE; the live test is opt-in with CODEX_REAL_API=1.
  */
 import assert from "node:assert/strict";
-import { Agent, type AgentTool, type Model } from "../agent/src/index.js";
-import { listDirTool } from "../agent/src/tools/list-dir.js";
+import { Agent, type AgentTool, type Model } from "@/agent/src/index.js";
+import { listDirTool } from "@/agent/src/tools/list-dir.js";
 import { bindToolCwd } from "@console/types";
-import { codexCredentialExists } from "../providers/src/codex/oauth.js";
-import { codexStreamFn } from "../providers/src/codex/stream-fn.js";
+import { codexCredentialExists } from "@/providers/src/codex/oauth.js";
+import { codexStreamFn } from "@/providers/src/codex/stream-fn.js";
 
 console.log("Running Codex provider tests...");
 

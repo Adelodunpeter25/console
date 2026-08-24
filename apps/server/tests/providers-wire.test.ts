@@ -10,7 +10,7 @@ import {
   LEGACY_THOUGHT_SIGNATURE,
   parseSse,
   streamCore,
-} from "../providers/src/shared/index.js";
+} from "@/providers/src/shared/index.js";
 import { z } from "zod";
 
 console.log("Running Provider Wire Converter tests...");

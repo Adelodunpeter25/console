@@ -4,8 +4,8 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ProjectInfo } from "../types/index.js";
-import { SqliteSessionStorage } from "../../../agent/src/session/storage.js";
+import type { ProjectInfo } from "@/api/src/types/index.js";
+import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
 
 export class ProjectService {
   private storage = new SqliteSessionStorage();

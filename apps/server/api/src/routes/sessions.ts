@@ -3,8 +3,8 @@
  * Controller delegating business logic to SessionService.
  */
 import { Hono } from "hono";
-import { SessionService } from "../services/session.service.js";
-import type { CreateSessionDto, UpdateSessionDto } from "../types/index.js";
+import { SessionService } from "@/api/src/services/session.service.js";
+import type { CreateSessionDto, UpdateSessionDto } from "@/api/src/types/index.js";
 
 export const sessionRoutes = new Hono();
 const sessionService = new SessionService();

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import type { AgentMessage, AgentTool } from "@console/types";
-import type { StreamFn } from "../../../agent/src/service/agent-loop.js";
-import { parseSse } from "../shared/sse-parser.js";
+import type { StreamFn } from "@/agent/src/service/agent-loop.js";
+import { parseSse } from "@/providers/src/shared/sse-parser.js";
 import { CODEX_BASE_URL, CODEX_CLIENT_VERSION, codexResponsesUrl } from "./constants.js";
 import { loadCodexCredential, refreshCodexIfNeeded } from "./oauth.js";
 

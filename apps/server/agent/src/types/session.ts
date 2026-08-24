@@ -1,7 +1,7 @@
 import type { AgentMessage, AssistantMessage } from "./message.js";
 import type { Model } from "./model.js";
 import type { AgentTool, PermissionRequest, ToolCall, ToolResult } from "./tool.js";
-import type { TodoItem } from "../tools/todo.js";
+import type { TodoItem } from "@/agent/src/tools/todo.js";
 
 /** Interactive question payload emitted when the model calls the 'ask' tool */
 export interface AskQuestionRequest {

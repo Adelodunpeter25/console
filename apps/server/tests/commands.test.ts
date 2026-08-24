@@ -8,7 +8,7 @@ import {
   SlashCommandRegistry,
   SqliteSessionStorage,
   type SlashCommandContext,
-} from "../agent/src/index.js";
+} from "@/agent/src/index.js";
 import type { ProviderId } from "@console/types";
 
 console.log("Running SlashCommandRegistry tests...");

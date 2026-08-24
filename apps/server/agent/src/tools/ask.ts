@@ -6,7 +6,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import type { AgentTool, AskQuestionRequest } from "../types/index.js";
+import type { AgentTool, AskQuestionRequest } from "@/agent/src/types/index.js";
 
 export type AskQuestionHandler = (request: AskQuestionRequest) => Promise<string | string[]>;
 

@@ -15,7 +15,7 @@ import {
   listDirTool,
   readFileTool,
   writeFileTool,
-} from "../agent/src/tools/index.js";
+} from "@/agent/src/tools/index.js";
 
 console.log("Running Local Tools functional tests...");
 

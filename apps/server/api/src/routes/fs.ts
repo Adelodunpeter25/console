@@ -4,8 +4,8 @@
  */
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { FsService } from "../services/fs.service.js";
-import { fsWatchService } from "../services/fswatch.service.js";
+import { FsService } from "@/api/src/services/fs.service.js";
+import { fsWatchService } from "@/api/src/services/fswatch.service.js";
 
 export const fsRoutes = new Hono();
 const fsService = new FsService();

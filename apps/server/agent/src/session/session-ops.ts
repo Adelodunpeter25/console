@@ -2,8 +2,8 @@ import type { Database as DatabaseType } from "bun:sqlite";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { AgentMessage, SessionHeader } from "../types/index.js";
-import { repairToolCallHistory } from "../utils/tool-history.js";
+import type { AgentMessage, SessionHeader } from "@/agent/src/types/index.js";
+import { repairToolCallHistory } from "@/agent/src/utils/tool-history.js";
 import { replaceMessages } from "./session-messages.js";
 import {
   findSessionDbPath,

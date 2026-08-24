@@ -2,13 +2,13 @@
  * Agent Run Execution Service.
  * Manages active run controllers, system prompt building, and agent turn execution with real-time turn persistence.
  */
-import { Agent } from "../../../agent/src/service/agent.js";
-import { allTools } from "../../../agent/src/tools/index.js";
-import { createAskManyTool, createAskTool } from "../../../agent/src/tools/ask.js";
-import { createTodoTool, type TodoItem } from "../../../agent/src/tools/todo.js";
-import { SqliteSessionStorage } from "../../../agent/src/session/storage.js";
-import { buildSystemPrompt } from "../../../agent/src/systemprompt/builder.js";
-import { findModelInProvider, getProvider } from "../../../agent/src/commands/provider-registry.js";
+import { Agent } from "@/agent/src/service/agent.js";
+import { allTools } from "@/agent/src/tools/index.js";
+import { createAskManyTool, createAskTool } from "@/agent/src/tools/ask.js";
+import { createTodoTool, type TodoItem } from "@/agent/src/tools/todo.js";
+import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
+import { buildSystemPrompt } from "@/agent/src/systemprompt/builder.js";
+import { findModelInProvider, getProvider } from "@/agent/src/commands/provider-registry.js";
 import type {
   AgentSessionEvent,
   AgentTool,
@@ -18,7 +18,7 @@ import type {
   UserMessage,
 } from "@console/types";
 import { bindToolCwd } from "@console/types";
-import type { RunPromptDto } from "../types/index.js";
+import type { RunPromptDto } from "@/api/src/types/index.js";
 import { expandPromptRefs } from "./assist.service.js";
 import { randomUUID } from "node:crypto";
 import {
@@ -28,7 +28,7 @@ import {
   isDoneEvent,
 } from "./notify-agent-event.js";
 import { notificationService } from "./notification.service.js";
-import { extractErrorMessage } from "../../../agent/src/utils/error.js";
+import { extractErrorMessage } from "@/agent/src/utils/error.js";
 
 export class RunService {
   private sessionStorage = new SqliteSessionStorage();

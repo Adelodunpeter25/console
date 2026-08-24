@@ -11,18 +11,18 @@
  *  7. Loop until stopReason === 'stop' or maxTurns reached
  */
 import { randomUUID } from "node:crypto";
-import { compactHistory, shouldCompact } from "../compaction/index.js";
+import { compactHistory, shouldCompact } from "@/agent/src/compaction/index.js";
 import { EventStream } from "./event-stream.js";
 import { executeTool } from "./tool-executor.js";
 import { streamOneTurn } from "./stream-turn.js";
-import { extractErrorMessage } from "../utils/error.js";
+import { extractErrorMessage } from "@/agent/src/utils/error.js";
 import type {
   AgentMessage,
   AgentSessionEvent,
   ImagePart,
   ToolResultMessage,
   UserMessage,
-} from "../types/index.js";
+} from "@/agent/src/types/index.js";
 import type { AgentLoopConfig } from "./types.js";
 
 export type {

@@ -5,4 +5,4 @@
  * reuse the OpenCode Zen converters (identical format) under a codebuff-named
  * alias.
  */
-export { convertOpencodeMessages as convertCodebuffMessages } from "../opencode/convert-messages.js";
+export { convertOpencodeMessages as convertCodebuffMessages } from "@/providers/src/opencode/convert-messages.js";

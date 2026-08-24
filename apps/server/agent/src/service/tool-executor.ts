@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { resolveApproval } from "../permissions/approval.js";
-import { normalizeToolOutput } from "../utils/tool-output.js";
+import { resolveApproval } from "@/agent/src/permissions/approval.js";
+import { normalizeToolOutput } from "@/agent/src/utils/tool-output.js";
 import { validateToolInput } from "./tool-input.js";
-import type { AgentTool, AgentSessionEvent, ApprovalMode, PermissionRequest, ToolCall, ToolResult } from "../types/index.js";
+import type { AgentTool, AgentSessionEvent, ApprovalMode, PermissionRequest, ToolCall, ToolResult } from "@/agent/src/types/index.js";
 import type { AgentLoopConfig } from "./types.js";
 
 /**

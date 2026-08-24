@@ -9,11 +9,11 @@
  * User-Agent: GeminiCLI/0.46.0/{modelId} (platform; arch; terminal)
  * Client-Metadata: ideType=IDE_UNSPECIFIED,...
  */
-import type { StreamFn } from "../../../agent/src/service/agent-loop.js";
-import { refreshIfNeeded } from "../auth/token-refresh.js";
-import { loadCredential, credentialExists } from "../auth/token-store.js";
-import { loginGemini } from "../auth/login.js";
-import { buildEndpointUrl, convertMessages, convertTools, streamCore } from "../shared/index.js";
+import type { StreamFn } from "@/agent/src/service/agent-loop.js";
+import { refreshIfNeeded } from "@/providers/src/auth/token-refresh.js";
+import { loadCredential, credentialExists } from "@/providers/src/auth/token-store.js";
+import { loginGemini } from "@/providers/src/auth/login.js";
+import { buildEndpointUrl, convertMessages, convertTools, streamCore } from "@/providers/src/shared/index.js";
 import type {
   CcaRequestPayload,
   CcaToolDeclarations,
@@ -22,8 +22,8 @@ import type {
   GenerationConfig,
   SystemInstruction,
   SystemInstructionPart,
-} from "../types/index.js";
-import { GEMINI_BASE_URL, getGeminiCliHeaders } from "../constants.js";
+} from "@/providers/src/types/index.js";
+import { GEMINI_BASE_URL, getGeminiCliHeaders } from "@/providers/src/constants.js";
 
 function buildSystemInstruction(systemPrompt: string): SystemInstruction | undefined {
   if (!systemPrompt.trim()) return undefined;

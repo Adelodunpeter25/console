@@ -1,8 +1,8 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { z } from "zod";
-import type { AgentTool } from "../types/index.js";
-import { pathString } from "../service/tool-input.js";
+import type { AgentTool } from "@/agent/src/types/index.js";
+import { pathString } from "@/agent/src/service/tool-input.js";
 
 const inputSchema = z.object({
   path: pathString('Required filesystem directory path to list. Use "." for the current project directory.'),

@@ -7,8 +7,8 @@ import type {
   PermissionRequest,
   ToolCall,
   ToolResult,
-} from "../types/index.js";
-import type { CompactionOptions } from "../compaction/index.js";
+} from "@/agent/src/types/index.js";
+import type { CompactionOptions } from "@/agent/src/compaction/index.js";
 
 export type LLMDelta =
   | { type: "text"; text: string; thoughtSignature?: string }

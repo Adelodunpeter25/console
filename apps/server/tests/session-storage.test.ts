@@ -3,7 +3,7 @@
  * Uses in-memory SQLite database (`:memory:`).
  */
 import assert from "node:assert/strict";
-import { SqliteSessionStorage } from "../agent/src/session/index.js";
+import { SqliteSessionStorage } from "@/agent/src/session/index.js";
 import type { AgentMessage } from "@console/types";
 
 console.log("Running SqliteSessionStorage tests...");

@@ -1,9 +1,9 @@
 /**
  * Session Persistence Service wrapping SqliteSessionStorage.
  */
-import { SqliteSessionStorage } from "../../../agent/src/session/storage.js";
+import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
 import type { SessionHeader } from "@console/types";
-import type { CreateSessionDto, SessionDetailResponse, UpdateSessionDto } from "../types/index.js";
+import type { CreateSessionDto, SessionDetailResponse, UpdateSessionDto } from "@/api/src/types/index.js";
 import { RunService } from "./run.service.js";
 
 export class SessionService {

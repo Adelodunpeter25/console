@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { AgentMessage, ToolResult } from "../types/index.js";
+import type { AgentMessage, ToolResult } from "@/agent/src/types/index.js";
 import { bumpSessionUpdated, getProjectIdBySessionId, getSessionDb } from "./session-helpers.js";
 import { truncateForPersistence, type StorageState } from "./utils.js";
 

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { execShell as execAsync } from "../utils/exec.js";
+import { execShell as execAsync } from "@/api/src/utils/exec.js";
 import type {
   GitBranchInfo,
   GitBranchesResponse,

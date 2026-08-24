@@ -3,7 +3,7 @@
  * Execution lands in Phase 6; discovery only for inventory / future registry.
  */
 import * as path from "node:path";
-import type { SlashCommandFile } from "../types/system-prompt.js";
+import type { SlashCommandFile } from "@/agent/src/types/system-prompt.js";
 import { parseFrontmatter } from "./frontmatter.js";
 import {
   createSourceMeta,

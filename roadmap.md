@@ -20,4 +20,5 @@ High-level direction only — implementation details live in `docs/`.
 
 ## Developer experience
 
-- [ ] Server path aliases — `@/…` imports like mobile already has; eliminate fragile `../../` chains
+- [x] Server path aliases — `@/…` imports like mobile already has; eliminate fragile `../../` chains
+- [ ] Native codemod support — let the harness execute scripted bulk refactors across the codebase (e.g. the import-alias migration) safely, with dry-run and verification built in

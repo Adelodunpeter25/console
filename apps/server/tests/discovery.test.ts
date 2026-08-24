@@ -6,8 +6,8 @@ import assert from "node:assert/strict";
 import {
   fetchModelsForProvider,
   listModelsForProvider,
-} from "../agent/src/commands/provider-registry.js";
-import { fetchAvailableModels } from "../providers/src/discovery/fetch-models.js";
+} from "@/agent/src/commands/provider-registry.js";
+import { fetchAvailableModels } from "@/providers/src/discovery/fetch-models.js";
 
 console.log("Running Model Discovery tests...");
 
@@ -76,7 +76,7 @@ console.log("Running Model Discovery tests...");
 
 // 3. Test ProviderService favorites prioritization
 {
-  const { ProviderService } = await import("../api/src/services/provider.service.js");
+  const { ProviderService } = await import("@/api/src/services/provider.service.js");
   const mockStorage: any = {
     listModelFavorites: () => [
       { provider: "antigravity", modelId: "gemini-3.1-pro-low" },

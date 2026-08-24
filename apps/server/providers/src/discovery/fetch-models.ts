@@ -12,7 +12,7 @@ import {
   GEMINI_BASE_URL,
   getAntigravityUserAgent,
   getGeminiCliUserAgent,
-} from "../constants.js";
+} from "@/providers/src/constants.js";
 
 const DENYLIST = new Set(["chat_20706", "chat_23310"]);
 

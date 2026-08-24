@@ -3,7 +3,7 @@
  * Inspired by oh-my-pi rule capability + cursor/windsurf providers.
  */
 import * as path from "node:path";
-import type { Rule } from "../types/system-prompt.js";
+import type { Rule } from "@/agent/src/types/system-prompt.js";
 import { asBoolean, asStringArray, parseFrontmatter } from "./frontmatter.js";
 import {
   createSourceMeta,

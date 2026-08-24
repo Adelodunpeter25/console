@@ -3,7 +3,7 @@
  * Project-level SYSTEM.md wins over user-level (oh-my-pi loadSystemPromptFiles).
  */
 import * as path from "node:path";
-import type { SystemPromptFile } from "../types/system-prompt.js";
+import type { SystemPromptFile } from "@/agent/src/types/system-prompt.js";
 import {
   createSourceMeta,
   getProjectConfigDirs,

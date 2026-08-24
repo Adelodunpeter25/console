@@ -7,7 +7,7 @@
  */
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { Skill } from "../types/system-prompt.js";
+import type { Skill } from "@/agent/src/types/system-prompt.js";
 import { asBoolean, parseFrontmatter } from "./frontmatter.js";
 import {
   createSourceMeta,

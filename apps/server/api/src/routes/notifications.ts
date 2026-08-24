@@ -7,7 +7,7 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { NotificationEvent } from "@console/types";
-import { notificationService } from "../services/notification.service.js";
+import { notificationService } from "@/api/src/services/notification.service.js";
 
 export const notificationRoutes = new Hono();
 

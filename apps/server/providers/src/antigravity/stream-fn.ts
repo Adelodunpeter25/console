@@ -10,11 +10,11 @@
  *
  * Usage: call createAntigravityStreamFn() once per Agent instance.
  */
-import type { StreamFn } from "../../../agent/src/service/agent-loop.js";
-import { refreshIfNeeded } from "../auth/token-refresh.js";
-import { loadCredential, credentialExists } from "../auth/token-store.js";
-import { loginAntigravity } from "../auth/login.js";
-import { buildEndpointUrl, convertMessages, convertTools, streamCore } from "../shared/index.js";
+import type { StreamFn } from "@/agent/src/service/agent-loop.js";
+import { refreshIfNeeded } from "@/providers/src/auth/token-refresh.js";
+import { loadCredential, credentialExists } from "@/providers/src/auth/token-store.js";
+import { loginAntigravity } from "@/providers/src/auth/login.js";
+import { buildEndpointUrl, convertMessages, convertTools, streamCore } from "@/providers/src/shared/index.js";
 import type {
   CcaRequestPayload,
   CcaToolDeclarations,
@@ -25,7 +25,7 @@ import type {
   SystemInstruction,
   SystemInstructionPart,
   ToolConfig,
-} from "../types/index.js";
+} from "@/providers/src/types/index.js";
 import {
   buildEnvelope,
   createSessionState,
@@ -36,7 +36,7 @@ import {
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { ANTIGRAVITY_BASE_URL, getAntigravityUserAgent } from "../constants.js";
+import { ANTIGRAVITY_BASE_URL, getAntigravityUserAgent } from "@/providers/src/constants.js";
 
 /**
  * System instruction injected by the Antigravity client for Gemini 3 + Claude models.

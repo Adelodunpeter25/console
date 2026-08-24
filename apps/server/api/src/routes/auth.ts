@@ -3,8 +3,8 @@
  * Controller delegating business logic to AuthService.
  */
 import { Hono } from "hono";
-import { AuthService } from "../services/auth.service.js";
-import type { OAuthCallbackDto, OAuthLoginUrlDto, ProjectIdDto } from "../types/index.js";
+import { AuthService } from "@/api/src/services/auth.service.js";
+import type { OAuthCallbackDto, OAuthLoginUrlDto, ProjectIdDto } from "@/api/src/types/index.js";
 import type { OAuthProviderId } from "@console/types";
 
 export const authRoutes = new Hono();

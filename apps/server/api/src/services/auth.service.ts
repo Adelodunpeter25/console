@@ -5,13 +5,13 @@ import {
   ANTIGRAVITY_OAUTH_CONFIG,
   GEMINI_OAUTH_CONFIG,
   OAUTH_AUTH_URL,
-} from "../../../providers/src/constants.js";
-import { loadCredential } from "../../../providers/src/auth/token-store.js";
-import { completeAuthFlowWithCode } from "../../../providers/src/auth/login.js";
+} from "@/providers/src/constants.js";
+import { loadCredential } from "@/providers/src/auth/token-store.js";
+import { completeAuthFlowWithCode } from "@/providers/src/auth/login.js";
 import {
   getConfiguredProjectId,
   setConfiguredProjectId,
-} from "../../../providers/src/auth/provider-config.js";
+} from "@/providers/src/auth/provider-config.js";
 import {
   hasCodebuffCredential,
   loadCodebuffCredential,
@@ -23,9 +23,9 @@ import {
   generateCodexPkce,
   loadCodexCredential,
   saveCodexCredential,
-} from "../../../providers/src/index.js";
+} from "@/providers/src/index.js";
 import * as crypto from "node:crypto";
-import type { AuthStatusResponse } from "../types/index.js";
+import type { AuthStatusResponse } from "@/api/src/types/index.js";
 import type { OAuthProviderId } from "@console/types";
 
 /**

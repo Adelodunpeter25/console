@@ -8,12 +8,12 @@
  *  4. Skipping thinking/reasoning parts (thought === true)
  *  5. Surfacing in-band stream errors
  */
-import type { LLMDelta } from "../../../agent/src/service/agent-loop.js";
+import type { LLMDelta } from "@/agent/src/service/agent-loop.js";
 import type {
   CcaResponsePart,
   CloudCodeAssistChunk,
   CloudCodeAssistRequest,
-} from "../types/index.js";
+} from "@/providers/src/types/index.js";
 import { parseSse } from "./sse-parser.js";
 
 export interface StreamCoreOptions {

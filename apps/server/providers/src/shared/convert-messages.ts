@@ -17,7 +17,7 @@ import type {
   GeminiInlineDataPart,
   GeminiOutgoingPart,
   GeminiTextPart,
-} from "../types/index.js";
+} from "@/providers/src/types/index.js";
 
 function makeTextPart(text: string, thoughtSignature?: string): GeminiTextPart {
   return {

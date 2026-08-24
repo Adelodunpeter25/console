@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { createApiApp } from "../api/src/app.js";
+import { createApiApp } from "@/api/src/app.js";
 import {
   isTerminalUpgradeRequest,
   terminalWebsocketHandlers,
   type TerminalSocketData,
-} from "../api/src/terminal/socket.route.js";
+} from "@/api/src/terminal/socket.route.js";
 
 /**
  * Terminal WebSocket pipeline test:

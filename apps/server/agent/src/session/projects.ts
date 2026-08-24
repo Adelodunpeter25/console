@@ -8,7 +8,7 @@ import type { Database as DatabaseType } from "bun:sqlite";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { ProjectInfo } from "../types/index.js";
+import type { ProjectInfo } from "@/agent/src/types/index.js";
 import type { StorageState } from "./utils.js";
 
 interface CreateProjectOptions {

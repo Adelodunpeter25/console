@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { GitService } from "../services/git.service.js";
+import { GitService } from "@/api/src/services/git.service.js";
 
 export const gitRoutes = new Hono();
 const gitService = new GitService();

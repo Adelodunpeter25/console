@@ -5,8 +5,8 @@ import {
   fetchModelsForProvider,
   listProviders,
   type ProviderCatalogEntry,
-} from "../../../agent/src/commands/provider-registry.js";
-import { SqliteSessionStorage } from "../../../agent/src/session/storage.js";
+} from "@/agent/src/commands/provider-registry.js";
+import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
 import type { Model, ProviderId } from "@console/types";
 
 export class ProviderService {

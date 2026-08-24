@@ -3,7 +3,7 @@
  * Controller delegating business logic to ProjectService.
  */
 import { Hono } from "hono";
-import { ProjectService } from "../services/project.service.js";
+import { ProjectService } from "@/api/src/services/project.service.js";
 
 export const projectRoutes = new Hono();
 const projectService = new ProjectService();

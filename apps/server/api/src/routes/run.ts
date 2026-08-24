@@ -4,9 +4,9 @@
  */
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { RunService } from "../services/run.service.js";
-import { extractErrorMessage } from "../../../agent/src/utils/error.js";
-import type { AnswerQuestionDto, ApproveToolPermissionDto, RunPromptDto } from "../types/index.js";
+import { RunService } from "@/api/src/services/run.service.js";
+import { extractErrorMessage } from "@/agent/src/utils/error.js";
+import type { AnswerQuestionDto, ApproveToolPermissionDto, RunPromptDto } from "@/api/src/types/index.js";
 
 export const runRoutes = new Hono();
 const runService = new RunService();

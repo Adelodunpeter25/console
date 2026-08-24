@@ -14,12 +14,12 @@ import assert from "node:assert/strict";
 import type { AgentMessage, AgentTool } from "@console/types";
 import { z } from "zod";
 import { asSchema } from "@ai-sdk/provider-utils";
-import { listProviders, listModelsForProvider } from "../agent/src/commands/provider-registry.js";
-import { convertOpencodeMessages } from "../providers/src/opencode/convert-messages.js";
-import { convertOpencodeTools } from "../providers/src/opencode/convert-tools.js";
-import { opencodeStreamFn } from "../providers/src/opencode/stream-fn.js";
-import { fetchOpencodeFreeModels } from "../providers/src/opencode/discovery.js";
-import { OPENCODE_BASE_URL } from "../providers/src/opencode/constants.js";
+import { listProviders, listModelsForProvider } from "@/agent/src/commands/provider-registry.js";
+import { convertOpencodeMessages } from "@/providers/src/opencode/convert-messages.js";
+import { convertOpencodeTools } from "@/providers/src/opencode/convert-tools.js";
+import { opencodeStreamFn } from "@/providers/src/opencode/stream-fn.js";
+import { fetchOpencodeFreeModels } from "@/providers/src/opencode/discovery.js";
+import { OPENCODE_BASE_URL } from "@/providers/src/opencode/constants.js";
 
 console.log("Running OpenCode Zen (opencode) Provider tests...");
 

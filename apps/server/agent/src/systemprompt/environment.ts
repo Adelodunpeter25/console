@@ -5,7 +5,7 @@ import { execFile } from "node:child_process";
 import * as os from "node:os";
 import * as path from "node:path";
 import { promisify } from "node:util";
-import type { EnvironmentInfo } from "../types/system-prompt.js";
+import type { EnvironmentInfo } from "@/agent/src/types/system-prompt.js";
 
 const execFileAsync = promisify(execFile);
 

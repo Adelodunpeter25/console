@@ -18,7 +18,7 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { streamText } from "ai";
 
-import type { StreamFn } from "../../../agent/src/service/agent-loop.js";
+import type { StreamFn } from "@/agent/src/service/agent-loop.js";
 import { CODEBUFF_API_URL } from "./constants.js";
 import { convertCodebuffMessages } from "./convert-messages.js";
 import {

@@ -3,8 +3,8 @@
  * Spawns an isolated child AgentLoop to execute a focused sub-task without cluttering the main conversation history.
  */
 import { z } from "zod";
-import { agentLoop, type StreamFn } from "../service/agent-loop.js";
-import type { AgentTool, Model } from "../types/index.js";
+import { agentLoop, type StreamFn } from "@/agent/src/service/agent-loop.js";
+import type { AgentTool, Model } from "@/agent/src/types/index.js";
 
 export interface SubagentToolContext {
   model: Model;

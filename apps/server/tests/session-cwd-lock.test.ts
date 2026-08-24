@@ -4,8 +4,8 @@
  * Once messages exist, cwd updates are silently ignored (run integrity).
  */
 import assert from "node:assert/strict";
-import { SqliteSessionStorage } from "../agent/src/session/index.js";
-import { SessionService } from "../api/src/services/session.service.js";
+import { SqliteSessionStorage } from "@/agent/src/session/index.js";
+import { SessionService } from "@/api/src/services/session.service.js";
 import type { AgentMessage } from "@console/types";
 
 console.log("Running SessionService cwd-lock tests...");

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { EventEmitter } from "node:events";
-import { isPathIgnored } from "../utils/ignored.js";
+import { isPathIgnored } from "@/api/src/utils/ignored.js";
 
 export interface FsWatcherEvent {
   type: "fsChange";

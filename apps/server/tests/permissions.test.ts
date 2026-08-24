@@ -14,7 +14,7 @@ import {
   type AgentTool,
   type Model,
   type StreamFn,
-} from "../agent/src/index.js";
+} from "@/agent/src/index.js";
 
 console.log("Running Permissions & Approval Engine tests...");
 
@@ -174,7 +174,7 @@ const testModel: Model = {
 
 // 4. Test Plan Mode system prompt injection
 {
-  const { buildSystemPrompt } = await import("../agent/src/systemprompt/index.js");
+  const { buildSystemPrompt } = await import("@/agent/src/systemprompt/index.js");
   const promptRes = await buildSystemPrompt({
     approvalMode: "plan-mode",
   });

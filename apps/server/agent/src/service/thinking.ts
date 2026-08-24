@@ -3,7 +3,7 @@
  * Separates model reasoning/thinking tokens (<thinking>...</thinking>) from visible response text.
  * Inspired by oh-my-pi/packages/coding-agent/src/thinking.ts.
  */
-import type { ThinkingPart, TextPart } from "../types/index.js";
+import type { ThinkingPart, TextPart } from "@/agent/src/types/index.js";
 
 export interface ThinkingParseResult {
   textParts: TextPart[];

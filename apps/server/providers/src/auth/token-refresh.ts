@@ -4,7 +4,7 @@
  * Uses Google's standard refresh_token grant.
  * In-flight deduplication ensures concurrent callers share a single refresh request.
  */
-import type { GeminiOAuthCredential, ParsedCredential } from "../types/index.js";
+import type { GeminiOAuthCredential, ParsedCredential } from "@/providers/src/types/index.js";
 import { parseCredential, saveCredential, type CredentialType } from "./token-store.js";
 import {
   OAUTH_TOKEN_URL,
@@ -13,7 +13,7 @@ import {
   GEMINI_CLI_CLIENT_SECRET,
   ANTIGRAVITY_CLIENT_ID,
   ANTIGRAVITY_CLIENT_SECRET,
-} from "../constants.js";
+} from "@/providers/src/constants.js";
 
 interface TokenResponse {
   access_token: string;

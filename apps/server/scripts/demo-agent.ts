@@ -8,13 +8,13 @@
  *   bun scripts/demo-agent.ts --provider antigravity --model gemini-2.5-pro "What tools do you have?"
  */
 import readline from "node:readline";
-import { Agent } from "../agent/src/service/agent.js";
-import { allTools } from "../agent/src/tools/index.js";
-import { SqliteSessionStorage } from "../agent/src/session/storage.js";
-import { buildSystemPrompt } from "../agent/src/systemprompt/builder.js";
-import { createAntigravityStreamFn } from "../providers/src/antigravity/stream-fn.js";
-import { geminiStreamFn } from "../providers/src/gemini/stream-fn.js";
-import { opencodeStreamFn } from "../providers/src/opencode/stream-fn.js";
+import { Agent } from "@/agent/src/service/agent.js";
+import { allTools } from "@/agent/src/tools/index.js";
+import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
+import { buildSystemPrompt } from "@/agent/src/systemprompt/builder.js";
+import { createAntigravityStreamFn } from "@/providers/src/antigravity/stream-fn.js";
+import { geminiStreamFn } from "@/providers/src/gemini/stream-fn.js";
+import { opencodeStreamFn } from "@/providers/src/opencode/stream-fn.js";
 import type { AgentSessionEvent, Model, ProviderId } from "@console/types";
 
 function parseArgs(): {

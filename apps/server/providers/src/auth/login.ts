@@ -11,7 +11,7 @@
 import * as crypto from "node:crypto";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-import type { GeminiOAuthCredential } from "../types/index.js";
+import type { GeminiOAuthCredential } from "@/providers/src/types/index.js";
 import type { OAuthProviderId } from "@console/types";
 import { saveCredential } from "./token-store.js";
 import {
@@ -22,7 +22,7 @@ import {
   ANTIGRAVITY_OAUTH_CONFIG,
   getAntigravityUserAgent,
   getGeminiCliHeaders,
-} from "../constants.js";
+} from "@/providers/src/constants.js";
 
 type OAuthConfig = typeof GEMINI_OAUTH_CONFIG | typeof ANTIGRAVITY_OAUTH_CONFIG;
 

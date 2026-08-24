@@ -19,17 +19,17 @@ import {
   loadCodexCredential,
   refreshCodexIfNeeded,
   OPENCODE_FREE_MODEL_IDS,
-} from "../../../providers/src/index.js";
-import { codexModelsUrl } from "../../../providers/src/codex/constants.js";
-import type { StreamFn } from "../service/agent-loop.js";
+} from "@/providers/src/index.js";
+import { codexModelsUrl } from "@/providers/src/codex/constants.js";
+import type { StreamFn } from "@/agent/src/service/agent-loop.js";
 
-import type { Model, ProviderCatalogEntry, ProviderId } from "../types/index.js";
+import type { Model, ProviderCatalogEntry, ProviderId } from "@/agent/src/types/index.js";
 
 export interface ProviderEntry extends ProviderCatalogEntry {
   getStreamFn: () => StreamFn;
 }
 
-export type { ProviderCatalogEntry } from "../types/index.js";
+export type { ProviderCatalogEntry } from "@/agent/src/types/index.js";
 
 export const DEFAULT_FALLBACK_MODEL = "gemini-3-flash";
 

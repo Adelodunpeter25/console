@@ -3,7 +3,7 @@
  * Inspired by oh-my-pi `discovery/agents-md.ts` + multi-provider context files.
  */
 import * as path from "node:path";
-import type { ContextFile } from "../types/system-prompt.js";
+import type { ContextFile } from "@/agent/src/types/system-prompt.js";
 import {
   createSourceMeta,
   getAncestorDirs,

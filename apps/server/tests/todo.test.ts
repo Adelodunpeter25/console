@@ -3,7 +3,7 @@
  * Zero network/API calls — 0 credits used.
  */
 import assert from "node:assert/strict";
-import { clearSessionTodoList, createTodoTool, todoTool } from "../agent/src/tools/index.js";
+import { clearSessionTodoList, createTodoTool, todoTool } from "@/agent/src/tools/index.js";
 
 console.log("Running TODO Tool tests...");
 

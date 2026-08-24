@@ -3,7 +3,7 @@
  * Controller delegating business logic to ProviderService.
  */
 import { Hono } from "hono";
-import { ProviderService } from "../services/provider.service.js";
+import { ProviderService } from "@/api/src/services/provider.service.js";
 import type { ProviderId } from "@console/types";
 
 export const providerRoutes = new Hono();

@@ -1,7 +1,7 @@
 /**
  * Shared helpers and types for session storage.
  */
-import type { AgentMessage } from "../types/index.js";
+import type { AgentMessage } from "@/agent/src/types/index.js";
 
 const MAX_PERSIST_CHARS = 500_000;
 const TRUNCATION_NOTICE = "\n\n[Session persistence truncated large content]";

@@ -1,4 +1,4 @@
-import type { AgentMessage, ToolCall, ToolResult, ToolResultMessage } from "../types/index.js";
+import type { AgentMessage, ToolCall, ToolResult, ToolResultMessage } from "@/agent/src/types/index.js";
 
 const INTERRUPTED_RESULT = "Tool execution was interrupted before a result was recorded.";
 

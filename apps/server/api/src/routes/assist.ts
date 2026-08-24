@@ -5,11 +5,11 @@
  * Both resolve the session's working directory as the search root.
  */
 import { Hono, type Context } from "hono";
-import { SlashCommandRegistry } from "../../../agent/src/commands/registry.js";
-import { discoverCommands } from "../../../agent/src/systemprompt/discover-commands.js";
-import { discoverSkills } from "../../../agent/src/systemprompt/discover-skills.js";
-import { SqliteSessionStorage } from "../../../agent/src/session/storage.js";
-import { searchFiles } from "../services/assist.service.js";
+import { SlashCommandRegistry } from "@/agent/src/commands/registry.js";
+import { discoverCommands } from "@/agent/src/systemprompt/discover-commands.js";
+import { discoverSkills } from "@/agent/src/systemprompt/discover-skills.js";
+import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
+import { searchFiles } from "@/api/src/services/assist.service.js";
 import type { SlashCommandInfo } from "@console/types";
 
 export const assistRoutes = new Hono();

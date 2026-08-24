@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AgentTool } from "../types/index.js";
+import type { AgentTool } from "@/agent/src/types/index.js";
 
 const inputSchema = z.object({
   url: z.string().url().describe("The URL to fetch"),

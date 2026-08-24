@@ -6,8 +6,8 @@ import type {
   ImagePart,
   Model,
   PermissionRequest,
-} from "../types/index.js";
-import { createSubagentTool } from "../tools/subagent.js";
+} from "@/agent/src/types/index.js";
+import { createSubagentTool } from "@/agent/src/tools/subagent.js";
 import { bindToolCwd } from "@console/types";
 import { agentLoop, agentLoopContinue, type AgentLoopConfig, type StreamFn } from "./agent-loop.js";
 import type { EventStream } from "./event-stream.js";

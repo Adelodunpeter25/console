@@ -16,7 +16,7 @@ import { Database as DatabaseConstructor, type Database as DatabaseType } from "
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { AgentMessage, ModelFavorite, SessionHeader, ProjectInfo, ToolResult } from "../types/index.js";
+import type { AgentMessage, ModelFavorite, SessionHeader, ProjectInfo, ToolResult } from "@/agent/src/types/index.js";
 import { initGlobalDatabase } from "./schema.js";
 import { getGlobalDbPath, getConsoleStorageDir } from "./apppaths.js";
 import { type StorageState } from "./utils.js";

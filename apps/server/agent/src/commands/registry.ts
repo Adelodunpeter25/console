@@ -1,9 +1,9 @@
 /**
  * SlashCommandRegistry — manages built-in and discovered custom slash commands.
  */
-import type { Agent } from "../service/agent.js";
-import type { SqliteSessionStorage } from "../session/storage.js";
-import type { Model, ProviderId, Skill, SlashCommandFile } from "../types/index.js";
+import type { Agent } from "@/agent/src/service/agent.js";
+import type { SqliteSessionStorage } from "@/agent/src/session/storage.js";
+import type { Model, ProviderId, Skill, SlashCommandFile } from "@/agent/src/types/index.js";
 import {
   compactCommand,
   modeCommand,
