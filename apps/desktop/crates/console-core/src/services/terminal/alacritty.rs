@@ -114,11 +114,11 @@ impl TerminalBackend for AlacrittyBackend {
     }
 }
 
-fn color_to_terminal(color: alacritty_terminal::term::color::CellColor) -> Option<TerminalColor> {
-    use alacritty_terminal::term::color::CellColor;
+fn color_to_terminal(color: alacritty_terminal::vte::ansi::Color) -> Option<TerminalColor> {
+    use alacritty_terminal::vte::ansi::Color;
     match color {
-        CellColor::Named(_) | CellColor::Indexed(_) => None,
-        CellColor::Spec(rgb) => Some(TerminalColor {
+        Color::Named(_) | Color::Indexed(_) => None,
+        Color::Spec(rgb) => Some(TerminalColor {
             r: rgb.r,
             g: rgb.g,
             b: rgb.b,
@@ -136,7 +136,7 @@ fn flags_to_terminal(flags: alacritty_terminal::term::cell::Flags) -> TerminalCe
         inverse: flags.contains(Flags::INVERSE),
         hidden: flags.contains(Flags::HIDDEN),
         strike: flags.contains(Flags::STRIKEOUT),
-        blink: flags.contains(Flags::BLINK),
+        blink: false,
         wrapline: flags.contains(Flags::WRAPLINE),
     }
 }

@@ -76,7 +76,5 @@ impl TerminalService {
     }
 }
 
-#[cfg(feature = "alacritty")]
 pub mod alacritty;
-#[cfg(feature = "alacritty")]
 pub use alacritty::AlacrittyBackend;
