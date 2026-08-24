@@ -6,7 +6,7 @@
  *   utils/icons/provider-icons.ts     — provider SVG XML + resolver
  *   utils/icons/file-type-registry.ts — FILE_ICONS map (icon name -> XML)
  *
- * Usage: node scripts/generate-svg-icons.mjs [path/to/console-rs]
+ * Usage: bun scripts/generate-svg-icons.mjs [path/to/console-rs]
  */
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
