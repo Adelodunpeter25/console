@@ -9,9 +9,9 @@ use console_ui::workspace::{
     cancel_workspace_drags,
 };
 use console_ui::{
-    ApprovalModeDropdown, ComposerView, ImageViewerModal, ModelDropdownMenu,
-    PermissionInteractionCard, PickerTab, QuestionInteractionCard, SidebarView, Theme, TitleBar,
-    WorkspaceFooter, centered_stripe, error_banner, notice_banner, todo_card,
+    ApprovalModeDropdown, CommandPalette, ComposerView, ImageViewerModal, ModelDropdownMenu,
+    PaletteEntry, PermissionInteractionCard, PickerTab, QuestionInteractionCard, SidebarView,
+    Theme, TitleBar, WorkspaceFooter, centered_stripe, error_banner, notice_banner, todo_card,
 };
 use gpui::{
     App, Context, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent,
@@ -140,6 +140,30 @@ impl Render for ConsoleDesktopApp {
                     div().into_any_element()
                 }
             }
+        });
+        // Command palette entries. Rebuilt each frame so closures capture the
+        // current entity/client; `set_entries` never notifies, so this does
+        // not loop the render.
+        self.command_palette.update(cx, |palette, cx| {
+            palette.set_entries(
+                vec![
+                    PaletteEntry::new("new-chat", "New Chat", {
+                        let on_new_chat = on_new_chat.clone();
+                        move |window, cx| (on_new_chat)(window, cx)
+                    }),
+                    PaletteEntry::new("new-terminal", "New Terminal", {
+                        let entity = entity.clone();
+                        move |window, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.open_terminal_tab(window, cx);
+                                });
+                            }
+                        }
+                    }),
+                ],
+                cx,
+            );
         });
         let on_select_tab: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static> = {
             let entity = entity.clone();
@@ -296,6 +320,7 @@ impl Render for ConsoleDesktopApp {
 
         div()
             .id("app-root")
+            .relative()
             .size_full()
             .bg(theme.canvas)
             .flex()
@@ -394,7 +419,20 @@ impl Render for ConsoleDesktopApp {
                             let on_new = on_new_chat.clone();
                             move |window: &mut Window, cx: &mut App| (on_new)(window, cx)
                         },
-                        move |_w, _cx| {},
+                        {
+                            // Sidebar search button opens the command palette.
+                            let entity = entity.clone();
+                            move |window: &mut Window, cx: &mut App| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.command_palette.update(cx, |palette, cx| {
+                                            palette.show(window, cx);
+                                        });
+                                        cx.notify();
+                                    });
+                                }
+                            }
+                        },
                         {
                             let entity = entity.clone();
                             move |_w, cx| {
@@ -555,6 +593,8 @@ impl Render for ConsoleDesktopApp {
                     }
                 }))
             })
+            // Command palette overlay (renders nothing while closed).
+            .child(self.command_palette.clone())
     }
 }
 
@@ -573,6 +613,23 @@ impl ConsoleDesktopApp {
         // (no transcript, no composer, no footer) instead of chat chrome.
         if active_tab.is_none() {
             return EmptyChatState::new(on_new_chat).into_any_element();
+        }
+
+        // Terminal tab: render the live terminal surface for its id.
+        if let Some(console_core::WorkspaceTabConfig::Terminal { terminal_id, .. }) = active_tab {
+            let theme = Theme::current(cx);
+            return match self.terminals.get(terminal_id) {
+                Some(view) => div().size_full().child(view.clone()).into_any_element(),
+                None => div()
+                    .size_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_color(theme.text_ghost)
+                    .text_size(px(12.0))
+                    .child("Terminal session ended")
+                    .into_any_element(),
+            };
         }
 
         let pane_id = pane_id.to_owned();

@@ -25,6 +25,10 @@ fn main() {
         if let Err(error) = register_fonts(cx) {
             log::warn!("Failed to register bundled fonts: {error}");
         }
+        // gpui-component: theme/global state/popover plumbing. Required before
+        // any of its components (CommandPalette) are used, and its `Root` must
+        // wrap the window's top-level view for overlays to render.
+        gpui_component::init(cx);
         console_ui::theme::init(cx);
         init_input_keybindings(cx);
         console_ui::init_autocomplete_keybindings(cx);
@@ -43,7 +47,9 @@ fn main() {
         };
 
         cx.open_window(options, |window, cx| {
-            cx.new(|cx| ConsoleDesktopApp::new(window, cx))
+            let app_view = cx.new(|cx| ConsoleDesktopApp::new(window, cx));
+            // Root hosts overlay surfaces (palette, dialogs, popovers) above the app view.
+            cx.new(|cx| gpui_component::Root::new(app_view.into(), window, cx))
         })
         .unwrap();
         cx.activate(true);

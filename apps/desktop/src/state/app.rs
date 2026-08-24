@@ -14,9 +14,10 @@ use console_ui::markdown::render::TranscriptSelection;
 use console_ui::utils::SessionDateGroup;
 use console_ui::workspace::{WorkspaceDrag, ops as workspace_ops};
 use console_ui::{
-    ComposerAttachmentPaste, ComposerEvent, ComposerInput, ContextMenuHandle, PickerTab,
-    TranscriptView,
+    CommandPalette, ComposerAttachmentPaste, ComposerEvent, ComposerInput, ContextMenuHandle,
+    PickerTab, TranscriptView,
 };
+use console_ui::terminal::TerminalView;
 use gpui::{AppContext, Context, Entity, ListAlignment, ListState, Subscription, Window, px};
 use std::rc::Rc;
 
@@ -144,6 +145,12 @@ pub struct ConsoleDesktopApp {
     /// debounce. While a drag continuously changes bounds this holds the
     /// newest frame and a single trailing timer writes it.
     pub(crate) pending_window_state: Option<persistence::window::PersistedWindowState>,
+    /// ⌘K-style palette (gpui-component `Command`), opened by the sidebar
+    /// search button. Entries are rebuilt each frame in `view.rs`.
+    pub command_palette: Entity<CommandPalette>,
+    /// Live terminal surfaces keyed by terminal id. Tabs reference these via
+    /// `WorkspaceTabConfig::Terminal { terminal_id }`.
+    pub terminals: HashMap<String, Entity<TerminalView>>,
     pub _subscriptions: Vec<Subscription>,
 }
 
@@ -392,6 +399,8 @@ impl ConsoleDesktopApp {
             sidebar_resize_start: None,
             saved_window_state: persistence::store::load_window(),
             pending_window_state: None,
+            command_palette: cx.new(|cx| CommandPalette::new(window, cx)),
+            terminals: HashMap::new(),
             collapsed_groups: Rc::new(
                 layout
                     .collapsed_groups
@@ -1160,6 +1169,50 @@ impl ConsoleDesktopApp {
         workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
         self.active_pane_id = Some(pane_id.to_string());
         format!("chat:{session_id}")
+    }
+
+    /// Open a new Terminal tab in the active pane. The PTY cwd is the pane's
+    /// selected project path, falling back to the process working directory.
+    pub fn open_terminal_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".into());
+        let cwd = self
+            .selected_project_for_pane(&pane_id)
+            .map(|project| project.path.clone())
+            .or_else(|| {
+                std::env::current_dir()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .ok()
+            })
+            .unwrap_or_else(|| ".".to_string());
+        self.open_terminal_tab_in_pane(&pane_id, cwd, window, cx);
+    }
+
+    /// Open a Terminal tab running at `cwd` in a specific pane.
+    pub fn open_terminal_tab_in_pane(
+        &mut self,
+        pane_id: &str,
+        cwd: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let terminal_id = format!(
+            "term-{}-{}",
+            chrono::Utc::now().timestamp_millis(),
+            self.terminals.len(),
+        );
+        let view = cx.new(|cx| TerminalView::with_cwd(cwd, self.client.clone(), window, cx));
+        self.terminals.insert(terminal_id.clone(), view);
+        let tab = WorkspaceTabConfig::Terminal {
+            terminal_id: terminal_id.clone(),
+            title: "Terminal".into(),
+            project_id: self.pane_project_id(pane_id),
+        };
+        workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
+        self.active_pane_id = Some(pane_id.to_string());
+        cx.notify();
     }
 
     /// Close a tab in a pane. Returns the newly active tab id, if any.
