@@ -8,6 +8,7 @@ license.workspace = true
 gpui = { workspace = true }
 gpui_macros = { workspace = true }
 gpui_platform = { workspace = true }
+gpui-component = { workspace = true }
 console-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
