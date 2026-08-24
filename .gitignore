@@ -4,6 +4,7 @@ apps/console-macos/.build
 packages/types/node_modules
 apps/cli/node_modules
 apps/web/node_modules
+index.js.map
 # Logs
 logs
 *.log
