@@ -8,6 +8,7 @@ pub mod git;
 pub mod model;
 pub mod project;
 pub mod session;
+pub mod terminal;
 pub mod workspace;
 
 pub use agent::*;
@@ -20,4 +21,5 @@ pub use git::*;
 pub use model::*;
 pub use project::*;
 pub use session::*;
+pub use terminal::*;
 pub use workspace::*;

@@ -6,6 +6,7 @@ pub mod project;
 pub mod provider;
 pub mod run;
 pub mod session;
+pub mod terminal;
 
 pub use assist::AssistService;
 pub use fs::FsService;
@@ -15,3 +16,4 @@ pub use project::ProjectService;
 pub use provider::ProviderService;
 pub use run::RunService;
 pub use session::SessionService;
+pub use terminal::TerminalService;

@@ -4,6 +4,7 @@ pub mod input;
 pub mod layout;
 pub mod markdown;
 pub mod primitives;
+pub mod terminal;
 pub mod theme;
 pub mod utils;
 pub mod workspace;
