@@ -1,10 +1,9 @@
 /**
  * Terminal WebSocket endpoint (/api/terminals).
  *
- * Attaches a `ws` WebSocketServer to the raw Node http.Server created in
- * index.ts. The Hono app cannot upgrade sockets itself (the server uses
- * `createServer` + `app.fetch`), so we intercept the `upgrade` event for
- * `/api/terminals` and hand the socket to node-pty.
+ * Uses Bun.serve's native WebSockets (replacing the `ws` shim): HTTP requests
+ * flow through `fetch`, while `/api/terminals` upgrade requests are handed to
+ * `server.upgrade` and thereafter driven by the exported handlers.
  *
  * Protocol:
  *   - Connect:  GET /api/terminals?cwd=...&cols=...&rows=...&shell=...&label=...
@@ -13,8 +12,6 @@
  *   - Client→Server frames: JSON `TerminalClientMessage`
  *     { type: "input" | "resize" | "kill", ... }
  */
-import type { Server } from "node:http";
-import { WebSocketServer, type WebSocket } from "ws";
 import type {
   TerminalClientMessage,
   TerminalSpawnParams,
@@ -23,83 +20,98 @@ import { terminalPtyManager } from "./pty.manager.js";
 
 const TERMINAL_PATH = "/api/terminals";
 
-function isTerminalRequest(url: string | undefined): boolean {
-  if (!url) return false;
+/** Per-socket state attached at upgrade time and mutated over the lifetime. */
+interface TerminalSocketData {
+  /** The original request URL carrying spawn params. */
+  url: string;
+  /** PTY session spawned for this socket; null until `open` succeeds. */
+  sessionId: string | null;
+  /** True while output is paused due to send-buffer backpressure. */
+  paused: boolean;
+  /** Interval polling the buffered amount while paused (resume trigger). */
+  drainPoller?: ReturnType<typeof setInterval>;
+}
+
+export function isTerminalUpgradeRequest(req: Request): boolean {
+  if (req.headers.get("upgrade") !== "websocket") return false;
   try {
-    const pathname = new URL(url, "http://localhost").pathname;
-    return pathname === TERMINAL_PATH;
+    return new URL(req.url).pathname === TERMINAL_PATH;
   } catch {
     return false;
   }
 }
 
-/**
- * Mount the terminal WebSocket server onto the HTTP server.
- * Call once from the server entry point; returns a close function for shutdown.
- */
-export function attachTerminalSocket(server: Server): () => void {
-  const wss = new WebSocketServer({ noServer: true });
+// Pause the PTY when the socket send buffer saturates so flooding programs
+// can't grow memory without bound; resume once it drains below the low mark.
+const HIGH_WATER = 1 << 20; // 1 MiB
+const LOW_WATER = HIGH_WATER / 2;
 
-  server.on("upgrade", (req, socket, head) => {
-    if (!isTerminalRequest(req.url)) return; // other consumers (none yet) or plain HTTP
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit("connection", ws, req);
-    });
-  });
+export const terminalWebsocketHandlers = {
+  websocket: {
+    data: {} as TerminalSocketData,
+    open(ws: import("bun").ServerWebSocket<TerminalSocketData>): void {
+      ws.data.sessionId = null;
+      ws.data.paused = false;
 
-  wss.on("connection", (ws: WebSocket, req) => {
-    const params = parseSpawnParams(req.url);
+      const maybeResume = () => {
+        if (!ws.data.sessionId || !ws.data.paused) return;
+        if (ws.getBufferedAmount() <= LOW_WATER) {
+          ws.data.paused = false;
+          terminalPtyManager.resume(ws.data.sessionId);
+          if (ws.data.drainPoller) {
+            clearInterval(ws.data.drainPoller);
+            ws.data.drainPoller = undefined;
+          }
+        }
+      };
+      // Native WebSockets have no "drain" event; poll the buffered amount
+      // while paused and resume once it falls below the low-water mark.
+      const checkBackpressure = () => {
+        if (!ws.data.sessionId || ws.data.paused) return;
+        if (ws.getBufferedAmount() > HIGH_WATER) {
+          ws.data.paused = true;
+          terminalPtyManager.pause(ws.data.sessionId);
+          if (!ws.data.drainPoller) ws.data.drainPoller = setInterval(maybeResume, 25);
+        }
+      };
+      const send = (message: unknown) => {
+        ws.send(JSON.stringify(message));
+        checkBackpressure();
+      };
 
-    let session: TerminalId | null = null;
-    let paused = false;
-    // Pause the PTY when the socket send buffer saturates so flooding programs
-    // can't grow memory without bound; resume once it drains.
-    const HIGH_WATER = 1 << 20; // 1 MiB
-    const checkBackpressure = () => {
-      if (!session || paused) return;
-      if (ws.bufferedAmount > HIGH_WATER) {
-        paused = true;
-        terminalPtyManager.pause(session);
+      // Validate cwd before spawning so the client gets a clean error frame.
+      try {
+        const params = parseSpawnParams(new URL(ws.data.url));
+        const spawned = terminalPtyManager.spawn(params);
+        ws.data.sessionId = spawned.id;
+        terminalPtyManager.attach(spawned.id, {
+          onData: (event) => send(event),
+          onExit: (code) => send({ type: "exit", code }),
+          onError: (message) => send({ type: "error", message }),
+        });
+        send(spawned);
+      } catch (err) {
+        send({ type: "error", message: err instanceof Error ? err.message : String(err) });
+        ws.close(4000, "Spawn failed");
       }
-    };
-    const maybeResume = () => {
-      if (!session || !paused) return;
-      if (ws.bufferedAmount <= HIGH_WATER / 2) {
-        paused = false;
-        terminalPtyManager.resume(session);
-      }
-    };
-    const send = (message: unknown) => {
-      if (ws.readyState === ws.OPEN) {
-        ws.send(JSON.stringify(message), checkBackpressure);
-      }
-    };
+    },
 
-    // Validate cwd before spawning so the client gets a clean error frame.
-    try {
-      const spawned = terminalPtyManager.spawn(params);
-      session = spawned.id;
-      terminalPtyManager.attach(spawned.id, {
-        onData: (event) => send(event),
-        onExit: (code) => send({ type: "exit", code }),
-        onError: (message) => send({ type: "error", message }),
-      });
-      send(spawned);
-    } catch (err) {
-      send({ type: "error", message: err instanceof Error ? err.message : String(err) });
-      ws.close(4000, "Spawn failed");
-      return;
-    }
+    message(
+      ws: import("bun").ServerWebSocket<TerminalSocketData>,
+      data: string | Uint8Array,
+    ): void {
+      const session = ws.data.sessionId;
+      if (!session) return;
 
-    ws.on("message", (raw) => {
       let frame: TerminalClientMessage;
       try {
-        frame = JSON.parse(raw.toString("utf-8")) as TerminalClientMessage;
+        frame = JSON.parse(
+          typeof data === "string" ? data : new TextDecoder().decode(data),
+        ) as TerminalClientMessage;
       } catch {
-        send({ type: "error", message: "Invalid terminal frame: expected JSON." });
+        ws.send(JSON.stringify({ type: "error", message: "Invalid terminal frame: expected JSON." }));
         return;
       }
-      if (!session) return;
 
       switch (frame.type) {
         case "input":
@@ -113,40 +125,32 @@ export function attachTerminalSocket(server: Server): () => void {
           ws.close(1000, "Killed");
           break;
         default:
-          send({ type: "error", message: `Unknown terminal frame type: ${(frame as { type?: string }).type}` });
+          ws.send(JSON.stringify({ type: "error", message: `Unknown terminal frame type: ${(frame as { type?: string }).type}` }));
       }
-    });
+    },
 
-    ws.on("close", () => {
+    close(ws: import("bun").ServerWebSocket<TerminalSocketData>): void {
+      if (ws.data.drainPoller) clearInterval(ws.data.drainPoller);
+      const session = ws.data.sessionId;
       if (session) {
         terminalPtyManager.kill(session);
-        session = null;
+        ws.data.sessionId = null;
       }
-    });
+    },
+  },
+};
 
-    // The send buffer drained below the low-water mark — resume output.
-    ws.on("drain", maybeResume);
-
-    ws.on("error", () => {
-      // Socket error — the close handler still fires; nothing extra needed.
-    });
-  });
-
-  return () => wss.close();
-}
-
-function parseSpawnParams(url: string | undefined): TerminalSpawnParams {
-  const parsed = new URL(url ?? "/", "http://localhost");
+function parseSpawnParams(url: URL): TerminalSpawnParams {
   const num = (v: string | null, fallback: number) => {
     if (!v) return fallback;
     const n = Number.parseInt(v, 10);
     return Number.isFinite(n) && n > 0 ? n : fallback;
   };
   return {
-    cwd: parsed.searchParams.get("cwd") ?? process.cwd(),
-    shell: parsed.searchParams.get("shell") ?? undefined,
-    cols: num(parsed.searchParams.get("cols"), 80),
-    rows: num(parsed.searchParams.get("rows"), 24),
-    label: parsed.searchParams.get("label") ?? undefined,
+    cwd: url.searchParams.get("cwd") ?? process.cwd(),
+    shell: url.searchParams.get("shell") ?? undefined,
+    cols: num(url.searchParams.get("cols"), 80),
+    rows: num(url.searchParams.get("rows"), 24),
+    label: url.searchParams.get("label") ?? undefined,
   };
 }

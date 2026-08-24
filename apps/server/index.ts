@@ -1,10 +1,14 @@
 /**
- * Server Entry Point — Starts Hono API Server listening on 0.0.0.0:3000.
+ * Server Entry Point — Starts the Hono API on Bun.serve (0.0.0.0:3000).
+ * Terminal WebSocket upgrades ride the same server natively.
  * Supports daemon mode with logging and graceful shutdown.
  */
-import { createServer } from "node:http";
 import { createApiApp } from "./api/src/app.js";
-import { attachTerminalSocket } from "./api/src/terminal/socket.route.js";
+import {
+  isTerminalUpgradeRequest,
+  terminalWebsocketHandlers,
+  type TerminalSocketData,
+} from "./api/src/terminal/socket.route.js";
 import { terminalPtyManager } from "./api/src/terminal/pty.manager.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -66,55 +70,6 @@ async function shutdown(): Promise<void> {
   process.exit(0);
 }
 
-const server = createServer(async (req, res) => {
-  const url = `http://${req.headers.host || "localhost"}${req.url}`;
-
-  // Convert Node.js IncomingMessage to Web Standard Request
-  const headers = new Headers();
-  for (const [key, value] of Object.entries(req.headers)) {
-    if (value !== undefined) {
-      if (Array.isArray(value)) {
-        for (const v of value) headers.append(key, v);
-      } else {
-        headers.set(key, value);
-      }
-    }
-  }
-
-  const method = req.method || "GET";
-  let body: BodyInit | null = null;
-  if (method !== "GET" && method !== "HEAD") {
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of req) {
-      chunks.push(chunk);
-    }
-    body = Buffer.concat(chunks);
-  }
-
-  const webReq = new Request(url, {
-    method,
-    headers,
-    body,
-  });
-
-  const webRes = await app.fetch(webReq);
-
-  res.statusCode = webRes.status;
-  webRes.headers.forEach((val, key) => {
-    res.setHeader(key, val);
-  });
-
-  if (webRes.body) {
-    const reader = webRes.body.getReader();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      res.write(value);
-    }
-  }
-  res.end();
-});
-
 // Graceful shutdown handlers
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
@@ -123,18 +78,28 @@ process.on("SIGINT", shutdown);
 async function startServer(): Promise<void> {
   await setupLogging();
 
-  // WebSocket endpoint for interactive terminals (node-pty backed).
-  attachTerminalSocket(server);
-
-  server.listen(port, host, () => {
-    log(`Console Agent Server running on http://${host}:${port}`);
-    log(`API Base: http://${host}:${port}/api (Accepting connections from all hosts/devices)`);
-    log(`Mode: ${isDaemon ? "daemon" : "foreground"}`);
-
-    if (isDaemon) {
-      log(`Logs: ${logFile}`);
-    }
+  Bun.serve<string, TerminalSocketData>({
+    port,
+    hostname: host,
+    fetch(req, server) {
+      if (isTerminalUpgradeRequest(req)) {
+        // Hijack the socket; handlers take over once the upgrade completes.
+        const upgraded = server.upgrade(req, { data: { url: req.url, sessionId: null, paused: false } });
+        if (upgraded) return undefined;
+        return new Response("Terminal WebSocket upgrade failed", { status: 400 });
+      }
+      return app.fetch(req);
+    },
+    websocket: terminalWebsocketHandlers.websocket,
   });
+
+  log(`Console Agent Server running on http://${host}:${port}`);
+  log(`API Base: http://${host}:${port}/api (Accepting connections from all hosts/devices)`);
+  log(`Mode: ${isDaemon ? "daemon" : "foreground"}`);
+
+  if (isDaemon) {
+    log(`Logs: ${logFile}`);
+  }
 }
 
 startServer().catch((error) => {
