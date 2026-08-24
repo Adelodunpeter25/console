@@ -150,7 +150,7 @@ pub struct ConsoleDesktopApp {
     pub command_palette: Entity<CommandPalette>,
     /// Live terminal surfaces keyed by terminal id. Tabs reference these via
     /// `WorkspaceTabConfig::Terminal { terminal_id }`.
-    pub terminals: HashMap<String, Entity<TerminalView>>,
+    pub terminals: std::collections::HashMap<String, Entity<TerminalView>>,
     pub _subscriptions: Vec<Subscription>,
 }
 
@@ -400,7 +400,7 @@ impl ConsoleDesktopApp {
             saved_window_state: persistence::store::load_window(),
             pending_window_state: None,
             command_palette: cx.new(|cx| CommandPalette::new(window, cx)),
-            terminals: HashMap::new(),
+            terminals: std::collections::HashMap::new(),
             collapsed_groups: Rc::new(
                 layout
                     .collapsed_groups

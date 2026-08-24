@@ -49,7 +49,7 @@ fn main() {
         cx.open_window(options, |window, cx| {
             let app_view = cx.new(|cx| ConsoleDesktopApp::new(window, cx));
             // Root hosts overlay surfaces (palette, dialogs, popovers) above the app view.
-            cx.new(|cx| gpui_component::Root::new(app_view.into(), window, cx))
+            cx.new(|cx| gpui_component::Root::new(app_view, window, cx))
         })
         .unwrap();
         cx.activate(true);

@@ -115,10 +115,10 @@ impl Render for CommandPalette {
             });
 
         // Modal overlay: dimmed backdrop, palette centered near the top like ⌘K menus.
+        // Painted last inside app-root, so no explicit z-index is needed.
         div()
             .absolute()
             .inset_0()
-            .z_index(1000)
             .bg(gpui::black().opacity(0.35))
             .flex()
             .justify_center()
