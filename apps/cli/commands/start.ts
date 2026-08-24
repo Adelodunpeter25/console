@@ -2,7 +2,6 @@
  * Start command - Launch the daemon
  */
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
 import * as path from "node:path";
 import { ensureConsoleDir, writePidFile, saveConfig, getDaemonStatus } from "../daemon-manager.js";
 import type { StartOptions } from "../types.js";
@@ -14,18 +13,20 @@ interface ServerLaunch {
 
 /**
  * Resolve how to launch the server:
- * 1. CONSOLE_SERVER_BIN env override (explicit path to a server binary/source)
- * 2. A `console-server` binary installed next to this CLI (compiled installs:
- *    both binaries live in the same dir, e.g. ~/.local/bin)
+ * 1. Compiled install: this `console` binary IS the server (multi-call).
+ *    Re-executes itself detached with CONSOLE_SERVE=1.
+ * 2. CONSOLE_SERVER_BIN env override (explicit path to a server binary/source)
  * 3. Dev fallback: run apps/server/index.ts via bun from the source tree
  */
-function resolveServerLaunch(): ServerLaunch {
-  const envBin = process.env.CONSOLE_SERVER_BIN;
-  if (envBin) return { cmd: envBin, args: [] };
+function resolveServerLaunch(): ServerLaunch & { serveEnv?: boolean } {
+  const execBase = path.basename(process.execPath);
+  // Under the bun runtime (dev) execPath is bun/bun-debug/node — not our binary.
+  const compiled = !["bun", "bun-debug", "node"].includes(execBase);
 
-  const execDir = path.dirname(process.execPath);
-  const candidate = path.join(execDir, "console-server");
-  if (existsSync(candidate)) return { cmd: candidate, args: [] };
+  const envBin = process.env.CONSOLE_SERVER_BIN;
+  if (envBin && !compiled) return { cmd: envBin, args: [] };
+
+  if (compiled) return { cmd: process.execPath, args: [], serveEnv: true };
 
   const cliCommandsDir = path.dirname(new URL(import.meta.url).pathname);
   const serverPath = path.resolve(cliCommandsDir, "..", "..", "server", "index.ts");
@@ -70,7 +71,7 @@ export async function startDaemon(options: StartOptions): Promise<void> {
     const child = spawn(launch.cmd, [...launch.args], {
       detached: true,
       stdio: "ignore",
-      env,
+      env: launch.serveEnv ? { ...env, CONSOLE_SERVE: "1" } : env,
     });
 
     child.unref();
@@ -103,7 +104,10 @@ export async function startDaemon(options: StartOptions): Promise<void> {
       CONSOLE_DAEMON: "true",
     };
 
-    const child = spawn(launch.cmd, launch.args, { stdio: "inherit", env });
+    const child = spawn(launch.cmd, launch.args, {
+      stdio: "inherit",
+      env: launch.serveEnv ? { ...env, CONSOLE_SERVE: "1" } : env,
+    });
     await new Promise<number>((resolve) => child.on("exit", (code) => resolve(code ?? 0)));
     process.exit(0);
   }

@@ -27,10 +27,10 @@ dev-desktop:
 build-desktop:
 	cargo build --release --manifest-path apps/desktop/Cargo.toml
 
-## build-server: Compile the agent server into a standalone single-binary executable
+## build-server: Compile the multi-call `console` binary (CLI + agent server)
 ## (bun runtime embedded, minified JS, zstd sourcemap for readable stacktraces)
 build-server:
-	bun build --compile --minify --sourcemap apps/server/index.ts --outfile console-server
+	bun build --compile --minify --sourcemap apps/cli/console.ts --outfile console
 
 ## build-desktop-mac: Build the GPUI desktop app for macOS (release)
 build-desktop-mac:
@@ -60,7 +60,7 @@ help:
 	@echo "  make dev-mobile        - Start the Expo mobile app dev server"
 	@echo "  make dev-desktop       - Start the GPUI desktop app in dev mode"
 	@echo "  make build-desktop     - Build the GPUI desktop app for production"
-	@echo "  make build-server      - Compile the agent server into a standalone binary"
+	@echo "  make build-server      - Compile the multi-call console binary (CLI + server)"
 	@echo "  make build-desktop-mac - Build the GPUI desktop app for macOS (release)"
 	@echo "  make typecheck         - Run TypeScript typechecking"
 	@echo "  make generate-icons    - Regenerate mobile SVG icon registries from console-rs"

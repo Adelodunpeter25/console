@@ -1,8 +1,9 @@
 #!/bin/sh
 # Console — install script
 #
-# Downloads the latest console (CLI) and console-server binaries from the
-# rolling GitHub release and installs them into ~/.local/bin.
+# Downloads the latest multi-call `console` binary (management CLI + agent
+# server in one executable) from the rolling GitHub release and installs it
+# into ~/.local/bin.
 #
 # Usage:
 #   curl -fsSL <raw-url>/install.sh | sh
@@ -44,8 +45,7 @@ echo "Installing Console (${SUFFIX}) to ${PREFIX}..."
 mkdir -p "$PREFIX"
 
 curl -fSL "${BASE_URL}/console-${SUFFIX}" -o "${PREFIX}/console"
-curl -fSL "${BASE_URL}/console-server-${SUFFIX}" -o "${PREFIX}/console-server"
-chmod +x "${PREFIX}/console" "${PREFIX}/console-server"
+chmod +x "${PREFIX}/console"
 
 case ":$PATH:" in
   *":${PREFIX}:"*) ;;
