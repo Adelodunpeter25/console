@@ -112,7 +112,7 @@ impl TerminalHandle {
             let mut b = backend.lock().await;
             b.resize(size);
             drop(b);
-            notify.notify_waiters();
+            notify.notify_one();
         });
         let _ = self.sender.send(TerminalClientMessage::Resize {
             cols: size.cols,
@@ -168,7 +168,7 @@ impl TerminalService {
                 Err(e) => {
                     *status_clone.write().await = TerminalStatus::Error;
                     *error_clone.write().await = Some(format!("WS connect failed: {e}"));
-                    notify_clone.notify_waiters();
+                    notify_clone.notify_one();
                     return;
                 }
             };
@@ -205,13 +205,13 @@ impl TerminalService {
                             Ok(TerminalServerMessage::Spawned { id: sid, .. }) => {
                                 *id_clone.write().await = Some(sid);
                                 *status_clone.write().await = TerminalStatus::Running;
-                                notify_clone.notify_waiters();
+                                notify_clone.notify_one();
                             }
                             Ok(TerminalServerMessage::Output { data }) => {
                                 let mut b = backend_clone.lock().await;
                                 b.advance(&data);
                                 drop(b);
-                                notify_clone.notify_waiters();
+                                notify_clone.notify_one();
                             }
                             Ok(TerminalServerMessage::Exit { code }) => {
                                 *status_clone.write().await = TerminalStatus::Exited;
@@ -219,13 +219,13 @@ impl TerminalService {
                                     *error_clone.write().await =
                                         Some(format!("Shell exited with code {c}"));
                                 }
-                                notify_clone.notify_waiters();
+                                notify_clone.notify_one();
                                 break;
                             }
                             Ok(TerminalServerMessage::Error { message }) => {
                                 *status_clone.write().await = TerminalStatus::Error;
                                 *error_clone.write().await = Some(message);
-                                notify_clone.notify_waiters();
+                                notify_clone.notify_one();
                                 break;
                             }
                             Err(e) => {
@@ -235,13 +235,13 @@ impl TerminalService {
                     }
                     Ok(tokio_tungstenite::tungstenite::Message::Close(_)) => {
                         *status_clone.write().await = TerminalStatus::Exited;
-                        notify_clone.notify_waiters();
+                        notify_clone.notify_one();
                         break;
                     }
                     Err(e) => {
                         *status_clone.write().await = TerminalStatus::Error;
                         *error_clone.write().await = Some(format!("WS read failed: {e}"));
-                        notify_clone.notify_waiters();
+                        notify_clone.notify_one();
                         break;
                     }
                     _ => {}

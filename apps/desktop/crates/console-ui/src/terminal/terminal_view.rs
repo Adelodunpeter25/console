@@ -61,7 +61,6 @@ impl TerminalView {
 
     fn spawn(&mut self, params: TerminalSpawnParams, client: ConsoleClient, cx: &mut Context<Self>) {
         let size = self.size;
-        let entity = cx.entity().downgrade();
 
         cx.spawn(async move |this, cx| {
             let service = client.terminal_service();
@@ -94,6 +93,11 @@ impl TerminalView {
             cx.spawn(async move |cx| {
                 loop {
                     handle_for_watch.notify.notified().await;
+                    // Coalesce output bursts (paste, `cat`, prompt redraws) into a
+                    // single snapshot + re-render pass instead of one per frame.
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(8))
+                        .await;
                     let snapshot = handle_for_watch.snapshot().await;
                     let status = handle_for_watch.status().await;
                     let error = handle_for_watch.error.read().await.clone();
@@ -165,7 +169,7 @@ impl TerminalView {
 
         match key {
             "enter" => Some("\r".into()),
-            "backspace" => Some("\x7f".into()),
+            "space" => Some(" ".into()),
             "delete" => Some("\x1b[3~".into()),
             "tab" => Some("\t".into()),
             "escape" => Some("\x1b".into()),
@@ -274,40 +278,63 @@ impl Render for TerminalView {
     }
 }
 
-fn render_snapshot(snapshot: &console_core::types::terminal::TerminalGridSnapshot, theme: TerminalTheme) -> gpui::AnyElement {
-    let rows = snapshot.rows.clone();
+fn render_snapshot(
+    snapshot: &console_core::types::terminal::TerminalGridSnapshot,
+    theme: TerminalTheme,
+) -> gpui::AnyElement {
+    let to_rgb_u32 = |c: Option<console_core::types::terminal::TerminalColor>| {
+        c.map(|c| c.r as u32 * 256 * 256 + c.g as u32 * 256 + c.b as u32)
+    };
     let cursor = snapshot.cursor;
+
     div()
         .flex()
         .flex_col()
         .font_family("GeistMono")
         .text_size(px(12.0))
         .line_height(px(16.0))
-        .children(rows.into_iter().enumerate().map(|(row_idx, row)| {
-            let is_cursor_row = row_idx as u16 == cursor.row;
+        .children(snapshot.rows.iter().enumerate().map(|(row_idx, row)| {
+            // Group consecutive same-styled cells into one text run: an
+            // 80x24 grid renders ~dozens of elements instead of ~2k divs,
+            // which is what made typed input echo visibly lag behind.
+            let mut runs: Vec<(Option<u32>, Option<u32>, bool, String)> = Vec::new();
+            for (col_idx, cell) in row.iter().enumerate() {
+                let fg = to_rgb_u32(cell.fg);
+                let bg = to_rgb_u32(cell.bg);
+                let is_cursor =
+                    row_idx as u16 == cursor.row && col_idx as u16 == cursor.col && cursor.visible;
+                match runs.last_mut() {
+                    Some((run_fg, run_bg, run_cursor, text))
+                        if *run_fg == fg && *run_bg == bg && *run_cursor == is_cursor =>
+                    {
+                        text.push(cell.c);
+                    }
+                    _ => runs.push((fg, bg, is_cursor, cell.c.to_string())),
+                }
+            }
+
+            // Runs flow at the font's natural advance, so the cursor block
+            // always sits exactly where the glyphs end — no cell-grid math.
             div()
+                .h(px(16.0))
                 .flex()
                 .flex_row()
-                .children(row.into_iter().enumerate().map(move |(col_idx, cell)| {
-                    let is_cursor = is_cursor_row && col_idx as u16 == cursor.col && cursor.visible;
-                    let fg = cell
-                        .fg
-                        .map(|c| rgb(c.r as u32 * 256 * 256 + c.g as u32 * 256 + c.b as u32).into())
-                        .unwrap_or(theme.foreground);
-                    let bg = cell
-                        .bg
-                        .map(|c| rgb(c.r as u32 * 256 * 256 + c.g as u32 * 256 + c.b as u32).into())
-                        .unwrap_or(theme.background);
-                    let ch = if cell.c == ' ' { ' ' } else { cell.c };
+                .children(runs.into_iter().map(|(fg, bg, is_cursor, text)| {
+                    let (fg, bg) = if is_cursor {
+                        (theme.cursor_text, theme.cursor)
+                    } else {
+                        (
+                            fg.map(|v| rgb(v).into()).unwrap_or(theme.foreground),
+                            bg.map(|v| rgb(v).into()).unwrap_or(theme.background),
+                        )
+                    };
                     div()
-                        .min_w(px(7.2))
                         .h(px(16.0))
                         .flex()
                         .items_center()
-                        .justify_center()
-                        .bg(if is_cursor { theme.cursor } else { bg })
-                        .text_color(if is_cursor { theme.cursor_text } else { fg })
-                        .child(SharedString::from(ch.to_string()))
+                        .bg(bg)
+                        .text_color(fg)
+                        .child(SharedString::from(text))
                 }))
         }))
         .into_any_element()

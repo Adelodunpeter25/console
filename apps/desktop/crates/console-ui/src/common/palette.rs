@@ -103,6 +103,7 @@ impl Render for CommandPalette {
 
         let entries = self.entries.clone();
 
+        let palette_handle = cx.entity().downgrade();
         let command = Command::new(&self.state)
             .items(entries.iter().map(|entry| {
                 CommandItem::new().label(entry.label.clone())
@@ -111,6 +112,11 @@ impl Render for CommandPalette {
             .on_confirm(move |index, window, cx| {
                 if let Some(entry) = entries.get(index.row) {
                     (entry.handler)(window, cx);
+                }
+                // Enter or item click both land here; the palette is a hosted
+                // overlay, so dismissal is our job (gpui-component never hides it).
+                if let Some(palette) = palette_handle.upgrade() {
+                    palette.update(cx, |palette, cx| palette.hide(cx));
                 }
             });
 

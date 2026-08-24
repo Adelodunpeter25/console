@@ -1,4 +1,4 @@
-use gpui::{App, Context, IntoElement, ParentElement, Render, Styled, Window, div, px, SharedString};
+use gpui::{Context, IntoElement, ParentElement, Render, Styled, Window, div, px, SharedString};
 
 use crate::theme::Theme;
 

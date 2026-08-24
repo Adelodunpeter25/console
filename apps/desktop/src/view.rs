@@ -9,7 +9,7 @@ use console_ui::workspace::{
     cancel_workspace_drags,
 };
 use console_ui::{
-    ApprovalModeDropdown, CommandPalette, ComposerView, ImageViewerModal, ModelDropdownMenu,
+    ApprovalModeDropdown, ComposerView, ImageViewerModal, ModelDropdownMenu,
     PaletteEntry, PermissionInteractionCard, PickerTab, QuestionInteractionCard, SidebarView,
     Theme, TitleBar, WorkspaceFooter, centered_stripe, error_banner, notice_banner, todo_card,
 };

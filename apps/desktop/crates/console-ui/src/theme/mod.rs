@@ -2,6 +2,7 @@ pub mod constants;
 pub use constants::*;
 
 use gpui::{App, Global, Hsla, Window, WindowAppearance, hsla, rgb, transparent_black};
+use gpui_component::{Theme as ComponentTheme, ThemeMode};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum ThemePreference {
@@ -206,25 +207,32 @@ fn set_active_theme(theme: Theme, cx: &mut App) {
 /// Initialize the theme palette from the OS appearance at startup.
 pub fn init(cx: &mut App) {
     let system_appearance = cx.window_appearance();
-    let theme = if resolves_to_dark(ThemePreference::System, system_appearance) {
-        Theme::dark()
-    } else {
-        Theme::light()
-    };
-    set_active_theme(theme, cx);
+    let is_dark = resolves_to_dark(ThemePreference::System, system_appearance);
+    set_active_theme(
+        if is_dark { Theme::dark() } else { Theme::light() },
+        cx,
+    );
+    sync_component_theme(is_dark, cx);
+}
+
+/// gpui-component widgets (command palette, dialogs) read their own global
+/// `Theme`; keep its light/dark mode aligned with ours so overlays match.
+fn sync_component_theme(is_dark: bool, cx: &mut App) {
+    ComponentTheme::change(
+        if is_dark { ThemeMode::Dark } else { ThemeMode::Light },
+        None,
+        cx,
+    );
 }
 
 /// Switch the active palette and update the native window appearance to match.
 pub fn apply_theme_preference(preference: ThemePreference, window: &mut Window, cx: &mut App) {
     let is_dark = resolves_to_dark(preference, cx.window_appearance());
     set_active_theme(
-        if is_dark {
-            Theme::dark()
-        } else {
-            Theme::light()
-        },
+        if is_dark { Theme::dark() } else { Theme::light() },
         cx,
     );
+    sync_component_theme(is_dark, cx);
     // On macOS: request native dark/light appearance override.
     #[cfg(target_os = "macos")]
     {
