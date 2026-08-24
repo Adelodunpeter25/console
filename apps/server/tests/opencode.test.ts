@@ -13,6 +13,7 @@
 import assert from "node:assert/strict";
 import type { AgentMessage, AgentTool } from "@console/types";
 import { z } from "zod";
+import { asSchema } from "@ai-sdk/provider-utils";
 import { listProviders, listModelsForProvider } from "../agent/src/commands/provider-registry.js";
 import { convertOpencodeMessages } from "../providers/src/opencode/convert-messages.js";
 import { convertOpencodeTools } from "../providers/src/opencode/convert-tools.js";
@@ -91,11 +92,14 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
   };
 
   const toolSet = convertOpencodeTools([sampleTool]);
-  const tool = toolSet.searchCode as { description: string; parameters: Record<string, unknown> };
+  const tool = toolSet.searchCode as { description: string; inputSchema: Record<string, unknown> };
   assert.ok(tool, "tool should be registered under its name");
   assert.equal(tool.description, "Search codebase using regex pattern");
-  assert.ok(tool.parameters?.properties);
-  assert.ok((tool.parameters.properties as Record<string, unknown>).pattern);
+  // ai@7 reads tool.inputSchema; asSchema() must yield real properties so the
+  // model knows the parameter names (empty schema => every call fails Required).
+  const wire = await asSchema(tool.inputSchema).jsonSchema;
+  assert.ok(wire.properties);
+  assert.ok((wire.properties as Record<string, unknown>).pattern);
   console.log("  ✅ convertOpencodeTools → ToolSet conversion");
 }
 
