@@ -275,6 +275,13 @@ impl RenderOnce for AutocompleteView {
 
         let mut popup = div()
             .id("composer-autocomplete")
+            // Occlude the elements underneath (transcript, composer card):
+            // without this, a mousedown on the popup also hits the underlying
+            // focus-tracking transcript, which steals focus from the composer.
+            // The app unmounts the popup when the composer blurs, so the
+            // mouse-up lands nowhere and the row's on_click never fires —
+            // clicks "just closed" the popup instead of selecting the item.
+            .occlude()
             .w(anchor_bounds.size.width)
             .max_h(px(220.0))
             .rounded(px(10.0))
