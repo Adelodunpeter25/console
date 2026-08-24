@@ -106,16 +106,18 @@ try {
   assert.ok(grepRes.content[0]?.text.includes("Universe"));
   console.log("  ✅ grep tool (fff-powered)");
 
-  // 8. Bash timeout alias and extended maximum
+  // 8. Bash timeout: no aliases (doc §9), 20-minute maximum enforced
   const bashArgs = bashTool.inputSchema.parse({
-    command: "printf timeout-alias",
-    timeout: 20 * 60 * 1000,
+    command: "printf timeout-ms",
+    timeoutMs: 20 * 60 * 1000,
   });
-  assert.equal(bashArgs.timeout, 20 * 60 * 1000);
   const bashRes = (await bashTool.execute(bashArgs)) as { content: Array<{ text: string }> };
-  assert.ok(bashRes.content[0]?.text.includes("timeout-alias"));
+  assert.ok(bashRes.content[0]?.text.includes("timeout-ms"));
   assert.throws(() => bashTool.inputSchema.parse({ command: "true", timeoutMs: 20 * 60 * 1000 + 1 }));
-  console.log("  ✅ bash timeout alias and 20-minute maximum");
+  // The `timeout` alias must not be honored (zod strips unknown keys).
+  const aliased = bashTool.inputSchema.parse({ command: "true", timeout: 5000 }) as { timeoutMs?: number };
+  assert.equal(aliased.timeoutMs, undefined);
+  console.log("  ✅ bash timeoutMs and 20-minute maximum (aliases rejected)");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }

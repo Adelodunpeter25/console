@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { execSync } from "node:child_process";
 import { readFileTool } from "../agent/src/tools/read/index.js";
 
 console.log("Running readFile ceiling/normalization tests...");
@@ -168,6 +169,64 @@ try {
   // Range stopped before EOF: totals are unknown, but nothing is flagged wrong.
   assert.notEqual(range.isError, true);
   console.log("  ✅ explicit ranges work");
+
+  // 16. Deep-offset read on a big file: byte budget spent scanning must not
+  // produce a degenerate range or bogus resume pointer.
+  const bigLog =
+    Array.from({ length: 20000 }, (_, i) => `log ${i + 1} ${"y".repeat(60)}`).join("\n") + "\n";
+  await write("big.log", bigLog); // ~1.5 MB, ~20k lines
+  const deep = await runTool({ path: "big.log", cwd: tempDir, startLine: 19000 });
+  assert.ok(
+    deep.content[0].text.includes(`before reaching startLine 19000`),
+    deep.content[0].text.slice(0, 200),
+  );
+  assert.ok(!deep.content[0].text.includes("lines 19000\u201318999"));
+  assert.equal(deep.resumeFrom, undefined);
+  console.log("  ✅ deep-offset scan-exhaustion returns clear branch message");
+
+  // 17. Surrogate pairs never split at the char cap (emoji = 2 UTF-16 units)
+  await write("emoji.txt", "😀".repeat(1999) + "🎉🎉🎉\n");
+  const emoji = await runTool({ path: "emoji.txt", cwd: tempDir });
+  const emojiText: string = emoji.content[0].text;
+  for (const c of emojiText) {
+    const cp = c.codePointAt(0)!;
+    if (cp >= 0xd800 && cp <= 0xdfff) {
+      throw new Error(`lone surrogate emitted: U+${cp.toString(16)}`);
+    }
+  }
+  assert.ok(emojiText.includes("[line truncated at 2000 characters]"));
+  assert.ok(!emojiText.includes("🎉"), "chars beyond cap should be dropped");
+  console.log("  ✅ surrogate pairs never split by the line cap");
+
+  // 18. FIFO rejection (named pipe hangs on open/read without writers)
+  const fifoPath = path.join(tempDir, "pipe.fifo");
+  await fs.rm(fifoPath, { force: true });
+  await execSync(`mkfifo ${JSON.stringify(fifoPath)}`);
+  const fifo = await runTool({ path: fifoPath });
+  assert.equal(fifo.isError, true);
+  assert.ok(fifo.content[0].text.includes("FIFO"));
+  console.log("  ✅ FIFO rejected instead of hanging");
+
+  // 19. Workspace containment: symlink escaping the project root is refused
+  const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), "outside-"));
+  const outsideFile = path.join(outsideDir, "secret.txt");
+  await fs.writeFile(outsideFile, "top secret");
+  const escapeLink = path.join(tempDir, "escape.txt");
+  await fs.symlink(outsideFile, escapeLink);
+  const escaped = await runTool({ path: "escape.txt", cwd: tempDir });
+  assert.equal(escaped.isError, true);
+  assert.ok(escaped.content[0].text.includes("outside the project directory"));
+  // A legit in-root file still reads fine through the same check.
+  const inside = await runTool({ path: "ten.txt", cwd: tempDir });
+  assert.notEqual(inside.isError, true);
+  console.log("  ✅ symlink escaping workspace root refused; in-root reads fine");
+
+  // 20. base64 + line ranges rejected up front
+  await assert.rejects(
+    () => runTool({ path: "ten.txt", cwd: tempDir, encoding: "base64", startLine: 2 }),
+    /not supported with encoding/,
+  );
+  console.log("  ✅ base64 combined with line ranges rejected clearly");
 
   console.log("readFile ceiling/normalization tests passed!");
 } finally {

@@ -51,7 +51,20 @@ const inputSchema = z.object({
 
 type Input = z.infer<typeof inputSchema>;
 
-export const readFileTool: AgentTool<typeof inputSchema> = {
+// base64 returns whole-file (bounded) bytes — combining it with line ranges is
+// rejected up front instead of silently ignoring the ranges.
+const inputSchemaWithGuards = inputSchema.superRefine((val, ctx) => {
+  if (val.encoding === "base64" && (val.startLine !== undefined || val.endLine !== undefined)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        "startLine/endLine are not supported with encoding='base64'. Read the bounded base64 output or use utf-8 with ranges.",
+      path: ["startLine"],
+    });
+  }
+});
+
+export const readFileTool: AgentTool<typeof inputSchemaWithGuards> = {
   name: "readFile",
   description: `Read the contents of a file at the given path.
 Supports optional line range selection for large files.
@@ -59,8 +72,8 @@ Lines are returned with their 1-indexed line numbers prefixed (e.g. "  42: conte
 Reads are capped at ${MAX_LINES} lines / ${MAX_BYTES / 1024} KiB / ${MAX_LINE_CHARS} chars per line; every truncation result states the exact startLine to resume from.
 Always prefer reading specific line ranges for large files to avoid wasting tokens.
 For directories, use listDir instead.`,
-  inputSchema,
-  execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {
+  inputSchema: inputSchemaWithGuards,
+  execute: async (args: Input, signal?: AbortSignal): Promise<unknown> => {
     const filePath = path.resolve(args.cwd ?? process.cwd(), args.path);
 
     if (isBlockedPath(filePath)) {
@@ -77,7 +90,11 @@ For directories, use listDir instead.`,
 
     let fh: fs.FileHandle;
     try {
-      fh = await fs.open(filePath, "r");
+      // O_NONBLOCK so opening a writer-less FIFO cannot hang the agent loop.
+      // It has no effect on regular files, and FIFOs/char devices are rejected
+      // via stat immediately after open.
+      const nonBlock = typeof fs.constants.O_NONBLOCK === "number" ? fs.constants.O_NONBLOCK : 0;
+      fh = await fs.open(filePath, fs.constants.O_RDONLY | nonBlock);
     } catch (err: unknown) {
       return handleOpenError(err, filePath);
     }
@@ -87,9 +104,43 @@ For directories, use listDir instead.`,
 
       if (stat.isDirectory()) {
         return metadataResult(
-          { kind: "binary", sizeBytes: stat.size },
+          { sizeBytes: stat.size },
           `"${filePath}" is a directory. Use listDir to browse directories.`,
         );
+      }
+
+      // FIFOs and character devices can hang on open/read even when the path
+      // is not one of the well-known blocked devices (e.g. /dev/stdin, named pipes).
+      if (stat.isFIFO() || stat.isCharacterDevice()) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: Refusing to read special file (${stat.isFIFO() ? "FIFO" : "character device"}): ${filePath}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      // Workspace containment (doc §9): symlinks are followed, but the resolved
+      // real path must stay inside the session's project directory.
+      if (args.cwd) {
+        const [realFile, realRoot] = await Promise.all([
+          fs.realpath(filePath),
+          fs.realpath(path.resolve(args.cwd)),
+        ]);
+        if (realFile !== realRoot && !realFile.startsWith(realRoot + path.sep)) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error: Refusing to read outside the project directory: ${filePath} resolves to ${realFile}, which is outside ${realRoot}`,
+              },
+            ],
+            isError: true,
+          };
+        }
       }
 
       const baseMeta = { sizeBytes: stat.size, mtimeMs: stat.mtimeMs };
@@ -134,6 +185,7 @@ For directories, use listDir instead.`,
         kind: declaredKind ?? "text",
         startLine: args.startLine,
         endLine: args.endLine,
+        signal,
       });
     } catch (err: unknown) {
       const error = err as NodeJS.ErrnoException;
@@ -190,6 +242,7 @@ interface TextReadOptions {
   kind: ReadMetadata["kind"];
   startLine?: number;
   endLine?: number;
+  signal?: AbortSignal;
 }
 
 async function readText(opts: TextReadOptions): Promise<unknown> {
@@ -245,6 +298,12 @@ async function readText(opts: TextReadOptions): Promise<unknown> {
   };
 
   for (;;) {
+    if (opts.signal?.aborted) {
+      return metadataResult(
+        { truncated: true, sizeBytes, mtimeMs, kind },
+        `Read aborted.`,
+      );
+    }
     if (feeder.bytesRead >= MAX_BYTES) {
       byteBudgetHit = true;
       break;
@@ -253,10 +312,24 @@ async function readText(opts: TextReadOptions): Promise<unknown> {
     if (feeder.halted) break;
     if (!more) break;
   }
-  if (!feeder.halted && byteBudgetHit) stoppedByBytes = true;
+  if (byteBudgetHit) {
+    stoppedByBytes = true;
+    // Partially assembled line is discarded; it will be re-read whole.
+    feeder.halt();
+  }
   // When halted by a ceiling, the partially assembled line is discarded and
   // will be re-read from the resume line — never emitted half a line.
   feeder.finishAtEof();
+
+  // Deep-offset degenerate case: the byte budget is spent scanning toward
+  // startLine and nothing was emitted. Never report a bogus empty range.
+  if (stoppedByBytes && lines.length === 0) {
+    return metadataResult(
+      { startLine: start, truncated: true, sizeBytes, mtimeMs, kind },
+      `Byte limit (${MAX_BYTES / 1024} KiB) reached before reaching startLine ${start}.`,
+      `The file is too large to scan to that offset. Try a smaller startLine, or use grep/glob to locate content first.`,
+    );
+  }
 
   const eofReached = feeder.eof && !feeder.halted;
   const truncated = stoppedByLines || stoppedByEndLine || stoppedByBytes;

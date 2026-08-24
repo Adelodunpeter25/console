@@ -22,13 +22,6 @@ const inputSchema = z.object({
     .describe(
       "Timeout in milliseconds. The process is killed if it exceeds this. Default: 30s, max: 20min.",
     ),
-  timeout: z
-    .number()
-    .int()
-    .min(1000)
-    .max(MAX_TIMEOUT_MS)
-    .optional()
-    .describe("Alias for timeoutMs, in milliseconds. Default: 30s, max: 20min."),
   env: z
     .record(z.string())
     .optional()
@@ -155,13 +148,12 @@ The command runs in a shell (/bin/sh -c), so pipes, redirects, and shell builtin
 Use for: running tests, builds, git operations, linters, package managers, file system queries.
 Do NOT use for file reads/writes — use readFile, writeFile, editFile, or listDir instead.
 Commands are killed after timeoutMs (default 30s, max 20min).
-The timeout parameter is accepted as an alias for timeoutMs.
 stdout and stderr are each capped at 50KB.`,
   inputSchema,
   execute: async (args: Input, signal?: AbortSignal): Promise<unknown> => {
     const cwd = args.cwd ? path.resolve(args.cwd) : process.cwd();
     const env = args.env ? { ...process.env, ...args.env } : process.env;
-    const timeoutMs = args.timeoutMs ?? args.timeout ?? DEFAULT_TIMEOUT_MS;
+    const timeoutMs = args.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
     const result = await execWithSignal(args.command, {
       cwd,

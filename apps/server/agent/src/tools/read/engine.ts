@@ -165,15 +165,20 @@ export class StreamingLineFeeder {
         i += 1;
         continue;
       }
-      // Characters beyond the per-line cap are dropped here; the flag tells
-      // the consumer to render the truncation marker.
-      if (this.lineBufChars < MAX_LINE_CHARS) {
-        this.lineBuf += ch;
-        this.lineBufChars += 1;
+      // Append whole code points (never splitting surrogate pairs), counting
+      // astral characters as 2 UTF-16 units toward MAX_LINE_CHARS. Characters
+      // beyond the per-line cap are dropped; the flag tells the consumer to
+      // render the truncation marker.
+      const codePoint = s.codePointAt(i)!;
+      const width = codePoint > 0xffff ? 2 : 1;
+      if (this.lineBufChars + width <= MAX_LINE_CHARS) {
+        this.lineBuf += String.fromCodePoint(codePoint);
+        this.lineBufChars += width;
       } else {
+        // Character does not fit under the cap — drop it without splitting.
         this.currentLineTruncated = true;
       }
-      i += 1;
+      i += width;
     }
   }
 
