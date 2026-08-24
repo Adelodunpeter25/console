@@ -103,11 +103,8 @@ export const ThinkingBlock = memo(function ThinkingBlock({
 
       {expanded ? (
         <View
-          className="mt-1.5 px-3 py-2.5 rounded-xl border-l-2"
-          style={{
-            backgroundColor: "rgba(255,255,255,0.03)",
-            borderColor: theme.colors.status.running,
-          }}
+          className="mt-1.5 px-3 py-2.5 rounded-xl"
+          style={{ backgroundColor: "rgba(255,255,255,0.03)" }}
         >
           <Text
             className="text-[13px] text-foreground-secondary leading-5 font-mono"
