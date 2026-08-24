@@ -81,6 +81,12 @@ async function startServer(): Promise<void> {
   Bun.serve<string, TerminalSocketData>({
     port,
     hostname: host,
+    // SSE agent-run streams can sit silent for minutes while a tool executes.
+    // Bun's default idle timeout (10s) kills such connections mid-run — the
+    // client then sees "SSE stream error" while the server keeps running the
+    // agent (sidebar stays "Working"). 0 disables the timeout, matching the
+    // old node:http bridging behavior.
+    idleTimeout: 0,
     fetch(req, server) {
       if (isTerminalUpgradeRequest(req)) {
         // Hijack the socket; handlers take over once the upgrade completes.
