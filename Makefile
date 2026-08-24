@@ -21,17 +21,17 @@ dev-console:
 dev-mobile:
 	npm run dev:mobile
 
-## dev-desktop: Start the Electron desktop app in dev mode (requires server running)
+## dev-desktop: Start the GPUI desktop app in dev mode (requires server running)
 dev-desktop:
-	npm run dev:desktop
+	cargo run --manifest-path apps/desktop/Cargo.toml
 
-## build-desktop: Build the Electron desktop app for production
+## build-desktop: Build the GPUI desktop app for production
 build-desktop:
-	npm run build:desktop
+	cargo build --release --manifest-path apps/desktop/Cargo.toml
 
-## build-desktop-mac: Build and package the Electron desktop app for macOS (DMG & ZIP)
+## build-desktop-mac: Build the GPUI desktop app for macOS (release)
 build-desktop-mac:
-	npm run build:desktop:mac
+	cargo build --release --manifest-path apps/desktop/Cargo.toml
 
 ## typecheck: Run TypeScript check across all monorepo workspaces
 typecheck:
@@ -55,9 +55,9 @@ help:
 	@echo "  make dev-server        - Start the backend agent server"
 	@echo "  make dev-console       - Start the console agent as a background daemon (PORT=nnnn to set port)"
 	@echo "  make dev-mobile        - Start the Expo mobile app dev server"
-	@echo "  make dev-desktop       - Start the Electron desktop app in dev mode"
-	@echo "  make build-desktop     - Build the Electron desktop app for production"
-	@echo "  make build-desktop-mac - Build and package macOS DMG & ZIP installers"
+	@echo "  make dev-desktop       - Start the GPUI desktop app in dev mode"
+	@echo "  make build-desktop     - Build the GPUI desktop app for production"
+	@echo "  make build-desktop-mac - Build the GPUI desktop app for macOS (release)"
 	@echo "  make typecheck         - Run TypeScript typechecking"
 	@echo "  make generate-icons    - Regenerate mobile SVG icon registries from console-rs"
 	@echo "  make generate-theme    - Regenerate mobile JS theme from global.css tokens"

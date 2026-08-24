@@ -1,0 +1,21 @@
+[package]
+name = "console-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gpui = { workspace = true }
+gpui_macros = { workspace = true }
+gpui_platform = { workspace = true }
+console-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+unicode-segmentation = { workspace = true }
+chrono = { workspace = true }
+pulldown-cmark = { workspace = true }
+regex = { workspace = true }
+base64 = { workspace = true }

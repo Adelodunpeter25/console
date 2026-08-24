@@ -1,0 +1,281 @@
+//! Project and branch selection: the footer pickers, the native folder
+//! picker for adding a project, and Git branch checkout.
+
+use std::rc::Rc;
+
+use console_core::{ProjectInfo, UpdateSessionDto};
+use gpui::Context;
+
+use super::ConsoleDesktopApp;
+
+impl ConsoleDesktopApp {
+    pub(crate) fn selected_project_for_pane(&self, pane_id: &str) -> Option<&ProjectInfo> {
+        self.pane_project_id(pane_id)
+            .as_ref()
+            .and_then(|id| self.projects.iter().find(|project| &project.id == id))
+    }
+
+    pub fn select_project_for_pane(
+        &mut self,
+        pane_id: String,
+        project_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        // Lock the working directory once a chat has messages. Each run
+        // reloads header.cwd for prompt-ref expansion, project context, and
+        // all tool paths — changing it mid-chat mixes old context with a
+        // new project.
+        if self.session_has_messages(&pane_id) {
+            return;
+        }
+        if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
+            state.selected_project_id = Some(project_id.clone());
+            Rc::make_mut(&mut state.branches).clear();
+            state.branch_loaded = false;
+            state.branch_is_git_repository = false;
+        }
+        cx.notify();
+
+        let Some(project) = self.selected_project_for_pane(&pane_id).cloned() else {
+            return;
+        };
+
+        // Point the active session at this project so the sidebar reflects the
+        // change immediately; persist the cwd change on the backend.
+        if let Some(session_id) = self.active_session_for_pane(&pane_id) {
+            if let Some(session) = Rc::make_mut(&mut self.sessions)
+            .iter_mut()
+            .find(|s| s.id == session_id)
+        {
+                session.project_id = Some(project.id.clone());
+                session.cwd = project.path.clone();
+            }
+        }
+
+        let path = project.path.clone();
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        let session_id = self.active_session_for_pane(&pane_id);
+        let pane_id_for_result = pane_id.clone();
+        cx.spawn(async move |_entity, cx| {
+            if let Some(session_id) = session_id {
+                if let Err(error) = client
+                    .sessions
+                    .update(
+                        &session_id,
+                        UpdateSessionDto {
+                            title: None,
+                            cwd: Some(path.clone()),
+                            model_id: None,
+                            provider: None,
+                            approval_mode: None,
+                        },
+                    )
+                    .await
+                {
+                    let message = format!("Unable to update session workspace: {error}");
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| this.set_error(message, cx));
+                        }
+                    });
+                }
+            }
+
+            match client.git.list_branches(Some(&path)).await {
+                Ok(branches) => cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if let Some(state) =
+                                this.workspace_pane_states.get_mut(&pane_id_for_result)
+                            {
+                                state.branches = Rc::new(branches.branches);
+                                state.branch_loaded = true;
+                                state.branch_is_git_repository = branches.is_git_repository;
+                            }
+                            cx.notify();
+                        });
+                    }
+                }),
+                Err(_) => cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if let Some(state) =
+                                this.workspace_pane_states.get_mut(&pane_id_for_result)
+                            {
+                                Rc::make_mut(&mut state.branches).clear();
+                                state.branch_loaded = true;
+                                state.branch_is_git_repository = false;
+                            }
+                            cx.notify();
+                        });
+                    }
+                }),
+            }
+        })
+        .detach();
+    }
+
+    /// Drop the project selection: new sessions fall back to the current
+    /// directory with no project scope, and the active session is released
+    /// from its project.
+    pub fn clear_project_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
+        // Same lock as select_project_for_pane — clearing the project
+        // changes cwd, which is unsafe once a chat has messages.
+        if self.session_has_messages(&pane_id) {
+            return;
+        }
+        if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
+            state.selected_project_id = None;
+            Rc::make_mut(&mut state.branches).clear();
+            state.branch_loaded = true;
+            state.branch_is_git_repository = false;
+        }
+        cx.notify();
+
+        let fallback_cwd = std::env::current_dir()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| ".".to_string());
+
+        let Some(session_id) = self.active_session_for_pane(&pane_id) else {
+            return;
+        };
+        if let Some(session) = Rc::make_mut(&mut self.sessions)
+            .iter_mut()
+            .find(|s| s.id == session_id)
+        {
+            session.project_id = None;
+            session.cwd = fallback_cwd.clone();
+        }
+
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_entity, cx| {
+            if let Err(error) = client
+                .sessions
+                .update(
+                    &session_id,
+                    UpdateSessionDto {
+                        title: None,
+                        cwd: Some(fallback_cwd),
+                        model_id: None,
+                        provider: None,
+                        approval_mode: None,
+                    },
+                )
+                .await
+            {
+                let message = format!("Unable to update session workspace: {error}");
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.set_error(message, cx));
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Add a project via the backend's native folder picker and select it.
+    pub fn add_project(&mut self, cx: &mut Context<Self>) {
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".to_string());
+        self.add_project_for_pane(pane_id, cx);
+    }
+
+    pub fn add_project_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_, cx| {
+            let picked = client.fs.pick_folder().await;
+            match picked {
+                Ok(path) if path.trim().is_empty() => {}
+                Ok(path) => match client.projects.add(&path).await {
+                    Ok(project) => cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                if !this.projects.iter().any(|p| p.id == project.id) {
+                                    Rc::make_mut(&mut this.projects).push(project.clone());
+                                }
+                                this.select_project_for_pane(pane_id.clone(), project.id, cx);
+                            });
+                        }
+                    }),
+                    Err(error) => {
+                        let message = format!("Unable to add project: {error}");
+                        cx.update(|cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| this.set_error(message, cx));
+                            }
+                        });
+                    }
+                },
+                Err(error) => {
+                    let message = format!("Unable to pick a folder: {error}");
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| this.set_error(message, cx));
+                        }
+                    });
+                }
+            }
+        })
+        .detach();
+    }
+
+    /// Check out a branch in the selected pane's project and refresh its branch list.
+    pub fn checkout_branch_for_pane(
+        &mut self,
+        pane_id: String,
+        branch: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(path) = self
+            .selected_project_for_pane(&pane_id)
+            .map(|project| project.path.clone())
+        else {
+            return;
+        };
+        if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
+            state.branch_pending = true;
+        }
+        cx.notify();
+
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            let result = match client.git.checkout_branch(Some(&path), &branch).await {
+                Ok(()) => client
+                    .git
+                    .list_branches(Some(&path))
+                    .await
+                    .map_err(|error| error.to_string()),
+                Err(error) => Err(error.to_string()),
+            };
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
+                            state.branch_pending = false;
+                        }
+                        match result {
+                            Ok(branches) => {
+                                if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
+                                    state.branches = Rc::new(branches.branches);
+                                    state.branch_loaded = true;
+                                    state.branch_is_git_repository = branches.is_git_repository;
+                                }
+                            }
+                            Err(error) => {
+                                this.set_error(format!("Unable to switch branch: {error}"), cx)
+                            }
+                        }
+                        cx.notify();
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+}
