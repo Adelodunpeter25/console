@@ -7,7 +7,7 @@
   },
   "type": "module",
   "scripts": {
-    "cli": "tsx index.ts"
+    "cli": "bun index.ts"
   },
   "dependencies": {
     "@console/types": "*",

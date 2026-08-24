@@ -11,15 +11,13 @@ dev-server:
 ##   Usage: make dev-console            (dev: port 3000, ~/.console-dev storage)
 ##          make dev-console PORT=3001  (prod: port 3001, ~/.console storage)
 ## Dev (default port) sets CONSOLE_ENV=dev so apppaths/daemon-manager resolve
-## ~/.console-dev, matching the desktop's separate dev bundle identifier. Passing
-## PORT leaves CONSOLE_ENV unset so prod uses ~/.console. Run via bun because
-## chained `npm run` drops the -p/--port flag.
+## ~/.console-dev, matching the desktop's separate dev bundle identifier.
 dev-console:
 	CONSOLE_ENV=$(if $(PORT),,dev) bun apps/cli/index.ts start -p $(if $(PORT),$(PORT),3000)
 
 ## dev-mobile: Start the Expo React Native app dev server
 dev-mobile:
-	npm run dev:mobile
+	bun run --cwd apps/mobile android
 
 ## dev-desktop: Start the GPUI desktop app in dev mode with auto-reload (requires server running)
 dev-desktop:
@@ -39,15 +37,15 @@ typecheck:
 
 ## generate-icons: Regenerate mobile SVG icon registries from console-rs assets
 generate-icons:
-	npm run icons:generate
+	bun run --cwd apps/mobile icons:generate
 
 ## generate-theme: Regenerate mobile JS theme from global.css tokens
 generate-theme:
-	npm run theme:generate
+	bun run --cwd apps/mobile theme:generate
 
 ## check: Run vp check for code formatting and linting
 check:
-	npm run check
+	bun run check
 
 ## help: Show this help message
 help:

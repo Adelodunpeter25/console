@@ -12,15 +12,15 @@
   "scripts": {
     "dev:server": "bun --watch apps/server/index.ts",
     "start:server": "bun apps/server/index.ts",
-    "dev:mobile": "npm run android --workspace=@console/mobile",
-    "icons:generate": "npm run icons:generate --workspace=@console/mobile",
-    "theme:generate": "npm run theme:generate --workspace=@console/mobile",
+    "dev:mobile": "bun run --cwd apps/mobile android",
+    "icons:generate": "bun run --cwd apps/mobile icons:generate",
+    "theme:generate": "bun run --cwd apps/mobile theme:generate",
     "dev:desktop": "cargo run --manifest-path apps/desktop/Cargo.toml",
     "build:desktop": "cargo build --release --manifest-path apps/desktop/Cargo.toml",
     "build:desktop:mac": "cargo build --release --manifest-path apps/desktop/Cargo.toml",
-    "cli": "npm run cli --workspace=@console/cli",
+    "cli": "bun apps/cli/index.ts",
     "check": "vp check",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bunx tsc --noEmit",
     "eas-build-pre-install": "curl -fsSL https://bun.sh/install | bash -s \"canary\" && (cp -f ~/.bun/bin/bun $(which bun) 2>/dev/null || cp -f ~/.bun/bin/bun /usr/local/bin/bun 2>/dev/null || true)"
   },
   "dependencies": {
