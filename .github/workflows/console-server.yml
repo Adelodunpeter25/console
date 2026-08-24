@@ -1,6 +1,11 @@
-# Builds the agent server as standalone single-binary executables on every
-# push to main and uploads them to a rolling GitHub Release tagged
-# `console-server` (no versioning — latest always wins).
+# Builds the agent server AND management CLI as standalone single-binary
+# executables on every push to main, then uploads them to a rolling GitHub
+# Release tagged `console-server` (no versioning — latest always wins).
+#
+# Assets per platform (os-arch suffix):
+#   console-server-linux-x64   console-linux-x64
+#   console-server-macos-x64   console-macos-x64
+#   console-server-macos-arm64 console-macos-arm64
 name: Build console-server
 
 on:
@@ -13,6 +18,15 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os-suffix: linux-x64
+            bun-target: bun-linux-x64
+          - os-suffix: macos-x64
+            bun-target: bun-darwin-x64
+          - os-suffix: macos-arm64
+            bun-target: bun-darwin-aarch64
     steps:
       - uses: actions/checkout@v4
 
@@ -23,23 +37,26 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # Cross-compile from Linux for both platforms Bun supports here.
-      # Flags: --minify shrinks bundled JS, --sourcemap (zstd) keeps
+      # Flags: --minify shrinks bundled JS; --sourcemap (zstd-compressed) keeps
       # stacktraces pointing at TS source in production crashes.
-      - name: Build binaries
+      - name: Build server binary
         run: |
           bun build --compile --minify --sourcemap \
             apps/server/index.ts \
-            --target=bun-linux-x64 \
-            --outfile console-server-linux-x64
-          bun build --compile --minify --sourcemap \
-            apps/server/index.ts \
-            --target=bun-darwin-x64 \
-            --outfile console-server-macos-x64
+            --target=${{ matrix.bun-target }} \
+            --outfile console-server-${{ matrix.os-suffix }}
+
+      - name: Build CLI binary
+        run: |
+          bun build --compile --minify \
+            apps/cli/index.ts \
+            --target=${{ matrix.bun-target }} \
+            --outfile console-${{ matrix.os-suffix }}
 
       - name: Smoke test linux binary
+        if: matrix.os-suffix == 'linux-x64'
         run: |
-          chmod +x console-server-linux-x64
+          chmod +x console-server-linux-x64 console-linux-x64
           CONSOLE_ENV=dev PORT=3999 ./console-server-linux-x64 &
           SERVER_PID=$!
           for i in $(seq 1 40); do
@@ -51,7 +68,7 @@ jobs:
           [ "$CODE" = "200" ] || { echo "Smoke test failed (HTTP $CODE)"; exit 1; }
           echo "Smoke test passed"
 
-      - name: Upload to rolling release (tag: console-server)
+      - name: Upload binaries to rolling release (tag: console-server)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: console-server
@@ -59,5 +76,5 @@ jobs:
           prerelease: false
           make_latest: true
           files: |
-            console-server-linux-x64
-            console-server-macos-x64
+            console-server-${{ matrix.os-suffix }}
+            console-${{ matrix.os-suffix }}

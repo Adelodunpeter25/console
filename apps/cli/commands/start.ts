@@ -2,9 +2,35 @@
  * Start command - Launch the daemon
  */
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import * as path from "node:path";
 import { ensureConsoleDir, writePidFile, saveConfig, getDaemonStatus } from "../daemon-manager.js";
 import type { StartOptions } from "../types.js";
+
+interface ServerLaunch {
+  cmd: string;
+  args: string[];
+}
+
+/**
+ * Resolve how to launch the server:
+ * 1. CONSOLE_SERVER_BIN env override (explicit path to a server binary/source)
+ * 2. A `console-server` binary installed next to this CLI (compiled installs:
+ *    both binaries live in the same dir, e.g. ~/.local/bin)
+ * 3. Dev fallback: run apps/server/index.ts via bun from the source tree
+ */
+function resolveServerLaunch(): ServerLaunch {
+  const envBin = process.env.CONSOLE_SERVER_BIN;
+  if (envBin) return { cmd: envBin, args: [] };
+
+  const execDir = path.dirname(process.execPath);
+  const candidate = path.join(execDir, "console-server");
+  if (existsSync(candidate)) return { cmd: candidate, args: [] };
+
+  const cliCommandsDir = path.dirname(new URL(import.meta.url).pathname);
+  const serverPath = path.resolve(cliCommandsDir, "..", "..", "server", "index.ts");
+  return { cmd: "bun", args: [serverPath] };
+}
 
 export async function startDaemon(options: StartOptions): Promise<void> {
   const status = await getDaemonStatus();
@@ -25,11 +51,8 @@ export async function startDaemon(options: StartOptions): Promise<void> {
   await saveConfig(config);
   await ensureConsoleDir();
 
-  // Determine server path - resolve relative to the CLI source file (which lives
-  // in apps/cli/commands/) so it works regardless of cwd (npm workspace runs,
-  // global install, make targets, etc.)
-  const cliCommandsDir = path.dirname(new URL(import.meta.url).pathname);
-  const serverPath = path.resolve(cliCommandsDir, "..", "..", "server", "index.ts");
+  // Resolve how to launch the server (binary install or dev source tree)
+  const launch = resolveServerLaunch();
 
   if (options.daemon) {
     // Start as background daemon
@@ -37,7 +60,6 @@ export async function startDaemon(options: StartOptions): Promise<void> {
     console.log(`Port: ${options.port}`);
     console.log(`Host: ${options.host}`);
 
-    const args = [serverPath];
     const env = {
       ...process.env,
       PORT: options.port,
@@ -45,7 +67,7 @@ export async function startDaemon(options: StartOptions): Promise<void> {
       CONSOLE_DAEMON: "true",
     };
 
-    const child = spawn("bun", [...args], {
+    const child = spawn(launch.cmd, [...launch.args], {
       detached: true,
       stdio: "ignore",
       env,
@@ -74,11 +96,15 @@ export async function startDaemon(options: StartOptions): Promise<void> {
     console.log(`Host: ${options.host}`);
     console.log(`Press Ctrl+C to stop`);
 
-    process.env.PORT = options.port;
-    process.env.HOST = options.host;
-    process.env.CONSOLE_DAEMON = "true";
+    const env = {
+      ...process.env,
+      PORT: options.port,
+      HOST: options.host,
+      CONSOLE_DAEMON: "true",
+    };
 
-    // Import and run the server directly
-    await import(serverPath);
+    const child = spawn(launch.cmd, launch.args, { stdio: "inherit", env });
+    await new Promise<number>((resolve) => child.on("exit", (code) => resolve(code ?? 0)));
+    process.exit(0);
   }
 }
