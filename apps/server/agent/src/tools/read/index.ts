@@ -1,74 +1,25 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { StringDecoder } from "node:string_decoder";
 import { z } from "zod";
-import type { AgentTool } from "../types/index.js";
-import { pathString } from "../service/tool-input.js";
+import type { AgentTool } from "../../types/index.js";
+import { pathString } from "../../service/tool-input.js";
+import {
+  classifyFile,
+  isBlockedPath,
+  MAX_BYTES,
+  MAX_LINE_CHARS,
+  MAX_LINES,
+  ReadMetadata,
+  StreamingLineFeeder,
+} from "./engine.js";
 
-// ---------------------------------------------------------------------------
-// Ceilings (independent; a read stops as soon as any one is reached)
-// ---------------------------------------------------------------------------
-const MAX_LINES = 2000; // controls normal large source files
-const MAX_BYTES = 128 * 1024; // controls wide or binary-like content
-const MAX_LINE_CHARS = 2000; // controls minified JS and long log lines
-const CHUNK_SIZE = 16 * 1024; // streaming chunk size
 const BASE64_RAW_LIMIT = 96 * 1024; // ~128 KiB of base64 output
-const SNIFF_SIZE = 8 * 1024; // bytes inspected for binary/PDF detection
-
-export type FileKind = "text" | "binary" | "pdf" | "image" | "notebook";
-
-const IMAGE_EXTENSIONS = new Set([
-  ".png",
-  ".jpg",
-  ".jpeg",
-  ".gif",
-  ".webp",
-  ".bmp",
-  ".ico",
-  ".tiff",
-]);
-
-interface ReadMetadata {
-  startLine?: number;
-  endLine?: number;
-  totalLines?: number;
-  truncated?: boolean;
-  resumeFrom?: number;
-  sizeBytes?: number;
-  mtimeMs?: number;
-  kind?: FileKind;
-}
 
 function metadataResult(meta: ReadMetadata, ...paragraphs: string[]) {
   return {
     content: [{ type: "text" as const, text: paragraphs.join("\n") }],
     ...meta,
   };
-}
-
-/** Block special devices and unbounded pseudo-files before any I/O. */
-function isBlockedPath(p: string): boolean {
-  const lower = p.toLowerCase();
-  if (lower === "/proc" || lower.startsWith("/proc/")) return true;
-  if (lower === "/sys" || lower.startsWith("/sys/")) return true;
-  return /^\/dev\/(zero|urandom|random|mem|kmem|port)$/.test(lower);
-}
-
-function fileKindForExtension(ext: string): FileKind | null {
-  const lower = ext.toLowerCase();
-  if (IMAGE_EXTENSIONS.has(lower)) return "image";
-  if (lower === ".ipynb") return "notebook";
-  return null;
-}
-
-interface TextReadOptions {
-  filePath: string;
-  fh: fs.FileHandle;
-  sizeBytes: number;
-  mtimeMs: number;
-  kind: FileKind;
-  startLine?: number;
-  endLine?: number;
 }
 
 const inputSchema = z.object({
@@ -99,113 +50,6 @@ const inputSchema = z.object({
 });
 
 type Input = z.infer<typeof inputSchema>;
-
-/**
- * Incremental line feeder over an open file handle.
- *
- * Streams fixed-size chunks, decodes UTF-8 safely across chunk boundaries
- * (StringDecoder), normalizes CRLF / lone-CR endings (including a CR that
- * straddles a chunk boundary), strips a leading BOM, and never loads more
- * than one chunk plus the current line into memory.
- *
- * Line counting follows `cat -n` semantics: a trailing newline does not
- * create an extra empty line.
- */
-class StreamingLineFeeder {
-  private readonly decoder = new StringDecoder("utf-8");
-  private heldCr = false; // saw "\r" as last decoded char; may merge with "\n"
-  private lineBuf = ""; // characters of the line currently being assembled
-  private lineBufChars = 0;
-  private strippedBom = false;
-  private currentLineTruncated = false;
-
-  /** Number of fully completed lines seen so far (== last completed line no). */
-  completedLines = 0;
-  bytesRead = 0;
-  eof = false;
-  /** Set by the consumer to stop all feeding and counting immediately. */
-  halted = false;
-  /** Consumer callback; may call halt() to stop further consumption. */
-  onLineComplete?: (line: string, originalCharCount: number, truncated: boolean) => void;
-
-  constructor(private readonly fh: fs.FileHandle) {}
-
-  halt(): void {
-    this.halted = true;
-    this.lineBuf = ""; // discard any partially assembled line
-    this.lineBufChars = 0;
-  }
-
-  /** Read the next chunk and feed it through. Returns false once EOF is hit. */
-  async readNextChunk(): Promise<boolean> {
-    if (this.eof || this.halted) return false;
-    const buffer = Buffer.alloc(CHUNK_SIZE);
-    const { bytesRead } = await this.fh.read(buffer, 0, CHUNK_SIZE, this.bytesRead);
-    this.bytesRead += bytesRead;
-    let text = bytesRead > 0 ? this.decoder.write(buffer.subarray(0, bytesRead)) : "";
-    if (bytesRead < CHUNK_SIZE) {
-      text += this.decoder.end();
-      this.eof = true;
-    }
-    this.consume(text);
-    return !this.eof;
-  }
-
-  /** Complete the in-progress line (if any) at EOF. */
-  finishAtEof(): void {
-    if (this.heldCr) {
-      this.finishLine(); // trailing "\r" terminates the final line
-      this.heldCr = false;
-    }
-    if (this.lineBuf.length > 0) this.finishLine();
-  }
-
-  private consume(text: string): void {
-    let s = (this.heldCr ? "\r" : "") + text;
-    this.heldCr = false;
-    if (!this.strippedBom) {
-      this.strippedBom = true;
-      if (s.startsWith("\uFEFF")) s = s.slice(1);
-    }
-    let i = 0;
-    while (i < s.length) {
-      if (this.halted) return;
-      const ch = s[i]!;
-      if (ch === "\r") {
-        if (i === s.length - 1 && !this.eof) {
-          this.heldCr = true; // might be "\r\n" split across chunks — hold it
-          return;
-        }
-        this.finishLine();
-        i += s[i + 1] === "\n" ? 2 : 1;
-        continue;
-      }
-      if (ch === "\n") {
-        this.finishLine();
-        i += 1;
-        continue;
-      }
-      // Characters beyond the per-line cap are dropped here; the flag tells
-      // the consumer to render the truncation marker.
-      if (this.lineBufChars < MAX_LINE_CHARS) {
-        this.lineBuf += ch;
-        this.lineBufChars += 1;
-      } else {
-        this.currentLineTruncated = true;
-      }
-      i += 1;
-    }
-  }
-
-  private finishLine(): void {
-    if (this.halted) return;
-    this.completedLines += 1;
-    this.onLineComplete?.(this.lineBuf, this.lineBufChars, this.currentLineTruncated);
-    this.currentLineTruncated = false;
-    this.lineBuf = "";
-    this.lineBufChars = 0;
-  }
-}
 
 export const readFileTool: AgentTool<typeof inputSchema> = {
   name: "readFile",
@@ -259,13 +103,9 @@ For directories, use listDir instead.`,
       }
 
       // --- Classify content -------------------------------------------------
-      const sniff = Buffer.alloc(Math.min(stat.size, SNIFF_SIZE));
-      const { bytesRead: sniffed } = await fh.read(sniff, 0, sniff.length, 0);
-      const head = sniff.subarray(0, sniffed);
-      const declaredKind = fileKindForExtension(path.extname(filePath));
-      const looksPdf = sniffed >= 5 && head.subarray(0, 5).toString("latin1") === "%PDF-";
+      const { kind: declaredKind, looksBinary } = await classifyFile(filePath, fh, stat.size);
 
-      if (looksPdf) {
+      if (declaredKind === "pdf") {
         return metadataResult(
           { ...baseMeta, kind: "pdf", truncated: false },
           `This is a PDF (${stat.size} bytes). Use pdftotext or a PDF-capable tool to extract its contents.`,
@@ -277,7 +117,7 @@ For directories, use listDir instead.`,
           `Image file (${path.extname(filePath)}, ${stat.size} bytes). Binary content cannot be displayed as text.`,
         );
       }
-      if (head.includes(0) && declaredKind !== "notebook") {
+      if (looksBinary && declaredKind !== "notebook") {
         return metadataResult(
           { ...baseMeta, kind: "binary", truncated: false },
           `Binary file (${path.extname(filePath) || "no extension"}, ${stat.size} bytes). Cannot display as text.`,
@@ -342,6 +182,16 @@ function handleOpenError(err: unknown, filePath: string): unknown {
   };
 }
 
+interface TextReadOptions {
+  filePath: string;
+  fh: fs.FileHandle;
+  sizeBytes: number;
+  mtimeMs: number;
+  kind: ReadMetadata["kind"];
+  startLine?: number;
+  endLine?: number;
+}
+
 async function readText(opts: TextReadOptions): Promise<unknown> {
   const { filePath, fh, sizeBytes, mtimeMs, kind } = opts;
   const start = opts.startLine ?? 1;
@@ -369,7 +219,7 @@ async function readText(opts: TextReadOptions): Promise<unknown> {
   let stoppedByBytes = false;
   let byteBudgetHit = false;
 
-  feeder.onLineComplete = (line, originalCharCount, lineWasTruncated) => {
+  feeder.onLineComplete = (line, _originalCharCount, lineWasTruncated) => {
     if (feeder.halted) return; // safety: no emissions after a stop condition
     const lineNum = feeder.completedLines;
 

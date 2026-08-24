@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { readFileTool } from "../agent/src/tools/read-file.js";
+import { readFileTool } from "../agent/src/tools/read/index.js";
 
 console.log("Running readFile ceiling/normalization tests...");
 
