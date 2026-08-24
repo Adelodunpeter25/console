@@ -11,6 +11,7 @@ reqwest = { workspace = true }
 futures-util = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
+tokio-tungstenite = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
 urlencoding = { workspace = true }

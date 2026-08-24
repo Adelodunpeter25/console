@@ -26,8 +26,12 @@ impl ConsoleClient {
             projects: ProjectService::new(transport.clone()),
             git: GitService::new(transport.clone()),
             model_favorites: ModelFavoriteService::new(transport.clone()),
-            transport,
+            transport: transport.clone(),
         }
+    }
+
+    pub fn terminal_service(&self) -> TerminalService {
+        TerminalService::new(self.transport.clone())
     }
 
     pub async fn set_base_url(&self, url: impl Into<String>) {
