@@ -189,7 +189,11 @@ impl ConsoleDesktopApp {
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_, cx| {
-            let Some(path) = crate::picker::pick_folder().await else {
+            let picked = cx
+                .background_executor()
+                .spawn(async move { crate::picker::pick_folder_blocking() })
+                .await;
+            let Some(path) = picked else {
                 return;
             };
             if path.trim().is_empty() {

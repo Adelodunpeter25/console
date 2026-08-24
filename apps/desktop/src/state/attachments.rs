@@ -157,7 +157,11 @@ impl ConsoleDesktopApp {
     pub fn pick_image(&mut self, cx: &mut Context<Self>) {
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_entity, cx| {
-            let Some(path) = crate::picker::pick_image_file().await else {
+            let picked = cx
+                .background_executor()
+                .spawn(async move { crate::picker::pick_image_file_blocking() })
+                .await;
+            let Some(path) = picked else {
                 return;
             };
             if path.trim().is_empty() {

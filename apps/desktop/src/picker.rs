@@ -8,18 +8,18 @@
 //! backend's `cancelled:true` → empty path contract.
 
 /// Open the native folder picker via `osascript`. Returns `None` when the user
-/// dismisses the dialog. Runs outside the GPUI main thread so the UI stays
-/// responsive while the modal is open.
-pub async fn pick_folder() -> Option<String> {
-    pick_via_osascript(true).await
+/// dismisses the dialog. Must run on a background thread — `osascript` blocks
+/// until the modal is dismissed.
+pub fn pick_folder_blocking() -> Option<String> {
+    pick_via_osascript_blocking(true)
 }
 
 /// Open the native file picker via `osascript`. Returns `None` on cancel.
-pub async fn pick_image_file() -> Option<String> {
-    pick_via_osascript(false).await
+pub fn pick_image_file_blocking() -> Option<String> {
+    pick_via_osascript_blocking(false)
 }
 
-async fn pick_via_osascript(is_folder: bool) -> Option<String> {
+fn pick_via_osascript_blocking(is_folder: bool) -> Option<String> {
     #[cfg(not(target_os = "macos"))]
     {
         let _ = is_folder;
@@ -32,16 +32,18 @@ async fn pick_via_osascript(is_folder: bool) -> Option<String> {
         let script = if is_folder {
             r#"POSIX path of (choose folder with prompt "Select Project Folder")"#
         } else {
-            r#"POSIX path of (choose file with prompt "Select an image")"# 
+            r#"POSIX path of (choose file with prompt "Select an image")"#
         };
 
-        // `osascript` blocks until the user picks or cancels. Run it as a
-        // Tokio child process so we don't freeze the GPUI main thread.
-        let output = tokio::process::Command::new("osascript")
+        // `osascript` is a separate process that shows its own modal. Running
+        // it synchronously on a background thread avoids freezing the GPUI main
+        // thread and avoids the `rfd`/`objc2` retain crash and the
+        // `tokio::process` future that never completes when polled by GPUI's
+        // executor (previous freeze).
+        let output = std::process::Command::new("osascript")
             .arg("-e")
             .arg(script)
             .output()
-            .await
             .ok()?;
 
         if output.status.success() {
@@ -56,7 +58,6 @@ async fn pick_via_osascript(is_folder: bool) -> Option<String> {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
             let combined = format!("{stderr} {stdout}");
-            // User cancelled is not an error — silent no-op.
             let cancelled = combined.contains("-128")
                 || combined.to_ascii_lowercase().contains("user canceled");
             if cancelled {
