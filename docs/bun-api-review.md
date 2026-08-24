@@ -1,106 +1,66 @@
 # Bun API Review — replacing Node APIs with Bun-native equivalents
 
 Review of `apps/server` + `apps/cli` after the runtime migration. The codebase now *runs* on Bun, but most I/O still goes
-through Node-compatibility shims. Every shimmed API works — the point of this
-review is where Bun's native APIs are meaningfully faster, lower-level, or let us
-delete dependencies outright.
+through Node-compatibility shims. Every shimmed API works — the point of this review is where Bun's native APIs are meaningfully faster, lower-level, or let us delete dependencies outright.
 
 Already done (no action needed): `bun:sqlite` (all 7 session modules), `Bun.Terminal`
 (`pty.manager.ts`), single-binary compile (`make build-server`).
 
 ---
 
-## Priority 1 — hot paths, drop-in replacements
+## ✅ DONE — Priority 1 — hot paths, drop-in replacements
 
-### 1.1 SHA-256 hashing on every persisted message
+### 1.1 SHA-256 hashing on every persisted message — DONE (`8812fc9`)
 
-- **Where:** `apps/server/agent/src/session/session-messages.ts:44` and `:75` (`crypto.createHash("sha256")`)
-- **Why it matters:** This runs for *every* message written to SQLite (content hashing for IDs/dedup). It is the single hottest crypto call in the server.
-- **Fix:** `new Bun.CryptoHasher("sha256").update(JSON.stringify(safeMsg)).digest("hex")` — Bun's hasher avoids the Node compat layer and streams updates without copying.
+- **Where:** `apps/server/agent/src/session/session-messages.ts:44` and `:75`, plus `providers/src/codex/oauth.ts:76` (PKCE challenge)
+- **What changed:** all three `crypto.createHash("sha256")` calls now use `new Bun.CryptoHasher("sha256")`.
 
-```ts
-// before
-const hash = crypto.createHash("sha256").update(JSON.stringify(safeMsg)).digest("hex").slice(0, 32);
-// after
-const hash = new Bun.CryptoHasher("sha256").update(JSON.stringify(safeMsg)).digest("hex").slice(0, 32);
-```
+### 1.2 Shell execution inside the bash tool — DONE (`94aea23`)
 
-Same one-liner applies to `apps/server/providers/src/codex/oauth.ts:76` (PKCE challenge).
+- **Where:** `apps/server/agent/src/tools/bash.ts`
+- **What changed:** `node:child_process.exec` replaced with `Bun.spawn` via a shared helper (see 1.3). `maxBuffer` overflow no longer kills data mid-stream — capture switches to drain-and-discard past the cap so children terminate normally and report real exit codes; SIGTERM→SIGKILL escalation and AbortSignal handling preserved.
 
-### 1.2 Shell execution inside the bash tool
+### 1.3 Git service exec wrapper — DONE (`94aea23`)
 
-- **Where:** `apps/server/agent/src/tools/bash.ts:69` (`exec(command, { maxBuffer: 10MB })`) — this is the core agent tool; *every* command the model runs passes through here.
-- **Problems today:** `node:child_process.exec` buffers stdout/stderr in JS, emulates kills with signals across the shim, and `maxBuffer` overflow silently truncates output.
-- **Fix:** `Bun.spawn` with inherited pipes and an explicit byte cap we control:
-
-```ts
-const proc = Bun.spawn(["bash", "-lc", command], { cwd, env, signal, stdout: "pipe", stderr: "pipe" });
-const out = await new Response(proc.stdout).bytes(); // cap by slicing if > limit
-```
-
-Bonus: `proc.kill()` maps directly to the existing timeout/AbortSignal logic, and exit codes come back as plain numbers instead of nullable shim fields (`exitCode === null && !killed` juggling at lines 110–111 disappears).
-
-### 1.3 Git service exec wrapper
-
-- **Where:** `apps/server/api/src/services/git.service.ts:1-11` (`promisify(exec)` used for every git status/branches/log call)
-- **Fix:** same `Bun.spawn` helper as 1.2 (extract once into e.g. `api/src/utils/exec.ts`, use from both). Git status is polled by UIs — latency users feel.
+- **Where:** shared helper extracted once into `api/src/utils/exec.ts`; used by both the bash tool and git.service.
+- Exports:
+  - `spawnCapture(argv, { cwd, env, timeoutMs, signal, maxBytes })` → `{ stdout, stderr, exitCode, killed, aborted }`
+  - `execShell(command, options)` → mirrors the old `promisify(exec)` contract (throws on non-zero exit with `.code`/`.stdout`/`.stderr` attached) so existing error-matching call sites keep working.
 
 ---
 
-## Priority 2 — user-facing file I/O
+## ✅ DONE / ⏭ SKIPPED — Priority 2 — user-facing file I/O
 
-### 2.1 File reads/writes in the FS browser service
+### 2.1 File reads/writes in the FS browser service — DONE (`4f3a83c`)
 
-- **Where:** `apps/server/api/src/services/fs.service.ts:181` (`fs.readFile`), `:196` (`fs.writeFile`) — these serve the mobile/desktop Files screens.
-- **Fix:** 
+- `fs.service.ts` reads use `await Bun.file(filePath).text()`; writes use `await Bun.write(filePath, content)` (atomic by default).
 
-```ts
-const text = await Bun.file(filePath).text();
-await Bun.write(filePath, content); // atomic by default
-```
+### 2.2 System-prompt / skill discovery reads — DONE (`4f3a83c`)
 
-`Bun.write` also gives atomic-rename semantics for free (no torn writes if the client disconnects mid-save).
+- `walk.ts` `readTextFile` uses `Bun.file(p).text()`; directory listing stayed on `fs.readdir` per the original recommendation.
 
-### 2.2 System-prompt / skill discovery reads
+### 2.3 Synchronous stat/exists checks on the request path — SKIPPED (deliberate)
 
-- **Where:** `apps/server/agent/src/systemprompt/walk.ts:68` (`readFile`), `:97` (`readdir withFileTypes`), plus `listMarkdownFiles`. Runs at session start for AGENTS.md/skills/rules discovery.
-- **Fix:** `await Bun.file(p).text()`; directory listing can stay on `fs.readdir` (Bun's readdir is already optimized) — only swap the file reads.
-
-### 2.3 Synchronous stat/exists checks on the request path
-
-- **Where (15 call sites):** `server/api/src/terminal/pty.manager.ts` (`existsSync` before spawn), `server/agent/src/session/projects.ts`, `session-ops.ts`, `session-helpers.ts`, `server/api/src/services/assist.service.ts`
-- **Why:** each `existsSync` blocks the event loop; several sit inside request handlers.
-- **Fix:** prefer `existsSync` only at startup; on request paths use `await Bun.file(p).exists()` (async, cached by Bun's FS cache). Lowest urgency of the three above.
+- The 15 `existsSync` sites guard SQLite DB files in modules that already run synchronous `bun:sqlite` queries on the same paths — event-loop blocking is an accepted trade-off there, and async conversion would ripple function signatures for microsecond-level gains. Revisit only if profiling ever flags these.
 
 ---
 
-## Priority 3 — architectural wins (bigger, do deliberately)
+## ✅ DONE — Priority 3 — architectural wins
 
-### 3.1 Replace `node:http` server + manual Hono bridging with `Bun.serve`
+### 3.1 `Bun.serve` replaces node:http bridging — DONE (`cf17f3e`)
 
-- **Where:** `apps/server/index.ts:5,69,129` — `createServer(async (req,res) => ...)` hand-wiring Hono's fetch handler onto the Node server object.
-- **Fix:**
+- `index.ts` lost the manual IncomingMessage↔Request bridging entirely; Hono's `app.fetch` is served directly.
 
-```ts
-Bun.serve({
-  port, hostname,
-  fetch: app.fetch,
-});
-```
+### 3.2 Native WebSockets for terminals — DONE (`cf17f3e`)
 
-Removes ~60 lines of manual req/res bridging and daemon shutdown wiring simplifies (server.stop()). All Hono middleware stays identical.
+- `socket.route.ts` rewritten for Bun.serve's native websockets (`server.upgrade` for `/api/terminals`).
+- Backpressure mapped from `ws.bufferedAmount`/`drain` to `getBufferedAmount()` + a low-water poller (25ms interval while paused).
+- Per-socket state (session id, pause flag, poller) lives in upgrade-time `data`.
+- The `ws` dependency was **deleted**; `tests/terminal.test.ts` was ported to boot a real Bun.serve instance and is the gate for this path (spawn/echo/resize/kill verified).
 
-### 3.2 Replace `ws` with Bun's native WebSockets
+### 3.3 OAuth login callback servers — DONE (`fbb058c`)
 
-- **Where:** `apps/server/api/src/terminal/socket.route.ts:17,41` (`WebSocketServer({ noServer: true })` attached to the Node http.Server) — carries all terminal traffic between mobile/desktop and the PTYs.
-- **Why:** terminal sessions stream continuously while typing; the `ws` shim does per-message JS allocations that Bun's C++-level publish path skips. Also deletes the `ws` dependency entirely.
-- **Fix:** fold into 3.1 — `Bun.serve({ websocket: { message(ws, data) {...}, close() {...} } })`, route upgrades via the same server. The backpressure pause/resume protocol in `socket.route.ts` maps to checking `ws.getBufferedAmount()` (native).
-- **Risk:** moderate — the terminal protocol (spawn frames, resize, kill, backpressure) needs careful porting; keep `tests/terminal.test.ts` as the gate.
-
-### 3.3 OAuth login callback servers
-
-- **Where:** `apps/server/providers/src/auth/login.ts:11` (`node:http` server listening locally for provider OAuth callbacks)
-- **Fix:** `Bun.serve({ fetch })` one-liner; low priority (runs rarely, briefly).
+- `providers/src/auth/login.ts` `startCallbackServer` now uses `Bun.serve({ fetch })`.
 
 ---
 
@@ -109,7 +69,7 @@ Removes ~60 lines of manual req/res bridging and daemon shutdown wiring simplifi
 | API | Where | Verdict |
 |---|---|---|
 | `node:path`, `node:os` (32+7 imports) | everywhere | No faster alternative; Bun's is the same code |
-| `node:util` promisify | git.service | Disappears naturally with 1.3; otherwise harmless |
+| `node:util` promisify | git.service | Removed naturally with 1.3 |
 | `node:events` EventEmitter | notification.service, fswatch.service | Bun's is compliant and fast; not worth churn |
 | `fs.watch(recursive)` | fswatch.service.ts | Native on Bun; revisit only if events misbehave |
 | `node:string_decoder` | tools/read/engine.ts | Could use `TextDecoder({stream:true})`; zero measurable difference at our chunk sizes |
@@ -117,17 +77,15 @@ Removes ~60 lines of manual req/res bridging and daemon shutdown wiring simplifi
 
 ## Random UUIDs (optional micro-win)
 
-9 files import `randomUUID` from `node:crypto` (`agent-loop.ts`, `tool-executor.ts`, `ask.ts`, `pty.manager.ts`, providers...). `crypto.randomUUID()` global works on Bun and is marginally faster than the module import path. Volume is too low to matter except per-tool-call IDs; fine to sweep opportunistically, never urgent.
+9 files import `randomUUID` from `node:crypto`. Volume is too low to matter except per-tool-call IDs; fine to sweep opportunistically, never urgent.
 
 ---
 
-## Suggested order
+## Status summary
 
-1. **1.1 CryptoHasher** — one-line, hottest path (message hashing)
-2. **1.2 + 1.3 shared spawn helper** — bash tool + git service (most user-visible latency)
-3. **2.1–2.3 Bun.file swaps** — mechanical, testable via existing suites
-4. **3.1 Bun.serve** — contained to index.ts
-5. **3.2 Native WebSockets** — biggest win, biggest risk; gate on terminal tests
-6. **3.3 + UUID sweep** — cleanup pass
-
-Each step keeps `tests/*.test.ts` green under `bun tests/<file>.test.ts` per repo rules.
+1. ~~**1.1 CryptoHasher**~~ ✅ `8812fc9`
+2. ~~**1.2 + 1.3 shared spawn helper**~~ ✅ `94aea23`
+3. ~~**2.1–2.3 Bun.file swaps**~~ ✅ 2.1–2.2 done (`4f3a83c`); 2.3 skipped deliberately
+4. ~~**3.1 Bun.serve**~~ ✅ folded into 3.2 (`cf17f3e`)
+5. ~~**3.2 Native WebSockets**~~ ✅ `cf17f3e` — gated on `bun tests/terminal.test.ts`
+6. **3.3 OAuth callbacks** ✅ `fbb058c`; UUID sweep left as opportunistic cleanup
