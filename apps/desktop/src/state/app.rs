@@ -112,7 +112,11 @@ pub struct ConsoleDesktopApp {
     pub question_selected: std::collections::HashMap<String, std::collections::HashSet<String>>,
     pub todo_items: std::collections::HashMap<String, Vec<TodoItem>>,
     pub agent_notices: std::collections::HashMap<String, String>,
-    pub error_message: Option<String>,
+    /// App-level error banner (not tied to any chat); shown in every pane.
+    pub error_message: Option<super::errors::BannerError>,
+    /// Chat-owned error banners keyed by session id (mirrors `agent_notices`),
+    /// rendered only in panes whose active tab shows that session.
+    pub session_errors: std::collections::HashMap<String, super::errors::BannerError>,
     pub error_selection: TranscriptSelection,
     /// Monotonic token so a stale auto-dismiss timer never clears a newer error.
     pub(crate) error_generation: u64,
@@ -388,6 +392,7 @@ impl ConsoleDesktopApp {
             todo_items: std::collections::HashMap::new(),
             agent_notices: std::collections::HashMap::new(),
             error_message: None,
+            session_errors: std::collections::HashMap::new(),
             error_selection: TranscriptSelection::default(),
             error_generation: 0,
             zoomed_image: None,

@@ -52,11 +52,13 @@ impl ConsoleDesktopApp {
         if prompt.trim().is_empty() {
             return;
         }
-        self.clear_error(cx);
         let run_pane_id = self
             .active_pane_id
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
+        // Fresh slate for this pane only: its active chat's error, or the
+        // app-level banner if that is what is showing.
+        self.clear_error_for_pane(&run_pane_id, cx);
         self.composer_for_pane(&run_pane_id)
             .update(cx, |input, cx| {
                 input.record_prompt_history(prompt.clone(), cx);
@@ -187,7 +189,7 @@ impl ConsoleDesktopApp {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
                                 this.set_session_running(&run_session_id, None);
-                                this.set_error(message, cx);
+                                this.set_error_for_session(&run_session_id, message, cx);
                                 this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
                                     t.finish_streaming(cx);
                                 });
@@ -199,7 +201,6 @@ impl ConsoleDesktopApp {
             };
 
             let mut server_run_may_be_active = false;
-            let mut server_run_finished = false;
             while let Some(event_res) = stream.next().await {
                     let still_running = cx.update(|cx| {
                         entity.upgrade().map(|app| app.read(cx).is_session_running(&run_session_id)).unwrap_or(false)
@@ -340,7 +341,8 @@ impl ConsoleDesktopApp {
                                         }
                                         AgentSessionEvent::Error { error } => {
                                             this.set_session_running(&run_session_id, None);
-                                            this.set_error(
+                                            this.set_error_for_session(
+                                                &run_session_id,
                                                 format!("Agent error: {}", error.message),
                                                 cx,
                                             );
@@ -368,7 +370,7 @@ impl ConsoleDesktopApp {
                                         // Keep the composer disabled while the backend
                                         // finishes the run that outlived this stream.
                                         this.set_session_running(&run_session_id, Some(run_started_at));
-                                        this.set_error(message, cx);
+                                        this.set_error_for_session(&run_session_id, message, cx);
                                         if this
                                             .active_session_for_pane(&run_pane_id)
                                             .as_deref()
@@ -392,12 +394,6 @@ impl ConsoleDesktopApp {
             match client.sessions.wait_until_settled(&session_id).await {
                 Ok(detail) => {
                     server_run_may_be_active = detail.header.status == Some(console_core::SessionStatus::Working);
-                    server_run_finished = matches!(
-                        detail.header.status,
-                        None
-                            | Some(console_core::SessionStatus::Idle)
-                            | Some(console_core::SessionStatus::Done)
-                    );
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
@@ -427,7 +423,9 @@ impl ConsoleDesktopApp {
                     let message = format!("Unable to refresh canonical message times: {error}");
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| this.set_error(message, cx));
+                            app.update(cx, |this, cx| {
+                                this.set_error_for_session(&session_id, message, cx)
+                            });
                         }
                     });
                 }
@@ -442,7 +440,8 @@ impl ConsoleDesktopApp {
                             == Some(run_session_id.as_str());
                         if server_run_may_be_active {
                             this.set_session_running(&run_session_id, Some(run_started_at));
-                            this.set_error(
+                            this.set_error_for_session(
+                                &run_session_id,
                                 "The server is still completing this run. Use Stop before sending another prompt.",
                                 cx,
                             );
@@ -457,9 +456,9 @@ impl ConsoleDesktopApp {
                             }
                         } else {
                             this.set_session_running(&run_session_id, None);
-                            if server_run_finished {
-                                this.clear_error(cx);
-                            }
+                            // Errors are never blanket-cleared here: a banner set
+                            // mid-run (or by another chat) must survive settling;
+                            // banners dismiss themselves after five seconds.
                             if pane_shows_run {
                                 this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
                                     t.finish_streaming(cx);

@@ -81,7 +81,7 @@ impl Render for ConsoleDesktopApp {
                                                     &new_session,
                                                     cx,
                                                 );
-                                                this.clear_error(cx);
+                                                this.clear_error_for_pane(&pane_id, cx);
                                                 if this.active_pane_id.as_deref()
                                                     == Some(pane_id.as_str())
                                                 {
@@ -663,7 +663,8 @@ impl ConsoleDesktopApp {
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
         let client = self.client.clone();
-        let error_message = self.error_message.clone();
+        let error_message = self.error_for_pane(&pane_id).map(|error| error.message.clone());
+        let error_pane_id = pane_id.clone();
         let error_selection = self.error_selection.clone();
         let agent_notice = self.agent_notice_for_pane(&pane_id);
         let todo_items = self.todo_items_for_pane(&pane_id);
@@ -695,7 +696,7 @@ impl ConsoleDesktopApp {
                 error_selection.clone(),
                 Some(Rc::new(move |cx| {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| this.clear_error(cx));
+                        app.update(cx, |this, cx| this.clear_error_for_pane(&error_pane_id, cx));
                     }
                 })),
                 cx,
@@ -794,7 +795,9 @@ impl ConsoleDesktopApp {
                                                 let message = format!("Unable to update tool permission: {error}");
                                                 cx.update(|cx| {
                                                     if let Some(app) = entity_for_error.upgrade() {
-                                                        app.update(cx, |this, cx| this.set_error(message, cx));
+                                                        app.update(cx, |this, cx| {
+                                                            this.set_error_for_session(&sid, message, cx)
+                                                        });
                                                     }
                                                 });
                                             }
@@ -1062,7 +1065,9 @@ impl ConsoleDesktopApp {
                                                             let message = format!("Unable to stop the agent run: {error}");
                                                             cx.update(|cx| {
                                                                 if let Some(app) = entity_for_error.upgrade() {
-                                                                    app.update(cx, |this, cx| this.set_error(message, cx));
+                                                                    app.update(cx, |this, cx| {
+                                                                        this.set_error_for_session(&sid_clone, message, cx)
+                                                                    });
                                                                 }
                                                             });
                                                         }

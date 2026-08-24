@@ -106,7 +106,9 @@ impl ConsoleDesktopApp {
                 let message = format!("Unable to rename session: {error}");
                 cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| this.set_error(message, cx));
+                        app.update(cx, |this, cx| {
+                            this.set_error_for_session(&session_id, message, cx)
+                        });
                     }
                 });
             }
@@ -132,7 +134,9 @@ impl ConsoleDesktopApp {
                 let message = format!("Unable to update session settings: {error}");
                 cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| this.set_error(message, cx));
+                        app.update(cx, |this, cx| {
+                            this.set_error_for_session(&session_id, message, cx)
+                        });
                     }
                 });
             }
@@ -163,7 +167,7 @@ impl ConsoleDesktopApp {
 
         self.clear_question_selected_for_session(&session_id);
         self.clear_question_inputs_for_session(&session_id, cx);
-        self.clear_error(cx);
+        self.clear_error_for_session(&session_id, cx);
         cx.notify();
 
         let client = self.client.clone();
@@ -183,7 +187,9 @@ impl ConsoleDesktopApp {
                 let message = format!("Unable to answer the agent question: {error}");
                 cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| this.set_error(message, cx));
+                        app.update(cx, |this, cx| {
+                            this.set_error_for_session(&session_id, message, cx)
+                        });
                     }
                 });
             }
@@ -385,7 +391,9 @@ impl ConsoleDesktopApp {
                     let message = format!("Unable to load session: {error}");
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| this.set_error(message, cx));
+                            app.update(cx, |this, cx| {
+                                this.set_error_for_session(&session_id, message, cx)
+                            });
                         }
                     });
                 }
