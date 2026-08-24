@@ -20,10 +20,16 @@ jobs:
         include:
           - os-suffix: linux-x64
             bun-target: bun-linux-x64
+            install-os: linux
+            install-cpu: x64
           - os-suffix: macos-x64
             bun-target: bun-darwin-x64
+            install-os: darwin
+            install-cpu: x64
           - os-suffix: macos-arm64
             bun-target: bun-darwin-aarch64
+            install-os: darwin
+            install-cpu: arm64
     steps:
       - uses: actions/checkout@v4
 
@@ -31,8 +37,11 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      # Install optional native deps for the TARGET platform, not the runner.
+      # ffi-rs (via @ff-labs/fff-node) ships a .node addon per os/arch; without
+      # this override a cross-compiled binary would miss its addon and crash.
+      - name: Install dependencies (for target platform)
+        run: bun install --frozen-lockfile --os=${{ matrix.install-os }} --cpu=${{ matrix.install-cpu }}
 
       # Flags: --minify shrinks bundled JS; --sourcemap (zstd-compressed) keeps
       # stacktraces pointing at TS source in production crashes.
