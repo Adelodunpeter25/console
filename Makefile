@@ -21,9 +21,9 @@ dev-console:
 dev-mobile:
 	npm run dev:mobile
 
-## dev-desktop: Start the GPUI desktop app in dev mode (requires server running)
+## dev-desktop: Start the GPUI desktop app in dev mode with auto-reload (requires server running)
 dev-desktop:
-	cargo run --manifest-path apps/desktop/Cargo.toml
+	bash apps/desktop/scripts/dev.sh
 
 ## build-desktop: Build the GPUI desktop app for production
 build-desktop:
