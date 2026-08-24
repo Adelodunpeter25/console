@@ -99,13 +99,12 @@ impl RenderOnce for ThinkingBlock {
         let header = div()
             .id(ElementId::Name(header_id.into()))
             .w_full()
-            .min_h(if collapsed { px(16.0) } else { px(18.0) })
+            .min_h(px(16.0))
             .flex()
             .items_center()
             .justify_between()
             .gap(px(6.0))
             .cursor_pointer()
-            .hover(|element| element.bg(theme.overlay))
             .on_click(move |_, window, cx| {
                 if let Some(on_toggle) = &on_toggle {
                     // `collapsed` is the current collapsed flag, which is
@@ -153,14 +152,14 @@ impl RenderOnce for ThinkingBlock {
         div()
             .id(ElementId::Name(block_id.into()))
             .px(px(12.0))
-            .py(if collapsed { px(6.0) } else { px(10.0) })
+            .py(px(6.0))
             .rounded(px(9.0))
             .bg(theme.inset)
             .border_1()
             .border_color(theme.border)
             .flex()
             .flex_col()
-            .gap(if collapsed { px(4.0) } else { px(6.0) })
+            .gap(px(4.0))
             .child(header)
             .when(!collapsed, |element| {
                 element.child(render_markdown(
