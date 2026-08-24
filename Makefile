@@ -5,17 +5,17 @@
 
 ## dev-server: Start the Hono agent server in dev mode (uses ~/.console-dev storage)
 dev-server:
-	CONSOLE_ENV=dev npm run dev:server
+	CONSOLE_ENV=dev bun --watch apps/server/index.ts
 
 ## dev-console: Start the console agent as a background daemon (survives closing terminal)
 ##   Usage: make dev-console            (dev: port 3000, ~/.console-dev storage)
 ##          make dev-console PORT=3001  (prod: port 3001, ~/.console storage)
 ## Dev (default port) sets CONSOLE_ENV=dev so apppaths/daemon-manager resolve
 ## ~/.console-dev, matching the desktop's separate dev bundle identifier. Passing
-## PORT leaves CONSOLE_ENV unset so prod uses ~/.console. Invoked via tsx because
+## PORT leaves CONSOLE_ENV unset so prod uses ~/.console. Run via bun because
 ## chained `npm run` drops the -p/--port flag.
 dev-console:
-	CONSOLE_ENV=$(if $(PORT),,dev) ./node_modules/.bin/tsx apps/cli/index.ts start -p $(if $(PORT),$(PORT),3000)
+	CONSOLE_ENV=$(if $(PORT),,dev) bun apps/cli/index.ts start -p $(if $(PORT),$(PORT),3000)
 
 ## dev-mobile: Start the Expo React Native app dev server
 dev-mobile:
@@ -35,7 +35,7 @@ build-desktop-mac:
 
 ## typecheck: Run TypeScript check across all monorepo workspaces
 typecheck:
-	npm run typecheck
+	bunx tsc --noEmit
 
 ## generate-icons: Regenerate mobile SVG icon registries from console-rs assets
 generate-icons:

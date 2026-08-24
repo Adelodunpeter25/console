@@ -10,8 +10,8 @@
     "apps/cli"
   ],
   "scripts": {
-    "dev:server": "npm run dev --workspace=@console/server",
-    "start:server": "npm run start --workspace=@console/server",
+    "dev:server": "bun --watch apps/server/index.ts",
+    "start:server": "bun apps/server/index.ts",
     "dev:mobile": "npm run android --workspace=@console/mobile",
     "icons:generate": "npm run icons:generate --workspace=@console/mobile",
     "theme:generate": "npm run theme:generate --workspace=@console/mobile",
