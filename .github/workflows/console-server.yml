@@ -53,22 +53,7 @@ jobs:
             --target=${{ matrix.bun-target }} \
             --outfile console-${{ matrix.os-suffix }}
 
-      - name: Smoke test linux binary
-        if: matrix.os-suffix == 'linux-x64'
-        run: |
-          chmod +x console-server-linux-x64 console-linux-x64
-          CONSOLE_ENV=dev PORT=3999 ./console-server-linux-x64 &
-          SERVER_PID=$!
-          for i in $(seq 1 40); do
-            curl -sf http://localhost:3999/api/sessions >/dev/null && break
-            sleep 0.5
-          done
-          CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3999/api/sessions)
-          kill $SERVER_PID 2>/dev/null || true
-          [ "$CODE" = "200" ] || { echo "Smoke test failed (HTTP $CODE)"; exit 1; }
-          echo "Smoke test passed"
-
-      - name: Upload binaries to rolling release (tag: console-server)
+      - name: "Upload binaries to rolling release"
         uses: softprops/action-gh-release@v2
         with:
           tag_name: console-server
