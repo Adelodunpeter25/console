@@ -83,7 +83,10 @@ impl ThinkingBlock {
 impl RenderOnce for ThinkingBlock {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
-        let palette = Palette::from_theme(&theme);
+        // Reasoning is secondary content — paint it a step quieter than the
+        // assistant's answer text.
+        let mut palette = Palette::from_theme(&theme);
+        palette.text = theme.text_secondary;
         let markdown_ctx =
             MarkdownCtx::new(self.id.clone(), &palette, Metrics::BODY, self.selection);
         let collapsed = self.collapsed;
