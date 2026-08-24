@@ -4,8 +4,8 @@
  * Runs real agent prompts against live Gemini / Antigravity LLM endpoints using your local credentials.
  *
  * Usage:
- *   npx tsx scripts/demo-agent.ts "List files in this project and build a hello world script"
- *   npx tsx scripts/demo-agent.ts --provider antigravity --model gemini-2.5-pro "What tools do you have?"
+ *   bun scripts/demo-agent.ts "List files in this project and build a hello world script"
+ *   bun scripts/demo-agent.ts --provider antigravity --model gemini-2.5-pro "What tools do you have?"
  */
 import readline from "node:readline";
 import { Agent } from "../agent/src/service/agent.js";

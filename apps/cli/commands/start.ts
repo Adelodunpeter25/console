@@ -45,7 +45,7 @@ export async function startDaemon(options: StartOptions): Promise<void> {
       CONSOLE_DAEMON: "true",
     };
 
-    const child = spawn("npx", ["tsx", ...args], {
+    const child = spawn("bun", [...args], {
       detached: true,
       stdio: "ignore",
       env,

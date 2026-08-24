@@ -7,11 +7,11 @@
 
 ## Tests & Verification
 - Run only the specific test file relevant to the task, e.g.:
-  `cd apps/server && npx tsx tests/<name>.test.ts`
+  `cd apps/server && bun tests/<name>.test.ts`
 - Never run `run-all-tests.ts` or the full suite unless explicitly asked.
 - If a test fails, fix the cause and re-run the same specific test until it passes before committing.
 - For mobile bundling verification:
-  `cd apps/mobile && npx expo export --platform android`
+  `cd apps/mobile && bunx expo export --platform android`
 - For mobile icon generation:
   `bash apps/mobile/scripts/generate-icons.sh [path/to/icon.png]`
 
