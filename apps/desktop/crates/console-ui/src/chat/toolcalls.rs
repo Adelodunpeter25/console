@@ -312,11 +312,6 @@ impl ToolCalls {
                     .id(ElementId::Name(
                         format!("tool-call-header-{call_id}").into(),
                     ))
-                    .hover(|element| {
-                        element
-                            .bg(theme.overlay_strong)
-                            .border_color(theme.border_strong)
-                    })
                     .on_click(move |_, window, cx| {
                         if let Some(on_action) = &on_action {
                             on_action(
@@ -452,11 +447,6 @@ impl ToolCalls {
                     .id(ElementId::Name(
                         format!("tool-group-header-{group_key}").into(),
                     ))
-                    .hover(|element| {
-                        element
-                            .bg(theme.overlay_strong)
-                            .border_color(theme.border_strong)
-                    })
                     .on_click(move |_, window, cx| {
                         if let Some(on_action) = &header_action {
                             on_action(
@@ -670,11 +660,6 @@ impl RenderOnce for ToolCalls {
             .rounded(px(6.0))
             .border_1()
             .border_color(transparent_black())
-            .hover(|element| {
-                element
-                    .bg(theme.overlay_strong)
-                    .border_color(theme.border_strong)
-            })
             .on_click(move |_, window, cx| {
                 if let Some(on_action) = &on_action {
                     on_action(
