@@ -307,6 +307,7 @@ impl ToolCalls {
                     .py(px(6.0))
                     .cursor_pointer()
                     .rounded(px(6.0))
+                    .bg(theme.inset)
                     .border_1()
                     .border_color(transparent_black())
                     .id(ElementId::Name(
@@ -442,6 +443,7 @@ impl ToolCalls {
                     .py(px(6.0))
                     .cursor_pointer()
                     .rounded(px(6.0))
+                    .bg(theme.inset)
                     .border_1()
                     .border_color(transparent_black())
                     .id(ElementId::Name(
@@ -658,6 +660,7 @@ impl RenderOnce for ToolCalls {
             .py(px(5.0))
             .cursor_pointer()
             .rounded(px(6.0))
+            .bg(theme.inset)
             .border_1()
             .border_color(transparent_black())
             .on_click(move |_, window, cx| {
