@@ -99,3 +99,7 @@ t3code/
 
 # macOS
 .DS_Store
+
+# compiled server binary (make build-server)
+console-server
+console-server-*
