@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from "react";
 import { View, Text, Pressable, ActivityIndicator, ScrollView, BackHandler } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Search, RefreshCw, File as FileIcon, ArrowLeft } from "lucide-react-native";
+import { Search, RefreshCw, File as FileIcon } from "lucide-react-native";
 import { TextInput } from "react-native";
 import { useAppStore, useProjectStore } from "@/stores";
 import { useDirectoryChildren, useReadFile, useSearchFiles } from "@/hooks/queries";
@@ -120,15 +120,6 @@ export function FilesScreen() {
           title={headerTitle}
           subtitle={headerSubtitle}
           onBack={handleBackFromFile}
-          rightAction={
-            <Pressable
-              onPress={() => handleBackFromFile()}
-              className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center"
-              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-            >
-              <ArrowLeft size={18} color={theme.colors.text.secondary} />
-            </Pressable>
-          }
         />
 
         {isLoadingFile ? (
