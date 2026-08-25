@@ -76,8 +76,9 @@ export const bashTool: AgentTool<typeof inputSchema> = {
   description: `Execute a shell command and return its output.
 Returns stdout, stderr, and exit code.
 The command runs in a shell (/bin/sh -c), so pipes, redirects, and shell builtins all work.
-Use for: running tests, builds, git operations, linters, package managers, file system queries.
+Use for: running tests, builds, git operations, linters, package managers.
 Do NOT use for file reads/writes — use readFile, writeFile, editFile, or listDir instead.
+Do NOT use for code/file searching — never run grep, egrep, fgrep, rg, ripgrep, or find via bash; the dedicated grep and glob tools are indexed and much faster.
 Commands are killed after timeoutMs (default 30s, max 20min).
 stdout and stderr are each capped at 50KB.`,
   inputSchema,
