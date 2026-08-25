@@ -9,7 +9,14 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { getLanguageFromPath, renderHighlightedLine } from "@/components/common/syntax-highlighter";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { FileTreeBrowser } from "@/components/files/FileTreeBrowser";
+import { getFilePreviewBlock } from "@console/types";
 import { theme } from "@/styles/theme";
+
+/** Selected file for preview; `size` comes from the tree entry stat when known. */
+interface SelectedFile {
+  readonly path: string;
+  readonly size?: number;
+}
 
 export function FilesScreen() {
   const insets = useSafeAreaInsets();
@@ -23,7 +30,8 @@ export function FilesScreen() {
     setActiveTab(previousTab && previousTab !== "files" ? previousTab : "home");
   }, [previousTab, setActiveTab]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
+  const selectedFilePath = selectedFile?.path ?? null;
 
   const project = useMemo(
     () => projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null,
@@ -49,25 +57,34 @@ export function FilesScreen() {
     refetch: refetchEntries,
   } = useDirectoryChildren(projectRoot);
 
+  // Gate before fetching: lockfiles, binaries, and oversized files are blocked
+  // client-side (stopgap — the canonical gate belongs on the server, see
+  // docs/notes/file-preview-gating.md).
+  const previewBlock = useMemo(() => {
+    if (!selectedFile) return null;
+    const fileName = selectedFile.path.split("/").pop() ?? selectedFile.path;
+    return getFilePreviewBlock(fileName, selectedFile.size);
+  }, [selectedFile]);
+
   const {
     data: fileData,
     isLoading: isLoadingFile,
     error: fileError,
-  } = useReadFile(selectedFilePath ?? "");
+  } = useReadFile(selectedFilePath ?? "", { enabled: !previewBlock });
 
-  const handleSelectFile = useCallback((absolutePath: string) => {
-    setSelectedFilePath(absolutePath);
+  const handleSelectFile = useCallback((absolutePath: string, fileSize?: number) => {
+    setSelectedFile({ path: absolutePath, size: fileSize });
   }, []);
 
   const handleBackFromFile = useCallback(() => {
-    setSelectedFilePath(null);
+    setSelectedFile(null);
   }, []);
 
   // Android back handling: if viewing file, close it; else return to previous tab
   React.useEffect(() => {
     const onBackPress = () => {
       if (selectedFilePath) {
-        setSelectedFilePath(null);
+        setSelectedFile(null);
         return true;
       }
       goBack();
@@ -122,7 +139,15 @@ export function FilesScreen() {
           onBack={handleBackFromFile}
         />
 
-        {isLoadingFile ? (
+        {previewBlock ? (
+          <View className="flex-1 items-center justify-center px-6">
+            <FileIcon size={28} color={theme.colors.text.muted} />
+            <Text className="mt-3 text-sm font-bold text-foreground">{previewBlock.title}</Text>
+            <Text className="mt-1 text-xs text-foreground-muted text-center leading-normal">
+              {previewBlock.message}
+            </Text>
+          </View>
+        ) : isLoadingFile ? (
           <View className="flex-1 items-center justify-center gap-3">
             <ActivityIndicator color={theme.colors.text.muted} />
             <Text className="text-xs text-foreground-muted">Loading file…</Text>

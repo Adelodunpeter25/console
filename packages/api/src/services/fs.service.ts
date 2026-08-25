@@ -1,3 +1,4 @@
+import axios from "axios";
 import { getConsoleApiClient } from "../client";
 import type { ProjectInfo, FsTreeEntry, FileSearchResult } from "@console/types";
 
@@ -40,8 +41,20 @@ export const fsService = {
   },
 
   async readFile(path: string): Promise<{ content: string; path: string }> {
-    const res = await getConsoleApiClient().get("/api/fs/file", { params: { path } });
-    return res.data.data ?? res.data;
+    try {
+      const res = await getConsoleApiClient().get("/api/fs/file", { params: { path } });
+      return res.data.data ?? res.data;
+    } catch (err) {
+      // Surface the server's structured preview-gate rejection (413/415) so UIs
+      // show the real reason instead of "Request failed with status code 413".
+      const data = axios.isAxiosError(err) ? err.response?.data : undefined;
+      if (data && typeof data.error === "string") {
+        const wrapped = new Error(data.error) as Error & { code?: string };
+        wrapped.code = typeof data.code === "string" ? data.code : undefined;
+        throw wrapped;
+      }
+      throw err;
+    }
   },
 
   async writeFile(path: string, content: string): Promise<{ success: boolean }> {

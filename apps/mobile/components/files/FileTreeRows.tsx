@@ -38,7 +38,8 @@ export const FileTreeRow = memo(function FileTreeRow(props: {
   readonly selected: boolean;
   readonly expanded: boolean;
   readonly onPressDirectory: (path: string) => void;
-  readonly onPressFile: (path: string) => void;
+  /** Receives the whole entry so callers can gate on name/size before fetching. */
+  readonly onPressFile: (entry: FsTreeEntry) => void;
 }) {
   const isDir = props.entry.isDir;
 
@@ -48,7 +49,7 @@ export const FileTreeRow = memo(function FileTreeRow(props: {
       accessibilityLabel={props.entry.path}
       onPress={() => {
         if (isDir) props.onPressDirectory(props.entry.path);
-        else props.onPressFile(props.entry.path);
+        else props.onPressFile(props.entry);
       }}
       className={`mx-2 min-h-[42px] flex-row items-center gap-2 rounded-[12px] px-2 active:opacity-80 ${props.selected ? "bg-card border border-border" : ""}`}
       style={{ paddingLeft: 8 + props.depth * 18 }}
