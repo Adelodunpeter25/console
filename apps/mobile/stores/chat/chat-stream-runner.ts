@@ -4,7 +4,7 @@ import { startNativeChatStream } from "@/utils/native-stream";
 import { useAppStore } from "@/stores/useAppStore";
 import { useSessionStore } from "@/stores/useSessionStore";
 import { useProviderStore } from "@/stores/useProviderStore";
-import { useSessionStatusStore } from "@/stores/useSessionStatusStore";
+import { setStatus } from "@/stores/useSessionStatusStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import type { ChatSessionState } from "@/types";
 import { EMPTY_CHAT_SESSION } from "@/types/chat-state";
@@ -25,7 +25,7 @@ export function syncSessionStatus(
   sessionId: string,
   status: "idle" | "working" | "done" | "needs_attention",
 ): void {
-  useSessionStatusStore.getState().setStatus(sessionId, status);
+  setStatus(sessionId, status);
 }
 
 export function updateSession(

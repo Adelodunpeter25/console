@@ -3,7 +3,7 @@ import type { ApprovalMode, ProjectInfo, SessionDetailResponse } from "@console/
 import { sessionService } from "@console/api";
 import { useProjectStore } from "./useProjectStore";
 import { useProviderStore } from "./useProviderStore";
-import { useSessionStatusStore } from "./useSessionStatusStore";
+import { setStatus } from "./useSessionStatusStore";
 
 export interface SessionViewState {
   sessionModelId: string | null;
@@ -64,7 +64,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           },
         },
       }));
-      useSessionStatusStore.getState().setStatus(sessionId, detail.header.status ?? "idle");
+      setStatus(sessionId, detail.header.status ?? "idle");
       return detail;
     } catch {
       return null;

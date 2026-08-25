@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { ProjectInfo, SessionHeader, UpdateSessionDto } from "@console/types";
 import { sessionService, fsService, sessionKeys, fsKeys } from "@console/api";
 import { queryClient } from "@/query-client";
-import { useSessionStatusStore } from "./useSessionStatusStore";
+import { clearStatus, setStatus, setStatuses } from "./useSessionStatusStore";
 import { useAppStore } from "./useAppStore";
 
 interface ProjectState {
@@ -70,7 +70,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     try {
       const sessions = await sessionService.getSessions();
       set({ sessions, sessionsLoading: false });
-      useSessionStatusStore.getState().setStatuses(sessions);
+      setStatuses(sessions);
     } catch {
       set({ sessionsLoading: false });
     }
@@ -93,7 +93,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
       title: title ?? "New Chat",
     });
     set((s) => ({ sessions: [session, ...s.sessions] }));
-    useSessionStatusStore.getState().setStatus(session.id, session.status ?? "idle");
+    setStatus(session.id, session.status ?? "idle");
     queryClient.invalidateQueries({ queryKey: sessionKeys.all }).catch(() => {});
     return session;
   },
@@ -110,7 +110,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   deleteSession: async (id: string) => {
     await sessionService.deleteSession(id);
     set((s) => ({ sessions: s.sessions.filter((sess) => sess.id !== id) }));
-    useSessionStatusStore.getState().clearStatus(id);
+    clearStatus(id);
     queryClient.invalidateQueries({ queryKey: sessionKeys.all }).catch(() => {});
   },
 
@@ -145,7 +145,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
       set((s) => ({
         sessions: s.sessions.map((sess) => (sess.id === sessionId ? { ...sess, ...header } : sess)),
       }));
-      if (header.status) useSessionStatusStore.getState().setStatus(sessionId, header.status);
+      if (header.status) setStatus(sessionId, header.status);
     } catch {
       // Ignore refresh failures — the header will update on next load.
     }

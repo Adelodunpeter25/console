@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useAppStore } from "@/stores/useAppStore";
 import { useProjectStore } from "@/stores/useProjectStore";
-import { useSessionStatusStore } from "@/stores/useSessionStatusStore";
+import { useValue } from "@legendapp/state/react";
+import { sessionStatuses$ } from "@/stores/useSessionStatusStore";
 import { confirmAlert } from "@/components/common/confirm-dialog";
 
 /**
@@ -69,7 +70,7 @@ export function useProjectSessions(projectId: string, projectPath: string) {
     [deleteSession, selectedSessionId, setSelectedSessionId],
   );
 
-  const statuses = useSessionStatusStore((state) => state.statuses);
+  const statuses = useValue(sessionStatuses$);
 
   return {
     sessions,
