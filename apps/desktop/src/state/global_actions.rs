@@ -6,7 +6,7 @@
 use std::rc::Rc;
 
 use console_core::CreateSessionDto;
-use gpui::{Context, Window};
+use gpui::{Context, Focusable as _, Window};
 
 use super::ConsoleDesktopApp;
 
@@ -124,5 +124,17 @@ impl ConsoleDesktopApp {
         self.command_palette
             .update(cx, |palette, cx| palette.toggle(window, cx));
         cx.notify();
+    }
+
+    /// ⌘L — move keyboard focus to the active pane's composer input.
+    pub fn focus_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Don't fight the palette for focus while it is open.
+        if self.command_palette.read(cx).is_open() {
+            return;
+        }
+        let composer = self.active_composer_input();
+        composer.update(cx, |input, cx| {
+            window.focus(&input.focus_handle(cx), cx);
+        });
     }
 }

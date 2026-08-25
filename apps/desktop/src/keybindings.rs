@@ -25,6 +25,8 @@ actions!(
         AddProject,
         /// Toggle the command palette.
         ToggleCommandPalette,
+        /// Move keyboard focus to the active pane's composer.
+        FocusComposer,
     ]
 );
 
@@ -38,6 +40,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-n", NewChat, None),
         KeyBinding::new("secondary-o", AddProject, None),
         KeyBinding::new("secondary-k", ToggleCommandPalette, None),
+        KeyBinding::new("secondary-l", FocusComposer, None),
     ]);
 }
 
@@ -67,13 +70,31 @@ pub fn init_handlers(app: Entity<ConsoleDesktopApp>, window: AnyWindowHandle, cx
             app.update(cx, |this, cx| this.add_project(cx));
         }
     });
-    cx.on_action(move |_: &ToggleCommandPalette, cx| {
-        // The palette toggle touches focus, so it needs the window; fetch it
-        // back through the handle captured at creation.
-        window
-            .update(cx, |_, window, cx| {
-                app.update(cx, |this, cx| this.toggle_command_palette(window, cx));
-            })
-            .ok();
+    // Handlers that touch the window itself (focus, overlays) must defer:
+    // global listeners run *inside* the window's own update, and a re-entrant
+    // `window.update` fails because the window is already checked out —
+    // the same reason gpui defers in `Window::dispatch_action`.
+    cx.on_action({
+        let app = app.clone();
+        move |_: &ToggleCommandPalette, cx| {
+            let app = app.clone();
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.toggle_command_palette(window, cx));
+                    })
+                    .ok();
+            });
+        }
+    });
+    cx.on_action(move |_: &FocusComposer, cx| {
+        let app = app.clone();
+        cx.defer(move |cx| {
+            window
+                .update(cx, |_, window, cx| {
+                    app.update(cx, |this, cx| this.focus_composer(window, cx));
+                })
+                .ok();
+        });
     });
 }
