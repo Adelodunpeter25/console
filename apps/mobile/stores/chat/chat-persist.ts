@@ -1,8 +1,8 @@
+import type { Observable } from "@legendapp/state";
 import type { ImageAttachment } from "@console/types";
 import type { ChatSessionState } from "@/types";
 import { createChatSessionState } from "@/types/chat-state";
 import { mmkvStringStorage } from "@/utils/storage";
-import { chat$ } from "@/stores/useChatStore";
 import { hasPersistableDraft, trimDraftAttachments } from "./draft";
 
 /**
@@ -11,7 +11,13 @@ import { hasPersistableDraft, trimDraftAttachments } from "./draft";
  * Keeps the exact same on-disk format the zustand `persist` middleware wrote
  * ({ state: { sessions }, version }) so upgrades and downgrades are lossless.
  * Writes are throttled while streaming is suppressed via `setSuppressPersist`.
+ *
+ * Receives the sessions observable as a parameter (rather than importing it
+ * from useChatStore) to avoid a require cycle.
  */
+
+/** The sessions node being persisted; bound by initChatPersistence(). */
+let sessionsNode: Observable<Record<string, ChatSessionState>> | null = null;
 
 export const PERSIST_NAME = "console-chat-cache";
 export const PERSIST_VERSION = 1;
@@ -71,7 +77,7 @@ function sanitizePersistedSessions(persisted: unknown): Record<string, ChatSessi
 /** Build the capped/partialized payload — same policy as the old partialize. */
 function buildPersistedSessions(): Record<string, unknown> {
   return Object.fromEntries(
-    Object.entries(chat$.sessions.peek())
+    Object.entries(sessionsNode?.peek() ?? {})
       // Keep sessions with messages OR with a draft (input/attachments) — so a
       // never-sent new chat typed but not sent still survives restart and shows
       // as DRAFT on home. Draft attachments capped to 2 via draft.ts.
@@ -130,10 +136,14 @@ export function clearChatStorage(): void {
 }
 
 /**
- * Hydrate `chat$` from storage and start persisting changes.
+ * Hydrate the sessions node from storage and start persisting changes.
  * Called once at module load of useChatStore (before first render).
  */
-export function initChatPersistence(): void {
+export function initChatPersistence(
+  sessions: Observable<Record<string, ChatSessionState>>,
+): void {
+  sessionsNode = sessions;
+
   // --- Hydrate ---
   try {
     const raw = mmkvStringStorage.getItem(PERSIST_NAME);
@@ -144,12 +154,12 @@ export function initChatPersistence(): void {
       };
       // Payloads from older/unknown versions are re-validated field-by-field
       // by sanitize; nothing to structurally migrate yet.
-      chat$.sessions.set(sanitizePersistedSessions(parsed.state?.sessions));
+      sessions.set(sanitizePersistedSessions(parsed.state?.sessions));
     }
   } catch (err) {
     console.warn("Could not restore persisted chats:", err);
   }
 
   // --- Persist on change ---
-  chat$.sessions.onChange(scheduleSave);
+  sessions.onChange(scheduleSave);
 }

@@ -112,6 +112,7 @@ export const ChatMessageList = forwardRef<LegendListRef, ChatMessageListProps>(
       <LegendList
         ref={ref}
         style={{ flex: 1 }}
+        recycleItems={false}
         data={displayMessages}
         keyExtractor={(item, i) => (item as any).id ?? `${(item as any).createdAt ?? i}-${i}`}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16 }}

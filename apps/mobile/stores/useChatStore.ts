@@ -341,8 +341,10 @@ export function handleEvent(sessionId: string, event: AgentSessionEvent): void {
   });
 }
 
-// Load persisted sessions once at module startup (before first render).
-initChatPersistence();
+// Load persisted sessions once at module startup (before first render). The
+// sessions node is passed in so chat-persist doesn't import this module
+// (require cycle).
+initChatPersistence(chat$.sessions);
 
 // Register checker to avoid cyclic import in useSessionStore
 registerSessionHasMessagesChecker((sessionId) => {

@@ -214,6 +214,7 @@ export function FileTreeBrowser(props: FileTreeBrowserProps) {
 
   return (
     <LegendList
+      recycleItems={false}
       data={rows}
       keyExtractor={(item) => item.key}
       renderItem={renderItem}
