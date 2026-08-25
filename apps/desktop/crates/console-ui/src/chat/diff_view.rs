@@ -11,6 +11,7 @@ use gpui::{
     Styled, Window, div, prelude::*, px,
 };
 
+use crate::primitives::{base_name, file_type_icon};
 use crate::theme::Theme;
 
 const MAX_RENDER_LINES: usize = 500;
@@ -20,6 +21,9 @@ const MAX_RENDER_LINES: usize = 500;
 pub struct DiffView {
     id: String,
     diff: DiffResult,
+    /// Target file path, when the diff came from a file tool call. Renders the
+    /// file's type icon and basename in the header instead of a bare label.
+    file_path: Option<String>,
     scroll_handle: ScrollHandle,
 }
 
@@ -28,8 +32,14 @@ impl DiffView {
         Self {
             id: id.into(),
             diff,
+            file_path: None,
             scroll_handle: ScrollHandle::new(),
         }
+    }
+
+    pub fn file_path(mut self, path: impl Into<String>) -> Self {
+        self.file_path = Some(path.into());
+        self
     }
 }
 
@@ -39,6 +49,7 @@ impl RenderOnce for DiffView {
 
         let added = self.diff.added;
         let removed = self.diff.removed;
+        let file_path = self.file_path.clone();
 
         // Summary badge: +N -M
         let summary = div()
@@ -95,13 +106,28 @@ impl RenderOnce for DiffView {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(
-                        div()
+                    .child(match &file_path {
+                        Some(path) => div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.0))
+                            .min_w_0()
+                            .child(file_type_icon(path, 13.0))
+                            .child(
+                                div()
+                                    .font_family("GeistMono")
+                                    .text_size(px(10.5))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(theme.text_secondary)
+                                    .truncate()
+                                    .child(base_name(path).to_owned()),
+                            ),
+                        None => div()
                             .text_size(px(10.0))
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme.text_ghost)
                             .child("DIFF"),
-                    )
+                    })
                     .child(summary),
             )
             .child(body)

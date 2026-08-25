@@ -22,7 +22,7 @@ use crate::chat::{DiffView, ThinkingBlock, WorkingIndicator};
 use crate::markdown::render::{
     Ctx as MarkdownCtx, MarkdownView, Metrics, Palette, TranscriptSelection, plain_text,
 };
-use crate::primitives::{IconName, activity_icon, app_icon, icon};
+use crate::primitives::{IconName, activity_icon, app_icon, file_type_icon, icon};
 use crate::theme::Theme;
 use crate::utils::time::normalize_unix_timestamp;
 
@@ -265,6 +265,7 @@ impl ToolCalls {
         let (status_icon, status_color) = Self::status_icon(&entry, &theme);
         let call_id_for_action = call_id.clone();
         let is_edit = is_edit_file(&entry.call.name);
+        let file_path = argument_path(&entry.call).map(str::to_owned);
         let diff = if is_edit {
             let mut cache = self.state.borrow_mut();
             if let Some((cached_args, cached_diff)) = cache.diff_cache.get(&call_id) {
@@ -325,11 +326,19 @@ impl ToolCalls {
                             );
                         }
                     })
-                    .child(icon(
-                        activity_icon(&entry.call.name),
-                        13.0,
-                        theme.text_tertiary,
-                    ))
+                    .when_some(file_path.clone(), |element, path| {
+                        // File-targeting calls show the file's real type icon
+                        // (multicolor, like mobile) instead of the generic
+                        // monochrome tool glyph.
+                        element.child(file_type_icon(&path, 13.0))
+                    })
+                    .when_none(&file_path, |element| {
+                        element.child(icon(
+                            activity_icon(&entry.call.name),
+                            13.0,
+                            theme.text_tertiary,
+                        ))
+                    })
                     .child(
                         div()
                             .flex_none()
@@ -389,7 +398,11 @@ impl ToolCalls {
                     .flex_col()
                     .gap(px(6.0))
                     .when_some(diff, |element, d| {
-                        element.child(DiffView::new(call_id.clone(), d))
+                        let mut view = DiffView::new(call_id.clone(), d);
+                        if let Some(path) = &file_path {
+                            view = view.file_path(path.clone());
+                        }
+                        element.child(view)
                     })
                     .when(!has_diff, |element| {
                         let arguments = serde_json::to_string_pretty(&entry.call.arguments)
@@ -775,6 +788,14 @@ impl ToolCalls {
 /// arguments carry `oldContent` / `newContent` for diffing.
 fn is_edit_file(name: &str) -> bool {
     matches!(name, "editFile" | "edit_file" | "str_replace")
+}
+
+/// The target path of a file-oriented tool call, when its arguments carry one.
+fn argument_path(call: &ToolCall) -> Option<&str> {
+    let object = call.arguments.as_object()?;
+    ["path", "filePath"]
+        .into_iter()
+        .find_map(|key| object.get(key).and_then(|value| value.as_str()))
 }
 
 fn truncate(value: &str, max_chars: usize) -> String {

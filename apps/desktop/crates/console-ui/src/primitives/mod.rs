@@ -5,6 +5,7 @@ use gpui::{
 };
 
 pub mod context_menu;
+pub mod file_icons;
 pub mod icons;
 pub mod menu;
 pub mod motion;
@@ -16,6 +17,7 @@ use crate::theme::Theme;
 use console_core::SessionStatus;
 
 pub use context_menu::session_context_menu;
+pub use file_icons::{base_name, file_icon_for_name, file_icon_for_path, file_type_icon};
 pub use icons::{FileTypeIcon, IconName, ProviderIcon, app_icon, provider_app_icon};
 pub use menu::{ContextMenuHandle, MenuAlign, MenuItem, dropdown_menu, popover};
 pub use text_field::TextField;
