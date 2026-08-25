@@ -152,14 +152,7 @@ export function useFsTree(path?: string) {
   });
 }
 
-export function useFsEntries(path: string | null, depth = 6) {
-  return useQuery({
-    queryKey: fsKeys.entries(path ?? undefined, depth),
-    queryFn: () => fsService.getFsEntries(path!, depth),
-    enabled: Boolean(path),
-    staleTime: 15_000,
-  });
-}
+export { useDirectoryChildren } from "@console/api";
 
 export function useReadFile(path: string) {
   return useQuery({
