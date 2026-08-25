@@ -16,6 +16,12 @@ export function FilesScreen() {
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
   const projects = useProjectStore((s) => s.projects);
   const setActiveTab = useAppStore((s) => s.setActiveTab);
+  // Back returns to wherever the user came from (never Files itself),
+  // mirroring the terminal screen's behavior.
+  const previousTab = useAppStore((s) => s.previousTab);
+  const goBack = useCallback(() => {
+    setActiveTab(previousTab && previousTab !== "files" ? previousTab : "home");
+  }, [previousTab, setActiveTab]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
 
@@ -57,18 +63,19 @@ export function FilesScreen() {
     setSelectedFilePath(null);
   }, []);
 
-  // Android back handling: if viewing file, go back to tree; else go home
+  // Android back handling: if viewing file, close it; else return to previous tab
   React.useEffect(() => {
     const onBackPress = () => {
       if (selectedFilePath) {
         setSelectedFilePath(null);
         return true;
       }
-      return false;
+      goBack();
+      return true;
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
     return () => sub.remove();
-  }, [selectedFilePath]);
+  }, [selectedFilePath, goBack]);
 
   const isPending = isPendingEntries || isFetchingEntries;
   const errorMsg = entriesError ? (entriesError as Error).message : null;
@@ -86,7 +93,7 @@ export function FilesScreen() {
   if (!project) {
     return (
       <View className="flex-1 bg-screen">
-        <ScreenHeader title="Files" onBack={() => setActiveTab("home")} />
+        <ScreenHeader title="Files" onBack={goBack} />
         <View className="flex-1 items-center justify-center px-6">
           <FileIcon size={28} color={theme.colors.text.muted} />
           <Text className="mt-3 text-sm font-bold text-foreground">No project selected</Text>
@@ -171,7 +178,7 @@ export function FilesScreen() {
       <ScreenHeader
         title="Files"
         subtitle={project.name}
-        onBack={() => setActiveTab("home")}
+        onBack={goBack}
         rightAction={
           <Pressable
             onPress={() => refetchEntries()}
