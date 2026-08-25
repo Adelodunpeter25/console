@@ -2,7 +2,6 @@ import { runService, sessionKeys } from "@console/api";
 import { queryClient } from "@/query-client";
 import { startNativeChatStream } from "@/utils/native-stream";
 import { useSessionStore } from "@/stores/useSessionStore";
-import { useProviderStore } from "@/stores/useProviderStore";
 import { setStatus } from "@/stores/useSessionStatusStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import type { ChatSessionState } from "@/types";

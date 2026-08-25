@@ -1,14 +1,13 @@
 import { useEffect } from "react";
-import { useProviderStore } from "@/stores/useProviderStore";
+import { useValue } from "@legendapp/state/react";
+import { loadApprovalModes, loadModels, loadProviders, provider$ } from "@/stores/useProviderStore";
 
-/** Provider + approval-mode catalog backed by `useProviderStore`. */
+/** Provider + approval-mode catalog backed by `provider$`. */
 export function useProviderCatalog() {
-  const providers = useProviderStore((state) => state.providers);
-  const loadingProviders = useProviderStore((state) => state.loadingProviders);
-  const approvalModes = useProviderStore((state) => state.approvalModes);
-  const loadingApprovalModes = useProviderStore((state) => state.loadingApprovalModes);
-  const loadProviders = useProviderStore((state) => state.loadProviders);
-  const loadApprovalModes = useProviderStore((state) => state.loadApprovalModes);
+  const providers = useValue(provider$.providers);
+  const loadingProviders = useValue(provider$.loadingProviders);
+  const approvalModes = useValue(provider$.approvalModes);
+  const loadingApprovalModes = useValue(provider$.loadingApprovalModes);
 
   useEffect(() => {
     if (providers.length === 0 && !loadingProviders) {
@@ -17,7 +16,7 @@ export function useProviderCatalog() {
     if (approvalModes.length === 0 && !loadingApprovalModes) {
       loadApprovalModes().catch(() => {});
     }
-  }, [providers.length, loadingProviders, approvalModes.length, loadingApprovalModes, loadProviders, loadApprovalModes]);
+  }, [providers.length, loadingProviders, approvalModes.length, loadingApprovalModes]);
 
   return {
     providers,
@@ -27,17 +26,16 @@ export function useProviderCatalog() {
   };
 }
 
-/** Per-provider dynamic model list backed by `useProviderStore` (cached). */
+/** Per-provider dynamic model list backed by `provider$` (cached). */
 export function useProviderModels(providerId: string) {
-  const models = useProviderStore((state) => state.modelsByProvider[providerId]);
-  const loadingModels = useProviderStore((state) => Boolean(state.loadingModels[providerId]));
-  const loadModels = useProviderStore((state) => state.loadModels);
+  const models = useValue(() => provider$.modelsByProvider[providerId].get());
+  const loadingModels = useValue(() => Boolean(provider$.loadingModels[providerId].get()));
 
   useEffect(() => {
     if (providerId && !models && !loadingModels) {
       loadModels(providerId).catch(() => {});
     }
-  }, [providerId, models, loadingModels, loadModels]);
+  }, [providerId, models, loadingModels]);
 
   return {
     data: models ? { provider: providerId, models } : undefined,

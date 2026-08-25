@@ -5,7 +5,8 @@ import { ScrollView } from "react-native-gesture-handler";
 import { Sparkles, Check, Search, Bot } from "lucide-react-native";
 import type { Model, ProviderId } from "@console/types";
 import { SharedBottomSheet } from "@/components/common/shared-bottom-sheet";
-import { useProviderStore } from "@/stores";
+import { useValue } from "@legendapp/state/react";
+import { loadModels, loadProviders, provider$ } from "@/stores/useProviderStore";
 import { formatModelName } from "@/utils";
 import { theme } from "@/styles/theme";
 import { ProviderIcon } from "@/components/icons";
@@ -18,12 +19,10 @@ interface ModelPickerSheetProps {
 
 export function ModelPickerSheet({ value, provider, onChange }: ModelPickerSheetProps) {
   const bottomSheetRef = useRef<BottomSheetModal>(null);
-  const providers = useProviderStore((state) => state.providers);
-  const modelsByProvider = useProviderStore((state) => state.modelsByProvider);
-  const loadProviders = useProviderStore((state) => state.loadProviders);
-  const loadModels = useProviderStore((state) => state.loadModels);
-  const loadingModels = useProviderStore((state) => state.loadingModels);
-  const loadingProviders = useProviderStore((state) => state.loadingProviders);
+  const providers = useValue(provider$.providers);
+  const modelsByProvider = useValue(provider$.modelsByProvider);
+  const loadingModels = useValue(provider$.loadingModels);
+  const loadingProviders = useValue(provider$.loadingProviders);
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 

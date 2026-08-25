@@ -7,7 +7,7 @@ import { applyChatEvent, toChatSnapshot } from "@/utils/chat-events";
 import { reconstructRuns } from "@/utils/reconstruct-runs";
 import { startNativeChatStream } from "@/utils/native-stream";
 import { useSessionStore, registerSessionHasMessagesChecker } from "./useSessionStore";
-import { useProviderStore } from "./useProviderStore";
+import { provider$ } from "./useProviderStore";
 import { chatPersistConfig, setSuppressPersist } from "./chat/chat-persist";
 import { trimDraftAttachments } from "./chat/draft";
 import {
@@ -129,9 +129,10 @@ export const useChatStore = create<ChatStoreState>()(
 
         // Validate image support for the selected model.
         if (attachments.length > 0 && sessionModelId && sessionProvider) {
-          const selectedModel = useProviderStore
-            .getState()
-            .modelsByProvider[sessionProvider]?.find((model) => model.id === sessionModelId);
+          const selectedModel = provider$
+            .modelsByProvider[sessionProvider]
+            .peek()
+            ?.find((model) => model.id === sessionModelId);
           if (selectedModel?.supportsImages === false) {
             set((state) => ({
               sessions: updateSession(state.sessions, sessionId, (current) => ({

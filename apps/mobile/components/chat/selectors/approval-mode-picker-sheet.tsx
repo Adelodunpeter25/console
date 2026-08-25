@@ -4,7 +4,8 @@ import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { ShieldCheck, Check } from "lucide-react-native";
 import type { ApprovalMode } from "@console/types";
 import { SharedBottomSheet } from "@/components/common/shared-bottom-sheet";
-import { useProviderStore } from "@/stores";
+import { useValue } from "@legendapp/state/react";
+import { loadApprovalModes, provider$ } from "@/stores/useProviderStore";
 import { theme } from "@/styles/theme";
 
 interface ApprovalModePickerSheetProps {
@@ -14,9 +15,8 @@ interface ApprovalModePickerSheetProps {
 
 export function ApprovalModePickerSheet({ value, onChange }: ApprovalModePickerSheetProps) {
   const bottomSheetRef = useRef<BottomSheetModal>(null);
-  const approvalModes = useProviderStore((state) => state.approvalModes);
-  const loadingApprovalModes = useProviderStore((state) => state.loadingApprovalModes);
-  const loadApprovalModes = useProviderStore((state) => state.loadApprovalModes);
+  const approvalModes = useValue(provider$.approvalModes);
+  const loadingApprovalModes = useValue(provider$.loadingApprovalModes);
 
   useEffect(() => {
     void loadApprovalModes();

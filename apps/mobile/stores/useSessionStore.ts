@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { ApprovalMode, ProjectInfo, SessionDetailResponse } from "@console/types";
 import { sessionService } from "@console/api";
 import { useProjectStore } from "./useProjectStore";
-import { useProviderStore } from "./useProviderStore";
+import { provider$ } from "./useProviderStore";
 import { setStatus } from "./useSessionStatusStore";
 
 export interface SessionViewState {
@@ -38,7 +38,7 @@ export function registerSessionHasMessagesChecker(checker: SessionHasMessagesChe
 }
 
 function resolveProvider(modelId: string, fallback: string | null): string | null {
-  const { providers, modelsByProvider } = useProviderStore.getState();
+  const { providers, modelsByProvider } = provider$.peek();
   for (const provider of providers) {
     if ((modelsByProvider[provider.name] ?? []).some((model) => model.id === modelId)) {
       return provider.name;
