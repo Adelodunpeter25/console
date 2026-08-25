@@ -241,12 +241,6 @@ impl Render for ConsoleDesktopApp {
             .flex_col()
             .overflow_hidden()
             .on_action(cx.listener(Self::copy_selection_action))
-            // Global shortcuts (⌘W/⌘N/⌘O/⌘K); bindings live in
-            // `crate::keybindings`, handlers in `state/global_actions.rs`.
-            .on_action(cx.listener(Self::close_tab_action))
-            .on_action(cx.listener(Self::new_chat_action))
-            .on_action(cx.listener(Self::add_project_action))
-            .on_action(cx.listener(Self::toggle_command_palette_action))
             // Invalidate a workspace drag on Escape so a drop queued just after
             // cancellation cannot mutate the pane tree.
             .on_key_down(|event: &KeyDownEvent, _, _| {

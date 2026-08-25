@@ -52,6 +52,11 @@ fn main() {
 
         cx.open_window(options, |window, cx| {
             let app_view = cx.new(|cx| ConsoleDesktopApp::new(window, cx));
+            // Global shortcut handlers (⌘W/⌘N/⌘O/⌘K). Must be registered on
+            // the App, not the root element: element-level `.on_action` only
+            // sees actions along the focus path, which is empty until
+            // something is focused.
+            keybindings::init_handlers(app_view.clone(), window.window_handle(), cx);
             // Root hosts overlay surfaces (palette, dialogs, popovers) above the app view.
             cx.new(|cx| gpui_component::Root::new(app_view, window, cx))
         })

@@ -1,17 +1,18 @@
 //! Central registry of global keyboard shortcuts.
 //!
 //! Every window-wide shortcut lives here: the actions are defined in this one
-//! module, their keystrokes are bound once in [`init`], and the handlers are
-//! methods on `ConsoleDesktopApp` (see `state/global_actions.rs`) attached to
-//! the app root in `view.rs`. To add a shortcut: declare an action below, bind
-//! a key, write the handler, and attach it with `.on_action(cx.listener(..))`
-//! on `"app-root"`.
+//! module, their keystrokes are bound once in [`init`], and their handlers are
+//! registered once per window in [`init_handlers`]. To add a shortcut:
+//! declare an action below, bind a key in [`init`], write a method on
+//! `ConsoleDesktopApp`, and register it in [`init_handlers`].
 //!
 //! Bindings carry no key context on purpose, so they fire anywhere in the
 //! window that a deeper context (composer, menus, palette) has not claimed
 //! the same keystroke for itself.
 
-use gpui::{App, KeyBinding, actions};
+use gpui::{AnyWindowHandle, App, Entity, KeyBinding, actions};
+
+use crate::state::ConsoleDesktopApp;
 
 actions!(
     console_global,
@@ -38,4 +39,41 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-o", AddProject, None),
         KeyBinding::new("secondary-k", ToggleCommandPalette, None),
     ]);
+}
+
+/// Register the app-global handlers for the actions bound in [`init`].
+///
+/// These must be *global* handlers (`App::on_action`), not element-level
+/// `.on_action`: an element handler only sees actions dispatched along its
+/// focus path, so with nothing focused — a fresh launch, say — the keystroke
+/// matches its binding, lands on the window's root dispatch node, and simply
+/// vanishes. Global listeners run first, focus or no focus.
+pub fn init_handlers(app: Entity<ConsoleDesktopApp>, window: AnyWindowHandle, cx: &mut App) {
+    cx.on_action({
+        let app = app.clone();
+        move |_: &CloseTab, cx| {
+            app.update(cx, |this, cx| this.close_tab(cx));
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &NewChat, cx| {
+            app.update(cx, |this, cx| this.create_new_chat(cx));
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &AddProject, cx| {
+            app.update(cx, |this, cx| this.add_project(cx));
+        }
+    });
+    cx.on_action(move |_: &ToggleCommandPalette, cx| {
+        // The palette toggle touches focus, so it needs the window; fetch it
+        // back through the handle captured at creation.
+        window
+            .update(cx, |_, window, cx| {
+                app.update(cx, |this, cx| this.toggle_command_palette(window, cx));
+            })
+            .ok();
+    });
 }

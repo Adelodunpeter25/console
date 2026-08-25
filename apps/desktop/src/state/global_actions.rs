@@ -1,8 +1,7 @@
-//! Handlers for the global shortcuts bound in `crate::keybindings`.
+//! Methods behind the global shortcuts bound in `crate::keybindings`.
 //!
-//! Each handler is attached to the app root with `.on_action(cx.listener(..))`
-//! in `view.rs`, so it fires whenever its keystroke reaches the root without a
-//! deeper context consuming it.
+//! They are registered as *global* action handlers (`App::on_action` in
+//! `keybindings::init_handlers`), so they run regardless of keyboard focus.
 
 use std::rc::Rc;
 
@@ -10,7 +9,6 @@ use console_core::CreateSessionDto;
 use gpui::{Context, Window};
 
 use super::ConsoleDesktopApp;
-use crate::keybindings::{AddProject, CloseTab, NewChat, ToggleCommandPalette};
 
 impl ConsoleDesktopApp {
     /// Create a chat session for the active pane and open it as its tab.
@@ -91,24 +89,9 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// ⌘N — new chat in the active pane.
-    pub fn new_chat_action(
-        &mut self,
-        _: &NewChat,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.create_new_chat(cx);
-    }
-
     /// ⌘W — close the active tab, then point the pane at whatever tab became
     /// active (mirroring the tab bar's close button).
-    pub fn close_tab_action(
-        &mut self,
-        _: &CloseTab,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn close_tab(&mut self, cx: &mut Context<Self>) {
         let Some(pane_id) = self.active_pane_id.clone() else {
             return;
         };
@@ -136,23 +119,8 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// ⌘O — open the folder picker to add a project for the active pane.
-    pub fn add_project_action(
-        &mut self,
-        _: &AddProject,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.add_project(cx);
-    }
-
     /// ⌘K — toggle the command palette.
-    pub fn toggle_command_palette_action(
-        &mut self,
-        _: &ToggleCommandPalette,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn toggle_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.command_palette
             .update(cx, |palette, cx| palette.toggle(window, cx));
         cx.notify();
