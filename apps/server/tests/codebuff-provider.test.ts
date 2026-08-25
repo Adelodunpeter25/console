@@ -50,7 +50,7 @@ const ORIGINAL_FETCH = globalThis.fetch;
 
 function mockFetch(handler: (url: string, init?: RequestInit) => Promise<Response>) {
   globalThis.fetch = (async (input: any, init?: RequestInit) =>
-    handler(String(input), init)) as typeof fetch;
+    handler(String(input), init)) as unknown as typeof fetch;
 }
 
 function restoreFetch() {
@@ -276,7 +276,14 @@ function restoreFetch() {
         model: { id: "deepseek/deepseek-v4-flash", provider: "codebuff", contextWindow: 400_000 },
         systemPrompt: "Be terse.",
         messages: [{ role: "user", content: "hi" }],
-        tools: [{ name: "listDir", description: "List a directory", inputSchema: z.object({ path: z.string() }) }],
+        tools: [
+          {
+            name: "listDir",
+            description: "List a directory",
+            inputSchema: z.object({ path: z.string() }),
+            execute: async () => ({ content: [] }),
+          },
+        ],
       })) {
         deltas.push(delta);
       }
@@ -297,11 +304,11 @@ function restoreFetch() {
       assert.equal(textDeltas.map((d) => (d as { text: string }).text).join(""), "pineapple");
 
       assert.ok(toolDeltas.length > 0, "should emit toolCall deltas");
-      const toolStart = toolDeltas.find((d) => d.name === "listDir") as { id: string; name: string; argumentsJson: string } | undefined;
+      const toolStart = toolDeltas.find((d) => d.name === "listDir") as unknown as { id: string; name: string; argumentsJson: string } | undefined;
       assert.ok(toolStart, "freebuff signature tool name must reverse-map back to the console tool id (list_directory → listDir)");
       const assembled = toolDeltas
-        .filter((d) => (d as { id: string }).id === toolStart.id)
-        .map((d) => (d as { argumentsJson: string }).argumentsJson)
+        .filter((d) => (d as unknown as { id: string }).id === toolStart.id)
+        .map((d) => (d as unknown as { argumentsJson: string }).argumentsJson)
         .join("");
       assert.deepEqual(JSON.parse(assembled), { path: "." }, `args were ${assembled}`);
       console.log("  ✅ codebuffStreamFn streaming (thinking/text/toolCall + free metadata + run lifecycle)");

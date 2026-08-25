@@ -56,7 +56,9 @@ export function consoleToolNameFor(freebuffName: string): string {
 }
 
 export function convertCodebuffTools(tools: AgentTool[]): ToolSet {
-  const result: ToolSet = {};
+  // Codebuff's backend expects OpenAI-style `parameters` JSON schema rather
+  // than the AI SDK's `inputSchema`, so entries are built loosely and cast.
+  const result: Record<string, unknown> = {};
 
   for (const tool of tools) {
     result[freebuffToolNameFor(tool.name)] = {
@@ -64,9 +66,9 @@ export function convertCodebuffTools(tools: AgentTool[]): ToolSet {
       parameters: zodToJsonSchema(tool.inputSchema, {
         target: "openApi3",
         $refStrategy: "none",
-      }) as any,
+      }),
     };
   }
 
-  return result;
+  return result as ToolSet;
 }

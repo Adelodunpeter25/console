@@ -5,6 +5,8 @@ import { ChevronLeft, Settings } from "lucide-react-native";
 
 interface ScreenHeaderProps {
   title: string;
+  /** Optional context line under the title. Reserved for screens that pass it; not rendered yet. */
+  subtitle?: string;
   onBack?: () => void;
   showSettings?: boolean;
   onSettingsPress?: () => void;

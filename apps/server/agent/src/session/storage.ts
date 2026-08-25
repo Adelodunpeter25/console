@@ -22,6 +22,7 @@ import { getGlobalDbPath, getConsoleStorageDir } from "./apppaths.js";
 import { type StorageState } from "./utils.js";
 import * as Projects from "./projects.js";
 import * as Sessions from "./sessions.js";
+import type { CreateSessionOptions } from "./session-ops.js";
 import * as ModelFavorites from "./model-favorites.js";
 
 export class SqliteSessionStorage {
@@ -89,14 +90,7 @@ export class SqliteSessionStorage {
 
   // MARK: - Sessions
 
-  createSession(options: {
-    id?: string;
-    title?: string;
-    cwd: string;
-    projectId?: string;
-    modelId: string;
-    provider: string;
-  }): SessionHeader {
+  createSession(options: CreateSessionOptions): SessionHeader {
     return Sessions.createSession(this.state, options);
   }
 

@@ -5,12 +5,11 @@
  */
 import { z } from "zod";
 import type { AgentTool } from "@/agent/src/types/index.js";
+import type { TodoItem } from "@console/types";
 
-export interface TodoItem {
-  id: number;
-  content: string;
-  status: "pending" | "in_progress" | "completed";
-}
+// Single source of truth: the shared TodoItem from @console/types is
+// structurally identical to the previous local declaration.
+export type { TodoItem };
 
 export type TodoUpdateAction = "created" | "updated";
 export type TodoUpdateHandler = (
@@ -68,7 +67,9 @@ export function createTodoTool(
     return { content: [{ type: "text", text: `${title}:\n${lines.join("\n")}` }] };
   };
 
-  const tool: AgentTool<typeof inputSchema> = {
+  // Annotated as the widened AgentTool (schema-erased) so the controller's
+  // tool slot accepts it without zod generic-variance friction.
+  const tool: AgentTool = {
     name: "todo",
     description: `Manage the session task list (TODOs) for multi-step feature development or refactoring.
 Use 'init' with tasks: ["task 1", "task 2"] to initialize the task breakdown.

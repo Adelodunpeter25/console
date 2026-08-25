@@ -11,7 +11,7 @@ export interface FsWatcherEvent {
 
 export class FsWatchService extends EventEmitter {
   private watchers = new Map<string, fs.FSWatcher>();
-  private debounceTimers = new Map<string, NodeJS.Timeout>();
+  private debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   /**
    * Start watching a project directory for real-time filesystem events.
