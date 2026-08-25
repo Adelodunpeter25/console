@@ -1,4 +1,5 @@
 pub mod assist;
+pub mod auth;
 pub mod fs;
 pub mod git;
 pub mod model_favorites;
@@ -9,6 +10,7 @@ pub mod session;
 pub mod terminal;
 
 pub use assist::AssistService;
+pub use auth::AuthService;
 pub use fs::FsService;
 pub use git::GitService;
 pub use model_favorites::ModelFavoriteService;

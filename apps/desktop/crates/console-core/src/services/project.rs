@@ -63,4 +63,29 @@ impl ProjectService {
             ))
         }
     }
+
+    /// `DELETE /api/projects/:id` — remove a project workspace by id.
+    pub async fn remove(&self, id: &str) -> Result<()> {
+        let url = self.transport.url(&format!("/api/projects/{}", id)).await;
+        let resp = self
+            .transport
+            .client()
+            .delete(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to remove project")?;
+
+        let body: ApiResponse<serde_json::Value> = resp
+            .json()
+            .await
+            .context("Failed to parse remove project response")?;
+        if body.success {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                body.error.unwrap_or_else(|| "Failed to remove project".into())
+            ))
+        }
+    }
 }

@@ -175,4 +175,96 @@ impl SessionService {
             ))
         }
     }
+
+    /// `GET /api/sessions?onlyDeleted=true` — soft-deleted sessions (trash).
+    pub async fn list_deleted(&self, project_id: Option<&str>) -> Result<Vec<SessionHeader>> {
+        let mut url = self.transport.url("/api/sessions").await;
+        let mut query = vec!["onlyDeleted=true".to_string()];
+        if let Some(p) = project_id {
+            query.push(format!("projectId={}", urlencoding::encode(p)));
+        }
+        url.push('?');
+        url.push_str(&query.join("&"));
+
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to list deleted sessions")?;
+
+        let body: ApiResponse<Vec<SessionHeader>> = resp
+            .json()
+            .await
+            .context("Failed to parse deleted sessions response")?;
+        if body.success {
+            Ok(body.data.unwrap_or_default())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to list deleted sessions".into())
+            ))
+        }
+    }
+
+    /// `POST /api/sessions/:id/restore` — bring a soft-deleted chat back.
+    pub async fn restore(&self, id: &str) -> Result<()> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/restore", id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to restore session")?;
+
+        let body: ApiResponse<serde_json::Value> = resp
+            .json()
+            .await
+            .context("Failed to parse restore session response")?;
+        if body.success {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to restore session".into())
+            ))
+        }
+    }
+
+    /// `DELETE /api/sessions/:id/permanent` — irreversibly delete a
+    /// soft-deleted chat and its messages.
+    pub async fn permanent_delete(&self, id: &str) -> Result<()> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/permanent", id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .delete(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to permanently delete session")?;
+
+        let body: ApiResponse<serde_json::Value> = resp
+            .json()
+            .await
+            .context("Failed to parse permanent delete response")?;
+        if body.success {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to permanently delete session".into())
+            ))
+        }
+    }
 }

@@ -11,6 +11,7 @@ pub struct ConsoleClient {
     pub fs: FsService,
     pub projects: ProjectService,
     pub git: GitService,
+    pub auth: AuthService,
     pub model_favorites: ModelFavoriteService,
 }
 
@@ -25,6 +26,7 @@ impl ConsoleClient {
             fs: FsService::new(transport.clone()),
             projects: ProjectService::new(transport.clone()),
             git: GitService::new(transport.clone()),
+            auth: AuthService::new(transport.clone()),
             model_favorites: ModelFavoriteService::new(transport.clone()),
             transport: transport.clone(),
         }

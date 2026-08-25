@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -55,4 +56,32 @@ impl HttpTransport {
     pub fn client(&self) -> &reqwest::Client {
         &self.http
     }
+}
+
+/// Probe an arbitrary backend URL for reachability — used by the settings
+/// screen's environment editor before saving/activating a URL. A backend
+/// answers `GET /api/projects`; any HTTP response within the timeout counts
+/// as reachable (auth failures still prove the server is there).
+pub async fn probe_backend(url: &str, timeout: std::time::Duration) -> Result<()> {
+    let trimmed = url.trim_end_matches('/');
+    anyhow::ensure!(!trimmed.is_empty(), "Backend URL is empty.");
+    let base = if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        trimmed.to_string()
+    } else {
+        format!("http://{trimmed}")
+    };
+
+    let client = reqwest::Client::builder().build()?;
+    let response = client
+        .get(format!("{base}/api/projects"))
+        .timeout(timeout)
+        .send()
+        .await
+        .context("Could not reach the server. Is it running?")?;
+    anyhow::ensure!(
+        response.status().is_success() || response.status() == reqwest::StatusCode::UNAUTHORIZED,
+        "Server responded with status {}",
+        response.status()
+    );
+    Ok(())
 }

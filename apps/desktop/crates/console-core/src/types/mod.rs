@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod assist;
+pub mod auth;
 pub mod chat;
 pub mod common;
 pub mod events;
@@ -13,6 +14,7 @@ pub mod workspace;
 
 pub use agent::*;
 pub use assist::*;
+pub use auth::*;
 pub use chat::*;
 pub use common::*;
 pub use events::*;
