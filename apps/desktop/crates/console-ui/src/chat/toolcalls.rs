@@ -22,6 +22,7 @@ use crate::chat::{DiffView, ThinkingBlock, WorkingIndicator};
 use crate::markdown::render::{
     Ctx as MarkdownCtx, MarkdownView, Metrics, Palette, TranscriptSelection, plain_text,
 };
+use crate::markdown::{highlight, render as markdown_render};
 use crate::primitives::{IconName, activity_icon, app_icon, file_type_icon, icon};
 use crate::theme::Theme;
 use crate::utils::time::normalize_unix_timestamp;
@@ -95,6 +96,8 @@ pub struct ToolCalls {
     working: bool,
     started_at: Option<i64>,
     elapsed_seconds: u64,
+    /// Session working directory, so absolute tool paths render relative.
+    cwd: Option<String>,
     state: Rc<RefCell<ToolCallsState>>,
     /// Shared transcript selection so run-activity text, arguments, and
     /// results join the same selection state as the surrounding messages.
@@ -117,6 +120,7 @@ impl ToolCalls {
             working,
             started_at,
             elapsed_seconds,
+            cwd: None,
             state,
             selection: TranscriptSelection::default(),
             on_action: None,
@@ -125,6 +129,12 @@ impl ToolCalls {
 
     pub fn selection(mut self, selection: TranscriptSelection) -> Self {
         self.selection = selection;
+        self
+    }
+
+    /// The session working directory, for relative path display.
+    pub fn cwd(mut self, cwd: Option<String>) -> Self {
+        self.cwd = cwd.filter(|cwd| !cwd.is_empty());
         self
     }
 
@@ -172,19 +182,20 @@ impl ToolCalls {
         }
     }
 
-    fn argument_summary(call: &ToolCall) -> Option<String> {
+    fn argument_summary(&self, call: &ToolCall) -> Option<String> {
         let object = call.arguments.as_object()?;
-        for key in [
-            "path",
-            "filePath",
-            "command",
-            "pattern",
-            "query",
-            "url",
-            "directory",
-        ] {
+        let cwd = self.cwd.as_deref();
+        if let Some(path) = argument_path(call) {
+            return Some(truncate(&to_relative_path(path, cwd), 72));
+        }
+        for key in ["command", "pattern", "query", "url", "directory"] {
             if let Some(value) = object.get(key).and_then(|value| value.as_str()) {
-                return Some(truncate(value, 72));
+                let value = if key == "directory" {
+                    to_relative_path(value, cwd)
+                } else {
+                    value.to_owned()
+                };
+                return Some(truncate(&value, 72));
             }
         }
         if let Some(paths) = object.get("paths").and_then(|value| value.as_array()) {
@@ -261,7 +272,7 @@ impl ToolCalls {
     ) -> AnyElement {
         let call_id = entry.call.id.clone();
         let open = self.state.borrow().expanded_calls.contains(&call_id);
-        let summary = Self::argument_summary(&entry.call);
+        let summary = self.argument_summary(&entry.call);
         let (status_icon, status_color) = Self::status_icon(&entry, &theme);
         let call_id_for_action = call_id.clone();
         let is_edit = is_edit_file(&entry.call.name);
@@ -410,12 +421,17 @@ impl ToolCalls {
                         element.child(self.section(&call_id, "Arguments", arguments, theme))
                     })
                     .when_some(entry.result, |element, result| {
-                        element.child(self.section(
-                            &call_id,
-                            "Result",
-                            Self::formatted_result(&result),
-                            theme,
-                        ))
+                        let raw = Self::formatted_result(&result);
+                        if is_read_file(&entry.call.name) {
+                            element.child(self.read_file_section(
+                                &call_id,
+                                raw,
+                                file_path.as_deref(),
+                                theme,
+                            ))
+                        } else {
+                            element.child(self.section(&call_id, "Result", raw, theme))
+                        }
                     }),
             );
         }
@@ -735,6 +751,63 @@ impl RenderOnce for ToolCalls {
 }
 
 impl ToolCalls {
+    /// The Result block for readFile calls: the file's code, syntax
+    /// highlighted through the markdown lexer when its extension maps to a
+    /// language. Mirrors mobile's `ReadFileResult` normalization — a leading
+    /// `File:` header is dropped, and line numbers are stripped when most
+    /// lines carry them.
+    fn read_file_section(
+        &self,
+        call_id: &str,
+        raw: String,
+        path: Option<&str>,
+        theme: Theme,
+    ) -> AnyElement {
+        let lang_tag = path.and_then(highlight::lang_tag_for_path);
+        let Some(lang_tag) = lang_tag else {
+            return self.section(call_id, "Result", raw, theme).into_any_element();
+        };
+
+        let palette = Palette::from_theme(&theme);
+        let ctx = MarkdownCtx::new(
+            format!("tool-{call_id}-result"),
+            &palette,
+            Metrics::COMPACT,
+            self.selection.clone(),
+        );
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(3.0))
+            .child(
+                div()
+                    .text_size(px(10.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme.text_ghost)
+                    .child("Result"),
+            )
+            .child(
+                div()
+                    .id(ElementId::Name(format!("tool-output-{call_id}-result").into()))
+                    .max_h(px(240.0))
+                    .overflow_y_scroll()
+                    .rounded(px(5.0))
+                    .bg(theme.inset)
+                    .px(px(8.0))
+                    .py(px(6.0))
+                    .font_family(markdown_render::MONO_FAMILY)
+                    .text_size(px(10.5))
+                    .line_height(px(15.0))
+                    .text_color(theme.text_tertiary)
+                    .child(markdown_render::highlighted_code(
+                        normalize_read_file_output(&raw),
+                        lang_tag,
+                        &ctx,
+                    )),
+            )
+            .into_any_element()
+    }
+
     /// A labelled, scrollable, selectable block of tool output (arguments or
     /// results). The `call_id` namespaces the selection row so each call's
     /// Arguments/Result get distinct registry keys instead of colliding with
@@ -790,12 +863,85 @@ fn is_edit_file(name: &str) -> bool {
     matches!(name, "editFile" | "edit_file" | "str_replace")
 }
 
+/// Whether a tool-call name reads file content into its result.
+fn is_read_file(name: &str) -> bool {
+    matches!(name, "readFile" | "read_file" | "view" | "Read")
+}
+
+/// Byte length of the `\s*\d+:\s?` line-number prefix, if present.
+fn line_number_prefix_len(line: &str) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let mut index = line.len() - line.trim_start().len();
+    let digits_start = index;
+    while index < line.len() && bytes[index].is_ascii_digit() {
+        index += 1;
+    }
+    if index == digits_start || bytes.get(index) != Some(&b':') {
+        return None;
+    }
+    index += 1;
+    if bytes.get(index) == Some(&b' ') {
+        index += 1;
+    }
+    Some(index)
+}
+
+/// Normalize readFile output to its bare code body, mirroring mobile's
+/// `ReadFileResult`: drop the `File:` header block (when short and followed by
+/// a blank line) and strip per-line numbers when most lines carry them.
+fn normalize_read_file_output(raw: &str) -> String {
+    let lines: Vec<&str> = raw.lines().collect();
+    let header_end = lines
+        .iter()
+        .skip(1)
+        .position(|line| line.is_empty())
+        .filter(|&end| end > 0 && end <= 6)
+        .filter(|_| lines.first().is_some_and(|first| first.starts_with("File:")))
+        .map(|end| end + 1);
+    let code: &[&str] = match header_end {
+        Some(end) => &lines[end..],
+        None => &lines[..],
+    };
+    let numbered = code
+        .iter()
+        .filter(|line| line_number_prefix_len(line).is_some())
+        .count();
+    if numbered * 2 > code.len() {
+        code.iter()
+            .map(|line| {
+                line_number_prefix_len(line)
+                    .map_or(*line, |prefix| &line[prefix..])
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    } else {
+        code.join("\n")
+    }
+}
+
 /// The target path of a file-oriented tool call, when its arguments carry one.
 fn argument_path(call: &ToolCall) -> Option<&str> {
     let object = call.arguments.as_object()?;
-    ["path", "filePath"]
+    ["path", "filePath", "targetFile", "absolutePath"]
         .into_iter()
         .find_map(|key| object.get(key).and_then(|value| value.as_str()))
+}
+
+/// Format `path` relative to the session working directory, so
+/// `/Users/me/repo/apps/server/index.ts` renders as `apps/server/index.ts`.
+/// Paths outside the directory are left untouched.
+fn to_relative_path(path: &str, cwd: Option<&str>) -> String {
+    let normalized_path = path.replace('\\', "/");
+    let Some(cwd) = cwd.map(|cwd| cwd.replace('\\', "/")) else {
+        return normalized_path;
+    };
+    let cwd = cwd.trim_end_matches('/');
+    if !cwd.is_empty()
+        && let Some(rest) = normalized_path.strip_prefix(cwd)
+    {
+        return rest.trim_start_matches('/').to_owned();
+    }
+    normalized_path
 }
 
 fn truncate(value: &str, max_chars: usize) -> String {
@@ -904,5 +1050,38 @@ mod tests {
             elapsed_seconds(Some(1_700_000_000_000), Some(1_700_000_065_000)),
             65
         );
+    }
+
+    #[test]
+    fn relative_paths_strip_the_session_cwd() {
+        assert_eq!(
+            super::to_relative_path(
+                "/Users/me/repo/apps/server/index.ts",
+                Some("/Users/me/repo")
+            ),
+            "apps/server/index.ts"
+        );
+        // No cwd, or a path outside it: untouched.
+        assert_eq!(
+            super::to_relative_path("/etc/hosts", None),
+            "/etc/hosts"
+        );
+        assert_eq!(
+            super::to_relative_path("/etc/hosts", Some("/Users/me/repo")),
+            "/etc/hosts"
+        );
+    }
+
+    #[test]
+    fn read_file_normalization_strips_headers_and_line_numbers() {
+        let with_header = "File: /repo/src/main.rs\n\n1: fn main() {}\n2: \n3: fn other() {}\n";
+        assert_eq!(
+            super::normalize_read_file_output(with_header),
+            "fn main() {}\n\nfn other() {}"
+        );
+
+        // No header, sparse numbers: kept verbatim.
+        let plain = "hello\nworld";
+        assert_eq!(super::normalize_read_file_output(plain), plain);
     }
 }

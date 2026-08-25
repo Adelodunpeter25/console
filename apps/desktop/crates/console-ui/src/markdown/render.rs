@@ -316,6 +316,36 @@ pub fn flatten_plain(
     }
 }
 
+/// A flat, syntax-highlighted monospace string. Runs tile the code exactly and
+/// share one font, so shaping is identical with or without highlighting.
+pub fn flatten_code(text: impl Into<SharedString>, lang: Option<Lang>, palette: &Palette) -> FlatText {
+    let text: SharedString = text.into();
+    let runs = if text.is_empty() {
+        Vec::new()
+    } else {
+        code_runs(&text, lang, &font(MONO_FAMILY), palette)
+    };
+    FlatText {
+        text,
+        runs,
+        links: Vec::new(),
+        code_ranges: Vec::new(),
+    }
+}
+
+/// Syntax-highlighted monospace code for tool results (readFile output),
+/// styled like the renderer's own fenced-code blocks.
+pub fn highlighted_code(
+    code: impl Into<SharedString>,
+    lang_tag: &str,
+    ctx: &Ctx,
+) -> AnyElement {
+    let lang = highlight::lang_for_tag(lang_tag);
+    let key = ctx.next_key();
+    let flat = ctx.flat(key.index, || flatten_code(code.into(), lang, &ctx.palette));
+    text_element(&flat, key, ctx)
+}
+
 // ── Per-message state ──────────────────────────────────────────────────────
 
 /// Everything the renderer keeps between frames for one markdown body.

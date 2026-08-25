@@ -61,6 +61,8 @@ pub struct TranscriptView {
     /// IDs of thinking blocks the user has expanded. Thinking is collapsed by
     /// default, but the choice survives virtualized row remounts.
     thinking_expanded: Rc<RefCell<HashSet<String>>>,
+    /// The active session's working directory, for relative tool paths.
+    session_cwd: Option<String>,
     /// Cache for run activity derived from messages. Keyed by user_index,
     /// invalidated when messages or streaming state changes.
     tool_activity_cache: RefCell<HashMap<usize, (u64, Option<(Vec<ActivityEvent>, Option<i64>, u64, bool)>)>>,
@@ -91,6 +93,7 @@ impl TranscriptView {
             scroll_restore_generation: 0,
             tool_calls_state: Rc::new(RefCell::new(ToolCallsState::default())),
             thinking_expanded: Rc::new(RefCell::new(HashSet::new())),
+            session_cwd: None,
             tool_activity_cache: RefCell::new(HashMap::new()),
             tool_activity_cache_version: std::cell::Cell::new(0),
             on_preview_image: None,
@@ -104,6 +107,15 @@ impl TranscriptView {
         handler: impl Fn(Arc<gpui::Image>, &mut Window, &mut App) + 'static,
     ) {
         self.on_preview_image = Some(Rc::new(handler));
+    }
+
+    /// Record the active session's working directory so tool-call rows can
+    /// show paths relative to it. Called when a session loads into the pane.
+    pub fn set_session_cwd(&mut self, cwd: Option<String>) -> &mut Self {
+        self.session_cwd = cwd.filter(|cwd| !cwd.is_empty());
+        // Summaries are derived per render, not cached.
+        self.tool_activity_cache.borrow_mut().clear();
+        self
     }
 
     /// Re-anchor the list after the message set changed: keep following the
@@ -869,6 +881,7 @@ fn transcript_row(
                             elapsed,
                             activity_state,
                         )
+                        .cwd(view_ref.session_cwd.clone())
                         .selection(view_ref.selection.clone())
                         .on_action(move |action, _window, cx| {
                             if let Some(view) = activity_entity.upgrade() {
