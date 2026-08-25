@@ -1,8 +1,103 @@
-# Migrating to Legend State & Legend List
+# Legend State & Legend List Migration — ✅ Complete
 
-Implementation guide for replacing Zustand with `@legendapp/state` and FlashList
-with `@legendapp/list` in `apps/mobile`. Phased so each step ships independently
-and can be rolled back without touching later work.
+Status record for replacing Zustand with `@legendapp/state` and FlashList with
+`@legendapp/list` in `apps/mobile`. The original phased plan is preserved at the
+bottom; all phases shipped between commits `9846eb7` (first Legend List swap)
+and `e79448c` (zustand removed).
+
+## Final state
+
+| Concern | Before | After |
+| --- | --- | --- |
+| Lists | `@shopify/flash-list` 2.0.2 | `@legendapp/list` 3.3.8 (`@legendapp/list/react-native`) |
+| State | `zustand` 5.x (10 stores) | `@legendapp/state` 3.0.0-beta.48 (pinned) |
+| Chat persistence | zustand `persist` middleware + MMKV | manual MMKV persistence via `chat$.sessions.onChange`, same on-disk format |
+
+## Conventions going forward
+
+- Reads in components: `useValue(store$.field)` from `@legendapp/state/react`
+- Derived reads with dynamic keys: `useValue(() => store$.record[key].get())`
+- Imperative reads outside render (commands, async work): `.peek()`
+- Writes via exported action functions (`store$.x.set(...)`, array methods);
+  multi-field updates wrapped in `batch(() => …)`
+- Never mutate data returned by `.get()` / `.peek()`
+
+Store modules keep their old file names (`useAppStore.ts`, etc.) but export
+observable nodes (`app$`, `provider$`, …) plus plain action functions.
+
+## What shipped
+
+### Part A — Legend List
+- **A1** `components/chat/chat-message-list.tsx` + `screens/chat/chat-screen.tsx` — component/ref swap. `LegendListRef` is non-generic (vs `FlashListRef<T>`). `className` → `style={{ flex: 1 }}` (no NativeWind interop registered). Confirmed smoother on device at equal message count.
+- **A2** `components/files/FileTreeBrowser.tsx` — same swap.
+- **A3** `@shopify/flash-list` removed; zero straggler references.
+- Deliberately skipped: `recycleItems` (FlashList v2 didn't recycle either), `initialScrollAtEnd`, `KeyboardAwareLegendList` — parked as future tuning (see below).
+
+### Part B — Legend State (one commit per store)
+| Store | Commit |
+| --- | --- |
+| `useSessionStatusStore` → `sessionStatuses$` (pilot) | `b4cccf4` |
+| `useAppStore` → `app$` (22 consumer files) | `236e2ef` |
+| `useProviderStore` → `provider$` | `348d165` |
+| `useAuthStore` → `auth$` | `59fa374` |
+| `useSessionStore` → `sessionsView$` | `a82ef66` |
+| `useProjectStore` → `project$` | `8189b69` |
+| `useFsStore` → `fs$` | `4ace18d` |
+| `useEnvironmentsStore` → `environments$` | `879357a` |
+| `useTerminalStore` → `terminals$` / `terminalBuffers$` | `dc965b6` |
+| `useChatStore` → `chat$` + confirm-dialog + drop zustand | `e79448c` |
+
+Notable decisions & deviations from the original plan:
+
+- **No adapters needed.** Every consumer fit cleanly into imperative-action or
+  reactive-read patterns, so stores were migrated straight to their final shape
+  (all consumers updated in the same commit).
+- **Environments persistence kept hand-rolled.** Its dual-key format (env list +
+  legacy single-URL key for downgrade safety) doesn't map to
+  `ObservablePersistMMKV`; the explicit `persist()` calls were preserved instead
+  of switching to `syncObservable`.
+- **Chat persistence format is unchanged.** Same key (`console-chat-cache`),
+  same `{ state: { sessions }, version: 1 }` wrapper — upgrades *and* downgrades
+  are lossless, no version bump required. Writes throttle at 300 ms; the
+  streaming suppress/flush mechanism (`setSuppressPersist`) was kept rather than
+  deleted, since it prevents MMKV writes during high-frequency stream deltas.
+- **Terminal `opening` promises moved off reactive state** into a module-level
+  `Map` — in-flight promises are not UI data.
+- **`confirm-dialog.tsx`** also migrated (`confirmDialog$`) so `zustand` could
+  be fully removed.
+- **B0 config file never created.** No store uses `syncObservable` plugins, so
+  there was nothing to configure globally.
+
+## Verification performed
+
+- `bunx tsc --noEmit` clean after every phase
+- `bunx expo export --platform android` green after each list/store milestone
+- Legend List verified on device (smoother scrolling reported at identical
+  message counts)
+
+## On-device regression checklist (recommended after upgrade)
+
+1. Chat: send → stream renders; stop button aborts; tool approvals/answers clear panels
+2. Persistence: send message → kill app → relaunch restores messages and drafts
+3. Terminal: open, type, resize (rotation/keyboard), kill → respawn
+4. Environments: switch/add/remove environments; disconnect-all clears server-scoped caches
+5. Home drafts: typed-but-unsent chats survive restart and show as DRAFT
+
+## Future tuning (parked)
+
+- `recycleItems` on the chat list (requires converting per-bubble `useState`
+  — `expanded`/`copied`/`previewUri` in `message-bubbles.tsx` — to
+  `useRecyclingState`)
+- `initialScrollAtEnd` / `maintainScrollAtEnd` to replace manual follow-scroll
+  in `chat-message-list.tsx`
+- `KeyboardAwareLegendList` requires bumping
+  `react-native-keyboard-controller` to ≥ 1.21.7 (currently 1.18.5) plus a new
+  dev build, and reworking composer insets
+- Legend State beta bumps: pin is exact (`3.0.0-beta.48`); bump deliberately
+
+---
+
+# Original plan (for reference)
 
 ## Why
 
@@ -14,7 +109,7 @@ and can be rolled back without touching later work.
 Both are by Legend App (same author). Legend List is stable-ish (v3); Legend
 State v3 is **beta** — pin the version and expect occasional API drift.
 
-## Current state audit
+## Original audit (pre-migration)
 
 **Lists (FlashList):**
 
@@ -35,220 +130,28 @@ State v3 is **beta** — pin the version and expect occasional API drift.
 - `apps/mobile/stores/useEnvironmentsStore.ts` (199) — hand-rolled persistence helper
 - `apps/mobile/stores/useTerminalStore.ts` (359) — no persistence
 - `apps/mobile/stores/useChatStore.ts` (360) — zustand `persist` middleware via
-  `apps/mobile/stores/chat/chat-persist.ts`, MMKV-backed
-  (`apps/mobile/utils/storage.ts` → `mmkvZustandStorage`), streaming coalescing
-  (`_streamBuf` + rAF), cross-store imports (`useAppStore`, `useSessionStore`,
-  `useProviderStore`)
+  `apps/mobile/stores/chat/chat-persist.ts`, MMKV-backed, streaming coalescing
+  (`_streamBuf` + rAF), cross-store imports
 - Barrel: `apps/mobile/stores/index.ts`
 
-Server state already lives in TanStack Query (`packages/api`) — do **not**
-migrate that; Legend State only replaces client/UI state.
+Server state lives in TanStack Query (`packages/api`) — intentionally **not**
+migrated; Legend State only replaced client/UI state.
 
----
+## Phases (all complete)
 
-# Part A — Legend List
+- [x] A0: Install `@legendapp/list`
+- [x] A1: Chat message list swap (`9846eb7`)
+- [x] A2: File tree browser swap (`9846eb7`)
+- [x] A3: Remove FlashList (`0f97ac7`)
+- [x] B0: Install `@legendapp/state@beta` (with B1, `b4cccf4`)
+- [x] B1: Pilot — session status store (`b4cccf4`)
+- [x] B2: app/provider/auth/session/project/fs stores (`236e2ef`, `348d165`, `59fa374`, `a82ef66`, `8189b69`, `4ace18d`)
+- [x] B3a: Terminal store (`dc965b6`)
+- [x] B3b: Chat store + persistence (`e79448c`)
+- [x] B4: Remove zustand (`e79448c`)
 
-## Phase A0: Install
-
-```sh
-cd apps/mobile && bun add @legendapp/list
-```
-
-No native code, no config plugin, no EAS rebuild. Import path is
-`@legendapp/list/react-native` (v3).
-
-## Phase A1: Chat message list (highest traffic)
-
-Files:
-
-1. `apps/mobile/components/chat/chat-message-list.tsx`
-   - Replace `import { FlashList, type FlashListRef } from "@shopify/flash-list"`
-     with `import { LegendList, type LegendListRef } from "@legendapp/list/react-native"`
-     (verify the exported ref type name against the installed `.d.ts`; v3 may
-     expose it from the package root).
-   - Swap `<FlashList …>` → `<LegendList …>`.
-   - Add `recycleItems` to match FlashList's recycling behavior.
-     ⚠️ Recycled cells reuse views — `MessageBubble` must not hold per-item
-     state in refs/render-scoped closures. If visual glitches appear, drop
-     `recycleItems` first and re-add later; Legend List is fast without it.
-   - Keep all existing props (`keyExtractor`, `onScroll`, `onContentSizeChange`,
-     header/footer components). They are FlatList-compatible.
-2. `apps/mobile/screens/chat/chat-screen.tsx`
-   - Change `useRef<FlashListRef<AgentMessage>>(null)` to the Legend ref type.
-
-Optional improvements once basic swap works (keep for a follow-up PR):
-
-- Replace the manual bottom-follow logic (`isAtEndRef`/`followRef` +
-  `onContentSizeChange` → `scrollToEnd`) with `initialScrollAtEnd` /
-  anchored-end-space props from the v3 API — see
-  https://www.legendapp.com/open-source/list/v3/api/
-- Consider `KeyboardAwareLegendList` instead of manual
-  `keyboardShouldPersistTaps` / dismiss handling.
-
-Verify: `bunx tsc --noEmit`, then `cd apps/mobile && bunx expo export --platform android`.
-Manual test: open a long conversation, stream a response, scroll up (pagination),
-flip away and back (follow behavior).
-
-## Phase A2: File tree browser
-
-File: `apps/mobile/components/files/FileTreeBrowser.tsx`
-
-- Same import/component swap on the `<FlashList>` at ~line 215.
-- No recycling needed yet (`rows` are shallow, uniform-ish); add `recycleItems`
-  only if profiling shows benefit.
-- `refreshControl`, `ListEmptyComponent` etc. carry over unchanged.
-
-Verify: same commands as A1. Manual test: browse a deep directory, pull-to-refresh, search.
-
-## Phase A3: Cleanup
-
-- Remove `@shopify/flash-list` from `apps/mobile/package.json`.
-- Update the doc comment in `apps/mobile/components/chat/message-bubbles.tsx`
-  ("chat FlashList" → "chat list").
-- Grep for stragglers: `grep -rn "flash-list\|FlashList" apps/mobile --include='*.ts*'`.
-
----
-
-# Part B — Legend State
-
-Strategy: incremental, one store per PR. Zustand and Legend State coexist fine;
-components migrate alongside their store. Order is leaf-stores-first,
-`useChatStore` last because it has persistence + cross-store coupling +
-streaming coalescing.
-
-## Phase B0: Groundwork
-
-1. `cd apps/mobile && bun add @legendapp/state@beta` (pin exact version in
-   `package.json`; bump deliberately).
-2. Create `apps/mobile/stores/legend-config.ts`: global sync config registering
-   `ObservablePersistMMKV` (from `@legendapp/state/persist-plugins/mmkv`) as the
-   default persist plugin, using the existing MMKV instance pattern from
-   `apps/mobile/utils/storage.ts`. Call it once from app bootstrap
-   (`apps/mobile/app/_layout.tsx`).
-3. Document conventions at the top of `apps/mobile/stores/index.ts`:
-   - Reads in components via `useValue(store$.path.to.value)`
-   - Writes via observable actions (`store$.x.set(...)`, array/map methods)
-   - Wrap multi-update bursts in `batch(() => …)` from `@legendapp/state`
-   - Never mutate data returned by `.get()` / `.peek()`
-
-## Phase B1: Pilot — leaf store
-
-Migrate `apps/mobile/stores/useSessionStatusStore.ts` (32 lines, no persistence,
-few consumers) end-to-end:
-
-1. Rewrite as an observable module:
-   ```ts
-   // useSessionStatusStore.ts
-   import { observable } from "@legendapp/state";
-   export const sessionStatus$ = observable({ /* same shape */ });
-   ```
-   Keep the old zustand hook temporarily as a thin adapter delegating to the
-   observable so untouched consumers keep working during transition.
-2. Migrate its consumers one by one (`grep -rn "useSessionStatusStore" apps/mobile`).
-3. Delete the zustand version once zero consumers remain.
-
-This validates: TypeScript inference, re-render behavior, and the
-adapter-then-delete workflow we'll repeat for every store.
-
-Verify: `bunx tsc --noEmit` + expo export; manual smoke of whatever UI reads it.
-
-## Phase B2: Simple stores (repeat pattern per store, one PR each)
-
-Order (least → more consumers):
-
-1. `apps/mobile/stores/useAppStore.ts`
-2. `apps/mobile/stores/useProviderStore.ts`
-3. `apps/mobile/stores/useAuthStore.ts`
-4. `apps/mobile/stores/useSessionStore.ts`
-5. `apps/mobile/stores/useProjectStore.ts`
-6. `apps/mobile/stores/useFsStore.ts`
-
-Per-store checklist:
-
-- [ ] Observable created; actions exported or attached
-- [ ] Cross-store reads: prefer direct imports of the other `$` node over
-      copying values (observables compose; zustand needed hooks)
-- [ ] All consumers migrated (`grep -rn "<storeName>" apps/mobile`)
-- [ ] Adapter removed
-- [ ] Typecheck + expo export green
-
-Note: `useEnvironmentsStore.ts` hand-rolls persistence (its local `persist()`
-helper writing to storage). When migrating it, replace that helper with
-`syncObservable(environments$, { persist: { name: "console-environments",
-plugin: ObservablePersistMMKV } })` — see Phase B3 patterns.
-
-## Phase B3: Hard parts
-
-### B3a — Terminal store
-
-File: `apps/mobile/stores/useTerminalStore.ts` (359 lines, high-frequency PTY
-output updates — this is where Legend's fine-grained reactivity pays off most).
-
-- Model per-session terminal buffers as observable nodes so only the active
-  surface re-renders.
-- Batch output chunks: `batch(() => buffer$.push(chunk))` replaces any manual
-  rAF throttling.
-- Verify against `apps/mobile/modules/console-terminal` contract (initialBuffer
-  diffing) — observable identity changes must not break the "only push suffix"
-  diff in the native view.
-
-### B3b — Chat store + persistence
-
-Files: `apps/mobile/stores/useChatStore.ts`,
-`apps/mobile/stores/chat/chat-persist.ts`, `apps/mobile/stores/chat/draft.ts`,
-`apps/mobile/stores/chat/chat-stream-runner.ts`,
-`apps/mobile/stores/chat/chat-decisions.ts`
-
-This is the riskiest migration. Do it last, alone in a PR.
-
-1. **Shape**: `sessions: Record<string, ChatSessionState>` becomes
-   `sessions$[sessionId].messages` etc. Per-session observable nodes mean
-   opening chat A no longer re-renders anything tracking chat B.
-2. **Persistence**: replace zustand `persist` middleware entirely with
-   `syncObservable(chat$, { persist: { name: "console-chat-cache", plugin:
-   ObservablePersistMMKV } })`.
-   - Port the partialize/sanitize logic from `chat-persist.ts`
-     (`sanitizeSessionPartial`, `MAX_PERSISTED_SESSIONS = 25`,
-     `MAX_PERSISTED_MESSAGES = 50`) into the sync config's transform options so
-     persisted size stays bounded.
-   - The streaming suppress/flush mechanism (`setSuppressPersist` +
-     `debouncedStorage`) can likely be deleted — configure the sync engine to
-     throttle saves instead, but confirm write frequency during streaming
-     before removing.
-   - **Bump `PERSIST_VERSION` semantics**: key name stays `console-chat-cache`;
-     write a small one-time migration (read old JSON shape → seed observable →
-     delete old key) or accept cache loss on upgrade since this is a cache, not
-     source of truth. Decide explicitly in the PR.
-3. **Streaming coalescing**: `_streamBuf` + `_streamRaf` in `useChatStore.ts`
-   map naturally to `batch()` around event application
-   (`applyChatEvent`). Keep the coalescing intent: many SSE deltas per frame →
-   one notification.
-4. **Cross-store calls**: `sendMessage` touches `useAppStore`,
-   `useSessionStore`, `useProviderStore` — after Phase B2 these are all
-   observables; call their actions directly.
-5. **Consumers**: `apps/mobile/hooks/useChatStream.ts` and the chat screens.
-   `useValue` on narrow nodes (`streamingText`, `running`, `messages.length`)
-   should cut re-renders vs today's whole-snapshot subscriptions.
-
-Verify: full chat flow — send, stream, tool approvals (`ask`), abort,
-background/foreground (rehydrate), kill & relaunch (persistence), pagination.
-
-## Phase B4: Cleanup
-
-- Remove `zustand` from `apps/mobile/package.json`.
-- Delete leftover adapters and `apps/mobile/stores/chat/chat-persist.ts` if
-  fully superseded.
-- `grep -rn "zustand" apps/mobile --include='*.ts*'` → zero hits.
-- Full verification: `bunx tsc --noEmit && cd apps/mobile && bunx expo export --platform android`.
-
----
-
-## Rollback strategy
-
-- Every phase is a separate commit/PR; revert restores previous behavior.
-- During Part B, zustand ↔ observable adapters make mixed states safe.
-- Chat persistence (B3b) is the only place with on-disk format change — keep
-  the old-key migration isolated there.
+The detailed step-by-step instructions for each phase were executed as written;
+deviations are documented in "What shipped" above.
 
 ## References
 
