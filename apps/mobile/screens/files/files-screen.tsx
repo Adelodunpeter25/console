@@ -3,7 +3,6 @@ import { View, Text, Pressable, ActivityIndicator, ScrollView, BackHandler } fro
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Search, RefreshCw, File as FileIcon } from "lucide-react-native";
 import { TextInput } from "react-native";
-import { useProjectStore } from "@/stores";
 import { useDirectoryChildren, useReadFile, useSearchFiles } from "@/hooks/queries";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { getLanguageFromPath, renderHighlightedLine } from "@/components/common/syntax-highlighter";
@@ -13,6 +12,7 @@ import { getFilePreviewBlock } from "@console/types";
 import { theme } from "@/styles/theme";
 import { app$, setActiveTab } from "@/stores/useAppStore";
 import { useValue } from "@legendapp/state/react";
+import { project$ } from "@/stores/useProjectStore";
 
 /** Selected file for preview; `size` comes from the tree entry stat when known. */
 interface SelectedFile {
@@ -23,7 +23,7 @@ interface SelectedFile {
 export function FilesScreen() {
   const insets = useSafeAreaInsets();
   const selectedProjectId = useValue(app$.selectedProjectId);
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useValue(project$.projects);
   // Back returns to wherever the user came from (never Files itself),
   // mirroring the terminal screen's behavior.
   const previousTab = useValue(app$.previousTab);

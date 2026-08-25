@@ -3,7 +3,7 @@ import type { ApprovalMode, ProjectInfo, SessionDetailResponse } from "@console/
 import { sessionService } from "@console/api";
 import { provider$ } from "./useProviderStore";
 import { setStatus } from "./useSessionStatusStore";
-import { useProjectStore } from "./useProjectStore";
+import { refreshSessionHeader } from "./useProjectStore";
 
 export interface SessionViewState {
   sessionModelId: string | null;
@@ -91,7 +91,7 @@ export function changeProject(sessionId: string, project: ProjectInfo): void {
     // projectId deliberately omitted: the server PATCH contract has no
     // project field and would silently ignore it (see session.service.ts).
     .updateSession(sessionId, { cwd: project.path })
-    .then(() => useProjectStore.getState().refreshSessionHeader(sessionId))
+    .then(() => refreshSessionHeader(sessionId))
     .catch(() => {});
 }
 

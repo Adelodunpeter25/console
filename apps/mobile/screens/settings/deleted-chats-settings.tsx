@@ -3,20 +3,18 @@ import { FlatList, Pressable, Text, View, ActivityIndicator } from "react-native
 import { RotateCcw, Trash2, MessageSquare } from "lucide-react-native";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { confirmAlert, EmptyState } from "@/components/common";
-import { useProjectStore } from "@/stores";
 import { formatRelativeTime, folderName } from "@/utils";
 import { theme } from "@/styles/theme";
+import { loadDeletedSessions, permanentlyDeleteSession, project$, restoreSession } from "@/stores/useProjectStore";
+import { useValue } from "@legendapp/state/react";
 
 interface DeletedChatsSettingsProps {
   onBack?: () => void;
 }
 
 export function DeletedChatsSettings({ onBack }: DeletedChatsSettingsProps) {
-  const deletedSessions = useProjectStore((state) => state.deletedSessions);
-  const loading = useProjectStore((state) => state.deletedSessionsLoading);
-  const loadDeletedSessions = useProjectStore((state) => state.loadDeletedSessions);
-  const restoreSession = useProjectStore((state) => state.restoreSession);
-  const permanentlyDeleteSession = useProjectStore((state) => state.permanentlyDeleteSession);
+  const deletedSessions = useValue(project$.deletedSessions);
+  const loading = useValue(project$.deletedSessionsLoading);
 
   const [busyId, setBusyId] = useState<string | null>(null);
 

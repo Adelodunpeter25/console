@@ -3,7 +3,6 @@ import { View, Keyboard, BackHandler, Pressable } from "react-native";
 import { SquareTerminal, Folder } from "lucide-react-native";
 import type { LegendListRef } from "@legendapp/list/react-native";
 import { useChatStream, useAbort } from "@/hooks";
-import { useProjectStore } from "@/stores";
 import { sessionsView$ } from "@/stores/useSessionStore";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import {
@@ -16,12 +15,13 @@ import {
 import { ChatScreenSkeleton } from "@/components/common";
 import { app$, setActiveTab, setSelectedProjectId, setSelectedSessionId } from "@/stores/useAppStore";
 import { useValue } from "@legendapp/state/react";
+import { project$ } from "@/stores/useProjectStore";
 
 export function ChatScreen() {
   const stream = useChatStream();
   const { abort } = useAbort();
   const selectedSessionId = useValue(app$.selectedSessionId);
-  const projects = useProjectStore((state) => state.projects);
+  const projects = useValue(project$.projects);
   const sessionCwd = useValue(() =>
     selectedSessionId ? sessionsView$[selectedSessionId].sessionCwd.get() ?? null : null,
   );

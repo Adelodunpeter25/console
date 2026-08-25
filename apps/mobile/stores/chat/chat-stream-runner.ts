@@ -2,7 +2,7 @@ import { runService, sessionKeys } from "@console/api";
 import { queryClient } from "@/query-client";
 import { startNativeChatStream } from "@/utils/native-stream";
 import { setStatus } from "@/stores/useSessionStatusStore";
-import { useProjectStore } from "@/stores/useProjectStore";
+import { refreshSessionHeader } from "@/stores/useProjectStore";
 import type { ChatSessionState } from "@/types";
 import { EMPTY_CHAT_SESSION } from "@/types/chat-state";
 
@@ -72,7 +72,7 @@ export function finalizeSessionRun(
     }),
   );
   syncSessionStatus(sessionId, hadError ? "needs_attention" : "done");
-  useProjectStore.getState().refreshSessionHeader(sessionId).catch(() => {});
+  refreshSessionHeader(sessionId).catch(() => {});
   queryClient.invalidateQueries({ queryKey: sessionKeys.all }).catch(() => {});
   queryClient.invalidateQueries({ queryKey: sessionKeys.detail(sessionId) }).catch(() => {});
 }

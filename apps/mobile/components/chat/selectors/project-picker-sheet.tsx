@@ -5,8 +5,9 @@ import { Folder, Check, Plus, Lock } from "lucide-react-native";
 import type { ProjectInfo } from "@console/types";
 import { SharedBottomSheet } from "@/components/common/shared-bottom-sheet";
 import { AddProjectScreen } from "@/screens/projects/add-project-screen";
-import { useProjectStore } from "@/stores";
 import { theme } from "@/styles/theme";
+import { loadProjects, project$ } from "@/stores/useProjectStore";
+import { useValue } from "@legendapp/state/react";
 
 interface ProjectPickerSheetProps {
   projects: ProjectInfo[];
@@ -25,8 +26,7 @@ export function ProjectPickerSheet({
 }: ProjectPickerSheetProps) {
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const [showAddProject, setShowAddProject] = useState(false);
-  const loadProjects = useProjectStore((state) => state.loadProjects);
-  const loadingProjects = useProjectStore((state) => state.loading);
+  const loadingProjects = useValue(project$.loading);
 
   useEffect(() => {
     if (projects.length === 0) {

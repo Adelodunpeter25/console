@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { useProjectStore } from "@/stores/useProjectStore";
 import { useValue } from "@legendapp/state/react";
 import { sessionStatuses$ } from "@/stores/useSessionStatusStore";
 import { confirmAlert } from "@/components/common/confirm-dialog";
 import { app$, setActiveTab, setSelectedSessionId } from "@/stores/useAppStore";
+import { createSession, deleteSession, loadSessions, project$ } from "@/stores/useProjectStore";
 
 /**
  * Project-scoped session management backed by `useProjectStore`.
@@ -15,13 +15,9 @@ import { app$, setActiveTab, setSelectedSessionId } from "@/stores/useAppStore";
 export function useProjectSessions(projectId: string, projectPath: string) {
   const selectedSessionId = useValue(app$.selectedSessionId);
 
-  const createSession = useProjectStore((state) => state.createSession);
-  const deleteSession = useProjectStore((state) => state.deleteSession);
-
   // Pull the flat session list and filter to this project.
-  const allSessions = useProjectStore((state) => state.sessions);
-  const sessionsLoading = useProjectStore((state) => state.sessionsLoading);
-  const loadSessions = useProjectStore((state) => state.loadSessions);
+  const allSessions = useValue(project$.sessions);
+  const sessionsLoading = useValue(project$.sessionsLoading);
 
   const sessions = useMemo(
     () => allSessions.filter((s) => s.projectId === projectId),

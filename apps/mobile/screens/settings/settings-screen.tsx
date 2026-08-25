@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { Text, View, Pressable, BackHandler } from "react-native";
 import { ChevronRight, Wifi, User, Folder, Trash2 } from "lucide-react-native";
 import { ScreenHeader } from "@/components/layout/screen-header";
-import { useProjectStore } from "@/stores";
 import { useAuth } from "@/hooks";
 import { EnvironmentsSettings } from "./environments-settings";
 import { AccountSettings } from "./account-settings";
@@ -11,6 +10,7 @@ import { DeletedChatsSettings } from "./deleted-chats-settings";
 import { theme } from "@/styles/theme";
 import { app$, setActiveTab, setPendingConnectionSection } from "@/stores/useAppStore";
 import { useValue } from "@legendapp/state/react";
+import { project$ } from "@/stores/useProjectStore";
 
 type SettingsSection = "connection" | "account" | "projects" | "deleted-chats";
 
@@ -51,8 +51,8 @@ export function SettingsScreen() {
   }, [section, setActiveTab]);
   const backendUrl = useValue(app$.backendUrl);
   const auth = useAuth();
-  const projects = useProjectStore((state) => state.projects);
-  const deletedSessions = useProjectStore((state) => state.deletedSessions);
+  const projects = useValue(project$.projects);
+  const deletedSessions = useValue(project$.deletedSessions);
 
   // Summary text under each landing row.
   const summary: Record<SettingsSection, string> = {

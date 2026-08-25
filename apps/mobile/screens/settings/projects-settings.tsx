@@ -3,19 +3,18 @@ import { FlatList, Pressable, Text, View, ActivityIndicator, Modal } from "react
 import { Folder, Trash2, Plus } from "lucide-react-native";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { confirmAlert, EmptyState } from "@/components/common";
-import { useProjectStore } from "@/stores";
 import { AddProjectScreen } from "@/screens/projects/add-project-screen";
 import { theme } from "@/styles/theme";
+import { deleteProject, loadProjects, project$ } from "@/stores/useProjectStore";
+import { useValue } from "@legendapp/state/react";
 
 interface ProjectsSettingsProps {
   onBack?: () => void;
 }
 
 export function ProjectsSettings({ onBack }: ProjectsSettingsProps) {
-  const projects = useProjectStore((state) => state.projects);
-  const loading = useProjectStore((state) => state.loading);
-  const loadProjects = useProjectStore((state) => state.loadProjects);
-  const deleteProject = useProjectStore((state) => state.deleteProject);
+  const projects = useValue(project$.projects);
+  const loading = useValue(project$.loading);
 
   const [showAddProject, setShowAddProject] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);

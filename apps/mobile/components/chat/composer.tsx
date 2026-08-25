@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-controller";
 import * as ImagePicker from "expo-image-picker";
 import type { ImageAttachment } from "@console/types";
-import { useChatStore, useProjectStore } from "@/stores";
+import { useChatStore } from "@/stores";
 import { changeModel, changeProject, setApprovalMode, sessionsView$ } from "@/stores/useSessionStore";
 import { ComposerBottomStrip } from "./composer-bottom-strip";
 import { ComposerAutocomplete } from "./composer-autocomplete";
@@ -12,6 +12,7 @@ import { AttachmentStrip } from "./attachment-strip";
 import { ComposerInput } from "./composer-input";
 import { app$ } from "@/stores/useAppStore";
 import { useValue } from "@legendapp/state/react";
+import { project$ } from "@/stores/useProjectStore";
 
 interface ComposerProps {
   value: string;
@@ -37,7 +38,7 @@ export function Composer({
   const paddingBottom = keyboardVisible ? 8 : Math.max(insets.bottom, 8) + 4;
 
   const selectedSessionId = useValue(app$.selectedSessionId);
-  const projects = useProjectStore((state) => state.projects);
+  const projects = useValue(project$.projects);
   const sessionView = useValue(() =>
     selectedSessionId ? sessionsView$[selectedSessionId].get() : undefined,
   );
