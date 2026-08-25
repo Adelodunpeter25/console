@@ -51,23 +51,33 @@ export function TerminalScreen() {
         <View className="flex-1 px-2 pb-1">
           {t.needsProjectPick ? (
             <ProjectPicker projects={t.projects} onSelect={t.selectProject} />
-          ) : !t.project ? null : !t.terminalId && !t.spawnError ? (
-            <View className="flex-1 items-center justify-center gap-2">
-              <ActivityIndicator />
-              <Text className="text-xs text-foreground-muted">Starting shell…</Text>
+          ) : !t.project ? null : (
+            // The surface mounts before the PTY exists: its first measured
+            // size gates the spawn (true grid from the start). While spawning,
+            // a spinner floats over the empty canvas.
+            <View className="flex-1">
+              <ConsoleTerminalSurface
+                terminalKey={t.terminalId ?? ""}
+                buffer={t.buffer}
+                fontSize={TERMINAL_FONT_SIZE}
+                isRunning={Boolean(t.isRunning)}
+                autoFocus={Boolean(t.isRunning)}
+                keyboardFocusRequest={t.focusRequest}
+                keyboardDismissRequest={t.keyboardDismissRequest}
+                onInput={t.handleInput}
+                onResize={t.handleResize}
+              />
+              {!t.terminalId && !t.spawnError ? (
+                <View
+                  className="absolute inset-0 items-center justify-center gap-2"
+                  pointerEvents="none"
+                >
+                  <ActivityIndicator />
+                  <Text className="text-xs text-foreground-muted">Starting shell…</Text>
+                </View>
+              ) : null}
             </View>
-          ) : t.terminalId ? (
-            <ConsoleTerminalSurface
-              terminalKey={t.terminalId}
-              buffer={t.buffer}
-              fontSize={TERMINAL_FONT_SIZE}
-              isRunning={Boolean(t.isRunning)}
-              keyboardFocusRequest={t.focusRequest}
-              keyboardDismissRequest={t.keyboardDismissRequest}
-              onInput={t.handleInput}
-              onResize={t.handleResize}
-            />
-          ) : null}
+          )}
         </View>
 
         {t.terminalId && t.isRunning ? (

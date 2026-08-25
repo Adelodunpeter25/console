@@ -20,6 +20,10 @@ export function useTerminalScreen() {
   const [focusRequest, setFocusRequest] = useState(0);
   const [keyboardDismissRequest, setKeyboardDismissRequest] = useState(0);
   const resizeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** Latest grid measured by the terminal surface. The first measurement gates
+   * the PTY spawn so the shell starts at the true size, never the 80×24 default. */
+  const surfaceSizeRef = useRef<{ cols: number; rows: number } | null>(null);
+  const [hasSurfaceSize, setHasSurfaceSize] = useState(false);
 
   const keyboardVisible = useKeyboardState((s) => s.isVisible);
 
@@ -39,9 +43,12 @@ export function useTerminalScreen() {
     setActiveTab(previousTab && previousTab !== "terminal" ? previousTab : "home");
   }, [previousTab, setActiveTab]);
 
-  // Spawn or reuse on mount (and if the selected project changes while mounted).
+  // Spawn or reuse on mount — but only once the surface reports its first
+  // size. The measured cols/rows flow into openTerminal (and the WS URL) so
+  // the PTY is created at the true grid and the shell's first prompt draws at
+  // the correct width instead of the 80×24 default.
   useEffect(() => {
-    if (!project) return;
+    if (!project || !hasSurfaceSize) return;
     let cancelled = false;
 
     (async () => {
@@ -55,6 +62,8 @@ export function useTerminalScreen() {
         const spawned = await store.openTerminal({
           projectId: project.id,
           cwd: project.path,
+          cols: surfaceSizeRef.current?.cols,
+          rows: surfaceSizeRef.current?.rows,
         });
         if (!cancelled) setTerminalId(spawned.id);
       } catch (cause) {
@@ -67,7 +76,7 @@ export function useTerminalScreen() {
     return () => {
       cancelled = true;
     };
-  }, [project?.id, project?.path]);
+  }, [project?.id, project?.path, hasSurfaceSize]);
 
   useEffect(() => {
     const onBackPress = () => {
@@ -106,10 +115,17 @@ export function useTerminalScreen() {
     [handleInput],
   );
 
-  // Coalesce resize storms (rotation, keyboard) into one PTY resize.
+  // Pre-spawn: track the measured grid; the first report unblocks the spawn
+  // effect. Post-spawn: coalesce resize storms (rotation, keyboard) into one
+  // debounced PTY resize.
   const handleResize = useCallback(
     (size: { cols: number; rows: number }) => {
-      if (!terminalId) return;
+      if (!terminalId) {
+        const first = surfaceSizeRef.current === null;
+        surfaceSizeRef.current = size;
+        if (first) setHasSurfaceSize(true);
+        return;
+      }
       if (resizeTimer.current) clearTimeout(resizeTimer.current);
       resizeTimer.current = setTimeout(() => {
         useTerminalStore.getState().resize(terminalId, size.cols, size.rows);
@@ -129,10 +145,17 @@ export function useTerminalScreen() {
       .kill(idToKill)
       .catch(() => {})
       .finally(() => {
-        // Respawn a fresh PTY for the same project so the user lands back in a shell
+        // Respawn a fresh PTY for the same project so the user lands back in a
+        // shell, reusing the last measured grid for the spawn params.
+        const size = surfaceSizeRef.current ?? undefined;
         useTerminalStore
           .getState()
-          .openTerminal({ projectId: project.id, cwd: project.path })
+          .openTerminal({
+            projectId: project.id,
+            cwd: project.path,
+            cols: size?.cols,
+            rows: size?.rows,
+          })
           .then((spawned) => setTerminalId(spawned.id))
           .catch((cause) => setSpawnError(cause instanceof Error ? cause.message : String(cause)));
       });
