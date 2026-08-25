@@ -32,9 +32,9 @@ build-desktop:
 build-server:
 	bun build --compile --minify --sourcemap apps/cli/console.ts --outfile console
 
-## build-desktop-mac: Build the GPUI desktop app for macOS (release)
-build-desktop-mac:
-	cargo build --release --manifest-path apps/desktop/Cargo.toml
+## build-preview
+build-preview:
+	cd apps/mobile && eas build --platform andriod --profile preview 
 
 ## typecheck: Run TypeScript check across all monorepo workspaces
 typecheck:
@@ -61,7 +61,7 @@ help:
 	@echo "  make dev-desktop       - Start the GPUI desktop app in dev mode"
 	@echo "  make build-desktop     - Build the GPUI desktop app for production"
 	@echo "  make build-server      - Compile the multi-call console binary (CLI + server)"
-	@echo "  make build-desktop-mac - Build the GPUI desktop app for macOS (release)"
+	@echo "  make build-preview - Build the Android apk with eas"
 	@echo "  make typecheck         - Run TypeScript typechecking"
 	@echo "  make generate-icons    - Regenerate mobile SVG icon registries from console-rs"
 	@echo "  make generate-theme    - Regenerate mobile JS theme from global.css tokens"
