@@ -1,9 +1,9 @@
-import { create } from "zustand";
+import { batch, observable } from "@legendapp/state";
 import type { ApprovalMode, ProjectInfo, SessionDetailResponse } from "@console/types";
 import { sessionService } from "@console/api";
-import { useProjectStore } from "./useProjectStore";
 import { provider$ } from "./useProviderStore";
 import { setStatus } from "./useSessionStatusStore";
+import { useProjectStore } from "./useProjectStore";
 
 export interface SessionViewState {
   sessionModelId: string | null;
@@ -19,16 +19,12 @@ export const EMPTY_SESSION_VIEW: SessionViewState = {
   approvalMode: "always-ask",
 };
 
-interface SessionState {
-  sessions: Record<string, SessionViewState>;
-
-  loadSession: (sessionId: string) => Promise<SessionDetailResponse | null>;
-  getSession: (sessionId: string) => SessionViewState;
-  changeModel: (sessionId: string, modelId: string) => void;
-  changeProject: (sessionId: string, project: ProjectInfo) => void;
-  setApprovalMode: (sessionId: string, mode: ApprovalMode) => void;
-  clear: () => void;
-}
+/**
+ * Per-session header view state (model/provider/cwd/approval mode) as Legend
+ * State observables, keyed by session id. See
+ * docs/legacy-state-and-list-migration.md.
+ */
+export const sessionsView$ = observable<Record<string, SessionViewState>>({});
 
 type SessionHasMessagesChecker = (sessionId: string) => boolean;
 let hasMessagesChecker: SessionHasMessagesChecker | null = null;
@@ -47,79 +43,64 @@ function resolveProvider(modelId: string, fallback: string | null): string | nul
   return fallback;
 }
 
-export const useSessionStore = create<SessionState>((set, get) => ({
-  sessions: {},
+/** Read a session's view state without subscribing (falls back to defaults). */
+export function getSession(sessionId: string): SessionViewState {
+  return sessionsView$[sessionId].peek() ?? EMPTY_SESSION_VIEW;
+}
 
-  loadSession: async (sessionId) => {
-    try {
-      const detail = await sessionService.getSession(sessionId);
-      set((state) => ({
-        sessions: {
-          ...state.sessions,
-          [sessionId]: {
-            sessionModelId: detail.header.modelId ?? null,
-            sessionProvider: detail.header.provider ?? null,
-            sessionCwd: detail.header.cwd ?? null,
-            approvalMode: (detail.header.approvalMode as ApprovalMode) ?? "always-ask",
-          },
-        },
-      }));
-      setStatus(sessionId, detail.header.status ?? "idle");
-      return detail;
-    } catch {
-      return null;
-    }
-  },
+export async function loadSession(sessionId: string): Promise<SessionDetailResponse | null> {
+  try {
+    const detail = await sessionService.getSession(sessionId);
+    sessionsView$[sessionId].set({
+      sessionModelId: detail.header.modelId ?? null,
+      sessionProvider: detail.header.provider ?? null,
+      sessionCwd: detail.header.cwd ?? null,
+      approvalMode: (detail.header.approvalMode as ApprovalMode) ?? "always-ask",
+    });
+    setStatus(sessionId, detail.header.status ?? "idle");
+    return detail;
+  } catch {
+    return null;
+  }
+}
 
-  getSession: (sessionId) => get().sessions[sessionId] ?? EMPTY_SESSION_VIEW,
+export function changeModel(sessionId: string, modelId: string): void {
+  const current = getSession(sessionId);
+  const provider = resolveProvider(modelId, current.sessionProvider);
+  sessionsView$[sessionId].set({
+    ...current,
+    sessionModelId: modelId,
+    sessionProvider: provider,
+  });
+  sessionService
+    .updateSession(sessionId, {
+      modelId,
+      provider: provider as import("@console/types").ProviderId | undefined,
+    })
+    .catch(() => {});
+}
 
-  changeModel: (sessionId, modelId) => {
-    const current = get().getSession(sessionId);
-    const provider = resolveProvider(modelId, current.sessionProvider);
-    set((state) => ({
-      sessions: {
-        ...state.sessions,
-        [sessionId]: { ...current, sessionModelId: modelId, sessionProvider: provider },
-      },
-    }));
-    sessionService
-      .updateSession(sessionId, {
-        modelId,
-        provider: provider as import("@console/types").ProviderId | undefined,
-      })
-      .catch(() => {});
-  },
+export function changeProject(sessionId: string, project: ProjectInfo): void {
+  // Lock the working directory once a chat has messages. Each run reloads
+  // header.cwd for prompt-ref expansion, project context, and all tool
+  // paths — changing it mid-chat mixes old context with a new project.
+  if (hasMessagesChecker && hasMessagesChecker(sessionId)) return;
+  const current = getSession(sessionId);
+  sessionsView$[sessionId].set({ ...current, sessionCwd: project.path });
+  sessionService
+    // projectId deliberately omitted: the server PATCH contract has no
+    // project field and would silently ignore it (see session.service.ts).
+    .updateSession(sessionId, { cwd: project.path })
+    .then(() => useProjectStore.getState().refreshSessionHeader(sessionId))
+    .catch(() => {});
+}
 
-  changeProject: (sessionId, project) => {
-    // Lock the working directory once a chat has messages. Each run reloads
-    // header.cwd for prompt-ref expansion, project context, and all tool
-    // paths — changing it mid-chat mixes old context with a new project.
-    if (hasMessagesChecker && hasMessagesChecker(sessionId)) return;
-    const current = get().getSession(sessionId);
-    set((state) => ({
-      sessions: {
-        ...state.sessions,
-        [sessionId]: { ...current, sessionCwd: project.path },
-      },
-    }));
-    sessionService
-      // projectId deliberately omitted: the server PATCH contract has no
-      // project field and would silently ignore it (see session.service.ts).
-      .updateSession(sessionId, { cwd: project.path })
-      .then(() => useProjectStore.getState().refreshSessionHeader(sessionId))
-      .catch(() => {});
-  },
+export function setApprovalMode(sessionId: string, mode: ApprovalMode): void {
+  const current = getSession(sessionId);
+  sessionsView$[sessionId].set({ ...current, approvalMode: mode });
+  sessionService.updateSession(sessionId, { approvalMode: mode }).catch(() => {});
+}
 
-  setApprovalMode: (sessionId, mode) => {
-    const current = get().getSession(sessionId);
-    set((state) => ({
-      sessions: {
-        ...state.sessions,
-        [sessionId]: { ...current, approvalMode: mode },
-      },
-    }));
-    sessionService.updateSession(sessionId, { approvalMode: mode }).catch(() => {});
-  },
-
-  clear: () => set({ sessions: {} }),
-}));
+export function clearSessions(): void {
+  sessionsView$.set({});
+}

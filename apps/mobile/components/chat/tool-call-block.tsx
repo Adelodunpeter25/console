@@ -5,7 +5,7 @@ import type { ToolCall, ToolResult } from "@console/types";
 import { ToolResultContent } from "./tool-result-content";
 import { DiffSummaryBadge } from "./diff-view";
 import { getToolMeta, formatUnknown, argSummary, computeLineDiff, computeNewFileDiff } from "@/utils";
-import { useSessionStore } from "@/stores";
+import { sessionsView$ } from "@/stores/useSessionStore";
 import { theme } from "@/styles/theme";
 import { app$ } from "@/stores/useAppStore";
 import { useValue } from "@legendapp/state/react";
@@ -28,8 +28,8 @@ const ToolCallRow = memo(function ToolCallRow({
 }: ToolCallRowProps) {
   const [open, setOpen] = useState(defaultOpen);
   const selectedSessionId = useValue(app$.selectedSessionId);
-  const sessionCwd = useSessionStore((state) =>
-    selectedSessionId ? state.sessions[selectedSessionId]?.sessionCwd : null,
+  const sessionCwd = useValue(() =>
+    selectedSessionId ? sessionsView$[selectedSessionId].sessionCwd.get() ?? null : null,
   );
   const meta = getToolMeta(call.name);
   const summary = argSummary(call, sessionCwd);
@@ -161,8 +161,8 @@ const ToolCallGroup = memo(function ToolCallGroup({
   const hasError = groupResults.some((result) => result.isError);
   const complete = groupResults.length === calls.length;
   const selectedSessionId = useValue(app$.selectedSessionId);
-  const sessionCwd = useSessionStore((state) =>
-    selectedSessionId ? state.sessions[selectedSessionId]?.sessionCwd : null,
+  const sessionCwd = useValue(() =>
+    selectedSessionId ? sessionsView$[selectedSessionId].sessionCwd.get() ?? null : null,
   );
   const meta = getToolMeta(name);
   const summary = calls.length === 1 ? argSummary(calls[0]!, sessionCwd) : `${calls.length} calls`;

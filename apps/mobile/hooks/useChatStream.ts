@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import type { ImageAttachment } from "@console/types";
 import { useInfiniteSession } from "./queries";
 import { useChatStore } from "@/stores/useChatStore";
-import { useSessionStore } from "@/stores/useSessionStore";
+import { getSession, sessionsView$ } from "@/stores/useSessionStore";
 import { app$ } from "@/stores/useAppStore";
 import { useValue } from "@legendapp/state/react";
 
@@ -73,36 +73,28 @@ export function useChatStream() {
     }
 
     if (latestHeader) {
-      useSessionStore.setState((state) => {
-        const current = state.sessions[selectedSessionId];
-        const nextModel = latestHeader.modelId ?? null;
-        const nextProvider = latestHeader.provider ?? null;
-        const nextCwd = latestHeader.cwd ?? null;
-        const nextApproval =
-          (latestHeader.approvalMode as import("@console/types").ApprovalMode) ?? "always-ask";
+      const current = sessionsView$[selectedSessionId].peek();
+      const nextModel = latestHeader.modelId ?? null;
+      const nextProvider = latestHeader.provider ?? null;
+      const nextCwd = latestHeader.cwd ?? null;
+      const nextApproval =
+        (latestHeader.approvalMode as import("@console/types").ApprovalMode) ?? "always-ask";
 
-        if (
-          current &&
-          current.sessionModelId === nextModel &&
-          current.sessionProvider === nextProvider &&
-          current.sessionCwd === nextCwd &&
-          current.approvalMode === nextApproval
-        ) {
-          return state;
-        }
+      const unchanged =
+        current &&
+        current.sessionModelId === nextModel &&
+        current.sessionProvider === nextProvider &&
+        current.sessionCwd === nextCwd &&
+        current.approvalMode === nextApproval;
 
-        return {
-          sessions: {
-            ...state.sessions,
-            [selectedSessionId]: {
-              sessionModelId: nextModel,
-              sessionProvider: nextProvider,
-              sessionCwd: nextCwd,
-              approvalMode: nextApproval,
-            },
-          },
-        };
-      });
+      if (!unchanged) {
+        sessionsView$[selectedSessionId].set({
+          sessionModelId: nextModel,
+          sessionProvider: nextProvider,
+          sessionCwd: nextCwd,
+          approvalMode: nextApproval,
+        });
+      }
     }
   }, [selectedSessionId, messagesFingerprint, latestHeader, loadMessages, allMessages]);
 
@@ -134,7 +126,7 @@ export function useChatStream() {
   }, [sessionQuery]);
 
   const sessionView = selectedSessionId
-    ? useSessionStore.getState().getSession(selectedSessionId)
+    ? getSession(selectedSessionId)
     : null;
 
   return {

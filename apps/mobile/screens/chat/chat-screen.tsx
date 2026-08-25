@@ -3,7 +3,8 @@ import { View, Keyboard, BackHandler, Pressable } from "react-native";
 import { SquareTerminal, Folder } from "lucide-react-native";
 import type { LegendListRef } from "@legendapp/list/react-native";
 import { useChatStream, useAbort } from "@/hooks";
-import { useSessionStore, useProjectStore } from "@/stores";
+import { useProjectStore } from "@/stores";
+import { sessionsView$ } from "@/stores/useSessionStore";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import {
   ChatMessageList,
@@ -21,8 +22,8 @@ export function ChatScreen() {
   const { abort } = useAbort();
   const selectedSessionId = useValue(app$.selectedSessionId);
   const projects = useProjectStore((state) => state.projects);
-  const sessionCwd = useSessionStore((state) =>
-    selectedSessionId ? state.sessions[selectedSessionId]?.sessionCwd ?? null : null,
+  const sessionCwd = useValue(() =>
+    selectedSessionId ? sessionsView$[selectedSessionId].sessionCwd.get() ?? null : null,
   );
 
   const findProjectForCwd = useCallback(

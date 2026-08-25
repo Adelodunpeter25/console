@@ -6,7 +6,7 @@ import { createChatSessionState, EMPTY_CHAT_SESSION } from "@/types/chat-state";
 import { applyChatEvent, toChatSnapshot } from "@/utils/chat-events";
 import { reconstructRuns } from "@/utils/reconstruct-runs";
 import { startNativeChatStream } from "@/utils/native-stream";
-import { useSessionStore, registerSessionHasMessagesChecker } from "./useSessionStore";
+import { getSession, registerSessionHasMessagesChecker } from "./useSessionStore";
 import { provider$ } from "./useProviderStore";
 import { chatPersistConfig, setSuppressPersist } from "./chat/chat-persist";
 import { trimDraftAttachments } from "./chat/draft";
@@ -123,9 +123,7 @@ export const useChatStore = create<ChatStoreState>()(
         const prompt = (promptOverride ?? input).trim();
         if (!prompt || running) return;
 
-        const { sessionModelId, sessionProvider, approvalMode } = useSessionStore
-          .getState()
-          .getSession(sessionId);
+        const { sessionModelId, sessionProvider, approvalMode } = getSession(sessionId);
 
         // Validate image support for the selected model.
         if (attachments.length > 0 && sessionModelId && sessionProvider) {
