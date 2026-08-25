@@ -1,16 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import type { TerminalServerMessage } from "@console/types";
-import { useTerminalStore } from "@/stores/useTerminalStore";
+import { useValue } from "@legendapp/state/react";
+import {
+  kill,
+  openTerminal,
+  resize,
+  subscribe as subscribeTerminal,
+  terminals$,
+  write,
+} from "@/stores/useTerminalStore";
 
 /**
  * Subscribe a component to a terminal's server events (output/exit/error).
  * Returns the latest accumulated output buffer and the terminal status.
  */
 export function useTerminalOutput(terminalId: string | undefined) {
-  const terminal = useTerminalStore((state) =>
-    terminalId ? state.terminals[terminalId] : undefined,
-  );
-  const subscribe = useTerminalStore((state) => state.subscribe);
+  const terminal = useValue(() => (terminalId ? terminals$[terminalId].get() : undefined));
   const [output, setOutput] = useState("");
   const outputRef = useRef("");
 
@@ -18,14 +23,14 @@ export function useTerminalOutput(terminalId: string | undefined) {
     if (!terminalId) return;
     outputRef.current = "";
     setOutput("");
-    const unsub = subscribe(terminalId, (message: TerminalServerMessage) => {
+    const unsub = subscribeTerminal(terminalId, (message: TerminalServerMessage) => {
       if (message.type === "output") {
         outputRef.current += message.data;
         setOutput(outputRef.current);
       }
     });
     return unsub;
-  }, [terminalId, subscribe]);
+  }, [terminalId]);
 
   return {
     terminal,
@@ -44,10 +49,6 @@ export function useTerminal(opts: {
   label?: string;
   shell?: string;
 }) {
-  const openTerminal = useTerminalStore((state) => state.openTerminal);
-  const write = useTerminalStore((state) => state.write);
-  const resize = useTerminalStore((state) => state.resize);
-  const kill = useTerminalStore((state) => state.kill);
   const [terminalId, setTerminalId] = useState<string | null>(null);
 
   const open = async () => {

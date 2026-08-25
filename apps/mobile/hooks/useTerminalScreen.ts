@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackHandler } from "react-native";
 import { useKeyboardState } from "react-native-keyboard-controller";
-import { useTerminalStore } from "@/stores";
+import {
+  findLiveTerminal,
+  kill as killTerminal,
+  openTerminal,
+  resize as resizeTerminalPty,
+  terminals$,
+  terminalBuffers$,
+  write as writeTerminal,
+} from "@/stores/useTerminalStore";
 import { app$, setActiveTab, setSelectedProjectId } from "@/stores/useAppStore";
 import { useValue } from "@legendapp/state/react";
 import { project$ } from "@/stores/useProjectStore";
@@ -53,14 +61,13 @@ export function useTerminalScreen() {
     let cancelled = false;
 
     (async () => {
-      const store = useTerminalStore.getState();
-      const existing = store.findLiveTerminal(project.id, project.path);
+      const existing = findLiveTerminal(project.id, project.path);
       if (existing) {
         setTerminalId(existing);
         return;
       }
       try {
-        const spawned = await store.openTerminal({
+        const spawned = await openTerminal({
           projectId: project.id,
           cwd: project.path,
           cols: surfaceSizeRef.current?.cols,
@@ -88,12 +95,12 @@ export function useTerminalScreen() {
     return () => sub.remove();
   }, [goBack]);
 
-  const term = useTerminalStore((state) => (terminalId ? state.terminals[terminalId] : undefined));
-  const buffer = useTerminalStore((state) => (terminalId ? (state.buffers[terminalId] ?? "") : ""));
+  const term = useValue(() => (terminalId ? terminals$[terminalId].get() : undefined));
+  const buffer = useValue(() => (terminalId ? terminalBuffers$[terminalId].get() ?? "" : ""));
 
   const handleInput = useCallback(
     (data: string) => {
-      if (terminalId) useTerminalStore.getState().write(terminalId, data);
+      if (terminalId) writeTerminal(terminalId, data);
       // Keep the soft keyboard up after sending a command; otherwise the IME
       // hides on IME_ACTION_SEND and the user must tap the terminal again.
       if (data.includes("\r") || data.includes("\n")) {
@@ -129,7 +136,7 @@ export function useTerminalScreen() {
       }
       if (resizeTimer.current) clearTimeout(resizeTimer.current);
       resizeTimer.current = setTimeout(() => {
-        useTerminalStore.getState().resize(terminalId, size.cols, size.rows);
+        resizeTerminalPty(terminalId, size.cols, size.rows);
       }, 100);
     },
     [terminalId],
@@ -141,17 +148,13 @@ export function useTerminalScreen() {
     // Clear UI first so the spawn spinner shows while the old PTY tears down
     setTerminalId(null);
     setSpawnError(null);
-    useTerminalStore
-      .getState()
-      .kill(idToKill)
+    killTerminal(idToKill)
       .catch(() => {})
       .finally(() => {
         // Respawn a fresh PTY for the same project so the user lands back in a
         // shell, reusing the last measured grid for the spawn params.
         const size = surfaceSizeRef.current ?? undefined;
-        useTerminalStore
-          .getState()
-          .openTerminal({
+        openTerminal({
             projectId: project.id,
             cwd: project.path,
             cols: size?.cols,
