@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, View, Text } from "react-native";
-import { FlashList } from "@shopify/flash-list";
+import { LegendList } from "@legendapp/list/react-native";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { theme } from "@/styles/theme";
 import { fsService } from "@console/api";
@@ -213,7 +213,7 @@ export function FileTreeBrowser(props: FileTreeBrowserProps) {
   }
 
   return (
-    <FlashList
+    <LegendList
       data={rows}
       keyExtractor={(item) => item.key}
       renderItem={renderItem}

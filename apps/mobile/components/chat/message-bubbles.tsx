@@ -373,7 +373,7 @@ export const AssistantBubble = memo(function AssistantBubble({
   );
 });
 
-/** Renders the agent message bubbles for the chat FlashList. */
+/** Renders the agent message bubbles for the chat list. */
 export const MessageBubble = memo(function MessageBubble({
   item,
   isStreaming,

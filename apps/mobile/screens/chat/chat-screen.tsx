@@ -1,8 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { View, Keyboard, BackHandler, Pressable } from "react-native";
 import { SquareTerminal, Folder } from "lucide-react-native";
-import type { FlashListRef } from "@shopify/flash-list";
-import type { AgentMessage } from "@console/types";
+import type { LegendListRef } from "@legendapp/list/react-native";
 import { useChatStream, useAbort } from "@/hooks";
 import { useAppStore, useSessionStore, useProjectStore } from "@/stores";
 import { ScreenHeader } from "@/components/layout/screen-header";
@@ -74,7 +73,7 @@ export function ChatScreen() {
     ),
     [openFiles, openTerminal],
   );
-  const listRef = useRef<FlashListRef<AgentMessage>>(null);
+  const listRef = useRef<LegendListRef>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
 
   const handleBackToHome = useCallback(() => {

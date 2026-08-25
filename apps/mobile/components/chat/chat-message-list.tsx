@@ -1,6 +1,6 @@
 import React, { forwardRef, useCallback, useMemo, useRef } from "react";
 import { View, Keyboard, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
-import { FlashList, type FlashListRef } from "@shopify/flash-list";
+import { LegendList, type LegendListRef } from "@legendapp/list/react-native";
 import type { AgentMessage } from "@console/types";
 import { MessageBubble } from "./message-bubbles";
 import { RunActivity } from "./run-activity";
@@ -22,7 +22,7 @@ interface ChatMessageListProps {
   onScrollBottomVisibilityChange: (visible: boolean) => void;
 }
 
-export const ChatMessageList = forwardRef<FlashListRef<AgentMessage>, ChatMessageListProps>(
+export const ChatMessageList = forwardRef<LegendListRef, ChatMessageListProps>(
   function ChatMessageList({ stream, onScrollBottomVisibilityChange }, ref) {
     const isStreaming =
       stream.running &&
@@ -87,7 +87,7 @@ export const ChatMessageList = forwardRef<FlashListRef<AgentMessage>, ChatMessag
       isAtEndRef.current = true;
       followRef.current = true;
       onScrollBottomVisibilityChange(false);
-      (ref as React.RefObject<FlashListRef<AgentMessage>>)?.current?.scrollToEnd({ animated: true });
+      (ref as React.RefObject<LegendListRef>)?.current?.scrollToEnd({ animated: true });
     }, [ref, onScrollBottomVisibilityChange]);
 
     const renderItem = useCallback(
@@ -109,9 +109,9 @@ export const ChatMessageList = forwardRef<FlashListRef<AgentMessage>, ChatMessag
     );
 
     return (
-      <FlashList
+      <LegendList
         ref={ref}
-        className="flex-1"
+        style={{ flex: 1 }}
         data={displayMessages}
         keyExtractor={(item, i) => (item as any).id ?? `${(item as any).createdAt ?? i}-${i}`}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16 }}
