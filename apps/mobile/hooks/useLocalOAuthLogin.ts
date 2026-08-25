@@ -10,7 +10,7 @@ import {
   stopAuthServer,
   type AuthCallbackResult,
 } from "@/modules/local-auth-server";
-import { useAuthStore } from "@/stores/useAuthStore";
+import { loadAuthStatus } from "@/stores/useAuthStore";
 
 /**
  * Orchestrates the full mobile OAuth login flow on Android using a native
@@ -58,7 +58,6 @@ export function useLocalOAuthLogin(): UseLocalOAuthLoginResult {
   const [error, setError] = useState<string | null>(null);
   const isAvailable = isLocalAuthServerAvailable();
 
-  const loadStatus = useAuthStore((state) => state.loadStatus);
 
   // Refs so the cleanup function always sees the latest values.
   const cleanupRef = useRef<(() => void) | null>(null);
@@ -135,7 +134,7 @@ export function useLocalOAuthLogin(): UseLocalOAuthLoginResult {
                 state: result.state || undefined,
               });
               // 9. Refresh auth status so the UI reflects the new credential.
-              await loadStatus().catch(() => {});
+              await loadAuthStatus().catch(() => {});
               resolveFlow();
             } catch (err: unknown) {
               rejectFlow(
@@ -180,7 +179,7 @@ export function useLocalOAuthLogin(): UseLocalOAuthLoginResult {
         setIsLoggingIn(false);
       }
     },
-    [loadStatus, stopServerAndCleanup],
+    [stopServerAndCleanup],
   );
 
   const cancel = useCallback(() => {

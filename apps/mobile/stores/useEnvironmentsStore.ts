@@ -4,7 +4,7 @@ import { appStorage } from "@/utils/storage";
 import { normalizeBackendUrl } from "@/utils/url";
 import { resetServerState } from "@/utils/server-state";
 import { queryClient } from "@/query-client";
-import { useAuthStore } from "@/stores/useAuthStore";
+import { loadAuthStatus } from "@/stores/useAuthStore";
 import { setBackendUrl } from "./useAppStore";
 
 /** Legacy single-URL key kept in sync so downgrades / other readers don't break. */
@@ -194,6 +194,6 @@ function activeUrlOf(state: { environments: Environment[]; activeId: string | nu
 function applyActive(url: string) {
   configureConsoleApi({ baseUrl: url });
   setBackendUrl(url);
-  useAuthStore.getState().loadStatus?.();
+  void loadAuthStatus();
   queryClient.resumePausedMutations?.();
 }

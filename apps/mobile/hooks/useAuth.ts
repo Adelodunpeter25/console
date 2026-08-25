@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import * as Linking from "expo-linking";
 import type { OAuthProviderId, ProviderId } from "@console/types";
-import { useAuthStore } from "@/stores/useAuthStore";
+import { useValue } from "@legendapp/state/react";
+import {
+  auth$,
+  loadAuthStatus,
+  loginCodebuff,
+  loginWithBrowser,
+  resetAuth,
+  saveProjectId,
+} from "@/stores/useAuthStore";
 
 /**
  * Auth status + OAuth login flow for mobile.
@@ -12,22 +20,17 @@ import { useAuthStore } from "@/stores/useAuthStore";
  * must be registered in the app config; this hook listens for it.
  */
 export function useAuth() {
-  const status = useAuthStore((state) => state.status);
-  const loading = useAuthStore((state) => state.loading);
-  const loggingIn = useAuthStore((state) => state.loggingIn);
-  const loadStatus = useAuthStore((state) => state.loadStatus);
-  const loginWithBrowser = useAuthStore((state) => state.loginWithBrowser);
-  const loginCodebuff = useAuthStore((state) => state.loginCodebuff);
-  const projectIds = useAuthStore((state) => state.projectIds);
-  const saveProjectId = useAuthStore((state) => state.saveProjectId);
-  const savingProjectId = useAuthStore((state) => state.savingProjectId);
-  const error = useAuthStore((state) => state.error);
-  const reset = useAuthStore((state) => state.reset);
+  const status = useValue(auth$.status);
+  const loading = useValue(auth$.loading);
+  const loggingIn = useValue(auth$.loggingIn);
+  const projectIds = useValue(auth$.projectIds);
+  const savingProjectId = useValue(auth$.savingProjectId);
+  const error = useValue(auth$.error);
 
   // Load auth status on mount.
   useEffect(() => {
-    loadStatus().catch(() => {});
-  }, [loadStatus]);
+    loadAuthStatus().catch(() => {});
+  }, []);
 
   const isLoggedIn = useCallback(
     (provider: OAuthProviderId) => Boolean(status?.[provider]?.loggedIn),
@@ -41,7 +44,7 @@ export function useAuth() {
     [loginWithBrowser],
   );
 
-  const refetch = useCallback(() => loadStatus(), [loadStatus]);
+  const refetch = useCallback(() => loadAuthStatus(), []);
 
   return {
     status,
@@ -66,11 +69,11 @@ export function useAuth() {
       // app via deep link, the code/state arrive here and we exchange them.
       const { authService } = await import("@console/api");
       await authService.handleCallback({ provider, code, state });
-      await loadStatus();
+      await loadAuthStatus();
     },
     isFetchingLoginUrl: loggingIn !== null,
     isSubmittingCallback: false,
-    reset,
+    reset: resetAuth,
   };
 }
 
