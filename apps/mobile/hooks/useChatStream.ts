@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo } from "react";
 import type { ImageAttachment } from "@console/types";
 import { useInfiniteSession } from "./queries";
-import { useAppStore } from "@/stores/useAppStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useSessionStore } from "@/stores/useSessionStore";
+import { app$ } from "@/stores/useAppStore";
+import { useValue } from "@legendapp/state/react";
 
 /**
  * Drives a single chat session's SSE stream against the backend.
@@ -18,7 +19,7 @@ import { useSessionStore } from "@/stores/useSessionStore";
  * older message batches are loaded as the user scrolls up.
  */
 export function useChatStream() {
-  const selectedSessionId = useAppStore((state) => state.selectedSessionId);
+  const selectedSessionId = useValue(app$.selectedSessionId);
 
   // Infinite shared fetch for paginating messages backwards.
   const sessionQuery = useInfiniteSession(selectedSessionId ?? "", 100);

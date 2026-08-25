@@ -6,7 +6,6 @@ import { createChatSessionState, EMPTY_CHAT_SESSION } from "@/types/chat-state";
 import { applyChatEvent, toChatSnapshot } from "@/utils/chat-events";
 import { reconstructRuns } from "@/utils/reconstruct-runs";
 import { startNativeChatStream } from "@/utils/native-stream";
-import { useAppStore } from "./useAppStore";
 import { useSessionStore, registerSessionHasMessagesChecker } from "./useSessionStore";
 import { useProviderStore } from "./useProviderStore";
 import { chatPersistConfig, setSuppressPersist } from "./chat/chat-persist";
@@ -20,6 +19,7 @@ import {
   abortSessionStream,
 } from "./chat/chat-stream-runner";
 import { answerSessionQuestion, approveSessionPermission } from "./chat/chat-decisions";
+import { app$ } from "./useAppStore";
 
 export interface ChatStoreState {
   sessions: Record<string, ChatSessionState>;
@@ -215,7 +215,7 @@ export const useChatStore = create<ChatStoreState>()(
         ) => set((state) => ({ sessions: updater(state.sessions) }));
 
         try {
-          const baseUrl = useAppStore.getState().backendUrl ?? "";
+          const baseUrl = app$.backendUrl.peek() ?? "";
           let hadError = false;
 
           setSuppressPersist(true);

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackHandler } from "react-native";
 import { useKeyboardState } from "react-native-keyboard-controller";
-import { useAppStore, useProjectStore, useTerminalStore } from "@/stores";
+import { useProjectStore, useTerminalStore } from "@/stores";
+import { app$, setActiveTab, setSelectedProjectId } from "@/stores/useAppStore";
+import { useValue } from "@legendapp/state/react";
 
 /**
  * All terminal-screen state and side effects: project scoping, PTY spawn/reuse/
@@ -9,10 +11,8 @@ import { useAppStore, useProjectStore, useTerminalStore } from "@/stores";
  * The screen file stays pure composition.
  */
 export function useTerminalScreen() {
-  const previousTab = useAppStore((state) => state.previousTab);
-  const setActiveTab = useAppStore((state) => state.setActiveTab);
-  const selectedProjectId = useAppStore((state) => state.selectedProjectId);
-  const setSelectedProjectId = useAppStore((state) => state.setSelectedProjectId);
+  const previousTab = useValue(app$.previousTab);
+  const selectedProjectId = useValue(app$.selectedProjectId);
   const projects = useProjectStore((state) => state.projects);
 
   const [terminalId, setTerminalId] = useState<string | null>(null);

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { TerminalServerMessage, TerminalSpawnedEvent } from "@console/types";
 import { connectTerminal } from "@console/api";
-import { useAppStore } from "./useAppStore";
+import { app$ } from "./useAppStore";
 
 export type TerminalStatus = "spawning" | "running" | "exited" | "error";
 
@@ -62,7 +62,7 @@ const pendingAppends: Record<string, string[]> = {};
 let flushTimer: ReturnType<typeof setInterval> | null = null;
 
 function getBaseUrl(): string {
-  return useAppStore.getState().backendUrl ?? "http://localhost:3000";
+  return app$.backendUrl.peek() ?? "http://localhost:3000";
 }
 
 /** Emit a server message to a specific terminal's listeners. */

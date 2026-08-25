@@ -3,10 +3,11 @@ import { View } from "react-native";
 import { AppShell } from "./app-shell";
 import { HomeScreen, ChatScreen, SettingsScreen, TerminalScreen } from "@/screens";
 import { FilesScreen } from "@/screens/files/files-screen";
-import { useAppStore } from "@/stores";
+import { app$ } from "@/stores/useAppStore";
+import { useValue } from "@legendapp/state/react";
 
 export function MainContent() {
-  const activeTab = useAppStore((state) => state.activeTab);
+  const activeTab = useValue(app$.activeTab);
 
   return (
     <AppShell>

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { getConsoleApiClient } from "@console/api";
 import type { FileSearchResult } from "@console/types";
-import { useAppStore } from "@/stores/useAppStore";
+import { app$ } from "@/stores/useAppStore";
+import { useValue } from "@legendapp/state/react";
 
 /** FFF-backed fuzzy file search for a session's working directory (@ refs). */
 export function useFileSearch(sessionId?: string) {
-  const backendUrl = useAppStore((state) => state.backendUrl);
+  const backendUrl = useValue(app$.backendUrl);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FileSearchResult[]>([]);
   const [loading, setLoading] = useState(false);

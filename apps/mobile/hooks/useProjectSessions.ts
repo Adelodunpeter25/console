@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { useAppStore } from "@/stores/useAppStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useValue } from "@legendapp/state/react";
 import { sessionStatuses$ } from "@/stores/useSessionStatusStore";
 import { confirmAlert } from "@/components/common/confirm-dialog";
+import { app$, setActiveTab, setSelectedSessionId } from "@/stores/useAppStore";
 
 /**
  * Project-scoped session management backed by `useProjectStore`.
@@ -13,9 +13,7 @@ import { confirmAlert } from "@/components/common/confirm-dialog";
  * stays consistent across screens.
  */
 export function useProjectSessions(projectId: string, projectPath: string) {
-  const selectedSessionId = useAppStore((state) => state.selectedSessionId);
-  const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
-  const setActiveTab = useAppStore((state) => state.setActiveTab);
+  const selectedSessionId = useValue(app$.selectedSessionId);
 
   const createSession = useProjectStore((state) => state.createSession);
   const deleteSession = useProjectStore((state) => state.deleteSession);

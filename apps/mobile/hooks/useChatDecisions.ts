@@ -1,6 +1,7 @@
 import { useCallback } from "react";
-import { useAppStore } from "@/stores/useAppStore";
 import { useChatStore } from "@/stores/useChatStore";
+import { app$ } from "@/stores/useAppStore";
+import { useValue } from "@legendapp/state/react";
 
 /**
  * Posts agent decisions (question answers / permission approvals) to the
@@ -9,7 +10,7 @@ import { useChatStore } from "@/stores/useChatStore";
  * of the outcome.
  */
 export function useChatDecisions() {
-  const selectedSessionId = useAppStore((state) => state.selectedSessionId);
+  const selectedSessionId = useValue(app$.selectedSessionId);
   const answerQuestion = useChatStore((state) => state.answerQuestion);
   const approvePermission = useChatStore((state) => state.approvePermission);
 

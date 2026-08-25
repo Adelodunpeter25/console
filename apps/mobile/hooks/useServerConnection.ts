@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { configureConsoleApi } from "@console/api";
 import { confirmAlert } from "@/components/common/confirm-dialog";
-import { useAppStore } from "@/stores/useAppStore";
 import {
   useEnvironmentsStore,
   type Environment,
 } from "@/stores/useEnvironmentsStore";
 import { normalizeBackendUrl } from "@/utils/url";
 import { resetServerState } from "@/utils/server-state";
+import { app$, setActiveTab, setBackendUrl } from "@/stores/useAppStore";
+import { useValue } from "@legendapp/state/react";
 
 /**
  * Legacy single-endpoint connection API, kept intact for the onboarding
@@ -16,8 +17,7 @@ import { resetServerState } from "@/utils/server-state";
  * stay in sync with the environments feature.
  */
 export function useServerConnection() {
-  const backendUrl = useAppStore((state) => state.backendUrl);
-  const setActiveTab = useAppStore((state) => state.setActiveTab);
+  const backendUrl = useValue(app$.backendUrl);
   const environments = useEnvironmentsStore((state) => state.environments);
   const activeId = useEnvironmentsStore((state) => state.activeId);
 
@@ -33,7 +33,7 @@ export function useServerConnection() {
   useEffect(() => {
     if (activeEnv) {
       configureConsoleApi({ baseUrl: activeEnv.url });
-      useAppStore.getState().setBackendUrl(activeEnv.url);
+      setBackendUrl(activeEnv.url);
     }
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps

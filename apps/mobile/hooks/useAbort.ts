@@ -1,10 +1,11 @@
 import { useCallback } from "react";
-import { useAppStore } from "@/stores/useAppStore";
 import { useChatStore } from "@/stores/useChatStore";
+import { app$ } from "@/stores/useAppStore";
+import { useValue } from "@legendapp/state/react";
 
 /** Wraps the chat-store abort for the mobile stop button. */
 export function useAbort() {
-  const selectedSessionId = useAppStore((state) => state.selectedSessionId);
+  const selectedSessionId = useValue(app$.selectedSessionId);
   const abort = useChatStore((state) => state.abort);
 
   const handleAbort = useCallback(async () => {

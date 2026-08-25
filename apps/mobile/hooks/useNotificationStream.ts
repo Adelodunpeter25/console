@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { NotificationEvent } from "@console/types";
-import { useAppStore } from "@/stores/useAppStore";
 import { startNativeNotificationStream } from "@/utils/native-stream";
+import { app$ } from "@/stores/useAppStore";
+import { useValue } from "@legendapp/state/react";
 
 /**
  * Subscribes to the backend's notification SSE stream
@@ -12,7 +13,7 @@ import { startNativeNotificationStream } from "@/utils/native-stream";
  * `fetch` + a reader loop (RN fetch streams responses as chunks).
  */
 export function useNotificationStream(onNotification?: (event: NotificationEvent) => void) {
-  const backendUrl = useAppStore((state) => state.backendUrl);
+  const backendUrl = useValue(app$.backendUrl);
   const onNotificationRef = useRef(onNotification);
   onNotificationRef.current = onNotification;
 

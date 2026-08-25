@@ -10,11 +10,12 @@ import {
 } from "./queries";
 import { useQueryClient } from "@tanstack/react-query";
 import type { SessionHeader } from "@console/types";
-import { useAppStore, useChatStore } from "@/stores";
+import { useChatStore } from "@/stores";
 import type { ChatStoreState } from "@/stores/useChatStore";
 import { useProjectBranches } from "./useProjectBranches";
 import { folderName } from "@/utils";
 import { draftPreview, isDraftSession } from "@/stores/chat/draft";
+import { setActiveTab, setSelectedSessionId } from "@/stores/useAppStore";
 
 type DraftSummaries = Record<string, { preview: string; draftUpdatedAt?: number }>;
 
@@ -74,8 +75,6 @@ export function useHomeSessions() {
   const { data: branches = {} } = useProjectBranches(projects);
   const createSession = useCreateSession();
   const deleteSessionMutation = useDeleteSession();
-  const setActiveTab = useAppStore((state) => state.setActiveTab);
-  const setSelectedSessionId = useAppStore((state) => state.setSelectedSessionId);
   const [searchQuery, setSearchQuery] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
 

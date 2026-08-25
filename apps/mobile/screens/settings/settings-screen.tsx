@@ -2,13 +2,15 @@ import React, { useState, useEffect } from "react";
 import { Text, View, Pressable, BackHandler } from "react-native";
 import { ChevronRight, Wifi, User, Folder, Trash2 } from "lucide-react-native";
 import { ScreenHeader } from "@/components/layout/screen-header";
-import { useAppStore, useProjectStore } from "@/stores";
+import { useProjectStore } from "@/stores";
 import { useAuth } from "@/hooks";
 import { EnvironmentsSettings } from "./environments-settings";
 import { AccountSettings } from "./account-settings";
 import { ProjectsSettings } from "./projects-settings";
 import { DeletedChatsSettings } from "./deleted-chats-settings";
 import { theme } from "@/styles/theme";
+import { app$, setActiveTab, setPendingConnectionSection } from "@/stores/useAppStore";
+import { useValue } from "@legendapp/state/react";
 
 type SettingsSection = "connection" | "account" | "projects" | "deleted-chats";
 
@@ -23,9 +25,7 @@ const SECTION_META: Record<
 };
 
 export function SettingsScreen() {
-  const setActiveTab = useAppStore((state) => state.setActiveTab);
-  const pendingConnectionSection = useAppStore((state) => state.pendingConnectionSection);
-  const setPendingConnectionSection = useAppStore((state) => state.setPendingConnectionSection);
+  const pendingConnectionSection = useValue(app$.pendingConnectionSection);
   const [section, setSection] = useState<SettingsSection | null>(null);
 
   // If the environment switcher's "Add environment" button sent us here, jump
@@ -49,7 +49,7 @@ export function SettingsScreen() {
     const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
     return () => sub.remove();
   }, [section, setActiveTab]);
-  const backendUrl = useAppStore((state) => state.backendUrl);
+  const backendUrl = useValue(app$.backendUrl);
   const auth = useAuth();
   const projects = useProjectStore((state) => state.projects);
   const deletedSessions = useProjectStore((state) => state.deletedSessions);

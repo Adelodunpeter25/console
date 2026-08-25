@@ -5,8 +5,10 @@ import type { ToolCall, ToolResult } from "@console/types";
 import { ToolResultContent } from "./tool-result-content";
 import { DiffSummaryBadge } from "./diff-view";
 import { getToolMeta, formatUnknown, argSummary, computeLineDiff, computeNewFileDiff } from "@/utils";
-import { useAppStore, useSessionStore } from "@/stores";
+import { useSessionStore } from "@/stores";
 import { theme } from "@/styles/theme";
+import { app$ } from "@/stores/useAppStore";
+import { useValue } from "@legendapp/state/react";
 
 interface ToolCallBlockProps {
   calls: ToolCall[];
@@ -25,7 +27,7 @@ const ToolCallRow = memo(function ToolCallRow({
   defaultOpen = false,
 }: ToolCallRowProps) {
   const [open, setOpen] = useState(defaultOpen);
-  const selectedSessionId = useAppStore((state) => state.selectedSessionId);
+  const selectedSessionId = useValue(app$.selectedSessionId);
   const sessionCwd = useSessionStore((state) =>
     selectedSessionId ? state.sessions[selectedSessionId]?.sessionCwd : null,
   );
@@ -158,7 +160,7 @@ const ToolCallGroup = memo(function ToolCallGroup({
   );
   const hasError = groupResults.some((result) => result.isError);
   const complete = groupResults.length === calls.length;
-  const selectedSessionId = useAppStore((state) => state.selectedSessionId);
+  const selectedSessionId = useValue(app$.selectedSessionId);
   const sessionCwd = useSessionStore((state) =>
     selectedSessionId ? state.sessions[selectedSessionId]?.sessionCwd : null,
   );
