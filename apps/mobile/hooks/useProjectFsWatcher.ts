@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useFsStore } from "@/stores/useFsStore";
+import { browseDirectory } from "@/stores/useFsStore";
 
 /**
  * Real-time project filesystem watching.
@@ -10,7 +10,6 @@ import { useFsStore } from "@/stores/useFsStore";
  * interval poll while the hook is mounted. Stops on unmount.
  */
 export function useProjectFsWatcher(projectPath?: string | null, pollMs = 5000) {
-  const browseDirectory = useFsStore((state) => state.browseDirectory);
 
   useEffect(() => {
     if (!projectPath) return;
@@ -34,5 +33,5 @@ export function useProjectFsWatcher(projectPath?: string | null, pollMs = 5000) 
       cancelled = true;
       clearInterval(interval);
     };
-  }, [projectPath, pollMs, browseDirectory]);
+  }, [projectPath, pollMs]);
 }
