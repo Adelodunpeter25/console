@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardStickyView, useKeyboardState } from "react-native-keyboard-controller";
 import * as ImagePicker from "expo-image-picker";
 import type { ImageAttachment } from "@console/types";
-import { useChatStore } from "@/stores";
+import { addAttachments, getChatSession, removeAttachment } from "@/stores/useChatStore";
 import { changeModel, changeProject, setApprovalMode, sessionsView$ } from "@/stores/useSessionStore";
 import { ComposerBottomStrip } from "./composer-bottom-strip";
 import { ComposerAutocomplete } from "./composer-autocomplete";
@@ -43,11 +43,9 @@ export function Composer({
     selectedSessionId ? sessionsView$[selectedSessionId].get() : undefined,
   );
 
-  const attachments = useChatStore((state) =>
-    selectedSessionId ? state.getSession(selectedSessionId).attachments : [],
+  const attachments = useValue(() =>
+    selectedSessionId ? getChatSession(selectedSessionId).attachments : [],
   );
-  const addAttachments = useChatStore((state) => state.addAttachments);
-  const removeAttachment = useChatStore((state) => state.removeAttachment);
 
   const selectedProject = projects.find(
     (p) =>

@@ -1,18 +1,13 @@
 import { createMMKV, type MMKV } from "react-native-mmkv";
-import type { StateStorage } from "zustand/middleware";
 
 export const appStorage: MMKV = createMMKV({
   id: "console-mobile-storage",
 });
 
-/**
- * Synchronous MMKV storage adapter for Zustand persist middleware.
- * Eliminates bridge overhead with zero-latency C++ JSI memory-mapped access.
- */
-export const mmkvZustandStorage: StateStorage = {
+/** Synchronous string storage adapter (MMKV, zero-latency JSI access). */
+export const mmkvStringStorage = {
   getItem: (name: string): string | null => {
-    const value = appStorage.getString(name);
-    return value ?? null;
+    return appStorage.getString(name) ?? null;
   },
   setItem: (name: string, value: string): void => {
     appStorage.set(name, value);

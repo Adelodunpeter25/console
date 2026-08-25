@@ -1,50 +1,37 @@
-import { createJSONStorage, type StateStorage, type PersistOptions } from "zustand/middleware";
 import type { ImageAttachment } from "@console/types";
 import type { ChatSessionState } from "@/types";
 import { createChatSessionState } from "@/types/chat-state";
-import { mmkvZustandStorage } from "@/utils/storage";
+import { mmkvStringStorage } from "@/utils/storage";
+import { chat$ } from "@/stores/useChatStore";
 import { hasPersistableDraft, trimDraftAttachments } from "./draft";
-import type { ChatStoreState } from "@/stores/useChatStore";
 
-// --- Streaming persist suppression ---
-let _suppressPersist = false;
-let _pendingKey: string | null = null;
-let _pendingValue: string | null = null;
-
-/** Call with true when streaming starts, false when it ends (triggers a flush). */
-export function setSuppressPersist(suppress: boolean): void {
-  _suppressPersist = suppress;
-  if (!suppress && _pendingKey !== null && _pendingValue !== null) {
-    mmkvZustandStorage.setItem(_pendingKey, _pendingValue);
-    _pendingKey = null;
-    _pendingValue = null;
-  }
-}
-
-const debouncedStorage: StateStorage = {
-  getItem: (name) => mmkvZustandStorage.getItem(name),
-  setItem: (name, value) => {
-    if (_suppressPersist) {
-      _pendingKey = name;
-      _pendingValue = value;
-      return;
-    }
-    mmkvZustandStorage.setItem(name, value);
-  },
-  removeItem: (name) => mmkvZustandStorage.removeItem(name),
-};
+/**
+ * Persistence for the Legend-State chat store.
+ *
+ * Keeps the exact same on-disk format the zustand `persist` middleware wrote
+ * ({ state: { sessions }, version }) so upgrades and downgrades are lossless.
+ * Writes are throttled while streaming is suppressed via `setSuppressPersist`.
+ */
 
 export const PERSIST_NAME = "console-chat-cache";
 export const PERSIST_VERSION = 1;
 export const MAX_PERSISTED_SESSIONS = 25;
 export const MAX_PERSISTED_MESSAGES = 50;
 
-/**
- * Shape of what partialize writes: per session only a subset of
- * ChatSessionState fields is persisted.
- */
-export interface ChatStorePersistedState {
-  sessions: Record<string, Partial<ChatSessionState>>;
+const SAVE_THROTTLE_MS = 300;
+
+// --- Streaming persist suppression ---
+let _suppressPersist = false;
+let _savePendingWhileSuppressed = false;
+let _saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Call with true when streaming starts, false when it ends (triggers a flush). */
+export function setSuppressPersist(suppress: boolean): void {
+  _suppressPersist = suppress;
+  if (!suppress && _savePendingWhileSuppressed) {
+    _savePendingWhileSuppressed = false;
+    saveNow();
+  }
 }
 
 /** Fields persisted per session — anything else is dropped on rehydrate. */
@@ -70,52 +57,99 @@ function sanitizeSessionPartial(partial: unknown): Partial<ChatSessionState> | n
 
 /** Validates an unknown persisted payload, returning only well-formed sessions. */
 function sanitizePersistedSessions(persisted: unknown): Record<string, ChatSessionState> {
-  const p = persisted as { sessions?: unknown } | null;
-  if (typeof p?.sessions !== "object" || p.sessions === null) return {};
-  const sessions: Record<string, ChatSessionState> = {};
-  for (const [id, raw] of Object.entries(p.sessions)) {
+  const sessions = (persisted ?? {}) as Record<string, unknown>;
+  if (typeof sessions !== "object" || sessions === null) return {};
+  const out: Record<string, ChatSessionState> = {};
+  for (const [id, raw] of Object.entries(sessions)) {
     const partial = sanitizeSessionPartial(raw);
     if (!partial) continue;
-    sessions[id] = { ...createChatSessionState(), ...partial };
+    out[id] = { ...createChatSessionState(), ...partial };
   }
-  return sessions;
+  return out;
 }
 
-export const chatPersistConfig: PersistOptions<ChatStoreState, ChatStorePersistedState> = {
-  name: PERSIST_NAME,
-  version: PERSIST_VERSION,
-  storage: createJSONStorage(() => debouncedStorage),
-  // Payloads from older/unknown versions are re-validated field-by-field by
-  // merge below; nothing to structurally migrate yet.
-  migrate: (persisted) => persisted as ChatStorePersistedState,
-  partialize: (state) => ({
-    sessions: Object.fromEntries(
-      Object.entries(state.sessions)
-        // Keep sessions with messages OR with a draft (input/attachments) — so a
-        // never-sent new chat typed but not sent still survives restart and shows
-        // as DRAFT on home. Draft attachments capped to 2 via draft.ts.
-        .filter(([, s]) => s.messages.length > 0 || hasPersistableDraft(s))
-        .sort((a, b) => {
-          const aDraft = hasPersistableDraft(a[1]) ? (a[1].draftUpdatedAt ?? 0) : 0;
-          const bDraft = hasPersistableDraft(b[1]) ? (b[1].draftUpdatedAt ?? 0) : 0;
-          if (aDraft !== bDraft) return bDraft - aDraft;
-          return b[1].messages.length - a[1].messages.length;
-        })
-        .slice(0, MAX_PERSISTED_SESSIONS)
-        .map(([id, s]) => [
-          id,
-          {
-            messages: s.messages.slice(-MAX_PERSISTED_MESSAGES),
-            runs: s.runs,
-            input: s.input,
-            attachments: trimDraftAttachments(s.attachments),
-            draftUpdatedAt: s.draftUpdatedAt,
-          },
-        ]),
-    ),
-  }),
-  merge: (persisted, current) => {
-    const sessions = sanitizePersistedSessions(persisted);
-    return { ...current, sessions };
-  },
-};
+/** Build the capped/partialized payload — same policy as the old partialize. */
+function buildPersistedSessions(): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(chat$.sessions.peek())
+      // Keep sessions with messages OR with a draft (input/attachments) — so a
+      // never-sent new chat typed but not sent still survives restart and shows
+      // as DRAFT on home. Draft attachments capped to 2 via draft.ts.
+      .filter(([, s]) => s.messages.length > 0 || hasPersistableDraft(s))
+      .sort((a, b) => {
+        const aDraft = hasPersistableDraft(a[1]) ? (a[1].draftUpdatedAt ?? 0) : 0;
+        const bDraft = hasPersistableDraft(b[1]) ? (b[1].draftUpdatedAt ?? 0) : 0;
+        if (aDraft !== bDraft) return bDraft - aDraft;
+        return b[1].messages.length - a[1].messages.length;
+      })
+      .slice(0, MAX_PERSISTED_SESSIONS)
+      .map(([id, s]) => [
+        id,
+        {
+          messages: s.messages.slice(-MAX_PERSISTED_MESSAGES),
+          runs: s.runs,
+          input: s.input,
+          attachments: trimDraftAttachments(s.attachments),
+          draftUpdatedAt: s.draftUpdatedAt,
+        },
+      ]),
+  );
+}
+
+function saveNow(): void {
+  try {
+    const payload = JSON.stringify({
+      state: { sessions: buildPersistedSessions() },
+      version: PERSIST_VERSION,
+    });
+    mmkvStringStorage.setItem(PERSIST_NAME, payload);
+  } catch (err) {
+    console.warn("Could not persist chat cache:", err);
+  }
+}
+
+function scheduleSave(): void {
+  if (_suppressPersist) {
+    _savePendingWhileSuppressed = true;
+    return;
+  }
+  if (_saveTimer != null) return; // trailing throttle already armed
+  _saveTimer = setTimeout(() => {
+    _saveTimer = null;
+    saveNow();
+  }, SAVE_THROTTLE_MS);
+}
+
+/** Wipe the persisted cache (backend switch / disconnect). */
+export function clearChatStorage(): void {
+  try {
+    mmkvStringStorage.removeItem(PERSIST_NAME);
+  } catch (err) {
+    console.warn("Could not clear persisted chat storage:", err);
+  }
+}
+
+/**
+ * Hydrate `chat$` from storage and start persisting changes.
+ * Called once at module load of useChatStore (before first render).
+ */
+export function initChatPersistence(): void {
+  // --- Hydrate ---
+  try {
+    const raw = mmkvStringStorage.getItem(PERSIST_NAME);
+    if (raw) {
+      const parsed = JSON.parse(raw) as {
+        state?: { sessions?: unknown };
+        version?: number;
+      };
+      // Payloads from older/unknown versions are re-validated field-by-field
+      // by sanitize; nothing to structurally migrate yet.
+      chat$.sessions.set(sanitizePersistedSessions(parsed.state?.sessions));
+    }
+  } catch (err) {
+    console.warn("Could not restore persisted chats:", err);
+  }
+
+  // --- Persist on change ---
+  chat$.sessions.onChange(scheduleSave);
+}

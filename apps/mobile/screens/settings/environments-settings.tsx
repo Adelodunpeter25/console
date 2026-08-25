@@ -125,7 +125,7 @@ export function EnvironmentsSettings({ onBack }: { onBack?: () => void }) {
         {activeId ? (
           <GlassSurface className="p-5 border-red-500/30 bg-red-500/5">
             <Pressable
-              onPress={deactivate}
+              onPress={deactivateEnvironment}
               style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
               className="flex-row items-center justify-center gap-2"
             >

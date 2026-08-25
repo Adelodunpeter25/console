@@ -1,4 +1,4 @@
-import { observable } from "@legendapp/state";
+import { batch, observable } from "@legendapp/state";
 import { configureConsoleApi } from "@console/api";
 import { appStorage } from "@/utils/storage";
 import { resetServerState } from "@/utils/server-state";

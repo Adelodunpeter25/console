@@ -10,7 +10,8 @@ import { theme } from "@/styles/theme";
 import { confirmAlert } from "@/components/common/confirm-dialog";
 import { EmptyState } from "@/components/common/empty-state";
 import { SessionListSkeleton } from "@/components/common/skeleton";
-import { useChatStore } from "@/stores";
+import { chat$ } from "@/stores/useChatStore";
+import { useValue } from "@legendapp/state/react";
 import { draftPreview, isDraftSession } from "@/stores/chat/draft";
 
 function getStatusStyle(status?: string): {
@@ -76,7 +77,7 @@ export function SessionList({
   getProjectNameForSession,
   getBranchForSession,
 }: SessionListProps) {
-  const chatSessions = useChatStore((s) => s.sessions);
+  const chatSessions = useValue(chat$.sessions);
   if (isLoading && sections.length === 0) {
     return <SessionListSkeleton />;
   }

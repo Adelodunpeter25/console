@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo } from "react";
 import type { ImageAttachment } from "@console/types";
 import { useInfiniteSession } from "./queries";
-import { useChatStore } from "@/stores/useChatStore";
+import {
+  abort as abortChat,
+  addAttachments,
+  chat$,
+  getChatSnapshot,
+  loadMessages as loadSessionMessages,
+  sendMessage,
+  setInput,
+} from "@/stores/useChatStore";
 import { getSession, sessionsView$ } from "@/stores/useSessionStore";
 import { app$ } from "@/stores/useAppStore";
 import { useValue } from "@legendapp/state/react";
@@ -25,24 +33,13 @@ export function useChatStream() {
   const sessionQuery = useInfiniteSession(selectedSessionId ?? "", 100);
 
   // Derive the UI snapshot for the selected session.
-  const snapshot = useChatStore(
-    useCallback(
-      (state) => (selectedSessionId ? state.getSnapshot(selectedSessionId) : undefined),
-      [selectedSessionId],
-    ),
+  const snapshot = useValue(() =>
+    selectedSessionId ? getChatSnapshot(selectedSessionId) : undefined,
   );
 
-  const input = useChatStore(
-    useCallback(
-      (state) => (selectedSessionId ? state.getSession(selectedSessionId).input : ""),
-      [selectedSessionId],
-    ),
+  const input = useValue(() =>
+    selectedSessionId ? chat$.sessions[selectedSessionId].input.get() ?? "" : "",
   );
-
-  const sendMessage = useChatStore((state) => state.sendMessage);
-  const abort = useChatStore((state) => state.abort);
-  const setInput = useChatStore((state) => state.setInput);
-  const loadMessages = useChatStore((state) => state.loadMessages);
 
   // Flatten all pages in ascending chronological order
   const allMessages = useMemo(() => {
@@ -67,9 +64,9 @@ export function useChatStream() {
   useEffect(() => {
     if (!selectedSessionId || !allMessages) return;
 
-    const isRunning = useChatStore.getState().sessions[selectedSessionId]?.running;
+    const isRunning = chat$.sessions[selectedSessionId].running.peek();
     if (!isRunning) {
-      loadMessages(selectedSessionId, allMessages);
+      loadSessionMessages(selectedSessionId, allMessages);
     }
 
     if (latestHeader) {
@@ -96,13 +93,13 @@ export function useChatStream() {
         });
       }
     }
-  }, [selectedSessionId, messagesFingerprint, latestHeader, loadMessages, allMessages]);
+  }, [selectedSessionId, messagesFingerprint, latestHeader, loadSessionMessages, allMessages]);
 
   const handleSend = useCallback(
     async (attachments?: ImageAttachment[]) => {
       if (!selectedSessionId) return;
       if (attachments && attachments.length > 0) {
-        useChatStore.getState().addAttachments(selectedSessionId, attachments);
+        addAttachments(selectedSessionId, attachments);
       }
       await sendMessage(selectedSessionId);
     },
@@ -111,9 +108,9 @@ export function useChatStream() {
 
   const stop = useCallback(() => {
     if (selectedSessionId) {
-      void abort(selectedSessionId);
+      void abortChat(selectedSessionId);
     }
-  }, [selectedSessionId, abort]);
+  }, [selectedSessionId]);
 
   const refetchMessages = useCallback(() => {
     return sessionQuery.refetch();

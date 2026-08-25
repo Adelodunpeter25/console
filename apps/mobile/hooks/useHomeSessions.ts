@@ -10,8 +10,8 @@ import {
 } from "./queries";
 import { useQueryClient } from "@tanstack/react-query";
 import type { SessionHeader } from "@console/types";
-import { useChatStore } from "@/stores";
-import type { ChatStoreState } from "@/stores/useChatStore";
+import { chat$ } from "@/stores/useChatStore";
+import { useValue } from "@legendapp/state/react";
 import { useProjectBranches } from "./useProjectBranches";
 import { folderName } from "@/utils";
 import { draftPreview, isDraftSession } from "@/stores/chat/draft";
@@ -37,9 +37,9 @@ function draftSummariesEqual(a: DraftSummaries, b: DraftSummaries): boolean {
 // visible preview hasn't changed, so React's useSyncExternalStore sees a
 // stable snapshot and doesn't warn "getSnapshot should be cached".
 let cachedDrafts: DraftSummaries = {};
-function selectDraftSummaries(s: ChatStoreState): DraftSummaries {
+function selectDraftSummaries(): DraftSummaries {
   const next: DraftSummaries = {};
-  for (const [id, state] of Object.entries(s.sessions)) {
+  for (const [id, state] of Object.entries(chat$.sessions.get())) {
     if (state.messages.length === 0 && isDraftSession(state)) {
       next[id] = {
         preview: draftPreview(state, 32),
@@ -104,7 +104,7 @@ export function useHomeSessions() {
   // streaming, etc.) — only when the visible preview actually changes.
   // The selector is cached (returns same ref when equal) to satisfy
   // useSyncExternalStore's "getSnapshot should be cached" invariant.
-  const draftSummaries = useChatStore(selectDraftSummaries);
+  const draftSummaries = useValue(selectDraftSummaries);
 
   // Build DRAFT section for never-sent / unsent drafts (0 messages but has input)
   const draftSection = useMemo<GroupedProjectSection | null>(() => {

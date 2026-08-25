@@ -1,14 +1,15 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { batch, observable } from "@legendapp/state";
 import type { AgentMessage, AgentSessionEvent, ImageAttachment } from "@console/types";
 import type { ChatSessionState, ChatSnapshot } from "@/types";
 import { createChatSessionState, EMPTY_CHAT_SESSION } from "@/types/chat-state";
 import { applyChatEvent, toChatSnapshot } from "@/utils/chat-events";
 import { reconstructRuns } from "@/utils/reconstruct-runs";
 import { startNativeChatStream } from "@/utils/native-stream";
-import { getSession, registerSessionHasMessagesChecker } from "./useSessionStore";
 import { provider$ } from "./useProviderStore";
-import { chatPersistConfig, setSuppressPersist } from "./chat/chat-persist";
+import { app$ } from "./useAppStore";
+import { getSession as getSessionView } from "./useSessionStore";
+import { registerSessionHasMessagesChecker } from "./useSessionStore";
+import { initChatPersistence, setSuppressPersist } from "./chat/chat-persist";
 import { trimDraftAttachments } from "./chat/draft";
 import {
   updateSession,
@@ -19,341 +20,331 @@ import {
   abortSessionStream,
 } from "./chat/chat-stream-runner";
 import { answerSessionQuestion, approveSessionPermission } from "./chat/chat-decisions";
-import { app$ } from "./useAppStore";
 
-export interface ChatStoreState {
-  sessions: Record<string, ChatSessionState>;
-  loadMessages: (sessionId: string, messages: AgentMessage[]) => void;
-  setInput: (sessionId: string, value: string) => void;
-  addAttachments: (sessionId: string, attachments: ImageAttachment[]) => void;
-  removeAttachment: (sessionId: string, index: number) => void;
-  clearAttachments: (sessionId: string) => void;
-  sendMessage: (sessionId: string, prompt?: string) => Promise<void>;
-  abort: (sessionId: string) => Promise<void>;
-  answerQuestion: (
-    sessionId: string,
-    requestId: string,
-    answer: string | string[],
-  ) => Promise<void>;
-  approvePermission: (sessionId: string, requestId: string, allow: boolean) => Promise<void>;
-  clear: (sessionId: string) => void;
-  reset: (sessionId: string) => void;
-  handleEvent: (sessionId: string, event: AgentSessionEvent) => void;
-  getSession: (sessionId: string) => ChatSessionState;
-  getSnapshot: (sessionId: string) => ChatSnapshot;
-}
+/**
+ * Chat runtime state (messages, streaming buffers, drafts, runs) as Legend
+ * State observables keyed by session id. See
+ * docs/legend-state-and-list-migration.md.
+ *
+ * Reads in components subscribe narrowly via `useValue(chat$.sessions[id])`;
+ * imperative reads outside render use `getChatSession(id)`.
+ */
+export const chat$ = observable({
+  sessions: {} as Record<string, ChatSessionState>,
+});
 
 // --- Streaming coalescing ---
 const _streamBuf: Record<string, { text: string; thinking: string }> = {};
 const _streamRaf: Record<string, ReturnType<typeof requestAnimationFrame>> = {};
 
-export const useChatStore = create<ChatStoreState>()(
-  persist(
-    (set, get) => ({
-      sessions: {},
+/** Read one session's state without subscribing (falls back to defaults). */
+export function getChatSession(sessionId: string): ChatSessionState {
+  return chat$.sessions[sessionId].peek() ?? EMPTY_CHAT_SESSION;
+}
 
-      loadMessages: (sessionId, messages) => {
-        set((state) => ({
-          sessions: updateSession(state.sessions, sessionId, (current) => {
-            if (current.running) return current;
-            return {
-              ...current,
-              messages,
-              streamingText: "",
-              streamingThinking: "",
-              activeToolCalls: [],
-              pendingQuestions: [],
-              pendingPermissions: [],
-              runs: reconstructRuns(messages),
-              // Keep draft input/attachments across reloads so image drafts
-              // survive going back to home and re-entering the chat.
-              // sendMessage and explicit clear/attachment actions manage them.
-            };
-          }),
-        }));
-      },
+export function getChatSnapshot(sessionId: string): ChatSnapshot {
+  return toChatSnapshot(getChatSession(sessionId));
+}
 
-      setInput: (sessionId, input) =>
-        set((state) => ({
-          sessions: updateSession(state.sessions, sessionId, (current) => ({
-            ...current,
-            input,
-            draftUpdatedAt: input.trim().length > 0 || current.attachments.length > 0 ? Date.now() : undefined,
-          })),
-        })),
+/** Apply a plain-record updater to the sessions map (one notification per call). */
+function setSessions(
+  updater: (sessions: Record<string, ChatSessionState>) => Record<string, ChatSessionState>,
+): void {
+  chat$.sessions.set((prev) => updater(prev));
+}
 
-      addAttachments: (sessionId, attachments) => {
-        if (attachments.length === 0) return;
-        set((state) => ({
-          sessions: updateSession(state.sessions, sessionId, (current) => {
-            const merged = trimDraftAttachments([...current.attachments, ...attachments]);
-            return {
-              ...current,
-              attachments: merged,
-              draftUpdatedAt: Date.now(),
-            };
-          }),
-        }));
-      },
+export function loadMessages(sessionId: string, messages: AgentMessage[]): void {
+  const current = getChatSession(sessionId);
+  if (current.running) return;
+  setSessions((sessions) =>
+    updateSession(sessions, sessionId, () => ({
+      ...current,
+      messages,
+      streamingText: "",
+      streamingThinking: "",
+      activeToolCalls: [],
+      pendingQuestions: [],
+      pendingPermissions: [],
+      runs: reconstructRuns(messages),
+      // Keep draft input/attachments across reloads so image drafts
+      // survive going back to home and re-entering the chat.
+      // sendMessage and explicit clear/attachment actions manage them.
+    })),
+  );
+}
 
-      removeAttachment: (sessionId, index) =>
-        set((state) => ({
-          sessions: updateSession(state.sessions, sessionId, (current) => {
-            const next = current.attachments.filter((_, i) => i !== index);
-            return {
-              ...current,
-              attachments: next,
-              draftUpdatedAt: current.input.trim().length > 0 || next.length > 0 ? Date.now() : undefined,
-            };
-          }),
-        })),
+export function setInput(sessionId: string, value: string): void {
+  setSessions((sessions) =>
+    updateSession(sessions, sessionId, (current) => ({
+      ...current,
+      input: value,
+      draftUpdatedAt: value.trim().length > 0 || current.attachments.length > 0 ? Date.now() : undefined,
+    })),
+  );
+}
 
-      clearAttachments: (sessionId) =>
-        set((state) => ({
-          sessions: updateSession(state.sessions, sessionId, (current) => ({
-            ...current,
-            attachments: [],
-            draftUpdatedAt: current.input.trim().length > 0 ? Date.now() : undefined,
-          })),
-        })),
+export function addAttachments(sessionId: string, attachments: ImageAttachment[]): void {
+  if (attachments.length === 0) return;
+  setSessions((sessions) =>
+    updateSession(sessions, sessionId, (current) => {
+      const merged = trimDraftAttachments([...current.attachments, ...attachments]);
+      return {
+        ...current,
+        attachments: merged,
+        draftUpdatedAt: Date.now(),
+      };
+    }),
+  );
+}
 
-      sendMessage: async (sessionId, promptOverride) => {
-        const session = get().getSession(sessionId);
-        const { input, running, attachments } = session;
-        const prompt = (promptOverride ?? input).trim();
-        if (!prompt || running) return;
+export function removeAttachment(sessionId: string, index: number): void {
+  setSessions((sessions) =>
+    updateSession(sessions, sessionId, (current) => {
+      const next = current.attachments.filter((_, i) => i !== index);
+      return {
+        ...current,
+        attachments: next,
+        draftUpdatedAt: current.input.trim().length > 0 || next.length > 0 ? Date.now() : undefined,
+      };
+    }),
+  );
+}
 
-        const { sessionModelId, sessionProvider, approvalMode } = getSession(sessionId);
+export function clearAttachments(sessionId: string): void {
+  setSessions((sessions) =>
+    updateSession(sessions, sessionId, (current) => ({
+      ...current,
+      attachments: [],
+      draftUpdatedAt: current.input.trim().length > 0 ? Date.now() : undefined,
+    })),
+  );
+}
 
-        // Validate image support for the selected model.
-        if (attachments.length > 0 && sessionModelId && sessionProvider) {
-          const selectedModel = provider$
-            .modelsByProvider[sessionProvider]
-            .peek()
-            ?.find((model) => model.id === sessionModelId);
-          if (selectedModel?.supportsImages === false) {
-            set((state) => ({
-              sessions: updateSession(state.sessions, sessionId, (current) => ({
-                ...current,
-                messages: [
-                  ...current.messages,
-                  {
-                    role: "assistant",
-                    createdAt: Date.now(),
-                    content: [
-                      {
-                        type: "text",
-                        text: `Error: The selected model '${sessionModelId}' does not support image attachments.`,
-                      },
-                    ],
-                  },
-                ],
-              })),
-            }));
-            return;
-          }
-        }
+export async function sendMessage(sessionId: string, promptOverride?: string): Promise<void> {
+  const session = getChatSession(sessionId);
+  const { input, running, attachments } = session;
+  const prompt = (promptOverride ?? input).trim();
+  if (!prompt || running) return;
 
-        set((state) => ({
-          sessions: updateSession(state.sessions, sessionId, (sessionState) => ({
-            ...sessionState,
-            input: "",
-            draftUpdatedAt: undefined,
-            running: true,
-            messages: [
-              ...sessionState.messages,
-              {
-                role: "user",
-                content: prompt,
-                createdAt: Date.now(),
-                ...(attachments.length > 0
-                  ? {
-                      attachments: attachments.map((a) => ({ type: "image" as const, ...a })),
-                    }
-                  : {}),
-              },
-            ],
-            streamingText: "",
-            streamingThinking: "",
-            activeToolCalls: [],
-            runs: [
-              ...sessionState.runs,
-              {
-                runId: randomUUID(),
-                startedAt: Date.now(),
-                elapsedMs: 0,
-                events: [],
-                status: "working" as const,
-              },
-            ],
-            attachments: [],
-          })),
-        }));
-        syncSessionStatus(sessionId, "working");
+  const { sessionModelId, sessionProvider, approvalMode } = getSessionView(sessionId);
 
-        const markError = (msg: string) => {
-          set((state) => ({
-            sessions: updateSession(state.sessions, sessionId, (sessionState) => ({
-              ...sessionState,
-              messages: [
-                ...sessionState.messages,
+  // Validate image support for the selected model.
+  if (attachments.length > 0 && sessionModelId && sessionProvider) {
+    const selectedModel = provider$
+      .modelsByProvider[sessionProvider]
+      .peek()
+      ?.find((model) => model.id === sessionModelId);
+    if (selectedModel?.supportsImages === false) {
+      setSessions((sessions) =>
+        updateSession(sessions, sessionId, (current) => ({
+          ...current,
+          messages: [
+            ...current.messages,
+            {
+              role: "assistant",
+              createdAt: Date.now(),
+              content: [
                 {
-                  role: "assistant",
-                  createdAt: Date.now(),
-                  content: [{ type: "text", text: `Error: ${msg}` }],
+                  type: "text",
+                  text: `Error: The selected model '${sessionModelId}' does not support image attachments.`,
                 },
               ],
-              streamingText: "",
-              streamingThinking: "",
-            })),
-          }));
-        };
-
-        const setSessions = (
-          updater: (sessions: Record<string, ChatSessionState>) => Record<string, ChatSessionState>,
-        ) => set((state) => ({ sessions: updater(state.sessions) }));
-
-        try {
-          const baseUrl = app$.backendUrl.peek() ?? "";
-          let hadError = false;
-
-          setSuppressPersist(true);
-          startNativeChatStream(
-            `chat-${sessionId}-${Date.now()}`,
-            `${baseUrl}/api/sessions/${sessionId}/run`,
-            {
-              prompt,
-              ...(attachments.length > 0 ? { attachments: session.attachments } : {}),
-              ...(sessionModelId ? { modelId: sessionModelId } : {}),
-              ...(sessionProvider ? { provider: sessionProvider } : {}),
-              ...(approvalMode ? { approvalMode } : {}),
             },
-            {
-              onEvent: (event) => {
-                if (event.type === "error" && !isAbortError(event.error.message)) {
-                  hadError = true;
-                }
-                if (event.type === "askQuestion" || event.type === "permissionRequest") {
-                  syncSessionStatus(sessionId, "needs_attention");
-                }
-                get().handleEvent(sessionId, event);
-              },
-              onError: (errMsg) => {
-                if (!isAbortError(errMsg)) {
-                  hadError = true;
-                  markError(errMsg);
-                }
-                setSuppressPersist(false);
-              },
-              onEnd: (aborted) => {
-                finalizeSessionRun(setSessions, sessionId, hadError && !aborted);
-                setSuppressPersist(false);
-              },
-            },
-          );
-        } catch (err) {
-          const msg =
-            err instanceof Error
-              ? err.message
-              : typeof err === "string"
-                ? err
-                : "Failed to send message. Is the backend running?";
-          if (!isAbortError(msg)) {
-            markError(msg);
+          ],
+        })),
+      );
+      return;
+    }
+  }
+
+  setSessions((sessions) =>
+    updateSession(sessions, sessionId, (sessionState) => ({
+      ...sessionState,
+      input: "",
+      draftUpdatedAt: undefined,
+      running: true,
+      messages: [
+        ...sessionState.messages,
+        {
+          role: "user",
+          content: prompt,
+          createdAt: Date.now(),
+          ...(attachments.length > 0
+            ? {
+                attachments: attachments.map((a) => ({ type: "image" as const, ...a })),
+              }
+            : {}),
+        },
+      ],
+      streamingText: "",
+      streamingThinking: "",
+      activeToolCalls: [],
+      runs: [
+        ...sessionState.runs,
+        {
+          runId: randomUUID(),
+          startedAt: Date.now(),
+          elapsedMs: 0,
+          events: [],
+          status: "working" as const,
+        },
+      ],
+      attachments: [],
+    })),
+  );
+  syncSessionStatus(sessionId, "working");
+
+  const markError = (msg: string) => {
+    setSessions((sessions) =>
+      updateSession(sessions, sessionId, (sessionState) => ({
+        ...sessionState,
+        messages: [
+          ...sessionState.messages,
+          {
+            role: "assistant",
+            createdAt: Date.now(),
+            content: [{ type: "text", text: `Error: ${msg}` }],
+          },
+        ],
+        streamingText: "",
+        streamingThinking: "",
+      })),
+    );
+  };
+
+  try {
+    const baseUrl = app$.backendUrl.peek() ?? "";
+    let hadError = false;
+
+    setSuppressPersist(true);
+    startNativeChatStream(
+      `chat-${sessionId}-${Date.now()}`,
+      `${baseUrl}/api/sessions/${sessionId}/run`,
+      {
+        prompt,
+        ...(attachments.length > 0 ? { attachments: session.attachments } : {}),
+        ...(sessionModelId ? { modelId: sessionModelId } : {}),
+        ...(sessionProvider ? { provider: sessionProvider } : {}),
+        ...(approvalMode ? { approvalMode } : {}),
+      },
+      {
+        onEvent: (event) => {
+          if (event.type === "error" && !isAbortError(event.error.message)) {
+            hadError = true;
           }
-          finalizeSessionRun(setSessions, sessionId, !isAbortError(msg));
+          if (event.type === "askQuestion" || event.type === "permissionRequest") {
+            syncSessionStatus(sessionId, "needs_attention");
+          }
+          handleEvent(sessionId, event);
+        },
+        onError: (errMsg) => {
+          if (!isAbortError(errMsg)) {
+            hadError = true;
+            markError(errMsg);
+          }
           setSuppressPersist(false);
-        }
+        },
+        onEnd: (aborted) => {
+          finalizeSessionRun(setSessions, sessionId, hadError && !aborted);
+          setSuppressPersist(false);
+        },
       },
+    );
+  } catch (err) {
+    const msg =
+      err instanceof Error
+        ? err.message
+        : typeof err === "string"
+          ? err
+          : "Failed to send message. Is the backend running?";
+    if (!isAbortError(msg)) {
+      markError(msg);
+    }
+    finalizeSessionRun(setSessions, sessionId, !isAbortError(msg));
+    setSuppressPersist(false);
+  }
+}
 
-      abort: async (sessionId: string) => {
-        const setSessions = (
-          updater: (sessions: Record<string, ChatSessionState>) => Record<string, ChatSessionState>,
-        ) => set((state) => ({ sessions: updater(state.sessions) }));
-        await abortSessionStream(setSessions, sessionId);
-      },
+export async function abort(sessionId: string): Promise<void> {
+  await abortSessionStream(setSessions, sessionId);
+}
 
-      answerQuestion: async (sessionId, requestId, answer) => {
-        const setSessions = (
-          updater: (sessions: Record<string, ChatSessionState>) => Record<string, ChatSessionState>,
-        ) => set((state) => ({ sessions: updater(state.sessions) }));
-        await answerSessionQuestion(setSessions, () => get().sessions, sessionId, requestId, answer);
-      },
+export async function answerQuestion(
+  sessionId: string,
+  requestId: string,
+  answer: string | string[],
+): Promise<void> {
+  await answerSessionQuestion(setSessions, () => chat$.sessions.peek(), sessionId, requestId, answer);
+}
 
-      approvePermission: async (sessionId, requestId, allow) => {
-        const setSessions = (
-          updater: (sessions: Record<string, ChatSessionState>) => Record<string, ChatSessionState>,
-        ) => set((state) => ({ sessions: updater(state.sessions) }));
-        await approveSessionPermission(setSessions, () => get().sessions, sessionId, requestId, allow);
-      },
+export async function approvePermission(
+  sessionId: string,
+  requestId: string,
+  allow: boolean,
+): Promise<void> {
+  await approveSessionPermission(setSessions, () => chat$.sessions.peek(), sessionId, requestId, allow);
+}
 
-      clear: (sessionId) =>
-        set((state) => ({
-          sessions: updateSession(state.sessions, sessionId, () => createChatSessionState()),
+export function clear(sessionId: string): void {
+  setSessions((sessions) => updateSession(sessions, sessionId, () => createChatSessionState()));
+}
+
+export function reset(sessionId: string): void {
+  setSessions((sessions) => updateSession(sessions, sessionId, () => createChatSessionState()));
+}
+
+export function handleEvent(sessionId: string, event: AgentSessionEvent): void {
+  if (event.type === 'modelStreamPart') {
+    // Accumulate into buffer
+    const buf = _streamBuf[sessionId] ?? { text: '', thinking: '' };
+    if (event.part?.text) buf.text += event.part.text;
+    if (event.part?.thinking) buf.thinking += event.part.thinking;
+    _streamBuf[sessionId] = buf;
+    // Cancel previous pending flush
+    if (_streamRaf[sessionId] != null) {
+      cancelAnimationFrame(_streamRaf[sessionId]!);
+    }
+    // Schedule a coalesced flush
+    _streamRaf[sessionId] = requestAnimationFrame(() => {
+      const pending = _streamBuf[sessionId];
+      if (!pending) return;
+      delete _streamBuf[sessionId];
+      delete _streamRaf[sessionId];
+      setSessions((sessions) =>
+        updateSession(sessions, sessionId, (s) => ({
+          ...s,
+          streamingText: s.streamingText + pending.text,
+          streamingThinking: s.streamingThinking + pending.thinking,
         })),
-
-      reset: (sessionId) =>
-        set((state) => ({
-          sessions: updateSession(state.sessions, sessionId, () => createChatSessionState()),
+      );
+    });
+    return;
+  }
+  // All other events flush any pending text buffer first, then apply immediately
+  batch(() => {
+    if (_streamBuf[sessionId]) {
+      if (_streamRaf[sessionId] != null) cancelAnimationFrame(_streamRaf[sessionId]!);
+      const pending = _streamBuf[sessionId]!;
+      delete _streamBuf[sessionId];
+      delete _streamRaf[sessionId];
+      setSessions((sessions) =>
+        updateSession(sessions, sessionId, (s) => ({
+          ...s,
+          streamingText: s.streamingText + pending.text,
+          streamingThinking: s.streamingThinking + pending.thinking,
         })),
+      );
+    }
+    setSessions((sessions) =>
+      updateSession(sessions, sessionId, (sessionState) => applyChatEvent(sessionState, event)),
+    );
+  });
+}
 
-      handleEvent: (sessionId, event) => {
-        if (event.type === 'modelStreamPart') {
-          // Accumulate into buffer
-          const buf = _streamBuf[sessionId] ?? { text: '', thinking: '' };
-          if (event.part?.text) buf.text += event.part.text;
-          if (event.part?.thinking) buf.thinking += event.part.thinking;
-          _streamBuf[sessionId] = buf;
-          // Cancel previous pending flush
-          if (_streamRaf[sessionId] != null) {
-            cancelAnimationFrame(_streamRaf[sessionId]!);
-          }
-          // Schedule a coalesced flush
-          _streamRaf[sessionId] = requestAnimationFrame(() => {
-            const pending = _streamBuf[sessionId];
-            if (!pending) return;
-            delete _streamBuf[sessionId];
-            delete _streamRaf[sessionId];
-            set((state) => ({
-              sessions: updateSession(state.sessions, sessionId, (s) => ({
-                ...s,
-                streamingText: s.streamingText + pending.text,
-                streamingThinking: s.streamingThinking + pending.thinking,
-              })),
-            }));
-          });
-          return;
-        }
-        // All other events flush any pending text buffer first, then apply immediately
-        if (_streamBuf[sessionId]) {
-          if (_streamRaf[sessionId] != null) cancelAnimationFrame(_streamRaf[sessionId]!);
-          const pending = _streamBuf[sessionId]!;
-          delete _streamBuf[sessionId];
-          delete _streamRaf[sessionId];
-          set((state) => ({
-            sessions: updateSession(state.sessions, sessionId, (s) => ({
-              ...s,
-              streamingText: s.streamingText + pending.text,
-              streamingThinking: s.streamingThinking + pending.thinking,
-            })),
-          }));
-        }
-        set((state) => ({
-          sessions: updateSession(state.sessions, sessionId, (sessionState) =>
-            applyChatEvent(sessionState, event),
-          ),
-        }));
-      },
-
-      getSession: (sessionId) => get().sessions[sessionId] ?? EMPTY_CHAT_SESSION,
-
-      getSnapshot: (sessionId) => toChatSnapshot(get().getSession(sessionId)),
-    }),
-    chatPersistConfig,
-  ),
-);
+// Load persisted sessions once at module startup (before first render).
+initChatPersistence();
 
 // Register checker to avoid cyclic import in useSessionStore
 registerSessionHasMessagesChecker((sessionId) => {
-  return useChatStore.getState().getSession(sessionId).messages.length > 0;
+  return getChatSession(sessionId).messages.length > 0;
 });

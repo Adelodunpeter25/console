@@ -1,4 +1,5 @@
-import { useChatStore } from "@/stores/useChatStore";
+import { chat$ } from "@/stores/useChatStore";
+import { clearChatStorage } from "@/stores/chat/chat-persist";
 import { queryClient } from "@/query-client";
 
 /** Clear the local chat cache (in-memory + persisted). Called when the
@@ -6,8 +7,8 @@ import { queryClient } from "@/query-client";
  *  leak into the new connection. */
 export function clearChatCache() {
   try {
-    useChatStore.setState({ sessions: {} });
-    useChatStore.persist?.clearStorage?.();
+    chat$.sessions.set({});
+    clearChatStorage();
   } catch (err) {
     console.warn("Could not clear persisted chat storage:", err);
   }

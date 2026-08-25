@@ -3,7 +3,12 @@ import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-nati
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ShieldCheck, ShieldX } from "lucide-react-native";
 import type { AskQuestionRequest, PermissionRequest } from "@console/types";
-import { useChatStore } from "@/stores";
+import { chat$ } from "@/stores/useChatStore";
+import {
+  approvePermission as approveChatPermission,
+  answerQuestion as answerChatQuestion,
+} from "@/stores/useChatStore";
+import { useValue } from "@legendapp/state/react";
 import { QuestionPanel } from "./question-panel";
 
 /* ------------------------------------------------------------------ */
@@ -16,13 +21,12 @@ interface PermissionPanelProps {
 }
 
 function PermissionPanel({ request, sessionId }: PermissionPanelProps) {
-  const approvePermission = useChatStore((s) => s.approvePermission);
   const [submittingAction, setSubmittingAction] = useState<"allow" | "deny" | null>(null);
 
   const handleApprove = async (allow: boolean) => {
     setSubmittingAction(allow ? "allow" : "deny");
     try {
-      await approvePermission(sessionId, request.requestId, allow);
+      await approveChatPermission(sessionId, request.requestId, allow);
     } finally {
       setSubmittingAction(null);
     }
@@ -113,7 +117,6 @@ function QuestionWizard({
   questions: AskQuestionRequest[];
   sessionId: string;
 }) {
-  const answerQuestion = useChatStore((s) => s.answerQuestion);
   const [index, setIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
@@ -123,7 +126,7 @@ function QuestionWizard({
   const handleAnswerSubmit = async (requestId: string, answer: string | string[]) => {
     setSubmitting(true);
     try {
-      await answerQuestion(sessionId, requestId, answer);
+      await answerChatQuestion(sessionId, requestId, answer);
     } finally {
       setSubmitting(false);
       if (!isLast) {
@@ -135,7 +138,7 @@ function QuestionWizard({
   const handleSkip = async () => {
     setSubmitting(true);
     try {
-      await answerQuestion(sessionId, current.requestId, "");
+      await answerChatQuestion(sessionId, current.requestId, "");
     } finally {
       setSubmitting(false);
       if (!isLast) {
@@ -177,11 +180,11 @@ export function InteractionPanel({
 }: InteractionPanelProps) {
   const insets = useSafeAreaInsets();
   const currentSessionId = sessionId ?? "";
-  const storePermissions = useChatStore(
-    (s) => s.sessions[currentSessionId]?.pendingPermissions ?? [],
+  const storePermissions = useValue(
+    () => chat$.sessions[currentSessionId].pendingPermissions.get() ?? [],
   );
-  const storeQuestions = useChatStore(
-    (s) => s.sessions[currentSessionId]?.pendingQuestions ?? [],
+  const storeQuestions = useValue(
+    () => chat$.sessions[currentSessionId].pendingQuestions.get() ?? [],
   );
 
   const permissions = propPermissions ?? storePermissions;

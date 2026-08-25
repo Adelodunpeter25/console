@@ -1,5 +1,8 @@
 import { useCallback } from "react";
-import { useChatStore } from "@/stores/useChatStore";
+import {
+  answerQuestion as answerChatQuestion,
+  approvePermission as approveChatPermission,
+} from "@/stores/useChatStore";
 import { app$ } from "@/stores/useAppStore";
 import { useValue } from "@legendapp/state/react";
 
@@ -11,31 +14,29 @@ import { useValue } from "@legendapp/state/react";
  */
 export function useChatDecisions() {
   const selectedSessionId = useValue(app$.selectedSessionId);
-  const answerQuestion = useChatStore((state) => state.answerQuestion);
-  const approvePermission = useChatStore((state) => state.approvePermission);
 
   const answer = useCallback(
     async (requestId: string, answer: string | string[]) => {
       if (!selectedSessionId) return;
       try {
-        await answerQuestion(selectedSessionId, requestId, answer);
+        await answerChatQuestion(selectedSessionId, requestId, answer);
       } catch (err) {
         console.error("Failed to answer question:", err);
       }
     },
-    [answerQuestion, selectedSessionId],
+    [selectedSessionId],
   );
 
   const approve = useCallback(
     async (requestId: string, allow: boolean) => {
       if (!selectedSessionId) return;
       try {
-        await approvePermission(selectedSessionId, requestId, allow);
+        await approveChatPermission(selectedSessionId, requestId, allow);
       } catch (err) {
         console.error("Failed to approve permission:", err);
       }
     },
-    [approvePermission, selectedSessionId],
+    [selectedSessionId],
   );
 
   return {

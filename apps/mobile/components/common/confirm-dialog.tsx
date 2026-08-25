@@ -6,7 +6,8 @@ import {
   Pressable,
   Animated,
 } from "react-native";
-import { create } from "zustand";
+import { observable } from "@legendapp/state";
+import { useValue } from "@legendapp/state/react";
 
 export interface ConfirmDialogButton {
   text: string;
@@ -20,19 +21,22 @@ interface ConfirmDialogOptions {
   buttons?: ConfirmDialogButton[];
 }
 
-interface ConfirmDialogState {
-  isOpen: boolean;
-  options: ConfirmDialogOptions | null;
-  show: (options: ConfirmDialogOptions) => void;
-  hide: () => void;
+interface ConfirmDialogOptions {
+  title: string;
+  message?: string;
+  buttons?: ConfirmDialogButton[];
 }
 
-export const useConfirmDialogStore = create<ConfirmDialogState>((set) => ({
+/** Dialog visibility state as Legend State observables. */
+export const confirmDialog$ = observable({
   isOpen: false,
-  options: null,
-  show: (options) => set({ isOpen: true, options }),
-  hide: () => set({ isOpen: false, options: null }),
-}));
+  options: null as ConfirmDialogOptions | null,
+});
+
+export function hideConfirmDialog(): void {
+  confirmDialog$.isOpen.set(false);
+  confirmDialog$.options.set(null);
+}
 
 /**
  * Drop-in replacement for React Native's Alert.alert()
@@ -42,15 +46,17 @@ export function confirmAlert(
   message?: string,
   buttons?: ConfirmDialogButton[],
 ) {
-  useConfirmDialogStore.getState().show({
+  confirmDialog$.options.set({
     title,
     message,
     buttons: buttons && buttons.length > 0 ? buttons : [{ text: "OK", style: "default" }],
   });
+  confirmDialog$.isOpen.set(true);
 }
 
 export function ConfirmDialog() {
-  const { isOpen, options, hide } = useConfirmDialogStore();
+  const isOpen = useValue(confirmDialog$.isOpen);
+  const options = useValue(confirmDialog$.options);
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.94)).current;
 
@@ -84,7 +90,7 @@ export function ConfirmDialog() {
           useNativeDriver: true,
         }),
       ]).start(() => {
-        hide();
+        hideConfirmDialog();
         if (onPress) {
           setTimeout(() => {
             void onPress();
@@ -92,7 +98,7 @@ export function ConfirmDialog() {
         }
       });
     },
-    [opacity, scale, hide],
+    [opacity, scale],
   );
 
   if (!isOpen || !options) {
