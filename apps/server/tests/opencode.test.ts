@@ -97,7 +97,7 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
   assert.equal(tool.description, "Search codebase using regex pattern");
   // ai@7 reads tool.inputSchema; asSchema() must yield real properties so the
   // model knows the parameter names (empty schema => every call fails Required).
-  const wire = await asSchema(tool.inputSchema).jsonSchema;
+  const wire = await asSchema(tool.inputSchema as Parameters<typeof asSchema>[0]).jsonSchema;
   assert.ok(wire.properties);
   assert.ok((wire.properties as Record<string, unknown>).pattern);
   console.log("  ✅ convertOpencodeTools → ToolSet conversion");
@@ -126,7 +126,7 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
   globalThis.fetch = (async () =>
     new Response(mockSse, {
       headers: { "Content-Type": "text/event-stream" },
-    })) as typeof fetch;
+    })) as unknown as typeof fetch;
 
   try {
     const deltas: Array<{ type: string; text?: string; name?: string; argumentsJson?: string }> = [];
@@ -153,15 +153,15 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
     // The agent loop concatenates every emitted toolCall delta per id, so the
     // start ("" args) + all fragments must parse as a whole.
     assert.ok(toolDeltas.length > 0, "should emit toolCall deltas");
-    const toolStart = toolDeltas.find((d) => d.name === "listDir") as {
+    const toolStart = toolDeltas.find((d) => d.name === "listDir") as unknown as {
       id: string;
       name: string;
       argumentsJson: string;
     };
     assert.ok(toolStart, "should emit a toolCall start with the tool name");
     const assembled = toolDeltas
-      .filter((d) => (d as { id: string }).id === toolStart.id)
-      .map((d) => (d as { argumentsJson: string }).argumentsJson)
+      .filter((d) => (d as unknown as { id: string }).id === toolStart.id)
+      .map((d) => (d as unknown as { argumentsJson: string }).argumentsJson)
       .join("");
     assert.deepEqual(JSON.parse(assembled), { path: "." }, `args were ${assembled}`);
     console.log("  ✅ opencodeStreamFn SDK streaming (thinking/text/toolCall)");
@@ -187,7 +187,7 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
     new Response(JSON.stringify(mockPayload), {
       status: 200,
       headers: { "Content-Type": "application/json" },
-    })) as typeof fetch;
+    })) as unknown as typeof fetch;
 
   try {
     const models = await fetchOpencodeFreeModels();
@@ -271,8 +271,8 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
           continue;
         }
         lastAssembled = toolDeltas
-          .filter((d) => (d as { id: string }).id === start.id)
-          .map((d) => (d as { argumentsJson: string }).argumentsJson)
+          .filter((d) => (d as unknown as { id: string }).id === start.id)
+          .map((d) => (d as unknown as { argumentsJson: string }).argumentsJson)
           .join("");
         const args = JSON.parse(lastAssembled) as { command?: string };
         if (typeof args.command === "string" && args.command.length > 0) {

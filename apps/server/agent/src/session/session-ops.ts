@@ -180,6 +180,14 @@ export function loadSession(
   const approvalMode = meta?.approval_mode ?? indexRow?.approval_mode ?? "always-ask";
   const createdAt = meta?.created_at ?? indexRow?.created_at ?? Date.now();
   const updatedAt = meta?.updated_at ?? indexRow?.updated_at ?? createdAt;
+  // The status column is read back as a raw string from SQLite; coerce to the
+  // SessionStatus union (defensive: unknown values fall back to "idle").
+  const sessionStatus =
+    indexRow?.status === "working" ||
+    indexRow?.status === "done" ||
+    indexRow?.status === "needs_attention"
+      ? indexRow.status
+      : ("idle" as const);
 
   if (!indexRow) {
     globalDb
@@ -214,7 +222,7 @@ export function loadSession(
       createdAt,
       updatedAt,
       messageCount: storedMessageCount ?? messages.length,
-      status: indexRow?.status ?? "idle",
+      status: sessionStatus,
     },
     messages,
     hasMore,

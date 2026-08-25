@@ -16,7 +16,7 @@ import {
  */
 async function main(): Promise<void> {
   const app = createApiApp();
-  const server = Bun.serve<string, TerminalSocketData>({
+  const server = Bun.serve<TerminalSocketData>({
     port: 0,
     hostname: "127.0.0.1",
     fetch(req, srv) {

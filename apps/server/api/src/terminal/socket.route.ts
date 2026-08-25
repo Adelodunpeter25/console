@@ -21,7 +21,7 @@ import { terminalPtyManager } from "./pty.manager.js";
 const TERMINAL_PATH = "/api/terminals";
 
 /** Per-socket state attached at upgrade time and mutated over the lifetime. */
-interface TerminalSocketData {
+export interface TerminalSocketData {
   /** The original request URL carrying spawn params. */
   url: string;
   /** PTY session spawned for this socket; null until `open` succeeds. */

@@ -13,3 +13,4 @@ if (process.env.CONSOLE_SERVE === "1") {
 } else {
   await import("./index.js");
 }
+export {};

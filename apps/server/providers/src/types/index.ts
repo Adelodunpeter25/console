@@ -3,6 +3,7 @@ export type { GeminiOAuthCredential, ParsedCredential } from "./oauth.js";
 export type {
   // Outgoing parts
   GeminiTextPart,
+  GeminiInlineDataPart,
   GeminiFunctionCallRef,
   GeminiFunctionCallPart,
   GeminiFunctionResponseBody,

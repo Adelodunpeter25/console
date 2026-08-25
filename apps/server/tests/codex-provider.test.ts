@@ -25,7 +25,7 @@ async function collectDeltas(body: string) {
   ).toString("base64url");
   process.env.OPENAI_CODEX_OAUTH_TOKEN = `header.${payload}.signature`;
   globalThis.fetch = (async () =>
-    new Response(body, { headers: { "Content-Type": "text/event-stream" } })) as typeof fetch;
+    new Response(body, { headers: { "Content-Type": "text/event-stream" } })) as unknown as typeof fetch;
 
   try {
     const model: Model = { id: "gpt-5.6-luna", provider: "codex", contextWindow: 272_000 };

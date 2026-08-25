@@ -78,7 +78,7 @@ process.on("SIGINT", shutdown);
 async function startServer(): Promise<void> {
   await setupLogging();
 
-  Bun.serve<string, TerminalSocketData>({
+  Bun.serve<TerminalSocketData>({
     port,
     hostname: host,
     // SSE agent-run streams can sit silent for minutes while a tool executes.

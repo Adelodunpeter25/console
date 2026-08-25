@@ -44,7 +44,7 @@ console.log("Running Model Discovery tests...");
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  }) as typeof fetch;
+  }) as unknown as typeof fetch;
 
   try {
     const models = await fetchAvailableModels({

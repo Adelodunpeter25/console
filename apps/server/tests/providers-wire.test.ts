@@ -132,7 +132,7 @@ console.log("Running Provider Wire Converter tests...");
     new Response(
       'data: {"response":{"candidates":[{"content":{"parts":[{"functionCall":{"name":"todo","args":{},"id":"call-1"},"thoughtSignature":"signature-stream"}]}}]}}\n\n',
       { headers: { "Content-Type": "text/event-stream" } },
-    )) as typeof fetch;
+    )) as unknown as typeof fetch;
 
   try {
     const deltas = [];

@@ -14,6 +14,7 @@ import type {
   AgentTool,
   ApprovalMode,
   AskQuestionRequest,
+  ImagePart,
   Model,
   UserMessage,
 } from "@console/types";
@@ -212,10 +213,17 @@ export class RunService {
     // Persist the user message immediately so it survives crashes, errors, and
     // session switches even if the run never completes. The agent also appends
     // this prompt to its internal history; we skip the duplicate at the end.
+    // DTO attachments arrive untagged; tag them as image parts for the loop
+    // and provider conversion layers.
+    const attachments: ImagePart[] | undefined = dto.attachments?.map((a) => ({
+      type: "image" as const,
+      data: a.data,
+      mimeType: a.mimeType,
+    }));
     const userMessage: UserMessage = {
       role: "user",
       content: prompt,
-      ...(dto.attachments && dto.attachments.length > 0 ? { attachments: dto.attachments } : {}),
+      ...(attachments && attachments.length > 0 ? { attachments } : {}),
     };
     this.sessionStorage.appendMessage(sessionId, userMessage);
 
@@ -230,7 +238,7 @@ export class RunService {
     let toolResultsPersistenceId: string | null = null;
 
     try {
-      const eventStream = agent.run(prompt, abortController.signal, dto.attachments);
+      const eventStream = agent.run(prompt, abortController.signal, attachments);
 
       // Track run failures reported by the agent loop (stream errors, max
       // turns, provider failures) so they can be persisted as error messages.
@@ -354,7 +362,7 @@ export class RunService {
     sessionId: string,
     kind: "question" | "permission",
   ): void {
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       const pending =
         kind === "question"
           ? this.pendingQuestions.get(requestId)
@@ -370,7 +378,9 @@ export class RunService {
           `${kind === "question" ? "Question" : "Permission request"} timed out waiting for a decision.`,
         ),
       );
-    }, RunService.DECISION_TIMEOUT_MS).unref?.();
+    }, RunService.DECISION_TIMEOUT_MS);
+    // Bun's timer is a number id; Node's is a Timeout object — only Node can unref.
+    if (typeof timer === "object") timer.unref?.();
   }
 
   /**

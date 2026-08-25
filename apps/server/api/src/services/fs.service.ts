@@ -72,7 +72,6 @@ export class FsService {
 
     return {
       currentPath: resolvedPath,
-      path: resolvedPath,
       parentPath,
       entries,
     };

@@ -157,6 +157,10 @@ export async function fetchModelsForProvider(
 
     if (providerName === "opencode") {
       discovered = await fetchOpencodeFreeModels(signal);
+    } else if (providerName === "codebuff") {
+      // Codebuff is device-code auth with its own backend, not OAuth token
+      // discovery — its catalog ships statically (fallback below).
+      throw new Error("Codebuff models are served from the bundled catalog");
     } else if (providerName === "codex") {
       if (!(await codexCredentialExists())) throw new Error("Codex is not logged in");
       const cred = await refreshCodexIfNeeded(await loadCodexCredential());

@@ -232,7 +232,6 @@ export function FileTreeBrowser(props: FileTreeBrowserProps) {
       <FlashList
         data={visibleNodes}
         keyExtractor={(item) => item.node.path}
-        estimatedItemSize={42}
         contentContainerStyle={{ paddingTop: 8, paddingBottom: 16 }}
         refreshControl={
           <RefreshControl
