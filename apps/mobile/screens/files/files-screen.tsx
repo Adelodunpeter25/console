@@ -143,14 +143,22 @@ export function FilesScreen() {
             showsVerticalScrollIndicator={false}
           >
             {(fileData?.content ?? "").split("\n").map((line, i) => (
-              <Text
-                key={i}
-                selectable
-                className="text-xs leading-5 font-mono"
-                style={{ color: theme.colors.text.primary }}
-              >
-                {renderHighlightedLine(line, getLanguageFromPath(selectedFilePath ?? undefined), String(i)) || " "}
-              </Text>
+              <View key={i} className="flex-row items-stretch">
+                {/* Line-number gutter (matches diff-view styling) */}
+                <Text
+                  className="w-8 shrink-0 text-[10px] leading-4 font-mono text-right pr-2 text-foreground-secondary/40"
+                  selectable={false}
+                >
+                  {i + 1}
+                </Text>
+                <Text
+                  className="flex-1 text-[11px] leading-4 font-mono"
+                  style={{ color: theme.colors.text.primary }}
+                  selectable
+                >
+                  {renderHighlightedLine(line, getLanguageFromPath(selectedFilePath ?? undefined), String(i)) || " "}
+                </Text>
+              </View>
             ))}
           </ScrollView>
         )}
