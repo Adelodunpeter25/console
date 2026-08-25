@@ -31,7 +31,11 @@ export function expandPromptRefs(prompt: string, cwd: string): string {
   });
 }
 
-export async function searchFiles(root: string, query: string): Promise<FileSearchResult[]> {
+export async function searchFiles(
+  root: string,
+  query: string,
+  maxResults = MAX_RESULTS,
+): Promise<FileSearchResult[]> {
   const basePath = path.resolve(root);
 
   const created = FileFinder.create({ basePath });
@@ -43,7 +47,7 @@ export async function searchFiles(root: string, query: string): Promise<FileSear
   try {
     await finder.waitForScan(5000);
 
-    const result = finder.mixedSearch(query, { pageSize: MAX_RESULTS });
+    const result = finder.mixedSearch(query, { pageSize: maxResults });
     if (!result.ok) {
       throw new Error(`Search error: ${result.error}`);
     }

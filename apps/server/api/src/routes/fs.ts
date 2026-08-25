@@ -6,6 +6,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { FsService } from "@/api/src/services/fs.service.js";
 import { fsWatchService } from "@/api/src/services/fswatch.service.js";
+import { searchFiles } from "@/api/src/services/assist.service.js";
 
 export const fsRoutes = new Hono();
 const fsService = new FsService();
@@ -18,6 +19,27 @@ fsRoutes.get("/browse", async (c) => {
   try {
     const result = await fsService.browseDirectory(dirPath);
     return c.json({ success: true, data: result });
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return c.json({ success: false, error: errorMsg }, 400);
+  }
+});
+
+/**
+ * GET /api/fs/search — FFF-backed fuzzy file search scoped to a project root.
+ * Query: root=<project dir>, q=<fuzzy query>, limit=<max results, default 20>
+ * Powers the Files-screen search without the client loading the whole tree.
+ */
+fsRoutes.get("/search", async (c) => {
+  const root = c.req.query("root");
+  const query = c.req.query("q") ?? "";
+  if (!root) {
+    return c.json({ success: false, error: "Missing required query param: root" }, 400);
+  }
+  const limit = Math.min(Math.max(Number.parseInt(c.req.query("limit") ?? "20", 10) || 20, 1), 100);
+  try {
+    const items = await searchFiles(root, query, limit);
+    return c.json({ success: true, data: items });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     return c.json({ success: false, error: errorMsg }, 400);

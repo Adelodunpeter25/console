@@ -100,6 +100,11 @@ export class FsService {
       } catch {
         return;
       }
+      // Directories first, then files, alphabetically (numeric-aware).
+      dirEntries.sort((a, b) => {
+        if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+        return a.name.localeCompare(b.name, undefined, { numeric: true });
+      });
 
       for (const entry of dirEntries) {
         if (!showHidden && entry.name.startsWith(".")) continue;

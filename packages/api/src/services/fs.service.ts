@@ -1,5 +1,5 @@
 import { getConsoleApiClient } from "../client";
-import type { ProjectInfo, FsTreeEntry } from "@console/types";
+import type { ProjectInfo, FsTreeEntry, FileSearchResult } from "@console/types";
 
 export const fsService = {
   async getProjects(): Promise<ProjectInfo[]> {
@@ -32,6 +32,11 @@ export const fsService = {
   async getFsEntries(path: string, depth = 1): Promise<FsTreeEntry[]> {
     const res = await getConsoleApiClient().get("/api/fs/entries", { params: { path, depth } });
     return res.data.data ?? res.data;
+  },
+
+  async searchFiles(root: string, query: string, limit = 20): Promise<FileSearchResult[]> {
+    const res = await getConsoleApiClient().get("/api/fs/search", { params: { root, q: query, limit } });
+    return res.data.data ?? [];
   },
 
   async readFile(path: string): Promise<{ content: string; path: string }> {
