@@ -8,6 +8,7 @@
 mod attachments;
 mod autocomplete;
 mod errors;
+mod global_actions;
 mod layout;
 mod projects;
 mod providers;

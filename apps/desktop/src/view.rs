@@ -1,8 +1,7 @@
 use std::rc::Rc;
 
 use console_core::{
-    ApprovalMode, ApproveToolPermissionDto, CreateSessionDto, ModelFavorite, SelectedModel,
-    UpdateSessionDto,
+    ApprovalMode, ApproveToolPermissionDto, ModelFavorite, SelectedModel, UpdateSessionDto,
 };
 use console_ui::workspace::{
     ContentRenderer, EmptyChatState, WorkspaceDrag, WorkspaceDropAction, WorkspacePane,
@@ -30,99 +29,14 @@ impl Render for ConsoleDesktopApp {
         let workspace_root = self.workspace_root.clone();
         let active_pane = self.active_pane_id.clone();
         let sessions = self.sessions.clone();
-        // Shared "New Chat" action: used by the sidebar's New Task row and
-        // the empty state's New Chat button.
+        // Shared "New Chat" action: used by the sidebar's New Task row, the
+        // empty state's New Chat button, and the palette. The logic lives on
+        // the entity (`create_new_chat`) so the ⌘N shortcut shares it.
         let on_new_chat: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
             let entity = entity.clone();
-            let client = client.clone();
             Rc::new(move |_w, cx| {
-                let client = client.clone();
                 if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        let pane_id = this
-                            .active_pane_id
-                            .clone()
-                            .unwrap_or_else(|| "pane-main".to_string());
-                        let approval_mode = this.pane_approval_mode(&pane_id);
-                        let selected_model = this.pane_selected_model(&pane_id);
-                        let session_project_id = this.pane_project_id(&pane_id);
-                        let session_cwd = this
-                            .selected_project_for_pane(&pane_id)
-                            .map(|project| project.path.clone())
-                            .unwrap_or_else(|| {
-                                std::env::current_dir()
-                                    .map(|p| p.to_string_lossy().to_string())
-                                    .unwrap_or_else(|_| ".".to_string())
-                            });
-                        cx.spawn(async move |entity, cx| {
-                            match client
-                                .sessions
-                                .create(CreateSessionDto {
-                                    cwd: session_cwd,
-                                    project_id: session_project_id,
-                                    model_id: selected_model
-                                        .as_ref()
-                                        .map(|model| model.model_id.clone()),
-                                    provider: selected_model
-                                        .as_ref()
-                                        .map(|model| model.provider.clone()),
-                                    title: Some("New Chat".into()),
-                                    approval_mode: Some(approval_mode.value().to_string()),
-                                })
-                                .await
-                            {
-                                Ok(new_session) => {
-                                    cx.update(|cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.save_transcript_scroll_position(cx);
-                                                this.apply_session_header_for_pane(
-                                                    &pane_id,
-                                                    &new_session,
-                                                    cx,
-                                                );
-                                                this.clear_error_for_pane(&pane_id, cx);
-                                                if this.active_pane_id.as_deref()
-                                                    == Some(pane_id.as_str())
-                                                {
-                                                    this.selected_session_id =
-                                                        Some(new_session.id.clone());
-                                                }
-                                                Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
-                                                this.open_chat_tab_in_pane(
-                                                    &pane_id,
-                                                    new_session.id.clone(),
-                                                    "New Chat",
-                                                );
-                                                this.composer_for_pane(&pane_id).update(
-                                                    cx,
-                                                    |input, cx| {
-                                                        input.set_prompt_history(Vec::new(), cx);
-                                                    },
-                                                );
-                                                this.transcript_for_pane(&pane_id).update(
-                                                    cx,
-                                                    |t, cx| {
-                                                        t.set_messages(Vec::new(), cx);
-                                                    },
-                                                );
-                                                cx.notify();
-                                            });
-                                        }
-                                    });
-                                }
-                                Err(error) => {
-                                    let message = format!("Unable to create a session: {error}");
-                                    cx.update(|cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| this.set_error(message, cx));
-                                        }
-                                    });
-                                }
-                            }
-                        })
-                        .detach();
-                    });
+                    app.update(cx, |this, cx| this.create_new_chat(cx));
                 }
             })
         };
@@ -327,6 +241,12 @@ impl Render for ConsoleDesktopApp {
             .flex_col()
             .overflow_hidden()
             .on_action(cx.listener(Self::copy_selection_action))
+            // Global shortcuts (⌘W/⌘N/⌘O/⌘K); bindings live in
+            // `crate::keybindings`, handlers in `state/global_actions.rs`.
+            .on_action(cx.listener(Self::close_tab_action))
+            .on_action(cx.listener(Self::new_chat_action))
+            .on_action(cx.listener(Self::add_project_action))
+            .on_action(cx.listener(Self::toggle_command_palette_action))
             // Invalidate a workspace drag on Escape so a drop queued just after
             // cancellation cannot mutate the pane tree.
             .on_key_down(|event: &KeyDownEvent, _, _| {

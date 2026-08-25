@@ -1,5 +1,6 @@
 mod app_menu;
 mod assets;
+mod keybindings;
 mod persistence;
 mod picker;
 mod state;
@@ -31,6 +32,9 @@ fn main() {
         gpui_component::init(cx);
         console_ui::theme::init(cx);
         init_input_keybindings(cx);
+        // Global shortcuts last, so context-scoped bindings keep winning ties
+        // inside their own contexts.
+        keybindings::init(cx);
         console_ui::init_autocomplete_keybindings(cx);
         console_ui::init_session_rename_keybindings(cx);
         console_ui::primitives::menu::init(cx);
