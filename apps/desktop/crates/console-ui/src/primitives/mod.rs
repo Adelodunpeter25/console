@@ -15,7 +15,7 @@ pub mod tooltip;
 use crate::theme::Theme;
 use console_core::SessionStatus;
 
-pub use context_menu::{ContextMenu, ContextMenuExt, ContextMenuState, session_context_menu};
+pub use context_menu::session_context_menu;
 pub use icons::{FileTypeIcon, IconName, ProviderIcon, app_icon, provider_app_icon};
 pub use menu::{ContextMenuHandle, MenuAlign, MenuItem, dropdown_menu, popover};
 pub use text_field::TextField;
