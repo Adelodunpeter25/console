@@ -109,6 +109,16 @@ impl Render for CommandPalette {
                 CommandItem::new().label(entry.label.clone())
             }))
             .placeholder("Type a command or search…")
+            // Escape with a non-empty query clears it; once the query is
+            // empty gpui-component hands dismissal to us here.
+            .on_cancel({
+                let palette_handle = palette_handle.clone();
+                move |_, cx| {
+                    if let Some(palette) = palette_handle.upgrade() {
+                        palette.update(cx, |palette, cx| palette.hide(cx));
+                    }
+                }
+            })
             .on_confirm(move |index, window, cx| {
                 if let Some(entry) = entries.get(index.row) {
                     (entry.handler)(window, cx);
