@@ -6,7 +6,7 @@ import { TextInput } from "react-native";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { FileTreeBrowser } from "../../components/files/FileTreeBrowser";
 import { useAppStore, useProjectStore } from "../../stores";
-import { useFsEntries, useReadFile } from "../../hooks/queries";
+import { useDirectoryChildren, useReadFile } from "../../hooks/queries";
 import { theme } from "../../styles/theme";
 
 export function FilesScreen() {
@@ -30,7 +30,7 @@ export function FilesScreen() {
     isFetching: isFetchingEntries,
     error: entriesError,
     refetch: refetchEntries,
-  } = useFsEntries(projectRoot, 6);
+  } = useDirectoryChildren(projectRoot);
 
   const {
     data: fileData,

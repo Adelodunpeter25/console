@@ -5,9 +5,8 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { listDirTool, readFileTool, writeFileTool } from "../../../agent/src/tools/index.js";
-import type { FsTreeEntry, GitFileStatus } from "@console/types";
-import { GitService } from "./git.service.js";
+import { listDirTool, readFileTool, writeFileTool } from "@/agent/src/tools/index.js";
+import type { FsTreeEntry } from "@console/types";
 
 export class FsService {
   /**
@@ -24,17 +23,6 @@ export class FsService {
 
     const dirEntries = await fs.readdir(resolvedPath, { withFileTypes: true });
     const entries: FsTreeEntry[] = [];
-
-    const gitStatusMap = new Map<string, GitFileStatus>();
-    try {
-      const gitService = new GitService();
-      const gitStatusSummary = await gitService.getGitStatus(resolvedPath);
-      for (const f of gitStatusSummary.files) {
-        gitStatusMap.set(f.path, f.status);
-      }
-    } catch {
-      // Ignored if target directory is not a git repo or has no git
-    }
 
     for (const entry of dirEntries) {
       // Ignore hidden files and directories (starting with '.') by default
@@ -59,7 +47,6 @@ export class FsService {
         path: entryPath,
         isDir: entry.isDirectory(),
         size,
-        gitStatus: gitStatusMap.get(entryPath),
       });
     }
 
@@ -105,19 +92,6 @@ export class FsService {
     const resolvedRoot = path.resolve(targetPath);
     const result: FsTreeEntry[] = [];
 
-    const gitStatusMap = new Map<string, GitFileStatus>();
-    try {
-      const gitService = new GitService();
-      const gitStatusSummary = await gitService.getGitStatus(resolvedRoot);
-      for (const f of gitStatusSummary.files) {
-        // gitService returns absolute paths or relative? normalize to absolute
-        const abs = path.isAbsolute(f.path) ? f.path : path.join(resolvedRoot, f.path);
-        gitStatusMap.set(abs, f.status);
-      }
-    } catch {
-      // not a git repo
-    }
-
     async function walk(currentPath: string, depth: number): Promise<void> {
       if (depth > maxDepth) return;
       let dirEntries: import("node:fs").Dirent[];
@@ -137,7 +111,6 @@ export class FsService {
             name: entry.name,
             path: dirPath,
             isDir: true,
-            gitStatus: gitStatusMap.get(dirPath),
           });
           continue;
         }
@@ -160,7 +133,6 @@ export class FsService {
           path: entryPath,
           isDir,
           size,
-          gitStatus: gitStatusMap.get(entryPath),
         });
 
         if (isDir) {

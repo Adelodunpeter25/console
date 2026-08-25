@@ -5,8 +5,7 @@ export const fsKeys = {
   projects: ["projects"] as const,
   browse: (path?: string) => ["fs", "browse", path || "root"] as const,
   tree: (path?: string) => ["fs", "tree", path || "root"] as const,
-  entries: (path?: string, depth?: number) =>
-    ["fs", "entries", path || "root", depth ?? 6] as const,
+  children: (path?: string) => ["fs", "children", path || "root"] as const,
   file: (path: string) => ["fs", "file", path] as const,
 };
 
@@ -56,11 +55,18 @@ export function useFsTree(path?: string) {
   });
 }
 
-export function useFsEntries(path: string | null, depth = 6) {
+/**
+ * Immediate children of one directory (lazy file tree).
+ * Expanding a directory mounts another instance of this hook per path.
+ */
+export function useDirectoryChildren(
+  path: string | null,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
-    queryKey: fsKeys.entries(path ?? undefined, depth),
-    queryFn: () => fsService.getFsEntries(path!, depth),
-    enabled: Boolean(path),
+    queryKey: fsKeys.children(path ?? undefined),
+    queryFn: () => fsService.getFsEntries(path!, 1),
+    enabled: Boolean(path) && (options?.enabled ?? true),
     staleTime: 15_000,
   });
 }

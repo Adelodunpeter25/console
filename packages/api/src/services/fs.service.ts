@@ -29,7 +29,7 @@ export const fsService = {
     return res.data.data ?? res.data;
   },
 
-  async getFsEntries(path: string, depth = 6): Promise<FsTreeEntry[]> {
+  async getFsEntries(path: string, depth = 1): Promise<FsTreeEntry[]> {
     const res = await getConsoleApiClient().get("/api/fs/entries", { params: { path, depth } });
     return res.data.data ?? res.data;
   },
