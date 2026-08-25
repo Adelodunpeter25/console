@@ -2,11 +2,10 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "
 import { ActivityIndicator, Pressable, RefreshControl, View, Text } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react-native";
-import { FileIcon } from "@/components/icons/file-icon";
-import { theme } from "../../styles/theme";
-import type { FsTreeEntry } from "@console/types";
+import { theme } from "@/styles/theme";
 import { fsService } from "@console/api";
+import type { FsTreeEntry } from "@console/types";
+import { TreeRow, FileTreeRow, LoadingRow, EmptyFolderRow } from "./FileTreeRows";
 
 const OPTIMISTIC_SELECTION_TIMEOUT_MS = 1000;
 
@@ -18,66 +17,6 @@ function ancestorPaths(path: string): ReadonlyArray<string> {
   }
   return ancestors;
 }
-
-interface TreeRow {
-  readonly key: string;
-  readonly kind: "entry" | "loading" | "empty";
-  readonly entry?: FsTreeEntry;
-  readonly depth: number;
-  /** Relative-to-root path for search display. */
-  readonly relativePath?: string;
-}
-
-const FileTreeRow = memo(function FileTreeRow(props: {
-  readonly entry: FsTreeEntry;
-  readonly depth: number;
-  readonly selected: boolean;
-  readonly expanded: boolean;
-  readonly onPressDirectory: (path: string) => void;
-  readonly onPressFile: (path: string) => void;
-}) {
-  const isDir = props.entry.isDir;
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={props.entry.path}
-      onPress={() => {
-        if (isDir) props.onPressDirectory(props.entry.path);
-        else props.onPressFile(props.entry.path);
-      }}
-      className={`mx-2 min-h-[42px] flex-row items-center gap-2 rounded-[12px] px-2 active:opacity-80 ${props.selected ? "bg-card border border-border" : ""}`}
-      style={{ paddingLeft: 8 + props.depth * 18 }}
-    >
-      {isDir ? (
-        props.expanded ? (
-          <ChevronDown size={12} color={theme.colors.text.muted} />
-        ) : (
-          <ChevronRight size={12} color={theme.colors.text.muted} />
-        )
-      ) : (
-        <View className="w-3" />
-      )}
-
-      {isDir ? (
-        props.expanded ? (
-          <FolderOpen size={17} color={theme.colors.text.secondary} />
-        ) : (
-          <Folder size={17} color={theme.colors.text.secondary} />
-        )
-      ) : (
-        <FileIcon filename={props.entry.name} size={17} />
-      )}
-
-      <Text
-        className={`min-w-0 flex-1 text-sm leading-normal ${props.selected ? "font-semibold text-foreground" : "font-medium text-foreground-secondary"}`}
-        numberOfLines={1}
-      >
-        {props.entry.name}
-      </Text>
-    </Pressable>
-  );
-});
 
 export interface FileTreeBrowserProps {
   /** Immediate children of the project root (root-level query lives in the screen). */
@@ -97,8 +36,10 @@ export interface FileTreeBrowserProps {
 /**
  * Lazy file tree: each directory loads its immediate children on expansion.
  * Children are cached by react-query (`["fs", "children", path]`), so
- * re-expanding is instant and nothing beyond the visible levels is ever
- * fetched or parsed on the device.
+ * re-expanding a directory never refetches while data is fresh.
+ *
+ * Search is server-side (FFF-backed `/api/fs/search`) — there is no local
+ * fallback; if the daemon is unreachable, search simply returns no results.
  */
 export function FileTreeBrowser(props: FileTreeBrowserProps) {
   const queryClient = useQueryClient();
@@ -113,8 +54,7 @@ export function FileTreeBrowser(props: FileTreeBrowserProps) {
   controlledSelectedPathRef.current = props.selectedPath;
   const pendingSelectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // One query per expanded directory; react-query caches results by path so
-  // re-expanding a directory never refetches while data is fresh.
+  // One query per expanded directory.
   const expandedList = useMemo(() => Array.from(expandedPaths), [expandedPaths]);
   const childrenQueries = useQueries({
     queries: expandedList.map((dirPath) => ({
@@ -162,28 +102,28 @@ export function FileTreeBrowser(props: FileTreeBrowserProps) {
   );
 
   const rootRelative = useCallback(
-    (p: string) => p.replace(new RegExp(`^${props.projectRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/?`), ""),
+    (p: string) =>
+      p.replace(new RegExp(`^${props.projectRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/?`), ""),
     [props.projectRoot],
   );
 
   const buildRows = useCallback(
-    (
-      entries: ReadonlyArray<FsTreeEntry>,
-      depth: number,
-      out: TreeRow[],
-      search: string | null,
-    ): void => {
+    (entries: ReadonlyArray<FsTreeEntry>, depth: number, out: TreeRow[]): void => {
       for (const entry of entries) {
-        if (!search || entry.name.toLowerCase().includes(search)) {
-          out.push({ key: `entry:${entry.path}`, kind: "entry", entry, depth, relativePath: rootRelative(entry.path) });
-        }
+        out.push({
+          key: `entry:${entry.path}`,
+          kind: "entry",
+          entry,
+          depth,
+          relativePath: rootRelative(entry.path),
+        });
         if (entry.isDir && expandedPaths.has(entry.path)) {
           const child = childrenByPath.get(entry.path);
           if (child?.pending) {
             out.push({ key: `loading:${entry.path}`, kind: "loading", depth: depth + 1 });
           } else {
-            buildRows(child?.entries ?? [], depth + 1, out, search);
-            if ((child?.entries?.length ?? 0) === 0 && !search) {
+            buildRows(child?.entries ?? [], depth + 1, out);
+            if ((child?.entries?.length ?? 0) === 0) {
               out.push({ key: `empty:${entry.path}`, kind: "empty", depth: depth + 1 });
             }
           }
@@ -193,55 +133,34 @@ export function FileTreeBrowser(props: FileTreeBrowserProps) {
     [expandedPaths, childrenByPath, rootRelative],
   );
 
-  const rows = useMemo(() => {
-    const search = props.searchQuery.trim().toLowerCase();
+  // Server search results replace the tree entirely while a query is active.
+  const rows = useMemo<TreeRow[]>(() => {
     if (props.searchResults != null) {
-      // Server-side fuzzy results — flat list, relative path as context.
-      return props.searchResults.map(
-        (entry): TreeRow => ({
-          key: `entry:${entry.path}`,
-          kind: "entry",
-          entry,
-          depth: 0,
-          relativePath: rootRelative(entry.path),
-        }),
-      );
+      return props.searchResults.map((entry) => ({
+        key: `entry:${entry.path}`,
+        kind: "entry" as const,
+        entry,
+        depth: 0,
+        relativePath: rootRelative(entry.path),
+      }));
     }
-    if (!search) {
-      const out: TreeRow[] = [];
-      buildRows(props.entries, 0, out, null);
-      return out;
-    }
-    // Local fallback while the server search is in flight.
     const out: TreeRow[] = [];
-    const collect = (entries: ReadonlyArray<FsTreeEntry>, depth: number): void => {
-      for (const entry of entries) {
-        if (entry.name.toLowerCase().includes(search)) {
-          out.push({ key: `entry:${entry.path}`, kind: "entry", entry, depth, relativePath: rootRelative(entry.path) });
-        }
-        if (entry.isDir && expandedPaths.has(entry.path)) {
-          collect(childrenByPath.get(entry.path)?.entries ?? [], depth + 1);
-        }
-      }
-    };
-    collect(props.entries, 0);
+    buildRows(props.entries, 0, out);
     return out;
-  }, [props.searchQuery, props.searchResults, props.entries, expandedPaths, childrenByPath, buildRows, rootRelative]);
+  }, [props.searchResults, props.entries, buildRows, rootRelative]);
 
   // Expand ancestors of the selected file so its row becomes reachable.
   const selectedRelativePath = props.selectedPath ? rootRelative(props.selectedPath) : null;
   useEffect(() => {
-    if (!selectedRelativePath) return;
+    if (!selectedRelativePath || props.searchResults != null) return;
     setExpandedPaths((current) => {
-      const needed = ancestorPaths(selectedRelativePath).map(
-        (a) => `${props.projectRoot}/${a}`,
-      );
+      const needed = ancestorPaths(selectedRelativePath).map((a) => `${props.projectRoot}/${a}`);
       if (needed.every((a) => current.has(a))) return current;
       const next = new Set(current);
-      for (const a of needed) next.add(`${props.projectRoot}/${a}`);
+      for (const a of needed) next.add(a);
       return next;
     });
-  }, [selectedRelativePath, props.projectRoot]);
+  }, [selectedRelativePath, props.projectRoot, props.searchResults]);
 
   useEffect(
     () => () => {
@@ -254,30 +173,16 @@ export function FileTreeBrowser(props: FileTreeBrowserProps) {
 
   const renderItem = useCallback(
     ({ item }: { item: TreeRow }) => {
-      if (item.kind === "loading") {
-        return (
-          <View className="min-h-[36px] flex-row items-center gap-2 pl-4" style={{ paddingLeft: 8 + item.depth * 18 }}>
-            <ActivityIndicator size="small" color={theme.colors.text.muted} />
-            <Text className="text-xs text-foreground-muted">Loading…</Text>
-          </View>
-        );
-      }
-      if (item.kind === "empty") {
-        return (
-          <View style={{ paddingLeft: 8 + item.depth * 18 }} className="py-1">
-            <Text className="text-xs italic text-foreground-tertiary">(empty)</Text>
-          </View>
-        );
-      }
+      if (item.kind === "loading") return <LoadingRow depth={item.depth} />;
+      if (item.kind === "empty") return <EmptyFolderRow depth={item.depth} />;
       const entry = item.entry!;
-      const isSelected =
-        props.selectedPath === entry.path ||
-        pendingSelection?.path === entry.path;
       return (
         <FileTreeRow
           entry={entry}
           depth={item.depth}
-          selected={isSelected}
+          selected={
+            props.selectedPath === entry.path || pendingSelection?.path === entry.path
+          }
           expanded={entry.isDir && expandedPaths.has(entry.path)}
           onPressDirectory={toggleDirectory}
           onPressFile={handleSelectFile}
@@ -332,12 +237,6 @@ export function FileTreeBrowser(props: FileTreeBrowserProps) {
         ) : props.searchResults != null ? (
           <View className="items-center py-16">
             <Text className="text-xs text-foreground-muted">No matches in this project</Text>
-          </View>
-        ) : props.searchQuery.trim() ? (
-          <View className="items-center py-16">
-            <Text className="text-xs text-foreground-muted">
-              No matches among loaded folders — expand more folders to widen the search.
-            </Text>
           </View>
         ) : (
           <View className="items-center py-16">

@@ -3,12 +3,13 @@ import { View, Text, Pressable, ActivityIndicator, ScrollView, BackHandler } fro
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Search, RefreshCw, File as FileIcon, ArrowLeft } from "lucide-react-native";
 import { TextInput } from "react-native";
-import { useDebouncedValue } from "../../hooks/useDebouncedValue";
-import { ScreenHeader } from "../../components/layout/screen-header";
-import { FileTreeBrowser } from "../../components/files/FileTreeBrowser";
-import { useAppStore, useProjectStore } from "../../stores";
-import { useDirectoryChildren, useReadFile, useSearchFiles } from "../../hooks/queries";
-import { theme } from "../../styles/theme";
+import { useAppStore, useProjectStore } from "@/stores";
+import { useDirectoryChildren, useReadFile, useSearchFiles } from "@/hooks/queries";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { getLanguageFromPath, renderHighlightedLine } from "@/components/common/syntax-highlighter";
+import { ScreenHeader } from "@/components/layout/screen-header";
+import { FileTreeBrowser } from "@/components/files/FileTreeBrowser";
+import { theme } from "@/styles/theme";
 
 export function FilesScreen() {
   const insets = useSafeAreaInsets();
@@ -141,13 +142,16 @@ export function FilesScreen() {
             contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 16 }}
             showsVerticalScrollIndicator={false}
           >
-            <Text
-              selectable
-              className="text-xs leading-5 font-mono"
-              style={{ color: theme.colors.text.primary }}
-            >
-              {fileData?.content ?? ""}
-            </Text>
+            {(fileData?.content ?? "").split("\n").map((line, i) => (
+              <Text
+                key={i}
+                selectable
+                className="text-xs leading-5 font-mono"
+                style={{ color: theme.colors.text.primary }}
+              >
+                {renderHighlightedLine(line, getLanguageFromPath(selectedFilePath ?? undefined), String(i)) || " "}
+              </Text>
+            ))}
           </ScrollView>
         )}
       </View>
