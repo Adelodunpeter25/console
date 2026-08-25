@@ -86,6 +86,9 @@ export interface FileTreeBrowserProps {
   readonly error: string | null;
   readonly isPending: boolean;
   readonly searchQuery: string;
+  /** Server-side FFF results; non-null means search mode is active. */
+  readonly searchResults?: ReadonlyArray<FsTreeEntry> | null;
+  readonly isSearching?: boolean;
   readonly selectedPath: string | null; // absolute path
   readonly onRefresh: () => void;
   readonly onSelectFile: (absolutePath: string) => void;
@@ -192,12 +195,24 @@ export function FileTreeBrowser(props: FileTreeBrowserProps) {
 
   const rows = useMemo(() => {
     const search = props.searchQuery.trim().toLowerCase();
+    if (props.searchResults != null) {
+      // Server-side fuzzy results — flat list, relative path as context.
+      return props.searchResults.map(
+        (entry): TreeRow => ({
+          key: `entry:${entry.path}`,
+          kind: "entry",
+          entry,
+          depth: 0,
+          relativePath: rootRelative(entry.path),
+        }),
+      );
+    }
     if (!search) {
       const out: TreeRow[] = [];
       buildRows(props.entries, 0, out, null);
       return out;
     }
-    // Search mode: flat list over everything loaded so far.
+    // Local fallback while the server search is in flight.
     const out: TreeRow[] = [];
     const collect = (entries: ReadonlyArray<FsTreeEntry>, depth: number): void => {
       for (const entry of entries) {
@@ -211,7 +226,7 @@ export function FileTreeBrowser(props: FileTreeBrowserProps) {
     };
     collect(props.entries, 0);
     return out;
-  }, [props.entries, props.searchQuery, expandedPaths, childrenByPath, buildRows, rootRelative]);
+  }, [props.searchQuery, props.searchResults, props.entries, expandedPaths, childrenByPath, buildRows, rootRelative]);
 
   // Expand ancestors of the selected file so its row becomes reachable.
   const selectedRelativePath = props.selectedPath ? rootRelative(props.selectedPath) : null;
@@ -308,6 +323,15 @@ export function FileTreeBrowser(props: FileTreeBrowserProps) {
         props.isPending ? (
           <View className="flex-1 items-center justify-center py-16">
             <ActivityIndicator color={theme.colors.text.muted} />
+          </View>
+        ) : props.isSearching ? (
+          <View className="flex-1 items-center justify-center py-16">
+            <ActivityIndicator size="small" color={theme.colors.text.muted} />
+            <Text className="mt-2 text-xs text-foreground-muted">Searching project…</Text>
+          </View>
+        ) : props.searchResults != null ? (
+          <View className="items-center py-16">
+            <Text className="text-xs text-foreground-muted">No matches in this project</Text>
           </View>
         ) : props.searchQuery.trim() ? (
           <View className="items-center py-16">

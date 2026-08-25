@@ -3,10 +3,11 @@ import { View, Text, Pressable, ActivityIndicator, ScrollView, BackHandler } fro
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Search, RefreshCw, File as FileIcon, ArrowLeft } from "lucide-react-native";
 import { TextInput } from "react-native";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { ScreenHeader } from "../../components/layout/screen-header";
 import { FileTreeBrowser } from "../../components/files/FileTreeBrowser";
 import { useAppStore, useProjectStore } from "../../stores";
-import { useDirectoryChildren, useReadFile } from "../../hooks/queries";
+import { useDirectoryChildren, useReadFile, useSearchFiles } from "../../hooks/queries";
 import { theme } from "../../styles/theme";
 
 export function FilesScreen() {
@@ -23,6 +24,15 @@ export function FilesScreen() {
   );
 
   const projectRoot = project?.path ?? null;
+
+  // Server-side FFF fuzzy search: keystrokes are debounced and resolved against
+  // a warm Rust-native index — the device never loads the whole tree to filter.
+  const debouncedQuery = useDebouncedValue(searchQuery.trim(), 350);
+  const isSearching = Boolean(projectRoot) && debouncedQuery.length > 0;
+  const {
+    data: searchResults,
+    isFetching: isFetchingSearch,
+  } = useSearchFiles(projectRoot, debouncedQuery);
 
   const {
     data: entries = [],
@@ -194,6 +204,16 @@ export function FilesScreen() {
           error={errorMsg}
           isPending={isPending}
           searchQuery={searchQuery}
+          searchResults={
+            isSearching
+              ? (searchResults ?? []).map((r) => ({
+                  name: r.absolutePath.split("/").pop() ?? r.relativePath,
+                  path: r.absolutePath,
+                  isDir: r.isDir,
+                }))
+              : null
+          }
+          isSearching={isFetchingSearch && isSearching}
           selectedPath={selectedFilePath}
           onRefresh={() => refetchEntries()}
           onSelectFile={handleSelectFile}
