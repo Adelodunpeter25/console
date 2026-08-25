@@ -30,7 +30,8 @@ export interface FileTreeBrowserProps {
   readonly isSearching?: boolean;
   readonly selectedPath: string | null; // absolute path
   readonly onRefresh: () => void;
-  readonly onSelectFile: (absolutePath: string) => void;
+  /** Second arg is the file's stat size (bytes) when known, for pre-fetch gating. */
+  readonly onSelectFile: (absolutePath: string, fileSize?: number) => void;
 }
 
 /**
@@ -84,19 +85,19 @@ export function FileTreeBrowser(props: FileTreeBrowserProps) {
   }, []);
 
   const handleSelectFile = useCallback(
-    (absolutePath: string) => {
+    (entry: FsTreeEntry) => {
       if (pendingSelectionTimeoutRef.current !== null) {
         clearTimeout(pendingSelectionTimeoutRef.current);
       }
       setPendingSelection({
-        path: absolutePath,
+        path: entry.path,
         selectedPathAtPress: controlledSelectedPathRef.current,
       });
       pendingSelectionTimeoutRef.current = setTimeout(() => {
         pendingSelectionTimeoutRef.current = null;
-        setPendingSelection((current) => (current?.path === absolutePath ? null : current));
+        setPendingSelection((current) => (current?.path === entry.path ? null : current));
       }, OPTIMISTIC_SELECTION_TIMEOUT_MS);
-      props.onSelectFile(absolutePath);
+      props.onSelectFile(entry.path, entry.size);
     },
     [props.onSelectFile],
   );

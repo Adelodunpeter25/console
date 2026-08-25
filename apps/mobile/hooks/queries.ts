@@ -168,10 +168,13 @@ export function useSearchFiles(root: string | null, query: string, enabled = tru
   });
 }
 
-export function useReadFile(path: string) {
+export function useReadFile(
+  path: string,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: fsKeys.file(path),
     queryFn: () => fsService.readFile(path),
-    enabled: Boolean(path),
+    enabled: Boolean(path) && (options?.enabled ?? true),
   });
 }
