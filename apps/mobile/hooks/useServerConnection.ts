@@ -2,7 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { configureConsoleApi } from "@console/api";
 import { confirmAlert } from "@/components/common/confirm-dialog";
 import {
-  useEnvironmentsStore,
+  addEnvironment,
+  deactivate as deactivateAllEnvironments,
+  environments$,
+  updateEnvironment,
   type Environment,
 } from "@/stores/useEnvironmentsStore";
 import { normalizeBackendUrl } from "@/utils/url";
@@ -18,8 +21,8 @@ import { useValue } from "@legendapp/state/react";
  */
 export function useServerConnection() {
   const backendUrl = useValue(app$.backendUrl);
-  const environments = useEnvironmentsStore((state) => state.environments);
-  const activeId = useEnvironmentsStore((state) => state.activeId);
+  const environments = useValue(environments$.environments);
+  const activeId = useValue(environments$.activeId);
 
   const [inputUrl, setInputUrl] = useState("");
   const [loading, setLoading] = useState(true);
@@ -54,16 +57,16 @@ export function useServerConnection() {
       }
       setIsSaving(true);
       try {
-        const store = useEnvironmentsStore.getState();
-        if (store.activeId && store.environments.some((e) => e.id === store.activeId)) {
+        const activeId = environments$.activeId.peek();
+        if (activeId && environments$.environments.peek().some((e) => e.id === activeId)) {
           // Editing the current environment's URL in place.
-          const previous = store.environments.find((e) => e.id === store.activeId);
+          const previous = environments$.environments.peek().find((e) => e.id === activeId);
           if (previous && previous.url !== url) {
             resetServerState();
           }
-          store.updateEnvironment(store.activeId, { url });
+          updateEnvironment(activeId, { url });
         } else {
-          store.addEnvironment(name?.trim() || "Default", url);
+          addEnvironment(name?.trim() || "Default", url);
         }
         setInputUrl(url);
       } catch (err) {
@@ -104,7 +107,7 @@ export function useServerConnection() {
           text: "Disconnect",
           style: "destructive",
           onPress: () => {
-            useEnvironmentsStore.getState().deactivate();
+            deactivateAllEnvironments();
             setInputUrl("");
             setTestingStatus("idle");
             setActiveTab("home");

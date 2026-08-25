@@ -5,9 +5,11 @@ import { ScreenHeader } from "@/components/layout/screen-header";
 import { GlassSurface } from "@/components/layout/glass-surface";
 import { EnvironmentEditor } from "@/components/environments/environment-editor";
 import {
-  useEnvironmentsStore,
+  deactivate as deactivateEnvironment,
+  environments$,
   type Environment,
 } from "@/stores/useEnvironmentsStore";
+import { useValue } from "@legendapp/state/react";
 import { urlHost } from "@/utils/url";
 import { theme } from "@/styles/theme";
 
@@ -17,10 +19,9 @@ import { theme } from "@/styles/theme";
  * EnvironmentEditor as a full screen with back/cancel and save/delete.
  */
 export function EnvironmentsSettings({ onBack }: { onBack?: () => void }) {
-  const environments = useEnvironmentsStore((state) => state.environments);
-  const activeId = useEnvironmentsStore((state) => state.activeId);
-  const probes = useEnvironmentsStore((state) => state.probes);
-  const deactivate = useEnvironmentsStore((state) => state.deactivate);
+  const environments = useValue(environments$.environments);
+  const activeId = useValue(environments$.activeId);
+  const probes = useValue(environments$.probes);
 
   // undefined = list view; null = create; string = edit that env.
   const [editing, setEditing] = useState<string | null | undefined>(undefined);

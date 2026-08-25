@@ -4,7 +4,8 @@ import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Server, Check, Plus, ChevronLeft } from "lucide-react-native";
 import { SharedBottomSheet } from "@/components/common/shared-bottom-sheet";
 import { EnvironmentEditor } from "@/components/environments/environment-editor";
-import { useEnvironmentsStore } from "@/stores/useEnvironmentsStore";
+import { activateEnvironment, environments$, probeEnvironment } from "@/stores/useEnvironmentsStore";
+import { useValue } from "@legendapp/state/react";
 import { urlHost } from "@/utils/url";
 
 function StatusDot({ ok, checkedAt }: { ok?: boolean; checkedAt?: number }) {
@@ -21,9 +22,9 @@ function StatusDot({ ok, checkedAt }: { ok?: boolean; checkedAt?: number }) {
  */
 export function EnvironmentSwitcher() {
   const sheetRef = useRef<BottomSheetModal>(null);
-  const environments = useEnvironmentsStore((state) => state.environments);
-  const activeId = useEnvironmentsStore((state) => state.activeId);
-  const probes = useEnvironmentsStore((state) => state.probes);
+  const environments = useValue(environments$.environments);
+  const activeId = useValue(environments$.activeId);
+  const probes = useValue(environments$.probes);
 
   // When true the sheet shows the create form instead of the list.
   const [creating, setCreating] = useState(false);
@@ -32,9 +33,8 @@ export function EnvironmentSwitcher() {
     setCreating(false);
     sheetRef.current?.present();
     // Probe all environments so the dots are fresh while the sheet is open.
-    const store = useEnvironmentsStore.getState();
-    store.environments.forEach((env) => {
-      void store.probeEnvironment(env.id);
+    environments$.environments.peek().forEach((env) => {
+      void probeEnvironment(env.id);
     });
   }, []);
 
@@ -43,7 +43,7 @@ export function EnvironmentSwitcher() {
       sheetRef.current?.dismiss();
       return;
     }
-    useEnvironmentsStore.getState().activateEnvironment(envId);
+    activateEnvironment(envId);
     sheetRef.current?.dismiss();
   };
 

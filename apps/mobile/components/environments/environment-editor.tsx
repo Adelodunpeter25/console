@@ -4,9 +4,14 @@ import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { CheckCircle2, XCircle, LoaderCircle } from "lucide-react-native";
 import { confirmAlert } from "@/components/common/confirm-dialog";
 import {
-  useEnvironmentsStore,
+  activateEnvironment,
+  addEnvironment,
+  environments$,
+  removeEnvironment,
+  updateEnvironment,
   type Environment,
 } from "@/stores/useEnvironmentsStore";
+import { useValue } from "@legendapp/state/react";
 import { normalizeBackendUrl } from "@/utils/url";
 
 export type EnvironmentEditorMode = "create" | "edit";
@@ -29,11 +34,8 @@ interface EnvironmentEditorProps {
  * row. Tests the currently edited URL (not the stored one) in both modes.
  */
 export function EnvironmentEditor({ mode, envId, onDone, insideBottomSheet }: EnvironmentEditorProps) {
-  const environments = useEnvironmentsStore((state) => state.environments);
-  const activeId = useEnvironmentsStore((state) => state.activeId);
-  const addEnvironment = useEnvironmentsStore((state) => state.addEnvironment);
-  const updateEnvironment = useEnvironmentsStore((state) => state.updateEnvironment);
-  const removeEnvironment = useEnvironmentsStore((state) => state.removeEnvironment);
+  const environments = useValue(environments$.environments);
+  const activeId = useValue(environments$.activeId);
 
   const editing: Environment | null =
     mode === "edit" ? environments.find((e) => e.id === envId) ?? null : null;
@@ -99,9 +101,10 @@ export function EnvironmentEditor({ mode, envId, onDone, insideBottomSheet }: En
 
   const commit = (normalized: string) => {
     // Another environment already using this exact (normalized) URL?
-    const duplicate = useEnvironmentsStore
-      .getState()
-      .environments.find((e) => e.url === normalized && e.id !== envId);
+    const duplicate = environments$
+      .environments
+      .peek()
+      .find((e) => e.url === normalized && e.id !== envId);
     if (duplicate) {
       setStatus("idle");
       confirmAlert(
@@ -194,7 +197,7 @@ export function EnvironmentEditor({ mode, envId, onDone, insideBottomSheet }: En
       {mode === "edit" && !isActive ? (
         <Pressable
           onPress={() => {
-            if (envId) useEnvironmentsStore.getState().activateEnvironment(envId);
+            if (envId) activateEnvironment(envId);
             onDone?.();
           }}
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
