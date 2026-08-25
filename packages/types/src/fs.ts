@@ -1,16 +1,27 @@
 /**
- * Client-side guards for the file preview (Files screen).
+ * File-preview gating rules shared by the server (`GET /api/fs/file`) and
+ * clients (mobile Files screen pre-fetch fast path).
  *
- * Blocks opening files that are useless or harmful to render on a phone:
- * generated lockfiles, binary blobs, and anything over the size cap.
- *
- * NOTE: This is a stopgap enforced on mobile only. The canonical gate belongs
- * on the server (`GET /api/fs/file`) so every client is protected — see
- * docs/notes/file-preview-gating.md.
+ * The server is the enforcement layer of record (see
+ * docs/notes/file-preview-gating.md); clients use the same predicates to block
+ * before a network round trip.
  */
 
-/** Files larger than this are rejected before fetching (~512 KB). */
+/** Files larger than this are rejected for text preview (~512 KB). */
 export const MAX_FILE_PREVIEW_BYTES = 512 * 1024;
+
+/** Structured codes returned by `GET /api/fs/file` when a preview is blocked. */
+export type FilePreviewBlockedCode = "LOCKFILE_BLOCKED" | "BINARY_FILE" | "FILE_TOO_LARGE";
+
+export type FilePreviewBlockKind = FilePreviewBlockedCode;
+
+export interface FilePreviewBlock {
+  readonly kind: FilePreviewBlockKind;
+  /** Short title for a blocked-preview panel. */
+  readonly title: string;
+  /** Human-readable explanation shown under the title. */
+  readonly message: string;
+}
 
 /** Exact basenames of common lock/manifest files that end in non-`.lock` names. */
 const LOCK_FILE_BASENAMES = new Set([
@@ -23,7 +34,7 @@ const LOCK_FILE_BASENAMES = new Set([
 /** Extensions that are machine-generated lockfiles (covers *.lock, bun.lockb, Cargo.lock…). */
 const LOCK_FILE_SUFFIXES = [".lock", ".lockb"];
 
-/** Extensions that should never be rendered as text in the preview pane. */
+/** Extensions that should never be rendered as text in a preview pane. */
 const BINARY_FILE_EXTENSIONS = new Set([
   // Images
   ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".icns", ".tiff",
@@ -40,28 +51,18 @@ const BINARY_FILE_EXTENSIONS = new Set([
   ".pdf", ".wasm", ".psd", ".sketch", ".class", ".pyc", ".db", ".sqlite", ".sqlite3",
 ]);
 
-export type FilePreviewBlockKind = "lockfile" | "binary" | "too-large";
-
-export interface FilePreviewBlock {
-  readonly kind: FilePreviewBlockKind;
-  /** Short title for the blocked-preview panel. */
-  readonly title: string;
-  /** Human-readable explanation shown under the title. */
-  readonly message: string;
-}
-
 function extensionOf(fileName: string): string {
   const idx = fileName.lastIndexOf(".");
   return idx === -1 ? "" : fileName.slice(idx).toLowerCase();
 }
 
-function isLockFile(fileName: string): boolean {
+export function isLockFileName(fileName: string): boolean {
   const lower = fileName.toLowerCase();
   if (LOCK_FILE_BASENAMES.has(lower)) return true;
   return LOCK_FILE_SUFFIXES.some((suffix) => lower.endsWith(suffix));
 }
 
-function isBinaryFile(fileName: string): boolean {
+export function isBinaryFileName(fileName: string): boolean {
   return BINARY_FILE_EXTENSIONS.has(extensionOf(fileName));
 }
 
@@ -72,34 +73,34 @@ export function formatBytes(bytes: number): string {
 }
 
 /**
- * Decide whether a file may be opened in the preview.
+ * Decide whether a file may be opened as a text preview.
  * Returns `null` when the file is allowed, otherwise a block reason.
  *
  * @param fileName basename of the file (e.g. "bun.lockb")
- * @param sizeBytes optional size from the tree entry stat; when unknown,
+ * @param sizeBytes optional size from stat/tree entry; when unknown,
  * name-based rules still apply and only the size cap is skipped.
  */
 export function getFilePreviewBlock(
   fileName: string,
   sizeBytes?: number,
 ): FilePreviewBlock | null {
-  if (isLockFile(fileName)) {
+  if (isLockFileName(fileName)) {
     return {
-      kind: "lockfile",
+      kind: "LOCKFILE_BLOCKED",
       title: "Lockfiles can't be previewed",
       message: `"${fileName}" is a generated lockfile — open it on your machine instead.`,
     };
   }
-  if (isBinaryFile(fileName)) {
+  if (isBinaryFileName(fileName)) {
     return {
-      kind: "binary",
+      kind: "BINARY_FILE",
       title: "Binary file",
       message: `"${fileName}" isn't a text file, so there's nothing to preview here.`,
     };
   }
   if (sizeBytes !== undefined && sizeBytes > MAX_FILE_PREVIEW_BYTES) {
     return {
-      kind: "too-large",
+      kind: "FILE_TOO_LARGE",
       title: "File too large",
       message: `"${fileName}" is ${formatBytes(sizeBytes)} — previews are capped at ${formatBytes(MAX_FILE_PREVIEW_BYTES)}.`,
     };

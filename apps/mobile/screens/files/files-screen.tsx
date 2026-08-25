@@ -9,7 +9,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { getLanguageFromPath, renderHighlightedLine } from "@/components/common/syntax-highlighter";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { FileTreeBrowser } from "@/components/files/FileTreeBrowser";
-import { getFilePreviewBlock } from "@/utils/file-guards";
+import { getFilePreviewBlock } from "@console/types";
 import { theme } from "@/styles/theme";
 
 /** Selected file for preview; `size` comes from the tree entry stat when known. */
