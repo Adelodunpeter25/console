@@ -13,6 +13,9 @@ import {
  *  2. Connect, spawn a shell in a temp dir.
  *  3. Assert spawn event + run a shell command, read output.
  *  4. Resize, then kill — assert exit frame and clean registry.
+ *
+ * Shell-start gating: connecting must NOT start the shell; the client's first
+ * resize carries the true grid size and starts it (fallback: 500ms timer).
  */
 async function main(): Promise<void> {
   const app = createApiApp();
@@ -66,13 +69,30 @@ async function main(): Promise<void> {
   await new Promise<void>((resolve) => ws.addEventListener("open", () => resolve()));
   console.log("  ✅ terminal WS connected");
 
-  const spawned = await received<{ type: string; id: string; pid: number }>(
-    (f) => f.type === "spawned",
+  // Shell start is gated on the client's first resize: nothing should arrive
+  // well before the 500ms fallback timer fires.
+  await new Promise((r) => setTimeout(r, 350));
+  assert.ok(
+    !frames.some((f) => f.includes("\"type\":\"spawned\"")),
+    "shell started before the client's first resize — gate is broken",
   );
+  console.log("  ✅ shell start gated until first resize");
+
+  // First resize carries the true grid size: it must start the shell (well
+  // ahead of the fallback timer) and report the resized dimensions.
+  const spawned = await (async () => {
+    const wait = received<{ type: string; id: string; pid: number; cols: number; rows: number }>(
+      (f) => f.type === "spawned",
+    );
+    ws.send(JSON.stringify({ type: "resize", cols: 101, rows: 31 }));
+    return wait;
+  })();
   assert.equal(spawned.type, "spawned");
   assert.ok(spawned.id.length > 0);
   assert.ok(spawned.pid > 0);
-  console.log(`  ✅ spawn event (pid ${spawned.pid})`);
+  assert.equal(spawned.cols, 101);
+  assert.equal(spawned.rows, 31);
+  console.log(`  ✅ spawn event at resized grid ${spawned.cols}x${spawned.rows} (pid ${spawned.pid})`);
 
   // Run a command and capture its output.
   const outputPromise = received<{ type: string; data: string }>(

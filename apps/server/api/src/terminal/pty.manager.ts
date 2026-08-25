@@ -40,7 +40,8 @@ const PAUSED_BUFFER_LIMIT_BYTES = 8 * 1024 * 1024;
 interface PtySession {
   id: TerminalId;
   terminal: Bun.Terminal;
-  proc: PtyProcess;
+  /** null until the shell subprocess actually starts (see startShell). */
+  proc: PtyProcess | null;
   shell: string;
   cwd: string;
   cols: number;
@@ -51,7 +52,22 @@ interface PtySession {
   paused: boolean;
   pausedBuffer: string[];
   pausedBufferBytes: number;
+  /** Whether the shell subprocess has been started. */
+  shellStarted: boolean;
+  /** Fallback that starts the shell at the default size if no resize arrives. */
+  shellStartTimer?: ReturnType<typeof setTimeout>;
+  /** Input received before the shell started, flushed on start. */
+  pendingInput: string[];
+  resolveStart?: (event: TerminalSpawnedEvent) => void;
+  rejectStart?: (cause: unknown) => void;
 }
+
+/** How long to wait for the client's first resize before starting the shell
+    at the default size. Real clients resize within ~100-300ms of connecting;
+    waiting for it means zsh draws its first prompt at the true grid width and
+    its partial-line erase dance self-cleans instead of leaving standout `%`
+    artifacts in scrollback. */
+const SHELL_START_FALLBACK_MS = 500;
 
 export class TerminalPtyManager {
   private sessions = new Map<TerminalId, PtySession>();
@@ -59,8 +75,15 @@ export class TerminalPtyManager {
   /**
    * Spawn a new shell PTY in the given working directory.
    * Throws if `cwd` does not exist so clients get a clear spawn error.
+   *
+   * The PTY is created immediately at the default size, but the shell itself
+   * starts on the client's first resize (or after SHELL_START_FALLBACK_MS) so
+   * the first prompt is drawn at the client's true grid width.
    */
-  spawn(params: TerminalSpawnParams): TerminalSpawnedEvent {
+  spawn(params: TerminalSpawnParams): {
+    id: TerminalId;
+    ready: Promise<TerminalSpawnedEvent>;
+  } {
     const cwd = path.resolve(params.cwd);
     if (!existsSync(cwd)) {
       throw new Error(`Cannot spawn terminal: working directory does not exist: ${cwd}`);
@@ -75,8 +98,8 @@ export class TerminalPtyManager {
       id,
       // Assigned immediately after construction below.
       terminal: undefined as unknown as Bun.Terminal,
-      // Assigned immediately after spawn below.
-      proc: undefined as unknown as PtyProcess,
+      // Assigned in startShell(); null until then.
+      proc: null,
       shell,
       cwd,
       cols,
@@ -86,6 +109,8 @@ export class TerminalPtyManager {
       paused: false,
       pausedBuffer: [],
       pausedBufferBytes: 0,
+      shellStarted: false,
+      pendingInput: [],
     };
     this.sessions.set(id, session);
 
@@ -100,9 +125,29 @@ export class TerminalPtyManager {
       },
     });
 
-    const proc = Bun.spawn([shell], {
+    const ready = new Promise<TerminalSpawnedEvent>((resolve, reject) => {
+      session.resolveStart = resolve;
+      session.rejectStart = reject;
+    });
+    session.shellStartTimer = setTimeout(() => {
+      if (!session.shellStarted && !session.killed) this.startShell(session);
+    }, SHELL_START_FALLBACK_MS);
+
+    return { id, ready };
+  }
+
+  /** Start the shell subprocess and resolve the spawn promise. */
+  private startShell(session: PtySession): void {
+    if (session.shellStarted || session.killed) return;
+    session.shellStarted = true;
+    if (session.shellStartTimer) {
+      clearTimeout(session.shellStartTimer);
+      session.shellStartTimer = undefined;
+    }
+
+    const proc = Bun.spawn([session.shell], {
       terminal: session.terminal,
-      cwd,
+      cwd: session.cwd,
       env: {
         ...process.env,
         TERM: "xterm-256color",
@@ -118,11 +163,32 @@ export class TerminalPtyManager {
     proc.exited.then((code) => {
       if (session.killed) return;
       session.killed = true;
-      this.sessions.delete(id);
+      this.sessions.delete(session.id);
       session.callbacks?.onExit(code);
     });
 
-    return { type: "spawned", id, pid: proc.pid, shell, cwd, cols, rows };
+    // Flush any keystrokes that arrived before the shell existed.
+    if (session.pendingInput.length > 0) {
+      const queued = [...session.pendingInput];
+      session.pendingInput.length = 0;
+      for (const data of queued) {
+        try {
+          session.terminal.write(data);
+        } catch {
+          // Terminal closed mid-flush — nothing more to do.
+        }
+      }
+    }
+
+    session.resolveStart?.({
+      type: "spawned",
+      id: session.id,
+      pid: proc.pid,
+      shell: session.shell,
+      cwd: session.cwd,
+      cols: session.cols,
+      rows: session.rows,
+    });
   }
 
   /** Route PTY output to callbacks, honoring attach buffering and pause state. */
@@ -169,6 +235,11 @@ export class TerminalPtyManager {
   write(id: TerminalId, data: string): boolean {
     const session = this.sessions.get(id);
     if (!session || session.killed) return false;
+    // Shell not started yet (waiting for first resize): hold keystrokes.
+    if (!session.shellStarted) {
+      session.pendingInput.push(data);
+      return true;
+    }
     try {
       session.terminal.write(data);
       return true;
@@ -185,6 +256,9 @@ export class TerminalPtyManager {
       session.terminal.resize(cols, rows);
       session.cols = cols;
       session.rows = rows;
+      // The first resize carries the client's true grid size: start the shell
+      // now so its first prompt is drawn at the correct width.
+      if (!session.shellStarted) this.startShell(session);
       return true;
     } catch {
       return false;
@@ -197,9 +271,16 @@ export class TerminalPtyManager {
     if (!session || session.killed) return;
     session.killed = true;
     this.sessions.delete(id);
+    if (session.shellStartTimer) {
+      clearTimeout(session.shellStartTimer);
+      session.shellStartTimer = undefined;
+    }
+    if (!session.shellStarted) {
+      session.rejectStart?.(new Error("Terminal killed before the shell started."));
+    }
     try {
       // Interactive shells ignore SIGTERM/SIGHUP; SIGKILL is deterministic.
-      session.proc.kill(9);
+      session.proc?.kill(9);
     } catch {
       // Already dead — fine.
     }
