@@ -4,7 +4,7 @@
  */
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { FsService } from "@/api/src/services/fs.service.js";
+import { FsService, FilePreviewBlockedError } from "@/api/src/services/fs.service.js";
 import { fsWatchService } from "@/api/src/services/fswatch.service.js";
 import { searchFiles } from "@/api/src/services/assist.service.js";
 
@@ -107,6 +107,13 @@ fsRoutes.get("/file", async (c) => {
       data: { path: filePath, content },
     });
   } catch (err) {
+    // Preview gate: structured status + code so clients can show why.
+    if (err instanceof FilePreviewBlockedError) {
+      return c.json(
+        { success: false, error: err.message, code: err.code, ...err.detail },
+        err.status,
+      );
+    }
     const errorMsg = err instanceof Error ? err.message : String(err);
     return c.json({ success: false, error: errorMsg }, 400);
   }

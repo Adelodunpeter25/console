@@ -6,7 +6,39 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { listDirTool, readFileTool, writeFileTool } from "@/agent/src/tools/index.js";
+import {
+  MAX_FILE_PREVIEW_BYTES,
+  formatBytes,
+  getFilePreviewBlock,
+} from "@console/types";
+import type { FilePreviewBlockedCode } from "@console/types";
 import type { FsTreeEntry } from "@console/types";
+
+/**
+ * Raised when a file may not be returned as a text preview (lockfile, binary,
+ * or over the size cap). Routes translate this into a structured HTTP error.
+ */
+export class FilePreviewBlockedError extends Error {
+  readonly code: FilePreviewBlockedCode;
+  readonly status: 413 | 415;
+  /** Extra structured fields for the JSON error body. */
+  readonly detail?: Record<string, number>;
+
+  constructor(
+    code: FilePreviewBlockedCode,
+    message: string,
+    options?: { status?: 413 | 415; detail?: Record<string, number> },
+  ) {
+    super(message);
+    this.name = "FilePreviewBlockedError";
+    this.code = code;
+    this.status = options?.status ?? 415;
+    this.detail = options?.detail;
+  }
+}
+
+/** Bytes inspected for NUL bytes before trusting that a file is text. */
+const BINARY_SNIFF_BYTES = 8192;
 
 export class FsService {
   /**
@@ -152,8 +184,51 @@ export class FsService {
 
   /**
    * Read file content with line range support.
+   *
+   * Enforces the file-preview gate (docs/notes/file-preview-gating.md):
+   * lockfiles, binary files (extension or NUL-byte sniff), and files over
+   * MAX_FILE_PREVIEW_BYTES are rejected with FilePreviewBlockedError before
+   * the body is read.
    */
   async readFileContent(filePath: string, startLine?: number, endLine?: number): Promise<string> {
+    const fileName = path.basename(filePath);
+
+    const nameBlock = getFilePreviewBlock(fileName);
+    if (nameBlock?.kind === "LOCKFILE_BLOCKED") {
+      throw new FilePreviewBlockedError("LOCKFILE_BLOCKED", nameBlock.message);
+    }
+    if (nameBlock?.kind === "BINARY_FILE") {
+      throw new FilePreviewBlockedError("BINARY_FILE", nameBlock.message);
+    }
+
+    const stat = await fs.stat(filePath);
+    if (!stat.isFile()) {
+      throw new Error(`${filePath} is not a regular file.`);
+    }
+    if (stat.size > MAX_FILE_PREVIEW_BYTES) {
+      throw new FilePreviewBlockedError(
+        "FILE_TOO_LARGE",
+        `"${fileName}" is ${formatBytes(stat.size)} — previews are capped at ${formatBytes(MAX_FILE_PREVIEW_BYTES)}.`,
+        { status: 413, detail: { sizeBytes: stat.size, maxBytes: MAX_FILE_PREVIEW_BYTES } },
+      );
+    }
+
+    // Content sniff: extensions lie, NUL bytes don't. Catches binaries whose
+    // extension isn't on the denylist.
+    const handle = await fs.open(filePath, "r");
+    try {
+      const sniff = Buffer.alloc(Math.min(BINARY_SNIFF_BYTES, stat.size));
+      await handle.read(sniff, 0, sniff.length, 0);
+      if (sniff.includes(0)) {
+        throw new FilePreviewBlockedError(
+          "BINARY_FILE",
+          `"${fileName}" doesn't look like a text file.`,
+        );
+      }
+    } finally {
+      await handle.close();
+    }
+
     const raw = await Bun.file(filePath).text();
     if (startLine === undefined && endLine === undefined) {
       return raw;
