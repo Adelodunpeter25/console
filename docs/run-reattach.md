@@ -154,6 +154,22 @@ Goal: start on phone, continue live on desktop (and vice versa).
   - Permission/question requests raised mid-run surface on the attached surface
     and can be answered there (requestId-keyed decisions make this work).
 
+- [ ] **3.6 Focused polling of projects/sessions.** Mobile keeps its lists fresh
+  via TanStack Query polling (`queries.ts`: `refetchInterval`, disabled in
+  background). The desktop has no query layer (GPUI/Rust), so replicate the
+  behavior with a simple poll loop:
+  - On app focus (window focused for the first time): immediately refetch
+    `/api/projects` and the active project's `/api/sessions`.
+  - While focused: keep polling both endpoints every ~30s.
+  - When unfocused/minimized: pause polling entirely (`refetchIntervalInBackground:
+    false` parity).
+  - On regaining focus: fire an immediate refresh, then resume the interval
+    timer from zero (avoid a stale-gap where the 30s tick lands right after
+    focus).
+  - Reuse the fetched headers to seed/refresh session statuses (same role as
+    mobile's `setStatuses`), so cross-surface status flips surface even without
+    an attach stream open.
+
 ## Phase 4 — Hardening (follow-up)
 
 - [ ] Multi-surface: allow simultaneous desktop+mobile attachment (falls out of
