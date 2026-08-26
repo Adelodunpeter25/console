@@ -22,6 +22,7 @@ export function configureConsoleApi(options: ConsoleApiClientOptions): AxiosInst
 
   clientInstance = axios.create({
     baseURL: currentBaseUrl,
+    adapter: "fetch",
     headers: {
       "Content-Type": "application/json",
     },
