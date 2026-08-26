@@ -28,13 +28,23 @@ impl AssetSource for Assets {
     }
 }
 
-/// Embedded UI fonts — Geist and Geist Mono (variable), © Vercel Inc.,
-/// licensed under the SIL Open Font License 1.1.
+/// Embedded UI fonts — Geist and Geist Mono (variable), © Vercel Inc., and
+/// JetBrains Mono, © The JetBrains Mono Project Authors — both licensed
+/// under the SIL Open Font License 1.1.
 static FONT_GEIST: &[u8] = include_bytes!("../assets/fonts/Geist.ttf");
 static FONT_GEIST_MONO: &[u8] = include_bytes!("../assets/fonts/GeistMono.ttf");
 static FONT_GEIST_MEDIUM: &[u8] = include_bytes!("../assets/fonts/Geist-Medium.ttf");
 static FONT_GEIST_SEMIBOLD: &[u8] = include_bytes!("../assets/fonts/Geist-SemiBold.ttf");
 static FONT_GEIST_BOLD: &[u8] = include_bytes!("../assets/fonts/Geist-Bold.ttf");
+static FONT_JETBRAINS_MONO_REGULAR: &[u8] =
+    include_bytes!("../assets/fonts/JetBrainsMono-Regular.ttf");
+static FONT_JETBRAINS_MONO_ITALIC: &[u8] =
+    include_bytes!("../assets/fonts/JetBrainsMono-Italic.ttf");
+static FONT_JETBRAINS_MONO_MEDIUM: &[u8] =
+    include_bytes!("../assets/fonts/JetBrainsMono-Medium.ttf");
+static FONT_JETBRAINS_MONO_SEMIBOLD: &[u8] =
+    include_bytes!("../assets/fonts/JetBrainsMono-SemiBold.ttf");
+static FONT_JETBRAINS_MONO_BOLD: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Bold.ttf");
 
 /// Register embedded Geist & Geist Mono fonts with GPUI
 pub fn register_fonts(cx: &App) -> gpui::Result<()> {
@@ -44,5 +54,10 @@ pub fn register_fonts(cx: &App) -> gpui::Result<()> {
         Cow::Borrowed(FONT_GEIST_MEDIUM),
         Cow::Borrowed(FONT_GEIST_SEMIBOLD),
         Cow::Borrowed(FONT_GEIST_BOLD),
+        Cow::Borrowed(FONT_JETBRAINS_MONO_REGULAR),
+        Cow::Borrowed(FONT_JETBRAINS_MONO_ITALIC),
+        Cow::Borrowed(FONT_JETBRAINS_MONO_MEDIUM),
+        Cow::Borrowed(FONT_JETBRAINS_MONO_SEMIBOLD),
+        Cow::Borrowed(FONT_JETBRAINS_MONO_BOLD),
     ])
 }

@@ -363,7 +363,7 @@ impl ToolCalls {
                             div()
                                 .min_w_0()
                                 .truncate()
-                                .font_family("GeistMono")
+                                .font_family(markdown_render::MONO_FAMILY)
                                 .text_size(px(11.5))
                                 .text_color(theme.text_tertiary)
                                 .child(summary),
@@ -796,8 +796,8 @@ impl ToolCalls {
                     .px(px(8.0))
                     .py(px(6.0))
                     .font_family(markdown_render::MONO_FAMILY)
-                    .text_size(px(10.5))
-                    .line_height(px(15.0))
+                    .text_size(px(12.0))
+                    .line_height(px(17.0))
                     .text_color(theme.text_tertiary)
                     .child(markdown_render::highlighted_code(
                         normalize_read_file_output(&raw),
@@ -842,13 +842,13 @@ impl ToolCalls {
                     .bg(theme.inset)
                     .px(px(8.0))
                     .py(px(6.0))
-                    .font_family("GeistMono")
-                    .text_size(px(10.5))
-                    .line_height(px(15.0))
+                    .font_family(markdown_render::MONO_FAMILY)
+                    .text_size(px(12.0))
+                    .line_height(px(17.0))
                     .text_color(theme.text_tertiary)
                     .child(plain_text(
                         content,
-                        "GeistMono",
+                        markdown_render::MONO_FAMILY,
                         FontWeight::NORMAL,
                         theme.text_tertiary,
                         &ctx,

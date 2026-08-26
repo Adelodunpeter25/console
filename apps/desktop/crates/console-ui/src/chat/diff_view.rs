@@ -12,6 +12,7 @@ use gpui::{
 };
 
 use crate::primitives::{base_name, file_type_icon};
+use crate::markdown::render::MONO_FAMILY;
 use crate::theme::Theme;
 
 const MAX_RENDER_LINES: usize = 500;
@@ -115,7 +116,7 @@ impl RenderOnce for DiffView {
                             .child(file_type_icon(path, 13.0))
                             .child(
                                 div()
-                                    .font_family("GeistMono")
+                                    .font_family(MONO_FAMILY)
                                     .text_size(px(10.5))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(theme.text_secondary)
@@ -172,7 +173,7 @@ fn diff_line_row(line: &DiffLine, theme: &Theme) -> impl IntoElement {
                 .w(px(32.0))
                 .flex_none()
                 .text_size(px(9.5))
-                .font_family("GeistMono")
+                .font_family(MONO_FAMILY)
                 .text_color(theme.text_ghost)
                 .child(line_no.map_or(String::new(), |n| n.to_string())),
         )
@@ -189,9 +190,9 @@ fn diff_line_row(line: &DiffLine, theme: &Theme) -> impl IntoElement {
             div()
                 .min_w_0()
                 .flex_1()
-                .font_family("GeistMono")
-                .text_size(px(10.5))
-                .line_height(px(15.0))
+                .font_family(MONO_FAMILY)
+                .text_size(px(12.0))
+                .line_height(px(17.0))
                 .text_color(fg)
                 .child(display_text),
         )
