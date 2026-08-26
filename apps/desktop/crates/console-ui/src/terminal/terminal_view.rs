@@ -247,6 +247,7 @@ impl Render for TerminalView {
         let snapshot = self.snapshot.clone();
         let view_handle = cx.entity().clone();
         let handle_for_key = self.handle.clone();
+        let handle_for_scroll = self.handle.clone();
         let focus_for_key = self.focus.clone();
 
         div()
@@ -268,6 +269,18 @@ impl Render for TerminalView {
                         h.send_input(bytes);
                     }
                     cx.stop_propagation();
+                }
+            })
+            .on_scroll_wheel(move |event, _window, cx| {
+                if let Some(h) = &handle_for_scroll {
+                    let delta = match event.delta {
+                        gpui::ScrollDelta::Lines(lines) => lines.y.round() as i32,
+                        gpui::ScrollDelta::Pixels(pixels) => (pixels.y / 16.0).round() as i32,
+                    };
+                    if delta != 0 {
+                        h.scroll(delta);
+                        cx.stop_propagation();
+                    }
                 }
             })
             .when_some(status_banner, |el, (msg, color)| {

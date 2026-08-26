@@ -124,6 +124,25 @@ impl TerminalHandle {
         let _ = self.sender.send(TerminalClientMessage::Kill);
     }
 
+    pub fn scroll(&self, delta: i32) {
+        let backend = self.backend.clone();
+        let notify = self.notify.clone();
+        let sender = self.sender.clone();
+        tokio::spawn(async move {
+            let mut b = backend.lock().await;
+            if b.is_alt_screen() {
+                let key = if delta > 0 { "\x1b[A" } else { "\x1b[B" };
+                let count = (delta.abs() as usize).min(5);
+                let input = key.repeat(count);
+                let _ = sender.send(TerminalClientMessage::Input { data: input });
+            } else {
+                b.scroll(delta);
+                drop(b);
+                notify.notify_one();
+            }
+        });
+    }
+
     pub async fn snapshot(&self) -> TerminalGridSnapshot {
         let b = self.backend.lock().await;
         b.snapshot()

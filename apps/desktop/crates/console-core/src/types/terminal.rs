@@ -173,6 +173,12 @@ pub trait TerminalBackend: Send {
     fn advance(&mut self, data: &str);
     fn snapshot(&self) -> TerminalGridSnapshot;
     fn size(&self) -> TerminalSize;
+    fn scroll(&mut self, delta: i32) {
+        let _ = delta;
+    }
+    fn is_alt_screen(&self) -> bool {
+        false
+    }
     /// Serialize input for the wire (identity for now, but ghostty may need transforms).
     fn encode_input(data: &str) -> String
     where

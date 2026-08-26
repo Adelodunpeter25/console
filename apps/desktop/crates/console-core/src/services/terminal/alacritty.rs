@@ -96,10 +96,13 @@ impl TerminalBackend for AlacrittyBackend {
             .term
             .mode()
             .contains(alacritty_terminal::term::TermMode::SHOW_CURSOR);
+        let raw_row = cursor.line.0 + display_offset as i32;
+        let is_row_visible = raw_row >= 0 && (raw_row as usize) < screen_lines;
+        let cursor_row = if is_row_visible { raw_row as u16 } else { 0 };
         let cursor_pos = CursorPosition {
             col: cursor.column.0 as u16,
-            row: (cursor.line.0 + display_offset as i32) as u16,
-            visible,
+            row: cursor_row,
+            visible: visible && is_row_visible,
         };
 
         TerminalGridSnapshot {
@@ -111,6 +114,17 @@ impl TerminalBackend for AlacrittyBackend {
 
     fn size(&self) -> TerminalSize {
         self.size
+    }
+
+    fn scroll(&mut self, delta: i32) {
+        self.term
+            .scroll_display(alacritty_terminal::grid::Scroll::Delta(delta));
+    }
+
+    fn is_alt_screen(&self) -> bool {
+        self.term
+            .mode()
+            .contains(alacritty_terminal::term::TermMode::ALT_SCREEN)
     }
 }
 
