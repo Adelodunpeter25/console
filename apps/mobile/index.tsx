@@ -1,4 +1,7 @@
 import "./global.css";
+import { initNitroFetch } from "./utils/nitro-fetch";
+initNitroFetch();
+
 import React, { useEffect, useState } from "react";
 import { registerRootComponent } from "expo";
 import { StatusBar } from "expo-status-bar";
