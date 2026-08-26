@@ -34,7 +34,7 @@ build-server:
 
 ## build-preview
 build-preview:
-	cd apps/mobile && eas build --platform andriod --profile preview 
+	cd apps/mobile && eas build --platform android --profile preview 
 
 ## typecheck: Run TypeScript check across all monorepo workspaces
 typecheck:
