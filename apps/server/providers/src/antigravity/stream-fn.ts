@@ -78,19 +78,18 @@ function buildSystemInstruction(modelId: string, userPrompt: string): SystemInst
     parts.push({ text: userPrompt });
   }
 
-  const instruction: SystemInstruction = { role: "user", parts };
+  // Claude models on CCA require role: "user"; Gemini models require role: undefined (omitted)
+  const role = isClaudeModel(modelId) ? "user" : undefined;
+  const instruction: SystemInstruction = { role, parts };
   return instruction;
 }
 
 function buildToolConfig(tools: GeminiFunctionDeclaration[], modelId: string): ToolConfig {
   const callingConfig: FunctionCallingConfig = {
-    mode: "VALIDATED",
+    mode: isClaudeModel(modelId) ? "VALIDATED" : "AUTO",
     allowedFunctionNames: undefined,
   };
-  // Claude always forces VALIDATED even with no tools
-  // Gemini with tools also uses VALIDATED per Antigravity behaviour
   void tools;
-  void modelId;
   return { functionCallingConfig: callingConfig };
 }
 

@@ -55,8 +55,59 @@ console.log("Running Provider Wire Converter tests...");
 
   // Verify function response wire structure
   assert.ok("functionResponse" in wireContent[2]!.parts[0]!);
+  assert.equal((wireContent[2]!.parts[0] as any).functionResponse.name, "listDir");
   assert.equal((wireContent[2]!.parts[0] as any).functionResponse.id, "call_123");
   console.log("  ✅ convertMessages wire transformation");
+}
+
+// 1a. Multi-turn same-role merging and trailing model turn stripping (prefill prevention)
+{
+  const multiTurnMessages: AgentMessage[] = [
+    { role: "user", content: "Prompt 1" },
+    {
+      role: "assistant",
+      id: "turn-1",
+      content: [
+        {
+          type: "toolCall",
+          call: { id: "call-a", name: "bash", arguments: { cmd: "ls" } },
+        },
+      ],
+      stopReason: "toolUse",
+    },
+    {
+      role: "toolResult",
+      results: [{ toolCallId: "call-a", content: "file.txt" }],
+    },
+    { role: "user", content: "checkout the codebase" },
+  ];
+
+  const wire = convertMessages(multiTurnMessages);
+  // ToolResult (user) + UserMessage (user) should be merged into a single user turn:
+  // [user (Prompt 1), model (toolCall), user (functionResponse + "checkout the codebase")]
+  assert.equal(wire.length, 3);
+  assert.equal(wire[0]?.role, "user");
+  assert.equal(wire[1]?.role, "model");
+  assert.equal(wire[2]?.role, "user");
+  assert.equal(wire[2]?.parts.length, 2);
+  assert.ok("functionResponse" in wire[2]!.parts[0]!);
+  assert.equal((wire[2]!.parts[0] as any).functionResponse.name, "bash");
+  assert.equal((wire[2]!.parts[1] as any).text, "checkout the codebase");
+  console.log("  ✅ Multi-turn consecutive user turn merging");
+
+  // Trailing model message (e.g. from a finished subagent) must be dropped so request ends with user
+  const prefillRiskMessages: AgentMessage[] = [
+    ...multiTurnMessages,
+    {
+      role: "assistant",
+      id: "turn-2",
+      content: [{ type: "text", text: "Finished subagents." }],
+      stopReason: "stop",
+    },
+  ];
+  const strippedWire = convertMessages(prefillRiskMessages);
+  assert.equal(strippedWire[strippedWire.length - 1]?.role, "user");
+  console.log("  ✅ Trailing model turn dropped (assistant prefill prevention)");
 }
 
 // 1b. Legacy function calls receive the documented compatibility sentinel.

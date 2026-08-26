@@ -65,7 +65,20 @@ function normalizeToolCallId(id: string): string {
 }
 
 export function convertMessages(messages: AgentMessage[]): GeminiContent[] {
-  const contents: GeminiContent[] = [];
+  // 1. Build toolCallId -> toolName lookup map from assistant tool calls in history
+  const toolNameByCallId = new Map<string, string>();
+  for (const msg of messages) {
+    if (msg.role === "assistant") {
+      for (const part of msg.content) {
+        if (part.type === "toolCall") {
+          toolNameByCallId.set(part.call.id, part.call.name);
+          toolNameByCallId.set(normalizeToolCallId(part.call.id), part.call.name);
+        }
+      }
+    }
+  }
+
+  const rawTurns: GeminiContent[] = [];
 
   for (const msg of messages) {
     if (msg.role === "user") {
@@ -78,7 +91,7 @@ export function convertMessages(messages: AgentMessage[]): GeminiContent[] {
       for (const att of msg.attachments ?? []) {
         parts.push(makeInlineDataPart(att.data, att.mimeType));
       }
-      contents.push({ role: "user", parts });
+      rawTurns.push({ role: "user", parts });
       continue;
     }
 
@@ -104,21 +117,50 @@ export function convertMessages(messages: AgentMessage[]): GeminiContent[] {
 
       // Only add assistant message if it has content
       if (parts.length > 0) {
-        contents.push({ role: "model", parts });
+        rawTurns.push({ role: "model", parts });
       }
       continue;
     }
 
     if (msg.role === "toolResult") {
-      const parts: GeminiOutgoingPart[] = msg.results.map((r) =>
-        makeFunctionResponsePart(r.toolCallId, normalizeToolCallId(r.toolCallId), r.content),
-      );
+      const parts: GeminiOutgoingPart[] = msg.results.map((r) => {
+        const toolName =
+          r.toolName ||
+          toolNameByCallId.get(r.toolCallId) ||
+          toolNameByCallId.get(normalizeToolCallId(r.toolCallId)) ||
+          r.toolCallId;
+        return makeFunctionResponsePart(toolName, normalizeToolCallId(r.toolCallId), r.content);
+      });
       // Only add tool result message if it has results
       if (parts.length > 0) {
-        contents.push({ role: "user", parts });
+        rawTurns.push({ role: "user", parts });
       }
     }
   }
 
-  return contents;
+  // 2. Merge adjacent turns of the same role (Gemini strict role alternation invariant)
+  const mergedTurns: GeminiContent[] = [];
+  for (const turn of rawTurns) {
+    if (turn.parts.length === 0) continue;
+    const last = mergedTurns[mergedTurns.length - 1];
+    if (last && last.role === turn.role) {
+      last.parts.push(...turn.parts);
+    } else {
+      mergedTurns.push({ role: turn.role, parts: [...turn.parts] });
+    }
+  }
+
+  // 3. Enforce conversation begins and ends with user when user turns exist
+  // (prevents "This model does not support assistant message prefill")
+  const hasUserTurn = mergedTurns.some((t) => t.role === "user");
+  if (hasUserTurn) {
+    while (mergedTurns.length > 0 && mergedTurns[0]!.role !== "user") {
+      mergedTurns.shift();
+    }
+    while (mergedTurns.length > 0 && mergedTurns[mergedTurns.length - 1]!.role !== "user") {
+      mergedTurns.pop();
+    }
+  }
+
+  return mergedTurns;
 }
