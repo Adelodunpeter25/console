@@ -3,7 +3,7 @@ use console_core::ConsoleClient;
 use std::sync::Arc;
 use gpui::{
     App, Context, FocusHandle, Focusable, IntoElement, KeyDownEvent, ParentElement, Render, Styled,
-    Window, div, prelude::*, px, rgb, SharedString,
+    Window, div, prelude::*, px, SharedString,
 };
 
 use crate::theme::Theme;
@@ -153,23 +153,50 @@ impl TerminalView {
                     return Some(code.to_string());
                 }
                 return match key {
+                    "space" => Some("\x00".into()),
                     "[" => Some("\x1b".into()),
                     "\\" => Some("\x1c".into()),
                     "]" => Some("\x1d".into()),
                     "^" => Some("\x1e".into()),
                     "_" => Some("\x1f".into()),
+                    "backspace" => Some("\x17".into()),
+                    "delete" => Some("\x1b[3;5~".into()),
+                    "up" => Some("\x1b[1;5A".into()),
+                    "down" => Some("\x1b[1;5B".into()),
+                    "right" => Some("\x1b[1;5C".into()),
+                    "left" => Some("\x1b[1;5D".into()),
                     _ => None,
                 };
             }
         }
 
-        if mods.alt && key.len() == 1 {
-            return Some(format!("\x1b{key}"));
+        if mods.alt {
+            match key {
+                "backspace" => return Some("\x1b\x7f".into()),
+                "up" => return Some("\x1b[1;3A".into()),
+                "down" => return Some("\x1b[1;3B".into()),
+                "right" => return Some("\x1b[1;3C".into()),
+                "left" => return Some("\x1b[1;3D".into()),
+                _ if key.len() == 1 => return Some(format!("\x1b{key}")),
+                _ => {}
+            }
+        }
+
+        if mods.shift {
+            match key {
+                "up" => return Some("\x1b[1;2A".into()),
+                "down" => return Some("\x1b[1;2B".into()),
+                "right" => return Some("\x1b[1;2C".into()),
+                "left" => return Some("\x1b[1;2D".into()),
+                "tab" => return Some("\x1b[Z".into()),
+                _ => {}
+            }
         }
 
         match key {
             "enter" => Some("\r".into()),
             "space" => Some(" ".into()),
+            "backspace" => Some("\x7f".into()),
             "delete" => Some("\x1b[3~".into()),
             "tab" => Some("\t".into()),
             "escape" => Some("\x1b".into()),
@@ -193,7 +220,7 @@ impl TerminalView {
             "f10" => Some("\x1b[21~".into()),
             "f11" => Some("\x1b[23~".into()),
             "f12" => Some("\x1b[24~".into()),
-            _ if key.len() == 1 => Some(key.to_string()),
+            _ if key.chars().count() == 1 => Some(key.to_string()),
             _ => None,
         }
     }
@@ -218,9 +245,10 @@ impl Render for TerminalView {
         };
 
         let snapshot = self.snapshot.clone();
-
+        let view_handle = cx.entity().clone();
         let handle_for_key = self.handle.clone();
         let focus_for_key = self.focus.clone();
+
         div()
             .id("terminal-view")
             .key_context("Terminal")
@@ -258,86 +286,238 @@ impl Render for TerminalView {
                     .min_h_0()
                     .w_full()
                     .overflow_hidden()
-                    .p(px(8.0))
-                    .when_some(snapshot, |el, snap| {
-                        el.child(render_snapshot(&snap, ttheme))
-                    })
-                    .when(self.snapshot.is_none(), |el| {
-                        el.child(
-                            div()
-                                .size_full()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .text_color(theme.text_ghost)
-                                .text_size(px(12.0))
-                                .child(SharedString::from("No output yet")),
+                    .child(
+                        gpui::canvas(
+                            move |bounds, window, _cx| {
+                                let pad_x = px(8.0);
+                                let pad_y = px(8.0);
+                                let avail_w = (bounds.size.width - pad_x * 2.0).max(px(0.0));
+                                let avail_h = (bounds.size.height - pad_y * 2.0).max(px(0.0));
+
+                                let run = gpui::TextRun {
+                                    len: 10,
+                                    font: gpui::font(crate::markdown::render::MONO_FAMILY),
+                                    color: gpui::white(),
+                                    ..Default::default()
+                                };
+                                let sample = window.text_system().shape_line(
+                                    SharedString::from("0123456789"),
+                                    px(12.0),
+                                    &[run],
+                                    None,
+                                );
+                                let cell_w = (sample.width / 10.0).max(px(1.0));
+                                let cell_h = px(16.0);
+
+                                let cols = ((avail_w / cell_w).floor() as u16).max(20);
+                                let rows = ((avail_h / cell_h).floor() as u16).max(5);
+
+                                (cols, rows, cell_w, cell_h)
+                            },
+                            {
+                                let snapshot = snapshot.clone();
+                                move |bounds, (cols, rows, cell_w, cell_h), window, cx| {
+                                    view_handle.update(cx, |view, _| {
+                                        if view.size.cols != cols || view.size.rows != rows {
+                                            view.size = TerminalSize { cols, rows };
+                                            if let Some(h) = &view.handle {
+                                                h.resize(view.size);
+                                            }
+                                        }
+                                    });
+
+                                    render_canvas_grid(
+                                        bounds,
+                                        cols,
+                                        rows,
+                                        cell_w,
+                                        cell_h,
+                                        snapshot.as_ref(),
+                                        ttheme,
+                                        window,
+                                        cx,
+                                    );
+                                }
+                            },
                         )
-                    }),
+                        .size_full(),
+                    ),
             )
     }
 }
 
-fn render_snapshot(
-    snapshot: &console_core::types::terminal::TerminalGridSnapshot,
-    theme: TerminalTheme,
-) -> gpui::AnyElement {
-    let to_rgb_u32 = |c: Option<console_core::types::terminal::TerminalColor>| {
-        c.map(|c| c.r as u32 * 256 * 256 + c.g as u32 * 256 + c.b as u32)
-    };
-    let cursor = snapshot.cursor;
+fn color_to_hsla(c: console_core::types::terminal::TerminalColor) -> gpui::Hsla {
+    let r = c.r as f32 / 255.0;
+    let g = c.g as f32 / 255.0;
+    let b = c.b as f32 / 255.0;
+    gpui::Rgba { r, g, b, a: 1.0 }.into()
+}
 
-    div()
-        .flex()
-        .flex_col()
-        .font_family("GeistMono")
-        .text_size(px(12.0))
-        .line_height(px(16.0))
-        .children(snapshot.rows.iter().enumerate().map(|(row_idx, row)| {
-            // Group consecutive same-styled cells into one text run: an
-            // 80x24 grid renders ~dozens of elements instead of ~2k divs,
-            // which is what made typed input echo visibly lag behind.
-            let mut runs: Vec<(Option<u32>, Option<u32>, bool, String)> = Vec::new();
-            for (col_idx, cell) in row.iter().enumerate() {
-                let fg = to_rgb_u32(cell.fg);
-                let bg = to_rgb_u32(cell.bg);
-                let is_cursor =
-                    row_idx as u16 == cursor.row && col_idx as u16 == cursor.col && cursor.visible;
-                match runs.last_mut() {
-                    Some((run_fg, run_bg, run_cursor, text))
-                        if *run_fg == fg && *run_bg == bg && *run_cursor == is_cursor =>
-                    {
-                        text.push(cell.c);
-                    }
-                    _ => runs.push((fg, bg, is_cursor, cell.c.to_string())),
-                }
+fn render_canvas_grid(
+    bounds: gpui::Bounds<gpui::Pixels>,
+    cols: u16,
+    rows: u16,
+    cell_w: gpui::Pixels,
+    cell_h: gpui::Pixels,
+    snapshot: Option<&console_core::types::terminal::TerminalGridSnapshot>,
+    theme: TerminalTheme,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let pad_x = px(8.0);
+    let pad_y = px(8.0);
+    let origin = bounds.origin + gpui::point(pad_x, pad_y);
+
+    window.paint_quad(gpui::fill(bounds, theme.background));
+
+    let Some(snap) = snapshot else {
+        return;
+    };
+
+    let cursor = snap.cursor;
+
+    for (row_idx, row) in snap.rows.iter().enumerate() {
+        if row_idx as u16 >= rows {
+            break;
+        }
+        let y = origin.y + cell_h * row_idx as f32;
+
+        struct CellRun {
+            start_col: usize,
+            count: usize,
+            fg: gpui::Hsla,
+            bg: gpui::Hsla,
+            bold: bool,
+            italic: bool,
+            underline: bool,
+            text: String,
+        }
+
+        let mut runs: Vec<CellRun> = Vec::new();
+
+        for (col_idx, cell) in row.iter().enumerate() {
+            if col_idx as u16 >= cols {
+                break;
             }
 
-            // Runs flow at the font's natural advance, so the cursor block
-            // always sits exactly where the glyphs end — no cell-grid math.
-            div()
-                .h(px(16.0))
-                .flex()
-                .flex_row()
-                .children(runs.into_iter().map(|(fg, bg, is_cursor, text)| {
-                    let (fg, bg) = if is_cursor {
-                        (theme.cursor_text, theme.cursor)
+            let mut fg = cell.fg.map(color_to_hsla).unwrap_or(theme.foreground);
+            let mut bg = cell.bg.map(color_to_hsla).unwrap_or(theme.background);
+
+            if cell.flags.inverse {
+                std::mem::swap(&mut fg, &mut bg);
+            }
+            if cell.flags.dim {
+                fg.a *= 0.6;
+            }
+            if cell.flags.hidden {
+                fg = bg;
+            }
+
+            let is_cursor =
+                cursor.visible && row_idx as u16 == cursor.row && col_idx as u16 == cursor.col;
+            if is_cursor {
+                bg = theme.cursor;
+                fg = theme.cursor_text;
+            }
+
+            let c = if cell.flags.wide_char_spacer {
+                ' '
+            } else {
+                cell.c
+            };
+
+            let can_merge = if let Some(last) = runs.last() {
+                last.fg == fg
+                    && last.bg == bg
+                    && last.bold == cell.flags.bold
+                    && last.italic == cell.flags.italic
+                    && last.underline == cell.flags.underline
+            } else {
+                false
+            };
+
+            if can_merge {
+                let last = runs.last_mut().unwrap();
+                last.count += 1;
+                last.text.push(c);
+            } else {
+                runs.push(CellRun {
+                    start_col: col_idx,
+                    count: 1,
+                    fg,
+                    bg,
+                    bold: cell.flags.bold,
+                    italic: cell.flags.italic,
+                    underline: cell.flags.underline,
+                    text: c.to_string(),
+                });
+            }
+        }
+
+        for run in runs {
+            let run_x = origin.x + cell_w * run.start_col as f32;
+            let run_w = cell_w * run.count as f32;
+
+            if run.bg != theme.background {
+                let bg_quad = gpui::Bounds {
+                    origin: gpui::point(run_x, y),
+                    size: gpui::size(run_w, cell_h),
+                };
+                window.paint_quad(gpui::fill(bg_quad, run.bg));
+            }
+
+            if !run.text.trim().is_empty() || run.underline {
+                let font_weight = if run.bold {
+                    gpui::FontWeight::BOLD
+                } else {
+                    gpui::FontWeight::NORMAL
+                };
+                let font_style = if run.italic {
+                    gpui::FontStyle::Italic
+                } else {
+                    gpui::FontStyle::Normal
+                };
+
+                let text_run = gpui::TextRun {
+                    len: run.text.len(),
+                    font: gpui::Font {
+                        family: SharedString::from(crate::markdown::render::MONO_FAMILY),
+                        weight: font_weight,
+                        style: font_style,
+                        features: Default::default(),
+                        fallbacks: None,
+                    },
+                    color: run.fg,
+                    background_color: None,
+                    underline: if run.underline {
+                        Some(gpui::UnderlineStyle {
+                            color: Some(run.fg),
+                            thickness: px(1.0),
+                            wavy: false,
+                        })
                     } else {
-                        (
-                            fg.map(|v| rgb(v).into()).unwrap_or(theme.foreground),
-                            bg.map(|v| rgb(v).into()).unwrap_or(theme.background),
-                        )
-                    };
-                    div()
-                        .h(px(16.0))
-                        .flex()
-                        .items_center()
-                        .bg(bg)
-                        .text_color(fg)
-                        .child(SharedString::from(text))
-                }))
-        }))
-        .into_any_element()
+                        None
+                    },
+                    strikethrough: None,
+                };
+
+                let shaped = window.text_system().shape_line(
+                    SharedString::from(run.text),
+                    px(12.0),
+                    &[text_run],
+                    None,
+                );
+                let _ = shaped.paint(
+                    gpui::point(run_x, y),
+                    cell_h,
+                    gpui::TextAlign::Left,
+                    None,
+                    window,
+                    cx,
+                );
+            }
+        }
+    }
 }
 
 pub fn estimate_size(width: f32, height: f32, font_size: f32) -> TerminalSize {

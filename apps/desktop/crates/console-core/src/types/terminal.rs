@@ -137,6 +137,8 @@ pub struct TerminalCellFlags {
     pub strike: bool,
     pub blink: bool,
     pub wrapline: bool,
+    pub wide_char: bool,
+    pub wide_char_spacer: bool,
 }
 
 /// One row of cells.

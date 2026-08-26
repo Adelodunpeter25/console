@@ -52,6 +52,7 @@ interface PtySession {
   paused: boolean;
   pausedBuffer: string[];
   pausedBufferBytes: number;
+  decoder: TextDecoder;
   /** Whether the shell subprocess has been started. */
   shellStarted: boolean;
   /** Fallback that starts the shell at the default size if no resize arrives. */
@@ -74,7 +75,7 @@ export class TerminalPtyManager {
 
   /**
    * Spawn a new shell PTY in the given working directory.
-   * Throws if `cwd` does not exist so clients get a clear spawn error.
+   * Throws if `cwd` does not exist so clients get a clean error.
    *
    * The PTY is created immediately at the default size, but the shell itself
    * starts on the client's first resize (or after SHELL_START_FALLBACK_MS) so
@@ -94,6 +95,7 @@ export class TerminalPtyManager {
     const rows = params.rows ?? 24;
 
     const id: TerminalId = randomUUID();
+    const decoder = new TextDecoder("utf-8", { fatal: false });
     const session: PtySession = {
       id,
       // Assigned immediately after construction below.
@@ -109,6 +111,7 @@ export class TerminalPtyManager {
       paused: false,
       pausedBuffer: [],
       pausedBufferBytes: 0,
+      decoder,
       shellStarted: false,
       pendingInput: [],
     };
@@ -121,7 +124,10 @@ export class TerminalPtyManager {
       // Buffer output that arrives before the WebSocket route has attached
       // callbacks so the initial shell prompt is never dropped.
       data: (_terminal, data) => {
-        this.handleOutput(session, new TextDecoder().decode(data));
+        const text = session.decoder.decode(data, { stream: true });
+        if (text.length > 0) {
+          this.handleOutput(session, text);
+        }
       },
     });
 
