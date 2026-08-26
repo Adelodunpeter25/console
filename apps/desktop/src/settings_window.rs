@@ -12,14 +12,19 @@ pub struct SettingsWindow {
     app: WeakEntity<ConsoleDesktopApp>,
     active_tab: SettingsTab,
     focus_handle: FocusHandle,
+    _subscription: Option<gpui::Subscription>,
 }
 
 impl SettingsWindow {
     pub fn new(app: WeakEntity<ConsoleDesktopApp>, cx: &mut Context<Self>) -> Self {
+        let subscription = app.upgrade().map(|app_entity| {
+            cx.observe(&app_entity, |_this, _app, cx| cx.notify())
+        });
         Self {
             app,
             active_tab: SettingsTab::Accounts,
             focus_handle: cx.focus_handle(),
+            _subscription: subscription,
         }
     }
 }

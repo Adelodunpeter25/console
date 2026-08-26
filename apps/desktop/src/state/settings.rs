@@ -32,16 +32,21 @@ impl ConsoleDesktopApp {
             ..Default::default()
         };
 
+        let entity = cx.entity().clone();
         let app_entity = cx.entity().downgrade();
 
-        let handle = cx.open_window(options, |window, cx| {
-            let settings_view = cx.new(|cx| SettingsWindow::new(app_entity, cx));
-            cx.new(|cx| gpui_component::Root::new(settings_view, window, cx))
-        }).ok();
+        cx.defer(move |cx| {
+            let handle = cx.open_window(options, |window, cx| {
+                let settings_view = cx.new(|cx| SettingsWindow::new(app_entity, cx));
+                cx.new(|cx| gpui_component::Root::new(settings_view, window, cx))
+            }).ok();
 
-        if let Some(h) = handle {
-            self.settings_window_handle = Some(h.into());
-        }
+            if let Some(h) = handle {
+                entity.update(cx, |this, _cx| {
+                    this.settings_window_handle = Some(h.into());
+                });
+            }
+        });
 
         // Refresh dynamic status when opening settings
         self.refresh_auth_status(cx);
