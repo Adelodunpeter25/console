@@ -112,6 +112,9 @@ class NativeStreamModule : Module() {
             val reader = BufferedReader(InputStreamReader(responseBody.byteStream(), Charsets.UTF_8))
             var line: String?
             var isAborted = false
+            // Last SSE "id:" seen; sent alongside each data frame so clients
+            // can resume with ?since=<seq> after a disconnect.
+            var lastId: String? = null
 
             while (reader.readLine().also { line = it } != null) {
               if (call.isCanceled()) {
@@ -120,20 +123,22 @@ class NativeStreamModule : Module() {
               }
 
               val currentLine = line?.trim() ?: continue
-              if (currentLine.isEmpty() || !currentLine.startsWith("data:")) {
+              if (currentLine.isEmpty()) continue
+              if (currentLine.startsWith("id:")) {
+                lastId = currentLine.substring(3).trim()
                 continue
               }
+              if (!currentLine.startsWith("data:")) continue
 
               val jsonString = currentLine.substring(5).trim()
               if (jsonString.isEmpty()) continue
 
-              sendEvent(
-                "onStreamEvent",
-                bundleOf(
-                  "streamId" to streamId,
-                  "rawJson" to jsonString
-                )
+              val payload = bundleOf(
+                "streamId" to streamId,
+                "rawJson" to jsonString
               )
+              if (lastId != null) payload.putString("seq", lastId)
+              sendEvent("onStreamEvent", payload)
             }
 
             activeStreams.remove(streamId)
@@ -229,6 +234,138 @@ class NativeStreamModule : Module() {
             // ignore on cancel
           } finally {
             activeStreams.remove(streamId)
+            response.close()
+          }
+        }
+      })
+
+      true
+    }
+
+    /**
+     * Generic GET SSE stream (used for run re-attach). Emits the same
+     * onStreamEvent/onStreamError/onStreamEnd events as startChatStream,
+     * including SSE "id:" passthrough as "seq".
+     */
+    AsyncFunction("startGetStream") { streamId: String, url: String, headers: Map<String, String>? ->
+      activeStreams[streamId]?.cancel()
+
+      val requestBuilder = Request.Builder()
+        .url(url)
+        .get()
+        .addHeader("Accept", "text/event-stream")
+        .addHeader("Cache-Control", "no-cache")
+
+      headers?.forEach { (k, v) ->
+        requestBuilder.addHeader(k, v)
+      }
+
+      val call = client.newCall(requestBuilder.build())
+      activeStreams[streamId] = call
+
+      call.enqueue(object : Callback {
+        override fun onFailure(call: Call, e: IOException) {
+          activeStreams.remove(streamId)
+          if (call.isCanceled()) {
+            sendEvent(
+              "onStreamEnd",
+              bundleOf(
+                "streamId" to streamId,
+                "aborted" to true
+              )
+            )
+            return
+          }
+          sendEvent(
+            "onStreamError",
+            bundleOf(
+              "streamId" to streamId,
+              "error" to (e.message ?: "Network error")
+            )
+          )
+        }
+
+        override fun onResponse(call: Call, response: Response) {
+          if (!response.isSuccessful) {
+            activeStreams.remove(streamId)
+            val errorBody = response.body?.string() ?: ""
+            sendEvent(
+              "onStreamError",
+              bundleOf(
+                "streamId" to streamId,
+                "statusCode" to response.code,
+                "error" to "Server returned HTTP ${response.code}: $errorBody"
+              )
+            )
+            response.close()
+            return
+          }
+
+          val responseBody = response.body
+          if (responseBody == null) {
+            activeStreams.remove(streamId)
+            sendEvent(
+              "onStreamError",
+              bundleOf(
+                "streamId" to streamId,
+                "error" to "Empty response body"
+              )
+            )
+            return
+          }
+
+          try {
+            val reader = BufferedReader(InputStreamReader(responseBody.byteStream(), Charsets.UTF_8))
+            var line: String?
+            var isAborted = false
+            var lastId: String? = null
+
+            while (reader.readLine().also { line = it } != null) {
+              if (call.isCanceled()) {
+                isAborted = true
+                break
+              }
+
+              val currentLine = line?.trim() ?: continue
+              if (currentLine.isEmpty()) continue
+              if (currentLine.startsWith(":")) continue // heartbeat comment
+              if (currentLine.startsWith("id:")) {
+                lastId = currentLine.substring(3).trim()
+                continue
+              }
+              if (!currentLine.startsWith("data:")) continue
+
+              val jsonString = currentLine.substring(5).trim()
+              if (jsonString.isEmpty()) continue
+
+              val payload = bundleOf(
+                "streamId" to streamId,
+                "rawJson" to jsonString
+              )
+              if (lastId != null) payload.putString("seq", lastId)
+              sendEvent("onStreamEvent", payload)
+            }
+
+            activeStreams.remove(streamId)
+            sendEvent(
+              "onStreamEnd",
+              bundleOf(
+                "streamId" to streamId,
+                "aborted" to isAborted
+              )
+            )
+          } catch (e: Exception) {
+            activeStreams.remove(streamId)
+            if (!call.isCanceled()) {
+              sendEvent(
+                "onStreamError",
+                bundleOf(
+                  "streamId" to streamId,
+                  "error" to (e.message ?: "Stream reading error")
+                )
+              )
+            }
+          } finally {
             response.close()
           }
         }

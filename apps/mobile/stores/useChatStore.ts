@@ -4,7 +4,6 @@ import type { ChatSessionState, ChatSnapshot } from "@/types";
 import { createChatSessionState, EMPTY_CHAT_SESSION } from "@/types/chat-state";
 import { applyChatEvent, toChatSnapshot, ensureMessageIds, newMessageId } from "@/utils/chat-events";
 import { reconstructRuns } from "@/utils/reconstruct-runs";
-import { startNativeChatStream } from "@/utils/native-stream";
 import { provider$ } from "./useProviderStore";
 import { app$ } from "./useAppStore";
 import { getSession as getSessionView } from "./useSessionStore";
@@ -19,6 +18,12 @@ import {
   finalizeSessionRun,
   abortSessionStream,
 } from "./chat/chat-stream-runner";
+import {
+  getOrCreateController,
+  getController,
+  removeController,
+  type RunStreamControllerDeps,
+} from "./chat/run-stream-controller";
 import { answerSessionQuestion, approveSessionPermission } from "./chat/chat-decisions";
 
 /**
@@ -51,6 +56,45 @@ function setSessions(
   updater: (sessions: Record<string, ChatSessionState>) => Record<string, ChatSessionState>,
 ): void {
   chat$.sessions.set((prev) => updater(prev));
+}
+
+/** Build controller callbacks wired to this module's state helpers. */
+function buildControllerDeps(sessionId: string): RunStreamControllerDeps {
+  const deps: RunStreamControllerDeps = {
+    setSessions,
+    handleEvent: (event) => {
+      if (event.type === "askQuestion" || event.type === "permissionRequest") {
+        syncSessionStatus(sessionId, "needs_attention");
+      }
+      handleEvent(sessionId, event);
+    },
+    finalize: (hadError) => {
+      finalizeSessionRun(setSessions, sessionId, hadError);
+      removeController(sessionId);
+    },
+    markError: (msg) => markSessionError(sessionId, msg),
+    baseUrl: () => app$.backendUrl.peek() ?? "",
+  };
+  return deps;
+}
+
+/** Append an error bubble to the transcript and clear streaming buffers. */
+function markSessionError(sessionId: string, msg: string): void {
+  setSessions((sessions) =>
+    updateSession(sessions, sessionId, (sessionState) => ({
+      ...sessionState,
+      messages: [
+        ...sessionState.messages,
+        {
+          role: "assistant",
+          createdAt: Date.now(),
+          content: [{ type: "text", text: `Error: ${msg}` }],
+        },
+      ],
+      streamingText: "",
+      streamingThinking: "",
+    })),
+  );
 }
 
 export function loadMessages(sessionId: string, messages: AgentMessage[]): void {
@@ -196,62 +240,17 @@ export async function sendMessage(sessionId: string, promptOverride?: string): P
   );
   syncSessionStatus(sessionId, "working");
 
-  const markError = (msg: string) => {
-    setSessions((sessions) =>
-      updateSession(sessions, sessionId, (sessionState) => ({
-        ...sessionState,
-        messages: [
-          ...sessionState.messages,
-          {
-            role: "assistant",
-            createdAt: Date.now(),
-            content: [{ type: "text", text: `Error: ${msg}` }],
-          },
-        ],
-        streamingText: "",
-        streamingThinking: "",
-      })),
-    );
-  };
-
   try {
-    const baseUrl = app$.backendUrl.peek() ?? "";
-    let hadError = false;
-
     setSuppressPersist(true);
-    startNativeChatStream(
-      `chat-${sessionId}-${Date.now()}`,
-      `${baseUrl}/api/sessions/${sessionId}/run`,
-      {
-        prompt,
-        ...(attachments.length > 0 ? { attachments: session.attachments } : {}),
-        ...(sessionModelId ? { modelId: sessionModelId } : {}),
-        ...(sessionProvider ? { provider: sessionProvider } : {}),
-        ...(approvalMode ? { approvalMode } : {}),
-      },
-      {
-        onEvent: (event) => {
-          if (event.type === "error" && !isAbortError(event.error.message)) {
-            hadError = true;
-          }
-          if (event.type === "askQuestion" || event.type === "permissionRequest") {
-            syncSessionStatus(sessionId, "needs_attention");
-          }
-          handleEvent(sessionId, event);
-        },
-        onError: (errMsg) => {
-          if (!isAbortError(errMsg)) {
-            hadError = true;
-            markError(errMsg);
-          }
-          setSuppressPersist(false);
-        },
-        onEnd: (aborted) => {
-          finalizeSessionRun(setSessions, sessionId, hadError && !aborted);
-          setSuppressPersist(false);
-        },
-      },
-    );
+    const controller = getOrCreateController(sessionId, buildControllerDeps(sessionId));
+    // markError is shared with the controller via deps.
+    controller.startRun({
+      prompt,
+      ...(attachments.length > 0 ? { attachments: session.attachments } : {}),
+      ...(sessionModelId ? { modelId: sessionModelId } : {}),
+      ...(sessionProvider ? { provider: sessionProvider } : {}),
+      ...(approvalMode ? { approvalMode } : {}),
+    });
   } catch (err) {
     const msg =
       err instanceof Error
@@ -260,7 +259,7 @@ export async function sendMessage(sessionId: string, promptOverride?: string): P
           ? err
           : "Failed to send message. Is the backend running?";
     if (!isAbortError(msg)) {
-      markError(msg);
+      markSessionError(sessionId, msg);
     }
     finalizeSessionRun(setSessions, sessionId, !isAbortError(msg));
     setSuppressPersist(false);
@@ -268,7 +267,56 @@ export async function sendMessage(sessionId: string, promptOverride?: string): P
 }
 
 export async function abort(sessionId: string): Promise<void> {
+  // Kill any live stream + pending reconnect timers before aborting the run.
+  getController(sessionId)?.cancel();
   await abortSessionStream(setSessions, sessionId);
+}
+
+/**
+ * Attach to a server-side active run for this session (re-attach).
+ *
+ * Called when entering a session whose server header reports "working" but no
+ * local stream exists. Loads nothing itself — the chat hook loads persisted
+ * messages first — then opens a re-attach stream replaying the current run's
+ * buffered events so the transcript converges and stays realtime.
+ */
+export function attachServerRun(sessionId: string): void {
+  const current = getChatSession(sessionId);
+  if (current.running || getController(sessionId)) return;
+
+  setSessions((sessions) =>
+    updateSession(sessions, sessionId, (sessionState) => {
+      const runs = sessionState.runs;
+      const hasWorkingRun = runs.length > 0 && runs[runs.length - 1]!.status === "working";
+      return {
+        ...sessionState,
+        running: true,
+        runs: hasWorkingRun
+          ? runs
+          : [
+              ...runs,
+              {
+                runId: randomUUID(),
+                startedAt: Date.now(),
+                elapsedMs: 0,
+                events: [],
+                status: "working" as const,
+              },
+            ],
+      };
+    }),
+  );
+  syncSessionStatus(sessionId, "working");
+
+  try {
+    setSuppressPersist(true);
+    // since=0 replays the whole current run's buffer so tool calls that
+    // started before we attached still appear in the timeline.
+    getOrCreateController(sessionId, buildControllerDeps(sessionId)).attach(0);
+  } catch {
+    finalizeSessionRun(setSessions, sessionId, false);
+    setSuppressPersist(false);
+  }
 }
 
 export async function answerQuestion(

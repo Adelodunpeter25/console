@@ -25,8 +25,21 @@ try {
 }
 
 export interface StreamCallbacks {
-  onEvent: (event: AgentSessionEvent) => void;
-  onError: (error: string) => void;
+  /**
+   * One SSE frame. `meta.seq` carries the server-assigned event sequence
+   * number (SSE `id:` field) when available, for re-attach resume support.
+   */
+  onEvent: (event: AgentSessionEvent, meta?: { seq?: number }) => void;
+  /**
+   * Transport failure (network drop, non-2xx, etc.). `info.statusCode`
+   * carries the HTTP status when the failure came from a response.
+   */
+  onError: (error: string, info?: { statusCode?: number }) => void;
+  /**
+   * Stream finished. `aborted` is true only when the caller cancelled the
+   * stream itself — a network drop reports aborted=false so consumers can
+   * distinguish user intent from connection loss.
+   */
   onEnd: (aborted: boolean) => void;
 }
 
@@ -48,11 +61,13 @@ export function startNativeChatStream(
 ): () => void {
   let finished = false;
 
-  const emitError = (err: string) => {
+  const emitError = (err: string, info?: { statusCode?: number }) => {
     if (finished) return;
     finished = true;
-    callbacks.onError(err);
-    callbacks.onEnd(true);
+    callbacks.onError(err, info);
+    // A transport failure is NOT a user abort — report aborted=false so
+    // consumers can reconnect instead of treating it as intentional cancel.
+    callbacks.onEnd(false);
   };
 
   const emitEnd = (aborted = false) => {
@@ -63,14 +78,18 @@ export function startNativeChatStream(
 
   if (isNativeStreamAvailable()) {
     const subscriptions: EventSubscription[] = [];
+    let cleanupFn: () => void = () => {};
 
     const eventSub = emitter!.addListener(
       "onStreamEvent",
-      (data: { streamId: string; rawJson: string }) => {
+      (data: { streamId: string; rawJson: string; seq?: string }) => {
         if (data.streamId === streamId && !finished) {
           try {
             const parsed = JSON.parse(data.rawJson) as AgentSessionEvent;
-            callbacks.onEvent(parsed);
+            const seq = data.seq != null ? Number.parseInt(data.seq, 10) : undefined;
+            callbacks.onEvent(parsed, {
+              seq: Number.isFinite(seq) ? seq : undefined,
+            });
           } catch {
             // ignore malformed frame
           }
@@ -83,8 +102,8 @@ export function startNativeChatStream(
       "onStreamError",
       (data: { streamId: string; error: string; statusCode?: number }) => {
         if (data.streamId === streamId && !finished) {
-          cleanup();
-          emitError(data.error);
+          cleanupFn();
+          emitError(data.error, { statusCode: data.statusCode });
         }
       }
     );
@@ -94,14 +113,14 @@ export function startNativeChatStream(
       "onStreamEnd",
       (data: { streamId: string; aborted?: boolean }) => {
         if (data.streamId === streamId && !finished) {
-          cleanup();
+          cleanupFn();
           emitEnd(Boolean(data.aborted));
         }
       }
     );
     subscriptions.push(endSub);
 
-    const cleanup = () => {
+    cleanupFn = () => {
       subscriptions.forEach((sub) => {
         try {
           sub.remove();
@@ -119,14 +138,13 @@ export function startNativeChatStream(
       headers
     ).catch((err: Error) => {
       if (!finished) {
-        cleanup();
+        cleanupFn();
         emitError(err?.message || "Failed to start native stream");
       }
     });
 
     return () => {
       if (!finished) {
-        cleanup();
         emitEnd(true);
         NativeStreamModule.abortStream(streamId).catch(() => {});
       }
@@ -164,7 +182,7 @@ export function startNativeChatStream(
   xhr.onload = () => {
     if (finished) return;
     if (xhr.status >= 400) {
-      emitError(`Server responded with status ${xhr.status}`);
+      emitError(`Server responded with status ${xhr.status}`, { statusCode: xhr.status });
     } else {
       emitEnd(false);
     }
@@ -187,6 +205,160 @@ export function startNativeChatStream(
       }
     }
   };
+}
+
+/**
+ * Open a GET SSE stream (run re-attach). Same callback contract as
+ * startNativeChatStream. Uses the native module on Android; falls back to XHR
+ * elsewhere (the fallback does not surface per-frame seq).
+ */
+export function startNativeGetStream(
+  streamId: string,
+  url: string,
+  callbacks: StreamCallbacks,
+  headers: Record<string, string> = {}
+): () => void {
+  let finished = false;
+
+  const emitError = (err: string, info?: { statusCode?: number }) => {
+    if (finished) return;
+    finished = true;
+    callbacks.onError(err, info);
+    callbacks.onEnd(false);
+  };
+
+  const emitEnd = (aborted = false) => {
+    if (finished) return;
+    finished = true;
+    callbacks.onEnd(aborted);
+  };
+
+  if (isNativeStreamAvailable()) {
+    const subscriptions: EventSubscription[] = [];
+
+    const eventSub = emitter!.addListener(
+      "onStreamEvent",
+      (data: { streamId: string; rawJson: string; seq?: string }) => {
+        if (data.streamId === streamId && !finished) {
+          try {
+            const parsed = JSON.parse(data.rawJson) as AgentSessionEvent;
+            const seq = data.seq != null ? Number.parseInt(data.seq, 10) : undefined;
+            callbacks.onEvent(parsed, { seq: Number.isFinite(seq) ? seq : undefined });
+          } catch {
+            // ignore malformed frame
+          }
+        }
+      }
+    );
+    subscriptions.push(eventSub);
+
+    const errorSub = emitter!.addListener(
+      "onStreamError",
+      (data: { streamId: string; error: string; statusCode?: number }) => {
+        if (data.streamId === streamId && !finished) {
+          cleanup();
+          emitError(data.error, { statusCode: data.statusCode });
+        }
+      }
+    );
+    subscriptions.push(errorSub);
+
+    const endSub = emitter!.addListener(
+      "onStreamEnd",
+      (data: { streamId: string; aborted?: boolean }) => {
+        if (data.streamId === streamId && !finished) {
+          cleanup();
+          emitEnd(Boolean(data.aborted));
+        }
+      }
+    );
+    subscriptions.push(endSub);
+
+    const cleanup = () => {
+      subscriptions.forEach((sub) => {
+        try {
+          sub.remove();
+        } catch {
+          // ignore
+        }
+      });
+      subscriptions.length = 0;
+    };
+
+    NativeStreamModule.startGetStream(streamId, url, headers).catch((err: Error) => {
+      if (!finished) {
+        cleanup();
+        emitError(err?.message || "Failed to start native stream");
+      }
+    });
+
+    return () => {
+      if (!finished) {
+        emitEnd(true);
+        NativeStreamModule.abortStream(streamId).catch(() => {});
+      }
+    };
+  }
+
+  // Fallback implementation for iOS/Web or mock environments
+  const xhr = new XMLHttpRequest();
+  let offset = 0;
+  let buffer = "";
+
+  xhr.open("GET", url);
+  Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+  xhr.setRequestHeader("Accept", "text/event-stream");
+
+  xhr.onprogress = () => {
+    if (finished || !xhr) return;
+    const chunk = xhr.responseText.slice(offset);
+    offset = xhr.responseText.length;
+    buffer += chunk;
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      handleSseLine(line.trim(), callbacks);
+    }
+  };
+
+  xhr.onload = () => {
+    if (finished) return;
+    if (xhr.status >= 400) {
+      emitError(`Server responded with status ${xhr.status}`, { statusCode: xhr.status });
+    } else {
+      emitEnd(false);
+    }
+  };
+
+  xhr.onerror = () => {
+    if (finished) return;
+    emitError("Failed to connect to the backend.");
+  };
+
+  xhr.send();
+
+  return () => {
+    if (!finished) {
+      emitEnd(true);
+      try {
+        xhr.abort();
+      } catch {
+        // ignore
+      }
+    }
+  };
+}
+
+/** Parse one SSE line and dispatch data frames to callbacks. */
+function handleSseLine(trimmed: string, callbacks: StreamCallbacks): void {
+  if (!trimmed.startsWith("data:")) return;
+  try {
+    const event = JSON.parse(trimmed.slice(5).trim()) as AgentSessionEvent;
+    callbacks.onEvent(event);
+  } catch {
+    // ignore malformed frame
+  }
 }
 
 export function startNativeNotificationStream(

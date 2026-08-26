@@ -242,6 +242,14 @@ export function applyChatEvent(
           elapsedMs: run.startedAt ? Date.now() - run.startedAt : run.elapsedMs,
         };
       });
+    case "streamReset":
+      // Re-attach replay is about to arrive — clear streaming buffers so the
+      // replayed coalesced snapshots don't duplicate already-seen text.
+      return {
+        ...session,
+        streamingText: "",
+        streamingThinking: "",
+      };
     case "error":
       if (event.error?.message.toLowerCase().includes("aborted")) {
         return updateLatestRun(session, (run) => ({

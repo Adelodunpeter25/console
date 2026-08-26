@@ -1,6 +1,16 @@
 import { getConsoleApiClient } from "../client";
 import type { RunPromptDto, AnswerQuestionDto, ApproveToolPermissionDto } from "@console/types";
 
+/**
+ * Path for the run re-attach SSE endpoint (GET).
+ * Pass `since` (last seen event seq) to replay buffered events newer than it;
+ * omit to go live immediately.
+ */
+export function getRunStreamPath(sessionId: string, since?: number): string {
+  const base = `/api/sessions/${sessionId}/run/stream`;
+  return since !== undefined ? `${base}?since=${since}` : base;
+}
+
 export const runService = {
   async abortRun(sessionId: string): Promise<{ success: boolean }> {
     const res = await getConsoleApiClient().post(`/api/sessions/${sessionId}/abort`);

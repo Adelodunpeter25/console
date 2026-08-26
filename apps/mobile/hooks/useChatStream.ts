@@ -11,6 +11,11 @@ import {
   setInput,
 } from "@/stores/useChatStore";
 import { getSession, sessionsView$ } from "@/stores/useSessionStore";
+import { sessionStatuses$ } from "@/stores/useSessionStatusStore";
+import {
+  attachServerRun,
+} from "@/stores/useChatStore";
+import { getController } from "@/stores/chat/run-stream-controller";
 import { app$ } from "@/stores/useAppStore";
 import { useValue } from "@legendapp/state/react";
 
@@ -61,12 +66,23 @@ export function useChatStream() {
   // When fresh session data arrives from the server, push the messages into
   // the chat store and sync the session view state (model, cwd, approval mode).
   // Skip loadMessages if the chat session is currently actively streaming/running.
+  //
+  // Attach-on-entry: when the server reports this session as "working" but no
+  // local stream exists, load persisted history then open a re-attach stream
+  // (since=0 replays the active run's buffer) so the transcript converges and
+  // stays realtime instead of freezing at a snapshot.
   useEffect(() => {
     if (!selectedSessionId || !allMessages) return;
 
     const isRunning = chat$.sessions[selectedSessionId].running.peek();
     if (!isRunning) {
       loadSessionMessages(selectedSessionId, allMessages);
+    }
+
+    const serverStatus = sessionStatuses$[selectedSessionId].peek();
+    const hasLocalStream = getController(selectedSessionId);
+    if (!isRunning && serverStatus === "working" && !hasLocalStream && selectedSessionId) {
+      attachServerRun(selectedSessionId);
     }
 
     if (latestHeader) {

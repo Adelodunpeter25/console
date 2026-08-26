@@ -1,5 +1,6 @@
 export {
   startNativeChatStream,
+  startNativeGetStream,
   startNativeNotificationStream,
   isNativeStreamAvailable,
   type StreamCallbacks,
