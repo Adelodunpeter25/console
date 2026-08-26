@@ -275,7 +275,7 @@ impl Render for TerminalView {
                 if let Some(h) = &handle_for_scroll {
                     let delta = match event.delta {
                         gpui::ScrollDelta::Lines(lines) => lines.y.round() as i32,
-                        gpui::ScrollDelta::Pixels(pixels) => (pixels.y / 16.0).round() as i32,
+                        gpui::ScrollDelta::Pixels(pixels) => (f32::from(pixels.y) / 16.0).round() as i32,
                     };
                     if delta != 0 {
                         h.scroll(delta);
