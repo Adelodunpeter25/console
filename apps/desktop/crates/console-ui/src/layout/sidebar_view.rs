@@ -9,7 +9,9 @@ use std::rc::Rc;
 
 use crate::input::ComposerInput;
 use crate::layout::sidebar_loading::{self as sidebar, SidebarLoadingState};
+use crate::primitives::menu::{ContextMenuHandle, MenuAlign, MenuItem, dropdown_menu};
 use crate::primitives::{IconName, app_icon, session_context_menu};
+use crate::settings::{EnvironmentRow, ProbeState};
 use crate::theme::Theme;
 use crate::utils::{SessionDateGroup, format_time_ago, group_indices_by_date};
 use crate::workspace::{WorkspaceDrag, WorkspaceDragPreview};
@@ -437,6 +439,9 @@ pub struct SidebarView {
     rename_input: Option<Entity<ComposerInput>>,
     on_resize_start: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static>,
     on_open_settings: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    pub environments: Vec<EnvironmentRow>,
+    pub server_menu: ContextMenuHandle,
+    on_switch_environment: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
 }
 
 impl SidebarView {
@@ -450,6 +455,8 @@ impl SidebarView {
         running_sessions: HashMap<String, i64>,
         waiting_sessions: HashSet<String>,
         sidebar_list_state: ListState,
+        environments: Vec<EnvironmentRow>,
+        server_menu: ContextMenuHandle,
         on_select_session: impl Fn(String, &mut Window, &mut App) + 'static,
         on_new_chat: impl Fn(&mut Window, &mut App) + 'static,
         on_search: impl Fn(&mut Window, &mut App) + 'static,
@@ -463,6 +470,7 @@ impl SidebarView {
         rename_input: Option<Entity<ComposerInput>>,
         on_resize_start: impl Fn(f32, &mut Window, &mut App) + 'static,
         on_open_settings: impl Fn(&mut Window, &mut App) + 'static,
+        on_switch_environment: impl Fn(String, &mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
             visible,
@@ -487,6 +495,9 @@ impl SidebarView {
             rename_input,
             on_resize_start: Rc::new(on_resize_start),
             on_open_settings: Rc::new(on_open_settings),
+            environments,
+            server_menu,
+            on_switch_environment: Rc::new(on_switch_environment),
         }
     }
 }
@@ -517,6 +528,9 @@ impl RenderOnce for SidebarView {
         let rename_input = self.rename_input;
         let on_resize_start = self.on_resize_start;
         let on_open_settings = self.on_open_settings;
+        let environments = self.environments;
+        let server_menu = self.server_menu;
+        let on_switch_env = self.on_switch_environment;
         let width = self.width;
 
         // Bucket sessions by calendar period (Today / Yesterday / This Week /
@@ -790,15 +804,17 @@ impl RenderOnce for SidebarView {
                         )
                     }),
             )
-            // Footer: Settings + Version
+            // Footer: Settings + Server Dropdown
             .child(
                 div()
                     .flex_none()
                     .h(px(40.0))
+                    .px(px(2.0))
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(
+                    .child({
+                        let on_open_settings = on_open_settings.clone();
                         div()
                             .id("open-settings")
                             .tab_index(0)
@@ -815,8 +831,84 @@ impl RenderOnce for SidebarView {
                                 cx.stop_propagation();
                                 (on_open_settings)(window, cx);
                             })
-                            .child(app_icon(IconName::Settings, 14.0, theme.text_tertiary)),
-                    ),
+                            .child(app_icon(IconName::Settings, 14.0, theme.text_tertiary))
+                    })
+                    .child({
+                        let active_env = environments.iter().find(|e| e.is_active);
+                        let active_label = active_env.map(|e| e.name.clone()).unwrap_or_else(|| "Local Server".to_string());
+                        let probe_dot_color = match active_env.map(|e| e.probe_state).unwrap_or(ProbeState::Unknown) {
+                            ProbeState::Ok => theme.accent,
+                            ProbeState::Failed => theme.danger,
+                            ProbeState::Probing => theme.accent,
+                            ProbeState::Unknown => theme.text_ghost,
+                        };
+
+                        let server_chip = div()
+                            .id("open-server-picker")
+                            .tab_index(0)
+                            .h(px(26.0))
+                            .px(px(6.0))
+                            .rounded(px(6.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(5.0))
+                            .cursor_pointer()
+                            .hover(|s| s.bg(theme.overlay))
+                            .active(|s| s.bg(theme.overlay_strong))
+                            .child(
+                                div()
+                                    .w(px(6.0))
+                                    .h(px(6.0))
+                                    .rounded_full()
+                                    .bg(probe_dot_color),
+                            )
+                            .child(app_icon(IconName::Server, 13.0, theme.text_tertiary))
+                            .child(
+                                div()
+                                    .text_size(px(11.5))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(theme.text_secondary)
+                                    .max_w(px(120.0))
+                                    .truncate()
+                                    .child(active_label),
+                            );
+
+                        let on_open_settings = on_open_settings.clone();
+                        dropdown_menu(
+                            server_chip,
+                            "sidebar-server-menu",
+                            &server_menu,
+                            MenuAlign::AboveRight,
+                            move |_| {
+                                let mut items = environments
+                                    .iter()
+                                    .map(|env| {
+                                        let env_id = env.id.clone();
+                                        let on_switch = on_switch_env.clone();
+                                        let is_active = env.is_active;
+                                        let label = format!("{} ({})", env.name, env.url);
+                                        MenuItem::new(label, move |window, cx| {
+                                            (on_switch)(env_id.clone(), window, cx);
+                                        })
+                                        .icon(IconName::Server.path())
+                                        .selected(is_active)
+                                    })
+                                    .collect::<Vec<_>>();
+
+                                if !items.is_empty() {
+                                    items.push(MenuItem::Separator);
+                                }
+                                let on_open_settings = on_open_settings.clone();
+                                items.push(
+                                    MenuItem::new("Server Settings…", move |window, cx| {
+                                        (on_open_settings)(window, cx);
+                                    })
+                                    .icon(IconName::Settings.path()),
+                                );
+                                items
+                            },
+                        )
+                    }),
             )
             // The divider is also the resize target. Keep the hit area a few
             // pixels wide without changing the visible border position.

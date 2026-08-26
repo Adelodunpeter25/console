@@ -168,6 +168,7 @@ pub struct ConsoleDesktopApp {
     pub environments: Vec<super::environments::Environment>,
     pub active_env_id: Option<String>,
     pub env_probes: std::collections::HashMap<String, console_ui::settings::ProbeState>,
+    pub server_menu: console_ui::primitives::ContextMenuHandle,
     pub deleted_sessions: Vec<SessionHeader>,
     pub settings_window_handle: Option<gpui::AnyWindowHandle>,
     pub _subscriptions: Vec<Subscription>,
@@ -427,6 +428,7 @@ impl ConsoleDesktopApp {
             environments: Vec::new(),
             active_env_id: None,
             env_probes: std::collections::HashMap::new(),
+            server_menu: console_ui::primitives::ContextMenuHandle::new(cx),
             deleted_sessions: Vec::new(),
             settings_window_handle: None,
             collapsed_groups: Rc::new(

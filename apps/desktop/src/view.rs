@@ -315,6 +315,8 @@ impl Render for ConsoleDesktopApp {
                         self.running_sessions_snapshot(),
                         self.waiting_sessions_snapshot(),
                         self.sidebar_list_state.clone(),
+                        self.environment_rows(),
+                        self.server_menu.clone(),
                         {
                             let entity = entity.clone();
                             move |id: String, _w, cx| {
@@ -499,6 +501,16 @@ impl Render for ConsoleDesktopApp {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
                                         this.open_settings(window, cx);
+                                    });
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |env_id: String, _w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.activate_environment(env_id, cx);
                                     });
                                 }
                             }
