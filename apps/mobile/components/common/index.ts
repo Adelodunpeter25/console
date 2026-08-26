@@ -7,3 +7,4 @@ export * from "./error-boundary";
 export * from "./skeleton";
 export * from "./empty-state";
 export * from "./image-preview-modal";
+export * from "./rename-session-dialog";

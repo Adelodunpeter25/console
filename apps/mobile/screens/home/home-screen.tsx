@@ -4,6 +4,7 @@ import { Pencil, Trash2 } from "lucide-react-native";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { SearchBar } from "@/components/common/search-bar";
 import { confirmAlert } from "@/components/common/confirm-dialog";
+import { openRenameDialog } from "@/components/common/rename-session-dialog";
 import { SessionList } from "@/components/home/session-list";
 import { EnvironmentSwitcher } from "@/components/environments/environment-switcher";
 import {
@@ -69,7 +70,11 @@ export function HomeScreen() {
       label: "Rename",
       icon: <Pencil size={18} color={theme.colors.text.secondary} />,
       onPress: () => {
-        confirmAlert("Rename", `Rename "${activeSession?.title || "Untitled Session"}" — coming soon`);
+        if (!activeSession) return;
+        openRenameDialog({
+          sessionId: activeSession.id,
+          currentTitle: activeSession.title || "Untitled Session",
+        });
       },
     },
     {

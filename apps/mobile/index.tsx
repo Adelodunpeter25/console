@@ -21,6 +21,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { MainContent } from "./components/layout/main-content";
 import { ConfirmDialog } from "./components/common/confirm-dialog";
+import { RenameSessionDialog } from "./components/common/rename-session-dialog";
 import { ErrorBoundary } from "./components/common/error-boundary";
 import { useServerConnection, useOAuthDeepLink } from "./hooks";
 import { queryClient } from "./query-client";
@@ -162,6 +163,7 @@ function AppRoot() {
             )}
 
             <ConfirmDialog />
+            <RenameSessionDialog />
           </View>
         </SafeAreaProvider>
       </GestureHandlerRootView>
