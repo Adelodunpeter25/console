@@ -74,8 +74,8 @@ impl Metrics {
     pub const BODY: Self = Self {
         text_size: 13.5,
         line_height: 21.0,
-        code_text_size: 11.5,
-        code_line_height: 17.5,
+        code_text_size: 12.5,
+        code_line_height: 18.5,
         block_gap: 10.0,
     };
 
@@ -84,8 +84,8 @@ impl Metrics {
     pub const USER_MESSAGE: Self = Self {
         text_size: 14.0,
         line_height: 20.0,
-        code_text_size: 11.5,
-        code_line_height: 17.5,
+        code_text_size: 12.5,
+        code_line_height: 18.5,
         block_gap: 10.0,
     };
 

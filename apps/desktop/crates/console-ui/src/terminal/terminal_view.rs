@@ -291,8 +291,8 @@ fn render_snapshot(
         .flex()
         .flex_col()
         .font_family("GeistMono")
-        .text_size(px(13.0))
-        .line_height(px(17.0))
+        .text_size(px(12.0))
+        .line_height(px(16.0))
         .children(snapshot.rows.iter().enumerate().map(|(row_idx, row)| {
             // Group consecutive same-styled cells into one text run: an
             // 80x24 grid renders ~dozens of elements instead of ~2k divs,
