@@ -38,6 +38,7 @@ use super::selection::{
 };
 use super::veil::{RowVeil, apply_veil};
 use crate::primitives::tooltip::Tooltip;
+use crate::primitives::{file_icon, file_icon_for_language};
 use crate::theme::Theme;
 
 /// Selection geometry: the laid-out text handle for one painted element.
@@ -1438,13 +1439,21 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
                     div()
                         .min_w_0()
                         .flex_1()
-                        .truncate()
+                        .flex()
+                        .items_center()
+                        .gap(px(6.0))
                         .text_size(px(10.0))
                         .line_height(px(14.0))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(ctx.palette.ghost)
                         .when_some(label, |element, label| {
-                            element.child(SharedString::from(label))
+                            if let Some(icon_path) = file_icon_for_language(&label) {
+                                element
+                                    .child(file_icon(icon_path, 13.0))
+                                    .child(SharedString::from(label))
+                            } else {
+                                element.child(SharedString::from(label))
+                            }
                         }),
                 )
                 .child(copy_button),
