@@ -29,7 +29,8 @@ import {
   isDoneEvent,
 } from "./notify-agent-event.js";
 import { notificationService } from "./notification.service.js";
-import { RunEventHub, type RunStreamSubscriber } from "./run-hub.js";
+import type { RunStreamSubscriber } from "@console/types";
+import { RunEventHub } from "@console/types";
 import { extractErrorMessage } from "@/agent/src/utils/error.js";
 
 export class RunService {

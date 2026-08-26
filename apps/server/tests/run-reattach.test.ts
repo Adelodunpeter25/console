@@ -8,9 +8,8 @@ import { createApiApp } from "@/api/src/index.js";
 import {
   RunEventHub,
   MAX_REPLAY_BUFFER,
-  type RunStreamSubscriber,
-} from "@/api/src/services/run-hub.js";
-import type { AgentSessionEvent } from "@console/types";
+} from "@console/types";
+import type { RunStreamSubscriber, AgentSessionEvent } from "@console/types";
 
 console.log("Running run re-attach (hub + attach route) tests...");
 
