@@ -4,7 +4,6 @@ export * from "./events";
 export * from "./fs";
 export * from "./model";
 export * from "./notifications";
-export * from "./run-hub";
 export * from "./session";
 export * from "./terminal";
 export * from "./tool";

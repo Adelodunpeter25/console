@@ -10,6 +10,7 @@
     "forceConsistentCasingInFileNames": true,
     "paths": {
       "@console/types": ["./packages/types/src/index.ts"],
+      "@console/utils": ["./packages/utils/src/index.ts"],
       "@console/api": ["./packages/api/src/index.ts"],
       "@/*": ["./apps/server/*"]
     }

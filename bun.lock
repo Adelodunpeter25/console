@@ -81,6 +81,7 @@
       "dependencies": {
         "@ai-sdk/openai-compatible": "^3.0.25",
         "@console/types": "*",
+        "@console/utils": "*",
         "@ff-labs/fff-node": "^0.10.0",
         "ai": "^7.0.55",
         "hono": "^4.4.12",
@@ -110,6 +111,16 @@
     "packages/types": {
       "name": "@console/types",
       "version": "1.0.0",
+      "devDependencies": {
+        "typescript": "~5.9.2",
+      },
+    },
+    "packages/utils": {
+      "name": "@console/utils",
+      "version": "1.0.0",
+      "dependencies": {
+        "@console/types": "*",
+      },
       "devDependencies": {
         "typescript": "~5.9.2",
       },
@@ -329,6 +340,8 @@
     "@console/server": ["@console/server@workspace:apps/server"],
 
     "@console/types": ["@console/types@workspace:packages/types"],
+
+    "@console/utils": ["@console/utils@workspace:packages/utils"],
 
     "@egjs/hammerjs": ["@egjs/hammerjs@2.0.17", "", { "dependencies": { "@types/hammerjs": "^2.0.36" } }, "sha512-XQsZgjm2EcVUiZQf11UBJQfmZeEmOW8DpI1gsFeln6w0ae0ii4dMQEQ0kjl6DspdWX1aGY1/loyXnP0JS06e/A=="],
 

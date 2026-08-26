@@ -10,6 +10,7 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.25",
     "@console/types": "*",
+    "@console/utils": "*",
     "@ff-labs/fff-node": "^0.10.0",
     "ai": "^7.0.55",
     "hono": "^4.4.12",

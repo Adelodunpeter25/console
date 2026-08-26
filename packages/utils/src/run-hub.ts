@@ -19,7 +19,7 @@
  * its exact wire behavior (stream just closes), so existing consumers are
  * unaffected until they adopt the new frames.
  */
-import type { AgentSessionEvent } from "./events";
+import type { AgentSessionEvent } from "@console/types";
 
 /** Maximum buffered events retained per active run for re-attach replay. */
 export const MAX_REPLAY_BUFFER = 500;
