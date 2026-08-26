@@ -102,7 +102,7 @@ impl RenderOnce for SidebarSessionItem {
         let is_renaming = self.is_renaming;
         let rename_input = self.rename_input;
 
-        let folder_name = self.project_name.clone().unwrap_or_else(|| {
+        let mut folder_name = self.project_name.clone().unwrap_or_else(|| {
             session
                 .cwd
                 .split(['/', '\\'])
@@ -111,6 +111,11 @@ impl RenderOnce for SidebarSessionItem {
                 .unwrap_or("workspace")
                 .to_string()
         });
+        // Directory names arrive lowercase from the filesystem; sentence-case
+        // the label so it reads like a title ("console" → "Console").
+        if let Some(first) = folder_name.get_mut(..1) {
+            first.make_ascii_uppercase();
+        }
 
         let display_title = if session.title.trim().is_empty() {
             "New Chat".to_string()
