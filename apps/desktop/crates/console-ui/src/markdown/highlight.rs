@@ -15,7 +15,6 @@
 //! This module is pure and synchronous; callers cache per line.
 
 use std::ops::Range;
-use std::path::Path;
 
 /// Paint class for a token. `Plain` is implicit — unmatched spans keep the
 /// block's foreground color.
@@ -105,46 +104,9 @@ pub fn lang_for_tag(tag: &str) -> Option<Lang> {
 }
 
 /// Resolve a file path to a fenced-code info string, via its extension.
-/// Mirrors mobile's `langFromPath` so readFile results highlight the same way
-/// on both platforms.
+/// Centralized in `crate::primitives::file_icons` so icon and language stay in sync.
 pub fn lang_tag_for_path(path: &str) -> Option<&'static str> {
-    let basename = path.rsplit(['/', '\\']).next().unwrap_or(path);
-    match basename.to_ascii_lowercase().as_str() {
-        "dockerfile" => return Some("dockerfile"),
-        "makefile" => return Some("makefile"),
-        _ => {}
-    }
-    let extension = Path::new(basename)
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .unwrap_or("");
-    Some(match extension {
-        "ts" | "tsx" | "mts" | "cts" => "typescript",
-        "js" | "jsx" | "mjs" | "cjs" => "javascript",
-        "json" | "jsonc" | "json5" => "json",
-        "html" | "htm" | "vue" | "svelte" => "html",
-        "css" => "css",
-        "scss" | "sass" => "scss",
-        "py" => "python",
-        "rb" => "ruby",
-        "go" => "go",
-        "rs" => "rust",
-        "java" => "java",
-        "kt" | "kts" => "kotlin",
-        "swift" => "swift",
-        "c" | "h" => "c",
-        "cpp" | "cc" | "cxx" | "hpp" => "cpp",
-        "cs" => "csharp",
-        "php" => "php",
-        "sh" | "bash" | "zsh" => "bash",
-        "yml" | "yaml" => "yaml",
-        "toml" | "ini" | "cfg" => "toml",
-        "xml" => "xml",
-        "md" | "markdown" => "markdown",
-        "sql" => "sql",
-        "graphql" | "gql" => "graphql",
-        _ => return None,
-    })
+    crate::primitives::file_icons::lang_tag_for_path(path)
 }
 
 // ── Language specs ─────────────────────────────────────────────────────────
