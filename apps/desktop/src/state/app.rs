@@ -171,6 +171,7 @@ pub struct ConsoleDesktopApp {
     pub server_menu: console_ui::primitives::ContextMenuHandle,
     pub deleted_sessions: Vec<SessionHeader>,
     pub settings_window_handle: Option<gpui::AnyWindowHandle>,
+    pub settings_window_view: Option<gpui::WeakEntity<crate::settings_window::SettingsWindow>>,
     pub _subscriptions: Vec<Subscription>,
 }
 
@@ -431,6 +432,7 @@ impl ConsoleDesktopApp {
             server_menu: console_ui::primitives::ContextMenuHandle::new(cx),
             deleted_sessions: Vec::new(),
             settings_window_handle: None,
+            settings_window_view: None,
             collapsed_groups: Rc::new(
                 layout
                     .collapsed_groups

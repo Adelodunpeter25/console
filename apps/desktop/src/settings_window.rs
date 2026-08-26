@@ -25,7 +25,12 @@ pub struct SettingsWindow {
 }
 
 impl SettingsWindow {
-    pub fn new(app: WeakEntity<ConsoleDesktopApp>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        app: WeakEntity<ConsoleDesktopApp>,
+        initial_tab: SettingsTab,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let subscription = app.upgrade().map(|app_entity| {
             cx.observe(&app_entity, |_this, _app, cx| cx.notify())
         });
@@ -50,7 +55,7 @@ impl SettingsWindow {
 
         Self {
             app,
-            active_tab: SettingsTab::Accounts,
+            active_tab: initial_tab,
             focus_handle: cx.focus_handle(),
             gemini_project_input,
             gemini_project_seeded: false,
@@ -60,6 +65,11 @@ impl SettingsWindow {
             new_env_probe: ProbeState::Unknown,
             _subscription: subscription,
         }
+    }
+
+    pub fn set_tab(&mut self, tab: SettingsTab, cx: &mut Context<Self>) {
+        self.active_tab = tab;
+        cx.notify();
     }
 }
 

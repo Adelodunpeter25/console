@@ -507,6 +507,20 @@ impl Render for ConsoleDesktopApp {
                         },
                         {
                             let entity = entity.clone();
+                            move |window, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.open_settings_tab(
+                                            console_ui::settings::SettingsTab::Connection,
+                                            window,
+                                            cx,
+                                        );
+                                    });
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
                             move |env_id: String, _w, cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {

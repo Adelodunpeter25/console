@@ -6,12 +6,26 @@ use crate::settings_window::SettingsWindow;
 use super::ConsoleDesktopApp;
 
 impl ConsoleDesktopApp {
-    pub fn open_settings(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_settings_tab(console_ui::settings::SettingsTab::Accounts, window, cx);
+    }
+
+    pub fn open_settings_tab(
+        &mut self,
+        tab: console_ui::settings::SettingsTab,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(handle) = self.settings_window_handle {
-            if cx.update_window(handle, |_root, window, _cx| {
-                window.activate_window();
-            }).is_ok() {
-                return;
+            if let Some(view) = self.settings_window_view.as_ref().and_then(|v| v.upgrade()) {
+                if cx.update_window(handle, |_root, window, cx| {
+                    window.activate_window();
+                    view.update(cx, |settings, cx| {
+                        settings.set_tab(tab, cx);
+                    });
+                }).is_ok() {
+                    return;
+                }
             }
         }
 
@@ -36,14 +50,17 @@ impl ConsoleDesktopApp {
         let app_entity = cx.entity().downgrade();
 
         cx.defer(move |cx| {
+            let mut settings_weak = None;
             let handle = cx.open_window(options, |window, cx| {
-                let settings_view = cx.new(|cx| SettingsWindow::new(app_entity, window, cx));
+                let settings_view = cx.new(|cx| SettingsWindow::new(app_entity, tab, window, cx));
+                settings_weak = Some(settings_view.downgrade());
                 cx.new(|cx| gpui_component::Root::new(settings_view, window, cx))
             }).ok();
 
             if let Some(h) = handle {
                 entity.update(cx, |this, _cx| {
                     this.settings_window_handle = Some(h.into());
+                    this.settings_window_view = settings_weak;
                 });
             }
         });
