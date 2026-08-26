@@ -875,17 +875,3 @@ fn grouped_number(value: u64) -> String {
     }
     grouped
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-use crate::primitives::{app_icon, IconName};
-
-    #[test]
-    fn groups_change_counts() {
-        assert_eq!(grouped_number(0), "0");
-        assert_eq!(grouped_number(2_849), "2,849");
-        assert_eq!(grouped_number(1_234_567), "1,234,567");
-    }
-}

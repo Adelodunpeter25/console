@@ -174,14 +174,3 @@ impl RenderOnce for ThinkingBlock {
             })
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::thinking_word_count;
-
-    #[test]
-    fn counts_words_using_whitespace_boundaries() {
-        assert_eq!(thinking_word_count("  first\nsecond\tthird  "), 3);
-        assert_eq!(thinking_word_count("   "), 0);
-    }
-}

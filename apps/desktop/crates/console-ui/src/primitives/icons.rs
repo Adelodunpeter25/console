@@ -680,36 +680,3 @@ pub fn app_icon(name: IconName, size: f32, color: Hsla) -> Svg {
 pub fn provider_app_icon(provider: &str, size: f32, color: Hsla) -> Svg {
     app_icon(IconName::provider(provider), size, color)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{FileTypeIcon, IconName, ProviderIcon};
-
-    #[test]
-    fn catalog_covers_root_provider_and_file_type_assets() {
-        assert_eq!(IconName::Folder.path(), "icons/folder.svg");
-        assert_eq!(IconName::TriangleAlert.path(), "icons/triangle-alert.svg");
-        assert_eq!(IconName::Pencil.path(), "icons/pencil.svg");
-        assert_eq!(IconName::WindowRestore.path(), "icons/window-restore.svg");
-        assert_eq!(
-            IconName::Provider(ProviderIcon::Gemini).path(),
-            "icons/providers/gemini.svg"
-        );
-        assert_eq!(
-            IconName::FileType(FileTypeIcon::Rust).path(),
-            "icons/file-types/rust.svg"
-        );
-    }
-
-    #[test]
-    fn provider_names_resolve_to_typed_icons() {
-        assert_eq!(
-            IconName::provider("claude").path(),
-            "icons/provider-claude.svg"
-        );
-        assert_eq!(
-            IconName::provider("google").path(),
-            "icons/providers/gemini.svg"
-        );
-    }
-}

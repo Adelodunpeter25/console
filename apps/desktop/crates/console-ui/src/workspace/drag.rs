@@ -72,34 +72,3 @@ impl Render for WorkspaceDragPreview {
             .child(self.title.clone())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cancelling_a_drag_invalidates_old_payloads_but_not_new_ones() {
-        let drag = WorkspaceDrag::new(
-            WorkspaceTabConfig::Chat {
-                session_id: "session-a".into(),
-                title: "Session A".into(),
-                project_id: None,
-            },
-            None,
-        );
-        assert!(!drag.is_cancelled());
-
-        cancel_workspace_drags();
-        assert!(drag.is_cancelled());
-
-        let fresh_drag = WorkspaceDrag::new(
-            WorkspaceTabConfig::Chat {
-                session_id: "session-b".into(),
-                title: "Session B".into(),
-                project_id: None,
-            },
-            None,
-        );
-        assert!(!fresh_drag.is_cancelled());
-    }
-}

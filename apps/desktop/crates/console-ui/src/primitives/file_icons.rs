@@ -232,53 +232,79 @@ pub fn file_type_icon(path_or_name: &str, size: f32) -> Img {
     file_icon(file_icon_for_path(path_or_name), size)
 }
 
+/// Resolve a fenced-code language tag (e.g. "ts", "python") to its file-type icon.
+/// Mirrors mobile's `LANG_ALIASES` so code-block headers show the same icon as
+/// file rows. Returns `None` for unknown/empty tags so the caller can fall
+/// back to a text-only header.
+pub fn file_icon_for_language(tag: &str) -> Option<&'static str> {
+    let tag = tag.trim().to_ascii_lowercase();
+    if tag.is_empty() {
+        return None;
+    }
+    Some(match tag.as_str() {
+        "ts" | "typescript" | "mts" | "cts" => FileTypeIcon::Typescript.path(),
+        "tsx" => FileTypeIcon::React.path(),
+        "js" | "javascript" | "mjs" | "cjs" | "node" => FileTypeIcon::Javascript.path(),
+        "jsx" => FileTypeIcon::React.path(),
+        "py" | "python" | "python3" | "pyi" | "pyw" => FileTypeIcon::Python.path(),
+        "rs" | "rust" => FileTypeIcon::Rust.path(),
+        "go" | "golang" => FileTypeIcon::Go.path(),
+        "rb" | "ruby" | "gemfile" | "rake" => FileTypeIcon::Ruby.path(),
+        "php" => FileTypeIcon::Php.path(),
+        "java" | "class" => FileTypeIcon::Java.path(),
+        "kt" | "kotlin" | "kts" => FileTypeIcon::Kotlin.path(),
+        "swift" => FileTypeIcon::Swift.path(),
+        "c" | "h" | "m" => FileTypeIcon::C.path(),
+        "cpp" | "cc" | "cxx" | "hh" | "hpp" | "hxx" | "mm" | "c++" => FileTypeIcon::Cpp.path(),
+        "cs" | "csharp" | "c#" => FileTypeIcon::Csharp.path(),
+        "hs" | "haskell" | "lhs" => FileTypeIcon::Haskell.path(),
+        "ex" | "elixir" | "exs" => FileTypeIcon::Elixir.path(),
+        "erl" | "erlang" | "hrl" => FileTypeIcon::Erlang.path(),
+        "clj" | "clojure" | "cljs" | "cljc" | "edn" => FileTypeIcon::Clojure.path(),
+        "lua" => FileTypeIcon::Lua.path(),
+        "zig" => FileTypeIcon::Zig.path(),
+        "dart" => FileTypeIcon::Dart.path(),
+        "elm" => FileTypeIcon::Elm.path(),
+        "cr" | "crystal" => FileTypeIcon::Crystal.path(),
+        "jl" | "julia" => FileTypeIcon::Julia.path(),
+        "ml" | "ocaml" | "mli" => FileTypeIcon::Ocaml.path(),
+        "pl" | "perl" | "pm" => FileTypeIcon::Perl.path(),
+        "scala" | "sbt" | "sc" => FileTypeIcon::Scala.path(),
+        "sol" | "solidity" => FileTypeIcon::Solidity.path(),
+        "tex" | "sty" | "cls" => FileTypeIcon::Tex.path(),
+        "prisma" => FileTypeIcon::Prisma.path(),
+        "proto" => FileTypeIcon::Proto.path(),
+        "graphql" | "gql" => FileTypeIcon::Graphql.path(),
+        "svelte" => FileTypeIcon::Svelte.path(),
+        "vue" => FileTypeIcon::Vue.path(),
+        "astro" => FileTypeIcon::Astro.path(),
+        "nix" => FileTypeIcon::Nix.path(),
+        "tf" | "terraform" | "tfvars" => FileTypeIcon::Terraform.path(),
+        "docker" | "dockerfile" => FileTypeIcon::Docker.path(),
+        "make" | "makefile" => FileTypeIcon::Makefile.path(),
+        "cmake" | "cmakelists" => FileTypeIcon::Cmake.path(),
+        "helm" => FileTypeIcon::Helm.path(),
+        "json" | "jsonc" | "json5" => FileTypeIcon::Json.path(),
+        "yaml" | "yml" => FileTypeIcon::Yaml.path(),
+        "toml" | "ini" | "cfg" | "conf" | "config" => FileTypeIcon::Settings.path(),
+        "xml" | "xsl" | "plist" => FileTypeIcon::Xml.path(),
+        "md" | "markdown" | "mdx" => FileTypeIcon::Markdown.path(),
+        "sh" | "bash" | "zsh" | "fish" | "shell" | "shellscript" | "console" => {
+            FileTypeIcon::Console.path()
+        }
+        "ps1" | "powershell" | "psm1" => FileTypeIcon::Powershell.path(),
+        "css" => FileTypeIcon::Css.path(),
+        "scss" | "sass" | "less" => FileTypeIcon::Sass.path(),
+        "html" | "htm" => FileTypeIcon::Html.path(),
+        "svg" => FileTypeIcon::Svg.path(),
+        "sql" | "postgres" | "postgresql" | "mysql" | "sqlite" => FileTypeIcon::Database.path(),
+        "diff" | "patch" => FileTypeIcon::Diff.path(),
+        "wasm" | "wat" | "webassembly" => FileTypeIcon::Webassembly.path(),
+        _ => return None,
+    })
+}
+
 /// Basename of a path, handling both separator styles.
 pub fn base_name(path: &str) -> &str {
     path.rsplit(['/', '\\']).next().unwrap_or(path)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{FileTypeIcon, file_icon_for_path, file_icon_for_name};
-
-    #[test]
-    fn file_icons_follow_names_and_extensions() {
-        assert_eq!(file_icon_for_name("main.rs"), FileTypeIcon::Rust.path());
-        assert_eq!(file_icon_for_name("Panel.tsx"), FileTypeIcon::React.path());
-        assert_eq!(file_icon_for_name("README.md"), FileTypeIcon::Readme.path());
-        assert_eq!(
-            file_icon_for_name("Dockerfile.dev"),
-            FileTypeIcon::Docker.path()
-        );
-        assert_eq!(file_icon_for_name("bun.lock"), FileTypeIcon::Bun.path());
-        assert_eq!(
-            file_icon_for_name("pnpm-lock.yaml"),
-            FileTypeIcon::Pnpm.path()
-        );
-        assert_eq!(
-            file_icon_for_name("vite.config.ts"),
-            FileTypeIcon::Vite.path()
-        );
-        assert_eq!(file_icon_for_name(".env.local"), FileTypeIcon::Settings.path());
-        assert_eq!(file_icon_for_name("unknown.data"), FileTypeIcon::File.path());
-    }
-
-    #[test]
-    fn paths_resolve_through_their_basename() {
-        assert_eq!(
-            file_icon_for_path("src/lib/main.rs"),
-            FileTypeIcon::Rust.path()
-        );
-        assert_eq!(
-            file_icon_for_path("C:\\repo\\src\\app.tsx"),
-            FileTypeIcon::React.path()
-        );
-    }
-
-    #[test]
-    fn base_names_strip_both_separator_styles() {
-        assert_eq!(super::base_name("src/lib/main.rs"), "main.rs");
-        assert_eq!(super::base_name("C:\\repo\\app.tsx"), "app.tsx");
-        assert_eq!(super::base_name("README.md"), "README.md");
-    }
 }

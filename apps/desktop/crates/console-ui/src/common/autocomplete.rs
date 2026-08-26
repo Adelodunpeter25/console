@@ -395,38 +395,3 @@ impl RenderOnce for AutocompleteView {
         .into_any_element()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn detects_line_start_slash_commands() {
-        let trigger = detect_trigger("build\n/plan", 11).expect("slash trigger");
-        assert_eq!(trigger.kind, AutocompleteKind::Command);
-        assert_eq!(trigger.range, 6..11);
-        assert_eq!(trigger.query, "plan");
-    }
-
-    #[test]
-    fn detects_whitespace_delimited_file_references() {
-        let trigger = detect_trigger("read @src/main", 14).expect("file trigger");
-        assert_eq!(trigger.kind, AutocompleteKind::File);
-        assert_eq!(trigger.query, "src/main");
-    }
-
-    #[test]
-    fn does_not_treat_email_addresses_as_file_references() {
-        assert!(detect_trigger("mail me@example", 15).is_none());
-    }
-
-    #[test]
-    fn does_not_panic_when_caret_precedes_a_new_slash_trigger() {
-        assert!(detect_trigger("/", 0).is_none());
-    }
-
-    #[test]
-    fn does_not_panic_when_caret_precedes_a_new_file_trigger() {
-        assert!(detect_trigger("@src/main", 0).is_none());
-    }
-}

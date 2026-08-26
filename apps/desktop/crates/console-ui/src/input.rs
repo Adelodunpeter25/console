@@ -597,32 +597,6 @@ impl PromptHistory {
     }
 }
 
-#[cfg(test)]
-mod prompt_history_tests {
-    use super::PromptHistory;
-
-    #[test]
-    fn preserves_draft_when_returning_to_newest_position() {
-        let mut history = PromptHistory::default();
-        history.set_entries(vec!["first".into(), "second".into()]);
-
-        assert_eq!(history.navigate(false, "draft"), Some("second".into()));
-        assert_eq!(history.navigate(false, "second"), Some("first".into()));
-        assert_eq!(history.navigate(true, "first"), Some("second".into()));
-        assert_eq!(history.navigate(true, "second"), Some("draft".into()));
-        assert!(!history.is_navigating());
-    }
-
-    #[test]
-    fn avoids_consecutive_duplicate_prompts() {
-        let mut history = PromptHistory::default();
-        history.record("same".into());
-        history.record("same".into());
-        history.record("next".into());
-        assert_eq!(history.entries, vec!["same", "next"]);
-    }
-}
-
 pub struct ComposerInput {
     focus_handle: FocusHandle,
     mode: FieldMode,

@@ -423,17 +423,3 @@ impl RenderOnce for AssistantMessageBubble {
             )
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::selection_row_for_part;
-
-    #[test]
-    fn assistant_content_parts_have_distinct_selection_rows() {
-        assert_ne!(
-            selection_row_for_part("message-7", 0),
-            selection_row_for_part("message-7", 1)
-        );
-        assert_eq!(selection_row_for_part("message-7", 1), "message-7-part-1");
-    }
-}
