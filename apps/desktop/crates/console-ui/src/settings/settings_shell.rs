@@ -35,7 +35,7 @@ impl RenderOnce for SettingsShell {
         let tabs = [
             (SettingsTab::Accounts, IconName::User, "Accounts"),
             (SettingsTab::Connection, IconName::Server, "Connection"),
-            (SettingsTab::Projects, IconName::FolderOpen, "Projects"),
+            (SettingsTab::Projects, IconName::Folder, "Projects"),
             (SettingsTab::DeletedChats, IconName::TrashBinMinimalistic, "Deleted chats"),
         ];
 

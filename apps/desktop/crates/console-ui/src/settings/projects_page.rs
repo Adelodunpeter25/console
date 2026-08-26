@@ -65,7 +65,7 @@ impl RenderOnce for ProjectsPage {
                                 cx.stop_propagation();
                                 (on_add)(window, cx);
                             })
-                            .child(app_icon(IconName::FolderOpen, 13.0, theme.on_inverse))
+                            .child(app_icon(IconName::Folder, 13.0, theme.on_inverse))
                             .child(
                                 div()
                                     .text_size(px(12.0))
@@ -88,7 +88,7 @@ impl RenderOnce for ProjectsPage {
                         .items_center()
                         .justify_center()
                         .gap(px(8.0))
-                        .child(app_icon(IconName::FolderOpen, 24.0, theme.text_ghost))
+                        .child(app_icon(IconName::Folder, 24.0, theme.text_ghost))
                         .child(
                             div()
                                 .text_size(px(13.0))
@@ -119,7 +119,7 @@ impl RenderOnce for ProjectsPage {
                                         .flex()
                                         .items_center()
                                         .gap(px(10.0))
-                                        .child(app_icon(IconName::FolderOpen, 16.0, theme.accent))
+                                        .child(app_icon(IconName::Folder, 16.0, theme.accent))
                                         .child(
                                             div()
                                                 .flex()
@@ -143,7 +143,7 @@ impl RenderOnce for ProjectsPage {
                                 .child(
                                     div()
                                         .id(ElementId::from(format!("btn-remove-proj-{}", proj_id)))
-                                        .px(px(8.0))
+                                        .px(px(6.0))
                                         .py(px(4.0))
                                         .rounded(px(5.0))
                                         .cursor_pointer()
@@ -152,12 +152,7 @@ impl RenderOnce for ProjectsPage {
                                             cx.stop_propagation();
                                             (on_rem)(proj_id.clone(), window, cx);
                                         })
-                                        .child(
-                                            div()
-                                                .text_size(px(11.5))
-                                                .text_color(theme.danger)
-                                                .child("Remove"),
-                                        ),
+                                        .child(app_icon(IconName::TrashBinMinimalistic, 13.0, theme.text_ghost)),
                                 )
                         }))
                 },
