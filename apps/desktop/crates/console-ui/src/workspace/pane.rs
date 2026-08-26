@@ -38,6 +38,17 @@ pub struct WorkspacePane {
         Rc<dyn Fn(String, WorkspaceDrag, WorkspaceDropAction, &mut Window, &mut App) + 'static>,
     on_close_pane: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_focus_pane: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_resize_split: Option<
+        Rc<
+            dyn Fn(
+                    String,
+                    console_core::SplitDirection,
+                    gpui::Point<gpui::Pixels>,
+                    &mut Window,
+                    &mut App,
+                ) + 'static,
+        >,
+    >,
 }
 
 impl WorkspacePane {
@@ -62,7 +73,22 @@ impl WorkspacePane {
             on_drop_tab,
             on_close_pane,
             on_focus_pane,
+            on_resize_split: None,
         }
+    }
+
+    pub fn with_resize_split(
+        mut self,
+        on_resize_split: impl Fn(
+            String,
+            console_core::SplitDirection,
+            gpui::Point<gpui::Pixels>,
+            &mut Window,
+            &mut App,
+        ) + 'static,
+    ) -> Self {
+        self.on_resize_split = Some(Rc::new(on_resize_split));
+        self
     }
 }
 
@@ -222,6 +248,17 @@ fn render_node(
     >,
     on_close_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_focus_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_resize_split: &Option<
+        Rc<
+            dyn Fn(
+                    String,
+                    console_core::SplitDirection,
+                    gpui::Point<gpui::Pixels>,
+                    &mut Window,
+                    &mut App,
+                ) + 'static,
+        >,
+    >,
     can_close_pane: bool,
     window: &mut Window,
     cx: &mut App,
@@ -243,6 +280,12 @@ fn render_node(
         WorkspaceNode::Split(split) => {
             let theme = Theme::current(cx);
             let is_horizontal = matches!(split.direction, console_core::SplitDirection::Horizontal);
+            let size_0 = split.sizes[0].clamp(5.0, 95.0);
+            let size_1 = split.sizes[1].clamp(5.0, 95.0);
+            let on_resize = on_resize_split.clone();
+            let split_id = split.id.clone();
+            let direction = split.direction;
+
             div()
                 .id(ElementId::Name(
                     format!("workspace-split-{}", split.id).into(),
@@ -253,19 +296,30 @@ fn render_node(
                 .flex()
                 .when(is_horizontal, |el| el.flex_row())
                 .when(!is_horizontal, |el| el.flex_col())
-                .child(render_node(
-                    &split.children[0],
-                    active_pane_id,
-                    render_content,
-                    on_select_tab,
-                    on_close_tab,
-                    on_drop_tab,
-                    on_close_pane,
-                    on_focus_pane,
-                    can_close_pane,
-                    window,
-                    cx,
-                ))
+                .child(
+                    div()
+                        .min_w_0()
+                        .min_h_0()
+                        .flex_grow(size_0)
+                        .flex_shrink(1.0)
+                        .flex_basis(gpui::relative(size_0 / 100.0))
+                        .flex()
+                        .flex_col()
+                        .child(render_node(
+                            &split.children[0],
+                            active_pane_id,
+                            render_content,
+                            on_select_tab,
+                            on_close_tab,
+                            on_drop_tab,
+                            on_close_pane,
+                            on_focus_pane,
+                            on_resize_split,
+                            can_close_pane,
+                            window,
+                            cx,
+                        )),
+                )
                 // Divider between panes.
                 .child(
                     div()
@@ -274,27 +328,61 @@ fn render_node(
                         ))
                         .flex_none()
                         .when(is_horizontal, |el| {
-                            el.w(px(2.0)).h_full().cursor_col_resize()
+                            el.w(px(6.0)).mx(px(-2.0)).h_full().cursor_col_resize()
                         })
                         .when(!is_horizontal, |el| {
-                            el.h(px(2.0)).w_full().cursor_row_resize()
+                            el.h(px(6.0)).my(px(-2.0)).w_full().cursor_row_resize()
                         })
-                        .bg(theme.border)
-                        .hover(|s| s.bg(theme.accent)),
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            div()
+                                .when(is_horizontal, |el| el.w(px(1.0)).h_full())
+                                .when(!is_horizontal, |el| el.h(px(1.0)).w_full())
+                                .bg(theme.border),
+                        )
+                        .hover(|s| s.bg(theme.accent.opacity(0.4)))
+                        .when_some(on_resize, |el, on_resize| {
+                            let split_id = split_id.clone();
+                            el.on_mouse_down(
+                                gpui::MouseButton::Left,
+                                move |event: &gpui::MouseDownEvent, window, cx| {
+                                    (on_resize)(
+                                        split_id.clone(),
+                                        direction,
+                                        event.position,
+                                        window,
+                                        cx,
+                                    );
+                                },
+                            )
+                        }),
                 )
-                .child(render_node(
-                    &split.children[1],
-                    active_pane_id,
-                    render_content,
-                    on_select_tab,
-                    on_close_tab,
-                    on_drop_tab,
-                    on_close_pane,
-                    on_focus_pane,
-                    can_close_pane,
-                    window,
-                    cx,
-                ))
+                .child(
+                    div()
+                        .min_w_0()
+                        .min_h_0()
+                        .flex_grow(size_1)
+                        .flex_shrink(1.0)
+                        .flex_basis(gpui::relative(size_1 / 100.0))
+                        .flex()
+                        .flex_col()
+                        .child(render_node(
+                            &split.children[1],
+                            active_pane_id,
+                            render_content,
+                            on_select_tab,
+                            on_close_tab,
+                            on_drop_tab,
+                            on_close_pane,
+                            on_focus_pane,
+                            on_resize_split,
+                            can_close_pane,
+                            window,
+                            cx,
+                        )),
+                )
                 .into_any_element()
         }
     }
@@ -312,6 +400,7 @@ impl RenderOnce for WorkspacePane {
             &self.on_drop_tab,
             &self.on_close_pane,
             &self.on_focus_pane,
+            &self.on_resize_split,
             can_close_pane,
             window,
             cx,

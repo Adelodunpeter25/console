@@ -280,6 +280,40 @@ pub fn move_tab_to_split(
     inject(root, target_pane_id, &split_id, insert_left, new_leaf).then_some(new_pane_id)
 }
 
+/// Update the proportion of a split node given a new size for the first child (in percent, e.g. 10.0..=90.0).
+pub fn resize_split(root: &mut WorkspaceNode, split_id: &str, size_0: f32) -> bool {
+    let size_0 = size_0.clamp(10.0, 90.0);
+    let size_1 = 100.0 - size_0;
+
+    fn update_split(node: &mut WorkspaceNode, split_id: &str, sizes: [f32; 2]) -> bool {
+        match node {
+            WorkspaceNode::Split(split) if split.id == split_id => {
+                split.sizes = sizes;
+                true
+            }
+            WorkspaceNode::Split(split) => {
+                update_split(&mut split.children[0], split_id, sizes)
+                    || update_split(&mut split.children[1], split_id, sizes)
+            }
+            WorkspaceNode::Leaf(_) => false,
+        }
+    }
+
+    update_split(root, split_id, [size_0, size_1])
+}
+
+/// Find current sizes for a split node.
+pub fn find_split_sizes(root: &WorkspaceNode, split_id: &str) -> Option<[f32; 2]> {
+    match root {
+        WorkspaceNode::Split(split) if split.id == split_id => Some(split.sizes),
+        WorkspaceNode::Split(split) => {
+            find_split_sizes(&split.children[0], split_id)
+                .or_else(|| find_split_sizes(&split.children[1], split_id))
+        }
+        WorkspaceNode::Leaf(_) => None,
+    }
+}
+
 /// A short unique suffix for generated pane/split ids.
 fn unique_suffix() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};

@@ -253,7 +253,9 @@ impl Render for ConsoleDesktopApp {
                 move |event: &MouseMoveEvent, _, cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            if this.resize_sidebar(f32::from(event.position.x)) {
+                            let sidebar_changed = this.resize_sidebar(f32::from(event.position.x));
+                            let split_changed = this.resize_split_drag(event.position);
+                            if sidebar_changed || split_changed {
                                 cx.notify();
                             }
                         });
@@ -265,7 +267,9 @@ impl Render for ConsoleDesktopApp {
                 move |_: &MouseUpEvent, _, cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            if this.finish_sidebar_resize() {
+                            let sidebar_changed = this.finish_sidebar_resize();
+                            let split_changed = this.finish_split_resize();
+                            if sidebar_changed || split_changed {
                                 cx.notify();
                             }
                         });
@@ -482,16 +486,31 @@ impl Render for ConsoleDesktopApp {
                             .flex()
                             .flex_col()
                             .overflow_hidden()
-                            .child(WorkspacePane::new(
-                                workspace_root,
-                                active_pane,
-                                render_content,
-                                on_select_tab,
-                                on_close_tab,
-                                on_drop_tab,
-                                on_close_pane,
-                                on_focus_pane,
-                            )),
+                            .child({
+                                let entity_for_split = entity.clone();
+                                WorkspacePane::new(
+                                    workspace_root,
+                                    active_pane,
+                                    render_content,
+                                    on_select_tab,
+                                    on_close_tab,
+                                    on_drop_tab,
+                                    on_close_pane,
+                                    on_focus_pane,
+                                )
+                                .with_resize_split(
+                                    move |split_id, direction, start_pos, window, cx| {
+                                        if let Some(app) = entity_for_split.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.begin_split_resize(
+                                                    split_id, direction, start_pos, window,
+                                                );
+                                                cx.notify();
+                                            });
+                                        }
+                                    },
+                                )
+                            }),
                     ),
             )
             .when_some(self.zoomed_image.clone(), |el, image| {

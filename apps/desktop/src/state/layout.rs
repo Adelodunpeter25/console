@@ -71,6 +71,47 @@ impl ConsoleDesktopApp {
         }
     }
 
+    pub fn begin_split_resize(
+        &mut self,
+        split_id: String,
+        direction: console_core::SplitDirection,
+        start_pos: gpui::Point<gpui::Pixels>,
+        window: &Window,
+    ) {
+        let sizes = console_ui::workspace::find_split_sizes(&self.workspace_root, &split_id)
+            .unwrap_or([50.0, 50.0]);
+        let viewport_size = window.viewport_size();
+        self.split_resize = Some((split_id, direction, start_pos, sizes, viewport_size));
+    }
+
+    pub fn resize_split_drag(&mut self, current_pos: gpui::Point<gpui::Pixels>) -> bool {
+        let Some((split_id, direction, start_pos, start_sizes, viewport_size)) =
+            self.split_resize.clone()
+        else {
+            return false;
+        };
+
+        let delta_percent = match direction {
+            console_core::SplitDirection::Horizontal => {
+                let avail_width = (f32::from(viewport_size.width) - self.sidebar_width).max(100.0);
+                let delta_px = f32::from(current_pos.x - start_pos.x);
+                (delta_px / avail_width) * 100.0
+            }
+            console_core::SplitDirection::Vertical => {
+                let avail_height = f32::from(viewport_size.height).max(100.0);
+                let delta_px = f32::from(current_pos.y - start_pos.y);
+                (delta_px / avail_height) * 100.0
+            }
+        };
+
+        let new_size_0 = (start_sizes[0] + delta_percent).clamp(10.0, 90.0);
+        console_ui::workspace::resize_split(&mut self.workspace_root, &split_id, new_size_0)
+    }
+
+    pub fn finish_split_resize(&mut self) -> bool {
+        self.split_resize.take().is_some()
+    }
+
     /// Track the window frame for persistence. Called every render: an
     /// unchanged frame costs one `Copy` struct comparison and no I/O; a
     /// changed frame is written at most once per [`WINDOW_SAVE_DEBOUNCE`],

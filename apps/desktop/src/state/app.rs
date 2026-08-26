@@ -139,6 +139,14 @@ pub struct ConsoleDesktopApp {
     pub sidebar_list_state: ListState,
     /// Live drag-resize anchor, owned by `layout`.
     pub(crate) sidebar_resize_start: Option<(f32, f32)>,
+    /// Active split divider drag: (split_id, direction, start_pos, start_sizes, viewport_size)
+    pub(crate) split_resize: Option<(
+        String,
+        console_core::SplitDirection,
+        gpui::Point<gpui::Pixels>,
+        [f32; 2],
+        gpui::Size<gpui::Pixels>,
+    )>,
     /// Calendar-period groups the user collapsed in the sidebar. Shared with
     /// the sidebar; cloned per frame as a refcount bump.
     pub collapsed_groups: Rc<std::collections::HashSet<SessionDateGroup>>,
@@ -402,6 +410,7 @@ impl ConsoleDesktopApp {
             sidebar_width,
             sidebar_list_state: ListState::new(0, ListAlignment::Top, px(55.0)),
             sidebar_resize_start: None,
+            split_resize: None,
             saved_window_state: persistence::store::load_window(),
             pending_window_state: None,
             command_palette: cx.new(|cx| CommandPalette::new(window, cx)),
