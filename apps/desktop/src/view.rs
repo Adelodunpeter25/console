@@ -85,10 +85,16 @@ impl Render for ConsoleDesktopApp {
                 move |pane_id: String, tab_id: String, _w: &mut Window, cx: &mut App| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            this.save_transcript_scroll_position(cx);
+                            let prev_sid = this
+                                .active_session_for_pane(&pane_id)
+                                .map(|s| s.to_string());
                             this.select_workspace_tab(&pane_id, &tab_id);
                             if let Some(sid) = tab_id.strip_prefix("chat:") {
                                 this.selected_session_id = Some(sid.to_string());
+                                if prev_sid.as_deref() == Some(sid) {
+                                    cx.notify();
+                                    return;
+                                }
                                 this.composer_for_pane(&pane_id).update(cx, |input, cx| {
                                     input.set_prompt_history(Vec::new(), cx);
                                 });
@@ -113,24 +119,35 @@ impl Render for ConsoleDesktopApp {
                 move |pane_id: String, tab_id: String, _w: &mut Window, cx: &mut App| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
+                            let prev_active_session = this
+                                .active_session_for_pane(&pane_id)
+                                .map(|s| s.to_string());
                             this.save_transcript_scroll_position(cx);
                             this.close_workspace_tab(&pane_id, &tab_id);
                             this.active_pane_id = Some(pane_id.clone());
                             let transcript = this.transcript_for_pane(&pane_id);
                             let composer = this.composer_for_pane(&pane_id);
-                            if let Some(active) = this.active_tab_id() {
-                                if let Some(sid) = active.strip_prefix("chat:") {
-                                    this.selected_session_id = Some(sid.to_string());
-                                    composer.update(cx, |input, cx| {
-                                        input.set_prompt_history(Vec::new(), cx);
-                                    });
-                                    transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
-                                    this.load_session_messages_for_pane(
-                                        pane_id.clone(),
-                                        sid.to_string(),
-                                        cx,
-                                    );
-                                }
+                            let new_active_session = this
+                                .active_session_for_pane(&pane_id)
+                                .map(|s| s.to_string());
+
+                            if new_active_session == prev_active_session && new_active_session.is_some() {
+                                // The active tab in this pane did not change; no reload or transcript clearing needed.
+                                cx.notify();
+                                return;
+                            }
+
+                            if let Some(sid) = new_active_session {
+                                this.selected_session_id = Some(sid.clone());
+                                composer.update(cx, |input, cx| {
+                                    input.set_prompt_history(Vec::new(), cx);
+                                });
+                                transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
+                                this.load_session_messages_for_pane(
+                                    pane_id.clone(),
+                                    sid,
+                                    cx,
+                                );
                             } else {
                                 this.selected_session_id = None;
                                 composer.update(cx, |input, cx| input.set_content("", cx));

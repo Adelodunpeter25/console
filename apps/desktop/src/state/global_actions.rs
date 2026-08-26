@@ -98,19 +98,26 @@ impl ConsoleDesktopApp {
         let Some(tab_id) = self.active_tab_id() else {
             return;
         };
+        let prev_active_session = self.active_session_for_pane(&pane_id).map(|s| s.to_string());
         self.save_transcript_scroll_position(cx);
         self.close_workspace_tab(&pane_id, &tab_id);
         let transcript = self.transcript_for_pane(&pane_id);
         let composer = self.composer_for_pane(&pane_id);
-        if let Some(active) = self.active_tab_id() {
-            if let Some(sid) = active.strip_prefix("chat:") {
-                self.selected_session_id = Some(sid.to_string());
-                composer.update(cx, |input, cx| {
-                    input.set_prompt_history(Vec::new(), cx);
-                });
-                transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
-                self.load_session_messages_for_pane(pane_id.clone(), sid.to_string(), cx);
-            }
+        let new_active_session = self.active_session_for_pane(&pane_id).map(|s| s.to_string());
+
+        if new_active_session == prev_active_session && new_active_session.is_some() {
+            // Active session did not change
+            cx.notify();
+            return;
+        }
+
+        if let Some(sid) = new_active_session {
+            self.selected_session_id = Some(sid.clone());
+            composer.update(cx, |input, cx| {
+                input.set_prompt_history(Vec::new(), cx);
+            });
+            transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
+            self.load_session_messages_for_pane(pane_id.clone(), sid, cx);
         } else {
             self.selected_session_id = None;
             composer.update(cx, |input, cx| input.set_content("", cx));
