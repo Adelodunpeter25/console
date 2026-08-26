@@ -20,6 +20,15 @@ Key architectural facts that make this easy here:
 - Pending questions/permissions are keyed by `requestId` in `RunService`,
   fully transport-independent.
 
+## Target scenario: cross-surface continuation
+
+A user starts a chat on mobile; later they sit down at the desktop and open the
+same session. The desktop must show the full persisted transcript **and** stream
+the still-running agent in real time — not a stale SQLite snapshot. Conversely,
+a run started on desktop must be readable live from mobile. Phase 1 makes this
+possible (the attach route is device-agnostic); Phases 2–3 wire each client up
+to it.
+
 ## Phase 1 — Server: pub/sub emit path + attach route
 
 ### Tasks
@@ -108,10 +117,45 @@ Key architectural facts that make this easy here:
   - Background the app during a long tool run → return → still realtime.
   - Abort from a second surface (if desktop attached) → both finalize.
 
-## Phase 3 — Hardening (follow-up)
+## Phase 3 — Desktop re-attach (cross-surface continuation)
 
-- [ ] Desktop parity: consume the attach endpoint in GPUI `console-core`
-  (`services/run.rs`) for the same behavior.
+Goal: start on phone, continue live on desktop (and vice versa).
+
+### Tasks
+
+- [ ] **3.1 Attach endpoint in `console-core`.** Add an SSE-consuming service in
+  `apps/desktop/crates/console-core/src/services/run.rs` mirroring the existing
+  run service: connect to `GET /api/sessions/:id/run/stream?since=<seq>` and feed
+  events into the same dispatch path used by locally-started runs.
+
+- [ ] **3.2 Attach on session entry.** When the GPUI app opens a session whose
+  server header reports `status === "working"` but no local run is active, load
+  persisted history first (existing session service), then open the attach
+  stream and converge via incoming events. Set the session's running/stop state
+  as if the run were local so the stop button and working indicators behave
+  correctly.
+
+- [ ] **3.3 History-first convergence.** Ensure replaying events on top of loaded
+  history cannot duplicate content: reuse the same reducer/guards the desktop
+  applies to its own run events (`applyChatEvent` parity in Rust); ignore or
+  merge events already reflected in persisted messages.
+
+- [ ] **3.4 Terminal + abort handling.** On terminal frames (`done`/`aborted`),
+  finalize the attached session exactly like a locally-started run (status flip,
+  header refresh, query invalidation equivalent). `/abort` from the desktop must
+  keep working against the server-side active run even though the desktop did
+  not start it.
+
+- [ ] **3.5 Verify cross-surface flows.**
+  - Start a run on mobile → open desktop mid-run → transcript loads then streams
+    live; run completes normally on both surfaces.
+  - Same in reverse (desktop → mobile).
+  - Abort from the non-initiating surface → both finalize.
+  - Permission/question requests raised mid-run surface on the attached surface
+    and can be answered there (requestId-keyed decisions make this work).
+
+## Phase 4 — Hardening (follow-up)
+
 - [ ] Multi-surface: allow simultaneous desktop+mobile attachment (falls out of
   the subscriber set naturally — verify no shared mutable state assumes one
   consumer).
