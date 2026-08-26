@@ -10,6 +10,7 @@
   `cd apps/server && bun tests/<name>.test.ts`
 - Never run `run-all-tests.ts` or the full suite unless explicitly asked.
 - If a test fails, fix the cause and re-run the same specific test until it passes before committing.
+- Never write inline `#[cfg(test)]` modules at the bottom of Rust source files; always place tests in dedicated `tests/` files.
 - For mobile bundling verification:
   `cd apps/mobile && bunx expo export --platform android`
 - For mobile icon generation:
