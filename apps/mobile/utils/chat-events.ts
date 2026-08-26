@@ -1,10 +1,36 @@
-import type { AgentSessionEvent, ToolResult } from "@console/types";
+import type { AgentMessage, AgentSessionEvent, ToolResult } from "@console/types";
 import type {
   ActivityEvent,
   ChatSessionState,
   ChatSnapshot,
   RunActivityState,
 } from "@/types/chat";
+
+/** Unique per-message id (crypto.randomUUID with a fallback). */
+export function newMessageId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * Ensure every message carries a unique id.
+ *
+ * Legend State keys observable arrays by `id` and warns when elements collide;
+ * assistant messages get ids from the server but user/toolResult messages are
+ * created without one. Returns the same array reference when nothing changed
+ * so callers don't churn object identities unnecessarily.
+ */
+export function ensureMessageIds(messages: AgentMessage[]): AgentMessage[] {
+  let changed = false;
+  const out = messages.map((m) => {
+    if (m.id) return m;
+    changed = true;
+    return { ...m, id: newMessageId() };
+  });
+  return changed ? out : messages;
+}
 
 /** Update the latest run in the session's runs array. */
 function updateLatestRun(
@@ -71,6 +97,7 @@ export function applyChatEvent(
             ...session.messages,
             {
               role: "assistant",
+              id: newMessageId(),
               createdAt: Date.now(),
               content: [
                 ...(session.streamingThinking
@@ -87,9 +114,12 @@ export function applyChatEvent(
         };
       }
 
-      const turnWithMeta = turn as typeof turn & { createdAt?: number };
+      const turnWithMeta = turn as typeof turn & { createdAt?: number; id?: string };
       const normalizedTurn = {
         ...turnWithMeta,
+        // Turns may arrive without an id (provider-dependent) — assign one so
+        // every stored message is uniquely keyed.
+        id: turnWithMeta.id ?? newMessageId(),
         createdAt: turnWithMeta.createdAt ?? Date.now(),
       };
 
@@ -179,7 +209,10 @@ export function applyChatEvent(
       // It renders as null in the UI — results are shown via RunActivity.
       updated = {
         ...updated,
-        messages: [...updated.messages, { role: "toolResult", results: eventResults }],
+        messages: [
+          ...updated.messages,
+          { role: "toolResult", id: newMessageId(), results: eventResults },
+        ],
         activeToolCalls: [],
       };
 
@@ -227,6 +260,7 @@ export function applyChatEvent(
           ...session.messages,
           {
             role: "assistant",
+            id: newMessageId(),
             content: [
               { type: "text", text: `Error: ${event.error?.message ?? "Unknown agent error"}` },
             ],

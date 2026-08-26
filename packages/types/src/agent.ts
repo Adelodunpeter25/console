@@ -29,6 +29,8 @@ export type AssistantMessageContent = TextPart | ThinkingPart | ToolCallPart;
 
 export interface UserMessage {
   role: "user";
+  /** Unique per-message id (assigned by clients for keyed array storage). */
+  id?: string;
   content: string;
   /** Inline image attachments sent with the prompt (base64-encoded). */
   attachments?: ImagePart[];
@@ -43,6 +45,8 @@ export interface AssistantMessage {
 
 export interface ToolResultMessage {
   role: "toolResult";
+  /** Unique per-message id (assigned by clients for keyed array storage). */
+  id?: string;
   results: import("./tool").ToolResult[];
 }
 

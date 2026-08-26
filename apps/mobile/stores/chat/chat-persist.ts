@@ -4,6 +4,7 @@ import type { ChatSessionState } from "@/types";
 import { createChatSessionState } from "@/types/chat-state";
 import { mmkvStringStorage } from "@/utils/storage";
 import { hasPersistableDraft, trimDraftAttachments } from "./draft";
+import { ensureMessageIds } from "@/utils/chat-events";
 
 /**
  * Persistence for the Legend-State chat store.
@@ -48,7 +49,9 @@ function sanitizeSessionPartial(partial: unknown): Partial<ChatSessionState> | n
     // Only known, expected-typed fields are copied — blind spreads would let
     // corrupt/stale persisted JSON inject unexpected props into app state.
     messages: Array.isArray(p.messages)
-      ? p.messages.filter((m): m is ChatSessionState["messages"][number] => typeof m === "object" && m !== null)
+      ? ensureMessageIds(
+          p.messages.filter((m): m is ChatSessionState["messages"][number] => typeof m === "object" && m !== null),
+        )
       : [],
     runs: Array.isArray(p.runs)
       ? p.runs.filter((r): r is ChatSessionState["runs"][number] => typeof r === "object" && r !== null)
