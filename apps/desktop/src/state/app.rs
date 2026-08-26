@@ -641,6 +641,25 @@ impl ConsoleDesktopApp {
         })
         .detach();
 
+        // 5. Periodic polling for session list / working status sync across surfaces.
+        let poll_client = app.client.clone();
+        cx.spawn(async move |entity, cx| loop {
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs(30))
+                .await;
+            if let Ok(sessions) = poll_client.sessions.list(None, None).await {
+                let _ = cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.sessions = Rc::new(sessions);
+                            cx.notify();
+                        });
+                    }
+                });
+            }
+        })
+        .detach();
+
         app
     }
 

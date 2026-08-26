@@ -131,4 +131,33 @@ impl RunService {
 
         Ok(SseStreamReader::parse_stream(resp))
     }
+
+    pub async fn attach_run_stream(
+        &self,
+        session_id: &str,
+        since: Option<u64>,
+    ) -> Result<impl futures_util::Stream<Item = Result<AgentSessionEvent>>> {
+        let path = if let Some(seq) = since {
+            format!("/api/sessions/{}/run/stream?since={}", session_id, seq)
+        } else {
+            format!("/api/sessions/{}/run/stream", session_id)
+        };
+        let url = self.transport.url(&path).await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to attach to agent run stream")?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let err_text = resp.text().await.unwrap_or_default();
+            return Err(anyhow!("Attach stream failed with status {}: {}", status, err_text));
+        }
+
+        Ok(SseStreamReader::parse_stream(resp))
+    }
 }

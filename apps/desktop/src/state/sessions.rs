@@ -359,12 +359,6 @@ impl ConsoleDesktopApp {
                                 this.apply_session_header_for_pane(&pane_id, &detail.header, cx);
                                 let composer = this.composer_for_pane(&pane_id);
                                 let transcript = this.transcript_for_pane(&pane_id);
-                                // If this chat's run is still active, re-engage
-                                // the in-pane WorkingIndicator after set_messages
-                                // resets it. The started_at comes from the
-                                // session-keyed run state so the elapsed counter
-                                // continues from the real run start, matching the
-                                // sidebar's "Working for Ns" label.
                                 let running_started_at = this
                                     .is_session_running(&session_id)
                                     .then(|| this.running_sessions.get(&session_id).copied())
@@ -389,6 +383,17 @@ impl ConsoleDesktopApp {
                                         );
                                     }
                                 });
+
+                                if detail.header.status == Some(console_core::SessionStatus::Working)
+                                    && !this.is_session_running(&session_id)
+                                {
+                                    this.attach_session_run_for_pane(
+                                        pane_id.clone(),
+                                        session_id.clone(),
+                                        cx,
+                                    );
+                                }
+
                                 cx.notify();
                             });
                         }

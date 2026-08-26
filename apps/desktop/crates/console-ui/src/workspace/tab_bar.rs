@@ -80,7 +80,7 @@ impl RenderOnce for WorkspaceTabBar {
                     .flex()
                     .items_center()
                     .gap_x(px(2.0))
-                    .overflow_hidden()
+                    .overflow_x_scroll()
                     .children(self.pane.tabs.into_iter().map(|tab| {
                         let tab_id = tab.id();
                         let is_active = active_id.as_deref() == Some(&tab_id.as_str());
@@ -96,6 +96,7 @@ impl RenderOnce for WorkspaceTabBar {
 
                         div()
                             .id(ElementId::Name(tab_id.into()))
+                            .flex_shrink(0.0)
                             .on_drag(drag, |drag, _, _, cx| {
                                 cx.new(|_| WorkspaceDragPreview::new(drag.tab.title()))
                             })

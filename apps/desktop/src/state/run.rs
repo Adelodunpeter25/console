@@ -237,123 +237,7 @@ impl ConsoleDesktopApp {
                                             if part.tool_call.is_none()
                                                 && (part.text.is_some() || part.thinking.is_some())
                                     );
-                                    match event {
-                                        AgentSessionEvent::ModelStreamPart { part } => {
-                                            if pane_shows_run {
-                                                this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                                    if let Some(text) = &part.text {
-                                                        t.append_assistant_text(text, cx);
-                                                    }
-                                                    if let Some(thinking) = &part.thinking {
-                                                        t.append_assistant_thinking(thinking, cx);
-                                                    }
-                                                    if let Some(preview) = part.tool_call {
-                                                        t.upsert_assistant_tool_call(
-                                                            console_core::ToolCall {
-                                                                id: preview.id,
-                                                                name: preview.name,
-                                                                arguments: preview.arguments.unwrap_or(serde_json::Value::Null),
-                                                                thought_signature: preview.thought_signature,
-                                                            },
-                                                            cx,
-                                                        );
-                                                    }
-                                                });
-                                            }
-                                        }
-                                        AgentSessionEvent::ModelStreamEnd { turn, .. } => {
-                                            if let Some(turn) = turn {
-                                                if pane_shows_run {
-                                                    this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                                        t.finalize_assistant_message(turn, cx);
-                                                    });
-                                                }
-                                            }
-                                        }
-                                        AgentSessionEvent::PermissionRequest { request } => {
-                                            this.set_pending_permission_for_session(&run_session_id, Some(request));
-                                            this.set_pending_question_for_session(&run_session_id, None);
-                                        }
-                                        AgentSessionEvent::AskQuestion { request } => {
-                                            this.set_pending_question_for_session(&run_session_id, Some(request));
-                                            this.set_pending_permission_for_session(&run_session_id, None);
-                                            this.clear_question_selected_for_session(&run_session_id);
-                                            this.clear_question_inputs_for_session(&run_session_id, cx);
-                                        }
-                                        AgentSessionEvent::ToolExecutionStart { calls } => {
-                                            if pane_shows_run {
-                                                this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                                    t.upsert_assistant_tool_calls(calls, cx);
-                                                });
-                                            }
-                                        }
-                                        AgentSessionEvent::ToolExecutionResult { result } => {
-                                            if pane_shows_run {
-                                                this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                                    t.append_tool_results(vec![result], cx);
-                                                });
-                                            }
-                                        }
-                                        AgentSessionEvent::ToolExecutionEnd { results } => {
-                                            if pane_shows_run {
-                                                this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                                    t.append_tool_results(results, cx);
-                                                });
-                                            }
-                                        }
-                                        AgentSessionEvent::TodoUpdate { items, .. } => {
-                                            this.set_todo_items_for_session(&run_session_id, items);
-                                        }
-                                        AgentSessionEvent::Compaction { summary, .. } => {
-                                            this.set_agent_notice_for_session(
-                                                &run_session_id,
-                                                Some(if summary.trim().is_empty() {
-                                                    "Conversation context was compacted.".to_string()
-                                                } else {
-                                                    format!("Context compacted: {}", summary)
-                                                }),
-                                            );
-                                        }
-                                        AgentSessionEvent::TurnStart { .. } => {
-                                            this.set_agent_notice_for_session(&run_session_id, None);
-                                        }
-                                        AgentSessionEvent::TurnEnd { .. } => {
-                                            // A run can contain several turns when the agent uses tools.
-                                            // Only SessionEnd terminates the complete SSE run.
-                                            this.set_pending_permission_for_session(&run_session_id, None);
-                                            this.set_pending_question_for_session(&run_session_id, None);
-                                            this.clear_question_selected_for_session(&run_session_id);
-                                        }
-                                        AgentSessionEvent::SessionEnd => {
-                                            this.set_session_running(&run_session_id, None);
-                                            this.set_pending_permission_for_session(&run_session_id, None);
-                                            this.set_pending_question_for_session(&run_session_id, None);
-                                            this.clear_question_selected_for_session(&run_session_id);
-                                            this.clear_question_inputs_for_session(&run_session_id, cx);
-                                            if pane_shows_run {
-                                                this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                                    t.finish_streaming(cx);
-                                                });
-                                            }
-                                        }
-                                        AgentSessionEvent::SessionStart => {
-                                            this.set_agent_notice_for_session(&run_session_id, None);
-                                        }
-                                        AgentSessionEvent::Error { error } => {
-                                            this.set_session_running(&run_session_id, None);
-                                            this.set_error_for_session(
-                                                &run_session_id,
-                                                format!("Agent error: {}", error.message),
-                                                cx,
-                                            );
-                                            if pane_shows_run {
-                                                this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                                    t.finish_streaming(cx);
-                                                });
-                                            }
-                                        }
-                                        _ => {}
-                                    }
+                                    this.process_agent_event(&run_session_id, &run_pane_id, event, cx);
                                     if defer_render && pane_shows_run {
                                         this.schedule_stream_render(run_pane_id.clone(), cx);
                                     } else {
@@ -469,6 +353,266 @@ impl ConsoleDesktopApp {
                     });
                 }
             });
+        }).detach();
+    }
+
+    /// Process a single incoming agent run event for a given session and pane.
+    fn process_agent_event(
+        &mut self,
+        run_session_id: &str,
+        run_pane_id: &str,
+        event: AgentSessionEvent,
+        cx: &mut Context<Self>,
+    ) {
+        let pane_shows_run = self
+            .active_session_for_pane(run_pane_id)
+            .as_deref()
+            == Some(run_session_id);
+
+        match event {
+            AgentSessionEvent::ModelStreamPart { part } => {
+                if pane_shows_run {
+                    self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                        if let Some(text) = &part.text {
+                            t.append_assistant_text(text, cx);
+                        }
+                        if let Some(thinking) = &part.thinking {
+                            t.append_assistant_thinking(thinking, cx);
+                        }
+                        if let Some(preview) = part.tool_call {
+                            t.upsert_assistant_tool_call(
+                                console_core::ToolCall {
+                                    id: preview.id,
+                                    name: preview.name,
+                                    arguments: preview.arguments.unwrap_or(serde_json::Value::Null),
+                                    thought_signature: preview.thought_signature,
+                                },
+                                cx,
+                            );
+                        }
+                    });
+                }
+            }
+            AgentSessionEvent::ModelStreamEnd { turn, .. } => {
+                if let Some(turn) = turn {
+                    if pane_shows_run {
+                        self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                            t.finalize_assistant_message(turn, cx);
+                        });
+                    }
+                }
+            }
+            AgentSessionEvent::PermissionRequest { request } => {
+                self.set_pending_permission_for_session(run_session_id, Some(request));
+                self.set_pending_question_for_session(run_session_id, None);
+            }
+            AgentSessionEvent::AskQuestion { request } => {
+                self.set_pending_question_for_session(run_session_id, Some(request));
+                self.set_pending_permission_for_session(run_session_id, None);
+                self.clear_question_selected_for_session(run_session_id);
+                self.clear_question_inputs_for_session(run_session_id, cx);
+            }
+            AgentSessionEvent::ToolExecutionStart { calls } => {
+                if pane_shows_run {
+                    self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                        t.upsert_assistant_tool_calls(calls, cx);
+                    });
+                }
+            }
+            AgentSessionEvent::ToolExecutionResult { result } => {
+                if pane_shows_run {
+                    self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                        t.append_tool_results(vec![result], cx);
+                    });
+                }
+            }
+            AgentSessionEvent::ToolExecutionEnd { results } => {
+                if pane_shows_run {
+                    self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                        t.append_tool_results(results, cx);
+                    });
+                }
+            }
+            AgentSessionEvent::TodoUpdate { items, .. } => {
+                self.set_todo_items_for_session(run_session_id, items);
+            }
+            AgentSessionEvent::Compaction { summary, .. } => {
+                self.set_agent_notice_for_session(
+                    run_session_id,
+                    Some(if summary.trim().is_empty() {
+                        "Conversation context was compacted.".to_string()
+                    } else {
+                        format!("Context compacted: {}", summary)
+                    }),
+                );
+            }
+            AgentSessionEvent::TurnStart { .. } => {
+                self.set_agent_notice_for_session(run_session_id, None);
+            }
+            AgentSessionEvent::TurnEnd { .. } => {
+                self.set_pending_permission_for_session(run_session_id, None);
+                self.set_pending_question_for_session(run_session_id, None);
+                self.clear_question_selected_for_session(run_session_id);
+            }
+            AgentSessionEvent::SessionEnd => {
+                self.set_session_running(run_session_id, None);
+                self.set_pending_permission_for_session(run_session_id, None);
+                self.set_pending_question_for_session(run_session_id, None);
+                self.clear_question_selected_for_session(run_session_id);
+                self.clear_question_inputs_for_session(run_session_id, cx);
+                if pane_shows_run {
+                    self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                        t.finish_streaming(cx);
+                    });
+                }
+            }
+            AgentSessionEvent::SessionStart => {
+                self.set_agent_notice_for_session(run_session_id, None);
+            }
+            AgentSessionEvent::Error { error } => {
+                self.set_session_running(run_session_id, None);
+                self.set_error_for_session(
+                    run_session_id,
+                    format!("Agent error: {}", error.message),
+                    cx,
+                );
+                if pane_shows_run {
+                    self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                        t.finish_streaming(cx);
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Attach to an in-flight server run for this session (re-attach).
+    pub fn attach_session_run_for_pane(
+        &mut self,
+        pane_id: String,
+        session_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        if self.is_session_running(&session_id) {
+            return;
+        }
+
+        let now = chrono::Utc::now().timestamp_millis();
+        self.set_session_running(&session_id, Some(now));
+
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        let run_pane_id = pane_id.clone();
+        let run_session_id = session_id.clone();
+
+        if self.active_session_for_pane(&pane_id).as_deref() == Some(session_id.as_str()) {
+            self.transcript_for_pane(&pane_id).update(cx, |t, cx| {
+                t.resume_streaming(now, cx);
+            });
+        }
+
+        cx.spawn(async move |_, cx| {
+            let mut stream = match client.runs.attach_run_stream(&session_id, None).await {
+                Ok(stream) => stream,
+                Err(_) => {
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.set_session_running(&run_session_id, None);
+                                if this.active_session_for_pane(&run_pane_id).as_deref()
+                                    == Some(run_session_id.as_str())
+                                {
+                                    this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
+                                        t.finish_streaming(cx);
+                                    });
+                                }
+                                cx.notify();
+                            });
+                        }
+                    });
+                    return;
+                }
+            };
+
+            while let Some(event_res) = stream.next().await {
+                let still_running = cx.update(|cx| {
+                    entity
+                        .upgrade()
+                        .map(|app| app.read(cx).is_session_running(&run_session_id))
+                        .unwrap_or(false)
+                });
+
+                if !still_running {
+                    break;
+                }
+
+                match event_res {
+                    Ok(event) => {
+                        cx.update(|cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    if !this.is_session_running(&run_session_id) {
+                                        return;
+                                    }
+                                    let pane_shows_run = this
+                                        .active_session_for_pane(&run_pane_id)
+                                        .as_deref()
+                                        == Some(run_session_id.as_str());
+                                    let defer_render = matches!(
+                                        &event,
+                                        AgentSessionEvent::ModelStreamPart { part }
+                                            if part.tool_call.is_none()
+                                                && (part.text.is_some() || part.thinking.is_some())
+                                    );
+
+                                    this.process_agent_event(&run_session_id, &run_pane_id, event, cx);
+
+                                    if defer_render && pane_shows_run {
+                                        this.schedule_stream_render(run_pane_id.clone(), cx);
+                                    } else {
+                                        cx.notify();
+                                    }
+                                });
+                            }
+                        });
+                    }
+                    Err(_) => {
+                        break;
+                    }
+                }
+            }
+
+            if let Ok(detail) = client.sessions.wait_until_settled(&session_id).await {
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.set_session_running(&run_session_id, None);
+                            if this.active_session_for_pane(&run_pane_id).as_deref() == Some(session_id.as_str()) {
+                                this.apply_session_header_for_pane(&run_pane_id, &detail.header, cx);
+                                this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
+                                    t.set_messages(detail.messages, cx);
+                                    t.finish_streaming(cx);
+                                });
+                            }
+                            cx.notify();
+                        });
+                    }
+                });
+            } else {
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.set_session_running(&run_session_id, None);
+                            if this.active_session_for_pane(&run_pane_id).as_deref() == Some(session_id.as_str()) {
+                                this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
+                                    t.finish_streaming(cx);
+                                });
+                            }
+                            cx.notify();
+                        });
+                    }
+                });
+            }
         }).detach();
     }
 }
