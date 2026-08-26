@@ -16,10 +16,12 @@ pub struct Environment {
 
 impl Environment {
     pub fn default_local() -> Self {
+        let default_url = std::env::var("CONSOLE_BACKEND_URL")
+            .unwrap_or_else(|_| "http://localhost:3000".to_string());
         Self {
             id: "default-local".to_string(),
-            name: "Local Daemon".to_string(),
-            url: "http://127.0.0.1:4040".to_string(),
+            name: "Local Server".to_string(),
+            url: default_url,
         }
     }
 }

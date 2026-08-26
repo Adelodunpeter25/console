@@ -1,10 +1,12 @@
 use std::collections::HashSet;
 use std::rc::Rc;
+use gpui::prelude::FluentBuilder;
 use gpui::{
-    App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
-    Styled, Window, div, prelude::*, px,
+    App, ElementId, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement,
+    RenderOnce, StatefulInteractiveElement, Styled, Window, div, px,
 };
 use console_core::types::{AuthStatusResponse, ProviderCatalogEntry};
+use crate::input::ComposerInput;
 use crate::theme::Theme;
 
 #[derive(IntoElement)]
@@ -12,18 +14,19 @@ pub struct AccountsPage {
     pub providers: Rc<Vec<ProviderCatalogEntry>>,
     pub auth_status: Option<AuthStatusResponse>,
     pub logging_in: HashSet<String>,
-    pub gemini_project_id: String,
+    pub gemini_project_input: Option<Entity<ComposerInput>>,
     pub on_login: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    pub on_save_gemini_project_id: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    pub on_save_gemini_project_id: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
 
 impl RenderOnce for AccountsPage {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let on_login = self.on_login.clone();
-        let _on_save_project = self.on_save_gemini_project_id.clone();
+        let on_save_project = self.on_save_gemini_project_id.clone();
         let auth_status = self.auth_status.clone();
         let logging_in = self.logging_in.clone();
+        let gemini_input = self.gemini_project_input.clone();
 
         div()
             .flex()
@@ -91,6 +94,8 @@ impl RenderOnce for AccountsPage {
 
                         let pid = provider_id.clone();
                         let on_login_click = on_login.clone();
+                        let on_save_click = on_save_project.clone();
+                        let gem_inp = gemini_input.clone();
 
                         div()
                             .id(ElementId::from(format!("provider-row-{pid}")))
@@ -170,43 +175,59 @@ impl RenderOnce for AccountsPage {
                                             ),
                                     ),
                             )
-                            .when(provider_id == "gemini" && is_logged_in, |row| {
-                                let cur_project_id = prov_status
-                                    .and_then(|s| s.configured_project_id.clone().or_else(|| s.project_id.clone()))
-                                    .unwrap_or_default();
-                                let project_display = if cur_project_id.is_empty() {
-                                    "Not set (auto-detected)".to_string()
-                                } else {
-                                    cur_project_id
-                                };
-
+                            .when(provider_id == "gemini" && is_logged_in, move |row| {
                                 row.child(
                                     div()
-                                        .pt(px(6.0))
+                                        .pt(px(8.0))
                                         .border_t_1()
                                         .border_color(theme.border)
                                         .flex()
-                                        .items_center()
-                                        .justify_between()
-                                        .gap(px(10.0))
+                                        .flex_col()
+                                        .gap(px(6.0))
                                         .child(
                                             div()
-                                                .flex_1()
+                                                .text_size(px(11.5))
+                                                .font_weight(gpui::FontWeight::MEDIUM)
+                                                .text_color(theme.text_secondary)
+                                                .child("Google Cloud Project ID (Optional)"),
+                                        )
+                                        .child(
+                                            div()
                                                 .flex()
-                                                .flex_col()
-                                                .gap(px(2.0))
+                                                .items_center()
+                                                .gap(px(8.0))
+                                                .when_some(gem_inp, |d, input| {
+                                                    d.child(
+                                                        div()
+                                                            .flex_1()
+                                                            .p(px(6.0))
+                                                            .rounded(px(6.0))
+                                                            .border_1()
+                                                            .border_color(theme.border)
+                                                            .bg(theme.canvas)
+                                                            .child(input),
+                                                    )
+                                                })
                                                 .child(
                                                     div()
-                                                        .text_size(px(11.5))
-                                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                                        .text_color(theme.text_secondary)
-                                                        .child("Google Cloud Project ID"),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_size(px(11.0))
-                                                        .text_color(theme.text_ghost)
-                                                        .child(project_display),
+                                                        .id("btn-save-gemini-project")
+                                                        .px(px(10.0))
+                                                        .py(px(5.0))
+                                                        .rounded(px(6.0))
+                                                        .bg(theme.accent)
+                                                        .cursor_pointer()
+                                                        .hover(|s| s.opacity(0.9))
+                                                        .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                                                            cx.stop_propagation();
+                                                            (on_save_click)(window, cx);
+                                                        })
+                                                        .child(
+                                                            div()
+                                                                .text_size(px(11.5))
+                                                                .font_weight(gpui::FontWeight::MEDIUM)
+                                                                .text_color(theme.on_inverse)
+                                                                .child("Save"),
+                                                        ),
                                                 ),
                                         ),
                                 )

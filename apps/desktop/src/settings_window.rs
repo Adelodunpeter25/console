@@ -1,10 +1,13 @@
 use std::rc::Rc;
+use std::time::Duration;
 use gpui::{
-    App, Context, FocusHandle, Focusable, IntoElement, ParentElement, Render, Styled, WeakEntity,
-    Window, div,
+    App, AppContext, Context, Entity, FocusHandle, Focusable, IntoElement, ParentElement, Render,
+    Styled, WeakEntity, Window, div,
 };
+use console_ui::input::ComposerInput;
 use console_ui::settings::{
-    AccountsPage, ConnectionPage, DeletedChatsPage, ProjectsPage, SettingsShell, SettingsTab,
+    AccountsPage, ConnectionPage, DeletedChatsPage, ProbeState, ProjectsPage, SettingsShell,
+    SettingsTab,
 };
 use crate::state::ConsoleDesktopApp;
 
@@ -12,18 +15,49 @@ pub struct SettingsWindow {
     app: WeakEntity<ConsoleDesktopApp>,
     active_tab: SettingsTab,
     focus_handle: FocusHandle,
+    gemini_project_input: Entity<ComposerInput>,
+    gemini_project_seeded: bool,
+    is_adding_env: bool,
+    new_env_name_input: Entity<ComposerInput>,
+    new_env_url_input: Entity<ComposerInput>,
+    new_env_probe: ProbeState,
     _subscription: Option<gpui::Subscription>,
 }
 
 impl SettingsWindow {
-    pub fn new(app: WeakEntity<ConsoleDesktopApp>, cx: &mut Context<Self>) -> Self {
+    pub fn new(app: WeakEntity<ConsoleDesktopApp>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let subscription = app.upgrade().map(|app_entity| {
             cx.observe(&app_entity, |_this, _app, cx| cx.notify())
         });
+
+        let gemini_project_input = cx.new(|cx| {
+            let mut input = ComposerInput::new(window, cx);
+            input.set_placeholder("e.g. my-gcp-project-123", cx);
+            input
+        });
+
+        let new_env_name_input = cx.new(|cx| {
+            let mut input = ComposerInput::new(window, cx);
+            input.set_placeholder("e.g. Production Daemon", cx);
+            input
+        });
+
+        let new_env_url_input = cx.new(|cx| {
+            let mut input = ComposerInput::new(window, cx);
+            input.set_placeholder("e.g. http://localhost:3000", cx);
+            input
+        });
+
         Self {
             app,
             active_tab: SettingsTab::Accounts,
             focus_handle: cx.focus_handle(),
+            gemini_project_input,
+            gemini_project_seeded: false,
+            is_adding_env: false,
+            new_env_name_input,
+            new_env_url_input,
+            new_env_probe: ProbeState::Unknown,
             _subscription: subscription,
         }
     }
@@ -45,7 +79,23 @@ impl Render for SettingsWindow {
             return div().size_full().child("Application closed").into_any_element();
         };
 
+        let initial_pid = if !self.gemini_project_seeded {
+            app_entity.read(cx).auth_status.as_ref().and_then(|st| {
+                st.gemini.configured_project_id.as_ref().or(st.gemini.project_id.as_ref()).cloned()
+            })
+        } else {
+            None
+        };
+
+        if let Some(pid) = initial_pid {
+            self.gemini_project_input.update(cx, |input, cx| {
+                input.set_content(pid, cx);
+            });
+            self.gemini_project_seeded = true;
+        }
+
         let app = app_entity.read(cx);
+
         let active_tab = self.active_tab;
 
         let on_select_tab: Rc<dyn Fn(SettingsTab, &mut Window, &mut App) + 'static> = {
@@ -71,12 +121,14 @@ impl Render for SettingsWindow {
                     })
                 };
 
-                let on_save_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+                let on_save_project: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
                     let app_handle = self.app.clone();
-                    Rc::new(move |project_id: String, _w: &mut Window, cx: &mut App| {
+                    let input_entity = self.gemini_project_input.clone();
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        let text = input_entity.read(cx).content().trim().to_string();
                         if let Some(app) = app_handle.upgrade() {
                             app.update(cx, |app_state, cx| {
-                                app_state.save_gemini_project_id(project_id, cx);
+                                app_state.save_gemini_project_id(text, cx);
                             });
                         }
                     })
@@ -86,7 +138,7 @@ impl Render for SettingsWindow {
                     providers: app.providers.clone(),
                     auth_status: app.auth_status.clone(),
                     logging_in: app.auth_logging_in.clone(),
-                    gemini_project_id: String::new(),
+                    gemini_project_input: Some(self.gemini_project_input.clone()),
                     on_login,
                     on_save_gemini_project_id: on_save_project,
                 }.into_any_element()
@@ -125,23 +177,77 @@ impl Render for SettingsWindow {
                     })
                 };
 
-                let on_add_new: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-                    let app_handle = self.app.clone();
+                let on_toggle_add: Rc<dyn Fn(bool, &mut Window, &mut App) + 'static> = {
+                    let entity = cx.entity().clone();
+                    Rc::new(move |is_adding: bool, _w: &mut Window, cx: &mut App| {
+                        entity.update(cx, |this, cx| {
+                            this.is_adding_env = is_adding;
+                            this.new_env_probe = ProbeState::Unknown;
+                            cx.notify();
+                        });
+                    })
+                };
+
+                let on_probe_new: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let entity = cx.entity().clone();
+                    let url_input = self.new_env_url_input.clone();
                     Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        let url = url_input.read(cx).content().trim().to_string();
+                        if url.is_empty() { return; }
+                        entity.update(cx, |this, cx| {
+                            this.new_env_probe = ProbeState::Probing;
+                            cx.notify();
+                        });
+                        let ent = entity.clone();
+                        cx.spawn(async move |cx| {
+                            let ok = console_core::utils::probe_backend(&url, Duration::from_secs(3)).await;
+                            let _ = cx.update(|cx| {
+                                ent.update(cx, |this, cx| {
+                                    this.new_env_probe = if ok.is_ok() { ProbeState::Ok } else { ProbeState::Failed };
+                                    cx.notify();
+                                });
+                            });
+                        }).detach();
+                    })
+                };
+
+                let on_save_new: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let app_handle = self.app.clone();
+                    let entity = cx.entity().clone();
+                    let name_input = self.new_env_name_input.clone();
+                    let url_input = self.new_env_url_input.clone();
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        let name = name_input.read(cx).content().trim().to_string();
+                        let url = url_input.read(cx).content().trim().to_string();
+                        if url.is_empty() { return; }
+                        let final_name = if name.is_empty() { "Custom Server".to_string() } else { name };
+
                         if let Some(app) = app_handle.upgrade() {
                             app.update(cx, |app_state, cx| {
-                                app_state.add_environment("Remote Daemon".to_string(), "http://127.0.0.1:4040".to_string(), cx);
+                                app_state.add_environment(final_name, url, cx);
                             });
                         }
+
+                        entity.update(cx, |this, cx| {
+                            this.is_adding_env = false;
+                            this.new_env_probe = ProbeState::Unknown;
+                            cx.notify();
+                        });
                     })
                 };
 
                 ConnectionPage {
                     environments: app.environment_rows(),
+                    is_adding: self.is_adding_env,
+                    name_input: Some(self.new_env_name_input.clone()),
+                    url_input: Some(self.new_env_url_input.clone()),
+                    new_probe_state: self.new_env_probe,
                     on_activate,
                     on_probe,
                     on_remove,
-                    on_add_new,
+                    on_toggle_add,
+                    on_probe_new,
+                    on_save_new,
                 }.into_any_element()
             }
             SettingsTab::Projects => {

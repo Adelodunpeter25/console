@@ -37,7 +37,7 @@ impl ConsoleDesktopApp {
 
         cx.defer(move |cx| {
             let handle = cx.open_window(options, |window, cx| {
-                let settings_view = cx.new(|cx| SettingsWindow::new(app_entity, cx));
+                let settings_view = cx.new(|cx| SettingsWindow::new(app_entity, window, cx));
                 cx.new(|cx| gpui_component::Root::new(settings_view, window, cx))
             }).ok();
 
