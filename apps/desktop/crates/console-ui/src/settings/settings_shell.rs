@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use gpui::{
     AnyElement, App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    RenderOnce, Styled, Window, div, prelude::*, px,
+    RenderOnce, StatefulInteractiveElement, Styled, Window, div, px,
 };
 use super::SettingsTab;
 use crate::primitives::icons::{IconName, app_icon};
@@ -47,7 +47,7 @@ impl RenderOnce for SettingsShell {
             // Left sidebar for navigation
             .child(
                 div()
-                    .w(px(200.0))
+                    .w(px(210.0))
                     .h_full()
                     .border_r_1()
                     .border_color(theme.border)
@@ -55,16 +55,18 @@ impl RenderOnce for SettingsShell {
                     .flex()
                     .flex_col()
                     .justify_between()
-                    .p(px(12.0))
+                    .pt(px(42.0))
+                    .pb(px(16.0))
+                    .px(px(12.0))
                     .child(
                         div()
                             .flex()
                             .flex_col()
-                            .gap(px(4.0))
+                            .gap(px(10.0))
                             .child(
                                 div()
                                     .px(px(8.0))
-                                    .py(px(6.0))
+                                    .py(px(4.0))
                                     .text_size(px(14.0))
                                     .font_weight(gpui::FontWeight::SEMIBOLD)
                                     .text_color(theme.text)
@@ -118,7 +120,9 @@ impl RenderOnce for SettingsShell {
                     .flex_1()
                     .h_full()
                     .overflow_hidden()
-                    .p(px(24.0))
+                    .pt(px(42.0))
+                    .pb(px(24.0))
+                    .px(px(24.0))
                     .child(self.content),
             )
     }

@@ -27,22 +27,51 @@ impl Environment {
 }
 
 impl ConsoleDesktopApp {
-    pub fn init_environments(&mut self) {
+    pub fn init_environments(&mut self, cx: &mut Context<Self>) {
+        let def = Environment::default_local();
         if let Some(persisted) = load_environments() {
             if !persisted.environments.is_empty() {
-                self.environments = persisted.environments.into_iter().map(|e| Environment {
-                    id: e.id,
-                    name: e.name,
-                    url: e.url,
+                self.environments = persisted.environments.into_iter().map(|e| {
+                    // Fix legacy mock 4040 port or placeholder from initial test to true default local url
+                    let url = if e.url == "http://127.0.0.1:4040" || e.url == "http://localhost:4040" {
+                        def.url.clone()
+                    } else {
+                        e.url
+                    };
+                    Environment {
+                        id: e.id,
+                        name: e.name,
+                        url,
+                    }
                 }).collect();
                 self.active_env_id = persisted.active_id.or_else(|| self.environments.first().map(|e| e.id.clone()));
-                return;
             }
         }
-        let def = Environment::default_local();
-        self.active_env_id = Some(def.id.clone());
-        self.environments = vec![def];
+        if self.environments.is_empty() {
+            self.active_env_id = Some(def.id.clone());
+            self.environments = vec![def];
+        }
         self.save_persisted_environments();
+
+        let active_url = self.active_environment_url();
+        let client = self.client.clone();
+        cx.spawn(async move |_entity, _cx| {
+            client.set_base_url(&active_url).await;
+        }).detach();
+
+        // Auto probe configured environments
+        let env_ids: Vec<String> = self.environments.iter().map(|e| e.id.clone()).collect();
+        for id in env_ids {
+            self.probe_environment(id, cx);
+        }
+    }
+
+    pub fn active_environment_url(&self) -> String {
+        self.active_env_id
+            .as_ref()
+            .and_then(|id| self.environments.iter().find(|e| &e.id == id))
+            .map(|e| e.url.clone())
+            .unwrap_or_else(|| Environment::default_local().url)
     }
 
     pub fn save_persisted_environments(&self) {

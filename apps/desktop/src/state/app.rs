@@ -439,7 +439,7 @@ impl ConsoleDesktopApp {
             _subscriptions: subscriptions,
         };
 
-        app.init_environments();
+        app.init_environments(cx);
         app.refresh_auth_status(cx);
 
         app.workspace_pane_states.insert(
