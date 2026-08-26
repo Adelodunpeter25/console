@@ -29,15 +29,55 @@ import {
   isDoneEvent,
 } from "./notify-agent-event.js";
 import { notificationService } from "./notification.service.js";
+import { RunEventHub, type RunStreamSubscriber } from "./run-hub.js";
 import { extractErrorMessage } from "@/agent/src/utils/error.js";
 
 export class RunService {
   private sessionStorage = new SqliteSessionStorage();
   private static activeRuns = new Map<string, AbortController>();
   private todoLists = new Map<string, TodoItem[]>();
+  /** Live run fan-out hubs keyed by sessionId (one per in-flight run). */
+  private hubs = new Map<string, RunEventHub>();
+
+  private ensureHub(sessionId: string): RunEventHub {
+    let hub = this.hubs.get(sessionId);
+    if (!hub) {
+      hub = new RunEventHub();
+      this.hubs.set(sessionId, hub);
+    }
+    return hub;
+  }
 
   public static isRunActive(sessionId: string): boolean {
     return RunService.activeRuns.has(sessionId);
+  }
+
+  /**
+   * Attach a subscriber to the in-flight run for a session.
+   * Returns false when no run is active (caller should fall back to loading
+   * persisted messages). When `since` is given, buffered events with seq >
+   * since are replayed ahead of live delivery — snapshot + registration happen
+   * in one synchronous section, so nothing is missed or duplicated.
+   */
+  subscribeToActiveRun(
+    sessionId: string,
+    subscriber: RunStreamSubscriber,
+    since?: number,
+  ): boolean {
+    const hub = this.hubs.get(sessionId);
+    if (!hub) return false;
+    hub.subscribe(subscriber, since);
+    return true;
+  }
+
+  /** Detach a previously attached subscriber (e.g. its SSE stream closed). */
+  unsubscribeFromActiveRun(sessionId: string, subscriberId: string): void {
+    this.hubs.get(sessionId)?.unsubscribe(subscriberId);
+  }
+
+  /** Resolves once any active run for the session settles (immediately if none). */
+  waitForRunSettle(sessionId: string): Promise<void> {
+    return this.hubs.get(sessionId)?.settled ?? Promise.resolve();
   }
   /** How long a pending question or permission decision may sit unresolved
       before it is rejected. Prevents the agent loop from hanging forever if
@@ -61,6 +101,12 @@ export class RunService {
   /**
    * Execute an agent run, streaming lifecycle events to onEvent callback.
    * Persists completed turns incrementally so data is never lost during network drops or crashes.
+   *
+   * The initiating client's onEvent is registered as the primary subscriber of a
+   * per-run event hub; other surfaces (mobile re-attach, desktop) can join the
+   * same run live via subscribeToActiveRun(). The legacy POST /run pipe keeps
+   * its exact wire behavior — synthetic frames (done/aborted/streamReset) are
+   * only delivered to subscribers that opt into them.
    */
   async runAgentStream(
     sessionId: string,
@@ -73,17 +119,28 @@ export class RunService {
 
     const abortController = new AbortController();
     RunService.activeRuns.set(sessionId, abortController);
+
+    const hub = this.ensureHub(sessionId);
+    const primarySubscriber: RunStreamSubscriber = {
+      id: randomUUID(),
+      deliver: (_seq, event) => onEvent(event),
+      // No ping/extendedFrames: preserve the exact legacy POST /run wire.
+    };
+    hub.subscribe(primarySubscriber);
+
     try {
-      await this.runAgentStreamInternal(sessionId, dto, onEvent, abortController);
+      await this.runAgentStreamInternal(sessionId, dto, hub, abortController);
     } finally {
       RunService.activeRuns.delete(sessionId);
+      hub.destroy();
+      this.hubs.delete(sessionId);
     }
   }
 
   private async runAgentStreamInternal(
     sessionId: string,
     dto: RunPromptDto,
-    onEvent: (event: AgentSessionEvent) => Promise<void> | void,
+    hub: RunEventHub,
     abortController: AbortController,
   ): Promise<void> {
     // Resolve @path file mentions against the session's working directory so
@@ -164,12 +221,12 @@ export class RunService {
     });
 
     // Wire the ask-question handler so the ask tool pauses for user input
-    // instead of auto-selecting the first option. The handler emits the
-    // askQuestion event through onEvent and waits for answerQuestion().
+    // instead of auto-selecting the first option. The handler broadcasts the
+    // askQuestion event through the run hub and waits for answerQuestion().
     const askHandler = (request: AskQuestionRequest) => {
       return new Promise<string | string[]>((resolve, reject) => {
         this.pendingQuestions.set(request.requestId, { sessionId, resolve, reject });
-        onEvent({ type: "askQuestion", request });
+        hub.broadcast({ type: "askQuestion", request });
         this.startDecisionTimeout(request.requestId, sessionId, "question");
       });
     };
@@ -184,7 +241,7 @@ export class RunService {
 
     const sessionTodo = createTodoTool(this.todoLists.get(sessionId) ?? [], (items, action) => {
       this.todoLists.set(sessionId, items);
-      return onEvent({ type: "todoUpdate", items, action });
+      hub.broadcast({ type: "todoUpdate", items, action });
     });
 
     const boundTools = tools.map((tool) => {
@@ -276,7 +333,7 @@ export class RunService {
           notificationService.push(doneNotification(sessionId));
         }
 
-        await onEvent(event);
+        hub.broadcast(event);
 
         if (event.type === "error") {
           runError = event.error?.message ?? "Unknown agent error";
@@ -314,6 +371,14 @@ export class RunService {
     } finally {
       // Repair once after the run settles, rather than on every session read.
       this.sessionStorage.repairSession(sessionId);
+
+      // Terminal signal for re-attach subscribers (extendedFrames only — the
+      // legacy POST /run pipe just closes, as before).
+      hub.broadcast(
+        abortController.signal.aborted
+          ? { type: "aborted", reason: "Run was aborted." }
+          : { type: "done" },
+      );
 
       // Reject any unresolved pending questions/approvals so the agent
       // loop doesn't hang forever after the run ends.

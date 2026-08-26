@@ -29,7 +29,13 @@ export type AgentSessionEvent =
   | { type: "compaction"; summary: string; originalMessageCount: number }
   | { type: "turnEnd"; turnId: string }
   | { type: "sessionEnd" }
-  | { type: "error"; error: { message: string; data?: unknown } };
+  | { type: "error"; error: { message: string; data?: unknown } }
+  /** Synthetic frame (re-attach streams only): run completed. */
+  | { type: "done"; summary?: string }
+  /** Synthetic frame (re-attach streams only): run was aborted. */
+  | { type: "aborted"; reason?: string }
+  /** Synthetic frame (re-attach streams only): precedes a replay batch so clients clear streaming buffers first. */
+  | { type: "streamReset" };
 
 export interface SseEventFrame {
   event: AgentSessionEvent["type"];
