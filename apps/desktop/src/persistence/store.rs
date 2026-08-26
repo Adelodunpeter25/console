@@ -9,11 +9,26 @@ use super::{layout::PersistedLayoutState, window::PersistedWindowState};
 
 const STORAGE_VERSION: u32 = 1;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PersistedEnvironment {
+    pub id: String,
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PersistedEnvironmentsState {
+    pub environments: Vec<PersistedEnvironment>,
+    pub active_id: Option<String>,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct StorageDocument {
     version: u32,
     window: Option<PersistedWindowState>,
+    settings_window: Option<PersistedWindowState>,
     layout: Option<PersistedLayoutState>,
+    environments: Option<PersistedEnvironmentsState>,
 }
 
 fn storage_path() -> PathBuf {
@@ -94,10 +109,26 @@ pub fn save_window(state: PersistedWindowState) {
     update_document(|document| document.window = Some(state));
 }
 
+pub fn load_settings_window() -> Option<PersistedWindowState> {
+    read_document().settings_window
+}
+
+pub fn save_settings_window(state: PersistedWindowState) {
+    update_document(|document| document.settings_window = Some(state));
+}
+
 pub fn load_layout() -> Option<PersistedLayoutState> {
     read_document().layout
 }
 
 pub fn save_layout(state: PersistedLayoutState) {
     update_document(|document| document.layout = Some(state));
+}
+
+pub fn load_environments() -> Option<PersistedEnvironmentsState> {
+    read_document().environments
+}
+
+pub fn save_environments(state: PersistedEnvironmentsState) {
+    update_document(|document| document.environments = Some(state));
 }

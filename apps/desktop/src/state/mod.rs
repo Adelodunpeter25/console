@@ -6,7 +6,10 @@
 //! so each domain stays reviewable without losing shared state.
 
 mod attachments;
+mod auth;
 mod autocomplete;
+mod deleted_sessions;
+mod environments;
 mod errors;
 mod global_actions;
 mod layout;
@@ -14,6 +17,7 @@ mod projects;
 mod providers;
 mod run;
 mod sessions;
+mod settings;
 mod transcript_scroll;
 
 mod app;

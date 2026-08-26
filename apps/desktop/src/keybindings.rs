@@ -27,6 +27,8 @@ actions!(
         ToggleCommandPalette,
         /// Move keyboard focus to the active pane's composer.
         FocusComposer,
+        /// Open settings window.
+        OpenSettings,
     ]
 );
 
@@ -41,6 +43,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-o", AddProject, None),
         KeyBinding::new("secondary-k", ToggleCommandPalette, None),
         KeyBinding::new("secondary-l", FocusComposer, None),
+        KeyBinding::new("secondary-,", OpenSettings, None),
     ]);
 }
 
@@ -68,6 +71,19 @@ pub fn init_handlers(app: Entity<ConsoleDesktopApp>, window: AnyWindowHandle, cx
         let app = app.clone();
         move |_: &AddProject, cx| {
             app.update(cx, |this, cx| this.add_project(cx));
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &OpenSettings, cx| {
+            let app = app.clone();
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.open_settings(window, cx));
+                    })
+                    .ok();
+            });
         }
     });
     // Handlers that touch the window itself (focus, overlays) must defer:

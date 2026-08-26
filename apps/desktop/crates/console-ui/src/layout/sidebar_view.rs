@@ -436,6 +436,7 @@ pub struct SidebarView {
     renaming_session_id: Option<String>,
     rename_input: Option<Entity<ComposerInput>>,
     on_resize_start: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static>,
+    on_open_settings: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
 
 impl SidebarView {
@@ -461,6 +462,7 @@ impl SidebarView {
         renaming_session_id: Option<String>,
         rename_input: Option<Entity<ComposerInput>>,
         on_resize_start: impl Fn(f32, &mut Window, &mut App) + 'static,
+        on_open_settings: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
             visible,
@@ -484,6 +486,7 @@ impl SidebarView {
             renaming_session_id,
             rename_input,
             on_resize_start: Rc::new(on_resize_start),
+            on_open_settings: Rc::new(on_open_settings),
         }
     }
 }
@@ -513,6 +516,7 @@ impl RenderOnce for SidebarView {
         let renaming_session_id = self.renaming_session_id;
         let rename_input = self.rename_input;
         let on_resize_start = self.on_resize_start;
+        let on_open_settings = self.on_open_settings;
         let width = self.width;
 
         // Bucket sessions by calendar period (Today / Yesterday / This Week /
@@ -804,9 +808,13 @@ impl RenderOnce for SidebarView {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .cursor_default()
+                            .cursor_pointer()
                             .hover(|s| s.bg(theme.overlay))
                             .active(|s| s.bg(theme.overlay_strong))
+                            .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                                cx.stop_propagation();
+                                (on_open_settings)(window, cx);
+                            })
                             .child(app_icon(IconName::Settings, 14.0, theme.text_tertiary)),
                     ),
             )

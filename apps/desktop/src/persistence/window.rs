@@ -31,7 +31,7 @@ impl PersistedWindowState {
             && self.height <= MAX_DIMENSION
     }
 
-    fn bounds(self) -> Bounds<gpui::Pixels> {
+    pub fn bounds(self) -> Bounds<gpui::Pixels> {
         Bounds::new(
             point(px(self.x), px(self.y)),
             size(px(self.width), px(self.height)),

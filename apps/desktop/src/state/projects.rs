@@ -276,4 +276,49 @@ impl ConsoleDesktopApp {
         })
         .detach();
     }
+
+    pub fn load_projects(&mut self, cx: &mut Context<Self>) {
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            if let Ok(projects) = client.projects.list().await {
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.projects = Rc::new(projects);
+                            cx.notify();
+                        });
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
+    pub fn remove_project(&mut self, project_id: String, cx: &mut Context<Self>) {
+        Rc::make_mut(&mut self.projects).retain(|p| p.id != project_id);
+        if self.selected_project_id.as_deref() == Some(&project_id) {
+            self.selected_project_id = None;
+        }
+        for state in self.workspace_pane_states.values_mut() {
+            if state.selected_project_id.as_deref() == Some(&project_id) {
+                state.selected_project_id = None;
+                state.branches = Rc::new(Vec::new());
+                state.branch_loaded = false;
+            }
+        }
+        cx.notify();
+
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            if let Err(error) = client.projects.remove(&project_id).await {
+                let message = format!("Unable to remove project: {error}");
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.set_error(message, cx));
+                    }
+                });
+            }
+        })
+        .detach();
+    }
 }

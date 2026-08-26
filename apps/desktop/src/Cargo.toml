@@ -24,3 +24,4 @@ log = { workspace = true }
 chrono = { workspace = true }
 base64 = { workspace = true }
 futures-util = { workspace = true }
+urlencoding = { workspace = true }

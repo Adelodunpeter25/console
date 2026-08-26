@@ -493,6 +493,16 @@ impl Render for ConsoleDesktopApp {
                                 }
                             }
                         },
+                        {
+                            let entity = entity.clone();
+                            move |window, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.open_settings(window, cx);
+                                    });
+                                }
+                            }
+                        },
                     ))
                     // The workspace pane is a sibling of the sidebar, inside
                     // the same row, so it sits to the right of it.

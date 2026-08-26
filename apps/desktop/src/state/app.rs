@@ -163,6 +163,13 @@ pub struct ConsoleDesktopApp {
     /// Live terminal surfaces keyed by terminal id. Tabs reference these via
     /// `WorkspaceTabConfig::Terminal { terminal_id }`.
     pub terminals: std::collections::HashMap<String, Entity<TerminalView>>,
+    pub auth_status: Option<console_core::types::AuthStatusResponse>,
+    pub auth_logging_in: std::collections::HashSet<String>,
+    pub environments: Vec<super::environments::Environment>,
+    pub active_env_id: Option<String>,
+    pub env_probes: std::collections::HashMap<String, console_ui::settings::ProbeState>,
+    pub deleted_sessions: Vec<SessionHeader>,
+    pub settings_window_handle: Option<gpui::AnyWindowHandle>,
     pub _subscriptions: Vec<Subscription>,
 }
 
@@ -415,6 +422,13 @@ impl ConsoleDesktopApp {
             pending_window_state: None,
             command_palette: cx.new(|cx| CommandPalette::new(window, cx)),
             terminals: std::collections::HashMap::new(),
+            auth_status: None,
+            auth_logging_in: std::collections::HashSet::new(),
+            environments: Vec::new(),
+            active_env_id: None,
+            env_probes: std::collections::HashMap::new(),
+            deleted_sessions: Vec::new(),
+            settings_window_handle: None,
             collapsed_groups: Rc::new(
                 layout
                     .collapsed_groups
@@ -424,6 +438,9 @@ impl ConsoleDesktopApp {
             ),
             _subscriptions: subscriptions,
         };
+
+        app.init_environments();
+        app.refresh_auth_status(cx);
 
         app.workspace_pane_states.insert(
             "pane-main".to_string(),

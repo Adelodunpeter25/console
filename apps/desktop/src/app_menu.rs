@@ -5,6 +5,7 @@
 //! desktop app registers its top-level menus during startup.
 
 use gpui::{App, Menu, MenuItem, actions};
+use crate::keybindings::OpenSettings;
 
 actions!(console_app, [Quit]);
 
@@ -13,7 +14,10 @@ pub fn init(cx: &mut App) {
     cx.on_action(|_: &Quit, cx| cx.quit());
 
     cx.set_menus(vec![
-        Menu::new("Console").items([MenuItem::action("Quit", Quit)]),
+        Menu::new("Console").items([
+            MenuItem::action("Settings...", OpenSettings),
+            MenuItem::action("Quit", Quit),
+        ]),
         Menu::new("File"),
         Menu::new("Edit"),
         Menu::new("View"),

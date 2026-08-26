@@ -11,6 +11,33 @@ use super::ConsoleDesktopApp;
 use super::user_prompt_history;
 
 impl ConsoleDesktopApp {
+    pub fn load_sessions(&mut self, cx: &mut Context<Self>) {
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            match client.sessions.list(None, None).await {
+                Ok(sessions) => {
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.sessions = Rc::new(sessions);
+                                cx.notify();
+                            });
+                        }
+                    });
+                }
+                Err(error) => {
+                    let message = format!("Unable to load sessions: {error}");
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| this.set_error(message, cx));
+                        }
+                    });
+                }
+            }
+        })
+        .detach();
+    }
+
     pub(crate) fn begin_session_rename(
         &mut self,
         session_id: String,

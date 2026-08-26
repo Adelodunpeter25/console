@@ -12,6 +12,23 @@ use std::rc::Rc;
 use super::app::ConsoleDesktopApp;
 
 impl ConsoleDesktopApp {
+    pub fn load_providers(&mut self, cx: &mut gpui::Context<Self>) {
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            if let Ok(providers) = client.providers.list().await {
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.providers = Rc::new(providers);
+                            cx.notify();
+                        });
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
     /// Fire a background fetch for a provider's live model list, unless one is
     /// already cached or in flight. Idempotent — safe to call on every render
     /// and every tab switch. On success the result replaces the cache entry and
