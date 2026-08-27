@@ -1,7 +1,7 @@
 //! Full-page File Viewer component for workspace tabs.
 
 use gpui::{
-    App, IntoElement, ParentElement, RenderOnce, ScrollHandle, Styled, Window, div,
+    App, ElementId, IntoElement, ParentElement, RenderOnce, Styled, Window, div,
     prelude::*, px,
 };
 
@@ -13,7 +13,6 @@ pub struct FileViewer {
     #[allow(dead_code)]
     path: String,
     content: String,
-    scroll_handle: ScrollHandle,
 }
 
 impl FileViewer {
@@ -21,7 +20,6 @@ impl FileViewer {
         Self {
             path: path.into(),
             content: content.into(),
-            scroll_handle: ScrollHandle::new(),
         }
     }
 }
@@ -34,52 +32,46 @@ impl RenderOnce for FileViewer {
         let line_num_width = format!("{}", total_lines.max(1)).len() * 8 + 24;
 
         div()
-            .id("file-viewer-container")
+            .id(ElementId::Name(format!("file-viewer-{}", self.path).into()))
             .size_full()
-            .flex()
-            .flex_col()
+            .min_h_0()
+            .min_w_0()
+            .overflow_y_scroll()
             .bg(theme.canvas)
-            // Code lines body
-            .child(
+            .py(px(8.0))
+            .children(lines.into_iter().enumerate().map(|(idx, line)| {
                 div()
-                    .id("file-viewer-body")
-                    .flex_1()
+                    .flex()
+                    .items_start()
+                    .min_h(px(20.0))
                     .w_full()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.scroll_handle)
-                    .py(px(8.0))
-                    .children(lines.into_iter().enumerate().map(|(idx, line)| {
+                    .hover(|s| s.bg(theme.overlay))
+                    .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .h(px(20.0))
-                            .w_full()
-                            .hover(|s| s.bg(theme.overlay))
-                            .child(
-                                div()
-                                    .w(px(line_num_width as f32))
-                                    .flex_none()
-                                    .text_align(gpui::TextAlign::Right)
-                                    .pr(px(12.0))
-                                    .font_family(MONO_FAMILY)
-                                    .text_size(px(11.0))
-                                    .text_color(theme.text_ghost)
-                                    .child(format!("{}", idx + 1)),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .font_family(MONO_FAMILY)
-                                    .text_size(px(12.0))
-                                    .text_color(theme.text)
-                                    .child(if line.is_empty() {
-                                        " ".to_string()
-                                    } else {
-                                        line.to_string()
-                                    }),
-                            )
-                    })),
-            )
+                            .w(px(line_num_width as f32))
+                            .flex_none()
+                            .text_align(gpui::TextAlign::Right)
+                            .pr(px(12.0))
+                            .pt(px(1.0))
+                            .font_family(MONO_FAMILY)
+                            .text_size(px(11.0))
+                            .text_color(theme.text_ghost)
+                            .child(format!("{}", idx + 1)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .font_family(MONO_FAMILY)
+                            .text_size(px(12.0))
+                            .line_height(px(18.0))
+                            .text_color(theme.text)
+                            .child(if line.is_empty() {
+                                " ".to_string()
+                            } else {
+                                line.to_string()
+                            }),
+                    )
+            }))
     }
 }

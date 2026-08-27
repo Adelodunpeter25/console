@@ -586,22 +586,43 @@ impl ConsoleDesktopApp {
             .map(|s| s.cwd.clone());
 
         cx.spawn(async move |entity, cx| {
-            match client.git.get_diff(cwd.as_deref(), Some(&file_path)).await {
-                Ok(resp) => {
-                    let diff_result = console_core::utils::diff::parse_unified_diff(&resp.diff);
-                    cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.open_diff_contents.insert(file_path, (diff_result, resp.diff));
-                                cx.notify();
-                            });
-                        }
+            let mut diff_raw = String::new();
+            if let Ok(resp) = client.git.get_diff(cwd.as_deref(), Some(&file_path)).await {
+                diff_raw = resp.diff;
+            }
+
+            let diff_result = if !diff_raw.trim().is_empty() {
+                console_core::utils::diff::parse_unified_diff(&diff_raw)
+            } else if let Ok(file_resp) = client.fs.read_file(&file_path).await {
+                let lines: Vec<console_core::DiffLine> = file_resp
+                    .content
+                    .lines()
+                    .enumerate()
+                    .map(|(i, line)| console_core::DiffLine {
+                        kind: console_core::DiffLineKind::Added,
+                        text: line.to_string(),
+                        old_no: None,
+                        new_no: Some(i + 1),
+                    })
+                    .collect();
+                let len = lines.len();
+                console_core::DiffResult {
+                    lines,
+                    added: len,
+                    removed: 0,
+                }
+            } else {
+                console_core::DiffResult::default()
+            };
+
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.open_diff_contents.insert(file_path, (diff_result, diff_raw));
+                        cx.notify();
                     });
                 }
-                Err(err) => {
-                    log::warn!("Failed to fetch git diff for tab {}: {}", file_path, err);
-                }
-            }
+            });
         })
         .detach();
 

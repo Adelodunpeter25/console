@@ -2,7 +2,7 @@
 
 use console_core::{DiffLine, DiffLineKind, DiffResult};
 use gpui::{
-    App, FontWeight, IntoElement, ParentElement, RenderOnce, ScrollHandle, SharedString, Styled,
+    App, ElementId, FontWeight, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
     Window, div, prelude::*, px,
 };
 
@@ -16,7 +16,6 @@ pub struct DiffViewer {
     diff: DiffResult,
     #[allow(dead_code)]
     raw_diff: String,
-    scroll_handle: ScrollHandle,
 }
 
 impl DiffViewer {
@@ -25,7 +24,6 @@ impl DiffViewer {
             path: path.into(),
             diff,
             raw_diff: raw_diff.into(),
-            scroll_handle: ScrollHandle::new(),
         }
     }
 }
@@ -35,39 +33,32 @@ impl RenderOnce for DiffViewer {
         let theme = Theme::current(cx);
 
         div()
-            .id("diff-viewer-container")
+            .id(ElementId::Name(format!("diff-viewer-{}", self.path).into()))
             .size_full()
-            .flex()
-            .flex_col()
+            .min_h_0()
+            .min_w_0()
+            .overflow_y_scroll()
             .bg(theme.canvas)
-            // Diff lines body
-            .child(
+            .py(px(8.0))
+            .child(if self.diff.lines.is_empty() {
                 div()
-                    .id("diff-viewer-body")
-                    .flex_1()
+                    .size_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .py(px(48.0))
+                    .text_size(px(12.0))
+                    .text_color(theme.text_tertiary)
+                    .child("No differences detected")
+                    .into_any_element()
+            } else {
+                div()
+                    .flex()
+                    .flex_col()
                     .w_full()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.scroll_handle)
-                    .py(px(8.0))
-                    .child(if self.diff.lines.is_empty() {
-                        div()
-                            .flex_1()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .py(px(48.0))
-                            .text_size(px(12.0))
-                            .text_color(theme.text_tertiary)
-                            .child("No differences detected")
-                            .into_any_element()
-                    } else {
-                        div()
-                            .flex()
-                            .flex_col()
-                            .children(self.diff.lines.iter().map(|line| diff_row(line, &theme)))
-                            .into_any_element()
-                    }),
-            )
+                    .children(self.diff.lines.iter().map(|line| diff_row(line, &theme)))
+                    .into_any_element()
+            })
     }
 }
 
@@ -97,8 +88,8 @@ fn diff_row(line: &DiffLine, theme: &Theme) -> impl IntoElement {
 
     div()
         .flex()
-        .items_center()
-        .h(px(20.0))
+        .items_start()
+        .min_h(px(20.0))
         .w_full()
         .px(px(10.0))
         .bg(bg)
@@ -109,6 +100,7 @@ fn diff_row(line: &DiffLine, theme: &Theme) -> impl IntoElement {
                 .flex_none()
                 .text_align(gpui::TextAlign::Right)
                 .pr(px(6.0))
+                .pt(px(1.0))
                 .font_family(MONO_FAMILY)
                 .text_size(px(10.0))
                 .text_color(theme.text_ghost)
@@ -120,6 +112,7 @@ fn diff_row(line: &DiffLine, theme: &Theme) -> impl IntoElement {
                 .flex_none()
                 .text_align(gpui::TextAlign::Right)
                 .pr(px(8.0))
+                .pt(px(1.0))
                 .font_family(MONO_FAMILY)
                 .text_size(px(10.0))
                 .text_color(theme.text_ghost)
@@ -129,6 +122,7 @@ fn diff_row(line: &DiffLine, theme: &Theme) -> impl IntoElement {
             div()
                 .w(px(14.0))
                 .flex_none()
+                .pt(px(1.0))
                 .text_size(px(11.0))
                 .font_weight(FontWeight::BOLD)
                 .text_color(fg)
@@ -140,6 +134,7 @@ fn diff_row(line: &DiffLine, theme: &Theme) -> impl IntoElement {
                 .min_w_0()
                 .font_family(MONO_FAMILY)
                 .text_size(px(12.0))
+                .line_height(px(18.0))
                 .text_color(fg)
                 .child(display_text),
         )
