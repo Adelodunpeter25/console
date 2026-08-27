@@ -11,6 +11,7 @@ pub mod notification;
 pub mod project;
 pub mod session;
 pub mod terminal;
+pub mod usage;
 pub mod workspace;
 
 pub use agent::*;
@@ -26,4 +27,5 @@ pub use notification::*;
 pub use project::*;
 pub use session::*;
 pub use terminal::*;
+pub use usage::*;
 pub use workspace::*;

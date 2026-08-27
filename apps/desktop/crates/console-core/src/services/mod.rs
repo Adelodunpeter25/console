@@ -9,6 +9,7 @@ pub mod provider;
 pub mod run;
 pub mod session;
 pub mod terminal;
+pub mod usage;
 
 pub use assist::AssistService;
 pub use auth::AuthService;
@@ -21,3 +22,4 @@ pub use provider::ProviderService;
 pub use run::RunService;
 pub use session::SessionService;
 pub use terminal::TerminalService;
+pub use usage::UsageService;

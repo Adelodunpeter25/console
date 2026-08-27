@@ -22,6 +22,7 @@ mod run;
 mod sessions;
 mod settings;
 mod transcript_scroll;
+mod usage;
 mod workspace_panes;
 
 mod app;

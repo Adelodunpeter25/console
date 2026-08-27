@@ -14,6 +14,7 @@ pub struct ConsoleClient {
     pub auth: AuthService,
     pub model_favorites: ModelFavoriteService,
     pub notifications: NotificationService,
+    pub usage: UsageService,
 }
 
 impl ConsoleClient {
@@ -30,6 +31,7 @@ impl ConsoleClient {
             auth: AuthService::new(transport.clone()),
             model_favorites: ModelFavoriteService::new(transport.clone()),
             notifications: NotificationService::new(transport.clone()),
+            usage: UsageService::new(transport.clone()),
             transport: transport.clone(),
         }
     }

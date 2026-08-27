@@ -7,7 +7,7 @@ use gpui::{
 use console_ui::input::ComposerInput;
 use console_ui::settings::{
     AccountsPage, ConnectionPage, DeletedChatsPage, ProbeState, ProjectsPage, SettingsShell,
-    SettingsTab,
+    SettingsTab, UsagePage,
 };
 use crate::state::ConsoleDesktopApp;
 
@@ -34,6 +34,14 @@ impl SettingsWindow {
         let subscription = app.upgrade().map(|app_entity| {
             cx.observe(&app_entity, |_this, _app, cx| cx.notify())
         });
+
+        if initial_tab == SettingsTab::Usage {
+            if let Some(app_entity) = app.upgrade() {
+                app_entity.update(cx, |app_state, cx| {
+                    app_state.fetch_usage(cx);
+                });
+            }
+        }
 
         let gemini_project_input = cx.new(|cx| {
             let mut input = ComposerInput::new(window, cx);
@@ -69,6 +77,13 @@ impl SettingsWindow {
 
     pub fn set_tab(&mut self, tab: SettingsTab, cx: &mut Context<Self>) {
         self.active_tab = tab;
+        if tab == SettingsTab::Usage {
+            if let Some(app_entity) = self.app.upgrade() {
+                app_entity.update(cx, |app_state, cx| {
+                    app_state.fetch_usage(cx);
+                });
+            }
+        }
         cx.notify();
     }
 }
@@ -258,6 +273,38 @@ impl Render for SettingsWindow {
                     on_toggle_add,
                     on_probe_new,
                     on_save_new,
+                }.into_any_element()
+            }
+            SettingsTab::Usage => {
+                let on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let app_handle = self.app.clone();
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| {
+                                app_state.fetch_usage(cx);
+                            });
+                        }
+                    })
+                };
+
+                let on_login: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+                    let app_handle = self.app.clone();
+                    Rc::new(move |provider: String, _w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| {
+                                app_state.login_provider(provider, cx);
+                            });
+                        }
+                    })
+                };
+
+                UsagePage {
+                    reports: app.usage_reports.clone(),
+                    providers: app.providers.clone(),
+                    auth_status: app.auth_status.clone(),
+                    loading: app.usage_loading,
+                    on_refresh,
+                    on_login,
                 }.into_any_element()
             }
             SettingsTab::Projects => {

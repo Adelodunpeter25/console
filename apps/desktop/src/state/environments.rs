@@ -171,11 +171,16 @@ impl ConsoleDesktopApp {
                         this.transcript_view.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
                         this.composer_input.update(cx, |input, cx| input.clear(cx));
 
+                        this.usage_reports = None;
+                        this.usage_loading = false;
+                        this.usage_last_fetched = None;
+
                         // Reload data from new server
                         this.load_sessions(cx);
                         this.load_providers(cx);
                         this.load_projects(cx);
                         this.refresh_auth_status(cx);
+                        this.fetch_usage(cx);
                         cx.notify();
                     });
                 }

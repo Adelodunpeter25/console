@@ -5,12 +5,14 @@ pub mod connection_page;
 pub mod deleted_chats_page;
 pub mod projects_page;
 pub mod settings_shell;
+pub mod usage_page;
 
 pub use accounts_page::*;
 pub use connection_page::*;
 pub use deleted_chats_page::*;
 pub use projects_page::*;
 pub use settings_shell::*;
+pub use usage_page::*;
 
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +22,7 @@ pub enum SettingsTab {
     #[default]
     Accounts,
     Connection,
+    Usage,
     Projects,
     DeletedChats,
 }
@@ -29,6 +32,7 @@ impl SettingsTab {
         match self {
             Self::Accounts => "Accounts",
             Self::Connection => "Connection",
+            Self::Usage => "Usage",
             Self::Projects => "Projects",
             Self::DeletedChats => "Deleted chats",
         }
