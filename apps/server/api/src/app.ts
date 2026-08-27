@@ -14,6 +14,7 @@ import { providerRoutes } from "./routes/providers.js";
 import { runRoutes } from "./routes/run.js";
 import { sessionRoutes } from "./routes/sessions.js";
 import { modelFavoriteRoutes } from "./routes/model-favorites.js";
+import { usageRoutes } from "./routes/usage.js";
 
 import { gitRoutes } from "./routes/git.js";
 
@@ -42,6 +43,7 @@ export function createApiApp(): Hono {
   api.route("/", modelFavoriteRoutes);
   api.route("/", sessionRoutes);
   api.route("/", runRoutes);
+  api.route("/", usageRoutes);
 
   app.route("/api", api);
 

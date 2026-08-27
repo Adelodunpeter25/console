@@ -8,3 +8,4 @@ export * from "./config.service";
 export * from "./run.service";
 export * from "./terminal.service";
 export * from "./assist.service";
+export * from "./usage.service";
