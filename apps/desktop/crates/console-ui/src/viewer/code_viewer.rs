@@ -289,6 +289,7 @@ impl RenderOnce for CodeViewer {
                                 .font_family(MONO_FAMILY)
                                 .text_size(px(11.0))
                                 .line_height(px(CODE_LINE_HEIGHT))
+                                .whitespace_nowrap()
                                 .child(StyledText::new(display_str.to_string()).with_runs(runs)),
                         )
                         .into_any_element()
