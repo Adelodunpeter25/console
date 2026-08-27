@@ -141,6 +141,9 @@ impl ConsoleDesktopApp {
             composer.update(cx, |input, cx| input.set_content("", cx));
             transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
         }
+        if self.right_sidebar_visible {
+            self.refresh_inspector(cx);
+        }
         cx.notify();
     }
 
