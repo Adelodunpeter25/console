@@ -125,7 +125,15 @@ impl Render for SettingsWindow {
 
         let on_select_tab: Rc<dyn Fn(SettingsTab, &mut Window, &mut App) + 'static> = {
             let entity = cx.entity().clone();
+            let app_handle = self.app.clone();
             Rc::new(move |tab: SettingsTab, _w: &mut Window, cx: &mut App| {
+                if tab == SettingsTab::Usage {
+                    if let Some(app) = app_handle.upgrade() {
+                        app.update(cx, |app_state, cx| {
+                            app_state.fetch_usage(cx);
+                        });
+                    }
+                }
                 entity.update(cx, |this, cx| {
                     this.active_tab = tab;
                     cx.notify();

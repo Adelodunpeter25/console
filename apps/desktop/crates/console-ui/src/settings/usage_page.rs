@@ -253,7 +253,7 @@ impl RenderOnce for UsagePage {
                                             .border_color(theme.border)
                                             .text_size(px(12.0))
                                             .text_color(theme.text_tertiary)
-                                            .child(if is_loading {
+                                            .child(if is_loading || reports_map.is_none() {
                                                 "Fetching quota details..."
                                             } else {
                                                 "No quota limits reported for this account."
