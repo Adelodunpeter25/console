@@ -175,7 +175,7 @@ impl RenderOnce for AccountsPage {
                                             ),
                                     ),
                             )
-                            .when(provider_id == "gemini" && is_logged_in, move |row| {
+                            .when(provider_id == "gemini", move |row| {
                                 row.child(
                                     div()
                                         .pt(px(8.0))
@@ -190,6 +190,12 @@ impl RenderOnce for AccountsPage {
                                                 .font_weight(gpui::FontWeight::MEDIUM)
                                                 .text_color(theme.text_secondary)
                                                 .child("Google Cloud Project ID (Optional)"),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(11.0))
+                                                .text_color(theme.text_tertiary)
+                                                .child("Used when automatic discovery can't select a project. Save before logging in if your account requires it."),
                                         )
                                         .child(
                                             div()
