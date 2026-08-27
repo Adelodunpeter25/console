@@ -150,7 +150,7 @@ impl ConsoleDesktopApp {
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        // Reset in-memory session and workspace caches
+                        // Reset in-memory session and workspace caches, closing all open tabs
                         this.sessions = std::rc::Rc::new(Vec::new());
                         this.selected_session_id = None;
                         this.projects = std::rc::Rc::new(Vec::new());
@@ -158,6 +158,18 @@ impl ConsoleDesktopApp {
                         this.branches = std::rc::Rc::new(Vec::new());
                         this.branch_loaded = false;
                         this.transcript_scroll_positions.clear();
+
+                        // Close all tabs and collapse splits back to clean main pane
+                        this.workspace_root = console_core::WorkspaceNode::leaf("pane-main");
+                        this.active_pane_id = Some("pane-main".to_string());
+                        this.workspace_pane_states.clear();
+                        this.terminals.clear();
+                        this.attachments.clear();
+                        this.todo_items.clear();
+                        this.running_sessions.clear();
+                        this.stream_render_pending.clear();
+                        this.transcript_view.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
+                        this.composer_input.update(cx, |input, cx| input.clear(cx));
 
                         // Reload data from new server
                         this.load_sessions(cx);
