@@ -63,11 +63,6 @@ export function UsageProviderCard({ displayName, report, loggedIn, email }: Prop
           {report.limits.map((limit) => (
             <UsageLimitRow key={limit.id} limit={limit} />
           ))}
-          {report.metadata?.projectId ? (
-            <Text className="text-[10px] text-foreground-secondary mt-2 font-mono">
-              project: {String(report.metadata.projectId)}
-            </Text>
-          ) : null}
         </View>
       )}
     </GlassSurface>

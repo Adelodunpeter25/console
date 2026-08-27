@@ -363,7 +363,6 @@ async function fetchAntigravityUsage(params: UsageFetchParams, ctx: UsageFetchCo
       scope: {
         provider: params.provider,
         accountId: credential.accountId,
-        projectId: credential.projectId,
         tier: entry.tier,
         windowId: entry.windowId,
       },
@@ -381,7 +380,6 @@ async function fetchAntigravityUsage(params: UsageFetchParams, ctx: UsageFetchCo
 
   const metadata: UsageReport["metadata"] = {
     endpoint: successfulEndpoint,
-    projectId: credential.projectId,
   };
   if (credential.email) metadata.email = credential.email;
   if (credential.accountId) metadata.accountId = credential.accountId;
