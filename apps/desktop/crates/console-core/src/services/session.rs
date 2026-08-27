@@ -79,6 +79,32 @@ impl SessionService {
         }
     }
 
+    pub async fn get_changes(&self, id: &str) -> Result<Vec<SessionFileChange>> {
+        let url = self.transport.url(&format!("/api/sessions/{}/changes", id)).await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to get session changes")?;
+
+        let body: ApiResponse<Vec<SessionFileChange>> = resp
+            .json()
+            .await
+            .context("Failed to parse session changes response")?;
+        if body.success {
+            body.data
+                .ok_or_else(|| anyhow!("Session changes data is missing"))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to load session changes".into())
+            ))
+        }
+    }
+
     /// Reload a session until the backend has finished persisting an active run.
     /// This is used after an SSE disconnect so the UI does not immediately
     /// submit another prompt against a still-running server session.

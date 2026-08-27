@@ -12,6 +12,18 @@ pub struct FsEntry {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct FsTreeEntry {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub size: Option<u64>,
+    pub git_status: Option<String>,
+    pub children: Option<Vec<FsTreeEntry>>,
+}
+
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BrowseDirectoryResponse {
     pub current_path: String,
     pub parent_path: Option<String>,

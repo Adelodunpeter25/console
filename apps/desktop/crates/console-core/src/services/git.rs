@@ -42,6 +42,48 @@ impl GitService {
         }
     }
 
+    pub async fn get_diff(
+        &self,
+        repo_path: Option<&str>,
+        file_path: Option<&str>,
+    ) -> Result<GitDiffResponse> {
+        let mut url = self.transport.url("/api/git/diff").await;
+        let mut params = Vec::new();
+        if let Some(r) = repo_path {
+            params.push(format!("cwd={}", urlencoding::encode(r)));
+        }
+        if let Some(f) = file_path {
+            params.push(format!("path={}", urlencoding::encode(f)));
+        }
+        if !params.is_empty() {
+            url.push('?');
+            url.push_str(&params.join("&"));
+        }
+
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to get git diff")?;
+
+        let body: ApiResponse<GitDiffResponse> = resp
+            .json()
+            .await
+            .context("Failed to parse git diff response")?;
+        if body.success {
+            body.data
+                .ok_or_else(|| anyhow!("Git diff data is missing"))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to get git diff".into())
+            ))
+        }
+    }
+
     pub async fn list_branches(&self, path: Option<&str>) -> Result<GitBranchesResponse> {
         let mut url = self.transport.url("/api/git/branches").await;
         if let Some(p) = path {

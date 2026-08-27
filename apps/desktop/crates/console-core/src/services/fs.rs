@@ -41,6 +41,47 @@ impl FsService {
         }
     }
 
+    pub async fn get_entries(
+        &self,
+        path: &str,
+        depth: Option<usize>,
+        hidden: Option<bool>,
+    ) -> Result<Vec<FsTreeEntry>> {
+        let mut url = self.transport.url("/api/fs/entries").await;
+        let mut params = vec![format!("path={}", urlencoding::encode(path))];
+        if let Some(d) = depth {
+            params.push(format!("depth={}", d));
+        }
+        if let Some(h) = hidden {
+            params.push(format!("hidden={}", h));
+        }
+        url.push('?');
+        url.push_str(&params.join("&"));
+
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to get fs entries")?;
+
+        let body: ApiResponse<Vec<FsTreeEntry>> = resp
+            .json()
+            .await
+            .context("Failed to parse fs entries response")?;
+        if body.success {
+            body.data
+                .ok_or_else(|| anyhow!("Fs entries data is missing"))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to get fs entries".into())
+            ))
+        }
+    }
+
     pub async fn get_tree(
         &self,
         path: Option<&str>,

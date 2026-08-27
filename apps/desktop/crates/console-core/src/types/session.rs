@@ -76,3 +76,15 @@ pub struct UpdateSessionDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub approval_mode: Option<String>,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionFileChange {
+    pub path: String,
+    pub status: String,
+    pub additions: u64,
+    pub deletions: u64,
+    pub turn_index: u64,
+    pub updated_at: i64,
+}
+
