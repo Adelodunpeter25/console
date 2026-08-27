@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from "react";
 import { Text, View, Pressable, BackHandler } from "react-native";
-import { ChevronRight, Wifi, User, Folder, Trash2 } from "lucide-react-native";
+import { ChevronRight, Wifi, User, Folder, Trash2, BarChart3 } from "lucide-react-native";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { useAuth } from "@/hooks";
 import { EnvironmentsSettings } from "./environments-settings";
 import { AccountSettings } from "./account-settings";
 import { ProjectsSettings } from "./projects-settings";
 import { DeletedChatsSettings } from "./deleted-chats-settings";
+import { UsageSettings } from "./usage-settings";
 import { theme } from "@/styles/theme";
 import { app$, setActiveTab, setPendingConnectionSection } from "@/stores/useAppStore";
 import { useValue } from "@legendapp/state/react";
 import { project$ } from "@/stores/useProjectStore";
 
-type SettingsSection = "connection" | "account" | "projects" | "deleted-chats";
+type SettingsSection = "connection" | "account" | "usage" | "projects" | "deleted-chats";
 
 const SECTION_META: Record<
   SettingsSection,
@@ -20,6 +21,7 @@ const SECTION_META: Record<
 > = {
   connection: { title: "Connection", icon: Wifi },
   account: { title: "Account", icon: User },
+  usage: { title: "Usage", icon: BarChart3 },
   projects: { title: "Projects", icon: Folder },
   "deleted-chats": { title: "Deleted Chats", icon: Trash2 },
 };
@@ -61,6 +63,7 @@ export function SettingsScreen() {
       auth.status && Object.values(auth.status).some((s) => s.loggedIn)
         ? "Signed in"
         : "No providers connected",
+    usage: "Quota & limits",
     projects: `${projects.length} project folder${projects.length === 1 ? "" : "s"}`,
     "deleted-chats": `${deletedSessions.length} deleted chat${deletedSessions.length === 1 ? "" : "s"}`,
   };
@@ -73,6 +76,8 @@ export function SettingsScreen() {
           <ProjectsSettings onBack={() => setSection(null)} />
         ) : section === "deleted-chats" ? (
           <DeletedChatsSettings onBack={() => setSection(null)} />
+        ) : section === "usage" ? (
+          <UsageSettings onBack={() => setSection(null)} />
         ) : (
           <>
             {section === "connection" ? <EnvironmentsSettings onBack={() => setSection(null)} /> : null}
