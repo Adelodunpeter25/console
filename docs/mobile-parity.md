@@ -118,7 +118,7 @@ Roughly: desktop has solid **chat + workspace shell** parity, but **missing the 
 | 10 | **Files — readFile preview + file watcher** (5s poll mobile; desktop could `watch_directory`) | ✅ | ❌ | **P1** |
 | 11 | **Composer autocomplete** `slash` + `file @` (assistService, 20 cap, seq guard) | ✅ | ✅ desktop `autocomplete.rs` wired to assist service | **Done** |
 | 12 | **Image attachments** (picker, strip, `MAX_DRAFT_IMAGES=2`, supportsImages guard) | ✅ `expo-image-picker` | ✅ desktop `attachments.rs` + drag/drop + preview modal | **Done** |
-| 13 | **Drafts** (persisted per-session, `Drafts` pinned section, `draftPreview`) | ✅ MMKV 2-cap | ◐ composer state per-pane; need pinned `Drafts` in sidebar | **P1** |
+| 13 | **Drafts** (persisted per-session, `Drafts` pinned section, `draftPreview`) | ✅ MMKV 2-cap | ✅ `state.json` drafts persistence + draft badge in sidebar | **Done** |
 | 14 | **Session management** (create/update/delete/restore/permanentDelete, refresh header, search, group by project) | ✅ `useHomeSessions` | ✅ desktop sidebar groups + Deleted Chats recovery page | **Done** |
 | 15 | **Syntax highlighting / diff** (Prism 18 langs, diff collapsed 60) | ✅ | ✅ desktop `markdown/highlight.rs`, `chat/diff_view.rs` | **Done** |
 | 16 | **Notifications / realtime** (`/api/notifications/stream` SSE) | ✅ | ❌ | **P2** |
