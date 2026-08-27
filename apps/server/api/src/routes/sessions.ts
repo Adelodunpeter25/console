@@ -137,3 +137,16 @@ sessionRoutes.delete("/sessions/:id/permanent", (c) => {
     data: { id, permanentlyDeleted: true },
   });
 });
+
+/**
+ * GET /api/sessions/:id/changes — Get recorded file changes for a session.
+ */
+sessionRoutes.get("/sessions/:id/changes", (c) => {
+  const id = c.req.param("id");
+  const changes = sessionService.getSessionFileChanges(id);
+  return c.json({
+    success: true,
+    data: changes,
+  });
+});
+

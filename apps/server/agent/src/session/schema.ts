@@ -90,6 +90,15 @@ export function initSessionDatabase(db: Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+
+    CREATE TABLE IF NOT EXISTS session_file_changes (
+      path TEXT PRIMARY KEY,
+      status TEXT NOT NULL,
+      additions INTEGER NOT NULL DEFAULT 0,
+      deletions INTEGER NOT NULL DEFAULT 0,
+      turn_index INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    );
   `);
 
   // Migration: add repair state to pre-existing per-session databases.

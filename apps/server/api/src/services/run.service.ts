@@ -294,6 +294,7 @@ export class RunService {
     const runPersistenceId = randomUUID();
     let toolBatchNumber = 0;
     let toolResultsPersistenceId: string | null = null;
+    const pendingToolCalls = new Map<string, { name: string; args: any }>();
 
     try {
       const eventStream = agent.run(prompt, abortController.signal, attachments);
@@ -307,19 +308,31 @@ export class RunService {
         // disconnect after a tool finishes from losing the result entirely.
         if (event.type === "toolExecutionStart") {
           toolResultsPersistenceId = `tool-results:${runPersistenceId}:${toolBatchNumber++}`;
+          for (const call of event.calls) {
+            pendingToolCalls.set(call.id, { name: call.name, args: call.arguments });
+          }
         }
         if (event.type === "modelStreamEnd" && event.turn) {
           this.sessionStorage.appendMessage(sessionId, event.turn);
         }
         if (event.type === "toolExecutionResult" && toolResultsPersistenceId) {
           this.sessionStorage.upsertToolResult(sessionId, toolResultsPersistenceId, event.result);
+          const callInfo = pendingToolCalls.get(event.result.toolCallId);
+          if (callInfo) {
+            this.extractAndRecordFileChange(sessionId, callInfo.name, callInfo.args, event.result.isError);
+          }
         }
         if (event.type === "toolExecutionEnd") {
           for (const result of event.results) {
             if (!toolResultsPersistenceId) continue;
             this.sessionStorage.upsertToolResult(sessionId, toolResultsPersistenceId, result);
+            const callInfo = pendingToolCalls.get(result.toolCallId);
+            if (callInfo) {
+              this.extractAndRecordFileChange(sessionId, callInfo.name, callInfo.args, result.isError);
+            }
           }
           toolResultsPersistenceId = null;
+          pendingToolCalls.clear();
         }
 
         // Mark needs_attention when the agent asks a question or requests permission
@@ -468,5 +481,54 @@ export class RunService {
       pending.reject(new Error("Run aborted while waiting for permission."));
     }
     return true;
+  }
+
+  private extractAndRecordFileChange(
+    sessionId: string,
+    toolName: string | undefined,
+    args: any,
+    isError?: boolean,
+  ): void {
+    if (isError || !toolName || !args) return;
+
+    const now = Date.now();
+
+    if ((toolName === "writeFile" || toolName === "write_file") && typeof args.path === "string") {
+      const lineCount = typeof args.content === "string" ? args.content.split("\n").length : 0;
+      this.sessionStorage.recordFileChange(sessionId, {
+        path: args.path,
+        status: "added",
+        additions: lineCount,
+        deletions: 0,
+        turnIndex: 0,
+        updatedAt: now,
+      });
+    } else if ((toolName === "editFile" || toolName === "edit_file" || toolName === "replace_file_content") && (typeof args.path === "string" || typeof args.TargetFile === "string")) {
+      const targetPath = args.path || args.TargetFile;
+      const adds = typeof args.replacement === "string" ? args.replacement.split("\n").length : (typeof args.ReplacementContent === "string" ? args.ReplacementContent.split("\n").length : 1);
+      const dels = typeof args.target === "string" ? args.target.split("\n").length : (typeof args.TargetContent === "string" ? args.TargetContent.split("\n").length : 1);
+      this.sessionStorage.recordFileChange(sessionId, {
+        path: targetPath,
+        status: "modified",
+        additions: adds,
+        deletions: dels,
+        turnIndex: 0,
+        updatedAt: now,
+      });
+    } else if ((toolName === "batchWrite" || toolName === "batch_write") && Array.isArray(args.files)) {
+      for (const file of args.files) {
+        if (typeof file.path === "string") {
+          const lineCount = typeof file.content === "string" ? file.content.split("\n").length : 0;
+          this.sessionStorage.recordFileChange(sessionId, {
+            path: file.path,
+            status: "added",
+            additions: lineCount,
+            deletions: 0,
+            turnIndex: 0,
+            updatedAt: now,
+          });
+        }
+      }
+    }
   }
 }

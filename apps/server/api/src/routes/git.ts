@@ -19,6 +19,21 @@ gitRoutes.get("/status", async (c) => {
 });
 
 /**
+ * GET /api/git/diff — Get unified diff for the repo or a specific file.
+ */
+gitRoutes.get("/diff", async (c) => {
+  const repoPath = c.req.query("repoPath") || c.req.query("cwd") || process.cwd();
+  const filePath = c.req.query("path") || undefined;
+  try {
+    const diff = await gitService.getDiff(repoPath, filePath);
+    return c.json({ success: true, data: { path: filePath, diff } });
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return c.json({ success: false, error: errorMsg }, 400);
+  }
+});
+
+/**
  * GET /api/git/branches — List local branches with the checked-out one marked.
  */
 gitRoutes.get("/branches", async (c) => {

@@ -101,4 +101,12 @@ export class SessionService {
   permanentlyDeleteSession(sessionId: string): boolean {
     return this.storage.permanentlyDeleteSession(sessionId);
   }
+
+  getSessionFileChanges(sessionId: string) {
+    return this.storage.getSessionFileChanges(sessionId);
+  }
+
+  recordFileChange(sessionId: string, change: import("@console/types").SessionFileChange) {
+    this.storage.recordFileChange(sessionId, change);
+  }
 }

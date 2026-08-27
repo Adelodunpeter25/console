@@ -130,16 +130,23 @@ export interface FsTreeEntry {
   children?: FsTreeEntry[];
 }
 
-export type GitFileStatus = "M" | "A" | "D" | "R" | "C" | "U" | "?" | "staged" | "modified" | "untracked" | "deleted";
+export interface GitFileEntry {
+  path: string;
+  status: GitFileStatus;
+  staged: boolean;
+  additions?: number;
+  deletions?: number;
+}
 
 export interface GitStatusSummary {
   branch: string;
   clean: boolean;
-  files: Array<{
-    path: string;
-    status: GitFileStatus;
-    staged: boolean;
-  }>;
+  files: GitFileEntry[];
+}
+
+export interface GitDiffResponse {
+  path?: string;
+  diff: string;
 }
 
 export interface GitBranchInfo {
@@ -157,3 +164,4 @@ export interface FsChangeEvent {
   projectPath: string;
   eventPath?: string;
 }
+

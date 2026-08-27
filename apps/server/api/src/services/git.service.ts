@@ -25,6 +25,41 @@ function isNotGitRepositoryError(error: unknown): boolean {
 }
 
 export class GitService {
+  private parseNumstat(output: string, map: Map<string, { additions: number; deletions: number }>): void {
+    for (const line of output.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const parts = trimmed.split("\t");
+      if (parts.length >= 3) {
+        const adds = parts[0] === "-" ? 0 : Number.parseInt(parts[0], 10) || 0;
+        const dels = parts[1] === "-" ? 0 : Number.parseInt(parts[1], 10) || 0;
+        const file = parts[2];
+        const existing = map.get(file) || { additions: 0, deletions: 0 };
+        map.set(file, {
+          additions: existing.additions + adds,
+          deletions: existing.deletions + dels,
+        });
+      }
+    }
+  }
+
+  private async getNumstatMap(repoPath: string): Promise<Map<string, { additions: number; deletions: number }>> {
+    const map = new Map<string, { additions: number; deletions: number }>();
+    try {
+      const unstaged = await execAsync("git diff --numstat", { cwd: repoPath });
+      this.parseNumstat(unstaged.stdout, map);
+    } catch {
+      // Ignored
+    }
+    try {
+      const staged = await execAsync("git diff --cached --numstat", { cwd: repoPath });
+      this.parseNumstat(staged.stdout, map);
+    } catch {
+      // Ignored
+    }
+    return map;
+  }
+
   /**
    * Run git status --porcelain=v1 in the repository directory and return structured status.
    */
@@ -38,7 +73,8 @@ export class GitService {
       const statusRes = await execAsync("git status --porcelain=v1 -u", { cwd: repoPath });
       const lines = statusRes.stdout.split("\n").filter((line) => line.trim().length > 0);
 
-      const files: Array<{ path: string; status: GitFileStatus; staged: boolean }> = [];
+      const numstatMap = await this.getNumstatMap(repoPath);
+      const files: import("@console/types").GitFileEntry[] = [];
 
       for (const line of lines) {
         const indexStatus = line[0];
@@ -70,10 +106,14 @@ export class GitService {
           status = "R";
         }
 
+        const stats = numstatMap.get(filePath) || numstatMap.get(rawFilePath);
+
         files.push({
           path: absolutePath,
           status,
           staged,
+          additions: stats?.additions ?? (status === "?" ? 0 : 0),
+          deletions: stats?.deletions ?? 0,
         });
       }
 
@@ -89,6 +129,30 @@ export class GitService {
         clean: true,
         files: [],
       };
+    }
+  }
+
+  /**
+   * Get unified diff for the repository or a specific file.
+   */
+  async getDiff(repoPath: string, filePath?: string): Promise<string> {
+    try {
+      const target = filePath ? ` -- "${filePath}"` : "";
+      const diffRes = await execAsync(`git diff HEAD${target}`, { cwd: repoPath });
+      if (diffRes.stdout.trim()) {
+        return diffRes.stdout;
+      }
+      const unstagedRes = await execAsync(`git diff${target}`, { cwd: repoPath });
+      return unstagedRes.stdout;
+    } catch {
+      try {
+        const target = filePath ? ` -- "${filePath}"` : "";
+        const fallbackRes = await execAsync(`git diff${target}`, { cwd: repoPath });
+        return fallbackRes.stdout;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Failed to compute git diff: ${msg}`;
+      }
     }
   }
 

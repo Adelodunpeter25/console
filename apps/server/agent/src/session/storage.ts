@@ -17,6 +17,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { AgentMessage, ModelFavorite, SessionHeader, ProjectInfo, ToolResult } from "@/agent/src/types/index.js";
+import type { SessionFileChange } from "@console/types";
 import { initGlobalDatabase } from "./schema.js";
 import { getGlobalDbPath, getConsoleStorageDir } from "./apppaths.js";
 import { type StorageState } from "./utils.js";
@@ -176,6 +177,20 @@ export class SqliteSessionStorage {
 
   setModelFavorite(favorite: ModelFavorite, isFavorite: boolean): void {
     ModelFavorites.setModelFavorite(this.state.globalDb, favorite, isFavorite);
+  }
+
+  // MARK: - File Changes
+
+  recordFileChange(sessionId: string, change: SessionFileChange): void {
+    Sessions.recordFileChange(this.state, sessionId, change);
+  }
+
+  getSessionFileChanges(sessionId: string): SessionFileChange[] {
+    return Sessions.getSessionFileChanges(this.state, sessionId);
+  }
+
+  clearSessionFileChanges(sessionId: string): void {
+    Sessions.clearSessionFileChanges(this.state, sessionId);
   }
 
   // MARK: - Lifecycle

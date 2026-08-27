@@ -24,3 +24,13 @@ export interface SessionContext {
   messages: AgentMessage[];
   tools: AgentTool[];
 }
+
+export interface SessionFileChange {
+  path: string;
+  status: "modified" | "added" | "deleted";
+  additions: number;
+  deletions: number;
+  turnIndex: number;
+  updatedAt: number;
+}
+
