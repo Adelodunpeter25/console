@@ -43,6 +43,8 @@ async function tryLoadCredential(type: OAuthProviderId) {
 
 export class AuthService {
   private readonly codexPending = new Map<string, { verifier: string; expiresAt: number }>();
+  /** Pending state tokens for gemini/antigravity loopback OAuth flows. */
+  private readonly oauthPending = new Map<string, { provider: OAuthProviderId; expiresAt: number }>();
 
   async getAuthStatus(): Promise<AuthStatusResponse> {
     const geminiCred = await tryLoadCredential("gemini");
@@ -114,6 +116,7 @@ export class AuthService {
   getLoginUrl(provider: OAuthProviderId): {
     provider: string;
     authUrl: string;
+    state: string;
     redirectUri: string;
   } {
     if (provider === "codex") {
@@ -121,10 +124,13 @@ export class AuthService {
       const { verifier, challenge } = generateCodexPkce();
       const result = createCodexAuthorizationUrl({ state, verifierChallenge: challenge });
       this.codexPending.set(state, { verifier, expiresAt: Date.now() + 10 * 60_000 });
-      return { provider, authUrl: result.authUrl, redirectUri: result.redirectUri };
+      return { provider, authUrl: result.authUrl, state, redirectUri: result.redirectUri };
     }
 
     const oauthConfig = provider === "gemini" ? GEMINI_OAUTH_CONFIG : ANTIGRAVITY_OAUTH_CONFIG;
+
+    const state = crypto.randomBytes(24).toString("hex");
+    this.oauthPending.set(state, { provider, expiresAt: Date.now() + 10 * 60_000 });
 
     const redirectUri = `http://localhost:${oauthConfig.port}${oauthConfig.callbackPath}`;
     const scopeString = oauthConfig.scopes.join(" ");
@@ -133,11 +139,12 @@ export class AuthService {
       oauthConfig.clientId,
     )}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(
       scopeString,
-    )}&access_type=offline&prompt=consent`;
+    )}&access_type=offline&prompt=consent&state=${encodeURIComponent(state)}`;
 
     return {
       provider,
       authUrl,
+      state,
       redirectUri,
     };
   }
@@ -155,6 +162,15 @@ export class AuthService {
       const credential = await exchangeCodexCode(code, pending.verifier, "http://localhost:1455/auth/callback");
       await saveCodexCredential(credential);
       return { provider, userEmail: credential.email };
+    }
+
+    // Validate the state token for gemini/antigravity.
+    if (state) {
+      const pending = this.oauthPending.get(state);
+      this.oauthPending.delete(state);
+      if (!pending || pending.expiresAt < Date.now()) {
+        throw new Error(`OAuth state is invalid or expired for provider: ${provider}`);
+      }
     }
 
     // Load the user-configured project ID (if any) so it takes precedence

@@ -146,7 +146,7 @@ impl ConsoleDesktopApp {
             // Spawn one-shot blocking loopback listener
             let expected_state = state.clone();
             let callback_res = tokio::task::spawn_blocking(move || -> Option<(String, String)> {
-                let listener = TcpListener::bind(("127.0.0.1", port)).ok()?;
+                let listener = TcpListener::bind(("localhost", port)).ok()?;
                 let _ = listener.set_nonblocking(false);
 
                 // Wait up to 120s for one connection
