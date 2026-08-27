@@ -1,6 +1,7 @@
 //! Hierarchical Project Directory Tree Viewer for the Right Inspector.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
 use std::rc::Rc;
 
 use console_core::types::FsTreeEntry;
@@ -14,10 +15,18 @@ use crate::primitives::file_icons::file_icon_for_name;
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 
+#[derive(Clone, Debug)]
+pub struct FileTreeNode {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub children: Vec<FileTreeNode>,
+}
+
 #[derive(IntoElement)]
 pub struct FileTreeView {
     entries: Vec<FsTreeEntry>,
-    collapsed_folders: HashSet<String>,
+    expanded_folders: HashSet<String>,
     selected_path: Option<String>,
     search_query: String,
     on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -27,7 +36,7 @@ pub struct FileTreeView {
 impl FileTreeView {
     pub fn new(
         entries: Vec<FsTreeEntry>,
-        collapsed_folders: HashSet<String>,
+        expanded_folders: HashSet<String>,
         selected_path: Option<String>,
         search_query: String,
         on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -35,7 +44,7 @@ impl FileTreeView {
     ) -> Self {
         Self {
             entries,
-            collapsed_folders,
+            expanded_folders,
             selected_path,
             search_query,
             on_toggle_folder,
@@ -44,9 +53,9 @@ impl FileTreeView {
     }
 
     fn render_node(
-        node: &FsTreeEntry,
+        node: &FileTreeNode,
         depth: usize,
-        collapsed_folders: &HashSet<String>,
+        expanded_folders: &HashSet<String>,
         selected_path: &Option<String>,
         on_toggle_folder: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
         on_select_file: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -55,10 +64,11 @@ impl FileTreeView {
     ) -> Vec<gpui::AnyElement> {
         let mut elements = Vec::new();
         let query_lower = search_query.to_lowercase();
-        let matches_filter = search_query.is_empty() || node.name.to_lowercase().contains(&query_lower);
+        let matches_filter =
+            search_query.is_empty() || node.name.to_lowercase().contains(&query_lower);
 
         let path = node.path.clone();
-        let is_collapsed = collapsed_folders.contains(&node.path);
+        let is_expanded = expanded_folders.contains(&node.path);
         let is_selected = selected_path.as_deref() == Some(&node.path);
 
         if matches_filter || node.is_dir {
@@ -94,10 +104,10 @@ impl FileTreeView {
                         .items_center()
                         .justify_center()
                         .when(node.is_dir, |el| {
-                            el.child(if is_collapsed {
-                                app_icon(IconName::ChevronRight, 12.0, theme.text_tertiary)
-                            } else {
+                            el.child(if is_expanded {
                                 app_icon(IconName::ChevronDown, 12.0, theme.text_tertiary)
+                            } else {
+                                app_icon(IconName::ChevronRight, 12.0, theme.text_tertiary)
                             })
                         }),
                 )
@@ -108,7 +118,13 @@ impl FileTreeView {
                         .flex()
                         .items_center()
                         .child(if node.is_dir {
-                            app_icon(IconName::FolderOpen, 14.0, theme.accent).into_any_element()
+                            if is_expanded {
+                                app_icon(IconName::FolderOpen, 14.0, theme.accent)
+                                    .into_any_element()
+                            } else {
+                                app_icon(IconName::Folder, 14.0, theme.text_secondary)
+                                    .into_any_element()
+                            }
                         } else {
                             file_icon(file_icon_for_name(&node.name), 14.0).into_any_element()
                         }),
@@ -124,35 +140,24 @@ impl FileTreeView {
                             theme.text_secondary
                         })
                         .child(node.name.clone()),
-                )
-                .when_some(node.size, |el, size| {
-                    el.child(
-                        div()
-                            .text_size(px(10.0))
-                            .text_color(theme.text_tertiary)
-                            .ml(px(4.0))
-                            .child(format_byte_size(size)),
-                    )
-                });
+                );
 
             elements.push(row.into_any_element());
         }
 
-        if node.is_dir && !is_collapsed {
-            if let Some(children) = &node.children {
-                for child in children {
-                    let mut child_els = Self::render_node(
-                        child,
-                        depth + 1,
-                        collapsed_folders,
-                        selected_path,
-                        on_toggle_folder,
-                        on_select_file,
-                        theme,
-                        search_query,
-                    );
-                    elements.append(&mut child_els);
-                }
+        if node.is_dir && (is_expanded || !search_query.is_empty()) {
+            for child in &node.children {
+                let mut child_els = Self::render_node(
+                    child,
+                    depth + 1,
+                    expanded_folders,
+                    selected_path,
+                    on_toggle_folder,
+                    on_select_file,
+                    theme,
+                    search_query,
+                );
+                elements.append(&mut child_els);
             }
         }
 
@@ -160,16 +165,88 @@ impl FileTreeView {
     }
 }
 
+pub fn build_tree_from_entries(entries: &[FsTreeEntry]) -> Vec<FileTreeNode> {
+    if entries.is_empty() {
+        return Vec::new();
+    }
+
+    let mut all_paths = HashSet::new();
+    let mut children_by_parent: HashMap<String, Vec<FsTreeEntry>> = HashMap::new();
+
+    for entry in entries {
+        all_paths.insert(entry.path.clone());
+        if let Some(parent) = Path::new(&entry.path).parent() {
+            children_by_parent
+                .entry(parent.to_string_lossy().to_string())
+                .or_default()
+                .push(entry.clone());
+        }
+    }
+
+    // Sort every children list: directories first, then case-insensitive alphabetical
+    for list in children_by_parent.values_mut() {
+        list.sort_by(|a, b| {
+            b.is_dir
+                .cmp(&a.is_dir)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+    }
+
+    // Root entries are those whose parent directory is not in all_paths
+    let mut root_entries: Vec<FsTreeEntry> = entries
+        .iter()
+        .filter(|e| {
+            Path::new(&e.path)
+                .parent()
+                .map(|p| !all_paths.contains(&p.to_string_lossy().to_string()))
+                .unwrap_or(true)
+        })
+        .cloned()
+        .collect();
+
+    root_entries.sort_by(|a, b| {
+        b.is_dir
+            .cmp(&a.is_dir)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+
+    fn assemble(
+        entry: FsTreeEntry,
+        children_by_parent: &HashMap<String, Vec<FsTreeEntry>>,
+    ) -> FileTreeNode {
+        let mut children = Vec::new();
+        if entry.is_dir {
+            if let Some(child_entries) = children_by_parent.get(&entry.path) {
+                for child in child_entries {
+                    children.push(assemble(child.clone(), children_by_parent));
+                }
+            }
+        }
+        FileTreeNode {
+            name: entry.name,
+            path: entry.path,
+            is_dir: entry.is_dir,
+            children,
+        }
+    }
+
+    root_entries
+        .into_iter()
+        .map(|r| assemble(r, &children_by_parent))
+        .collect()
+}
+
 impl RenderOnce for FileTreeView {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
+        let tree = build_tree_from_entries(&self.entries);
         let mut children = Vec::new();
 
-        for entry in &self.entries {
+        for node in &tree {
             let mut els = Self::render_node(
-                entry,
+                node,
                 0,
-                &self.collapsed_folders,
+                &self.expanded_folders,
                 &self.selected_path,
                 &self.on_toggle_folder,
                 &self.on_select_file,
@@ -206,12 +283,3 @@ impl RenderOnce for FileTreeView {
     }
 }
 
-fn format_byte_size(bytes: u64) -> String {
-    if bytes < 1024 {
-        format!("{} B", bytes)
-    } else if bytes < 1024 * 1024 {
-        format!("{:.1} KB", bytes as f64 / 1024.0)
-    } else {
-        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
-    }
-}

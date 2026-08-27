@@ -72,9 +72,9 @@ impl ConsoleDesktopApp {
     }
 
     pub fn toggle_inspector_folder(&mut self, path: String, cx: &mut Context<Self>) {
-        let collapsed = Rc::make_mut(&mut self.inspector_collapsed_folders);
-        if !collapsed.remove(&path) {
-            collapsed.insert(path);
+        let expanded = Rc::make_mut(&mut self.inspector_expanded_folders);
+        if !expanded.remove(&path) {
+            expanded.insert(path);
         }
         cx.notify();
     }

@@ -145,7 +145,7 @@ pub struct ConsoleDesktopApp {
     pub inspector_file_entries: Rc<Vec<console_core::types::FsTreeEntry>>,
     pub inspector_working_changes: Rc<Vec<console_core::types::GitFileEntry>>,
     pub inspector_session_changes: Rc<Vec<console_core::types::SessionFileChange>>,
-    pub inspector_collapsed_folders: Rc<std::collections::HashSet<String>>,
+    pub inspector_expanded_folders: Rc<std::collections::HashSet<String>>,
     pub inspector_selected_path: Option<String>,
     /// Retained virtualization state for the sidebar session history.
     pub sidebar_list_state: ListState,
@@ -467,7 +467,7 @@ impl ConsoleDesktopApp {
             inspector_file_entries: Rc::new(Vec::new()),
             inspector_working_changes: Rc::new(Vec::new()),
             inspector_session_changes: Rc::new(Vec::new()),
-            inspector_collapsed_folders: Rc::new(std::collections::HashSet::new()),
+            inspector_expanded_folders: Rc::new(std::collections::HashSet::new()),
             inspector_selected_path: None,
             sidebar_list_state: ListState::new(0, ListAlignment::Top, px(55.0)),
             sidebar_resize_start: None,

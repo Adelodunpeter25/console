@@ -676,7 +676,7 @@ impl Render for ConsoleDesktopApp {
                             (*self.inspector_file_entries).clone(),
                             (*self.inspector_working_changes).clone(),
                             (*self.inspector_session_changes).clone(),
-                            (*self.inspector_collapsed_folders).clone(),
+                            (*self.inspector_expanded_folders).clone(),
                             self.inspector_selected_path.clone(),
                             on_select_inspector_tab,
                             on_toggle_inspector_folder,
