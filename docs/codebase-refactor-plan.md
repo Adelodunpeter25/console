@@ -127,15 +127,14 @@ apps/desktop/crates/console-ui/src/layout/sidebar/
 
 ---
 
-## Phase 4: Modularize Root Desktop View (`apps/desktop/src/view.rs`)
+## Phase 4: Modularize Root Desktop View (`apps/desktop/src/view/`)
 
 ### Task 4.1: Split `view.rs` (1,208 Lines)
 - **Directory**: `apps/desktop/src/view/`
-- [ ] `mod.rs`: Root window frame `Render for ConsoleDesktopApp`, title bar, and modal dialog overlays.
-- [ ] `chat_view.rs`: Workspace chat tab content (`render_workspace_content` chat branch).
-- [ ] `terminal_view.rs`: Terminal tab content and empty state rendering.
+- [x] `mod.rs`: Root window frame `Render for ConsoleDesktopApp`, title bar, and modal dialog overlays.
+- [x] `workspace_content.rs`: Workspace chat tab content (`render_workspace_content`), composer, and terminal/empty state rendering.
 
 ### Task 4.2: Full Suite & Desktop Verification
-- [ ] Run `cargo check` across all workspace crates.
-- [ ] Run relevant server/desktop unit tests per `AGENTS.md`.
-- [ ] Commit Phase 4 with a single-line commit message.
+- [x] Run `cargo check` across all workspace crates.
+- [x] Run relevant server/desktop unit tests per `AGENTS.md`.
+- [x] Commit Phase 4 with a single-line commit message.
