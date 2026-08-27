@@ -187,21 +187,98 @@ pub fn extract_edit_args(arguments: &serde_json::Value) -> Option<(&str, &str)> 
 /// Try to extract file content from a `writeFile` / `batchWrite` tool-call
 /// arguments JSON value. For `writeFile` this returns a single (path, content).
 /// For `batchWrite` this returns the first file. Returns `None` otherwise.
-pub fn extract_write_args(arguments: &serde_json::Value) -> Option<(String, String)> {
-    let obj = arguments.as_object()?;
-    if let (Some(path), Some(content)) = (obj.get("path").and_then(|v| v.as_str()), obj.get("content").and_then(|v| v.as_str()))
-    {
-        return Some((path.to_owned(), content.to_owned()));
-    }
-    if let Some(files) = obj.get("files").and_then(|v| v.as_array()) {
-        if let Some(first) = files.first()
-            && let (Some(path), Some(content)) = (
-                first.get("path").and_then(|v| v.as_str()),
-                first.get("content").and_then(|v| v.as_str()),
-            )
-        {
-            return Some((path.to_owned(), content.to_owned()));
+pub fn parse_unified_diff(raw_diff: &str) -> DiffResult {
+    let mut lines = Vec::new();
+    let mut added = 0usize;
+    let mut removed = 0usize;
+    let mut old_line_no = 0usize;
+    let mut new_line_no = 0usize;
+    let mut in_hunk = false;
+
+    for line in raw_diff.lines() {
+        if line.starts_with("@@") {
+            in_hunk = true;
+            if let Some((old_start, new_start)) = parse_hunk_header(line) {
+                old_line_no = old_start;
+                new_line_no = new_start;
+            }
+            continue;
+        }
+
+        if !in_hunk {
+            continue;
+        }
+
+        if let Some(rest) = line.strip_prefix('+') {
+            lines.push(DiffLine {
+                kind: DiffLineKind::Added,
+                text: rest.to_string(),
+                old_no: None,
+                new_no: Some(new_line_no),
+            });
+            added += 1;
+            new_line_no += 1;
+        } else if let Some(rest) = line.strip_prefix('-') {
+            lines.push(DiffLine {
+                kind: DiffLineKind::Removed,
+                text: rest.to_string(),
+                old_no: Some(old_line_no),
+                new_no: None,
+            });
+            removed += 1;
+            old_line_no += 1;
+        } else if let Some(rest) = line.strip_prefix(' ') {
+            lines.push(DiffLine {
+                kind: DiffLineKind::Context,
+                text: rest.to_string(),
+                old_no: Some(old_line_no),
+                new_no: Some(new_line_no),
+            });
+            old_line_no += 1;
+            new_line_no += 1;
+        } else if line.starts_with('\\') {
+            continue;
+        } else {
+            lines.push(DiffLine {
+                kind: DiffLineKind::Context,
+                text: line.to_string(),
+                old_no: Some(old_line_no),
+                new_no: Some(new_line_no),
+            });
+            old_line_no += 1;
+            new_line_no += 1;
         }
     }
-    None
+
+    DiffResult {
+        lines,
+        added,
+        removed,
+    }
+}
+
+fn parse_hunk_header(header: &str) -> Option<(usize, usize)> {
+    let parts: Vec<&str> = header.split("@@").collect();
+    if parts.len() < 2 {
+        return None;
+    }
+    let range_part = parts[1].trim();
+    let mut ranges = range_part.split_whitespace();
+    let old_range = ranges.next()?;
+    let new_range = ranges.next()?;
+
+    let old_start = old_range
+        .strip_prefix('-')?
+        .split(',')
+        .next()?
+        .parse::<usize>()
+        .ok()?;
+    let new_start = new_range
+        .strip_prefix('+')?
+        .split(',')
+        .next()?
+        .parse::<usize>()
+        .ok()?;
+
+    Some((old_start, new_start))
 }

@@ -9,6 +9,7 @@ pub mod settings;
 pub mod terminal;
 pub mod theme;
 pub mod utils;
+pub mod viewer;
 pub mod workspace;
 
 pub use chat::*;
@@ -20,5 +21,6 @@ pub use markdown::*;
 pub use primitives::*;
 pub use settings::*;
 pub use theme::*;
+pub use viewer::*;
 pub use workspace::*;
 

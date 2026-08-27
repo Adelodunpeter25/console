@@ -147,6 +147,9 @@ pub struct ConsoleDesktopApp {
     pub inspector_session_changes: Rc<Vec<console_core::types::SessionFileChange>>,
     pub inspector_expanded_folders: Rc<std::collections::HashSet<String>>,
     pub inspector_selected_path: Option<String>,
+    pub preview_tab: Option<(String, std::time::Instant)>,
+    pub open_file_contents: std::collections::HashMap<String, String>,
+    pub open_diff_contents: std::collections::HashMap<String, (console_core::DiffResult, String)>,
     /// Retained virtualization state for the sidebar session history.
     pub sidebar_list_state: ListState,
     /// Live drag-resize anchor, owned by `layout`.
@@ -469,6 +472,9 @@ impl ConsoleDesktopApp {
             inspector_session_changes: Rc::new(Vec::new()),
             inspector_expanded_folders: Rc::new(std::collections::HashSet::new()),
             inspector_selected_path: None,
+            preview_tab: None,
+            open_file_contents: std::collections::HashMap::new(),
+            open_diff_contents: std::collections::HashMap::new(),
             sidebar_list_state: ListState::new(0, ListAlignment::Top, px(55.0)),
             sidebar_resize_start: None,
             split_resize: None,

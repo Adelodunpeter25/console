@@ -296,7 +296,14 @@ impl Render for ConsoleDesktopApp {
             Rc::new(move |path, _w, cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.select_inspector_file(path, cx);
+                        match this.inspector_active_tab {
+                            console_ui::InspectorTab::AllFiles => {
+                                this.open_file_tab(path, cx);
+                            }
+                            console_ui::InspectorTab::Changes => {
+                                this.open_diff_tab(path, cx);
+                            }
+                        }
                     });
                 }
             })

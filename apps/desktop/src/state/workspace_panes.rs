@@ -456,6 +456,158 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    pub fn open_file_tab(&mut self, path: String, cx: &mut Context<Self>) {
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".into());
+        self.open_file_tab_in_pane(&pane_id, path, cx);
+    }
+
+    pub fn open_file_tab_in_pane(&mut self, pane_id: &str, path: String, cx: &mut Context<Self>) {
+        let title = std::path::Path::new(&path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&path)
+            .to_string();
+
+        let preview_target = self.preview_tab.as_ref().and_then(|(tab_id, opened_at)| {
+            if opened_at.elapsed() < std::time::Duration::from_secs(600) {
+                Some(tab_id.clone())
+            } else {
+                None
+            }
+        });
+
+        let tab = WorkspaceTabConfig::File {
+            path: path.clone(),
+            title,
+            project_id: self.pane_project_id(pane_id),
+        };
+
+        let new_tab_id = workspace_ops::replace_or_open_tab(
+            &mut self.workspace_root,
+            pane_id,
+            preview_target.as_deref(),
+            tab,
+        );
+
+        let created_at = self
+            .preview_tab
+            .as_ref()
+            .filter(|(tid, _)| preview_target.as_deref() == Some(tid.as_str()))
+            .map(|(_, instant)| *instant)
+            .unwrap_or_else(std::time::Instant::now);
+
+        self.preview_tab = Some((new_tab_id, created_at));
+        self.active_pane_id = Some(pane_id.to_string());
+        self.inspector_selected_path = Some(path.clone());
+
+        // Fetch file content if not cached
+        let client = self.client.clone();
+        let file_path = path.clone();
+        cx.spawn(async move |entity, cx| {
+            match client.fs.read_file(&file_path).await {
+                Ok(resp) => {
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.open_file_contents.insert(file_path, resp.content);
+                                cx.notify();
+                            });
+                        }
+                    });
+                }
+                Err(err) => {
+                    log::warn!("Failed to read file for tab {}: {}", file_path, err);
+                }
+            }
+        })
+        .detach();
+
+        cx.notify();
+    }
+
+    pub fn open_diff_tab(&mut self, path: String, cx: &mut Context<Self>) {
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".into());
+        self.open_diff_tab_in_pane(&pane_id, path, cx);
+    }
+
+    pub fn open_diff_tab_in_pane(&mut self, pane_id: &str, path: String, cx: &mut Context<Self>) {
+        let title = format!(
+            "Diff: {}",
+            std::path::Path::new(&path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(&path)
+        );
+
+        let preview_target = self.preview_tab.as_ref().and_then(|(tab_id, opened_at)| {
+            if opened_at.elapsed() < std::time::Duration::from_secs(600) {
+                Some(tab_id.clone())
+            } else {
+                None
+            }
+        });
+
+        let tab = WorkspaceTabConfig::Diff {
+            path: path.clone(),
+            title,
+            project_id: self.pane_project_id(pane_id),
+        };
+
+        let new_tab_id = workspace_ops::replace_or_open_tab(
+            &mut self.workspace_root,
+            pane_id,
+            preview_target.as_deref(),
+            tab,
+        );
+
+        let created_at = self
+            .preview_tab
+            .as_ref()
+            .filter(|(tid, _)| preview_target.as_deref() == Some(tid.as_str()))
+            .map(|(_, instant)| *instant)
+            .unwrap_or_else(std::time::Instant::now);
+
+        self.preview_tab = Some((new_tab_id, created_at));
+        self.active_pane_id = Some(pane_id.to_string());
+        self.inspector_selected_path = Some(path.clone());
+
+        let client = self.client.clone();
+        let file_path = path.clone();
+        let cwd = self
+            .selected_session_id
+            .as_deref()
+            .and_then(|id| self.sessions.iter().find(|s| s.id == id))
+            .map(|s| s.cwd.clone());
+
+        cx.spawn(async move |entity, cx| {
+            match client.git.get_diff(cwd.as_deref(), Some(&file_path)).await {
+                Ok(resp) => {
+                    let diff_result = console_core::utils::diff::parse_unified_diff(&resp.diff);
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.open_diff_contents.insert(file_path, (diff_result, resp.diff));
+                                cx.notify();
+                            });
+                        }
+                    });
+                }
+                Err(err) => {
+                    log::warn!("Failed to fetch git diff for tab {}: {}", file_path, err);
+                }
+            }
+        })
+        .detach();
+
+        cx.notify();
+    }
+
     /// Close a tab in a pane. Returns the newly active tab id, if any.
     pub fn close_workspace_tab(&mut self, pane_id: &str, tab_id: &str) -> Option<String> {
         workspace_ops::close_tab(&mut self.workspace_root, pane_id, tab_id)

@@ -37,6 +37,31 @@ pub fn open_tab(root: &mut WorkspaceNode, pane_id: &str, tab: console_core::Work
     leaf.active_tab_id = Some(tab_id);
 }
 
+/// Open a tab, or replace an existing preview tab if found.
+pub fn replace_or_open_tab(
+    root: &mut WorkspaceNode,
+    pane_id: &str,
+    replace_tab_id: Option<&str>,
+    new_tab: console_core::WorkspaceTabConfig,
+) -> String {
+    let leaf = active_leaf(root, Some(pane_id));
+    let new_tab_id = new_tab.id();
+
+    if let Some(target_id) = replace_tab_id {
+        if let Some(pos) = leaf.tabs.iter().position(|t| t.id() == target_id) {
+            leaf.tabs[pos] = new_tab;
+            leaf.active_tab_id = Some(new_tab_id.clone());
+            return new_tab_id;
+        }
+    }
+
+    if !leaf.tabs.iter().any(|t| t.id() == new_tab_id) {
+        leaf.tabs.push(new_tab);
+    }
+    leaf.active_tab_id = Some(new_tab_id.clone());
+    new_tab_id
+}
+
 /// Move a tab into an existing pane, removing it from its source first.
 /// Existing tabs are deduplicated and activated instead of duplicated.
 pub fn move_tab_to_pane(

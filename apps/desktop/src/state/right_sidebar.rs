@@ -79,6 +79,7 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    #[allow(dead_code)]
     pub fn select_inspector_file(&mut self, path: String, cx: &mut Context<Self>) {
         self.inspector_selected_path = Some(path);
         cx.notify();

@@ -44,6 +44,26 @@ impl ConsoleDesktopApp {
             };
         }
 
+        // File tab: render full-page FileViewer
+        if let Some(console_core::WorkspaceTabConfig::File { path, .. }) = active_tab {
+            let content = self
+                .open_file_contents
+                .get(path)
+                .cloned()
+                .unwrap_or_else(|| "Loading file content...".to_string());
+            return console_ui::FileViewer::new(path.clone(), content).into_any_element();
+        }
+
+        // Diff tab: render full-page DiffViewer
+        if let Some(console_core::WorkspaceTabConfig::Diff { path, .. }) = active_tab {
+            let (diff_result, raw_diff) = self
+                .open_diff_contents
+                .get(path)
+                .cloned()
+                .unwrap_or_else(|| (console_core::DiffResult::default(), String::new()));
+            return console_ui::DiffViewer::new(path.clone(), diff_result, raw_diff).into_any_element();
+        }
+
         let pane_id = pane_id.to_owned();
         self.ensure_workspace_pane_state(&pane_id, window, cx);
         let pane_transcript = self.transcript_for_pane(&pane_id);
