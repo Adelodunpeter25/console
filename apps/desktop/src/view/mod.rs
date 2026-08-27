@@ -337,14 +337,6 @@ impl Render for ConsoleDesktopApp {
                                             .active_session_for_pane(&active_pane_id)
                                             .map(|s| s.to_string());
 
-                                        // Save draft for the session we're leaving.
-                                        if let Some(ref leaving_sid) = prev_sid {
-                                            if leaving_sid.as_str() != id.as_str() {
-                                                let text = this.active_composer_input().read(cx).content().to_string();
-                                                this.save_draft_for_session(Some(leaving_sid), &text);
-                                            }
-                                        }
-
                                         this.save_transcript_scroll_position(cx);
                                         this.selected_session_id = Some(id.clone());
                                         // Use the session's real title for the tab

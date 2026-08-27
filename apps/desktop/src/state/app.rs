@@ -171,6 +171,10 @@ pub struct ConsoleDesktopApp {
     pub settings_window_handle: Option<gpui::AnyWindowHandle>,
     pub settings_window_view: Option<gpui::WeakEntity<crate::settings_window::SettingsWindow>>,
     pub drafts: std::collections::HashMap<String, crate::persistence::store::PersistedDraft>,
+    /// Session IDs whose draft is confirmed for sidebar display.
+    /// Only updated when a tab closes (or submit). Typing never touches this —
+    /// so the sidebar stays frozen while a tab is open.
+    pub sidebar_draft_ids: std::collections::HashSet<String>,
     pub drafts_collapsed: bool,
     pub _subscriptions: Vec<Subscription>,
 }
@@ -290,6 +294,12 @@ impl ConsoleDesktopApp {
         });
 
         let drafts = persistence::store::load_drafts();
+        // All persisted drafts (except new_chat) are already confirmed for sidebar display.
+        let sidebar_draft_ids: std::collections::HashSet<String> = drafts
+            .keys()
+            .filter(|k| k.as_str() != "new_chat" && !drafts[*k].prompt.trim().is_empty())
+            .cloned()
+            .collect();
         if let Some(initial_draft) = drafts.get("new_chat") {
             if !initial_draft.prompt.trim().is_empty() {
                 composer_input.update(cx, |input, cx| {
@@ -316,6 +326,12 @@ impl ConsoleDesktopApp {
                             let attachments =
                                 (*this.attachments_for_pane("pane-main")).clone();
                             this.submit_prompt(prompt.clone(), attachments, cx);
+                        }
+                        ComposerEvent::Edited => {
+                            // Save raw text for crash safety; does NOT update sidebar_draft_ids.
+                            let text = input.read(cx).content().to_string();
+                            let session_id = this.active_session_for_pane("pane-main");
+                            this.save_draft_for_session(session_id.as_deref(), &text);
                         }
                         ComposerEvent::Focus => cx.notify(),
                         // Backspace on an empty composer removes the last staged
@@ -436,6 +452,7 @@ impl ConsoleDesktopApp {
             settings_window_handle: None,
             settings_window_view: None,
             drafts,
+            sidebar_draft_ids,
             drafts_collapsed: false,
             collapsed_groups: Rc::new(
                 layout

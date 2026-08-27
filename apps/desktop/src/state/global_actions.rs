@@ -109,6 +109,14 @@ impl ConsoleDesktopApp {
             return;
         };
         let prev_active_session = self.active_session_for_pane(&pane_id).map(|s| s.to_string());
+
+        // Commit the current composer text to sidebar draft state at close time.
+        // This is the ONLY moment the sidebar updates for this session's draft.
+        if let Some(ref sid) = prev_active_session {
+            let text = self.composer_for_pane(&pane_id).read(cx).content().to_string();
+            self.commit_draft_to_sidebar(sid, &text);
+        }
+
         self.save_transcript_scroll_position(cx);
         self.close_workspace_tab(&pane_id, &tab_id);
         let transcript = self.transcript_for_pane(&pane_id);

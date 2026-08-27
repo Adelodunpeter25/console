@@ -21,6 +21,11 @@ impl ConsoleDesktopApp {
             if prompt_trimmed.is_empty() {
                 continue;
             }
+            // Session drafts only appear in the sidebar once confirmed (tab was closed
+            // with unsent text). new_chat is always shown when it has text.
+            if key != "new_chat" && !self.sidebar_draft_ids.contains(key) {
+                continue;
+            }
             let first_line = prompt_trimmed.lines().next().unwrap_or("").trim().to_string();
             let preview = if first_line.chars().count() > 42 {
                 let truncated: String = first_line.chars().take(40).collect();
@@ -98,5 +103,22 @@ impl ConsoleDesktopApp {
         if self.drafts.remove(key).is_some() {
             persistence::store::save_drafts(self.drafts.clone());
         }
+    }
+
+    /// Called when a tab closes — commits the current draft state to the sidebar.
+    /// If `text` is non-empty, the session appears in the draft sidebar.
+    /// If empty, it is removed from the sidebar.
+    pub fn commit_draft_to_sidebar(&mut self, session_id: &str, text: &str) {
+        self.save_draft_for_session(Some(session_id), text);
+        if text.trim().is_empty() {
+            self.sidebar_draft_ids.remove(session_id);
+        } else {
+            self.sidebar_draft_ids.insert(session_id.to_string());
+        }
+    }
+
+    /// Called when submitting — removes the session from the sidebar draft list immediately.
+    pub fn revoke_sidebar_draft(&mut self, session_id: &str) {
+        self.sidebar_draft_ids.remove(session_id);
     }
 }

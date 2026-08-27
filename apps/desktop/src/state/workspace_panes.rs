@@ -93,7 +93,12 @@ impl ConsoleDesktopApp {
                     let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
                     this.submit_prompt(prompt.clone(), attachments, cx);
                 }
-                ComposerEvent::Edited => {}
+                ComposerEvent::Edited => {
+                    // Save raw text for crash safety; does NOT update sidebar_draft_ids.
+                    let text = input.read(cx).content().to_string();
+                    let session_id = this.active_session_for_pane(&edit_pane_id);
+                    this.save_draft_for_session(session_id.as_deref(), &text);
+                }
                 _ => {}
             },
         ));
@@ -366,20 +371,6 @@ impl ConsoleDesktopApp {
             .map(str::to_owned)
     }
 
-    /// Returns the session IDs that are currently open (active tab) in any pane.
-    /// Used to suppress draft badge/entries for sessions the user is currently viewing.
-    pub(crate) fn open_session_ids(&self) -> std::collections::HashSet<String> {
-        self.workspace_root
-            .leaves()
-            .into_iter()
-            .filter_map(|leaf| {
-                leaf.active_tab_id
-                    .as_deref()
-                    .and_then(|tab_id| tab_id.strip_prefix("chat:"))
-                    .map(str::to_owned)
-            })
-            .collect()
-    }
 
     /// The active leaf's tab id, for places that still want the flat view.
     pub fn active_tab_id(&self) -> Option<String> {
