@@ -100,19 +100,24 @@ impl RenderOnce for TitleBar {
             )
             // Center: the selected session's chat title — folder name. It is
             // dead-center because the side blocks are equal width.
-            .when_some(title, |el, title| {
-                el.child(
-                    div().flex_1().flex().justify_center().min_w_0().child(
-                        div()
-                            .truncate()
-                            .max_w(px(480.0))
-                            .text_size(px(12.0))
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(theme.text_secondary)
-                            .child(title),
-                    ),
-                )
-            })
+            .child(
+                div()
+                    .flex_1()
+                    .flex()
+                    .justify_center()
+                    .min_w_0()
+                    .when_some(title, |el, title| {
+                        el.child(
+                            div()
+                                .truncate()
+                                .max_w(px(480.0))
+                                .text_size(px(12.0))
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .text_color(theme.text_secondary)
+                                .child(title),
+                        )
+                    }),
+            )
             // Right: spacer + right inspector toggle button
             .child(
                 div()

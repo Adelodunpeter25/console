@@ -166,6 +166,9 @@ impl Render for ConsoleDesktopApp {
                                 });
                                 transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
                             }
+                            if this.right_sidebar_visible {
+                                this.refresh_inspector(cx);
+                            }
                             cx.notify();
                         });
                     }
