@@ -3,14 +3,14 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use console_core::types::{FsTreeEntry, GitFileEntry, SessionFileChange};
+use console_core::types::{GitFileEntry, SessionFileChange};
 use gpui::{
     App, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
 use crate::inspector::changes_list::ChangesListView;
-use crate::inspector::file_tree::FileTreeView;
+use crate::inspector::file_tree::{FileTreeNode, FileTreeView};
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 
@@ -26,9 +26,9 @@ pub struct RightSidebar {
     width: f32,
     active_tab: InspectorTab,
     search_query: String,
-    file_entries: Vec<FsTreeEntry>,
-    working_changes: Vec<GitFileEntry>,
-    session_changes: Vec<SessionFileChange>,
+    tree: Rc<Vec<FileTreeNode>>,
+    working_changes: Rc<Vec<GitFileEntry>>,
+    session_changes: Rc<Vec<SessionFileChange>>,
     expanded_folders: HashSet<String>,
     selected_path: Option<String>,
     on_select_tab: Rc<dyn Fn(InspectorTab, &mut Window, &mut App) + 'static>,
@@ -43,9 +43,9 @@ impl RightSidebar {
         width: f32,
         active_tab: InspectorTab,
         search_query: String,
-        file_entries: Vec<FsTreeEntry>,
-        working_changes: Vec<GitFileEntry>,
-        session_changes: Vec<SessionFileChange>,
+        tree: Rc<Vec<FileTreeNode>>,
+        working_changes: Rc<Vec<GitFileEntry>>,
+        session_changes: Rc<Vec<SessionFileChange>>,
         expanded_folders: HashSet<String>,
         selected_path: Option<String>,
         on_select_tab: Rc<dyn Fn(InspectorTab, &mut Window, &mut App) + 'static>,
@@ -58,7 +58,7 @@ impl RightSidebar {
             width,
             active_tab,
             search_query,
-            file_entries,
+            tree,
             working_changes,
             session_changes,
             expanded_folders,
@@ -230,7 +230,7 @@ impl RenderOnce for RightSidebar {
             // Content Body
             .child(match self.active_tab {
                 InspectorTab::AllFiles => FileTreeView::new(
-                    self.file_entries,
+                    self.tree,
                     self.expanded_folders,
                     self.selected_path,
                     self.search_query,

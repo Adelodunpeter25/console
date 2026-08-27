@@ -14,16 +14,16 @@ use crate::theme::Theme;
 
 #[derive(IntoElement)]
 pub struct ChangesListView {
-    working_changes: Vec<GitFileEntry>,
-    session_changes: Vec<SessionFileChange>,
+    working_changes: Rc<Vec<GitFileEntry>>,
+    session_changes: Rc<Vec<SessionFileChange>>,
     selected_path: Option<String>,
     on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
 }
 
 impl ChangesListView {
     pub fn new(
-        working_changes: Vec<GitFileEntry>,
-        session_changes: Vec<SessionFileChange>,
+        working_changes: Rc<Vec<GitFileEntry>>,
+        session_changes: Rc<Vec<SessionFileChange>>,
         selected_path: Option<String>,
         on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     ) -> Self {
@@ -66,7 +66,7 @@ impl RenderOnce for ChangesListView {
                     .flex()
                     .flex_col()
                     .gap(px(2.0))
-                    .children(self.working_changes.into_iter().map(|entry| {
+                    .children(self.working_changes.iter().map(|entry| {
                         let on_select = on_select.clone();
                         let path = entry.path.clone();
                         let is_selected = selected_path.as_deref() == Some(&path);

@@ -25,7 +25,7 @@ pub struct FileTreeNode {
 
 #[derive(IntoElement)]
 pub struct FileTreeView {
-    entries: Vec<FsTreeEntry>,
+    tree: Rc<Vec<FileTreeNode>>,
     expanded_folders: HashSet<String>,
     selected_path: Option<String>,
     search_query: String,
@@ -35,7 +35,7 @@ pub struct FileTreeView {
 
 impl FileTreeView {
     pub fn new(
-        entries: Vec<FsTreeEntry>,
+        tree: Rc<Vec<FileTreeNode>>,
         expanded_folders: HashSet<String>,
         selected_path: Option<String>,
         search_query: String,
@@ -43,7 +43,7 @@ impl FileTreeView {
         on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     ) -> Self {
         Self {
-            entries,
+            tree,
             expanded_folders,
             selected_path,
             search_query,
@@ -239,10 +239,9 @@ pub fn build_tree_from_entries(entries: &[FsTreeEntry]) -> Vec<FileTreeNode> {
 impl RenderOnce for FileTreeView {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
-        let tree = build_tree_from_entries(&self.entries);
         let mut children = Vec::new();
 
-        for node in &tree {
+        for node in self.tree.as_ref() {
             let mut els = Self::render_node(
                 node,
                 0,

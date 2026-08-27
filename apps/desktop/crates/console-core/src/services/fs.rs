@@ -180,4 +180,37 @@ impl FsService {
             ))
         }
     }
+
+    pub async fn watch_events(
+        &self,
+        path: &str,
+    ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<serde_json::Value>> + Send>>> {
+        use eventsource_stream::Eventsource;
+        use futures_util::StreamExt;
+
+        let url = format!(
+            "{}/api/fs/watch?path={}",
+            self.transport.url("").await,
+            urlencoding::encode(path)
+        );
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to connect to fs watch SSE stream")?;
+
+        let stream = resp.bytes_stream().eventsource().filter_map(|item| async {
+            match item {
+                Ok(event) if event.event == "fsChange" => {
+                    serde_json::from_str(&event.data).ok().map(Ok)
+                }
+                _ => None,
+            }
+        });
+
+        Ok(Box::pin(stream))
+    }
 }

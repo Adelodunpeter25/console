@@ -88,6 +88,36 @@ impl ConsoleDesktopApp {
         self.fetch_inspector_fs_tree(cx);
         self.fetch_inspector_git_changes(cx);
         self.fetch_inspector_session_changes(cx);
+        self.ensure_inspector_fs_watcher(cx);
+    }
+
+    pub fn ensure_inspector_fs_watcher(&mut self, cx: &mut Context<Self>) {
+        let cwd = self
+            .selected_session_id
+            .as_deref()
+            .and_then(|id| self.sessions.iter().find(|s| s.id == id))
+            .map(|s| s.cwd.clone())
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default().to_string_lossy().to_string());
+
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            use futures_util::StreamExt;
+            if let Ok(mut stream) = client.fs.watch_events(&cwd).await {
+                while let Some(Ok(_event)) = stream.next().await {
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                if this.right_sidebar_visible {
+                                    this.fetch_inspector_fs_tree(cx);
+                                    this.fetch_inspector_git_changes(cx);
+                                }
+                            });
+                        }
+                    });
+                }
+            }
+        })
+        .detach();
     }
 
     pub fn fetch_inspector_fs_tree(&mut self, cx: &mut Context<Self>) {
@@ -102,10 +132,11 @@ impl ConsoleDesktopApp {
         cx.spawn(async move |entity, cx| {
             match client.fs.get_entries(&cwd, Some(4), Some(false)).await {
                 Ok(entries) => {
+                    let tree = console_ui::build_tree_from_entries(&entries);
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.inspector_file_entries = Rc::new(entries);
+                                this.inspector_tree = Rc::new(tree);
                                 cx.notify();
                             });
                         }
