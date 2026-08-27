@@ -4,24 +4,6 @@
 
 This plan details the end-to-end architecture and implementation for a **Conductor-style Right Sidebar** in the Desktop GPUI application, supported by backend file mutation tracking, git status streaming, and an integrated bottom terminal/dev-run dock.
 
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ Top Window Titlebar (Left toggles ◧, Tab Bar, Right Sidebar Toggle ◨)                  │
-├──────────────┬───────────────────────────────────────────┬─────────────────────────────┤
-│ Left Sidebar │ Main Workspace (Split Panes)              │ Right Sidebar               │
-│ (Sessions &  │ ┌───────────────────────┬───────────────┐ │ ┌─────────────────────────┐ │
-│  Projects)   │ │ Active Chat Tab       │ Editor Tab    │ │ │ All files │ Changes (4) │ │
-│              │ │                       │               │ │ ├─────────────────────────┤ │
-│              │ │                       │               │ │ │ 📁 apps/desktop/        │ │
-│              │ │                       │               │ │ │   ├── 📄 main.rs        │ │
-│              │ │                       │               │ │ │   └── 📁 state/         │ │
-│              │ └───────────────────────┴───────────────┘ │ ├─────────────────────────┤ │
-│              │                                           │ │ Run | Terminal (1)  ▶ ■ │ │
-│              │                                           │ │ $ bun run dev           │ │
-│              │                                           │ └─────────────────────────┘ │
-└──────────────┴───────────────────────────────────────────┴─────────────────────────────┘
-```
-
 ---
 
 ## 2. Component Breakdown
