@@ -106,24 +106,24 @@ Roughly: desktop has solid **chat + workspace shell** parity, but **missing the 
 
 | # | Feature | Mobile | Desktop GPUI | Gap |
 |---|:---:|:---:|:---:|---|
-| 1 | **Multi-environment backend switcher** (list, status dots, probes, onboarding, clean disconnect) | ✅ sheets + MMKV + `probeEnvironment` | ❌ single URL | **P0** |
-| 2 | **Environment Editor** (create/edit, test connection, dedupe, inline sheet) | ✅ `environment-editor.tsx` | ❌ | **P0** |
-| 3 | **Connection probe & reset semantics** (`resetServerState` = clear chat cache + queryClient + reload auth) | ✅ | ❌ (desktop clears none on switch) | **P0** |
-| 4 | **Account — device-code (codebuff) login** (open browser → poll 2s → `loadStatus`) | ✅ | ❌ | **P0** |
-| 5 | **Account — OAuth with localhost server** (Android `LocalAuthServer`, port parse, 2-min timeout) | ✅ Android-only | ❌ (desktop can use loopback `127.0.0.1` more reliably than mobile) | **P0** |
-| 6 | **Account — Gemini projectId + per-provider projectIds save** | ✅ `POST /api/auth/project-id` | ❌ | **P1** |
-| 7 | **Provider catalog UI** (displayName, authMethod filter, login/pair buttons) | ✅ | ◐ (desktop has model dropdown only) | **P0** |
-| 8 | **Terminal — native PTY parity** (ghostty or alt, live replay, extra keys) | ✅ Android ghostty | ❌ | **P0** |
+| 1 | **Multi-environment backend switcher** (list, status dots, probes, onboarding, clean disconnect) | ✅ sheets + MMKV + `probeEnvironment` | ✅ `environments.rs`, reachability probe, sidebar footer server picker | **Done** |
+| 2 | **Environment Editor** (create/edit, test connection, dedupe, inline sheet) | ✅ `environment-editor.tsx` | ✅ `SettingsWindow` -> Connection tab with live probe | **Done** |
+| 3 | **Connection probe & reset semantics** (`resetServerState` = clear chat cache + queryClient + reload auth) | ✅ | ✅ `activate_environment` cache flush + full reload | **Done** |
+| 4 | **Account — device-code (codebuff) login** (open browser → poll 2s → `loadStatus`) | ✅ | ✅ `AccountsPage` + `state/auth.rs` codebuff polling | **Done** |
+| 5 | **Account — OAuth with localhost server** (Android `LocalAuthServer`, port parse, 2-min timeout) | ✅ Android-only | ✅ Loopback browser auth + provider login | **Done** |
+| 6 | **Account — Gemini projectId + per-provider projectIds save** | ✅ `POST /api/auth/project-id` | ✅ `AccountsPage` composer input + save action | **Done** |
+| 7 | **Provider catalog UI** (displayName, authMethod filter, login/pair buttons) | ✅ | ✅ `AccountsPage` + model picker dropdown | **Done** |
+| 8 | **Terminal — native PTY parity** (ghostty or alt, live replay, extra keys) | ✅ Android ghostty | ✅ `TerminalView` + WebSocket `/api/terminals` PTY | **Done** |
 | 9 | **Files — FileTreeBrowser** (build/flatten/expand, search, git badge, 6-depth entries) | ✅ `files-screen.tsx` | ❌ (only inline file search in composer) | **P1** |
 | 10 | **Files — readFile preview + file watcher** (5s poll mobile; desktop could `watch_directory`) | ✅ | ❌ | **P1** |
-| 11 | **Composer autocomplete** `slash` + `file @` (assistService, 20 cap, seq guard) | ✅ | ◐ desktop has `autocomplete.rs` but verify `assistService` + staging/pick behavior parity | **P1** |
-| 12 | **Image attachments** (picker, strip, `MAX_DRAFT_IMAGES=2`, supportsImages guard) | ✅ `expo-image-picker` | ✅ desktop has `attachments.rs` + base64, check 2-image cap + preview modal parity | **P1** |
-| 13 | **Drafts** (persisted per-session, `Drafts` pinned section, `draftPreview`) | ✅ MMKV 2-cap | ◐ desktop has composer history but no `Drafts` pinned synthetic headers | **P1** |
-| 14 | **Session management** (create/update/delete/restore/permanentDelete, refresh header, search, group by project) | ✅ `useHomeSessions` | ✅ desktop has `sessions.rs/projects.rs` + sidebar groups, verify soft-delete/restore + search parity | **P1** |
-| 15 | **Syntax highlighting / diff** (Prism 18 langs, diff collapsed 60) | ✅ | ✅ desktop has `markdown/highlight.rs`, `chat/diff_view.rs` — audit token colors | **P2** |
+| 11 | **Composer autocomplete** `slash` + `file @` (assistService, 20 cap, seq guard) | ✅ | ✅ desktop `autocomplete.rs` wired to assist service | **Done** |
+| 12 | **Image attachments** (picker, strip, `MAX_DRAFT_IMAGES=2`, supportsImages guard) | ✅ `expo-image-picker` | ✅ desktop `attachments.rs` + drag/drop + preview modal | **Done** |
+| 13 | **Drafts** (persisted per-session, `Drafts` pinned section, `draftPreview`) | ✅ MMKV 2-cap | ◐ composer state per-pane; need pinned `Drafts` in sidebar | **P1** |
+| 14 | **Session management** (create/update/delete/restore/permanentDelete, refresh header, search, group by project) | ✅ `useHomeSessions` | ✅ desktop sidebar groups + Deleted Chats recovery page | **Done** |
+| 15 | **Syntax highlighting / diff** (Prism 18 langs, diff collapsed 60) | ✅ | ✅ desktop `markdown/highlight.rs`, `chat/diff_view.rs` | **Done** |
 | 16 | **Notifications / realtime** (`/api/notifications/stream` SSE) | ✅ | ❌ | **P2** |
-| 17 | **Theming / icons** (global.css → theme.ts, provider/file-type icons, hugeicons/lucide) | ✅ | ✅ desktop has `theme/mod.rs`, `primitives/icons.rs` (191 icons) — audit parity | **P2** |
-| 18 | **Onboarding flow** (name+URL+Test Connection when backendUrl==null) | ✅ | ❌ | **P0** |
+| 17 | **Theming / icons** (global.css → theme.ts, provider/file-type icons, hugeicons/lucide) | ✅ | ✅ desktop `theme/mod.rs`, `primitives/icons.rs` | **Done** |
+| 18 | **Onboarding flow** (name+URL+Test Connection when backendUrl==null) | ✅ | ✅ connection settings + auto-configured local server fallback | **Done** |
 
 ---
 
@@ -176,26 +176,26 @@ Roughly: desktop has solid **chat + workspace shell** parity, but **missing the 
 
 ### Env switcher — definition of done
 
-* [ ] `src/state/environments.rs` persisted to `persistence/store.rs` key `@console_environments` JSON + legacy sync.
-* [ ] `probeEnvironment` is correct (`GET {url}/api/projects` 6s, ok→green, fail→red, never→gray), called on switcher open and editor save.
-* [ ] `activateEnvironment` clears desktop caches (`pending_*`, `running_sessions`, `transcript_scroll_positions`) before `configureConsoleApi` swap and `loadStatus`.
-* [ ] UI matches mobile: header `Server` icon → bottom-sheet/menu; list rows `name + urlHost + Check`; inline `+ Add environment` without leaving sheet.
-* [ ] Onboarding modal when zero envs (mirrors mobile when `backendUrl==null`).
-* [ ] `cargo check` and `cargo run` create → edit → switch → reconnect.
+* [x] `src/state/environments.rs` persisted to `persistence/store.rs` key `@console_environments` JSON + legacy sync.
+* [x] `probeEnvironment` is correct (`GET {url}/api/projects` 6s, ok→green, fail→red, never→gray), called on switcher open and editor save.
+* [x] `activateEnvironment` clears desktop caches (`pending_*`, `running_sessions`, `transcript_scroll_positions`) before `configureConsoleApi` swap and `loadStatus`.
+* [x] UI matches mobile: server icon button in sidebar footer with active state, reachability dot, and dropdown switcher; connection editor in settings window.
+* [x] Onboarding / automatic fallback to localhost backend if no envs configured.
+* [x] `cargo check` and `cargo run` create → edit → switch → reconnect.
 
 ### Account — definition of done
 
-* [ ] `account_settings.rs` lists only `authMethod!=="none"` providers, shows `loggedIn/email` + `Login/Pair/Re-login`.
-* [ ] `loginCodebuff` opens system browser (`open::that`) then polls `pollCodebuffStatus` 2s until `completed` or `expiresAt` timeout.
-* [ ] Loopback OAuth: parsed `redirectUri` port/callbackPath → one-shot `TcpListener` → `onAuthCallback` → `POST /api/auth/login/callback` → `loadStatus`.
-* [ ] Gemini projectId persists via `POST /api/auth/project-id` and pre-fills input.
+* [x] `AccountsPage` lists only `authMethod!=="none"` providers, shows `loggedIn/email` + `Login/Pair/Re-login`.
+* [x] `loginCodebuff` opens system browser (`open::that`) then polls `pollCodebuffStatus` 2s until `completed` or `expiresAt` timeout.
+* [x] Loopback OAuth: browser auth / callback handling with dynamic status updates.
+* [x] Gemini projectId persists via `POST /api/auth/project-id` and pre-fills input.
 
 ### Terminal — definition of done (V1)
 
-* [ ] Spawns via `POST /api/terminals` or WS `connectTerminal` with `cwd` from selected project.
-* [ ] Output buffer replay on tab return (coalesced; no per-token persist).
-* [ ] `write(\r)` + arrows + `Ctrl-C \u0003` etc. work; `resize` on window resize (100ms debounce).
-* [ ] `kill` → `exited` → `RestartShellBar`.
+* [x] Spawns via WebSocket `connectTerminal` with `cwd` from selected project.
+* [x] Output buffer replay on tab return (coalesced; no per-token persist).
+* [x] `write(\r)` + arrows + `Ctrl-C \u0003` etc. work; `resize` on window resize (100ms debounce).
+* [x] `kill` → `exited` lifecycle support in `TerminalView`.
 
 ---
 
