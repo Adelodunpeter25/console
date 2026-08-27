@@ -66,29 +66,29 @@ apps/desktop/crates/console-ui/src/layout/sidebar/
 
 ### Task 2.1: Extract Session Item Component (`session_item.rs`)
 - **File**: `apps/desktop/crates/console-ui/src/layout/sidebar/session_item.rs`
-- [ ] Move `SidebarSessionItem` struct and its `RenderOnce` implementation.
-- [ ] Move inline rename keybinding actions (`CommitSessionRename`, `CancelSessionRename`).
-- [ ] Move `render_sidebar_session_item` helper and action buttons.
+- [x] Move `SidebarSessionItem` struct and its `RenderOnce` implementation.
+- [x] Move inline rename keybinding actions (`CommitSessionRename`, `CancelSessionRename`).
+- [x] Move `render_sidebar_session_item` helper and action buttons.
 
 ### Task 2.2: Extract Draft Item Component (`draft_item.rs`)
 - **File**: `apps/desktop/crates/console-ui/src/layout/sidebar/draft_item.rs`
-- [ ] Move `DraftSummary` struct.
-- [ ] Move `render_sidebar_draft_item` function.
+- [x] Move `DraftSummary` struct.
+- [x] Move `render_sidebar_draft_item` function.
 
 ### Task 2.3: Extract Collapsible Group Headers (`group_header.rs`)
 - **File**: `apps/desktop/crates/console-ui/src/layout/sidebar/group_header.rs`
-- [ ] Move `group_header` function (chevron rotation, date label, add-project button).
-- [ ] Move `drafts_group_header` function.
+- [x] Move `group_header` function (chevron rotation, date label, add-project button).
+- [x] Move `drafts_group_header` function.
 
 ### Task 2.4: Assemble Main Sidebar View (`mod.rs`)
 - **File**: `apps/desktop/crates/console-ui/src/layout/sidebar/mod.rs`
-- [ ] Retain `SidebarView` struct, constructor `SidebarView::new`, and `SidebarRow` enum.
-- [ ] Retain list virtualization and bottom environments/settings popup footer.
-- [ ] Update `apps/desktop/crates/console-ui/src/layout/mod.rs` to re-export `SidebarView` and `DraftSummary`.
+- [x] Retain `SidebarView` struct, constructor `SidebarView::new`, and `SidebarRow` enum.
+- [x] Retain list virtualization and bottom environments/settings popup footer.
+- [x] Update `apps/desktop/crates/console-ui/src/layout/mod.rs` to re-export `SidebarView` and `DraftSummary`.
 
 ### Task 2.5: Verification
-- [ ] Verify `cargo check` passes with 0 warnings.
-- [ ] Commit Phase 2 with a single-line commit message.
+- [x] Verify `cargo check` passes with 0 warnings.
+- [x] Commit Phase 2 with a single-line commit message.
 
 ---
 
