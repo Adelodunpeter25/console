@@ -187,6 +187,28 @@ pub fn extract_edit_args(arguments: &serde_json::Value) -> Option<(&str, &str)> 
 /// Try to extract file content from a `writeFile` / `batchWrite` tool-call
 /// arguments JSON value. For `writeFile` this returns a single (path, content).
 /// For `batchWrite` this returns the first file. Returns `None` otherwise.
+pub fn extract_write_args(arguments: &serde_json::Value) -> Option<(String, String)> {
+    let obj = arguments.as_object()?;
+    if let (Some(path), Some(content)) = (
+        obj.get("path").and_then(|v| v.as_str()),
+        obj.get("content").and_then(|v| v.as_str()),
+    ) {
+        return Some((path.to_owned(), content.to_owned()));
+    }
+    if let Some(files) = obj.get("files").and_then(|v| v.as_array()) {
+        if let Some(first) = files.first()
+            && let (Some(path), Some(content)) = (
+                first.get("path").and_then(|v| v.as_str()),
+                first.get("content").and_then(|v| v.as_str()),
+            )
+        {
+            return Some((path.to_owned(), content.to_owned()));
+        }
+    }
+    None
+}
+
+/// Parse raw unified git diff output into a `DiffResult`.
 pub fn parse_unified_diff(raw_diff: &str) -> DiffResult {
     let mut lines = Vec::new();
     let mut added = 0usize;
