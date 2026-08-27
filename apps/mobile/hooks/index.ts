@@ -14,4 +14,5 @@ export * from "./useTerminal";
 export * from "./useGit";
 export * from "./useProjectBranches";
 export * from "./useHomeSessions";
+export * from "./useUsage";
 export * from "./queries";
