@@ -319,7 +319,15 @@ impl Render for ConsoleDesktopApp {
                         self.collapsed_groups.clone(),
                         self.running_sessions_snapshot(),
                         self.waiting_sessions_snapshot(),
-                        self.draft_summaries(&self.open_session_ids()),
+                        self.draft_summaries(&{
+                            let mut active = std::collections::HashSet::new();
+                            if let Some(pane_id) = self.active_pane_id.as_deref() {
+                                if let Some(sid) = self.active_session_for_pane(pane_id) {
+                                    active.insert(sid);
+                                }
+                            }
+                            active
+                        }),
                         self.drafts_collapsed,
                         self.sidebar_list_state.clone(),
                         self.environment_rows(),
