@@ -189,13 +189,7 @@ impl RenderOnce for AccountsPage {
                                                 .text_size(px(11.5))
                                                 .font_weight(gpui::FontWeight::MEDIUM)
                                                 .text_color(theme.text_secondary)
-                                                .child("Google Cloud Project ID (Optional)"),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_size(px(11.0))
-                                                .text_color(theme.text_tertiary)
-                                                .child("Used when automatic discovery can't select a project. Save before logging in if your account requires it."),
+                                                .child("Google Cloud Project ID"),
                                         )
                                         .child(
                                             div()
