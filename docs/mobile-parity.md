@@ -121,7 +121,7 @@ Roughly: desktop has solid **chat + workspace shell** parity, but **missing the 
 | 13 | **Drafts** (persisted per-session, `Drafts` pinned section, `draftPreview`) | ✅ MMKV 2-cap | ✅ `state.json` drafts persistence + draft badge in sidebar | **Done** |
 | 14 | **Session management** (create/update/delete/restore/permanentDelete, refresh header, search, group by project) | ✅ `useHomeSessions` | ✅ desktop sidebar groups + Deleted Chats recovery page | **Done** |
 | 15 | **Syntax highlighting / diff** (Prism 18 langs, diff collapsed 60) | ✅ | ✅ desktop `markdown/highlight.rs`, `chat/diff_view.rs` | **Done** |
-| 16 | **Notifications / realtime** (`/api/notifications/stream` SSE) | ✅ | ❌ | **P2** |
+| 16 | **Notifications / realtime** (`/api/notifications/stream` SSE) | ✅ | ✅ SSE listener + native macOS Notification Center banners | **Done** |
 | 17 | **Theming / icons** (global.css → theme.ts, provider/file-type icons, hugeicons/lucide) | ✅ | ✅ desktop `theme/mod.rs`, `primitives/icons.rs` | **Done** |
 | 18 | **Onboarding flow** (name+URL+Test Connection when backendUrl==null) | ✅ | ✅ connection settings + auto-configured local server fallback | **Done** |
 
