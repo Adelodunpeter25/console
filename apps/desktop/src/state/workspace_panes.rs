@@ -370,6 +370,21 @@ impl ConsoleDesktopApp {
             .map(str::to_owned)
     }
 
+    /// Returns the session IDs that are currently open (active tab) in any pane.
+    /// Used to suppress draft badge/entries for sessions the user is currently viewing.
+    pub(crate) fn open_session_ids(&self) -> std::collections::HashSet<String> {
+        self.workspace_root
+            .leaves()
+            .into_iter()
+            .filter_map(|leaf| {
+                leaf.active_tab_id
+                    .as_deref()
+                    .and_then(|tab_id| tab_id.strip_prefix("chat:"))
+                    .map(str::to_owned)
+            })
+            .collect()
+    }
+
     /// The active leaf's tab id, for places that still want the flat view.
     pub fn active_tab_id(&self) -> Option<String> {
         let pane_id = self.active_pane_id.as_deref()?;

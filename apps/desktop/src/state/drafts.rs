@@ -14,11 +14,15 @@ impl ConsoleDesktopApp {
             .collect()
     }
 
-    pub fn draft_summaries(&self) -> Vec<DraftSummary> {
+    pub fn draft_summaries(&self, open_sessions: &std::collections::HashSet<String>) -> Vec<DraftSummary> {
         let mut summaries = Vec::new();
         for (key, draft) in &self.drafts {
             let prompt_trimmed = draft.prompt.trim();
             if prompt_trimmed.is_empty() {
+                continue;
+            }
+            // Don't show a draft entry for sessions the user is currently viewing.
+            if key != "new_chat" && open_sessions.contains(key) {
                 continue;
             }
             let first_line = prompt_trimmed.lines().next().unwrap_or("").trim().to_string();

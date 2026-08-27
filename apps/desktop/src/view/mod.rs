@@ -319,7 +319,7 @@ impl Render for ConsoleDesktopApp {
                         self.collapsed_groups.clone(),
                         self.running_sessions_snapshot(),
                         self.waiting_sessions_snapshot(),
-                        self.draft_summaries(),
+                        self.draft_summaries(&self.open_session_ids()),
                         self.drafts_collapsed,
                         self.sidebar_list_state.clone(),
                         self.environment_rows(),
