@@ -193,6 +193,7 @@ impl RenderOnce for CodeViewer {
             .size_full()
             .min_h_0()
             .min_w_0()
+            .overflow_x_scroll()
             .bg(theme.canvas)
             .child(
                 list(self.list_state, move |index, _window, _cx| {
@@ -278,14 +279,14 @@ impl RenderOnce for CodeViewer {
                         .flex()
                         .items_center()
                         .h(px(CODE_LINE_HEIGHT))
-                        .w_full()
+                        .min_w_full()
+                        .w_auto()
                         .px(px(6.0))
                         .bg(bg)
                         .child(gutter_view)
                         .child(
                             div()
-                                .flex_1()
-                                .min_w_0()
+                                .flex_none()
                                 .font_family(MONO_FAMILY)
                                 .text_size(px(11.0))
                                 .line_height(px(CODE_LINE_HEIGHT))
