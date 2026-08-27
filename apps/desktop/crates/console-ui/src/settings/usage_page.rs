@@ -124,13 +124,14 @@ impl RenderOnce for UsagePage {
                     .flex()
                     .flex_col()
                     .gap(px(12.0))
-                    .children(self.providers.iter().filter(|p| p.auth_method != "none").map(|provider| {
+                    .children(self.providers.iter().filter(|p| {
+                        matches!(p.name.as_str(), "gemini" | "antigravity" | "codex")
+                    }).map(|provider| {
                         let provider_id = provider.name.clone();
                         let prov_status = auth_status.as_ref().and_then(|st| {
                             match provider_id.as_str() {
                                 "gemini" => Some(&st.gemini),
                                 "antigravity" => Some(&st.antigravity),
-                                "codebuff" => st.codebuff.as_ref(),
                                 "codex" | "openai" => Some(&st.codex),
                                 _ => None,
                             }
