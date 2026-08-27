@@ -351,12 +351,15 @@ pub struct DraftSummary {
     pub session_id: Option<String>,
     pub title: String,
     pub preview: String,
+    pub project_name: Option<String>,
     pub updated_at: i64,
 }
 
 #[derive(Clone)]
 enum SidebarRow {
-    DraftHeader,
+    DraftHeader {
+        collapsed: bool,
+    },
     Draft(usize),
     /// Position into the sidebar's shared session list. Carrying the index
     /// (not the header) keeps row construction allocation-free; only rows
@@ -454,6 +457,7 @@ pub struct SidebarView {
     pub waiting_sessions: HashSet<String>,
     /// Unsent prompt drafts, each with preview and target session if any.
     pub draft_summaries: Vec<DraftSummary>,
+    pub drafts_collapsed: bool,
     /// Retained list state is owned by the desktop app so it survives root
     /// renders caused by scrolling, status ticks, and transcript updates.
     pub sidebar_list_state: ListState,
@@ -462,6 +466,7 @@ pub struct SidebarView {
     on_search: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_add_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_group: Rc<dyn Fn(SessionDateGroup, &mut Window, &mut App) + 'static>,
+    on_toggle_drafts: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_rename_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_commit_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_cancel_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -487,6 +492,7 @@ impl SidebarView {
         running_sessions: HashMap<String, i64>,
         waiting_sessions: HashSet<String>,
         draft_summaries: Vec<DraftSummary>,
+        drafts_collapsed: bool,
         sidebar_list_state: ListState,
         environments: Vec<EnvironmentRow>,
         server_menu: ContextMenuHandle,
@@ -495,6 +501,7 @@ impl SidebarView {
         on_search: impl Fn(&mut Window, &mut App) + 'static,
         on_add_project: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_group: impl Fn(SessionDateGroup, &mut Window, &mut App) + 'static,
+        on_toggle_drafts: impl Fn(&mut Window, &mut App) + 'static,
         on_rename_session: impl Fn(String, &mut Window, &mut App) + 'static,
         on_commit_rename: impl Fn(&mut Window, &mut App) + 'static,
         on_cancel_rename: impl Fn(&mut Window, &mut App) + 'static,
@@ -516,12 +523,14 @@ impl SidebarView {
             running_sessions,
             waiting_sessions,
             draft_summaries,
+            drafts_collapsed,
             sidebar_list_state,
             on_select_session: Rc::new(on_select_session),
             on_new_chat: Rc::new(on_new_chat),
             on_search: Rc::new(on_search),
             on_add_project: Rc::new(on_add_project),
             on_toggle_group: Rc::new(on_toggle_group),
+            on_toggle_drafts: Rc::new(on_toggle_drafts),
             on_rename_session: Rc::new(on_rename_session),
             on_commit_rename: Rc::new(on_commit_rename),
             on_cancel_rename: Rc::new(on_cancel_rename),
@@ -619,9 +628,13 @@ impl RenderOnce for SidebarView {
         // a dedicated Drafts section, followed by date groups.
         let mut list_rows = Vec::new();
         if !draft_summaries.is_empty() {
-            list_rows.push(SidebarRow::DraftHeader);
-            for i in 0..draft_summaries.len() {
-                list_rows.push(SidebarRow::Draft(i));
+            list_rows.push(SidebarRow::DraftHeader {
+                collapsed: self.drafts_collapsed,
+            });
+            if !self.drafts_collapsed {
+                for i in 0..draft_summaries.len() {
+                    list_rows.push(SidebarRow::Draft(i));
+                }
             }
         }
         if let Some((group, positions)) = pinned {
@@ -651,6 +664,7 @@ impl RenderOnce for SidebarView {
         let list_draft_summaries = draft_summaries;
         let list_on_new = on_new.clone();
         let list_on_sel = on_sel;
+        let list_on_toggle_drafts = self.on_toggle_drafts.clone();
         let list_on_rename = on_rename;
         let list_on_commit_rename = on_commit_rename;
         let list_on_cancel_rename = on_cancel_rename;
@@ -664,108 +678,21 @@ impl RenderOnce for SidebarView {
                 return div().into_any_element();
             };
             let row = match row {
-                SidebarRow::DraftHeader => div()
-                    .w_full()
-                    .px(px(14.0))
-                    .py(px(4.0))
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_x(px(6.0))
-                            .child(app_icon(IconName::Pen, 10.5, theme.accent))
-                            .child(
-                                div()
-                                    .text_size(px(11.0))
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(theme.text_secondary)
-                                    .child("Drafts"),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .px(px(5.0))
-                            .py(px(0.5))
-                            .rounded(px(3.0))
-                            .bg(theme.accent.opacity(0.12))
-                            .text_color(theme.accent)
-                            .text_size(px(10.0))
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .child(format!("{}", list_draft_summaries.len())),
-                    )
-                    .into_any_element(),
+                SidebarRow::DraftHeader { collapsed } => {
+                    drafts_group_header(theme, collapsed, list_on_toggle_drafts.clone())
+                        .into_any_element()
+                }
                 SidebarRow::Draft(draft_index) => {
                     let Some(draft) = list_draft_summaries.get(draft_index) else {
                         return div().into_any_element();
                     };
-                    let is_active = match &draft.session_id {
-                        Some(sid) => list_selected_id.as_deref() == Some(sid),
-                        None => list_selected_id.is_none(),
-                    };
-                    let sid = draft.session_id.clone();
-                    let on_sel = list_on_sel.clone();
-                    let on_new = list_on_new.clone();
-                    div()
-                        .id(ElementId::Name(format!("draft-row-{}", draft_index).into()))
-                        .w_full()
-                        .px(px(10.0))
-                        .py(px(6.0))
-                        .rounded(px(6.0))
-                        .cursor_pointer()
-                        .when(is_active, |s| s.bg(theme.sidebar_item_background))
-                        .when(!is_active, |s| s.hover(|h| h.bg(theme.sidebar_item_background)))
-                        .on_click(move |_, window, cx| {
-                            if let Some(sid) = &sid {
-                                (on_sel)(sid.clone(), window, cx);
-                            } else {
-                                (on_new)(window, cx);
-                            }
-                        })
-                        .flex()
-                        .flex_col()
-                        .gap_y(px(2.0))
-                        .child(
-                            div()
-                                .w_full()
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .gap_x(px(6.0))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .truncate()
-                                        .text_size(px(12.5))
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(theme.text)
-                                        .child(draft.title.clone()),
-                                )
-                                .child(
-                                    div()
-                                        .flex_none()
-                                        .px(px(4.0))
-                                        .py(px(0.5))
-                                        .rounded(px(3.0))
-                                        .bg(theme.accent.opacity(0.15))
-                                        .text_color(theme.accent)
-                                        .text_size(px(10.0))
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .child("Draft"),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .w_full()
-                                .truncate()
-                                .text_size(px(11.0))
-                                .text_color(theme.text_tertiary)
-                                .child(draft.preview.clone()),
-                        )
-                        .into_any_element()
+                    render_sidebar_draft_item(
+                        draft,
+                        list_selected_id.as_deref(),
+                        &list_on_sel,
+                        &list_on_new,
+                        theme,
+                    )
                 }
                 SidebarRow::Session(session_index) => {
                     // Clone only for rows the virtualized list actually
@@ -1132,4 +1059,165 @@ fn group_header(
                     .child(app_icon(IconName::FolderNew, 15.0, theme.text_ghost)),
             )
         })
+}
+
+fn drafts_group_header(
+    theme: Theme,
+    collapsed: bool,
+    on_toggle: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+) -> impl IntoElement {
+    let group_name = "sidebar-group-header-drafts";
+    let chevron = app_icon(IconName::ChevronDown, 11.0, theme.text_ghost)
+        .when(collapsed, |icon| {
+            icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
+        })
+        .invisible()
+        .group_hover(group_name, |icon| icon.visible());
+    let toggle_on_click = on_toggle.clone();
+    let toggle_on_key = on_toggle;
+
+    div()
+        .h(px(28.0))
+        .flex()
+        .items_center()
+        .justify_between()
+        .group(group_name)
+        .child(
+            div()
+                .id("sidebar-group-toggle-drafts")
+                .tab_index(0)
+                .h(px(22.0))
+                .flex()
+                .items_center()
+                .gap(px(4.0))
+                .cursor_default()
+                .hover(|s| s.bg(theme.overlay))
+                .text_size(px(14.5))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme.text)
+                .child("Drafts")
+                .child(chevron)
+                .on_click(move |_, window, cx| (toggle_on_click)(window, cx))
+                .on_key_down(move |event: &KeyDownEvent, window, cx| {
+                    if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                        (toggle_on_key)(window, cx);
+                        cx.stop_propagation();
+                    }
+                }),
+        )
+}
+
+fn render_sidebar_draft_item(
+    draft: &DraftSummary,
+    selected_id: Option<&str>,
+    on_select: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_new_chat: &Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    theme: Theme,
+) -> gpui::AnyElement {
+    let is_active = match &draft.session_id {
+        Some(sid) => selected_id == Some(sid.as_str()),
+        None => selected_id.is_none(),
+    };
+    let sid = draft.session_id.clone();
+    let on_select = on_select.clone();
+    let on_new = on_new_chat.clone();
+    let on_click = move |window: &mut Window, cx: &mut App| {
+        if let Some(sid) = &sid {
+            (on_select)(sid.clone(), window, cx);
+        } else {
+            (on_new)(window, cx);
+        }
+    };
+
+    let folder_name = draft
+        .project_name
+        .clone()
+        .unwrap_or_else(|| "Workspace".to_string());
+
+    div()
+        .id(ElementId::Name(
+            format!("draft-row-{}", draft.session_id.as_deref().unwrap_or("new-chat")).into(),
+        ))
+        .w_full()
+        .h(px(55.0))
+        .px(px(8.0))
+        .py(px(6.0))
+        .rounded(px(8.0))
+        .cursor_default()
+        .group("sidebar-draft-card")
+        .when(is_active, |s| s.bg(theme.sidebar_item_background))
+        .when(!is_active, |s| s.hover(|h| h.bg(theme.sidebar_item_background)))
+        .on_click(move |_, window, cx| on_click(window, cx))
+        .flex()
+        .flex_col()
+        .justify_between()
+        .child(
+            div()
+                .w_full()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_x(px(6.0))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .items_center()
+                        .gap_x(px(6.0))
+                        .child(
+                            div()
+                                .truncate()
+                                .text_size(px(13.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(theme.text)
+                                .child(draft.title.clone()),
+                        )
+                        .child(
+                            div()
+                                .flex_none()
+                                .px(px(4.0))
+                                .py(px(0.5))
+                                .rounded(px(3.0))
+                                .bg(theme.accent.opacity(0.15))
+                                .text_color(theme.accent)
+                                .text_size(px(10.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .child("Draft"),
+                        ),
+                ),
+        )
+        .child(
+            div()
+                .w_full()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_x(px(5.0))
+                .text_size(px(11.5))
+                .line_height(px(15.0))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .items_center()
+                        .gap_x(px(4.0))
+                        .child(app_icon(IconName::Folder, 11.0, theme.text_tertiary))
+                        .child(
+                            div()
+                                .flex_1()
+                                .truncate()
+                                .text_color(theme.text_tertiary)
+                                .child(folder_name),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .text_color(theme.text_ghost)
+                        .child(format_time_ago(draft.updated_at)),
+                ),
+        )
+        .into_any_element()
 }

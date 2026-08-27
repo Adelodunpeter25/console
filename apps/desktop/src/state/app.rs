@@ -173,6 +173,7 @@ pub struct ConsoleDesktopApp {
     pub settings_window_handle: Option<gpui::AnyWindowHandle>,
     pub settings_window_view: Option<gpui::WeakEntity<crate::settings_window::SettingsWindow>>,
     pub drafts: std::collections::HashMap<String, crate::persistence::store::PersistedDraft>,
+    pub drafts_collapsed: bool,
     pub _subscriptions: Vec<Subscription>,
 }
 
@@ -442,6 +443,7 @@ impl ConsoleDesktopApp {
             settings_window_handle: None,
             settings_window_view: None,
             drafts,
+            drafts_collapsed: false,
             collapsed_groups: Rc::new(
                 layout
                     .collapsed_groups
@@ -1491,11 +1493,29 @@ impl ConsoleDesktopApp {
             } else {
                 first_line
             };
+            let project_name = if key == "new_chat" {
+                self.active_pane_id
+                    .as_deref()
+                    .and_then(|pane_id| self.selected_project_for_pane(pane_id))
+                    .map(|p| p.name.clone())
+            } else if let Some(session) = self.sessions.iter().find(|s| &s.id == key) {
+                self.projects
+                    .iter()
+                    .find(|project| {
+                        session.project_id.as_deref() == Some(project.id.as_str())
+                            || (!session.cwd.is_empty() && session.cwd == project.path)
+                    })
+                    .map(|project| project.name.clone())
+            } else {
+                None
+            };
+
             if key == "new_chat" {
                 summaries.push(console_ui::DraftSummary {
                     session_id: None,
                     title: "New Chat".to_string(),
                     preview,
+                    project_name,
                     updated_at: draft.updated_at,
                 });
             } else if let Some(session) = self.sessions.iter().find(|s| &s.id == key) {
@@ -1507,6 +1527,7 @@ impl ConsoleDesktopApp {
                         session.title.clone()
                     },
                     preview,
+                    project_name,
                     updated_at: draft.updated_at,
                 });
             }

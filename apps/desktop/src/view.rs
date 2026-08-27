@@ -334,6 +334,7 @@ impl Render for ConsoleDesktopApp {
                         self.running_sessions_snapshot(),
                         self.waiting_sessions_snapshot(),
                         self.draft_summaries(),
+                        self.drafts_collapsed,
                         self.sidebar_list_state.clone(),
                         self.environment_rows(),
                         self.server_menu.clone(),
@@ -409,6 +410,17 @@ impl Render for ConsoleDesktopApp {
                             move |group: console_ui::utils::SessionDateGroup, _w, cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| this.toggle_sidebar_group(group, cx));
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |_w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.drafts_collapsed = !this.drafts_collapsed;
+                                        cx.notify();
+                                    });
                                 }
                             }
                         },
