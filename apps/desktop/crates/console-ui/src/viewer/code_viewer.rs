@@ -259,19 +259,19 @@ impl RenderOnce for CodeViewer {
                             .into_any_element()
                     };
 
+                    let display_str = if line.text.is_empty() {
+                        " "
+                    } else {
+                        line.text.as_str()
+                    };
+
                     let runs = code_runs_for_tokens(
-                        &line.text,
+                        display_str,
                         &line.tokens,
                         default_text_color,
                         &code_font,
                         &palette,
                     );
-
-                    let display_text: gpui::SharedString = if line.text.is_empty() {
-                        " ".into()
-                    } else {
-                        line.text.as_str().into()
-                    };
 
                     div()
                         .id(ElementId::Name(format!("code-row-{}", index).into()))
@@ -289,7 +289,7 @@ impl RenderOnce for CodeViewer {
                                 .font_family(MONO_FAMILY)
                                 .text_size(px(11.0))
                                 .line_height(px(CODE_LINE_HEIGHT))
-                                .child(StyledText::new(display_text).with_runs(runs)),
+                                .child(StyledText::new(display_str.to_string()).with_runs(runs)),
                         )
                         .into_any_element()
                 })
@@ -313,55 +313,58 @@ fn code_runs_for_tokens(
     code_font: &Font,
     palette: &Palette,
 ) -> Vec<TextRun> {
-    let mut runs = Vec::new();
-    let mut cursor = 0;
+    if text.is_empty() {
+        return Vec::new();
+    }
 
-    for token in tokens {
-        if token.range.start > cursor {
-            let len = token.range.start - cursor;
-            runs.push(TextRun {
+    let mut runs: Vec<TextRun> = Vec::new();
+    let push = |runs: &mut Vec<TextRun>, len: usize, color: Hsla| {
+        if len == 0 {
+            return;
+        }
+        match runs.last_mut() {
+            Some(last) if last.color == color => last.len += len,
+            _ => runs.push(TextRun {
                 len,
                 font: code_font.clone(),
-                color: default_color,
+                color,
                 background_color: None,
                 underline: None,
                 strikethrough: None,
-            });
+            }),
         }
-        let len = token.range.len();
-        let color = palette.token(token.class);
-        runs.push(TextRun {
-            len,
-            font: code_font.clone(),
-            color,
-            background_color: None,
-            underline: None,
-            strikethrough: None,
-        });
-        cursor = token.range.end;
+    };
+
+    let mut cursor = 0;
+    for token in tokens {
+        let start = token.range.start.min(text.len());
+        let end = token.range.end.min(text.len());
+        if start > cursor {
+            push(&mut runs, start - cursor, default_color);
+            cursor = start;
+        }
+        if end > cursor {
+            let color = palette.token(token.class);
+            push(&mut runs, end - cursor, color);
+            cursor = end;
+        }
     }
 
     if cursor < text.len() {
-        let len = text.len() - cursor;
-        runs.push(TextRun {
-            len,
-            font: code_font.clone(),
-            color: default_color,
-            background_color: None,
-            underline: None,
-            strikethrough: None,
-        });
+        push(&mut runs, text.len() - cursor, default_color);
     }
 
-    if runs.is_empty() && !text.is_empty() {
-        runs.push(TextRun {
+    // Strict validator: ensure total run length exactly matches text.len()
+    let total_len: usize = runs.iter().map(|r| r.len).sum();
+    if total_len != text.len() {
+        return vec![TextRun {
             len: text.len(),
             font: code_font.clone(),
             color: default_color,
             background_color: None,
             underline: None,
             strikethrough: None,
-        });
+        }];
     }
 
     runs
