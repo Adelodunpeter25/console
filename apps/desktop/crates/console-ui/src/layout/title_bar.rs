@@ -58,7 +58,6 @@ impl RenderOnce for TitleBar {
         let theme = Theme::current(cx);
         let on_toggle = self.on_toggle_sidebar;
         let on_toggle_right = self.on_toggle_right_sidebar;
-        let right_open = self.right_sidebar_open;
         let title = self.title;
         let sidebar_width = self.sidebar_width;
 
@@ -142,17 +141,9 @@ impl RenderOnce for TitleBar {
                                 .active(|s| s.bg(theme.overlay_strong))
                                 .on_click(move |_, window, cx| (on_toggle_right)(window, cx))
                                 .child(app_icon(
-                                    if right_open {
-                                        IconName::PanelRightClose
-                                    } else {
-                                        IconName::PanelRightOpen
-                                    },
+                                    IconName::PanelRight,
                                     14.0,
-                                    if right_open {
-                                        theme.accent
-                                    } else {
-                                        theme.text_tertiary
-                                    },
+                                    theme.text_tertiary,
                                 )),
                         )
                     }),

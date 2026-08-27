@@ -119,7 +119,7 @@ impl FileTreeView {
                         .items_center()
                         .child(if node.is_dir {
                             if is_expanded {
-                                app_icon(IconName::FolderOpen, 14.0, theme.accent)
+                                app_icon(IconName::FolderOpen, 14.0, theme.text_secondary)
                                     .into_any_element()
                             } else {
                                 app_icon(IconName::Folder, 14.0, theme.text_secondary)
