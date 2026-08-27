@@ -15,6 +15,7 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    #[allow(dead_code)]
     pub fn set_right_sidebar_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
         if self.right_sidebar_visible == visible {
             return;
@@ -64,6 +65,7 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    #[allow(dead_code)]
     pub fn set_inspector_search_query(&mut self, query: String, cx: &mut Context<Self>) {
         self.inspector_search_query = query;
         cx.notify();
