@@ -9,8 +9,10 @@ mod attachments;
 mod auth;
 mod autocomplete;
 mod deleted_sessions;
+mod drafts;
 mod environments;
 mod errors;
+mod execution;
 mod global_actions;
 mod layout;
 mod notifications;
@@ -20,6 +22,7 @@ mod run;
 mod sessions;
 mod settings;
 mod transcript_scroll;
+mod workspace_panes;
 
 mod app;
 

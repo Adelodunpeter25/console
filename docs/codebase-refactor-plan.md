@@ -96,7 +96,7 @@ apps/desktop/crates/console-ui/src/layout/sidebar/
 
 ### Task 3.1: Extract Workspace Pane State Accessors
 - **Target File**: `apps/desktop/src/state/workspace_panes.rs`
-- [ ] Extract pane-scoped entity getters/mutators:
+- [x] Extract pane-scoped entity getters/mutators:
   - `ensure_workspace_pane_state`
   - `transcript_for_pane`, `composer_for_pane`, `active_session_for_pane`
   - `set_pane_model`, `set_pane_approval_mode`
@@ -104,7 +104,7 @@ apps/desktop/crates/console-ui/src/layout/sidebar/
 
 ### Task 3.2: Extract Execution & Interaction State
 - **Target File**: `apps/desktop/src/state/execution.rs`
-- [ ] Extract session execution tracking:
+- [x] Extract session execution tracking:
   - `is_session_running`, `set_session_running`, `running_sessions_snapshot`
   - Interactive permissions: `set_pending_permission_for_session`, `confirm_pending_permission_for_pane`
   - Interactive questions: `set_pending_question_for_session`, `submit_question_answer_for_pane`
@@ -112,18 +112,18 @@ apps/desktop/crates/console-ui/src/layout/sidebar/
 
 ### Task 3.3: Extract Draft State Management
 - **Target File**: `apps/desktop/src/state/drafts.rs`
-- [ ] Move `draft_summaries(&self) -> Vec<DraftSummary>` computation.
-- [ ] Move `get_draft_for_session` and `save_draft_for_session`.
+- [x] Move `draft_summaries(&self) -> Vec<DraftSummary>` computation.
+- [x] Move `get_draft_for_session` and `save_draft_for_session`.
 
 ### Task 3.4: Modularize Run Event Dispatcher (`state/run.rs`)
-- **Directory**: `apps/desktop/src/state/run/`
-- [ ] `submission.rs`: Prompt submission, draft clearing, optimistic transcript push.
-- [ ] `event_handler.rs`: `process_agent_event` (14 `AgentSessionEvent` branches).
-- [ ] `mod.rs`: `attach_session_run_for_pane` and stream render throttling.
+- **File**: `apps/desktop/src/state/run.rs`
+- [x] Focused prompt submission, draft clearing, optimistic transcript push.
+- [x] `process_agent_event` (14 `AgentSessionEvent` branches).
+- [x] `attach_session_run_for_pane` and stream render throttling.
 
 ### Task 3.5: Verification
-- [ ] Run `cargo check` and verify desktop app state builds cleanly.
-- [ ] Commit Phase 3 with a single-line commit message.
+- [x] Run `cargo check` and verify desktop app state builds cleanly.
+- [x] Commit Phase 3 with a single-line commit message.
 
 ---
 
