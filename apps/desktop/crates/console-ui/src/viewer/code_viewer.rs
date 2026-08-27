@@ -7,7 +7,7 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, ElementId, FontWeight, Hsla, IntoElement, ListAlignment, ListState,
+    App, ElementId, FontWeight, Hsla, IntoElement, ListState,
     ParentElement, RenderOnce, Styled, Window, div, list, prelude::*, px,
 };
 
@@ -34,14 +34,16 @@ pub struct CodeViewerLine {
 pub struct CodeViewer {
     id: String,
     lines: Rc<Vec<CodeViewerLine>>,
+    list_state: ListState,
     empty_message: Option<String>,
 }
 
 impl CodeViewer {
-    pub fn new(id: impl Into<String>) -> Self {
+    pub fn new(id: impl Into<String>, list_state: ListState) -> Self {
         Self {
             id: id.into(),
             lines: Rc::new(Vec::new()),
+            list_state,
             empty_message: None,
         }
     }
@@ -165,8 +167,6 @@ impl RenderOnce for CodeViewer {
                 .into_any_element();
         }
 
-        let total_lines = self.lines.len();
-
         // Determine max line number for gutter sizing
         let max_line = self
             .lines
@@ -181,13 +181,6 @@ impl RenderOnce for CodeViewer {
             .iter()
             .any(|l| l.old_line_no.is_some() || l.new_line_no.is_some());
 
-        // Virtualized list state with uniform line height for 120 FPS performance
-        let list_state = ListState::new(
-            total_lines,
-            ListAlignment::Top,
-            px(CODE_LINE_HEIGHT),
-        );
-
         let lines_rc = self.lines.clone();
 
         div()
@@ -197,7 +190,7 @@ impl RenderOnce for CodeViewer {
             .min_w_0()
             .bg(theme.canvas)
             .child(
-                list(list_state, move |index, _window, _cx| {
+                list(self.list_state, move |index, _window, _cx| {
                     let Some(line) = lines_rc.get(index) else {
                         return div().into_any_element();
                     };

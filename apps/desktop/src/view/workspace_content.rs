@@ -51,7 +51,13 @@ impl ConsoleDesktopApp {
                 .get(path)
                 .cloned()
                 .unwrap_or_else(|| "Loading file content...".to_string());
-            return console_ui::FileViewer::new(path.clone(), content).into_any_element();
+            let line_count = content.lines().count();
+            let list_state = self.viewer_list_state(
+                &format!("file:{}", path),
+                line_count,
+                console_ui::CODE_LINE_HEIGHT,
+            );
+            return console_ui::FileViewer::new(path.clone(), content, list_state).into_any_element();
         }
 
         // Diff tab: render full-page DiffViewer
@@ -61,7 +67,14 @@ impl ConsoleDesktopApp {
                 .get(path)
                 .cloned()
                 .unwrap_or_else(|| (console_core::DiffResult::default(), String::new()));
-            return console_ui::DiffViewer::new(path.clone(), diff_result, raw_diff).into_any_element();
+            let line_count = diff_result.lines.len();
+            let list_state = self.viewer_list_state(
+                &format!("diff:{}", path),
+                line_count,
+                console_ui::CODE_LINE_HEIGHT,
+            );
+            return console_ui::DiffViewer::new(path.clone(), diff_result, raw_diff, list_state)
+                .into_any_element();
         }
 
         let pane_id = pane_id.to_owned();

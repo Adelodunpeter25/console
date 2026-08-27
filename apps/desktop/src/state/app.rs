@@ -150,6 +150,7 @@ pub struct ConsoleDesktopApp {
     pub preview_tab: Option<(String, std::time::Instant)>,
     pub open_file_contents: std::collections::HashMap<String, String>,
     pub open_diff_contents: std::collections::HashMap<String, (console_core::DiffResult, String)>,
+    pub viewer_list_states: std::collections::HashMap<String, ListState>,
     /// Retained virtualization state for the sidebar session history.
     pub sidebar_list_state: ListState,
     /// Live drag-resize anchor, owned by `layout`.
@@ -475,6 +476,7 @@ impl ConsoleDesktopApp {
             preview_tab: None,
             open_file_contents: std::collections::HashMap::new(),
             open_diff_contents: std::collections::HashMap::new(),
+            viewer_list_states: std::collections::HashMap::new(),
             sidebar_list_state: ListState::new(0, ListAlignment::Top, px(55.0)),
             sidebar_resize_start: None,
             split_resize: None,
@@ -747,5 +749,16 @@ impl ConsoleDesktopApp {
         .detach();
 
         app
+    }
+
+    pub fn viewer_list_state(&mut self, id: &str, count: usize, row_height: f32) -> gpui::ListState {
+        let state = self
+            .viewer_list_states
+            .entry(id.to_string())
+            .or_insert_with(|| gpui::ListState::new(count, gpui::ListAlignment::Top, gpui::px(row_height)));
+        if state.item_count() != count {
+            state.reset_with_uniform_height(count, gpui::px(row_height));
+        }
+        state.clone()
     }
 }
