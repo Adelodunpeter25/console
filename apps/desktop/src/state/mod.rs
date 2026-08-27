@@ -13,6 +13,7 @@ mod environments;
 mod errors;
 mod global_actions;
 mod layout;
+mod notifications;
 mod projects;
 mod providers;
 mod run;

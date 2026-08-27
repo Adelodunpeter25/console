@@ -333,7 +333,7 @@ impl Render for ConsoleDesktopApp {
                         self.collapsed_groups.clone(),
                         self.running_sessions_snapshot(),
                         self.waiting_sessions_snapshot(),
-                        self.draft_session_ids(),
+                        self.draft_summaries(),
                         self.sidebar_list_state.clone(),
                         self.environment_rows(),
                         self.server_menu.clone(),

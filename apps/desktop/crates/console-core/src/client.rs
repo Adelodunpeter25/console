@@ -13,6 +13,7 @@ pub struct ConsoleClient {
     pub git: GitService,
     pub auth: AuthService,
     pub model_favorites: ModelFavoriteService,
+    pub notifications: NotificationService,
 }
 
 impl ConsoleClient {
@@ -28,6 +29,7 @@ impl ConsoleClient {
             git: GitService::new(transport.clone()),
             auth: AuthService::new(transport.clone()),
             model_favorites: ModelFavoriteService::new(transport.clone()),
+            notifications: NotificationService::new(transport.clone()),
             transport: transport.clone(),
         }
     }

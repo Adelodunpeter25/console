@@ -454,6 +454,7 @@ impl ConsoleDesktopApp {
 
         app.init_environments(cx);
         app.refresh_auth_status(cx);
+        app.init_notifications(cx);
 
         app.workspace_pane_states.insert(
             "pane-main".to_string(),
@@ -1467,12 +1468,51 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    #[allow(dead_code)]
     pub fn draft_session_ids(&self) -> std::collections::HashSet<String> {
         self.drafts
             .iter()
             .filter(|(k, v)| k.as_str() != "new_chat" && !v.prompt.trim().is_empty())
             .map(|(k, _)| k.clone())
             .collect()
+    }
+
+    pub fn draft_summaries(&self) -> Vec<console_ui::DraftSummary> {
+        let mut summaries = Vec::new();
+        for (key, draft) in &self.drafts {
+            let prompt_trimmed = draft.prompt.trim();
+            if prompt_trimmed.is_empty() {
+                continue;
+            }
+            let first_line = prompt_trimmed.lines().next().unwrap_or("").trim().to_string();
+            let preview = if first_line.chars().count() > 42 {
+                let truncated: String = first_line.chars().take(40).collect();
+                format!("{truncated}…")
+            } else {
+                first_line
+            };
+            if key == "new_chat" {
+                summaries.push(console_ui::DraftSummary {
+                    session_id: None,
+                    title: "New Chat".to_string(),
+                    preview,
+                    updated_at: draft.updated_at,
+                });
+            } else if let Some(session) = self.sessions.iter().find(|s| &s.id == key) {
+                summaries.push(console_ui::DraftSummary {
+                    session_id: Some(session.id.clone()),
+                    title: if session.title.trim().is_empty() {
+                        "New Chat".to_string()
+                    } else {
+                        session.title.clone()
+                    },
+                    preview,
+                    updated_at: draft.updated_at,
+                });
+            }
+        }
+        summaries.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        summaries
     }
 
     pub fn get_draft_for_session(&self, session_id: Option<&str>) -> Option<&str> {

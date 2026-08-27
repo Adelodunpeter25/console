@@ -346,8 +346,18 @@ impl RenderOnce for SidebarSessionItem {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct DraftSummary {
+    pub session_id: Option<String>,
+    pub title: String,
+    pub preview: String,
+    pub updated_at: i64,
+}
+
 #[derive(Clone)]
 enum SidebarRow {
+    DraftHeader,
+    Draft(usize),
     /// Position into the sidebar's shared session list. Carrying the index
     /// (not the header) keeps row construction allocation-free; only rows
     /// actually rendered by the virtualized list clone their header.
@@ -442,8 +452,8 @@ pub struct SidebarView {
     /// Sessions waiting for a permission or question response, keyed by session
     /// id. Each shows its own Waiting indicator.
     pub waiting_sessions: HashSet<String>,
-    /// Sessions with unsent prompt drafts, keyed by session id.
-    pub draft_sessions: HashSet<String>,
+    /// Unsent prompt drafts, each with preview and target session if any.
+    pub draft_summaries: Vec<DraftSummary>,
     /// Retained list state is owned by the desktop app so it survives root
     /// renders caused by scrolling, status ticks, and transcript updates.
     pub sidebar_list_state: ListState,
@@ -476,7 +486,7 @@ impl SidebarView {
         collapsed_groups: Rc<HashSet<SessionDateGroup>>,
         running_sessions: HashMap<String, i64>,
         waiting_sessions: HashSet<String>,
-        draft_sessions: HashSet<String>,
+        draft_summaries: Vec<DraftSummary>,
         sidebar_list_state: ListState,
         environments: Vec<EnvironmentRow>,
         server_menu: ContextMenuHandle,
@@ -505,7 +515,7 @@ impl SidebarView {
             collapsed_groups,
             running_sessions,
             waiting_sessions,
-            draft_sessions,
+            draft_summaries,
             sidebar_list_state,
             on_select_session: Rc::new(on_select_session),
             on_new_chat: Rc::new(on_new_chat),
@@ -541,7 +551,11 @@ impl RenderOnce for SidebarView {
         let collapsed_groups = self.collapsed_groups;
         let running_sessions = self.running_sessions;
         let waiting_sessions = self.waiting_sessions;
-        let draft_sessions = self.draft_sessions;
+        let draft_summaries = self.draft_summaries;
+        let draft_sessions: HashSet<String> = draft_summaries
+            .iter()
+            .filter_map(|d| d.session_id.clone())
+            .collect();
         let on_new = self.on_new_chat;
         let on_search = self.on_search;
         let on_add = self.on_add_project;
@@ -601,11 +615,15 @@ impl RenderOnce for SidebarView {
             .into_any_element(),
         };
 
-        // Scrollable rows: every group renders its own header plus its
-        // sessions when not collapsed. The first group's header already has a
-        // pinned copy above the list, so it is skipped here (its sessions are
-        // still included when expanded).
+        // Scrollable rows: any active drafts are pinned right at the top under
+        // a dedicated Drafts section, followed by date groups.
         let mut list_rows = Vec::new();
+        if !draft_summaries.is_empty() {
+            list_rows.push(SidebarRow::DraftHeader);
+            for i in 0..draft_summaries.len() {
+                list_rows.push(SidebarRow::Draft(i));
+            }
+        }
         if let Some((group, positions)) = pinned {
             if !collapsed_groups.contains(&group) {
                 list_rows.extend(positions.into_iter().map(SidebarRow::Session));
@@ -630,6 +648,8 @@ impl RenderOnce for SidebarView {
         let list_running_sessions = running_sessions;
         let list_waiting_sessions = waiting_sessions;
         let list_draft_sessions = draft_sessions;
+        let list_draft_summaries = draft_summaries;
+        let list_on_new = on_new.clone();
         let list_on_sel = on_sel;
         let list_on_rename = on_rename;
         let list_on_commit_rename = on_commit_rename;
@@ -644,6 +664,109 @@ impl RenderOnce for SidebarView {
                 return div().into_any_element();
             };
             let row = match row {
+                SidebarRow::DraftHeader => div()
+                    .w_full()
+                    .px(px(14.0))
+                    .py(px(4.0))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_x(px(6.0))
+                            .child(app_icon(IconName::Pen, 10.5, theme.accent))
+                            .child(
+                                div()
+                                    .text_size(px(11.0))
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(theme.text_secondary)
+                                    .child("Drafts"),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .px(px(5.0))
+                            .py(px(0.5))
+                            .rounded(px(3.0))
+                            .bg(theme.accent.opacity(0.12))
+                            .text_color(theme.accent)
+                            .text_size(px(10.0))
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .child(format!("{}", list_draft_summaries.len())),
+                    )
+                    .into_any_element(),
+                SidebarRow::Draft(draft_index) => {
+                    let Some(draft) = list_draft_summaries.get(draft_index) else {
+                        return div().into_any_element();
+                    };
+                    let is_active = match &draft.session_id {
+                        Some(sid) => list_selected_id.as_deref() == Some(sid),
+                        None => list_selected_id.is_none(),
+                    };
+                    let sid = draft.session_id.clone();
+                    let on_sel = list_on_sel.clone();
+                    let on_new = list_on_new.clone();
+                    div()
+                        .id(ElementId::Name(format!("draft-row-{}", draft_index).into()))
+                        .w_full()
+                        .px(px(10.0))
+                        .py(px(6.0))
+                        .rounded(px(6.0))
+                        .cursor_pointer()
+                        .when(is_active, |s| s.bg(theme.sidebar_item_background))
+                        .when(!is_active, |s| s.hover(|h| h.bg(theme.sidebar_item_background)))
+                        .on_click(move |_, window, cx| {
+                            if let Some(sid) = &sid {
+                                (on_sel)(sid.clone(), window, cx);
+                            } else {
+                                (on_new)(window, cx);
+                            }
+                        })
+                        .flex()
+                        .flex_col()
+                        .gap_y(px(2.0))
+                        .child(
+                            div()
+                                .w_full()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap_x(px(6.0))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_size(px(12.5))
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .text_color(theme.text)
+                                        .child(draft.title.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .flex_none()
+                                        .px(px(4.0))
+                                        .py(px(0.5))
+                                        .rounded(px(3.0))
+                                        .bg(theme.accent.opacity(0.15))
+                                        .text_color(theme.accent)
+                                        .text_size(px(10.0))
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .child("Draft"),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .w_full()
+                                .truncate()
+                                .text_size(px(11.0))
+                                .text_color(theme.text_tertiary)
+                                .child(draft.preview.clone()),
+                        )
+                        .into_any_element()
+                }
                 SidebarRow::Session(session_index) => {
                     // Clone only for rows the virtualized list actually
                     // paints; positions were grouped without touching data.
