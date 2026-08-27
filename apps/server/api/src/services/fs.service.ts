@@ -140,9 +140,26 @@ export class FsService {
 
       for (const entry of dirEntries) {
         if (!showHidden && entry.name.startsWith(".")) continue;
-        // Skip massive ignored dirs for performance (like T3 does via searchRanking)
-        if (!showHidden && (entry.name === "node_modules" || entry.name === ".git")) {
-          // Still record the directory itself so it appears in the tree
+        const IGNORED_DIRS = new Set([
+          "node_modules",
+          ".git",
+          "target",
+          "dist",
+          "build",
+          ".next",
+          ".turbo",
+          ".cache",
+          "coverage",
+          ".parcel-cache",
+          "out",
+          ".output",
+          ".expo",
+          ".gradle",
+          "bin",
+          "obj",
+        ]);
+
+        if (!showHidden && IGNORED_DIRS.has(entry.name)) {
           const dirPath = path.join(currentPath, entry.name);
           result.push({
             name: entry.name,
