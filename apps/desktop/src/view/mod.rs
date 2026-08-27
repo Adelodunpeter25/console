@@ -106,6 +106,11 @@ impl Render for ConsoleDesktopApp {
                                     sid.to_string(),
                                     cx,
                                 );
+                            } else {
+                                this.selected_session_id = None;
+                            }
+                            if this.right_sidebar_visible {
+                                this.refresh_inspector(cx);
                             }
                             cx.notify();
                         });

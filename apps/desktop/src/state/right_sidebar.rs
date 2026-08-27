@@ -85,6 +85,21 @@ impl ConsoleDesktopApp {
     }
 
     pub fn refresh_inspector(&mut self, cx: &mut Context<Self>) {
+        let has_session = self
+            .selected_session_id
+            .as_deref()
+            .and_then(|id| self.sessions.iter().find(|s| s.id == id))
+            .is_some();
+
+        if !has_session {
+            self.inspector_tree = Rc::new(Vec::new());
+            self.inspector_working_changes = Rc::new(Vec::new());
+            self.inspector_session_changes = Rc::new(Vec::new());
+            self.inspector_selected_path = None;
+            cx.notify();
+            return;
+        }
+
         self.fetch_inspector_fs_tree(cx);
         self.fetch_inspector_git_changes(cx);
         self.fetch_inspector_session_changes(cx);
@@ -92,12 +107,14 @@ impl ConsoleDesktopApp {
     }
 
     pub fn ensure_inspector_fs_watcher(&mut self, cx: &mut Context<Self>) {
-        let cwd = self
+        let Some(session) = self
             .selected_session_id
             .as_deref()
             .and_then(|id| self.sessions.iter().find(|s| s.id == id))
-            .map(|s| s.cwd.clone())
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default().to_string_lossy().to_string());
+        else {
+            return;
+        };
+        let cwd = session.cwd.clone();
 
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
@@ -121,12 +138,16 @@ impl ConsoleDesktopApp {
     }
 
     pub fn fetch_inspector_fs_tree(&mut self, cx: &mut Context<Self>) {
-        let cwd = self
+        let Some(session) = self
             .selected_session_id
             .as_deref()
             .and_then(|id| self.sessions.iter().find(|s| s.id == id))
-            .map(|s| s.cwd.clone())
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default().to_string_lossy().to_string());
+        else {
+            self.inspector_tree = Rc::new(Vec::new());
+            cx.notify();
+            return;
+        };
+        let cwd = session.cwd.clone();
 
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
@@ -151,12 +172,16 @@ impl ConsoleDesktopApp {
     }
 
     pub fn fetch_inspector_git_changes(&mut self, cx: &mut Context<Self>) {
-        let cwd = self
+        let Some(session) = self
             .selected_session_id
             .as_deref()
             .and_then(|id| self.sessions.iter().find(|s| s.id == id))
-            .map(|s| s.cwd.clone())
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default().to_string_lossy().to_string());
+        else {
+            self.inspector_working_changes = Rc::new(Vec::new());
+            cx.notify();
+            return;
+        };
+        let cwd = session.cwd.clone();
 
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
