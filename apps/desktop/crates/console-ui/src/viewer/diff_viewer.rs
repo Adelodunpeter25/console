@@ -6,16 +6,15 @@ use gpui::{
     Window, div, prelude::*, px,
 };
 
-use crate::common::copy_button::copy_button;
 use crate::markdown::render::MONO_FAMILY;
-use crate::primitives::file_icon;
-use crate::primitives::file_icons::file_icon_for_name;
 use crate::theme::Theme;
 
 #[derive(IntoElement)]
 pub struct DiffViewer {
+    #[allow(dead_code)]
     path: String,
     diff: DiffResult,
+    #[allow(dead_code)]
     raw_diff: String,
     scroll_handle: ScrollHandle,
 }
@@ -34,15 +33,6 @@ impl DiffViewer {
 impl RenderOnce for DiffViewer {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
-        let file_name = std::path::Path::new(&self.path)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(&self.path)
-            .to_string();
-
-        let added = self.diff.added;
-        let removed = self.diff.removed;
-        let copy_btn_id = format!("diff-copy-btn-{}", self.path);
 
         div()
             .id("diff-viewer-container")
@@ -50,60 +40,6 @@ impl RenderOnce for DiffViewer {
             .flex()
             .flex_col()
             .bg(theme.canvas)
-            // Header bar
-            .child(
-                div()
-                    .h(px(36.0))
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px(px(14.0))
-                    .border_b_1()
-                    .border_color(theme.border)
-                    .bg(theme.surface)
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.0))
-                            .child(file_icon(file_icon_for_name(&file_name), 15.0))
-                            .child(
-                                div()
-                                    .text_size(px(12.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme.text)
-                                    .child(self.path.clone()),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(12.0))
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(6.0))
-                                    .child(
-                                        div()
-                                            .text_size(px(11.0))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(theme.success)
-                                            .child(format!("+{added}")),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(11.0))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(theme.danger)
-                                            .child(format!("-{removed}")),
-                                    ),
-                            )
-                            .child(copy_button(copy_btn_id, self.raw_diff.clone(), theme, cx)),
-                    ),
-            )
             // Diff lines body
             .child(
                 div()

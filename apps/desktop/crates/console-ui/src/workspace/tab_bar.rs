@@ -7,6 +7,8 @@ use gpui::{
     prelude::FluentBuilder, px,
 };
 
+use crate::primitives::file_icon;
+use crate::primitives::file_icons::file_icon_for_name;
 use crate::primitives::{IconName, app_icon};
 use crate::theme::{TABBAR_HEIGHT, Theme};
 
@@ -38,15 +40,6 @@ impl WorkspaceTabBar {
             can_close_pane,
             on_close_pane: Rc::new(on_close_pane),
         }
-    }
-}
-
-fn tab_icon(config: &console_core::WorkspaceTabConfig) -> IconName {
-    match config {
-        console_core::WorkspaceTabConfig::Chat { .. } => IconName::Bot,
-        console_core::WorkspaceTabConfig::Terminal { .. } => IconName::Terminal,
-        console_core::WorkspaceTabConfig::File { .. } => IconName::File,
-        console_core::WorkspaceTabConfig::Diff { .. } => IconName::GitBranch,
     }
 }
 
@@ -85,7 +78,6 @@ impl RenderOnce for WorkspaceTabBar {
                         let tab_id = tab.id();
                         let is_active = active_id.as_deref() == Some(&tab_id.as_str());
                         let title = tab.title().to_string();
-                        let tab_icon_name = tab_icon(&tab);
                         let drag = WorkspaceDrag::new(tab.clone(), Some(pane_id.clone()));
 
                         let id_for_select = tab_id.clone();
@@ -125,17 +117,37 @@ impl RenderOnce for WorkspaceTabBar {
                                     (on_s)(pane_id.clone(), id.clone(), window, cx);
                                 }
                             })
-                            // Tab Icon — white for the active tab, muted for
-                            // inactive ones; no brand color.
-                            .child(app_icon(
-                                tab_icon_name,
-                                11.0,
-                                if is_active {
-                                    theme.text
-                                } else {
-                                    theme.text_tertiary
-                                },
-                            ))
+                            // Tab Icon
+                            .child(match &tab {
+                                console_core::WorkspaceTabConfig::Chat { .. } => app_icon(
+                                    IconName::Bot,
+                                    11.0,
+                                    if is_active {
+                                        theme.text
+                                    } else {
+                                        theme.text_tertiary
+                                    },
+                                )
+                                .into_any_element(),
+                                console_core::WorkspaceTabConfig::Terminal { .. } => app_icon(
+                                    IconName::Terminal,
+                                    11.0,
+                                    if is_active {
+                                        theme.text
+                                    } else {
+                                        theme.text_tertiary
+                                    },
+                                )
+                                .into_any_element(),
+                                console_core::WorkspaceTabConfig::File { path, .. }
+                                | console_core::WorkspaceTabConfig::Diff { path, .. } => {
+                                    let name = std::path::Path::new(path)
+                                        .file_name()
+                                        .and_then(|n| n.to_str())
+                                        .unwrap_or(path);
+                                    file_icon(file_icon_for_name(name), 13.0).into_any_element()
+                                }
+                            })
                             // Tab Title
                             .child(
                                 div()

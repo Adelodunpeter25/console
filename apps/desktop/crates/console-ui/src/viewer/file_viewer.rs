@@ -1,18 +1,16 @@
 //! Full-page File Viewer component for workspace tabs.
 
 use gpui::{
-    App, FontWeight, IntoElement, ParentElement, RenderOnce, ScrollHandle, Styled, Window, div,
+    App, IntoElement, ParentElement, RenderOnce, ScrollHandle, Styled, Window, div,
     prelude::*, px,
 };
 
-use crate::common::copy_button::copy_button;
 use crate::markdown::render::MONO_FAMILY;
-use crate::primitives::file_icon;
-use crate::primitives::file_icons::file_icon_for_name;
 use crate::theme::Theme;
 
 #[derive(IntoElement)]
 pub struct FileViewer {
+    #[allow(dead_code)]
     path: String,
     content: String,
     scroll_handle: ScrollHandle,
@@ -31,16 +29,9 @@ impl FileViewer {
 impl RenderOnce for FileViewer {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
-        let file_name = std::path::Path::new(&self.path)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(&self.path)
-            .to_string();
-
         let lines: Vec<&str> = self.content.lines().collect();
         let total_lines = lines.len();
         let line_num_width = format!("{}", total_lines.max(1)).len() * 8 + 24;
-        let copy_btn_id = format!("file-copy-btn-{}", self.path);
 
         div()
             .id("file-viewer-container")
@@ -48,46 +39,6 @@ impl RenderOnce for FileViewer {
             .flex()
             .flex_col()
             .bg(theme.canvas)
-            // Header bar
-            .child(
-                div()
-                    .h(px(36.0))
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px(px(14.0))
-                    .border_b_1()
-                    .border_color(theme.border)
-                    .bg(theme.surface)
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.0))
-                            .child(file_icon(file_icon_for_name(&file_name), 15.0))
-                            .child(
-                                div()
-                                    .text_size(px(12.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme.text)
-                                    .child(self.path.clone()),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(12.0))
-                            .child(
-                                div()
-                                    .text_size(px(11.0))
-                                    .text_color(theme.text_tertiary)
-                                    .child(format!("{total_lines} lines")),
-                            )
-                            .child(copy_button(copy_btn_id, self.content.clone(), theme, cx)),
-                    ),
-            )
             // Code lines body
             .child(
                 div()
