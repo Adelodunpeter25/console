@@ -2,7 +2,7 @@
 
 ## 1. Overview & Scope
 
-This plan details the end-to-end architecture and implementation for the **Right Workspace Inspector Panel** in the Desktop GPUI application, following a **backend-first execution order**.
+This plan details the end-to-end architecture and implementation for the **Right Workspace Inspector Panel** in the Desktop GPUI application, utilizing our existing server filesystem infrastructure and adding lightweight session file tracking and git diff statistics.
 
 ### Scope Focus:
 * **Included**: Top Inspector panel with **`All files`** (repository tree browser) and **`Changes`** (git diffs & per-turn file mutation list with `+X` / `-Y` stats).
@@ -10,104 +10,83 @@ This plan details the end-to-end architecture and implementation for the **Right
 
 ---
 
-## 2. Component & Feature Breakdown
+## 2. Server Infrastructure Audit & Requirements (`apps/server`)
 
-### 2.1 Top Inspector Tabs
-1. **`All files` Tab**:
-   * Hierarchical project directory tree viewer with search filtering, collapsible folders, and file-type icons.
-   * Single click opens a preview tab in the workspace editor pane; drag or secondary action inserts `@path/to/file` into composer.
-2. **`Changes (N)` Tab**:
-   * Live list of files modified during the chat session and uncommitted git working tree changes.
-   * Displays status tag (Modified, Added, Deleted, Untracked) along with green `+X` additions and red `-Y` deletions counts.
-   * Selecting a file opens a diff preview in the center workspace pane.
+### 2.1 Already Shipped & Available ✅
+* **`GET /api/fs/entries?path=...&depth=6&hidden=false`**: Recursive directory tree listing with children, file sizes, and types.
+* **`GET /api/fs/search?root=...&q=...`**: Fuzzy file search scoped to project root.
+* **`GET /api/fs/file?path=...`**: Reading and previewing file contents.
+* **`GET /api/fs/watch?path=...`**: Real-time SSE stream for filesystem change events.
 
-### 2.2 Titlebar Integration
-* Collapsible panel toggle button (`IconName::PanelRightOpen` / `IconName::PanelRightClose` or `◨`) in the top window titlebar.
-* Resizable left border with width persistence (`280px` default, `220px`–`500px` bounds).
-
----
-
-## 3. Backend Architecture (`apps/server`)
-
-We build and verify all backend surfaces first before touching the frontend.
-
-### 3.1 Per-Turn File Mutation Tracking & Database Storage
-* **Lightweight Storage Design**:
-  * To prevent database bloat, the database does **not** store entire raw file contents or verbose unified diffs.
-  * Instead, we store a structured, lightweight record:
-    ```typescript
-    interface SessionFileChange {
-      path: string;           // Relative file path
-      status: "modified" | "added" | "deleted";
-      additions: number;      // Line count added
-      deletions: number;      // Line count removed
-      turnIndex: number;      // Turn index when change occurred
-      updatedAt: number;      // Timestamp
-    }
-    ```
-  * Persisted in a dedicated SQLite table `session_file_changes (session_id, path, status, additions, deletions, turn_index, updated_at)` indexed by `(session_id, path)`.
-* **Agent Run Integration**:
-  * During agent execution turns, tool calls modifying the filesystem (`write_to_file`, `edit_file`, `replace_file_content`, etc.) compute the line delta and upsert the session change record.
-  * Emitted in SSE run stream events and queryable via API.
-
-### 3.2 Git Status & Changes Endpoints
-* **`GET /api/git/changes?cwd=<path>`**:
-  * Returns git working tree status and line counts for all staged and unstaged changes:
-    ```typescript
-    interface GitWorkingChange {
-      path: string;
-      status: "modified" | "added" | "deleted" | "untracked";
-      additions: number;
-      deletions: number;
-      staged: boolean;
-    }
-    ```
-* **`GET /api/git/diff?path=<file>&cwd=<path>`**:
-  * Returns unified diff text for a specific file on demand for frontend diff rendering.
-* **`GET /api/sessions/:id/changes`**:
-  * Returns all accumulated file mutations for the specified session.
-
-### 3.3 Scalable Recursive FS Tree Endpoint
-* **`GET /api/fs/tree?cwd=<path>&depth=3`**:
-  * Recursive directory listing with smart ignores (`.git`, `node_modules`, `.turbo`, `target`, `dist`, `.DS_Store`).
-  * On-demand lazy-loading when expanding deeply nested folders.
+### 2.2 Server Updates Required
+1. **Enrich Git Status with `+X` / `-Y` Line Diffs**:
+   * Update `GitService.getGitStatus` in `api/src/services/git.service.ts` to compute line additions and deletions via `git diff --numstat` (for both working tree and staged index):
+     ```typescript
+     export interface GitFileChange {
+       path: string;
+       status: "M" | "A" | "D" | "R" | "?";
+       additions: number;
+       deletions: number;
+       staged: boolean;
+     }
+     ```
+2. **Add Git Diff Endpoint**:
+   * Add `GET /api/git/diff?path=<file>&cwd=<path>` to return on-demand unified diff text for file inspection.
+3. **Session File Mutation Persistence (Zero-Bloat SQLite Table)**:
+   * In per-session SQLite databases (`agent/src/session/schema.ts`), add:
+     ```sql
+     CREATE TABLE IF NOT EXISTS session_file_changes (
+       path TEXT PRIMARY KEY,
+       status TEXT NOT NULL,
+       additions INTEGER NOT NULL DEFAULT 0,
+       deletions INTEGER NOT NULL DEFAULT 0,
+       turn_index INTEGER NOT NULL DEFAULT 0,
+       updated_at INTEGER NOT NULL
+     );
+     ```
+   * Stores only file paths, line metrics, and turn indexes (taking a few kilobytes per session, preventing database bloat).
+4. **Agent Tool Execution Hook**:
+   * Hook agent tool calls (`write_to_file`, `replace_file_content`, etc.) in `RunService` / `session-ops` to record touched files and stream them.
+5. **Session Changes Route**:
+   * Add `GET /api/sessions/:id/changes` in `routes/sessions.ts` to return the recorded files touched during that chat session.
 
 ---
 
-## 4. Frontend & Desktop Client (`apps/desktop`)
+## 3. Desktop Client Architecture (`apps/desktop`)
 
-### 4.1 Core Client & Shared Types (`console-core`)
-* Add DTOs: `GitWorkingChange`, `SessionFileChange`, `DirectoryTreeNode`, `FileDiffResponse`.
-* Add services: `GitService.getChanges(cwd)`, `GitService.getFileDiff(path, cwd)`, `FsService.getTree(cwd, depth)`.
+### 3.1 Core Client & Shared Types (`console-core`)
+* Add DTOs: `GitFileChange`, `SessionFileChange`, `FileDiffResponse`.
+* Add methods in `GitService`: `get_status(cwd)` (with diff stats), `get_file_diff(path, cwd)`.
+* Add method in `SessionService`: `get_changes(session_id)`.
 
-### 4.2 State Management (`apps/desktop/src/state/`)
+### 3.2 State Management (`apps/desktop/src/state/`)
 * **`right_sidebar.rs`**:
   * `right_sidebar_visible: bool` (persisted in layout config).
-  * `right_sidebar_width: Pixels` (resizable with drag handle).
+  * `right_sidebar_width: Pixels` (resizable with drag handle, bounds `220px`–`500px`).
   * `active_inspector_tab: InspectorTab` (`AllFiles` | `Changes`).
   * `project_file_tree: Option<Rc<DirectoryTreeNode>>`.
-  * `working_changes: Option<Rc<Vec<GitWorkingChange>>>`.
+  * `working_changes: Option<Rc<Vec<GitFileChange>>>`.
   * `session_changes: Option<Rc<Vec<SessionFileChange>>>`.
 
-### 4.3 UI Components (`crates/console-ui/src/inspector/`)
+### 3.3 UI Components (`crates/console-ui/src/inspector/`)
 * `RightSidebar`: Segmented header control (`All files` vs `Changes`), search input, and scrollable content.
 * `FileTreeView`: Hierarchical tree with folder toggles, search filtering, and file extension icons.
 * `ChangesListView`: List of changed files with color-coded diff badges (`+12`, `-4`) and git status dots.
 
 ---
 
-## 5. Phased Roadmap (Backend-First)
+## 4. Phased Roadmap (Backend-First)
 
-### Phase 1: Backend Persistence & Endpoints (`apps/server`)
-1. Create `session_file_changes` SQLite table and lightweight storage operations in `SqliteSessionStorage`.
-2. Hook tool execution to record per-turn file mutations and emit changes.
-3. Implement `GET /api/git/changes` and `GET /api/git/diff`.
-4. Implement `GET /api/fs/tree` with smart ignore filtering.
-5. Verify all endpoints with automated Bun tests.
+### Phase 1: Server Updates (`apps/server`)
+1. Add `session_file_changes` table in per-session SQLite schema and add CRUD operations in `SqliteSessionStorage`.
+2. Hook tool execution in `RunService` to record touched files on each agent turn.
+3. Update `GitService` to compute `additions`/`deletions` via `git diff --numstat`.
+4. Add `GET /api/git/diff` and `GET /api/sessions/:id/changes` endpoints.
+5. Verify all server changes with focused Bun unit tests.
 
 ### Phase 2: Core Client & Shared Types (`console-core`)
-1. Implement DTOs and client methods in `console-core`.
-2. Verify serialization and error handling with unit tests.
+1. Implement DTOs and client service methods in `console-core`.
+2. Verify serialization with cargo tests.
 
 ### Phase 3: Desktop Right Sidebar Shell & Toggle (`apps/desktop`)
 1. Add `right_sidebar_visible` and `right_sidebar_width` state with persistent layout storage.
@@ -115,6 +94,6 @@ We build and verify all backend surfaces first before touching the frontend.
 3. Render resizable right sidebar container alongside workspace panes.
 
 ### Phase 4: `All Files` & `Changes` UI Views (`console-ui`)
-1. Build `FileTreeView` component with folder collapse/expand, search filtering, and click-to-preview.
-2. Build `ChangesListView` component with git status badges and line diff counts.
-3. Connect live refresh on turn completion and tab switching.
+1. Connect `GET /api/fs/entries` to `FileTreeView` with folder collapse/expand and search.
+2. Build `ChangesListView` with git status badges and line diff counts.
+3. Wire click-to-preview and live refresh on turn completion.
