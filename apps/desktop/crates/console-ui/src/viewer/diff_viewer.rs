@@ -1,17 +1,13 @@
 //! Full-page Git Diff Viewer component for workspace tabs.
 
-use console_core::{DiffLine, DiffLineKind, DiffResult};
-use gpui::{
-    App, ElementId, FontWeight, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
-    Window, div, prelude::*, px,
-};
+use console_core::{DiffLineKind, DiffResult};
+use gpui::{App, IntoElement, RenderOnce, Window};
 
-use crate::markdown::render::MONO_FAMILY;
+use super::code_viewer::{CodeViewer, CodeViewerLine};
 use crate::theme::Theme;
 
 #[derive(IntoElement)]
 pub struct DiffViewer {
-    #[allow(dead_code)]
     path: String,
     diff: DiffResult,
     #[allow(dead_code)]
@@ -32,110 +28,41 @@ impl RenderOnce for DiffViewer {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
 
-        div()
-            .id(ElementId::Name(format!("diff-viewer-{}", self.path).into()))
-            .size_full()
-            .min_h_0()
-            .min_w_0()
-            .overflow_y_scroll()
-            .bg(theme.canvas)
-            .py(px(8.0))
-            .child(if self.diff.lines.is_empty() {
-                div()
-                    .size_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .py(px(48.0))
-                    .text_size(px(12.0))
-                    .text_color(theme.text_tertiary)
-                    .child("No differences detected")
-                    .into_any_element()
-            } else {
-                div()
-                    .flex()
-                    .flex_col()
-                    .w_full()
-                    .children(self.diff.lines.iter().map(|line| diff_row(line, &theme)))
-                    .into_any_element()
+        let lines: Vec<CodeViewerLine> = self
+            .diff
+            .lines
+            .into_iter()
+            .map(|line| {
+                let (gutter, gutter_color, bg_color) = match line.kind {
+                    DiffLineKind::Added => (
+                        "+",
+                        theme.success,
+                        Some(gpui::hsla(145.0 / 360.0, 0.50, 0.66, 0.08)),
+                    ),
+                    DiffLineKind::Removed => (
+                        "-",
+                        theme.danger,
+                        Some(gpui::hsla(4.0 / 360.0, 0.55, 0.63, 0.08)),
+                    ),
+                    DiffLineKind::Context => (" ", theme.text_tertiary, None),
+                };
+
+                CodeViewerLine {
+                    line_no: None,
+                    old_line_no: line.old_no,
+                    new_line_no: line.new_no,
+                    gutter: Some(gutter),
+                    gutter_color: Some(gutter_color),
+                    bg_color,
+                    text_color: None,
+                    text: line.text,
+                }
             })
+            .collect();
+
+        CodeViewer::new(format!("diff-{}", self.path))
+            .for_path(self.path)
+            .lines(lines)
+            .empty_message("No differences detected")
     }
-}
-
-fn diff_row(line: &DiffLine, theme: &Theme) -> impl IntoElement {
-    let (gutter, fg, bg) = match line.kind {
-        DiffLineKind::Added => (
-            "+",
-            theme.success,
-            gpui::hsla(145.0 / 360.0, 0.50, 0.66, 0.08),
-        ),
-        DiffLineKind::Removed => (
-            "-",
-            theme.danger,
-            gpui::hsla(4.0 / 360.0, 0.55, 0.63, 0.08),
-        ),
-        DiffLineKind::Context => (" ", theme.text_tertiary, gpui::transparent_black()),
-    };
-
-    let old_no_str = line.old_no.map_or(String::new(), |n| n.to_string());
-    let new_no_str = line.new_no.map_or(String::new(), |n| n.to_string());
-
-    let display_text: SharedString = if line.text.is_empty() {
-        " ".into()
-    } else {
-        line.text.as_str().into()
-    };
-
-    div()
-        .flex()
-        .items_start()
-        .min_h(px(20.0))
-        .w_full()
-        .px(px(10.0))
-        .bg(bg)
-        .hover(|s| s.bg(theme.overlay))
-        .child(
-            div()
-                .w(px(32.0))
-                .flex_none()
-                .text_align(gpui::TextAlign::Right)
-                .pr(px(6.0))
-                .pt(px(1.0))
-                .font_family(MONO_FAMILY)
-                .text_size(px(10.0))
-                .text_color(theme.text_ghost)
-                .child(old_no_str),
-        )
-        .child(
-            div()
-                .w(px(32.0))
-                .flex_none()
-                .text_align(gpui::TextAlign::Right)
-                .pr(px(8.0))
-                .pt(px(1.0))
-                .font_family(MONO_FAMILY)
-                .text_size(px(10.0))
-                .text_color(theme.text_ghost)
-                .child(new_no_str),
-        )
-        .child(
-            div()
-                .w(px(14.0))
-                .flex_none()
-                .pt(px(1.0))
-                .text_size(px(11.0))
-                .font_weight(FontWeight::BOLD)
-                .text_color(fg)
-                .child(gutter),
-        )
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .font_family(MONO_FAMILY)
-                .text_size(px(12.0))
-                .line_height(px(18.0))
-                .text_color(fg)
-                .child(display_text),
-        )
 }
