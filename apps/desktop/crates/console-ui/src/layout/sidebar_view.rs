@@ -50,6 +50,7 @@ pub struct SidebarSessionItem {
     project_name: Option<String>,
     is_active: bool,
     loading_state: Option<SidebarLoadingState>,
+    has_draft: bool,
     is_renaming: bool,
     rename_input: Option<Entity<ComposerInput>>,
     on_click: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -65,6 +66,7 @@ impl SidebarSessionItem {
         project_name: Option<String>,
         is_active: bool,
         loading_state: Option<SidebarLoadingState>,
+        has_draft: bool,
         is_renaming: bool,
         rename_input: Option<Entity<ComposerInput>>,
         on_click: impl Fn(&mut Window, &mut App) + 'static,
@@ -78,6 +80,7 @@ impl SidebarSessionItem {
             project_name,
             is_active,
             loading_state,
+            has_draft,
             is_renaming,
             rename_input,
             on_click: Rc::new(on_click),
@@ -230,6 +233,20 @@ impl RenderOnce for SidebarSessionItem {
                             .items_center()
                             .gap_x(px(6.0))
                             .child(title)
+                            .when(self.has_draft, |el| {
+                                el.child(
+                                    div()
+                                        .flex_none()
+                                        .px(px(4.0))
+                                        .py(px(0.5))
+                                        .rounded(px(3.0))
+                                        .bg(theme.accent.opacity(0.15))
+                                        .text_color(theme.accent)
+                                        .text_size(px(10.0))
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .child("Draft"),
+                                )
+                            })
                             .when_some(
                                 loading_state
                                     .and_then(|state| sidebar::status_indicator(state, theme)),
@@ -347,6 +364,7 @@ fn render_sidebar_session_item(
     selected_id: Option<&str>,
     running_started_at: Option<i64>,
     is_waiting: bool,
+    has_draft: bool,
     on_select: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_rename: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_commit_rename: &Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -375,6 +393,7 @@ fn render_sidebar_session_item(
         project_name,
         is_active,
         loading_state,
+        has_draft,
         is_renaming,
         is_renaming.then_some(rename_input).flatten(),
         {
@@ -423,6 +442,8 @@ pub struct SidebarView {
     /// Sessions waiting for a permission or question response, keyed by session
     /// id. Each shows its own Waiting indicator.
     pub waiting_sessions: HashSet<String>,
+    /// Sessions with unsent prompt drafts, keyed by session id.
+    pub draft_sessions: HashSet<String>,
     /// Retained list state is owned by the desktop app so it survives root
     /// renders caused by scrolling, status ticks, and transcript updates.
     pub sidebar_list_state: ListState,
@@ -455,6 +476,7 @@ impl SidebarView {
         collapsed_groups: Rc<HashSet<SessionDateGroup>>,
         running_sessions: HashMap<String, i64>,
         waiting_sessions: HashSet<String>,
+        draft_sessions: HashSet<String>,
         sidebar_list_state: ListState,
         environments: Vec<EnvironmentRow>,
         server_menu: ContextMenuHandle,
@@ -483,6 +505,7 @@ impl SidebarView {
             collapsed_groups,
             running_sessions,
             waiting_sessions,
+            draft_sessions,
             sidebar_list_state,
             on_select_session: Rc::new(on_select_session),
             on_new_chat: Rc::new(on_new_chat),
@@ -518,6 +541,7 @@ impl RenderOnce for SidebarView {
         let collapsed_groups = self.collapsed_groups;
         let running_sessions = self.running_sessions;
         let waiting_sessions = self.waiting_sessions;
+        let draft_sessions = self.draft_sessions;
         let on_new = self.on_new_chat;
         let on_search = self.on_search;
         let on_add = self.on_add_project;
@@ -605,6 +629,7 @@ impl RenderOnce for SidebarView {
         let list_selected_id = selected_id;
         let list_running_sessions = running_sessions;
         let list_waiting_sessions = waiting_sessions;
+        let list_draft_sessions = draft_sessions;
         let list_on_sel = on_sel;
         let list_on_rename = on_rename;
         let list_on_commit_rename = on_commit_rename;
@@ -625,16 +650,18 @@ impl RenderOnce for SidebarView {
                     let Some(session) = list_sessions.get(session_index).cloned() else {
                         return div().into_any_element();
                     };
-                    // Resolve this row's own running/waiting state from the
+                    // Resolve this row's own running/waiting/draft state from the
                     // per-session maps so each chat shows its own indicator.
                     let running_started_at = list_running_sessions.get(&session.id).copied();
                     let is_waiting = list_waiting_sessions.contains(&session.id);
+                    let has_draft = list_draft_sessions.contains(&session.id);
                     render_sidebar_session_item(
                         session,
                         &list_projects,
                         list_selected_id.as_deref(),
                         running_started_at,
                         is_waiting,
+                        has_draft,
                         &list_on_sel,
                         &list_on_rename,
                         &list_on_commit_rename,

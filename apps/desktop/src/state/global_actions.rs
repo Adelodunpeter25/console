@@ -65,9 +65,19 @@ impl ConsoleDesktopApp {
                                     new_session.id.clone(),
                                     "New Chat",
                                 );
+                                let new_chat_draft = this.get_draft_for_session(None).map(|s| s.to_string());
                                 this.composer_for_pane(&pane_id).update(cx, |input, cx| {
                                     input.set_prompt_history(Vec::new(), cx);
+                                    if let Some(draft_text) = &new_chat_draft {
+                                        input.set_content(draft_text.clone(), cx);
+                                    } else {
+                                        input.clear(cx);
+                                    }
                                 });
+                                if let Some(draft_text) = new_chat_draft {
+                                    this.save_draft_for_session(Some(&new_session.id), &draft_text);
+                                    this.clear_draft_for_session(None);
+                                }
                                 this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
                                     t.set_messages(Vec::new(), cx);
                                 });

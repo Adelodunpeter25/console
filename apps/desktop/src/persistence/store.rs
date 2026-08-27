@@ -22,6 +22,17 @@ pub struct PersistedEnvironmentsState {
     pub active_id: Option<String>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PersistedDraft {
+    pub prompt: String,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PersistedDraftsState {
+    pub drafts: std::collections::HashMap<String, PersistedDraft>,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct StorageDocument {
     version: u32,
@@ -29,6 +40,7 @@ struct StorageDocument {
     settings_window: Option<PersistedWindowState>,
     layout: Option<PersistedLayoutState>,
     environments: Option<PersistedEnvironmentsState>,
+    drafts: Option<PersistedDraftsState>,
 }
 
 fn storage_path() -> PathBuf {
@@ -131,4 +143,17 @@ pub fn load_environments() -> Option<PersistedEnvironmentsState> {
 
 pub fn save_environments(state: PersistedEnvironmentsState) {
     update_document(|document| document.environments = Some(state));
+}
+
+pub fn load_drafts() -> std::collections::HashMap<String, PersistedDraft> {
+    read_document()
+        .drafts
+        .map(|s| s.drafts)
+        .unwrap_or_default()
+}
+
+pub fn save_drafts(drafts: std::collections::HashMap<String, PersistedDraft>) {
+    update_document(|document| {
+        document.drafts = Some(PersistedDraftsState { drafts });
+    });
 }

@@ -59,6 +59,8 @@ impl ConsoleDesktopApp {
         // Fresh slate for this pane only: its active chat's error, or the
         // app-level banner if that is what is showing.
         self.clear_error_for_pane(&run_pane_id, cx);
+        let active_session = self.active_session_for_pane(&run_pane_id).map(|s| s.to_string());
+        self.clear_draft_for_session(active_session.as_deref());
         self.composer_for_pane(&run_pane_id)
             .update(cx, |input, cx| {
                 input.record_prompt_history(prompt.clone(), cx);

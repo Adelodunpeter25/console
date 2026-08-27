@@ -172,6 +172,7 @@ pub struct ConsoleDesktopApp {
     pub deleted_sessions: Vec<SessionHeader>,
     pub settings_window_handle: Option<gpui::AnyWindowHandle>,
     pub settings_window_view: Option<gpui::WeakEntity<crate::settings_window::SettingsWindow>>,
+    pub drafts: std::collections::HashMap<String, crate::persistence::store::PersistedDraft>,
     pub _subscriptions: Vec<Subscription>,
 }
 
@@ -289,10 +290,19 @@ impl ConsoleDesktopApp {
             }
         });
 
+        let drafts = persistence::store::load_drafts();
+        if let Some(initial_draft) = drafts.get("new_chat") {
+            if !initial_draft.prompt.trim().is_empty() {
+                composer_input.update(cx, |input, cx| {
+                    input.set_content(initial_draft.prompt.clone(), cx);
+                });
+            }
+        }
+
         let subscriptions = vec![
             cx.subscribe(
                 &composer_input,
-                |this, _input, event: &ComposerEvent, cx| {
+                |this, input, event: &ComposerEvent, cx| {
                     match event {
                         ComposerEvent::Submit(prompt) => {
                             // The main composer belongs to "pane-main" even when
@@ -309,11 +319,9 @@ impl ConsoleDesktopApp {
                             this.submit_prompt(prompt.clone(), attachments, cx);
                         }
                         ComposerEvent::Edited => {
-                            // Avoid full app re-render per keystroke (was causing
-                            // few-ms lag and transcript re-measurement). The
-                            // ComposerInput entity's own notify drives the
-                            // text field; has_draft is read in ComposerView via
-                            // entity read tracking and window refresh.
+                            let text = input.read(cx).content().to_string();
+                            let session_id = this.active_session_for_pane("pane-main");
+                            this.save_draft_for_session(session_id.as_deref(), &text);
                         }
                         ComposerEvent::Focus => cx.notify(),
                         // Backspace on an empty composer removes the last staged
@@ -433,6 +441,7 @@ impl ConsoleDesktopApp {
             deleted_sessions: Vec::new(),
             settings_window_handle: None,
             settings_window_view: None,
+            drafts,
             collapsed_groups: Rc::new(
                 layout
                     .collapsed_groups
@@ -754,9 +763,10 @@ impl ConsoleDesktopApp {
             });
         });
         let submit_pane_id = pane_id.to_string();
+        let edit_pane_id = pane_id.to_string();
         self._subscriptions.push(cx.subscribe(
             &composer_input,
-            move |this, _input, event: &ComposerEvent, cx| match event {
+            move |this, input, event: &ComposerEvent, cx| match event {
                 ComposerEvent::Submit(prompt) => {
                     this.active_pane_id = Some(submit_pane_id.clone());
                     this.selected_session_id = this.active_session_for_pane(&submit_pane_id);
@@ -764,7 +774,9 @@ impl ConsoleDesktopApp {
                     this.submit_prompt(prompt.clone(), attachments, cx);
                 }
                 ComposerEvent::Edited => {
-                    // Avoid app re-render per keystroke for per-pane composer.
+                    let text = input.read(cx).content().to_string();
+                    let session_id = this.active_session_for_pane(&edit_pane_id);
+                    this.save_draft_for_session(session_id.as_deref(), &text);
                 }
                 _ => {}
             },
@@ -1436,9 +1448,15 @@ impl ConsoleDesktopApp {
         self.active_pane_id = Some(new_pane_id.clone());
         if let WorkspaceTabConfig::Chat { session_id, .. } = tab {
             self.selected_session_id = Some(session_id.clone());
+            let draft = self.get_draft_for_session(Some(&session_id)).map(|s| s.to_string());
             self.composer_for_pane(&new_pane_id)
                 .update(cx, |input, cx| {
                     input.set_prompt_history(Vec::new(), cx);
+                    if let Some(draft_text) = draft {
+                        input.set_content(draft_text, cx);
+                    } else {
+                        input.clear(cx);
+                    }
                 });
             self.transcript_for_pane(&new_pane_id)
                 .update(cx, |transcript, cx| {
@@ -1447,5 +1465,49 @@ impl ConsoleDesktopApp {
             self.load_session_messages_for_pane(new_pane_id, session_id, cx);
         }
         cx.notify();
+    }
+
+    pub fn draft_session_ids(&self) -> std::collections::HashSet<String> {
+        self.drafts
+            .iter()
+            .filter(|(k, v)| k.as_str() != "new_chat" && !v.prompt.trim().is_empty())
+            .map(|(k, _)| k.clone())
+            .collect()
+    }
+
+    pub fn get_draft_for_session(&self, session_id: Option<&str>) -> Option<&str> {
+        let key = session_id.unwrap_or("new_chat");
+        self.drafts.get(key).map(|d| d.prompt.as_str())
+    }
+
+    pub fn save_draft_for_session(&mut self, session_id: Option<&str>, text: &str) {
+        let key = session_id.unwrap_or("new_chat").to_string();
+        if text.trim().is_empty() {
+            if self.drafts.remove(&key).is_some() {
+                persistence::store::save_drafts(self.drafts.clone());
+            }
+        } else {
+            let changed = match self.drafts.get(&key) {
+                Some(existing) => existing.prompt != text,
+                None => true,
+            };
+            if changed {
+                self.drafts.insert(
+                    key,
+                    crate::persistence::store::PersistedDraft {
+                        prompt: text.to_string(),
+                        updated_at: chrono::Utc::now().timestamp(),
+                    },
+                );
+                persistence::store::save_drafts(self.drafts.clone());
+            }
+        }
+    }
+
+    pub fn clear_draft_for_session(&mut self, session_id: Option<&str>) {
+        let key = session_id.unwrap_or("new_chat");
+        if self.drafts.remove(key).is_some() {
+            persistence::store::save_drafts(self.drafts.clone());
+        }
     }
 }

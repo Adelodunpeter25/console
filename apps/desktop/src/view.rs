@@ -95,8 +95,14 @@ impl Render for ConsoleDesktopApp {
                                     cx.notify();
                                     return;
                                 }
+                                let draft = this.get_draft_for_session(Some(sid)).map(|s| s.to_string());
                                 this.composer_for_pane(&pane_id).update(cx, |input, cx| {
                                     input.set_prompt_history(Vec::new(), cx);
+                                    if let Some(draft_text) = draft {
+                                        input.set_content(draft_text, cx);
+                                    } else {
+                                        input.clear(cx);
+                                    }
                                 });
                                 this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
                                     t.set_messages(Vec::new(), cx);
@@ -139,8 +145,14 @@ impl Render for ConsoleDesktopApp {
 
                             if let Some(sid) = new_active_session {
                                 this.selected_session_id = Some(sid.clone());
+                                let draft = this.get_draft_for_session(Some(&sid)).map(|s| s.to_string());
                                 composer.update(cx, |input, cx| {
                                     input.set_prompt_history(Vec::new(), cx);
+                                    if let Some(draft_text) = draft {
+                                        input.set_content(draft_text, cx);
+                                    } else {
+                                        input.clear(cx);
+                                    }
                                 });
                                 transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
                                 this.load_session_messages_for_pane(
@@ -150,7 +162,14 @@ impl Render for ConsoleDesktopApp {
                                 );
                             } else {
                                 this.selected_session_id = None;
-                                composer.update(cx, |input, cx| input.set_content("", cx));
+                                let draft = this.get_draft_for_session(None).map(|s| s.to_string());
+                                composer.update(cx, |input, cx| {
+                                    if let Some(draft_text) = draft {
+                                        input.set_content(draft_text, cx);
+                                    } else {
+                                        input.clear(cx);
+                                    }
+                                });
                                 transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
                             }
                             cx.notify();
@@ -314,6 +333,7 @@ impl Render for ConsoleDesktopApp {
                         self.collapsed_groups.clone(),
                         self.running_sessions_snapshot(),
                         self.waiting_sessions_snapshot(),
+                        self.draft_session_ids(),
                         self.sidebar_list_state.clone(),
                         self.environment_rows(),
                         self.server_menu.clone(),
@@ -340,8 +360,14 @@ impl Render for ConsoleDesktopApp {
                                             })
                                             .unwrap_or_else(|| "Chat".to_string());
                                         this.open_chat_tab(id.clone(), title);
+                                        let draft = this.get_draft_for_session(Some(&id)).map(|s| s.to_string());
                                         this.active_composer_input().update(cx, |input, cx| {
                                             input.set_prompt_history(Vec::new(), cx);
+                                            if let Some(draft_text) = draft {
+                                                input.set_content(draft_text, cx);
+                                            } else {
+                                                input.clear(cx);
+                                            }
                                         });
                                         this.active_transcript_view().update(cx, |t, cx| {
                                             t.set_messages(Vec::new(), cx);
