@@ -38,7 +38,7 @@ export function statusForLimit(limit: UsageLimit): string | undefined {
   if (limit.status && limit.status !== "unknown") return limit.status;
   const used = limit.amount.usedFraction ?? (limit.amount.used !== undefined ? limit.amount.used / 100 : undefined);
   if (used === undefined) return limit.status;
-  if (used >= 0.9) return "exhausted";
+  if (used >= 1) return "exhausted";
   if (used >= 0.5) return "warning";
   return "ok";
 }
