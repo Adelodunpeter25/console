@@ -1515,10 +1515,7 @@ impl ConsoleDesktopApp {
             } else if let Some(session) = self.sessions.iter().find(|s| &s.id == key) {
                 self.projects
                     .iter()
-                    .find(|project| {
-                        session.project_id.as_deref() == Some(project.id.as_str())
-                            || (!session.cwd.is_empty() && session.cwd == project.path)
-                    })
+                    .find(|project| project.matches_session(session))
                     .map(|project| project.name.clone())
             } else {
                 None
@@ -1535,11 +1532,7 @@ impl ConsoleDesktopApp {
             } else if let Some(session) = self.sessions.iter().find(|s| &s.id == key) {
                 summaries.push(console_ui::DraftSummary {
                     session_id: Some(session.id.clone()),
-                    title: if session.title.trim().is_empty() {
-                        "New Chat".to_string()
-                    } else {
-                        session.title.clone()
-                    },
+                    title: session.display_title().to_string(),
                     preview,
                     project_name,
                     updated_at: draft.updated_at,

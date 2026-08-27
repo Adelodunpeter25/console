@@ -48,13 +48,7 @@ impl ConsoleDesktopApp {
             .sessions
             .iter()
             .find(|session| session.id == session_id)
-            .map(|session| {
-                if session.title.trim().is_empty() {
-                    "New Chat".to_string()
-                } else {
-                    session.title.clone()
-                }
-            })
+            .map(|session| session.display_title().to_string())
         else {
             return;
         };

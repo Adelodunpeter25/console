@@ -107,26 +107,12 @@ impl RenderOnce for SidebarSessionItem {
         let is_renaming = self.is_renaming;
         let rename_input = self.rename_input;
 
-        let mut folder_name = self.project_name.clone().unwrap_or_else(|| {
-            session
-                .cwd
-                .split(['/', '\\'])
-                .filter(|s| !s.is_empty())
-                .last()
-                .unwrap_or("workspace")
-                .to_string()
-        });
-        // Directory names arrive lowercase from the filesystem; sentence-case
-        // the label so it reads like a title ("console" → "Console").
-        if let Some(first) = folder_name.get_mut(..1) {
-            first.make_ascii_uppercase();
-        }
+        let folder_name = self
+            .project_name
+            .clone()
+            .unwrap_or_else(|| crate::utils::format_folder_display_name(&session.cwd));
 
-        let display_title = if session.title.trim().is_empty() {
-            "New Chat".to_string()
-        } else {
-            session.title.clone()
-        };
+        let display_title = session.display_title().to_string();
         let drag = WorkspaceDrag::new(
             console_core::WorkspaceTabConfig::Chat {
                 session_id: session.id.clone(),
@@ -391,10 +377,7 @@ fn render_sidebar_session_item(
     );
     let project_name = projects
         .iter()
-        .find(|project| {
-            session.project_id.as_deref() == Some(project.id.as_str())
-                || (!session.cwd.is_empty() && session.cwd == project.path)
-        })
+        .find(|project| project.matches_session(&session))
         .map(|project| project.name.clone());
     let session_id = session.id.clone();
     let is_renaming = renaming_session_id == Some(session_id.as_str());

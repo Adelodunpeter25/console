@@ -27,6 +27,17 @@ pub struct SessionHeader {
     pub deleted_at: Option<i64>,
 }
 
+impl SessionHeader {
+    pub fn display_title(&self) -> &str {
+        let trimmed = self.title.trim();
+        if trimmed.is_empty() {
+            "New Chat"
+        } else {
+            trimmed
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionDetailResponse {

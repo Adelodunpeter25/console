@@ -30,25 +30,25 @@ Delete uncompiled Waku-era files in `apps/desktop/crates/console-ui/` that are n
 
 ### Task 1.2: Centralize Project Matching Logic
 - **Target File**: [`apps/desktop/crates/console-core/src/types/project.rs`](file:///Users/adelodunpeter/Developer/Projects/console/apps/desktop/crates/console-core/src/types/project.rs)
-- [ ] Implement `ProjectInfo::matches_session(&self, session: &SessionHeader) -> bool`.
-- [ ] Replace duplicated matching in:
+- [x] Implement `ProjectInfo::matches_session(&self, session: &SessionHeader) -> bool`.
+- [x] Replace duplicated matching in:
   - [`apps/desktop/crates/console-ui/src/layout/sidebar_view.rs`](file:///Users/adelodunpeter/Developer/Projects/console/apps/desktop/crates/console-ui/src/layout/sidebar_view.rs)
   - [`apps/desktop/src/state/app.rs`](file:///Users/adelodunpeter/Developer/Projects/console/apps/desktop/src/state/app.rs)
   - [`apps/desktop/src/view.rs`](file:///Users/adelodunpeter/Developer/Projects/console/apps/desktop/src/view.rs)
 
 ### Task 1.3: Centralize Fallback Session Title Formatting
 - **Target File**: [`apps/desktop/crates/console-core/src/types/session.rs`](file:///Users/adelodunpeter/Developer/Projects/console/apps/desktop/crates/console-core/src/types/session.rs)
-- [ ] Implement `SessionHeader::display_title(&self) -> &str` (defaults trimmed empty string to `"New Chat"`).
-- [ ] Update call sites in `sidebar_view.rs`, `sessions.rs`, `app.rs`, and `view.rs`.
+- [x] Implement `SessionHeader::display_title(&self) -> &str` (defaults trimmed empty string to `"New Chat"`).
+- [x] Update call sites in `sidebar_view.rs`, `sessions.rs`, `app.rs`, and `view.rs`.
 
 ### Task 1.4: Centralize Directory Name & Sentence-Casing Helper
 - **Target File**: [`apps/desktop/crates/console-ui/src/utils/mod.rs`](file:///Users/adelodunpeter/Developer/Projects/console/apps/desktop/crates/console-ui/src/utils/mod.rs)
-- [ ] Add `pub fn format_folder_display_name(path: &str) -> String`.
-- [ ] Replace custom split/casing in `sidebar_view.rs`, `file_icons.rs`, and `state/run.rs`.
+- [x] Add `pub fn format_folder_display_name(path: &str) -> String`.
+- [x] Replace custom split/casing in `sidebar_view.rs`, `file_icons.rs`, and `state/run.rs`.
 
 ### Task 1.5: Verification
-- [ ] Run `cargo check` in `apps/desktop`.
-- [ ] Commit Phase 1 with a single-line commit message.
+- [x] Run `cargo check` in `apps/desktop`.
+- [x] Commit Phase 1 with a single-line commit message.
 
 ---
 

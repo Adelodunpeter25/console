@@ -239,19 +239,11 @@ impl Render for ConsoleDesktopApp {
                 let folder = self
                     .projects
                     .iter()
-                    .find(|project| {
-                        session.project_id.as_deref() == Some(project.id.as_str())
-                            || (!session.cwd.is_empty() && session.cwd == project.path)
-                    })
+                    .find(|project| project.matches_session(session))
                     .map(|project| project.name.clone())
-                    .unwrap_or_else(|| {
-                        std::path::Path::new(&session.cwd)
-                            .file_name()
-                            .map(|n| n.to_string_lossy().to_string())
-                            .unwrap_or_default()
-                    });
+                    .unwrap_or_else(|| console_ui::utils::format_folder_display_name(&session.cwd));
                 if folder.is_empty() {
-                    session.title.clone()
+                    session.display_title().to_string()
                 } else {
                     format!("{} — {}", session.title, folder)
                 }
@@ -352,13 +344,7 @@ impl Render for ConsoleDesktopApp {
                                             .sessions
                                             .iter()
                                             .find(|s| s.id == id)
-                                            .map(|s| {
-                                                if s.title.trim().is_empty() {
-                                                    "New Chat".to_string()
-                                                } else {
-                                                    s.title.clone()
-                                                }
-                                            })
+                                            .map(|s| s.display_title().to_string())
                                             .unwrap_or_else(|| "Chat".to_string());
                                         this.open_chat_tab(id.clone(), title);
                                         let draft = this.get_draft_for_session(Some(&id)).map(|s| s.to_string());
