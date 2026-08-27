@@ -29,34 +29,92 @@ export interface SpawnCaptureResult {
   aborted: boolean;
 }
 
-function safeKill(proc: Bun.Subprocess<any, any, any>, signal: Parameters<typeof proc.kill>[0]) {
+function killProcessTree(pid: number, signal: NodeJS.Signals = "SIGTERM") {
+  if (process.platform === "win32") {
+    try {
+      Bun.spawn(["taskkill", "/pid", String(pid), "/T", "/F"], {
+        stdin: "ignore",
+        stdout: "ignore",
+        stderr: "ignore",
+      });
+    } catch {}
+    return;
+  }
+
+  // 1. Immediately kill process group and process via fast syscalls
   try {
-    proc.kill(signal);
+    process.kill(-pid, signal);
+  } catch {}
+  try {
+    process.kill(pid, signal);
+  } catch {}
+
+  // 2. Terminate any child processes via pkill without blocking main thread
+  try {
+    Bun.spawn(["pkill", `-${signal === "SIGKILL" ? "9" : "15"}`, "-P", String(pid)], {
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+  } catch {}
+}
+
+function safeKill(proc: Bun.Subprocess<any, any, any>, signal?: NodeJS.Signals) {
+  try {
+    killProcessTree(proc.pid, signal ?? "SIGTERM");
   } catch {
-    // Already exited — nothing to do.
+    try {
+      proc.kill(signal);
+    } catch {
+      // Already exited — nothing to do.
+    }
   }
 }
 
 async function readCapped(
   stream: ReadableStream<Uint8Array>,
   maxBytes: number,
+  signal?: AbortSignal,
 ): Promise<string> {
   const decoder = new TextDecoder();
   const reader = stream.getReader();
   let text = "";
   let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const previousTotal = total;
-    total += value.byteLength;
-    if (previousTotal < maxBytes) {
-      // Retain exactly up to the budget, slicing mid-chunk when it straddles
-      // the boundary so small caps still keep their first bytes.
-      text += decoder.decode(value.subarray(0, maxBytes - previousTotal), { stream: true });
+
+  const onAbort = () => {
+    try {
+      void reader.cancel();
+    } catch {}
+  };
+
+  if (signal) {
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  }
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const previousTotal = total;
+      total += value.byteLength;
+      if (previousTotal < maxBytes) {
+        // Retain exactly up to the budget, slicing mid-chunk when it straddles
+        // the boundary so small caps still keep their first bytes.
+        text += decoder.decode(value.subarray(0, maxBytes - previousTotal), { stream: true });
+      }
+      // Over budget: keep reading (drain) but stop retaining, so the child
+      // never blocks on a full pipe and still terminates normally.
     }
-    // Over budget: keep reading (drain) but stop retaining, so the child
-    // never blocks on a full pipe and still terminates normally.
+  } catch {
+    // Aborted or stream cancelled
+  } finally {
+    if (signal) {
+      signal.removeEventListener("abort", onAbort);
+    }
+    try {
+      reader.releaseLock();
+    } catch {}
   }
   return text + decoder.decode();
 }
@@ -90,14 +148,16 @@ export async function spawnCapture(
   let abortedBySignal = false;
 
   let escalation: ReturnType<typeof setTimeout> | undefined;
-  const terminate = () => {
-    safeKill(proc, undefined);
-    escalation = setTimeout(() => safeKill(proc, "SIGKILL"), 500);
+  const terminate = (force = false) => {
+    safeKill(proc, force ? "SIGKILL" : "SIGTERM");
+    if (!force) {
+      escalation = setTimeout(() => safeKill(proc, "SIGKILL"), 300);
+    }
   };
 
   const onAbort = () => {
     abortedBySignal = true;
-    terminate();
+    terminate(true);
   };
 
   if (options.signal) {
@@ -115,10 +175,20 @@ export async function spawnCapture(
 
   try {
     const [stdout, stderr] = await Promise.all([
-      readCapped(proc.stdout as ReadableStream<Uint8Array>, maxBytes),
-      readCapped(proc.stderr as ReadableStream<Uint8Array>, maxBytes),
+      readCapped(proc.stdout as ReadableStream<Uint8Array>, maxBytes, options.signal),
+      readCapped(proc.stderr as ReadableStream<Uint8Array>, maxBytes, options.signal),
     ]);
-    const rawExit = await proc.exited;
+
+    // If aborted, do not block indefinitely on proc.exited
+    let rawExit: number | null | undefined;
+    if (abortedBySignal) {
+      rawExit = await Promise.race([
+        proc.exited,
+        new Promise<number>((r) => setTimeout(() => r(143), 100)),
+      ]);
+    } else {
+      rawExit = await proc.exited;
+    }
 
     return {
       stdout,
