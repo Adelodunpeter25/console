@@ -40,6 +40,10 @@ const SIDEBAR_DEFAULT_WIDTH: f32 = 260.0;
 pub(crate) const SIDEBAR_MIN_WIDTH: f32 = 180.0;
 /// Shared with `layout` for clamping the sidebar's drag-resize width.
 pub(crate) const SIDEBAR_MAX_WIDTH: f32 = 520.0;
+pub(crate) const RIGHT_SIDEBAR_DEFAULT_WIDTH: f32 = 280.0;
+pub(crate) const RIGHT_SIDEBAR_MIN_WIDTH: f32 = 220.0;
+pub(crate) const RIGHT_SIDEBAR_MAX_WIDTH: f32 = 550.0;
+
 
 pub struct ConsoleDesktopApp {
     pub client: ConsoleClient,
@@ -133,6 +137,16 @@ pub struct ConsoleDesktopApp {
     pub(crate) stream_render_pending: std::collections::HashMap<String, bool>,
     pub sidebar_visible: bool,
     pub sidebar_width: f32,
+    pub right_sidebar_visible: bool,
+    pub right_sidebar_width: f32,
+    pub(crate) right_sidebar_resize_start: Option<(f32, f32)>,
+    pub inspector_active_tab: console_ui::InspectorTab,
+    pub inspector_search_query: String,
+    pub inspector_file_entries: Rc<Vec<console_core::types::FsTreeEntry>>,
+    pub inspector_working_changes: Rc<Vec<console_core::types::GitFileEntry>>,
+    pub inspector_session_changes: Rc<Vec<console_core::types::SessionFileChange>>,
+    pub inspector_collapsed_folders: Rc<std::collections::HashSet<String>>,
+    pub inspector_selected_path: Option<String>,
     /// Retained virtualization state for the sidebar session history.
     pub sidebar_list_state: ListState,
     /// Live drag-resize anchor, owned by `layout`.
@@ -192,6 +206,13 @@ impl ConsoleDesktopApp {
                 .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
         } else {
             SIDEBAR_DEFAULT_WIDTH
+        };
+        let right_sidebar_width = if layout.right_sidebar_width.is_finite() {
+            layout
+                .right_sidebar_width
+                .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
+        } else {
+            RIGHT_SIDEBAR_DEFAULT_WIDTH
         };
         let transcript_view = cx.new(|cx| TranscriptView::new(cx));
         let composer_input = cx.new(|cx| ComposerInput::new(window, cx));
@@ -438,6 +459,16 @@ impl ConsoleDesktopApp {
             stream_render_pending: std::collections::HashMap::new(),
             sidebar_visible: layout.sidebar_visible,
             sidebar_width,
+            right_sidebar_visible: layout.right_sidebar_visible,
+            right_sidebar_width,
+            right_sidebar_resize_start: None,
+            inspector_active_tab: console_ui::InspectorTab::AllFiles,
+            inspector_search_query: String::new(),
+            inspector_file_entries: Rc::new(Vec::new()),
+            inspector_working_changes: Rc::new(Vec::new()),
+            inspector_session_changes: Rc::new(Vec::new()),
+            inspector_collapsed_folders: Rc::new(std::collections::HashSet::new()),
+            inspector_selected_path: None,
             sidebar_list_state: ListState::new(0, ListAlignment::Top, px(55.0)),
             sidebar_resize_start: None,
             split_resize: None,

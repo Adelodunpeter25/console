@@ -1,0 +1,217 @@
+//! Hierarchical Project Directory Tree Viewer for the Right Inspector.
+
+use std::collections::HashSet;
+use std::rc::Rc;
+
+use console_core::types::FsTreeEntry;
+use gpui::{
+    App, InteractiveElement, IntoElement, ParentElement, RenderOnce, StatefulInteractiveElement,
+    Styled, Window, div, prelude::FluentBuilder, px,
+};
+
+use crate::primitives::file_icon;
+use crate::primitives::file_icons::file_icon_for_name;
+use crate::primitives::icons::{IconName, app_icon};
+use crate::theme::Theme;
+
+#[derive(IntoElement)]
+pub struct FileTreeView {
+    entries: Vec<FsTreeEntry>,
+    collapsed_folders: HashSet<String>,
+    selected_path: Option<String>,
+    search_query: String,
+    on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+}
+
+impl FileTreeView {
+    pub fn new(
+        entries: Vec<FsTreeEntry>,
+        collapsed_folders: HashSet<String>,
+        selected_path: Option<String>,
+        search_query: String,
+        on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+        on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    ) -> Self {
+        Self {
+            entries,
+            collapsed_folders,
+            selected_path,
+            search_query,
+            on_toggle_folder,
+            on_select_file,
+        }
+    }
+
+    fn render_node(
+        node: &FsTreeEntry,
+        depth: usize,
+        collapsed_folders: &HashSet<String>,
+        selected_path: &Option<String>,
+        on_toggle_folder: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+        on_select_file: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+        theme: &Theme,
+        search_query: &str,
+    ) -> Vec<gpui::AnyElement> {
+        let mut elements = Vec::new();
+        let query_lower = search_query.to_lowercase();
+        let matches_filter = search_query.is_empty() || node.name.to_lowercase().contains(&query_lower);
+
+        let path = node.path.clone();
+        let is_collapsed = collapsed_folders.contains(&node.path);
+        let is_selected = selected_path.as_deref() == Some(&node.path);
+
+        if matches_filter || node.is_dir {
+            let on_toggle = on_toggle_folder.clone();
+            let on_select = on_select_file.clone();
+            let node_path = path.clone();
+            let is_dir = node.is_dir;
+
+            let row = div()
+                .id(format!("file-tree-item-{}", path))
+                .flex()
+                .items_center()
+                .h(px(26.0))
+                .w_full()
+                .px(px(8.0))
+                .pl(px(8.0 + (depth as f32 * 14.0)))
+                .rounded(px(4.0))
+                .cursor_pointer()
+                .hover(|s| s.bg(theme.overlay))
+                .when(is_selected, |s| s.bg(theme.overlay_strong))
+                .on_click(move |_, window, cx| {
+                    if is_dir {
+                        (on_toggle)(node_path.clone(), window, cx);
+                    } else {
+                        (on_select)(node_path.clone(), window, cx);
+                    }
+                })
+                .child(
+                    div()
+                        .w(px(16.0))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .when(node.is_dir, |el| {
+                            el.child(if is_collapsed {
+                                app_icon(IconName::ChevronRight, 12.0, theme.text_tertiary)
+                            } else {
+                                app_icon(IconName::ChevronDown, 12.0, theme.text_tertiary)
+                            })
+                        }),
+                )
+                .child(
+                    div()
+                        .mr(px(6.0))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .child(if node.is_dir {
+                            app_icon(IconName::FolderOpen, 14.0, theme.accent).into_any_element()
+                        } else {
+                            file_icon(file_icon_for_name(&node.name), 14.0).into_any_element()
+                        }),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .truncate()
+                        .text_size(px(12.0))
+                        .text_color(if is_selected {
+                            theme.text
+                        } else {
+                            theme.text_secondary
+                        })
+                        .child(node.name.clone()),
+                )
+                .when_some(node.size, |el, size| {
+                    el.child(
+                        div()
+                            .text_size(px(10.0))
+                            .text_color(theme.text_tertiary)
+                            .ml(px(4.0))
+                            .child(format_byte_size(size)),
+                    )
+                });
+
+            elements.push(row.into_any_element());
+        }
+
+        if node.is_dir && !is_collapsed {
+            if let Some(children) = &node.children {
+                for child in children {
+                    let mut child_els = Self::render_node(
+                        child,
+                        depth + 1,
+                        collapsed_folders,
+                        selected_path,
+                        on_toggle_folder,
+                        on_select_file,
+                        theme,
+                        search_query,
+                    );
+                    elements.append(&mut child_els);
+                }
+            }
+        }
+
+        elements
+    }
+}
+
+impl RenderOnce for FileTreeView {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let theme = Theme::current(cx);
+        let mut children = Vec::new();
+
+        for entry in &self.entries {
+            let mut els = Self::render_node(
+                entry,
+                0,
+                &self.collapsed_folders,
+                &self.selected_path,
+                &self.on_toggle_folder,
+                &self.on_select_file,
+                &theme,
+                &self.search_query,
+            );
+            children.append(&mut els);
+        }
+
+        div()
+            .id("file-tree-container")
+            .flex_1()
+            .w_full()
+            .overflow_y_scroll()
+            .p(px(6.0))
+            .child(if children.is_empty() {
+                div()
+                    .flex_1()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .py(px(24.0))
+                    .text_size(px(12.0))
+                    .text_color(theme.text_tertiary)
+                    .child(if self.search_query.is_empty() {
+                        "No files found"
+                    } else {
+                        "No matching files"
+                    })
+                    .into_any_element()
+            } else {
+                div().flex().flex_col().children(children).into_any_element()
+            })
+    }
+}
+
+fn format_byte_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{} B", bytes)
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    }
+}

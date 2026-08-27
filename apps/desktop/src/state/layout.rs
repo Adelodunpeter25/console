@@ -16,10 +16,12 @@ use crate::persistence;
 const WINDOW_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
 
 impl ConsoleDesktopApp {
-    fn persist_layout(&self) {
+    pub(crate) fn persist_layout(&self) {
         persistence::layout::save(persistence::PersistedLayoutState {
             sidebar_visible: self.sidebar_visible,
             sidebar_width: self.sidebar_width,
+            right_sidebar_visible: self.right_sidebar_visible,
+            right_sidebar_width: self.right_sidebar_width,
             collapsed_groups: self
                 .collapsed_groups
                 .iter()

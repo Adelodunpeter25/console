@@ -5,7 +5,7 @@ use std::rc::Rc;
 use console_ui::workspace::{
     ContentRenderer, WorkspaceDrag, WorkspaceDropAction, WorkspacePane, cancel_workspace_drags,
 };
-use console_ui::{ImageViewerModal, PaletteEntry, SidebarView, Theme, TitleBar};
+use console_ui::{ImageViewerModal, PaletteEntry, RightSidebar, SidebarView, Theme, TitleBar};
 use gpui::{
     App, Context, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent,
     MouseUpEvent, ParentElement, Render, Styled, Window, div, prelude::FluentBuilder,
@@ -253,6 +253,67 @@ impl Render for ConsoleDesktopApp {
                 }
             })
         };
+        let on_toggle_right_sidebar: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |_w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.toggle_right_sidebar(cx);
+                    });
+                }
+            })
+        };
+        let on_select_inspector_tab: Rc<dyn Fn(console_ui::InspectorTab, &mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |tab, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.set_inspector_tab(tab, cx);
+                    });
+                }
+            })
+        };
+        let on_toggle_inspector_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |path, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.toggle_inspector_folder(path, cx);
+                    });
+                }
+            })
+        };
+        let on_select_inspector_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |path, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.select_inspector_file(path, cx);
+                    });
+                }
+            })
+        };
+        let on_refresh_inspector: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |_w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.refresh_inspector(cx);
+                    });
+                }
+            })
+        };
+        let on_begin_right_sidebar_resize: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |start_x, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.begin_right_sidebar_resize(start_x);
+                        cx.notify();
+                    });
+                }
+            })
+        };
 
         div()
             .id("app-root")
@@ -276,8 +337,10 @@ impl Render for ConsoleDesktopApp {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
                             let sidebar_changed = this.resize_sidebar(f32::from(event.position.x));
+                            let right_sidebar_changed =
+                                this.resize_right_sidebar(f32::from(event.position.x));
                             let split_changed = this.resize_split_drag(event.position);
-                            if sidebar_changed || split_changed {
+                            if sidebar_changed || right_sidebar_changed || split_changed {
                                 cx.notify();
                             }
                         });
@@ -290,19 +353,23 @@ impl Render for ConsoleDesktopApp {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
                             let sidebar_changed = this.finish_sidebar_resize();
+                            let right_sidebar_changed = this.finish_right_sidebar_resize();
                             let split_changed = this.finish_split_resize();
-                            if sidebar_changed || split_changed {
+                            if sidebar_changed || right_sidebar_changed || split_changed {
                                 cx.notify();
                             }
                         });
                     }
                 }
             })
-            .child(TitleBar::new(
-                titlebar_text,
-                self.sidebar_width,
-                on_toggle_sidebar,
-            ))
+            .child(
+                TitleBar::new(
+                    titlebar_text,
+                    self.sidebar_width,
+                    on_toggle_sidebar,
+                )
+                .with_right_sidebar_toggle(self.right_sidebar_visible, on_toggle_right_sidebar),
+            )
             // Sidebar + workspace sit in a row below the title bar.
             .child(
                 div()
@@ -596,7 +663,25 @@ impl Render for ConsoleDesktopApp {
                                     },
                                 )
                             }),
-                    ),
+                    )
+                    // Conductor-style Right Sidebar Inspector (All files & Changes)
+                    .when(self.right_sidebar_visible, |el| {
+                        el.child(RightSidebar::new(
+                            self.right_sidebar_width,
+                            self.inspector_active_tab,
+                            self.inspector_search_query.clone(),
+                            (*self.inspector_file_entries).clone(),
+                            (*self.inspector_working_changes).clone(),
+                            (*self.inspector_session_changes).clone(),
+                            (*self.inspector_collapsed_folders).clone(),
+                            self.inspector_selected_path.clone(),
+                            on_select_inspector_tab,
+                            on_toggle_inspector_folder,
+                            on_select_inspector_file,
+                            on_refresh_inspector,
+                            on_begin_right_sidebar_resize,
+                        ))
+                    }),
             )
             .when_some(self.zoomed_image.clone(), |el, image| {
                 el.child(ImageViewerModal::new(image, "Image preview", {

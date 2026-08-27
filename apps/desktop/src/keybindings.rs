@@ -29,6 +29,8 @@ actions!(
         FocusComposer,
         /// Open settings window.
         OpenSettings,
+        /// Toggle the right workspace inspector panel.
+        ToggleRightSidebar,
     ]
 );
 
@@ -44,6 +46,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-k", ToggleCommandPalette, None),
         KeyBinding::new("secondary-l", FocusComposer, None),
         KeyBinding::new("secondary-,", OpenSettings, None),
+        KeyBinding::new("secondary-shift-b", ToggleRightSidebar, None),
     ]);
 }
 
@@ -103,14 +106,23 @@ pub fn init_handlers(app: Entity<ConsoleDesktopApp>, window: AnyWindowHandle, cx
             });
         }
     });
-    cx.on_action(move |_: &FocusComposer, cx| {
+    cx.on_action({
         let app = app.clone();
-        cx.defer(move |cx| {
-            window
-                .update(cx, |_, window, cx| {
-                    app.update(cx, |this, cx| this.focus_composer(window, cx));
-                })
-                .ok();
-        });
+        move |_: &FocusComposer, cx| {
+            let app = app.clone();
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.focus_composer(window, cx));
+                    })
+                    .ok();
+            });
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &ToggleRightSidebar, cx| {
+            app.update(cx, |this, cx| this.toggle_right_sidebar(cx));
+        }
     });
 }

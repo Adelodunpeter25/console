@@ -18,6 +18,7 @@ mod layout;
 mod notifications;
 mod projects;
 mod providers;
+mod right_sidebar;
 mod run;
 mod sessions;
 mod settings;
@@ -29,4 +30,8 @@ mod app;
 
 pub use app::ConsoleDesktopApp;
 // Shared by the sibling handler modules (`layout`, `sessions`, `run`).
-pub(crate) use app::{SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, user_prompt_history};
+pub(crate) use app::{
+    RIGHT_SIDEBAR_MAX_WIDTH, RIGHT_SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
+    user_prompt_history,
+};
+
