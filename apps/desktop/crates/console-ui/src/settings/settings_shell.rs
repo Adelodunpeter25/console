@@ -118,9 +118,10 @@ impl RenderOnce for SettingsShell {
             // Right content container
             .child(
                 div()
+                    .id("settings-content-scroll")
                     .flex_1()
                     .h_full()
-                    .overflow_hidden()
+                    .overflow_y_scroll()
                     .pt(px(42.0))
                     .pb(px(24.0))
                     .px(px(24.0))

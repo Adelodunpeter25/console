@@ -277,9 +277,10 @@ impl RenderOnce for UsagePage {
                                                 let status_color = match limit.status {
                                                     Some(UsageStatus::Exhausted) => theme.danger,
                                                     Some(UsageStatus::Warning) => theme.warning,
+                                                    Some(UsageStatus::Ok) => theme.success,
                                                     _ if used_percent >= 90.0 => theme.danger,
-                                                    _ if used_percent >= 75.0 => theme.warning,
-                                                    _ => theme.accent,
+                                                    _ if used_percent >= 50.0 => theme.warning,
+                                                    _ => theme.success,
                                                 };
 
                                                 let reset_str = limit.window.as_ref().and_then(|w| {
