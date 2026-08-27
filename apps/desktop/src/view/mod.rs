@@ -329,6 +329,14 @@ impl Render for ConsoleDesktopApp {
                             move |id: String, _w, cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
+                                        let active_pane_id = this
+                                            .active_pane_id
+                                            .clone()
+                                            .unwrap_or_else(|| "pane-main".to_string());
+                                        let prev_sid = this
+                                            .active_session_for_pane(&active_pane_id)
+                                            .map(|s| s.to_string());
+
                                         this.save_transcript_scroll_position(cx);
                                         this.selected_session_id = Some(id.clone());
                                         // Use the session's real title for the tab
@@ -341,6 +349,12 @@ impl Render for ConsoleDesktopApp {
                                             .map(|s| s.display_title().to_string())
                                             .unwrap_or_else(|| "Chat".to_string());
                                         this.open_chat_tab(id.clone(), title);
+
+                                        if prev_sid.as_deref() == Some(&id) {
+                                            cx.notify();
+                                            return;
+                                        }
+
                                         let draft = this.get_draft_for_session(Some(&id)).map(|s| s.to_string());
                                         this.active_composer_input().update(cx, |input, cx| {
                                             input.set_prompt_history(Vec::new(), cx);
