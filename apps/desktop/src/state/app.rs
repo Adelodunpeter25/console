@@ -317,11 +317,6 @@ impl ConsoleDesktopApp {
                                 (*this.attachments_for_pane("pane-main")).clone();
                             this.submit_prompt(prompt.clone(), attachments, cx);
                         }
-                        ComposerEvent::Edited => {
-                            let text = input.read(cx).content().to_string();
-                            let session_id = this.active_session_for_pane("pane-main");
-                            this.save_draft_for_session(session_id.as_deref(), &text);
-                        }
                         ComposerEvent::Focus => cx.notify(),
                         // Backspace on an empty composer removes the last staged
                         // attachment, the chat idiom for discarding a chip.

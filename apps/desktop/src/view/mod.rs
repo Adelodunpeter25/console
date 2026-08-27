@@ -319,15 +319,7 @@ impl Render for ConsoleDesktopApp {
                         self.collapsed_groups.clone(),
                         self.running_sessions_snapshot(),
                         self.waiting_sessions_snapshot(),
-                        self.draft_summaries(&{
-                            let mut active = std::collections::HashSet::new();
-                            if let Some(pane_id) = self.active_pane_id.as_deref() {
-                                if let Some(sid) = self.active_session_for_pane(pane_id) {
-                                    active.insert(sid);
-                                }
-                            }
-                            active
-                        }),
+                        self.draft_summaries(),
                         self.drafts_collapsed,
                         self.sidebar_list_state.clone(),
                         self.environment_rows(),
@@ -344,6 +336,14 @@ impl Render for ConsoleDesktopApp {
                                         let prev_sid = this
                                             .active_session_for_pane(&active_pane_id)
                                             .map(|s| s.to_string());
+
+                                        // Save draft for the session we're leaving.
+                                        if let Some(ref leaving_sid) = prev_sid {
+                                            if leaving_sid.as_str() != id.as_str() {
+                                                let text = this.active_composer_input().read(cx).content().to_string();
+                                                this.save_draft_for_session(Some(leaving_sid), &text);
+                                            }
+                                        }
 
                                         this.save_transcript_scroll_position(cx);
                                         this.selected_session_id = Some(id.clone());
