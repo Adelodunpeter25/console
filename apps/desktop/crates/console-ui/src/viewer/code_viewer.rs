@@ -1,14 +1,11 @@
-//! High-performance virtualized Code & Diff Viewer with syntax highlighting
-//! and line selection.
-//!
-//! Uses GPUI's virtualized `list` with uniform line heights so 100 or 100,000
-//! lines render at the same instant 120 FPS.
+//! High-performance virtualized Code & Diff Viewer with single-pass TextRun
+//! GPU text shaping, syntax highlighting, and virtualized list scrolling.
 
 use std::rc::Rc;
 
 use gpui::{
-    App, ElementId, FontWeight, Hsla, IntoElement, ListState,
-    ParentElement, RenderOnce, Styled, Window, div, list, prelude::*, px,
+    App, ElementId, Font, FontWeight, Hsla, IntoElement, ListState, ParentElement, RenderOnce,
+    Styled, StyledText, TextRun, Window, div, list, prelude::*, px,
 };
 
 use crate::markdown::highlight::{self, Carry, lang_for_tag, lang_tag_for_path};
@@ -181,6 +178,14 @@ impl RenderOnce for CodeViewer {
             .iter()
             .any(|l| l.old_line_no.is_some() || l.new_line_no.is_some());
 
+        let code_font = Font {
+            family: MONO_FAMILY.into(),
+            features: Default::default(),
+            weight: FontWeight::NORMAL,
+            style: Default::default(),
+            ..Default::default()
+        };
+
         let lines_rc = self.lines.clone();
 
         div()
@@ -254,23 +259,18 @@ impl RenderOnce for CodeViewer {
                             .into_any_element()
                     };
 
-                    let code_content = if line.tokens.is_empty() {
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .font_family(MONO_FAMILY)
-                            .text_size(px(11.0))
-                            .line_height(px(CODE_LINE_HEIGHT))
-                            .text_color(default_text_color)
-                            .child(if line.text.is_empty() {
-                                " ".to_string()
-                            } else {
-                                line.text.clone()
-                            })
-                            .into_any_element()
+                    let runs = code_runs_for_tokens(
+                        &line.text,
+                        &line.tokens,
+                        default_text_color,
+                        &code_font,
+                        &palette,
+                    );
+
+                    let display_text: gpui::SharedString = if line.text.is_empty() {
+                        " ".into()
                     } else {
-                        render_highlighted_tokens(&line.text, &line.tokens, default_text_color, &palette)
-                            .into_any_element()
+                        line.text.as_str().into()
                     };
 
                     div()
@@ -282,7 +282,15 @@ impl RenderOnce for CodeViewer {
                         .px(px(6.0))
                         .bg(bg)
                         .child(gutter_view)
-                        .child(code_content)
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .font_family(MONO_FAMILY)
+                                .text_size(px(11.0))
+                                .line_height(px(CODE_LINE_HEIGHT))
+                                .child(StyledText::new(display_text).with_runs(runs)),
+                        )
                         .into_any_element()
                 })
                 .flex_1()
@@ -298,62 +306,63 @@ impl CodeViewerLine {
     }
 }
 
-fn render_highlighted_tokens(
+fn code_runs_for_tokens(
     text: &str,
     tokens: &[highlight::Token],
-    fallback_color: Hsla,
+    default_color: Hsla,
+    code_font: &Font,
     palette: &Palette,
-) -> impl IntoElement {
-    let mut spans: Vec<gpui::AnyElement> = Vec::new();
+) -> Vec<TextRun> {
+    let mut runs = Vec::new();
     let mut cursor = 0;
 
     for token in tokens {
         if token.range.start > cursor {
-            let slice = &text[cursor..token.range.start];
-            spans.push(
-                div()
-                    .text_color(fallback_color)
-                    .child(slice.to_string())
-                    .into_any_element(),
-            );
+            let len = token.range.start - cursor;
+            runs.push(TextRun {
+                len,
+                font: code_font.clone(),
+                color: default_color,
+                background_color: None,
+                underline: None,
+                strikethrough: None,
+            });
         }
-        let token_slice = &text[token.range.clone()];
+        let len = token.range.len();
         let color = palette.token(token.class);
-        spans.push(
-            div()
-                .text_color(color)
-                .child(token_slice.to_string())
-                .into_any_element(),
-        );
+        runs.push(TextRun {
+            len,
+            font: code_font.clone(),
+            color,
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        });
         cursor = token.range.end;
     }
 
     if cursor < text.len() {
-        let slice = &text[cursor..];
-        spans.push(
-            div()
-                .text_color(fallback_color)
-                .child(slice.to_string())
-                .into_any_element(),
-        );
+        let len = text.len() - cursor;
+        runs.push(TextRun {
+            len,
+            font: code_font.clone(),
+            color: default_color,
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        });
     }
 
-    if spans.is_empty() {
-        spans.push(
-            div()
-                .text_color(fallback_color)
-                .child(if text.is_empty() { " ".to_string() } else { text.to_string() })
-                .into_any_element(),
-        );
+    if runs.is_empty() && !text.is_empty() {
+        runs.push(TextRun {
+            len: text.len(),
+            font: code_font.clone(),
+            color: default_color,
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        });
     }
 
-    div()
-        .flex_1()
-        .min_w_0()
-        .flex()
-        .flex_wrap()
-        .font_family(MONO_FAMILY)
-        .text_size(px(11.0))
-        .line_height(px(CODE_LINE_HEIGHT))
-        .children(spans)
+    runs
 }
