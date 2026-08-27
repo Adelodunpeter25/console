@@ -124,7 +124,9 @@ impl ConsoleDesktopApp {
         let new_active_session = self.active_session_for_pane(&pane_id).map(|s| s.to_string());
 
         if new_active_session == prev_active_session && new_active_session.is_some() {
-            // Active session did not change
+            if self.right_sidebar_visible {
+                self.refresh_inspector(cx);
+            }
             cx.notify();
             return;
         }

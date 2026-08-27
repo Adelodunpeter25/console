@@ -137,7 +137,9 @@ impl Render for ConsoleDesktopApp {
                                 .map(|s| s.to_string());
 
                             if new_active_session == prev_active_session && new_active_session.is_some() {
-                                // The active tab in this pane did not change; no reload or transcript clearing needed.
+                                if this.right_sidebar_visible {
+                                    this.refresh_inspector(cx);
+                                }
                                 cx.notify();
                                 return;
                             }
@@ -572,6 +574,9 @@ impl Render for ConsoleDesktopApp {
                                                     pane_id, next_id, cx,
                                                 );
                                             }
+                                        }
+                                        if this.right_sidebar_visible {
+                                            this.refresh_inspector(cx);
                                         }
                                         cx.notify();
 
