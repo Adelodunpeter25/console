@@ -118,7 +118,7 @@ export class FsService {
    */
   async listAllEntries(
     targetPath: string,
-    maxDepth = 6,
+    maxDepth = 25,
     showHidden = false,
   ): Promise<FsTreeEntry[]> {
     const resolvedRoot = path.resolve(targetPath);

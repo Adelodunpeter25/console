@@ -152,7 +152,7 @@ impl ConsoleDesktopApp {
 
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
-            match client.fs.get_entries(&cwd, Some(4), Some(false)).await {
+            match client.fs.get_entries(&cwd, Some(25), Some(false)).await {
                 Ok(entries) => {
                     let tree = console_ui::build_tree_from_entries(&entries);
                     cx.update(|cx| {

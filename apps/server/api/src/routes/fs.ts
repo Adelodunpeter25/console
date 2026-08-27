@@ -55,7 +55,7 @@ fsRoutes.get("/entries", async (c) => {
   if (!dirPath) {
     return c.json({ success: false, error: "Query parameter 'path' is required." }, 400);
   }
-  const maxDepth = Number.parseInt(c.req.query("depth") || "6", 10);
+  const maxDepth = Number.parseInt(c.req.query("depth") || "25", 10);
   const showHidden = c.req.query("hidden") === "true";
 
   try {

@@ -261,7 +261,6 @@ impl RenderOnce for CodeViewer {
                     .w_full()
                     .px(px(6.0))
                     .bg(bg)
-                    .hover(|s| s.bg(theme.overlay))
                     .child(gutter_view)
                     .child(code_content)
             }))
