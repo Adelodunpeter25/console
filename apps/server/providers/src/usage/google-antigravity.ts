@@ -1,4 +1,4 @@
-import { getAntigravityUserAgent } from "@/providers/src/constants.js";
+import { ANTIGRAVITY_BASE_URL, getAntigravityUserAgent } from "@/providers/src/constants.js";
 import type {
   UsageAmount,
   UsageFetchContext,
@@ -40,7 +40,6 @@ interface AntigravityUsageResponse {
   models: Record<string, AntigravityModelInfo>;
 }
 
-const DEFAULT_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com";
 const FETCH_AVAILABLE_MODELS_PATH = "/v1internal:fetchAvailableModels";
 
 interface AntigravityWindowDescriptor {
@@ -248,10 +247,10 @@ async function fetchAntigravityUsage(params: UsageFetchParams, ctx: UsageFetchCo
   if (!accessToken) return null;
 
   const baseUrl = params.baseUrl?.replace(/\/+$/, "");
-  const endpoints = baseUrl ? [baseUrl] : [DEFAULT_ENDPOINT, "https://daily-cloudcode-pa.sandbox.googleapis.com"];
+  const endpoints = baseUrl ? [baseUrl] : [ANTIGRAVITY_BASE_URL, "https://daily-cloudcode-pa.sandbox.googleapis.com"];
 
   let response: Response | undefined;
-  let successfulEndpoint = DEFAULT_ENDPOINT;
+  let successfulEndpoint = ANTIGRAVITY_BASE_URL;
   for (const endpoint of endpoints) {
     try {
       const url = `${endpoint}${FETCH_AVAILABLE_MODELS_PATH}`;

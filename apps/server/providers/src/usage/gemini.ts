@@ -1,4 +1,4 @@
-import { getGeminiCliHeaders } from "@/providers/src/constants.js";
+import { GEMINI_BASE_URL, getGeminiCliHeaders } from "@/providers/src/constants.js";
 import type {
   UsageAmount,
   UsageFetchContext,
@@ -9,8 +9,6 @@ import type {
   UsageWindow,
 } from "@console/types";
 import { parseIsoTimestamp } from "./shared.js";
-
-const DEFAULT_ENDPOINT = "https://cloudcode-pa.googleapis.com";
 
 const GEMINI_TIER_MAP: Array<{ tier: string; models: string[] }> = [
   {
@@ -198,7 +196,7 @@ export const googleGeminiCliUsageProvider: UsageProvider = {
       return null;
     }
 
-    const baseUrl = (params.baseUrl?.trim() || DEFAULT_ENDPOINT).replace(/\/$/, "");
+    const baseUrl = (params.baseUrl?.trim() || GEMINI_BASE_URL).replace(/\/$/, "");
 
     const loadResponse = await loadCodeAssist(params, ctx, accessToken, baseUrl, credential.projectId);
     const projectId = credential.projectId ?? getProjectId(loadResponse);

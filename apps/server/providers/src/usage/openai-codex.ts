@@ -11,12 +11,13 @@ import type {
   UsageWindow,
 } from "@console/types";
 
+import { CODEX_BASE_URL } from "@/providers/src/codex/constants.js";
+import { HOUR_MS } from "./shared.js";
+
 const CODEX_USAGE_PATH = "wham/usage";
 const JWT_AUTH_CLAIM = "https://api.openai.com/auth";
 const JWT_PROFILE_CLAIM = "https://api.openai.com/profile";
-const CODEX_BASE_URL = "https://chatgpt.com/backend-api";
 const USER_AGENT = "console/1.0";
-const HOUR_MS = 60 * 60 * 1000;
 
 interface CodexUsageWindowPayload {
   used_percent?: number;
