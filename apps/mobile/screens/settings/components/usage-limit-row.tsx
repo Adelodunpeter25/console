@@ -2,10 +2,10 @@ import React from "react";
 import { Text, View } from "react-native";
 import type { UsageLimit } from "@console/types";
 import {
+  colorForLimit,
   formatWindowLabel,
   getBarPercent,
   getUsedPercent,
-  statusColor,
 } from "@/utils/usage-helpers";
 
 interface Props {
@@ -34,7 +34,7 @@ export function UsageLimitRow({ limit }: Props) {
           </Text>
         </View>
         <View className="items-end">
-          <Text className="text-xs font-bold" style={{ color: statusColor(limit.status) }}>
+          <Text className="text-xs font-bold" style={{ color: colorForLimit(limit) }}>
             {usedPct !== null ? `${usedPct}% used` : remainingPct !== null ? `${remainingPct}% left` : limit.status ?? "—"}
           </Text>
           {limit.amount.remaining !== undefined && limit.amount.remainingFraction !== undefined && (
@@ -49,7 +49,7 @@ export function UsageLimitRow({ limit }: Props) {
           className="h-full rounded-full"
           style={{
             width: `${barPct}%` as unknown as number,
-            backgroundColor: statusColor(limit.status),
+            backgroundColor: colorForLimit(limit),
           }}
         />
       </View>

@@ -127,8 +127,8 @@ function clampFraction(value: number | undefined): number | undefined {
 
 function getUsageStatus(remainingFraction: number | undefined): UsageStatus | undefined {
   if (remainingFraction === undefined) return "unknown";
-  if (remainingFraction <= 0) return "exhausted";
-  if (remainingFraction <= 0.1) return "warning";
+  if (remainingFraction <= 0.1) return "exhausted";
+  if (remainingFraction <= 0.5) return "warning";
   return "ok";
 }
 

@@ -34,6 +34,19 @@ export function statusColor(status?: string): string {
   }
 }
 
+export function statusForLimit(limit: UsageLimit): string | undefined {
+  if (limit.status && limit.status !== "unknown") return limit.status;
+  const used = limit.amount.usedFraction ?? (limit.amount.used !== undefined ? limit.amount.used / 100 : undefined);
+  if (used === undefined) return limit.status;
+  if (used >= 0.9) return "exhausted";
+  if (used >= 0.5) return "warning";
+  return "ok";
+}
+
+export function colorForLimit(limit: UsageLimit): string {
+  return statusColor(statusForLimit(limit));
+}
+
 export function getUsedPercent(limit: UsageLimit): number | null {
   if (limit.amount.usedFraction !== undefined) return Math.round(limit.amount.usedFraction * 100);
   if (limit.amount.used !== undefined) return Math.round(limit.amount.used);

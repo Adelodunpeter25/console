@@ -286,8 +286,8 @@ function buildUsageAmount(window: ParsedUsageWindow): UsageAmount {
 
 function buildUsageStatus(args: { usedFraction?: number; explicitlyAllowed: boolean }): UsageLimit["status"] {
   if (args.usedFraction === undefined) return "unknown";
-  if (args.usedFraction >= 1) return args.explicitlyAllowed ? "warning" : "exhausted";
-  if (args.usedFraction >= 0.9) return "warning";
+  if (args.usedFraction >= 0.9) return args.explicitlyAllowed ? "warning" : "exhausted";
+  if (args.usedFraction >= 0.5) return "warning";
   return "ok";
 }
 

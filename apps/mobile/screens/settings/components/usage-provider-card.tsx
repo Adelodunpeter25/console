@@ -3,7 +3,7 @@ import { Text, View } from "react-native";
 import { AlertCircle, Check, Circle } from "lucide-react-native";
 import { GlassSurface } from "@/components/layout/glass-surface";
 import { theme } from "@/styles/theme";
-import { statusColor } from "@/utils/usage-helpers";
+import { colorForLimit, statusColor, statusForLimit } from "@/utils/usage-helpers";
 import { UsageLimitRow } from "./usage-limit-row";
 import type { UsageReport } from "@console/types";
 
@@ -15,7 +15,7 @@ interface Props {
 }
 
 export function UsageProviderCard({ displayName, report, loggedIn, email }: Props) {
-  const isExhausted = report?.limits.some((l) => l.status === "exhausted");
+  const isExhausted = report?.limits.some((l) => (statusForLimit(l) === "exhausted"));
   const mostPressured = report?.limits[0];
 
   return (
@@ -37,7 +37,7 @@ export function UsageProviderCard({ displayName, report, loggedIn, email }: Prop
           </View>
         </View>
         {mostPressured && (
-          <Text className="text-xs font-bold" style={{ color: statusColor(mostPressured.status) }}>
+          <Text className="text-xs font-bold" style={{ color: colorForLimit(mostPressured) }}>
             {mostPressured.amount.used !== undefined ? `${Math.round(mostPressured.amount.used)}%` : ""}
           </Text>
         )}

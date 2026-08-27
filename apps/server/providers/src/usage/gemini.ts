@@ -8,7 +8,7 @@ import type {
   UsageReport,
   UsageWindow,
 } from "@console/types";
-import { parseIsoTimestamp } from "./shared.js";
+import { parseIsoTimestamp, usageStatus } from "./shared.js";
 
 const GEMINI_TIER_MAP: Array<{ tier: string; models: string[] }> = [
   {
@@ -229,6 +229,7 @@ export const googleGeminiCliUsageProvider: UsageProvider = {
         },
         window,
         amount,
+        status: usageStatus(amount.usedFraction),
       });
     });
 

@@ -25,7 +25,7 @@ export function parseIsoTimestamp(value: unknown): number | undefined {
 
 export function usageStatus(usedFraction: number | undefined): import("@console/types").UsageStatus {
   if (usedFraction === undefined) return "unknown";
-  if (usedFraction >= 1) return "exhausted";
-  if (usedFraction >= 0.9) return "warning";
+  if (usedFraction >= 0.9) return "exhausted";
+  if (usedFraction >= 0.5) return "warning";
   return "ok";
 }
