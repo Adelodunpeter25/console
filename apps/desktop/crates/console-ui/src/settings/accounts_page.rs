@@ -64,7 +64,7 @@ impl RenderOnce for AccountsPage {
                                 "gemini" => Some(&st.gemini),
                                 "antigravity" => Some(&st.antigravity),
                                 "codebuff" => st.codebuff.as_ref(),
-                                "codex" => Some(&st.codex),
+                                "codex" | "openai" => Some(&st.codex),
                                 _ => None,
                             }
                         });

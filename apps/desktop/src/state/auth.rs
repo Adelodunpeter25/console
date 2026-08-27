@@ -53,7 +53,7 @@ impl ConsoleDesktopApp {
         let oauth_id = match provider_name.as_str() {
             "gemini" => OAuthProviderId::Gemini,
             "antigravity" => OAuthProviderId::Antigravity,
-            "codex" => OAuthProviderId::Codex,
+            "codex" | "openai" => OAuthProviderId::Codex,
             _ => {
                 self.auth_logging_in.remove(&provider_name);
                 cx.notify();
@@ -133,7 +133,7 @@ impl ConsoleDesktopApp {
                 }
             };
 
-            // Parse port from redirect_uri (e.g. http://127.0.0.1:8085/)
+            // Parse port from redirect_uri (e.g. http://localhost:8085/ or http://127.0.0.1:8085/)
             let port: u16 = redirect_uri
                 .split(':')
                 .nth(2)
@@ -141,53 +141,93 @@ impl ConsoleDesktopApp {
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(8085);
 
+            // Bind listener BEFORE launching browser to avoid race conditions with fast redirects
+            let listener = match TcpListener::bind(("127.0.0.1", port))
+                .or_else(|_| TcpListener::bind(("0.0.0.0", port)))
+                .or_else(|_| TcpListener::bind(("localhost", port)))
+            {
+                Ok(l) => l,
+                Err(err) => {
+                    log::error!("Failed to bind loopback listener on port {port}: {err}");
+                    let _ = cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.auth_logging_in.remove(&provider_name);
+                                cx.notify();
+                            });
+                        }
+                    });
+                    return;
+                }
+            };
+
+            let _ = listener.set_nonblocking(false);
+
+            // Now open browser safely
             open_browser(&auth_url);
 
-            // Spawn one-shot blocking loopback listener
+            // Spawn loopback callback handler
             let expected_state = state.clone();
             let callback_res = tokio::task::spawn_blocking(move || -> Option<(String, String)> {
-                let listener = TcpListener::bind(("localhost", port)).ok()?;
-                let _ = listener.set_nonblocking(false);
+                let start = std::time::Instant::now();
+                let deadline = Duration::from_secs(120);
 
-                // Wait up to 120s for one connection
-                if let Ok((mut stream, _)) = listener.accept() {
-                    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-                    let mut buf = [0u8; 4096];
-                    let n = stream.read(&mut buf).unwrap_or(0);
-                    let request = String::from_utf8_lossy(&buf[..n]);
+                while start.elapsed() < deadline {
+                    if let Ok((mut stream, _)) = listener.accept() {
+                        let _ = stream.set_read_timeout(Some(Duration::from_secs(4)));
+                        let mut buf = [0u8; 4096];
+                        let n = stream.read(&mut buf).unwrap_or(0);
+                        if n == 0 {
+                            continue;
+                        }
+                        let request = String::from_utf8_lossy(&buf[..n]);
 
-                    // Parse GET /?code=...&state=...
-                    let mut code = None;
-                    let mut returned_state = None;
+                        // Handle browser favicon probes gracefully
+                        if request.contains("GET /favicon.ico") {
+                            let response = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let _ = stream.write_all(response.as_bytes());
+                            continue;
+                        }
 
-                    if let Some(query_start) = request.find("GET /") {
-                        let line = &request[query_start..request[query_start..].find("\r\n").unwrap_or(request.len())];
-                        if let Some(q) = line.split('?').nth(1).and_then(|s| s.split_whitespace().next()) {
-                            for part in q.split('&') {
-                                let mut kv = part.split('=');
-                                if let (Some(k), Some(v)) = (kv.next(), kv.next()) {
-                                    if k == "code" {
-                                        code = Some(urlencoding::decode(v).unwrap_or_default().into_owned());
-                                    } else if k == "state" {
-                                        returned_state = Some(urlencoding::decode(v).unwrap_or_default().into_owned());
+                        let mut code = None;
+                        let mut returned_state = None;
+
+                        for line in request.lines() {
+                            if line.starts_with("GET ") {
+                                if let Some(path_and_query) = line.split_whitespace().nth(1) {
+                                    if let Some(query) = path_and_query.split('?').nth(1) {
+                                        for part in query.split('&') {
+                                            let mut kv = part.split('=');
+                                            if let (Some(k), Some(v)) = (kv.next(), kv.next()) {
+                                                if k == "code" {
+                                                    code = Some(urlencoding::decode(v).unwrap_or_default().into_owned());
+                                                } else if k == "state" {
+                                                    returned_state = Some(urlencoding::decode(v).unwrap_or_default().into_owned());
+                                                }
+                                            }
+                                        }
                                     }
                                 }
+                                break;
                             }
                         }
-                    }
 
-                    // Respond with HTML
-                    let html = "<!DOCTYPE html><html><body style='font-family:sans-serif;background:#1a1a1a;color:#fff;display:flex;align-items:center;justify-content:center;height:90vh;'><h2>Authentication successful! You can close this tab and return to Console.</h2></body></html>";
-                    let response = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                        html.len(),
-                        html
-                    );
-                    let _ = stream.write_all(response.as_bytes());
+                        if let (Some(c), Some(s)) = (code, returned_state) {
+                            let html = "<!DOCTYPE html><html><body style='font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#18181b;color:#f4f4f5;display:flex;align-items:center;justify-content:center;height:90vh;'><div style='text-align:center;padding:32px;background:#27272a;border-radius:12px;border:1px solid #3f3f46;'><h2 style='margin:0 0 8px 0;color:#22c55e;'>Authentication successful!</h2><p style='margin:0;color:#a1a1aa;'>You can close this tab and return to Console.</p></div></body></html>";
+                            let response = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                                html.len(),
+                                html
+                            );
+                            let _ = stream.write_all(response.as_bytes());
+                            let _ = stream.flush();
 
-                    if let (Some(c), Some(s)) = (code, returned_state) {
-                        if s == expected_state {
-                            return Some((c, s));
+                            if s == expected_state {
+                                return Some((c, s));
+                            }
+                        } else {
+                            let response = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let _ = stream.write_all(response.as_bytes());
                         }
                     }
                 }
@@ -195,7 +235,9 @@ impl ConsoleDesktopApp {
             }).await.ok().flatten();
 
             if let Some((code, state)) = callback_res {
-                let _ = client.auth.handle_callback(provider, &code, Some(&state)).await;
+                if let Err(e) = client.auth.handle_callback(provider, &code, Some(&state)).await {
+                    log::error!("Failed to handle OAuth callback on server: {e}");
+                }
             }
 
             let _ = cx.update(|cx| {

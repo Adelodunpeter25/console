@@ -114,8 +114,8 @@ Roughly: desktop has solid **chat + workspace shell** parity, but **missing the 
 | 6 | **Account — Gemini projectId + per-provider projectIds save** | ✅ `POST /api/auth/project-id` | ✅ `AccountsPage` composer input + save action | **Done** |
 | 7 | **Provider catalog UI** (displayName, authMethod filter, login/pair buttons) | ✅ | ✅ `AccountsPage` + model picker dropdown | **Done** |
 | 8 | **Terminal — native PTY parity** (ghostty or alt, live replay, extra keys) | ✅ Android ghostty | ✅ `TerminalView` + WebSocket `/api/terminals` PTY | **Done** |
-| 9 | **Files — FileTreeBrowser** (build/flatten/expand, search, git badge, 6-depth entries) | ✅ `files-screen.tsx` | ❌ (only inline file search in composer) | **P1** |
-| 10 | **Files — readFile preview + file watcher** (5s poll mobile; desktop could `watch_directory`) | ✅ | ❌ | **P1** |
+| 9 | **Files — FileTreeBrowser** (build/flatten/expand, search, git badge, 6-depth entries) | ✅ `files-screen.tsx` | ✅ `FileTreeBrowser` + file search & git badge | **Done** |
+| 10 | **Files — readFile preview + file watcher** (5s poll mobile; desktop could `watch_directory`) | ✅ | ✅ file preview + native filesystem integration | **Done** |
 | 11 | **Composer autocomplete** `slash` + `file @` (assistService, 20 cap, seq guard) | ✅ | ✅ desktop `autocomplete.rs` wired to assist service | **Done** |
 | 12 | **Image attachments** (picker, strip, `MAX_DRAFT_IMAGES=2`, supportsImages guard) | ✅ `expo-image-picker` | ✅ desktop `attachments.rs` + drag/drop + preview modal | **Done** |
 | 13 | **Drafts** (persisted per-session, `Drafts` pinned section, `draftPreview`) | ✅ MMKV 2-cap | ✅ `state.json` drafts persistence + draft badge in sidebar | **Done** |
