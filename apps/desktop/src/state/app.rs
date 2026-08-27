@@ -1055,9 +1055,23 @@ impl ConsoleDesktopApp {
         match started_at {
             Some(t) => {
                 self.running_sessions.insert(session_id.to_string(), t);
+                if let Some(session) = std::rc::Rc::make_mut(&mut self.sessions)
+                    .iter_mut()
+                    .find(|s| s.id == session_id)
+                {
+                    session.status = Some(console_core::SessionStatus::Working);
+                }
             }
             None => {
                 self.running_sessions.remove(session_id);
+                if let Some(session) = std::rc::Rc::make_mut(&mut self.sessions)
+                    .iter_mut()
+                    .find(|s| s.id == session_id)
+                {
+                    if session.status == Some(console_core::SessionStatus::Working) {
+                        session.status = None;
+                    }
+                }
             }
         }
     }

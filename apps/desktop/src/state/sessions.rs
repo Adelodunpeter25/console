@@ -257,6 +257,8 @@ impl ConsoleDesktopApp {
             session.model_id = header.model_id.clone();
             session.provider = header.provider.clone();
             session.approval_mode = header.approval_mode.clone();
+            session.status = header.status.clone();
+            session.updated_at = header.updated_at;
             // Keep the sidebar row and any open chat tabs in step when the
             // backend renames the session (e.g. after the first turn).
             if !header.title.trim().is_empty() && session.title != header.title {

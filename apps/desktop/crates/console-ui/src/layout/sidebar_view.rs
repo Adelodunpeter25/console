@@ -1189,9 +1189,6 @@ fn render_sidebar_draft_item(
                     div()
                         .flex_1()
                         .min_w_0()
-                        .flex()
-                        .items_center()
-                        .gap_x(px(6.0))
                         .child(
                             div()
                                 .truncate()
@@ -1199,18 +1196,6 @@ fn render_sidebar_draft_item(
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(theme.text)
                                 .child(draft.title.clone()),
-                        )
-                        .child(
-                            div()
-                                .flex_none()
-                                .px(px(4.0))
-                                .py(px(0.5))
-                                .rounded(px(3.0))
-                                .bg(theme.accent.opacity(0.15))
-                                .text_color(theme.accent)
-                                .text_size(px(10.0))
-                                .font_weight(FontWeight::MEDIUM)
-                                .child("Draft"),
                         ),
                 ),
         )
