@@ -357,9 +357,6 @@ pub struct DraftSummary {
 
 #[derive(Clone)]
 enum SidebarRow {
-    DraftHeader {
-        collapsed: bool,
-    },
     Draft(usize),
     /// Position into the sidebar's shared session list. Carrying the index
     /// (not the header) keeps row construction allocation-free; only rows
@@ -584,69 +581,83 @@ impl RenderOnce for SidebarView {
         let on_switch_env = self.on_switch_environment;
         let width = self.width;
 
-        // Bucket sessions by calendar period (Today / Yesterday / This Week /
-        // This Month / Older), each group preceded by its section header —
-        // which doubles as a collapse toggle. The *first* group's header is
-        // pinned above the virtualized list (so "Today" and the folder+ icon
-        // never move when toggling); its sessions plus the remaining groups'
-        // headers and sessions become lightweight row descriptors. Grouping
-        // moves only positions; headers are cloned per rendered row below.
+        // Filter out sessions that have drafts so they appear exclusively in the
+        // Drafts section without duplicating in date groups below.
         let sessions = self.sessions;
-        let mut grouped = group_indices_by_date(sessions.len(), |index| {
+        let grouped: Vec<(SessionDateGroup, Vec<usize>)> = group_indices_by_date(sessions.len(), |index| {
             let session = &sessions[index];
-            session.updated_at.max(session.created_at)
+            if draft_sessions.contains(&session.id) {
+                0
+            } else {
+                session.updated_at.max(session.created_at)
+            }
         })
-        .into_iter();
-        let pinned = grouped.next();
+        .into_iter()
+        .map(|(group, positions)| {
+            let filtered: Vec<usize> = positions
+                .into_iter()
+                .filter(|&idx| !draft_sessions.contains(&sessions[idx].id))
+                .collect();
+            (group, filtered)
+        })
+        .filter(|(_, positions)| !positions.is_empty())
+        .collect();
 
-        // The pinned header row above the list: always the first group's
-        // header, sharing its line with the add-project button.
-        let pinned_header = match &pinned {
-            Some((group, _)) => group_header(
+        let has_drafts = !draft_summaries.is_empty();
+
+        // The pinned header row above the list: if drafts exist, Drafts is the
+        // pinned top group header; otherwise the first date group is pinned.
+        let pinned_header = if has_drafts {
+            drafts_group_header(
                 theme,
-                group.label(),
-                collapsed_groups.contains(group),
+                self.drafts_collapsed,
+                true,
+                on_add.clone(),
+                self.on_toggle_drafts.clone(),
+            )
+            .into_any_element()
+        } else {
+            let first_group = grouped.first().map(|(g, _)| *g).unwrap_or(SessionDateGroup::Today);
+            group_header(
+                theme,
+                first_group.label(),
+                collapsed_groups.contains(&first_group),
                 true,
                 on_add.clone(),
                 on_toggle_group.clone(),
-                *group,
+                first_group,
             )
-            .into_any_element(),
-            None => group_header(
-                theme,
-                "Today",
-                false,
-                true,
-                on_add.clone(),
-                on_toggle_group.clone(),
-                SessionDateGroup::Today,
-            )
-            .into_any_element(),
+            .into_any_element()
         };
 
-        // Scrollable rows: any active drafts are pinned right at the top under
-        // a dedicated Drafts section, followed by date groups.
+        // Scrollable rows:
         let mut list_rows = Vec::new();
-        if !draft_summaries.is_empty() {
-            list_rows.push(SidebarRow::DraftHeader {
-                collapsed: self.drafts_collapsed,
-            });
+        if has_drafts {
             if !self.drafts_collapsed {
                 for i in 0..draft_summaries.len() {
                     list_rows.push(SidebarRow::Draft(i));
                 }
             }
-        }
-        if let Some((group, positions)) = pinned {
-            if !collapsed_groups.contains(&group) {
-                list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+            for (group, positions) in grouped {
+                let collapsed = collapsed_groups.contains(&group);
+                list_rows.push(SidebarRow::GroupHeader { group, collapsed });
+                if !collapsed {
+                    list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+                }
             }
-        }
-        for (group, positions) in grouped {
-            let collapsed = collapsed_groups.contains(&group);
-            list_rows.push(SidebarRow::GroupHeader { group, collapsed });
-            if !collapsed {
-                list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+        } else {
+            let mut grouped_iter = grouped.into_iter();
+            if let Some((group, positions)) = grouped_iter.next() {
+                if !collapsed_groups.contains(&group) {
+                    list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+                }
+            }
+            for (group, positions) in grouped_iter {
+                let collapsed = collapsed_groups.contains(&group);
+                list_rows.push(SidebarRow::GroupHeader { group, collapsed });
+                if !collapsed {
+                    list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+                }
             }
         }
         let list_rows = Rc::new(list_rows);
@@ -664,7 +675,6 @@ impl RenderOnce for SidebarView {
         let list_draft_summaries = draft_summaries;
         let list_on_new = on_new.clone();
         let list_on_sel = on_sel;
-        let list_on_toggle_drafts = self.on_toggle_drafts.clone();
         let list_on_rename = on_rename;
         let list_on_commit_rename = on_commit_rename;
         let list_on_cancel_rename = on_cancel_rename;
@@ -678,10 +688,6 @@ impl RenderOnce for SidebarView {
                 return div().into_any_element();
             };
             let row = match row {
-                SidebarRow::DraftHeader { collapsed } => {
-                    drafts_group_header(theme, collapsed, list_on_toggle_drafts.clone())
-                        .into_any_element()
-                }
                 SidebarRow::Draft(draft_index) => {
                     let Some(draft) = list_draft_summaries.get(draft_index) else {
                         return div().into_any_element();
@@ -1064,6 +1070,8 @@ fn group_header(
 fn drafts_group_header(
     theme: Theme,
     collapsed: bool,
+    with_add_button: bool,
+    on_add: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 ) -> impl IntoElement {
     let group_name = "sidebar-group-header-drafts";
@@ -1105,6 +1113,25 @@ fn drafts_group_header(
                     }
                 }),
         )
+        .when(with_add_button, |header| {
+            header.child(
+                div()
+                    .id("btn-add-project")
+                    .w(px(20.0))
+                    .h(px(20.0))
+                    .rounded(px(6.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .cursor_default()
+                    .hover(|s| s.bg(theme.overlay))
+                    .active(|s| s.bg(theme.overlay_strong))
+                    .on_click(move |_, window, cx| {
+                        (on_add)(window, cx);
+                    })
+                    .child(app_icon(IconName::FolderNew, 15.0, theme.text_ghost)),
+            )
+        })
 }
 
 fn render_sidebar_draft_item(
