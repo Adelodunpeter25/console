@@ -17,16 +17,16 @@ This document outlines the systematic refactoring and modularization roadmap for
 
 ### Task 1.1: Purge Orphaned Legacy Files (~12,400 Lines)
 Delete uncompiled Waku-era files in `apps/desktop/crates/console-ui/` that are not included in any `mod.rs`:
-- [ ] `apps/desktop/crates/console-ui/src/layout/sidebar.rs` (1,580 lines)
-- [ ] `apps/desktop/crates/console-ui/src/layout/right_panel.rs` (3,661 lines)
-- [ ] `apps/desktop/crates/console-ui/src/chat/sessions.rs` (1,584 lines)
-- [ ] `apps/desktop/crates/console-ui/src/chat/transcript.rs` (1,150 lines)
-- [ ] `apps/desktop/crates/console-ui/src/chat/streaming.rs` (864 lines)
-- [ ] `apps/desktop/crates/console-ui/src/common/components.rs` (1,374 lines)
-- [ ] `apps/desktop/crates/console-ui/src/common/command_palette.rs` (1,184 lines)
-- [ ] `apps/desktop/crates/console-ui/src/common/file_search.rs` (987 lines)
-- [ ] `apps/desktop/crates/console-ui/src/common/commit_dialog.rs` (780 lines)
-- [ ] `apps/desktop/crates/console-ui/src/common/image_preview.rs` (310 lines)
+- [x] `apps/desktop/crates/console-ui/src/layout/sidebar.rs` (1,580 lines)
+- [x] `apps/desktop/crates/console-ui/src/layout/right_panel.rs` (3,661 lines)
+- [x] `apps/desktop/crates/console-ui/src/chat/sessions.rs` (1,584 lines)
+- [x] `apps/desktop/crates/console-ui/src/chat/transcript.rs` (1,150 lines)
+- [x] `apps/desktop/crates/console-ui/src/chat/streaming.rs` (864 lines)
+- [x] `apps/desktop/crates/console-ui/src/common/components.rs` (1,374 lines)
+- [x] `apps/desktop/crates/console-ui/src/common/command_palette.rs` (1,184 lines)
+- [x] `apps/desktop/crates/console-ui/src/common/file_search.rs` (987 lines)
+- [x] `apps/desktop/crates/console-ui/src/common/commit_dialog.rs` (780 lines)
+- [x] `apps/desktop/crates/console-ui/src/common/image_preview.rs` (310 lines)
 
 ### Task 1.2: Centralize Project Matching Logic
 - **Target File**: [`apps/desktop/crates/console-core/src/types/project.rs`](file:///Users/adelodunpeter/Developer/Projects/console/apps/desktop/crates/console-core/src/types/project.rs)
