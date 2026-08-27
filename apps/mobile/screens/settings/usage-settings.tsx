@@ -65,12 +65,6 @@ export function UsageSettings({ onBack }: Props) {
             email={card.email}
           />
         ))}
-
-        <View className="mt-2 px-1">
-          <Text className="text-[11px] text-foreground-secondary leading-4">
-            Antigravity shows Google / Anthropic / OpenAI counters separately. Codex 30d/5h windows share the same account — Spark has a separate meter.
-          </Text>
-        </View>
       </ScrollView>
     </View>
   );
