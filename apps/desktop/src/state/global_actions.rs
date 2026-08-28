@@ -6,6 +6,7 @@
 use std::rc::Rc;
 
 use console_core::CreateSessionDto;
+use console_ui::PaletteEntry;
 use gpui::{Context, Focusable as _, Window};
 
 use super::ConsoleDesktopApp;
@@ -149,17 +150,106 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// ⌘K — toggle the command palette.
+    /// ⌘K — toggle the command palette. Static command entries are rebuilt here
+    /// (with the current entity/client) so the palette always opens with fresh
+    /// closures; async modes replace them via their own wrappers.
     pub fn toggle_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.command_palette
-            .update(cx, |palette, cx| palette.toggle(window, cx));
+        let entity = cx.entity().downgrade();
+        self.command_palette.update(cx, |palette, cx| {
+            palette.set_entries(
+                vec![
+                    PaletteEntry::new("new-chat", "New Chat", {
+                        let entity = entity.clone();
+                        move |_window, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| this.create_new_chat(cx));
+                            }
+                        }
+                    }),
+                    PaletteEntry::new("new-terminal", "New Terminal", {
+                        let entity = entity.clone();
+                        move |window, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| this.open_terminal_tab(window, cx));
+                            }
+                        }
+                    }),
+                ],
+                cx,
+            );
+            palette.toggle(window, cx);
+        });
+        cx.notify();
+    }
+
+    /// ⌘P — open the quick file search palette scoped to the active pane's
+    /// project root (falling back to the current directory).
+    pub fn open_quick_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".to_string());
+        let root = self
+            .selected_project_for_pane(&pane_id)
+            .map(|project| project.path.clone())
+            .or_else(|| {
+                std::env::current_dir()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .ok()
+            });
+        self.quick_open_palette
+            .update(cx, |palette, cx| palette.open(root, window, cx));
+        cx.notify();
+    }
+
+    /// ⌘O — open the remote directory browser palette to add a project.
+    pub fn open_project_browse(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.project_browse_palette
+            .update(cx, |palette, cx| palette.open(window, cx));
+        cx.notify();
+    }
+
+    /// Open (never toggle) the command palette — used by the sidebar search
+    /// button. Builds the same static entries as ⌘K.
+    pub fn open_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.command_palette.read(cx).is_open(cx) {
+            return;
+        }
+        let entity = cx.entity().downgrade();
+        self.command_palette.update(cx, |palette, cx| {
+            palette.set_entries(
+                vec![
+                    PaletteEntry::new("new-chat", "New Chat", {
+                        let entity = entity.clone();
+                        move |_window, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| this.create_new_chat(cx));
+                            }
+                        }
+                    }),
+                    PaletteEntry::new("new-terminal", "New Terminal", {
+                        let entity = entity.clone();
+                        move |window, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| this.open_terminal_tab(window, cx));
+                            }
+                        }
+                    }),
+                ],
+                cx,
+            );
+            palette.show(window, cx);
+        });
         cx.notify();
     }
 
     /// ⌘L — move keyboard focus to the active pane's composer input.
     pub fn focus_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Don't fight the palette for focus while it is open.
-        if self.command_palette.read(cx).is_open() {
+        // Don't fight any palette for focus while it is open.
+        if self.command_palette.read(cx).is_open(cx)
+            || self.quick_open_palette.read(cx).is_open(cx)
+            || self.project_browse_palette.read(cx).is_open(cx)
+        {
             return;
         }
         let composer = self.active_composer_input();

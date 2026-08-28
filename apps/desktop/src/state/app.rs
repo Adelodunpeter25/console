@@ -13,7 +13,7 @@ use console_ui::markdown::render::TranscriptSelection;
 use console_ui::utils::SessionDateGroup;
 use console_ui::{
     CommandPalette, ComposerAttachmentPaste, ComposerEvent, ComposerInput, ContextMenuHandle,
-    PickerTab, TranscriptView,
+    PickerTab, ProjectBrowsePalette, QuickOpenPalette, TranscriptView,
 };
 use console_ui::terminal::TerminalView;
 use gpui::{AppContext, Context, Entity, ListAlignment, ListState, Subscription, Window, px};
@@ -175,9 +175,12 @@ pub struct ConsoleDesktopApp {
     /// debounce. While a drag continuously changes bounds this holds the
     /// newest frame and a single trailing timer writes it.
     pub(crate) pending_window_state: Option<persistence::window::PersistedWindowState>,
-    /// ⌘K-style palette (gpui-component `Command`), opened by the sidebar
-    /// search button. Entries are rebuilt each frame in `view.rs`.
+    /// ⌘K-style command palette (New Chat, New Terminal, …).
     pub command_palette: Entity<CommandPalette>,
+    /// ⌘P quick file open palette, scoped to the active pane's project root.
+    pub quick_open_palette: Entity<QuickOpenPalette>,
+    /// ⌘O remote directory browser / project picker.
+    pub project_browse_palette: Entity<ProjectBrowsePalette>,
     /// Live terminal surfaces keyed by terminal id. Tabs reference these via
     /// `WorkspaceTabConfig::Terminal { terminal_id }`.
     pub terminals: std::collections::HashMap<String, Entity<TerminalView>>,
@@ -419,6 +422,7 @@ impl ConsoleDesktopApp {
             ),
         ];
 
+        let client_for_palettes = client.clone();
         let mut app = Self {
             client,
             sessions: Rc::new(Vec::new()),
@@ -487,6 +491,12 @@ impl ConsoleDesktopApp {
             saved_window_state: persistence::store::load_window(),
             pending_window_state: None,
             command_palette: cx.new(|cx| CommandPalette::new(window, cx)),
+            quick_open_palette: cx.new(|cx| {
+                QuickOpenPalette::new(client_for_palettes.clone(), window, cx)
+            }),
+            project_browse_palette: cx.new(|cx| {
+                ProjectBrowsePalette::new(client_for_palettes.clone(), window, cx)
+            }),
             terminals: std::collections::HashMap::new(),
             auth_status: None,
             auth_logging_in: std::collections::HashSet::new(),
@@ -516,6 +526,42 @@ impl ConsoleDesktopApp {
         app.init_environments(cx);
         app.refresh_auth_status(cx);
         app.init_notifications(cx);
+
+        // Wire the palette wrappers back into the app: ⌘P opens a confirmed
+        // file as a workspace tab, ⌘O registers the browsed folder as a
+        // project. The wrappers hide their own modals.
+        {
+            let entity = cx.entity().downgrade();
+            app.quick_open_palette.update(cx, |palette, cx| {
+                palette.set_on_open_file(
+                    move |path, _window, cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                let pane_id = this
+                                    .active_pane_id
+                                    .clone()
+                                    .unwrap_or_else(|| "pane-main".to_string());
+                                this.open_file_tab_in_pane(&pane_id, path, cx);
+                            });
+                        }
+                    },
+                    cx,
+                );
+            });
+        }
+        {
+            let entity = cx.entity().downgrade();
+            app.project_browse_palette.update(cx, |palette, cx| {
+                palette.set_on_select_project(
+                    move |path, _window, cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| this.add_project_from_path(path, cx));
+                        }
+                    },
+                    cx,
+                );
+            });
+        }
 
         app.workspace_pane_states.insert(
             "pane-main".to_string(),

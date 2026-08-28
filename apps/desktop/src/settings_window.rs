@@ -318,10 +318,10 @@ impl Render for SettingsWindow {
             SettingsTab::Projects => {
                 let on_add_project: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
                     let app_handle = self.app.clone();
-                    Rc::new(move |_window: &mut Window, cx: &mut App| {
+                    Rc::new(move |window: &mut Window, cx: &mut App| {
                         if let Some(app) = app_handle.upgrade() {
                             app.update(cx, |app_state, cx| {
-                                app_state.add_project(cx);
+                                app_state.open_project_browse(window, cx);
                             });
                         }
                     })

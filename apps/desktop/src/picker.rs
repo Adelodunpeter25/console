@@ -1,5 +1,6 @@
-//! Native file pickers — frontend replacement for the removed
-//! `POST /api/fs/pick-folder` / `pick-file` osascript endpoints.
+//! Native file picker — frontend replacement for the removed
+//! `POST /api/fs/pick-file` osascript endpoint. (Folder selection now uses the
+//! in-app ⌘O directory browser palette instead.)
 //!
 //! The previous backend spawned `osascript` via HTTP. This runs the same
 //! `osascript` directly in the desktop process — no HTTP round-trip, no
@@ -7,33 +8,21 @@
 //! `openPanel` `EXC_BAD_ACCESS`). Cancellation returns `None`, matching the
 //! backend's `cancelled:true` → empty path contract.
 
-/// Open the native folder picker via `osascript`. Returns `None` when the user
-/// dismisses the dialog. Must run on a background thread — `osascript` blocks
-/// until the modal is dismissed.
-pub fn pick_folder_blocking() -> Option<String> {
-    pick_via_osascript_blocking(true)
-}
-
 /// Open the native file picker via `osascript`. Returns `None` on cancel.
 pub fn pick_image_file_blocking() -> Option<String> {
-    pick_via_osascript_blocking(false)
+    pick_via_osascript_blocking()
 }
 
-fn pick_via_osascript_blocking(is_folder: bool) -> Option<String> {
+fn pick_via_osascript_blocking() -> Option<String> {
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = is_folder;
         log::warn!("Native picker via osascript is macOS-only");
         return None;
     }
 
     #[cfg(target_os = "macos")]
     {
-        let script = if is_folder {
-            r#"POSIX path of (choose folder with prompt "Select Project Folder")"#
-        } else {
-            r#"POSIX path of (choose file with prompt "Select an image")"#
-        };
+        let script = r#"POSIX path of (choose file with prompt "Select an image")"#;
 
         // `osascript` is a separate process that shows its own modal. Running
         // it synchronously on a background thread avoids freezing the GPUI main

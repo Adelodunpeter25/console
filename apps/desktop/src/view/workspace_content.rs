@@ -311,7 +311,6 @@ impl ConsoleDesktopApp {
                 let composer_pane_id = pane_id.clone();
                 let submit_pane_id = composer_pane_id.clone();
                 let abort_pane_id = pane_id.clone();
-                let add_project_pane_id = pane_id.clone();
                 let composer_autocomplete = autocomplete;
                 let workspace_footer = WorkspaceFooter::new(
                     self.projects.clone(),
@@ -335,10 +334,12 @@ impl ConsoleDesktopApp {
                     },
                     {
                         let entity = entity.clone();
-                        move |_w, cx| {
+                        move |window, cx| {
                             if let Some(app) = entity.upgrade() {
-                                let pane_id = add_project_pane_id.clone();
-                                app.update(cx, |this, cx| this.add_project_for_pane(pane_id, cx));
+                                // Open the ⌘O directory browser palette — it
+                                // works against remote backends, where the
+                                // native dialog can't see the host filesystem.
+                                app.update(cx, |this, cx| this.open_project_browse(window, cx));
                             }
                         }
                     },

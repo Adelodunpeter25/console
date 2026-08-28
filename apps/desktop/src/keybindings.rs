@@ -21,8 +21,10 @@ actions!(
         CloseTab,
         /// Create a chat session in the active pane.
         NewChat,
-        /// Open the folder picker to add a project.
+        /// Open the project directory browser palette to add a project.
         AddProject,
+        /// Open the quick file search palette scoped to the active pane's project.
+        QuickOpenFile,
         /// Toggle the command palette.
         ToggleCommandPalette,
         /// Move keyboard focus to the active pane's composer.
@@ -43,6 +45,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-w", CloseTab, None),
         KeyBinding::new("secondary-n", NewChat, None),
         KeyBinding::new("secondary-o", AddProject, None),
+        KeyBinding::new("secondary-p", QuickOpenFile, None),
         KeyBinding::new("secondary-k", ToggleCommandPalette, None),
         KeyBinding::new("secondary-l", FocusComposer, None),
         KeyBinding::new("secondary-,", OpenSettings, None),
@@ -73,7 +76,27 @@ pub fn init_handlers(app: Entity<ConsoleDesktopApp>, window: AnyWindowHandle, cx
     cx.on_action({
         let app = app.clone();
         move |_: &AddProject, cx| {
-            app.update(cx, |this, cx| this.add_project(cx));
+            let app = app.clone();
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.open_project_browse(window, cx));
+                    })
+                    .ok();
+            });
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &QuickOpenFile, cx| {
+            let app = app.clone();
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.open_quick_open(window, cx));
+                    })
+                    .ok();
+            });
         }
     });
     cx.on_action({

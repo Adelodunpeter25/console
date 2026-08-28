@@ -5,7 +5,7 @@ use std::rc::Rc;
 use console_ui::workspace::{
     ContentRenderer, WorkspaceDrag, WorkspaceDropAction, WorkspacePane, cancel_workspace_drags,
 };
-use console_ui::{ImageViewerModal, PaletteEntry, RightSidebar, SidebarView, Theme, TitleBar};
+use console_ui::{ImageViewerModal, RightSidebar, SidebarView, Theme, TitleBar};
 use gpui::{
     App, Context, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent,
     MouseUpEvent, ParentElement, Render, Styled, Window, div, prelude::FluentBuilder,
@@ -48,30 +48,6 @@ impl Render for ConsoleDesktopApp {
                     div().into_any_element()
                 }
             }
-        });
-        // Command palette entries. Rebuilt each frame so closures capture the
-        // current entity/client; `set_entries` never notifies, so this does
-        // not loop the render.
-        self.command_palette.update(cx, |palette, cx| {
-            palette.set_entries(
-                vec![
-                    PaletteEntry::new("new-chat", "New Chat", {
-                        let on_new_chat = on_new_chat.clone();
-                        move |window, cx| (on_new_chat)(window, cx)
-                    }),
-                    PaletteEntry::new("new-terminal", "New Terminal", {
-                        let entity = entity.clone();
-                        move |window, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.open_terminal_tab(window, cx);
-                                });
-                            }
-                        }
-                    }),
-                ],
-                cx,
-            );
         });
         let on_select_tab: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static> = {
             let entity = entity.clone();
@@ -467,19 +443,21 @@ impl Render for ConsoleDesktopApp {
                             move |window: &mut Window, cx: &mut App| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
-                                        this.command_palette.update(cx, |palette, cx| {
-                                            palette.show(window, cx);
-                                        });
-                                        cx.notify();
+                                        this.open_command_palette(window, cx);
                                     });
                                 }
                             }
                         },
                         {
+                            // Sidebar "Add Project" opens the directory browser
+                            // palette (works against remote backends, where a
+                            // native dialog can't see the host filesystem).
                             let entity = entity.clone();
-                            move |_w, cx| {
+                            move |window, cx| {
                                 if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| this.add_project(cx));
+                                    app.update(cx, |this, cx| {
+                                        this.open_project_browse(window, cx);
+                                    });
                                 }
                             }
                         },
@@ -716,7 +694,9 @@ impl Render for ConsoleDesktopApp {
                     }
                 }))
             })
-            // Command palette overlay (renders nothing while closed).
+            // Palette overlays (each renders nothing while closed).
             .child(self.command_palette.clone())
+            .child(self.quick_open_palette.clone())
+            .child(self.project_browse_palette.clone())
     }
 }

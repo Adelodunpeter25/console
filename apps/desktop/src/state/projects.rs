@@ -176,29 +176,16 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// Add a project via the backend's native folder picker and select it.
-    pub fn add_project(&mut self, cx: &mut Context<Self>) {
+    /// Register `path` as a tracked project and select it for the active pane.
+    /// Shared by the ⌘O project browser and the native folder picker.
+    pub fn add_project_from_path(&mut self, path: String, cx: &mut Context<Self>) {
         let pane_id = self
             .active_pane_id
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
-        self.add_project_for_pane(pane_id, cx);
-    }
-
-    pub fn add_project_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_, cx| {
-            let picked = cx
-                .background_executor()
-                .spawn(async move { crate::picker::pick_folder_blocking() })
-                .await;
-            let Some(path) = picked else {
-                return;
-            };
-            if path.trim().is_empty() {
-                return;
-            }
             match client.projects.add(&path).await {
                 Ok(project) => cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
@@ -222,6 +209,7 @@ impl ConsoleDesktopApp {
         })
         .detach();
     }
+
 
     /// Check out a branch in the selected pane's project and refresh its branch list.
     pub fn checkout_branch_for_pane(
