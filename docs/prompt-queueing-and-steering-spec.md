@@ -36,10 +36,8 @@ Currently:
 +-----------------------------------------------------------------------+
 |                                                                       |
 |  +-----------------------------------------------------------------+  |
-|  | ⏳ Queued Next                                                   |  |
-|  | "Also make sure to update the unit tests in app.test.tsx"       |  |
-|  |                                                                 |  |
-|  | [✏️ Edit]   [🗑️ Delete]                       [⚡ Send / Steer Now] |  |
+|  | ⏳ "Also make sure to update the unit tests in app.test.tx..."  |  |
+|  |                                              [✏️] [🗑️] [⚡ Steer] |  |
 |  +-----------------------------------------------------------------+  |
 |                                                                       |
 |  +-----------------------------------------------------------------+  |
@@ -62,26 +60,17 @@ Currently:
 > [!NOTE]
 > When the composer is empty during a run, the primary button is **Stop** (`■`). As soon as the user begins typing a follow-up, the button transitions into a **Queue** button (`↑`). If the user deletes their text, it smoothly reverts to the **Stop** button.
 
-### 2.2 The Queued Prompt Card (Above Composer)
+### 2.2 The Queued Prompt Card (Single Compact Row)
 
-The Queued Prompt Card sits docked directly above the composer input container with subtle rounded corners (`rounded(8px)`), border (`border_strong`), and surface contrast (`theme.composer` / `theme.surface`):
+The Queued Prompt Card is an ultra-compact, single-line strip (`h(32px)`, `rounded(8px)`, `bg(theme.composer)` / `border_strong`) docked directly above the composer input:
 
-- **Header / Indicator**:
-  - `⏳ Queued next` badge with subtle animated pulse or icon.
-  - Model tag (e.g. `Gemini 2.5 Flash`) and attachment thumbnails if attachments were attached.
-- **Prompt Snippet**:
-  - Truncated 1–2 line preview of the queued message text.
-- **Action Toolbar**:
-  1. **Edit Button (`✏️ Edit`)**:
-     - Clears the queue from the server.
-     - Loads the prompt text and attachments back into the active composer.
-     - Focuses the composer input and places the caret at the end of the text.
-  2. **Delete Button (`🗑️ Delete` or `✕`)**:
-     - Deletes the queued prompt on the server and removes the card with a fade-out transition.
-  3. **Steer / Send Now Button (`⚡ Steer Now` or `↑ Steer`)**:
-     - Triggers an immediate abort of the active turn.
-     - Converts the queued prompt into an immediate new run without waiting.
-     - Displays feedback in the transcript (e.g., `Turn steered by user`).
+- **Left Content (Single Truncated Line)**:
+  - Subtle `⏳` icon or `Queued:` label.
+  - The prompt text truncated with ellipsis (`truncate()`) before reaching the action buttons on the right.
+- **Right Action Buttons (3 Compact Controls)**:
+  1. **Edit (`✏️`)**: Clears the queue from the server and restores the prompt text & attachments into the active composer input.
+  2. **Delete (`🗑️` / `✕`)**: Discards the queued prompt completely.
+  3. **Steer / Send Now (`⚡` / `↑`)**: Halts the active agent turn immediately and starts this queued prompt as the new turn.
 
 ---
 
