@@ -105,6 +105,35 @@ impl SessionService {
         }
     }
 
+    /// `GET /api/sessions/:id/todos` — persisted todo checklist for a session.
+    pub async fn get_todos(&self, id: &str) -> Result<Vec<TodoItem>> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/todos", id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to get session todos")?;
+
+        let body: ApiResponse<Vec<TodoItem>> = resp
+            .json()
+            .await
+            .context("Failed to parse session todos response")?;
+        if body.success {
+            Ok(body.data.unwrap_or_default())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to load session todos".into())
+            ))
+        }
+    }
+
     /// Reload a session until the backend has finished persisting an active run.
     /// This is used after an SSE disconnect so the UI does not immediately
     /// submit another prompt against a still-running server session.

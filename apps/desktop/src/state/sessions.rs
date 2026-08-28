@@ -421,6 +421,42 @@ impl ConsoleDesktopApp {
                                     );
                                 }
 
+                                // Hydrate the persisted todo checklist so a
+                                // reopened session shows its outstanding tasks
+                                // right away instead of waiting for the next
+                                // run's todoUpdate (docs/todo-integration.md).
+                                let todo_client = client.clone();
+                                let todo_pane_id = pane_id.clone();
+                                let todo_session_id = session_id.clone();
+                                cx.spawn(async move |entity, cx| {
+                                    if let Ok(items) =
+                                        todo_client.sessions.get_todos(&todo_session_id).await
+                                    {
+                                        let _ = cx.update(|cx| {
+                                            if let Some(app) = entity.upgrade() {
+                                                app.update(cx, |this, cx| {
+                                                    // Ignore a slower response after
+                                                    // this pane has switched to
+                                                    // another active tab.
+                                                    if this
+                                                        .active_session_for_pane(&todo_pane_id)
+                                                        .as_deref()
+                                                        != Some(todo_session_id.as_str())
+                                                    {
+                                                        return;
+                                                    }
+                                                    this.set_todo_items_for_session(
+                                                        &todo_session_id,
+                                                        items,
+                                                    );
+                                                    cx.notify();
+                                                });
+                                            }
+                                        });
+                                    }
+                                })
+                                .detach();
+
                                 cx.notify();
                             });
                         }
