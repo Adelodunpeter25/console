@@ -121,6 +121,8 @@ export interface SessionDetailResponse {
   nextCursor: number | null;
 }
 
+export type GitFileStatus = "M" | "A" | "D" | "R" | "C" | "U" | "?" | "!";
+
 export interface FsTreeEntry {
   name: string;
   path: string;

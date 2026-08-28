@@ -99,6 +99,13 @@ export function initSessionDatabase(db: Database): void {
       turn_index INTEGER NOT NULL DEFAULT 0,
       updated_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS session_todos (
+      id INTEGER PRIMARY KEY,
+      content TEXT NOT NULL,
+      status TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
 
   // Migration: add repair state to pre-existing per-session databases.

@@ -17,7 +17,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { AgentMessage, ModelFavorite, SessionHeader, ProjectInfo, ToolResult } from "@/agent/src/types/index.js";
-import type { SessionFileChange } from "@console/types";
+import type { SessionFileChange, TodoItem } from "@console/types";
 import { initGlobalDatabase } from "./schema.js";
 import { getGlobalDbPath, getConsoleStorageDir } from "./apppaths.js";
 import { type StorageState } from "./utils.js";
@@ -191,6 +191,20 @@ export class SqliteSessionStorage {
 
   clearSessionFileChanges(sessionId: string): void {
     Sessions.clearSessionFileChanges(this.state, sessionId);
+  }
+
+  // MARK: - Todos
+
+  saveSessionTodos(sessionId: string, items: readonly TodoItem[]): void {
+    Sessions.saveSessionTodos(this.state, sessionId, items);
+  }
+
+  getSessionTodos(sessionId: string): TodoItem[] {
+    return Sessions.getSessionTodos(this.state, sessionId);
+  }
+
+  clearSessionTodos(sessionId: string): void {
+    Sessions.clearSessionTodos(this.state, sessionId);
   }
 
   // MARK: - Lifecycle

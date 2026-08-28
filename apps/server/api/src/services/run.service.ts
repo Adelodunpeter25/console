@@ -165,10 +165,11 @@ export class RunService {
 
     const boundTools = assembleAgentTools({
       cwd: session.header.cwd,
-      initialTodos: this.todoLists.get(sessionId) ?? [],
+      initialTodos: this.todoLists.get(sessionId) ?? this.sessionStorage.getSessionTodos(sessionId) ?? [],
       askHandler: this.decisions.createAskHandler(sessionId, hub),
       onTodoUpdate: (items, action) => {
         this.todoLists.set(sessionId, items);
+        this.sessionStorage.saveSessionTodos(sessionId, items);
         hub.broadcast({ type: "todoUpdate", items, action });
       },
     });

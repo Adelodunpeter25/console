@@ -109,4 +109,12 @@ export class SessionService {
   recordFileChange(sessionId: string, change: import("@console/types").SessionFileChange) {
     this.storage.recordFileChange(sessionId, change);
   }
+
+  getSessionTodos(sessionId: string): import("@console/types").TodoItem[] {
+    return this.storage.getSessionTodos(sessionId);
+  }
+
+  saveSessionTodos(sessionId: string, items: readonly import("@console/types").TodoItem[]): void {
+    this.storage.saveSessionTodos(sessionId, items);
+  }
 }

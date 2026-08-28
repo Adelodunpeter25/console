@@ -150,3 +150,15 @@ sessionRoutes.get("/sessions/:id/changes", (c) => {
   });
 });
 
+/**
+ * GET /api/sessions/:id/todos — Get persisted todos for a session.
+ */
+sessionRoutes.get("/sessions/:id/todos", (c) => {
+  const id = c.req.param("id");
+  const todos = sessionService.getSessionTodos(id);
+  return c.json({
+    success: true,
+    data: todos,
+  });
+});
+
