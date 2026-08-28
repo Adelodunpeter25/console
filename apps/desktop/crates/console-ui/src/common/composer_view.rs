@@ -303,6 +303,7 @@ impl RenderOnce for ComposerView {
         let model_trigger = MenuChip::new("model-picker-chip")
             .height(px(24.0))
             .outlined()
+            .background(theme.composer)
             .selected(model_is_open)
             .icon(provider_svg_path(&model_provider), theme.text)
             .label(model_label);
@@ -325,6 +326,7 @@ impl RenderOnce for ComposerView {
         let approval_trigger = MenuChip::new("approval-mode-chip")
             .height(px(26.0))
             .outlined()
+            .background(theme.composer)
             .selected(approval_is_open)
             .icon(
                 self.approval_mode.icon().path(),
@@ -424,7 +426,7 @@ impl RenderOnce for ComposerView {
                             } else if focused {
                                 theme.accent
                             } else {
-                                theme.border
+                                theme.border_strong
                             })
                             .shadow_sm()
                             .overflow_hidden()

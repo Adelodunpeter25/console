@@ -47,7 +47,7 @@ pub fn error_banner(
             .px(px(10.0))
             .py(px(7.0))
             .rounded(px(6.0))
-            .bg(theme.danger_soft)
+            .bg(theme.composer)
             .border_1()
             .border_color(theme.danger.opacity(0.35))
             .flex()
