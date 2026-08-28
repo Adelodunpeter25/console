@@ -2,7 +2,7 @@
 
 **Status**: Finalized Design  
 **Applies to**: Server (`apps/server`), Desktop (`apps/desktop`), Mobile (`apps/mobile`)  
-**Target Capabilities**: Real-Time Subagent Streaming, Right Panel Subagents Tab with Accordion & Badges, Mobile Bottom Sheet
+**Target Capabilities**: Real-Time Subagent Streaming, Right Panel Subagents Tab with Accordion & Badges, Mobile Floating Banner & Dedicated Subagent Screens
 
 ---
 
@@ -140,55 +140,118 @@ In the main chat transcript, the subagent tool call is displayed as a sleek caps
 
 ## 4. Mobile Client Architecture (`apps/mobile`)
 
-On mobile, subagents are viewed via an **Interactive Bottom Sheet**.
+On Mobile, subagents follow the same high-polish floating banner pattern as the Todo Banner, navigating into dedicated screen views for list browsing and deep-dive inspection.
 
-### 4.1 Chat Message Capsule
-- Rendered in the chat stream as an interactive dark pill/card showing the subagent role badge, prompt snippet, and live status spinner.
-- Tapping the capsule triggers the **Subagent Bottom Sheet**.
+### 4.1 Floating Subagent Banner (`components/chat/subagent-banner.tsx`)
 
-### 4.2 Subagent Bottom Sheet (`components/chat/subagent-bottom-sheet.tsx`)
+Docked floating directly above the Composer / Interaction Panel in `ChatScreen` (beside or stacked with `TodoBanner`):
+
+```
++-------------------------------------------------------------------------------+
+| 🤖 SUBAGENTS [ 2 ] • Codebase Inspector (Running)                         [→] |
++-------------------------------------------------------------------------------+
+```
+
+- **Visuals**: Dark `#121214` surface, `#27272a` border, rounded-xl styling.
+- **Left Icon & Title**: Bot icon with `SUBAGENTS` header and active counter badge (`[ 2 ]`).
+- **Preview Snippet**: Name and live status of the latest running or completed subagent.
+- **Action**: Tapping the banner navigates to the **Subagents List Screen**.
+
+---
+
+### 4.2 Subagents List Screen (`screens/subagents/subagents-screen.tsx`)
+
+A dedicated screen listing all subagents created during the active chat session:
 
 ```
 +-------------------------------------------------------+
-|  ━━━━ (Drag Handle)                                   |
-|  🤖 Codebase Inspector                   [✕ Close]    |
-|  "Audit database migrations and schema"               |
-|  Status: Running (Turn 2/10)                          |
+|  [← Back]               Subagents (2)                 |
 +-------------------------------------------------------+
-|  ACTIVITY FEED:                                       |
 |                                                       |
+|  +-------------------------------------------------+  |
+|  | 🤖 Codebase Inspector                 ● Running |  |
+|  |    "Audit database migrations and schema"       |  |
+|  |    Turn 2/10 • 3 tools executed              [→]|  |
+|  +-------------------------------------------------+  |
+|                                                       |
+|  +-------------------------------------------------+  |
+|  | ✓ Test Runner                            • Done |  |
+|  |    "Verify bun tests across apps/server"        |  |
+|  |    Completed in 3 turns                      [→]|  |
+|  +-------------------------------------------------+  |
+|                                                       |
++-------------------------------------------------------+
+```
+
+#### Features:
+1. **ScreenHeader**: Standard navigation header with back button (`[←]`) returning to `ChatScreen`.
+2. **List Cards**:
+   - Subagent Name & Role badge.
+   - Truncated prompt description.
+   - Status pill (`● Running (Turn 2/10)` with pulsing blue/cyan dot, `✓ Done` with green pill, `✗ Failed` with red pill).
+   - Chevron / Arrow (`[→]`) indicating navigation.
+3. **Empty State**:
+   - Displays a clean placeholder if no subagents have been spawned in the session.
+4. **Navigation Action**: Tapping any card navigates to the **Subagent Details Screen**.
+
+---
+
+### 4.3 Subagent Details Screen (`screens/subagents/subagent-details-screen.tsx`)
+
+The deep-dive inspector screen for a specific subagent run:
+
+```
++-------------------------------------------------------+
+|  [← Back]            Codebase Inspector               |
++-------------------------------------------------------+
+|                                                       |
+|  MISSION PROMPT                                       |
+|  "Audit database migrations and schema across         |
+|   apps/server to verify session_todos table"          |
+|                                                       |
+|  STATUS & TURNS                                       |
+|  ● Running • Turn 2 of 10                             |
+|                                                       |
+|  ACTIVITY TIMELINE                                    |
 |  [✓] glob "apps/server/src/**/*.ts"                   |
-|      Found 14 files                                   |
+|      Found 14 matching files                          |
 |                                                       |
 |  [✓] readFile "schema.ts" (lines 80-120)              |
 |                                                       |
 |  [⚡] grep "session_todos"                             |
-|      Searching codebase...                            |
+|      Searching codebase in progress...                |
 |                                                       |
-|  FINAL SUMMARY:                                       |
+|  FINAL SUMMARY                                        |
 |  (Awaiting completion...)                             |
 |                                                       |
 |  [ 📋 Copy Summary ]                                  |
 +-------------------------------------------------------+
 ```
 
-#### Mobile Invariants:
-1. **Snap Points**: `['45%', '85%']` via bottom sheet modal.
-2. **Reanimated Transitions**: Live tool steps animate in smoothly as SSE events arrive.
-3. **Copy Action**: Button to copy the subagent's final output to clipboard or paste into the composer.
+#### Features:
+1. **ScreenHeader**: Back button returning to the Subagents List screen.
+2. **Mission Prompt Section**: Full original instruction provided by the primary agent.
+3. **Live Activity Timeline**: Real-time list of tool executions (`glob`, `readFile`, `grep`) with status indicators, argument summaries, and file match counts.
+4. **Markdown Summary**: Full rendered GitHub-flavored Markdown summary returned upon subagent completion.
+5. **Action Buttons**: One-tap button to copy summary to clipboard or share.
 
 ---
 
-## 5. Implementation Checklist
+## 5. Implementation Roadmap
 
-- [ ] **Phase 1: Server Event Protocol (`apps/server`)**:
-  - Define `SubagentEvent` interfaces in `@console/types`.
-  - Update `apps/server/agent/src/tools/subagent.ts` to emit real-time lifecycle events (`subagentStart`, `subagentActivity`, `subagentEnd`) to `RunEventHub`.
-- [ ] **Phase 2: Desktop Right Panel `Subagents` Tab (`apps/desktop`)**:
-  - Add `RightPanelTab::Subagents` in `apps/desktop/src/state/`.
-  - Implement badge counter and `subagent_list_view` in `crates/console-ui/src/right_sidebar/`.
-  - Add accordion toggle state and empty state view.
-  - Wire `[ View in Panel → ]` click handler in transcript capsule.
-- [ ] **Phase 3: Mobile Bottom Sheet (`apps/mobile`)**:
-  - Implement `subagent-card.tsx` for chat messages.
-  - Implement `subagent-bottom-sheet.tsx` with activity timeline and copy action.
+### Phase 1: Server Event Protocol (`apps/server`)
+- [ ] Define `SubagentEvent` interfaces in `@console/types`.
+- [ ] Update `apps/server/agent/src/tools/subagent.ts` to emit real-time lifecycle events (`subagentStart`, `subagentActivity`, `subagentEnd`) to `RunEventHub`.
+- [ ] Forward subagent events over the active SSE stream.
+
+### Phase 2: Desktop Right Panel `Subagents` Tab (`apps/desktop`)
+- [ ] Add `RightPanelTab::Subagents` in `apps/desktop/src/state/`.
+- [ ] Implement badge counter and `subagent_list_view` in `crates/console-ui/src/right_sidebar/`.
+- [ ] Add accordion toggle state and empty state view.
+- [ ] Wire `[ View in Panel → ]` click handler in transcript capsule.
+
+### Phase 3: Mobile Banner & Subagent Screens (`apps/mobile`)
+- [ ] Create `useSessionSubagents` hook to track subagent state and live SSE events.
+- [ ] Create `components/chat/subagent-banner.tsx` floating in `ChatScreen`.
+- [ ] Implement `screens/subagents/subagents-screen.tsx` (Subagents List).
+- [ ] Implement `screens/subagents/subagent-details-screen.tsx` (Subagent Details & Activity Timeline).
