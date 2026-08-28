@@ -163,27 +163,50 @@ export function FilesScreen() {
         ) : (
           <ScrollView
             className="flex-1 bg-screen"
-            contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 16 }}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
             showsVerticalScrollIndicator={false}
           >
-            {(fileData?.content ?? "").split("\n").map((line, i) => (
-              <View key={i} className="flex-row items-stretch">
-                {/* Line-number gutter (matches diff-view styling) */}
-                <Text
-                  className="w-8 shrink-0 text-[10px] leading-4 font-mono text-right pr-2 text-foreground-secondary/40"
-                  selectable={false}
-                >
-                  {i + 1}
-                </Text>
-                <Text
-                  className="flex-1 text-[11px] leading-4 font-mono"
-                  style={{ color: theme.colors.text.primary }}
-                  selectable
-                >
-                  {renderHighlightedLine(line, getLanguageFromPath(selectedFilePath ?? undefined), String(i)) || " "}
-                </Text>
+            <View style={{ flexDirection: "row", padding: 16, minWidth: "100%" }}>
+              {/* Gutter - not selectable, not copied */}
+              <View style={{ width: 32, marginRight: 8, alignItems: "flex-end" }}>
+                {(fileData?.content ?? "").split("\n").map((_, i) => (
+                  <Text
+                    key={`ln-${i}`}
+                    className="text-[10px] leading-4 font-mono text-right pr-2 text-foreground-secondary/40"
+                    selectable={false}
+                    style={{ lineHeight: 16 }}
+                  >
+                    {i + 1}
+                  </Text>
+                ))}
               </View>
-            ))}
+
+              {/* Code - single selectable Text so handles span multiple lines, horizontal scroll for long lines */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ flex: 1 }}
+                contentContainerStyle={{ flexGrow: 1 }}
+              >
+                <Text
+                  selectable
+                  selectionColor="rgba(255,255,255,0.3)"
+                  style={{
+                    color: theme.colors.text.primary,
+                    fontSize: 11,
+                    lineHeight: 16,
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {(fileData?.content ?? "").split("\n").map((line, i, arr) => (
+                    <Text key={`lc-${i}`} style={{ lineHeight: 16 }}>
+                      {renderHighlightedLine(line, getLanguageFromPath(selectedFilePath ?? undefined), String(i)) || " "}
+                      {i < arr.length - 1 ? "\n" : ""}
+                    </Text>
+                  ))}
+                </Text>
+              </ScrollView>
+            </View>
           </ScrollView>
         )}
       </View>
