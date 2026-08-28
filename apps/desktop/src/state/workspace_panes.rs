@@ -19,7 +19,7 @@ impl ConsoleDesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if pane_id == "pane-main" || self.workspace_pane_states.contains_key(pane_id) {
+        if self.workspace_pane_states.contains_key(pane_id) {
             return;
         }
 
@@ -287,8 +287,10 @@ impl ConsoleDesktopApp {
     pub(crate) fn pane_model_search(&self, pane_id: &str) -> Entity<ComposerInput> {
         self.workspace_pane_states
             .get(pane_id)
+            .or_else(|| self.workspace_pane_states.get("pane-main"))
+            .or_else(|| self.workspace_pane_states.values().next())
             .map(|state| state.model_search.clone())
-            .expect("model search field is always present for a workspace pane")
+            .expect("model search field is always present in workspace pane states")
     }
 
     pub(crate) fn pane_approval_menu(&self, pane_id: &str) -> ContextMenuHandle {
