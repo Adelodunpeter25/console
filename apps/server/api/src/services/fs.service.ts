@@ -13,6 +13,7 @@ import {
 } from "@console/types";
 import type { FilePreviewBlockedCode } from "@console/types";
 import type { FsTreeEntry } from "@console/types";
+import { isPathIgnored } from "@/api/src/utils/ignored.js";
 
 /**
  * Raised when a file may not be returned as a text preview (lockfile, binary,
@@ -140,26 +141,7 @@ export class FsService {
 
       for (const entry of dirEntries) {
         if (!showHidden && entry.name.startsWith(".")) continue;
-        const IGNORED_DIRS = new Set([
-          "node_modules",
-          ".git",
-          "target",
-          "dist",
-          "build",
-          ".next",
-          ".turbo",
-          ".cache",
-          "coverage",
-          ".parcel-cache",
-          "out",
-          ".output",
-          ".expo",
-          ".gradle",
-          "bin",
-          "obj",
-        ]);
-
-        if (!showHidden && IGNORED_DIRS.has(entry.name)) {
+        if (!showHidden && isPathIgnored(entry.name)) {
           const dirPath = path.join(currentPath, entry.name);
           result.push({
             name: entry.name,

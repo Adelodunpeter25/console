@@ -20,6 +20,13 @@ export const IGNORED_PATHS = [
   ".gemini",
   "target",
   "tmp",
+  ".parcel-cache",
+  "out",
+  ".output",
+  ".expo",
+  ".gradle",
+  "bin",
+  "obj",
 ];
 
 /**

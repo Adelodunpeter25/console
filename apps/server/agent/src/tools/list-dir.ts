@@ -3,32 +3,7 @@ import * as path from "node:path";
 import { z } from "zod";
 import type { AgentTool } from "@/agent/src/types/index.js";
 import { pathString } from "@/agent/src/service/tool-input.js";
-
-// Reuse the same deny-list as the file watcher / API utils to avoid walking
-// massive ignored trees (node_modules, .git, dist, etc.). Keep local to avoid
-// cross-layer import coupling; must stay in sync with api/src/utils/ignored.ts.
-const IGNORED_SEGMENTS = new Set([
-  "node_modules",
-  ".git",
-  ".hg",
-  ".svn",
-  "dist",
-  "build",
-  ".next",
-  ".turbo",
-  ".vite",
-  ".cache",
-  "coverage",
-  ".DS_Store",
-  "thumbs.db",
-  ".gemini",
-  "target",
-  "tmp",
-]);
-
-function isIgnoredName(name: string): boolean {
-  return IGNORED_SEGMENTS.has(name.toLowerCase());
-}
+import { isPathIgnored } from "@/api/src/utils/ignored.js";
 
 const inputSchema = z.object({
   path: pathString('Required filesystem directory path to list. Use "." for the current project directory.'),
@@ -93,9 +68,9 @@ async function buildTree(
   }
 
   let filtered = showHidden ? entries : entries.filter((e) => !e.name.startsWith("."));
-  // Skip massive ignored trees when recursing (node_modules, .git, etc.)
+  // Skip massive ignored trees when recursing (node_modules, .git, dist, etc.)
   if (recursive) {
-    filtered = filtered.filter((e) => !isIgnoredName(e.name));
+    filtered = filtered.filter((e) => !isPathIgnored(e.name));
   }
   filtered.sort((a, b) => {
     if (a.isDirectory() !== b.isDirectory()) {
