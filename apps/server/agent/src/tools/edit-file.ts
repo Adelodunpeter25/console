@@ -22,11 +22,7 @@ type Input = z.infer<typeof inputSchema>;
 
 export const editFileTool: AgentTool<typeof inputSchema> = {
   name: "editFile",
-  description: `Edit a file by replacing one specific string with another.
-The oldContent must match EXACTLY (including whitespace, indentation, and newlines).
-Always call readFile first to get the exact current content before using this tool.
-If the match appears 0 times or more than once, the edit is rejected — be precise.
-For complete file rewrites, use writeFile instead.`,
+  description: "Edit a file by replacing an exact string. Read the file first to get the exact match. For complete rewrites, use writeFile.",
   inputSchema,
   execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {
     const filePath = path.resolve(args.cwd ?? process.cwd(), args.path);

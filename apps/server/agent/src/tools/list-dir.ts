@@ -171,11 +171,7 @@ function renderTree(entries: TreeEntry[], prefix = "", _isLast = false): string[
 
 export const listDirTool: AgentTool<typeof inputSchema> = {
   name: "listDir",
-  description: `List files and directories at a given path.
-Returns a tree-like structure showing names, sizes, and nesting.
-Use this to understand project structure before reading specific files.
-Use recursive: true to explore subdirectories (up to maxDepth levels deep).
-Skips ignored trees (node_modules, .git, dist, etc.) when recursive, truncates at maxEntries.`,
+  description: "List files and directories at a path. Use recursive for subdirectories.",
   inputSchema,
   execute: async (args: Input, signal?: AbortSignal): Promise<unknown> => {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");

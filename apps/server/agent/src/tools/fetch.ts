@@ -58,7 +58,7 @@ function htmlToText(html: string): string {
 
 export const fetchTool: AgentTool<typeof inputSchema> = {
   name: "fetch",
-  description: `Fetch content from a URL.`,
+  description: "Fetch content from a URL or web page as markdown or text.",
   inputSchema,
   execute: async (args: Input, parentSignal?: AbortSignal): Promise<unknown> => {
     const controller = new AbortController();

@@ -23,10 +23,7 @@ type Input = z.infer<typeof inputSchema>;
 
 export const writeFileTool: AgentTool<typeof inputSchema> = {
   name: "writeFile",
-  description: `Write content to a file, fully replacing its contents.
-Creates the file if it does not exist. Parent directories are created automatically.
-Use this for creating new files or completely rewriting an existing file.
-For targeted changes to an existing file, use editFile instead to avoid rewriting unchanged content.`,
+  description: "Create or overwrite a file with new content. For targeted changes, use editFile instead.",
   inputSchema,
   execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {
     const filePath = path.resolve(args.cwd ?? process.cwd(), args.path);

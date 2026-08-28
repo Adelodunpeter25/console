@@ -30,10 +30,7 @@ type Input = z.infer<typeof inputSchema>;
 
 export const readSkillTool: AgentTool<typeof inputSchema> = {
   name: "readSkill",
-  description: `Read the full content of a skill by name.
-The system prompt only lists skill names with one-line descriptions.
-Call this tool when a skill matches the current task to load its complete instructions, file path, and workflow details.
-If called without a name, returns the list of all available skills.`,
+  description: "Read a skill's full instructions by name. Omit name to list available skills.",
   tier: "read",
   inputSchema,
   execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {

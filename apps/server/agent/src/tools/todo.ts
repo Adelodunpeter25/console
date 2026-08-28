@@ -71,12 +71,7 @@ export function createTodoTool(
   // tool slot accepts it without zod generic-variance friction.
   const tool: AgentTool = {
     name: "todo",
-    description: `Manage the session task list (TODOs) for multi-step feature development or refactoring.
-Use 'init' with tasks: ["task 1", "task 2"] to initialize the task breakdown.
-Use 'start' with index: 1 to mark a task as in_progress.
-Use 'done' with index: 1 to mark a task as completed.
-Use 'append' with tasks: ["new task"] to add items to the list.
-Use 'view' to render the current task list status.`,
+    description: "Manage the session task list for multi-step work. Operations: init, start, done, append, view.",
     tier: "read",
     inputSchema,
     execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {

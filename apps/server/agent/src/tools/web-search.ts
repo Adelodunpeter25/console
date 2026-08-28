@@ -155,7 +155,7 @@ async function searchBrave(
 
 export const webSearchTool: AgentTool<typeof inputSchema> = {
   name: "webSearch",
-  description: `Search the web for up-to-date information.`,
+  description: "Search the web for up-to-date documentation and information.",
   inputSchema,
   execute: async (args: Input, parentSignal?: AbortSignal): Promise<unknown> => {
     const controller = new AbortController();

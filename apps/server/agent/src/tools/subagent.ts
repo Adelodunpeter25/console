@@ -35,8 +35,7 @@ const inputSchema = z.object({
 
 type Input = z.infer<typeof inputSchema>;
 
-const description = `Spawn an isolated subagent to execute a dedicated sub-task (e.g. searching files, inspecting tests, evaluating code).
-The subagent runs in its own memory context and returns its final summary result back to you.`;
+const description = "Delegate a focused sub-task to an isolated subagent.";
 
 // Widened return type so the tool slots uniformly into AgentTool<ZodTypeAny>
 // collections without zod generic-variance friction.

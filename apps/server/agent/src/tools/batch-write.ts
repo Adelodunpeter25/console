@@ -97,13 +97,7 @@ function formatResults(results: FileWriteResult[]): string {
 
 export const batchWriteTool: AgentTool<typeof inputSchema> = {
   name: "batchWrite",
-  description: `Write multiple files in a single call.
-All writes are executed concurrently by default, making this ideal for scaffolding
-an entire project structure or coordinated multi-file changes.
-Parent directories are created automatically for each file.
-Reports individual results so you know exactly which files succeeded or failed.
-Set stopOnError: true if you need atomic-style behaviour (stop after first failure).
-Validates that no two entries share the same path before writing.`,
+  description: "Write multiple files at once. Useful for project scaffolding or multi-file creation.",
   inputSchema,
   execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {
     const baseCwd = path.resolve(args.cwd ?? process.cwd());

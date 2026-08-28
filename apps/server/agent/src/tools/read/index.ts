@@ -66,12 +66,7 @@ const inputSchemaWithGuards = inputSchema.superRefine((val, ctx) => {
 
 export const readFileTool: AgentTool<typeof inputSchemaWithGuards> = {
   name: "readFile",
-  description: `Read the contents of a file at the given path.
-Supports optional line range selection for large files.
-Lines are returned with their 1-indexed line numbers prefixed (e.g. "  42: content"), matching cat -n numbering.
-Reads are capped at ${MAX_LINES} lines / ${MAX_BYTES / 1024} KiB / ${MAX_LINE_CHARS} chars per line; every truncation result states the exact startLine to resume from.
-Always prefer reading specific line ranges for large files to avoid wasting tokens.
-For directories, use listDir instead.`,
+  description: "Read a file. Optional startLine/endLine for large files. Use for files only — use listDir for directories.",
   inputSchema: inputSchemaWithGuards,
   execute: async (args: Input, signal?: AbortSignal): Promise<unknown> => {
     const filePath = path.resolve(args.cwd ?? process.cwd(), args.path);

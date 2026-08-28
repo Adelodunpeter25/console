@@ -25,15 +25,7 @@ type Input = z.infer<typeof inputSchema>;
 
 export const globTool: AgentTool<typeof inputSchema> = {
   name: "glob",
-  description: `Find files matching a glob pattern using fff — a high-performance Rust-powered file finder.
-100% compatible with npm \`glob\` pattern syntax: *, **, ?, [abc], {a,b}.
-Powered by a native background index so repeat calls are near-instant.
-Common examples:
-  - "src/**/*.ts"    → all TypeScript files under src/
-  - "**/*.json"      → all JSON files anywhere
-  - "*.md"           → Markdown files in the root
-  - "{src,test}/**"  → everything under src/ or test/
-Results are sorted by path.`,
+  description: "Find files matching a glob pattern (e.g. 'src/**/*.ts', '**/*.json').",
   inputSchema,
   execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {
     const searchRoot = path.resolve(args.cwd ?? process.cwd());

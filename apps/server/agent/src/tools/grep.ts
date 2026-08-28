@@ -50,11 +50,7 @@ type Input = z.infer<typeof inputSchema>;
 
 export const grepTool: AgentTool<typeof inputSchema> = {
   name: "grep",
-  description: `Search file contents using fff — a Rust-powered content search engine.
-Faster than ripgrep for repeated searches in the same process (warm index).
-Supports plain-text, regex, and typo-resistant fuzzy search modes.
-Returns matching lines with surrounding context, grouped by file.
-Use for finding function definitions, import usages, variable names, TODOs, etc.`,
+  description: "Search file contents by pattern. Use for finding definitions, usages, or references.",
   inputSchema,
   execute: async (args: Input, _signal?: AbortSignal): Promise<unknown> => {
     const searchPath = path.resolve(args.cwd ?? process.cwd(), args.path);

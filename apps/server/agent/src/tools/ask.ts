@@ -32,8 +32,7 @@ const inputSchema = questionSchema;
 
 type Input = z.infer<typeof inputSchema>;
 
-const description = `Ask the user a question to clarify ambiguous requirements, architecture options, or preferences.
-Provide a clear question and, optionally, a list of distinct option choices. Set skippable to false if the question is strictly required.`;
+const description = "Ask the user a question to clarify requirements. Optionally provide distinct choices.";
 
 /** Build the tool-result text for a single answer, marking skips explicitly. */
 function formatAnswer(answer: string | string[]): string {
@@ -102,8 +101,7 @@ const askManySchema = z.object({
     .describe("The list of questions to ask the user, answered in order"),
 });
 
-const askManyDescription = `Ask the user multiple questions at once, presented one at a time.
-Each question may have optional multiple-choice options; the user can always type a custom answer or skip (if skippable). Use this when you need several independent answers before proceeding.`;
+const askManyDescription = "Ask the user multiple questions in sequence.";
 
 export function createAskManyTool(handler?: AskQuestionHandler): AgentTool<typeof askManySchema> {
   return {
