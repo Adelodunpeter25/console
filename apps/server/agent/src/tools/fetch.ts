@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AgentTool } from "@/agent/src/types/index.js";
+import { firecrawlScrape, isRetryableFirecrawlError } from "./firecrawl.js";
 
 const inputSchema = z.object({
   url: z.string().url().describe("The URL to fetch"),
@@ -59,7 +60,8 @@ export const fetchTool: AgentTool<typeof inputSchema> = {
   name: "fetch",
   description: `Fetch content from a URL via HTTP. Returns the response body as text.
 Supports GET, POST, PUT, PATCH, DELETE requests with custom headers and body.
-HTML pages are automatically converted to plain text for readability.
+For GET web pages, uses Firecrawl keyless scrape (JS-rendered, clean markdown) with fallback to direct fetch + HTML strip.
+HTML pages are automatically converted to plain text/markdown for readability.
 JSON responses are pretty-printed. Binary content is summarised (not returned raw).
 Use this to:
   - Read public documentation, README files, and API references
@@ -81,6 +83,54 @@ Do NOT use for authentication-required pages.`,
     }
 
     const isParentAborted = () => parentSignal?.aborted ?? false;
+
+    // Keyless Firecrawl for HTML GETs (spec 3.2) — only for web pages, not APIs/POSTs
+    const isGet = (args.method ?? "GET") === "GET" && !args.body;
+    const isLikelyApi =
+      args.url.includes("/api/") ||
+      args.url.endsWith(".json") ||
+      (args.headers && Object.values(args.headers).some((v) => String(v).includes("application/json")));
+    if (isGet && !isLikelyApi) {
+      try {
+        const fc = await firecrawlScrape(args.url, controller.signal);
+        if (fc.success && fc.data?.markdown) {
+          clearTimeout(timeoutHandle);
+          if (parentSignal) parentSignal.removeEventListener("abort", onParentAbort);
+          const sections: string[] = [
+            `URL: ${args.url}`,
+            `Status: ${fc.data.metadata?.statusCode ?? 200} OK (via Firecrawl)`,
+            `Title: ${fc.data.metadata?.title ?? ""}`,
+            "",
+            "Body (markdown):",
+            fc.data.markdown,
+          ];
+          if (args.returnHeaders) {
+            sections.splice(3, 0, `SourceURL: ${fc.data.metadata?.sourceURL ?? args.url}`);
+          }
+          return {
+            content: [{ type: "text", text: sections.join("\n") }],
+          };
+        }
+      } catch (fcErr: unknown) {
+        const err = fcErr as Error;
+        if (err.name === "AbortError") {
+          clearTimeout(timeoutHandle);
+          if (parentSignal) parentSignal.removeEventListener("abort", onParentAbort);
+          if (isParentAborted()) {
+            return {
+              content: [{ type: "text", text: `Request cancelled by user abort — ${args.url}` }],
+              isError: true,
+            };
+          }
+          return {
+            content: [{ type: "text", text: `Error: Request timed out after ${args.timeoutMs}ms — ${args.url}` }],
+            isError: true,
+          };
+        }
+        // Fallback to direct fetch on any Firecrawl error (spec: Error / Rate Limit -> direct)
+        // Only abort fallback if it's a non-retryable and we want to surface? Spec says always fallback, so continue.
+      }
+    }
 
     let response: Response;
     try {

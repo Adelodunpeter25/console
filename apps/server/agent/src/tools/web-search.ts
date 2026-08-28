@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AgentTool } from "@/agent/src/types/index.js";
+import { firecrawlSearch, isRetryableFirecrawlError } from "./firecrawl.js";
 
 const inputSchema = z.object({
   query: z.string().describe("The search query"),
@@ -154,11 +155,11 @@ async function searchBrave(
 
 export const webSearchTool: AgentTool<typeof inputSchema> = {
   name: "webSearch",
-  description: `Search the web and return a list of relevant results.
-Returns result titles, URLs, and snippets.
+  description: `Search the web and return a list of relevant results with full markdown.
+Uses Firecrawl keyless search (no API key) for JS-rendered, clean markdown; falls back to DuckDuckGo Lite on rate limit / network error.
+Returns result titles, URLs, descriptions, and markdown for each hit.
 Use this to find up-to-date information, documentation, package details, or to research topics.
-After finding URLs, use the fetch tool to read the full content of any page.
-DuckDuckGo requires no API key. Brave Search requires BRAVE_SEARCH_API_KEY env var (free tier available).`,
+DuckDuckGo fallback requires no API key. Brave Search requires BRAVE_SEARCH_API_KEY env var (free tier available).`,
   inputSchema,
   execute: async (args: Input, parentSignal?: AbortSignal): Promise<unknown> => {
     const controller = new AbortController();
@@ -175,12 +176,39 @@ DuckDuckGo requires no API key. Brave Search requires BRAVE_SEARCH_API_KEY env v
 
     const isParentAborted = () => parentSignal?.aborted ?? false;
 
-    let results: SearchResult[];
+    // Keyless Firecrawl first (spec 3.1), fallback to DuckDuckGo on 429/network
+    let firecrawlResults: Array<{ title: string; url: string; markdown: string; description?: string }> | null = null;
+    let results: SearchResult[] | null = null;
+
     try {
       if (args.searchEngine === "brave") {
         results = await searchBrave(args.query, args.numResults, controller.signal);
       } else {
-        results = await searchDuckDuckGo(args.query, args.numResults, controller.signal);
+        // Try Firecrawl keyless
+        try {
+          const fc = await firecrawlSearch(args.query, args.numResults, controller.signal);
+          if (fc.success && fc.data && fc.data.length > 0) {
+            firecrawlResults = fc.data
+              .filter((r) => r.url)
+              .slice(0, args.numResults)
+              .map((r) => ({
+                title: r.title ?? "",
+                url: r.url ?? "",
+                markdown: r.markdown ?? "",
+                description: r.description,
+              }));
+          } else {
+            // Empty or unsuccessful — fallback
+            throw new Error("Firecrawl returned no results");
+          }
+        } catch (fcErr: unknown) {
+          if (isRetryableFirecrawlError(fcErr) || (fcErr instanceof Error && fcErr.message.includes("no results"))) {
+            // Fallback to DuckDuckGo Lite
+            results = await searchDuckDuckGo(args.query, args.numResults, controller.signal);
+          } else {
+            throw fcErr;
+          }
+        }
       }
     } catch (err: unknown) {
       clearTimeout(timeout);
@@ -207,7 +235,29 @@ DuckDuckGo requires no API key. Brave Search requires BRAVE_SEARCH_API_KEY env v
       if (parentSignal) parentSignal.removeEventListener("abort", onParentAbort);
     }
 
-    if (results.length === 0) {
+    // Firecrawl path — return markdown directly
+    if (firecrawlResults && firecrawlResults.length > 0) {
+      const lines: string[] = [
+        `Web search results for: "${args.query}" (${firecrawlResults.length} results) — via Firecrawl (markdown)\n`,
+      ];
+      for (let i = 0; i < firecrawlResults.length; i++) {
+        const r = firecrawlResults[i]!;
+        lines.push(`[${i + 1}] ${r.title}`);
+        lines.push(`    URL: ${r.url}`);
+        if (r.description) lines.push(`    ${r.description}`);
+        if (r.markdown) {
+          lines.push(`    ---`);
+          lines.push(r.markdown);
+        }
+        lines.push("");
+      }
+      return {
+        content: [{ type: "text", text: lines.join("\n") }],
+      };
+    }
+
+    // DuckDuckGo / Brave fallback path
+    if (!results || results.length === 0) {
       return {
         content: [
           {
