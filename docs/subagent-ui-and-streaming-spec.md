@@ -1,19 +1,19 @@
-# Subagent Streaming & UI Flow Specification
+# Subagent Streaming & Multi-Platform UI Specification
 
-**Status**: Draft  
+**Status**: Finalized Design  
 **Applies to**: Server (`apps/server`), Desktop (`apps/desktop`), Mobile (`apps/mobile`)  
-**Target Capabilities**: Real-Time Subagent Event Streaming, Inline Transcript Capsules, Workspace Tab vs. Inspector Views, Mobile Bottom Sheet Explorer
+**Target Capabilities**: Real-Time Subagent Streaming, Right Panel Subagents Tab with Accordion & Badges, Mobile Bottom Sheet
 
 ---
 
 ## 1. Overview & Problem Statement
 
-Currently, when the primary agent spawns a subagent via the `subagent` tool:
-1. The backend runs a nested `agentLoop`, but does not emit real-time subagent progress events over the SSE stream.
-2. The primary client interfaces (Desktop and Mobile) only receive a generic, opaque tool execution block until the entire subagent run finishes and dumps a summary text block.
-3. Users lack visibility into what tools the subagent is running, which files it is inspecting, its turn progression, or intermediate findings.
+When the primary agent spawns child subagents (e.g. for codebase inspection, test verification, or deep research), users need real-time visibility into what the subagents are doing without:
+1. Cluttering the main chat stream with hundreds of nested tool lines.
+2. Opening dozens of separate workspace tabs that must be manually closed.
+3. Feeling blind to what tools, files, and queries the subagents are executing.
 
-This specification defines the complete end-to-end architecture for real-time subagent streaming on the **Server**, followed by the **Desktop Dashboard** and **Mobile Client** UI flows.
+This specification defines the complete end-to-end architecture across the **Server**, **Desktop Dashboard**, and **Mobile App**.
 
 ---
 
@@ -21,7 +21,7 @@ This specification defines the complete end-to-end architecture for real-time su
 
 ### 2.1 Subagent Event Types (`@console/types` & `apps/server/agent/src/types/`)
 
-Subagents emit discrete lifecycle events through the session's active `RunEventHub` so that any connected client (Desktop, Mobile, CLI) can track their execution in real time:
+Subagents emit discrete real-time events over the session's active `RunEventHub`:
 
 ```typescript
 export interface SubagentStartEvent {
@@ -45,13 +45,6 @@ export interface SubagentActivityEvent {
   error?: string;
 }
 
-export interface SubagentTurnEndEvent {
-  type: "subagentTurnEnd";
-  subagentId: string;
-  turnIndex: number;
-  thought?: string;
-}
-
 export interface SubagentEndEvent {
   type: "subagentEnd";
   subagentId: string;
@@ -64,120 +57,94 @@ export interface SubagentEndEvent {
 export type SubagentEvent =
   | SubagentStartEvent
   | SubagentActivityEvent
-  | SubagentTurnEndEvent
   | SubagentEndEvent;
 ```
 
-### 2.2 Server Tool Execution (`apps/server/agent/src/tools/subagent.ts`)
+### 2.2 Execution in `apps/server/agent/src/tools/subagent.ts`
 
-When `createSubagentTool` is executed within `RunService`:
-1. It generates a unique `subagentId` (`subagent-${randomUUID()}`).
-2. Broadcasts `subagentStart` over `RunEventHub`.
-3. Passes an event-forwarding callback to the child `agentLoop`.
-4. As the subagent invokes tools (`glob`, `grep`, `readFile`), it broadcasts `subagentActivity`.
-5. On completion or cancellation, broadcasts `subagentEnd` with the final summary.
-
-```typescript
-// Example Server Event Flow:
-hub.broadcast({
-  type: "subagentStart",
-  subagentId: "subagent-102",
-  parentToolCallId: "call_9481",
-  name: "Codebase Inspector",
-  role: "Codebase Inspector",
-  prompt: "Find all instances of database schemas across apps/server",
-  maxTurns: 10,
-});
-```
+1. Creates a unique `subagentId` (`subagent-${randomUUID()}`).
+2. Emits `subagentStart` immediately.
+3. Attaches an event listener to the child `agentLoop` to broadcast `subagentActivity` as the child calls `glob`, `grep`, `readFile`, etc.
+4. On loop settlement, broadcasts `subagentEnd` with the final markdown summary.
 
 ---
 
 ## 3. Desktop UI Architecture (`apps/desktop`)
 
-Desktop provides a multi-layered viewing experience: a compact inline card in the main chat, with deep-dive inspection options.
+Desktop uses a unified **Right Panel `Subagents` Tab** paired with an **In-Chat Capsule**.
 
-### 3.1 Inline Subagent Capsule Card (Chat Transcript)
+### 3.1 Right Panel `Subagents` Tab (`RightPanelTab::Subagents`)
 
-Rendered inside the conversation transcript in place of a plain tool call box:
+The Right Panel header adds a third tab alongside `All` and `Changes`, featuring a **dynamic badge counter**:
+
+```
++-------------------------------------------------------------------------------+
+| RIGHT PANEL (Cmd+I)                                                           |
+| [ All ]        [ Changes (4) ]        [ Subagents (2) ]                       |
++-------------------------------------------------------------------------------+
+| 🤖 Codebase Inspector                                               ● Running |
+|    "Audit database migrations and schema"                         (Turn 2/10) |
+|    ▾ Details                                                                  |
+|      • Task Prompt: "Audit database migrations and schema..."                 |
+|      • Activity Timeline:                                                     |
+|        ✓ glob: "apps/server/agent/src/**/*.ts" (14 files found)               |
+|        ✓ readFile: "schema.ts" (lines 80-120)                                 |
+|        ⚡ grep: "session_todos" (in progress...)                              |
+|      • Summary: (Awaiting completion...)                                      |
++-------------------------------------------------------------------------------+
+| ✓ Test Runner                                                          • Done |
+|    "Verify bun tests pass across server"                                      |
+|    ▸ Details                                                                  |
++-------------------------------------------------------------------------------+
+```
+
+#### Key Features:
+1. **Dynamic Tab Badge**:
+   - Displays total subagent count for the active session (e.g. `Subagents (2)`).
+   - If any subagents are actively running, the badge pulses with an active green accent indicator.
+2. **Accordion-Style List Items**:
+   - **Collapsed State**: Displays subagent icon, role badge, prompt snippet, status pill (`● Running (Turn 2/10)`, `✓ Done`, `✗ Failed`), and chevron toggle (`▸`).
+   - **Expanded State (`▾ Details`)**:
+     - Full Mission Prompt.
+     - Step-by-step Activity Timeline (tools executed with file paths and match counts).
+     - Rendered Markdown Summary once completed.
+3. **Empty State**:
+   - When no subagents have run in the current session, displays a clean placeholder:
+     ```
+     +-------------------------------------------------------+
+     |                    🤖                                 |
+     |           No Subagents Spawned                        |
+     |   Subagents spawned by the assistant will appear here |
+     +-------------------------------------------------------+
+     ```
+
+---
+
+### 3.2 In-Transcript Subagent Capsule & Linkage
+
+In the main chat transcript, the subagent tool call is displayed as a sleek capsule with a **`[ View in Panel → ]`** action button:
 
 ```
 +-------------------------------------------------------------------------------+
 | 🤖 [Codebase Inspector]  "Audit database migrations and schema"               |
-|    ● Running (Turn 2/10) • 3 actions executed                         [ ⌄ ] [↗] |
-+-------------------------------------------------------------------------------+
-|  ▸ Live Activity:                                                             |
-|    ✓ glob: "apps/server/agent/src/**/*.ts" (found 14 files)                   |
-|    ✓ readFile: "schema.ts" (lines 80-120)                                     |
-|    ⚡ grep: "session_todos" (in progress...)                                  |
-+-------------------------------------------------------------------------------+
-|  📋 Summary (upon completion):                                                |
-|     "Found session_todos table defined in schema.ts with matching storage..." |
+|    ● Running (Turn 2/10) • 3 actions executed              [ View in Panel → ] |
 +-------------------------------------------------------------------------------+
 ```
 
-#### Visual Elements:
-- **Header**:
-  - Subagent icon + Role Badge (e.g. `Codebase Inspector`, `Test Runner`).
-  - Mission prompt.
-  - Pulsing status indicator (`Running Turn 2/10` / `Completed`).
-  - `[ ⌄ ]` Accordion toggle button.
-  - `[ ↗ ]` Deep-dive action button.
-- **Collapsible Activity Feed**: Compact list of tools invoked with execution status (pending, running, done).
-- **Summary Box**: Rendered markdown summary once finished.
-
----
-
-### 3.2 Desktop Deep-Dive Options (Under Evaluation)
-
-The deep-dive exploration experience is designed around two options:
-
-```
-+-------------------------------------------------------------------------------+
-|                          OPTION B: WORKSPACE TAB                              |
-+-------------------------------------------------------------------------------+
-| [Chat: Refactor DB]  [Subagent: Codebase Inspector]  [Terminal]               |
-+------------------------------------+------------------------------------------+
-| Main Chat Transcript               | Subagent Real-Time Transcript            |
-| ...                                | Turn 1: Thought -> Glob "src/**/*.ts"    |
-| primary agent waiting...           | Turn 2: Thought -> Read "schema.ts"      |
-|                                    | Turn 3: Assistant Summary Result         |
-+------------------------------------+------------------------------------------+
-```
-
-#### Option B: Dedicated Workspace Tab (`WorkspaceTabConfig::Subagent`)
-- Clicking `[ ↗ ]` on the Subagent Card opens a dedicated tab in the current or split pane.
-- Tab shows the subagent's full, independent message stream, tool calls, and thoughts.
-- Can be split side-by-side (`Cmd+\`) with the main chat for real-time parallel monitoring.
-
-```
-+-------------------------------------------------------------------------------+
-|                      OPTION C: RIGHT INSPECTOR DRAWER                         |
-+-------------------------------------------------------------------------------+
-| Main Chat Transcript               | INSPECTOR (Cmd+I)                        |
-| ...                                | [Subagent: Codebase Inspector]           |
-| 🤖 [Subagent Capsule Card]         | Status: Completed (3 turns)              |
-|                                    |                                          |
-|                                    | Messages & Tool Execution Tree:          |
-|                                    | 1. user: "Audit schema..."               |
-|                                    | 2. call: glob "src/**/*.ts"              |
-|                                    | 3. call: readFile "schema.ts"            |
-+------------------------------------+------------------------------------------+
-```
-
-#### Option C: Right Inspector Drawer Integration (`Cmd+I`)
-- Clicking `[ ↗ ]` focuses the Right Inspector Drawer and switches its view to the selected Subagent Run.
-- Keeps the main workspace focused on the primary conversation while allowing side-panel inspection.
+- Clicking `[ View in Panel → ]`:
+  1. Opens the Right Panel (if closed).
+  2. Switches the active tab to `Subagents`.
+  3. Automatically scrolls to and expands that specific subagent's accordion.
 
 ---
 
 ## 4. Mobile Client Architecture (`apps/mobile`)
 
-On mobile devices, vertical screen space is precious. Subagents use a **Compact Inline Card** in chat and expand into a full **Interactive Bottom Sheet**.
+On mobile, subagents are viewed via an **Interactive Bottom Sheet**.
 
 ### 4.1 Chat Message Capsule
-- Rendered in the mobile chat stream as a sleek dark pill/card.
-- Shows agent role badge, truncated task prompt, and live status spinner.
-- Tap gesture triggers the **Subagent Bottom Sheet**.
+- Rendered in the chat stream as an interactive dark pill/card showing the subagent role badge, prompt snippet, and live status spinner.
+- Tapping the capsule triggers the **Subagent Bottom Sheet**.
 
 ### 4.2 Subagent Bottom Sheet (`components/chat/subagent-bottom-sheet.tsx`)
 
@@ -198,29 +165,30 @@ On mobile devices, vertical screen space is precious. Subagents use a **Compact 
 |  [⚡] grep "session_todos"                             |
 |      Searching codebase...                            |
 |                                                       |
-|  FINAL RESULT:                                        |
+|  FINAL SUMMARY:                                       |
 |  (Awaiting completion...)                             |
+|                                                       |
+|  [ 📋 Copy Summary ]                                  |
 +-------------------------------------------------------+
 ```
 
-#### Mobile Bottom Sheet Invariants:
-1. **Snap Points**: `['40%', '85%']` using `@gorhom/bottom-sheet` or native bottom sheet modal.
-2. **Real-Time Subscription**: Connects to the active chat session's SSE stream and updates the activity list with spring animations (`react-native-reanimated`).
-3. **Copy & Share**: Quick button at the bottom to copy the subagent's findings to clipboard or insert into the composer input.
+#### Mobile Invariants:
+1. **Snap Points**: `['45%', '85%']` via bottom sheet modal.
+2. **Reanimated Transitions**: Live tool steps animate in smoothly as SSE events arrive.
+3. **Copy Action**: Button to copy the subagent's final output to clipboard or paste into the composer.
 
 ---
 
-## 5. Implementation Roadmap
+## 5. Implementation Checklist
 
-### Phase 1: Server Event Streaming
-- [ ] Define `SubagentEvent` types in `@console/types`.
-- [ ] Update `apps/server/agent/src/tools/subagent.ts` to forward `agentLoop` events to `RunEventHub`.
-- [ ] Broadcast events over `/api/sessions/:id/run` SSE stream.
-
-### Phase 2: Mobile Bottom Sheet Experience
-- [ ] Create `apps/mobile/components/chat/subagent-card.tsx` in chat stream.
-- [ ] Implement `apps/mobile/components/chat/subagent-bottom-sheet.tsx` with activity timeline and live turn indicator.
-
-### Phase 3: Desktop UI & Deep-Dive
-- [ ] Implement `subagent_card` in `apps/desktop/crates/console-ui/src/common/`.
-- [ ] Implement selected Deep-Dive mode (Option B Tab vs. Option C Inspector) based on design selection.
+- [ ] **Phase 1: Server Event Protocol (`apps/server`)**:
+  - Define `SubagentEvent` interfaces in `@console/types`.
+  - Update `apps/server/agent/src/tools/subagent.ts` to emit real-time lifecycle events (`subagentStart`, `subagentActivity`, `subagentEnd`) to `RunEventHub`.
+- [ ] **Phase 2: Desktop Right Panel `Subagents` Tab (`apps/desktop`)**:
+  - Add `RightPanelTab::Subagents` in `apps/desktop/src/state/`.
+  - Implement badge counter and `subagent_list_view` in `crates/console-ui/src/right_sidebar/`.
+  - Add accordion toggle state and empty state view.
+  - Wire `[ View in Panel → ]` click handler in transcript capsule.
+- [ ] **Phase 3: Mobile Bottom Sheet (`apps/mobile`)**:
+  - Implement `subagent-card.tsx` for chat messages.
+  - Implement `subagent-bottom-sheet.tsx` with activity timeline and copy action.
