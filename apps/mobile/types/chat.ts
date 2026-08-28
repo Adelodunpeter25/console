@@ -68,6 +68,7 @@ export interface ChatStoreState {
   approvePermission: (sessionId: string, requestId: string, allow: boolean) => Promise<void>;
   clear: (sessionId: string) => void;
   reset: (sessionId: string) => void;
+  setTodoItems: (sessionId: string, items: TodoItem[]) => void;
   handleEvent: (sessionId: string, event: AgentSessionEvent) => void;
 }
 
@@ -82,6 +83,7 @@ export type ChatSnapshot = {
   pendingQuestion: PendingQuestion | null;
   pendingPermissions: PendingPermission[];
   pendingQuestions: PendingQuestion[];
+  todoItems: TodoItem[];
   running: boolean;
   runs: RunActivityState[];
 };

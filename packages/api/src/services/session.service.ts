@@ -62,4 +62,9 @@ export const sessionService = {
     }
     return { success: true };
   },
+
+  async getTodos(id: string): Promise<import("@console/types").TodoItem[]> {
+    const res = await getConsoleApiClient().get(`/api/sessions/${id}/todos`);
+    return unwrapData(res.data, "get session todos");
+  },
 };

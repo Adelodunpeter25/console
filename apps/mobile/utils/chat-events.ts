@@ -316,6 +316,7 @@ export function toChatSnapshot(session: ChatSessionState): ChatSnapshot {
     pendingQuestion: session.pendingQuestions[session.pendingQuestions.length - 1] ?? null,
     pendingPermissions: session.pendingPermissions,
     pendingQuestions: session.pendingQuestions,
+    todoItems: session.todoItems ?? [],
     running: session.running,
     runs: session.runs,
   };

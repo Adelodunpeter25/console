@@ -128,6 +128,15 @@ export function setInput(sessionId: string, value: string): void {
   );
 }
 
+export function setTodoItems(sessionId: string, items: import("@console/types").TodoItem[]): void {
+  setSessions((sessions) =>
+    updateSession(sessions, sessionId, (current) => ({
+      ...current,
+      todoItems: items,
+    })),
+  );
+}
+
 export function addAttachments(sessionId: string, attachments: ImageAttachment[]): void {
   if (attachments.length === 0) return;
   setSessions((sessions) =>
@@ -248,7 +257,7 @@ export async function sendMessage(sessionId: string, promptOverride?: string): P
       prompt,
       ...(attachments.length > 0 ? { attachments: session.attachments } : {}),
       ...(sessionModelId ? { modelId: sessionModelId } : {}),
-      ...(sessionProvider ? { provider: sessionProvider } : {}),
+      ...(sessionProvider ? { provider: sessionProvider as import("@console/types").ProviderId } : {}),
       ...(approvalMode ? { approvalMode } : {}),
     });
   } catch (err) {

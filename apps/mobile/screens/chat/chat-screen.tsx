@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from "react"
 import { View, Keyboard, BackHandler, Pressable } from "react-native";
 import { SquareTerminal, Folder } from "lucide-react-native";
 import type { LegendListRef } from "@legendapp/list/react-native";
-import { useChatStream, useAbort } from "@/hooks";
+import { useChatStream, useAbort, useSessionTodos } from "@/hooks";
 import { sessionsView$ } from "@/stores/useSessionStore";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import {
@@ -11,6 +11,8 @@ import {
   ChatScrollBottomButton,
   Composer,
   InteractionPanel,
+  TodoBanner,
+  TodoBottomSheet,
 } from "@/components/chat";
 import { ChatScreenSkeleton } from "@/components/common";
 import { app$, setActiveTab, setSelectedProjectId, setSelectedSessionId } from "@/stores/useAppStore";
@@ -125,6 +127,16 @@ export function ChatScreen() {
 
   const hasMessages = useMemo(() => stream.messages.length > 0, [stream.messages.length]);
 
+  const {
+    todoItems,
+    totalCount,
+    completedCount,
+    hasActiveTodos,
+    nextPendingTodo,
+    bottomSheetRef,
+    openSheet,
+  } = useSessionTodos(selectedSessionId);
+
   return (
     <View className="flex-1 bg-screen">
       <ScreenHeader title={stream.chatTitle} onBack={handleBackToHome} rightAction={headerRightActions} />
@@ -148,6 +160,16 @@ export function ChatScreen() {
         hasInteraction={hasPendingInteraction}
       />
 
+      {/* Floating Task Checklist Banner when active tasks exist */}
+      {hasActiveTodos ? (
+        <TodoBanner
+          completedCount={completedCount}
+          totalCount={totalCount}
+          nextTask={nextPendingTodo?.content}
+          onPress={openSheet}
+        />
+      ) : null}
+
       {/* Footer interaction panel or composer */}
       {hasPendingInteraction ? (
         <InteractionPanel sessionId={selectedSessionId} />
@@ -165,6 +187,14 @@ export function ChatScreen() {
           projectLocked={stream.messages.length > 0}
         />
       )}
+
+      {/* Expandable Task Checklist Bottom Sheet */}
+      <TodoBottomSheet
+        ref={bottomSheetRef}
+        todoItems={todoItems}
+        completedCount={completedCount}
+        totalCount={totalCount}
+      />
     </View>
   );
 }

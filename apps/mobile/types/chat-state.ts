@@ -29,6 +29,7 @@ export const emptyChatSnapshot: ChatSnapshot = {
   pendingQuestion: null,
   pendingPermissions: [],
   pendingQuestions: [],
+  todoItems: [],
   runs: [],
   running: false,
 };
