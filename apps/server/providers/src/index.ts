@@ -21,26 +21,6 @@ export {
 } from "./codex/oauth.js";
 export type { CodexOAuthCredential, ParsedCodexCredential } from "./codex/oauth.js";
 
-/** Codebuff / Freebuff provider — device-code login + OpenAI-compatible backend */
-export {
-  codebuffStreamFn,
-  startCodebuffLogin,
-  pollCodebuffLogin,
-  generateFingerprintId,
-  loadCodebuffCredential,
-  clearCodebuffCredential,
-  hasCodebuffCredential,
-  CODEBUFF_BASE_URL,
-  CODEBUFF_API_URL,
-  CODEBUFF_MODEL_SPECS,
-  isCodebuffFreeModelId,
-} from "./codebuff/index.js";
-export type {
-  CodebuffCredential,
-  CodebuffLoginCode,
-  CodebuffLoginStatus,
-} from "./codebuff/index.js";
-
 /** Model discovery */
 export { fetchAvailableModels } from "./discovery/fetch-models.js";
 export type { FetchAvailableModelsOptions, DiscoveredApiModel } from "./discovery/fetch-models.js";

@@ -38,9 +38,7 @@ export function AccountSettings() {
   const handleLogin = async (provider: ProviderId, authMethod?: string) => {
     setLoggingInProvider(provider);
     try {
-      if (authMethod === "device-code") {
-        await auth.loginCodebuff();
-      } else if (authMethod === "oauth" && localOAuth.isAvailable) {
+      if (authMethod === "oauth" && localOAuth.isAvailable) {
         await localOAuth.loginWithLocalServer(provider as OAuthProviderId);
       } else if (authMethod === "oauth") {
         await auth.login(provider as OAuthProviderId);

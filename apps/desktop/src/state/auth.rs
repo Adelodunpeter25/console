@@ -45,11 +45,6 @@ impl ConsoleDesktopApp {
         self.auth_logging_in.insert(provider_name.clone());
         cx.notify();
 
-        if provider_name == "codebuff" {
-            self.login_codebuff(cx);
-            return;
-        }
-
         let oauth_id = match provider_name.as_str() {
             "gemini" => OAuthProviderId::Gemini,
             "antigravity" => OAuthProviderId::Antigravity,
@@ -62,53 +57,6 @@ impl ConsoleDesktopApp {
         };
 
         self.login_oauth(oauth_id, cx);
-    }
-
-    fn login_codebuff(&mut self, cx: &mut Context<Self>) {
-        let client = self.client.clone();
-
-        cx.spawn(async move |entity, cx| {
-            let res = client.auth.codebuff_start().await;
-            let (login_url, fingerprint_id, fingerprint_hash, expires_at) = match res {
-                Ok(data) => (data.login_url, data.fingerprint_id, data.fingerprint_hash, data.expires_at),
-                Err(err) => {
-                    log::error!("Failed to start Codebuff login: {err}");
-                    let _ = cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.auth_logging_in.remove("codebuff");
-                                cx.notify();
-                            });
-                        }
-                    });
-                    return;
-                }
-            };
-
-            open_browser(&login_url);
-
-            let deadline = std::time::Instant::now() + Duration::from_millis(expires_at.saturating_sub(chrono::Utc::now().timestamp_millis()) as u64).min(Duration::from_secs(300));
-            let expires_at_str = expires_at.to_string();
-
-            while std::time::Instant::now() < deadline {
-                tokio::time::sleep(Duration::from_secs(2)).await;
-                if let Ok(poll) = client.auth.codebuff_poll(&fingerprint_id, &fingerprint_hash, &expires_at_str).await {
-                    if poll.completed {
-                        break;
-                    }
-                }
-            }
-
-            let _ = cx.update(|cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.auth_logging_in.remove("codebuff");
-                        this.refresh_auth_status(cx);
-                        cx.notify();
-                    });
-                }
-            });
-        }).detach();
     }
 
     fn login_oauth(&mut self, provider: OAuthProviderId, cx: &mut Context<Self>) {

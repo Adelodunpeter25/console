@@ -35,15 +35,13 @@ pub struct ProviderAuthStatus {
     pub configured_project_id: Option<String>,
 }
 
-/// Response of `GET /api/auth/status`. The three OAuth keys are always present;
-/// `codebuff` may be absent on older servers.
+/// Response of `GET /api/auth/status`.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AuthStatusResponse {
     pub gemini: ProviderAuthStatus,
     pub antigravity: ProviderAuthStatus,
     pub codex: ProviderAuthStatus,
-    pub codebuff: Option<ProviderAuthStatus>,
 }
 
 /// Response of `POST /api/auth/login/url`.
@@ -54,39 +52,4 @@ pub struct OAuthLoginUrlResponse {
     pub state: String,
     /** Loopback URI the authorization code will land on. */
     pub redirect_uri: String,
-}
-
-/// Response of `POST /api/auth/codebuff/start`.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CodebuffLoginStart {
-    pub provider: String,
-    pub login_url: String,
-    pub fingerprint_id: String,
-    pub fingerprint_hash: String,
-    /// Epoch-ms per the real API; relayed verbatim by the server, which
-    /// accepts both numbers and numeric strings — so do we.
-    #[serde(deserialize_with = "deserialize_epoch_ms")]
-    pub expires_at: i64,
-}
-
-fn deserialize_epoch_ms<'de, D>(deserializer: D) -> Result<i64, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let value = serde_json::Value::deserialize(deserializer)?;
-    match value {
-        serde_json::Value::Number(n) => Ok(n.as_i64().unwrap_or(0)),
-        serde_json::Value::String(s) => s.parse::<i64>().map_err(serde::de::Error::custom),
-        _ => Err(serde::de::Error::custom("expiresAt must be epoch ms")),
-    }
-}
-
-/// Response of `GET /api/auth/codebuff/status?...`.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CodebuffLoginPoll {
-    pub completed: bool,
-    #[serde(default)]
-    pub email: Option<String>,
 }

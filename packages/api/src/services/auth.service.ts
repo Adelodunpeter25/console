@@ -25,24 +25,4 @@ export const authService = {
     const res = await getConsoleApiClient().post("/api/auth/login/callback", payload);
     return unwrapData(res.data, "handle auth callback");
   },
-
-  async startCodebuffLogin(): Promise<{
-    provider: string;
-    loginUrl: string;
-    fingerprintId: string;
-    fingerprintHash: string;
-    expiresAt: string;
-  }> {
-    const res = await getConsoleApiClient().post("/api/auth/codebuff/start");
-    return unwrapData(res.data, "start codebuff login");
-  },
-
-  async pollCodebuffStatus(params: {
-    fingerprintId: string;
-    fingerprintHash: string;
-    expiresAt: string;
-  }): Promise<{ completed: boolean; email?: string }> {
-    const res = await getConsoleApiClient().get("/api/auth/codebuff/status", { params });
-    return unwrapData(res.data, "poll codebuff login status");
-  },
 };

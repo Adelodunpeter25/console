@@ -5,7 +5,6 @@ import { useValue } from "@legendapp/state/react";
 import {
   auth$,
   loadAuthStatus,
-  loginCodebuff,
   loginWithBrowser,
   resetAuth,
   saveProjectId,
@@ -54,7 +53,6 @@ export function useAuth() {
     isLoggedIn,
     getLoginUrlFor: handleLogin,
     login: handleLogin,
-    loginCodebuff,
     projectIds,
     saveProjectId,
     savingProjectId,

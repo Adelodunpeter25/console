@@ -63,7 +63,6 @@ impl RenderOnce for AccountsPage {
                             match provider_id.as_str() {
                                 "gemini" => Some(&st.gemini),
                                 "antigravity" => Some(&st.antigravity),
-                                "codebuff" => st.codebuff.as_ref(),
                                 "codex" | "openai" => Some(&st.codex),
                                 _ => None,
                             }

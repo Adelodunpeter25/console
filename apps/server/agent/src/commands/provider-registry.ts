@@ -12,8 +12,6 @@ import {
   loadCredential,
   opencodeStreamFn,
   refreshIfNeeded,
-  codebuffStreamFn,
-  CODEBUFF_MODEL_SPECS,
   codexStreamFn,
   codexCredentialExists,
   loadCodexCredential,
@@ -63,15 +61,6 @@ export const DEFAULT_OPENCODE_MODELS: Model[] = OPENCODE_FREE_MODEL_IDS.map((id)
   contextWindow: 200_000,
 }));
 
-export const DEFAULT_CODEBUFF_MODELS: Model[] = CODEBUFF_MODEL_SPECS.map(
-  (spec) => ({
-    id: spec.id,
-    provider: "codebuff" as const,
-    contextWindow: spec.contextWindow,
-    ...(spec.multimodal ? { supportsImages: true } : {}),
-  }),
-);
-
 export const DEFAULT_CODEX_MODELS: Model[] = [
   "gpt-5.6-terra",
   "gpt-5.6-luna",
@@ -103,14 +92,6 @@ export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
     authMethod: "none",
     models: DEFAULT_OPENCODE_MODELS,
     getStreamFn: () => opencodeStreamFn,
-  },
-  codebuff: {
-    name: "codebuff",
-    displayName: "Codebuff (Freebuff)",
-    description: "Free-tier models served by codebuff.com (DeepSeek, MiMo, Kimi, MiniMax)",
-    authMethod: "device-code",
-    models: DEFAULT_CODEBUFF_MODELS,
-    getStreamFn: () => codebuffStreamFn,
   },
   codex: {
     name: "codex",
@@ -157,10 +138,6 @@ export async function fetchModelsForProvider(
 
     if (providerName === "opencode") {
       discovered = await fetchOpencodeFreeModels(signal);
-    } else if (providerName === "codebuff") {
-      // Codebuff is device-code auth with its own backend, not OAuth token
-      // discovery — its catalog ships statically (fallback below).
-      throw new Error("Codebuff models are served from the bundled catalog");
     } else if (providerName === "codex") {
       if (!(await codexCredentialExists())) throw new Error("Codex is not logged in");
       const cred = await refreshCodexIfNeeded(await loadCodexCredential());
@@ -213,8 +190,6 @@ export async function fetchModelsForProvider(
       ? DEFAULT_GEMINI_MODELS
       : providerName === "opencode"
         ? DEFAULT_OPENCODE_MODELS
-      : providerName === "codebuff"
-          ? DEFAULT_CODEBUFF_MODELS
           : providerName === "codex"
             ? DEFAULT_CODEX_MODELS
           : DEFAULT_ANTIGRAVITY_MODELS;

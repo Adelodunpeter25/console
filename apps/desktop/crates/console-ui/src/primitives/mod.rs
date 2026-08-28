@@ -83,7 +83,7 @@ pub fn provider_color(theme: &Theme, provider: &str) -> Hsla {
 pub fn provider_icon(provider: &str) -> &'static str {
     let provider = provider.to_ascii_lowercase();
     match provider.as_str() {
-        "antigravity" | "gemini" | "google" | "opencode" | "codebuff" | "codex" | "openai"
+        "antigravity" | "gemini" | "google" | "opencode" | "codex" | "openai"
         | "chatgpt" | "claude" | "anthropic" | "deepseek" | "grok" | "cursor" | "amp" | "pi" => {
             IconName::provider(&provider).path()
         }

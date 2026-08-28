@@ -3,7 +3,7 @@
  * `ProviderId` is the single source of truth for valid provider names.
  */
 
-export type ProviderId = "gemini" | "antigravity" | "opencode" | "codebuff" | "codex";
+export type ProviderId = "gemini" | "antigravity" | "opencode" | "codex";
 
 /** Providers that authenticate via Google OAuth (login-only providers). */
 export type OAuthProviderId = "gemini" | "antigravity" | "codex";

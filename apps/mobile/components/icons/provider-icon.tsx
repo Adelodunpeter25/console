@@ -8,7 +8,7 @@ interface ProviderIconProps {
 }
 
 /**
- * Renders a provider logo (antigravity, codebuff, gemini, openai, opencode,
+ * Renders a provider logo (antigravity, gemini, openai, opencode,
  * with `codex` aliased to openai). Returns null for unknown providers.
  */
 export const ProviderIcon = memo(function ProviderIcon({

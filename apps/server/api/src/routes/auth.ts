@@ -11,52 +11,6 @@ export const authRoutes = new Hono();
 const authService = new AuthService();
 
 /**
- * POST /api/auth/codebuff/start — Start the Codebuff device-code login flow.
- * Returns the login URL to open plus polling params.
- */
-authRoutes.post("/codebuff/start", async (c) => {
-  try {
-    const data = await authService.startCodebuffLogin();
-    return c.json({ success: true, data });
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    return c.json({ success: false, error: errorMsg }, 500);
-  }
-});
-
-/**
- * GET /api/auth/codebuff/status — Poll the Codebuff login flow.
- * Query params: fingerprintId, fingerprintHash, expiresAt.
- */
-authRoutes.get("/codebuff/status", async (c) => {
-  const fingerprintId = c.req.query("fingerprintId");
-  const fingerprintHash = c.req.query("fingerprintHash");
-  const expiresAt = c.req.query("expiresAt");
-
-  if (!fingerprintId || !fingerprintHash || !expiresAt) {
-    return c.json(
-      {
-        success: false,
-        error: "Missing fingerprintId, fingerprintHash, or expiresAt query params.",
-      },
-      400,
-    );
-  }
-
-  try {
-    const data = await authService.pollCodebuffLogin({
-      fingerprintId,
-      fingerprintHash,
-      expiresAt,
-    });
-    return c.json({ success: true, data });
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    return c.json({ success: false, error: errorMsg }, 500);
-  }
-});
-
-/**
  * GET /api/auth/status — Check provider login credentials status.
  */
 authRoutes.get("/status", async (c) => {

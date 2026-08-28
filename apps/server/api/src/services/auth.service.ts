@@ -13,10 +13,6 @@ import {
   setConfiguredProjectId,
 } from "@/providers/src/auth/provider-config.js";
 import {
-  hasCodebuffCredential,
-  loadCodebuffCredential,
-  pollCodebuffLogin,
-  startCodebuffLogin,
   codexCredentialExists,
   createCodexAuthorizationUrl,
   exchangeCodexCode,
@@ -49,7 +45,6 @@ export class AuthService {
   async getAuthStatus(): Promise<AuthStatusResponse> {
     const geminiCred = await tryLoadCredential("gemini");
     const antigravityCred = await tryLoadCredential("antigravity");
-    const codebuffCred = await loadCodebuffCredential();
     const codexCred = await (async () => {
       try {
         return await loadCodexCredential();
@@ -76,41 +71,11 @@ export class AuthService {
         projectId: antigravityCred?.projectId,
         configuredProjectId: antigravityConfigured,
       },
-      codebuff: {
-        loggedIn: Boolean(codebuffCred?.authToken),
-        email: codebuffCred?.email,
-      },
       codex: {
         loggedIn: Boolean(codexCred?.accessToken) || (await codexCredentialExists()),
         email: codexCred?.email,
       },
     };
-  }
-
-  /**
-   * Start the Codebuff device-code login flow. Returns the login URL the user
-   * must open plus the params needed to poll for completion.
-   */
-  async startCodebuffLogin() {
-    const login = await startCodebuffLogin();
-    return { provider: "codebuff", ...login };
-  }
-
-  /**
-   * Poll the Codebuff login status. Once the user completes the browser login
-   * the credential is stored server-side and loggedIn flips to true.
-   */
-  async pollCodebuffLogin(params: {
-    fingerprintId: string;
-    fingerprintHash: string;
-    expiresAt: string;
-  }) {
-    return pollCodebuffLogin(params);
-  }
-
-  /** True when a Codebuff credential (env var or file) is present. */
-  async hasCodebuffLogin(): Promise<boolean> {
-    return hasCodebuffCredential();
   }
 
   getLoginUrl(provider: OAuthProviderId): {

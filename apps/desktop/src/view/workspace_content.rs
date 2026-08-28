@@ -57,7 +57,10 @@ impl ConsoleDesktopApp {
                 line_count,
                 console_ui::CODE_LINE_HEIGHT,
             );
-            return console_ui::FileViewer::new(path.clone(), content, list_state).into_any_element();
+            let selection_state = self.viewer_selection_state(&format!("file:{}", path));
+            return console_ui::FileViewer::new(path.clone(), content, list_state)
+                .selection_state(selection_state)
+                .into_any_element();
         }
 
         // Diff tab: render full-page DiffViewer
@@ -73,7 +76,9 @@ impl ConsoleDesktopApp {
                 line_count,
                 console_ui::CODE_LINE_HEIGHT,
             );
+            let selection_state = self.viewer_selection_state(&format!("diff:{}", path));
             return console_ui::DiffViewer::new(path.clone(), diff_result, raw_diff, list_state)
+                .selection_state(selection_state)
                 .into_any_element();
         }
 

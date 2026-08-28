@@ -1,6 +1,5 @@
 //! Client for the server's `/api/auth/*` routes: provider login status,
-//! OAuth (URL + code exchange), Codebuff device-code login, and the Gemini
-//! Cloud project id setting.
+//! OAuth (URL + code exchange), and the Gemini Cloud project id setting.
 
 use crate::types::*;
 use crate::utils::HttpTransport;
@@ -107,73 +106,6 @@ impl AuthService {
             Err(anyhow!(
                 body.error
                     .unwrap_or_else(|| "OAuth callback failed".into())
-            ))
-        }
-    }
-
-    /// `POST /api/auth/codebuff/start` — device-code login: returns the URL to
-    /// open in a browser plus fingerprint params used to poll completion.
-    pub async fn codebuff_start(&self) -> Result<CodebuffLoginStart> {
-        let url = self.transport.url("/api/auth/codebuff/start").await;
-        let resp = self
-            .transport
-            .client()
-            .post(&url)
-            .headers(self.transport.build_headers().await)
-            .send()
-            .await
-            .context("Failed to start codebuff login")?;
-
-        let body: ApiResponse<CodebuffLoginStart> = resp
-            .json()
-            .await
-            .context("Failed to parse codebuff start response")?;
-        if body.success {
-            body.data.ok_or_else(|| anyhow!("Codebuff start response missing data"))
-        } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to start codebuff login".into())
-            ))
-        }
-    }
-
-    /// `GET /api/auth/codebuff/status` — poll whether the device-code login
-    /// was approved. Transient errors are returned; callers retry until their
-    /// own deadline.
-    pub async fn codebuff_poll(
-        &self,
-        fingerprint_id: &str,
-        fingerprint_hash: &str,
-        expires_at: &str,
-    ) -> Result<CodebuffLoginPoll> {
-        let base = self.transport.url("/api/auth/codebuff/status").await;
-        let url = format!(
-            "{}?fingerprintId={}&fingerprintHash={}&expiresAt={}",
-            base,
-            urlencoding::encode(fingerprint_id),
-            urlencoding::encode(fingerprint_hash),
-            urlencoding::encode(expires_at),
-        );
-        let resp = self
-            .transport
-            .client()
-            .get(&url)
-            .headers(self.transport.build_headers().await)
-            .send()
-            .await
-            .context("Failed to poll codebuff login")?;
-
-        let body: ApiResponse<CodebuffLoginPoll> = resp
-            .json()
-            .await
-            .context("Failed to parse codebuff poll response")?;
-        if body.success {
-            body.data.ok_or_else(|| anyhow!("Codebuff poll response missing data"))
-        } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to poll codebuff login".into())
             ))
         }
     }

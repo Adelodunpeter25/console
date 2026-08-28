@@ -7,7 +7,6 @@ export type { OAuthProviderId, ProviderId } from "@console/types";
 const INITIAL_STATUS: AuthStatusResponse = {
   gemini: { loggedIn: false },
   antigravity: { loggedIn: false },
-  codebuff: { loggedIn: false },
   codex: { loggedIn: false },
 };
 
@@ -70,45 +69,6 @@ export async function loginWithBrowser(provider: OAuthProviderId): Promise<void>
     await loadAuthStatus();
   } catch (e) {
     auth$.error.set(e instanceof Error ? e.message : "Login failed");
-    throw e;
-  } finally {
-    auth$.loggingIn.set(null);
-  }
-}
-
-/** Codebuff device-code login: opens browser, polls until approved. */
-export async function loginCodebuff(): Promise<void> {
-  batch(() => {
-    auth$.loggingIn.set("codebuff");
-    auth$.error.set(null);
-  });
-  try {
-    // Device-code flow: get a login URL + fingerprint params, open the
-    // system browser, then poll until the user approves or it expires.
-    const start = await authService.startCodebuffLogin();
-    await openAuthUrl(start.loginUrl);
-
-    const deadline = Number(start.expiresAt) * 1000;
-    while (Date.now() < deadline) {
-      await sleep(2000);
-      let completed = false;
-      try {
-        // Transient poll errors are retried until the deadline.
-        const poll = await authService.pollCodebuffStatus({
-          fingerprintId: start.fingerprintId,
-          fingerprintHash: start.fingerprintHash,
-          expiresAt: start.expiresAt,
-        });
-        completed = poll.completed;
-      } catch {}
-      if (completed) {
-        await loadAuthStatus();
-        return;
-      }
-    }
-    throw new Error("Codebuff login timed out.");
-  } catch (e) {
-    auth$.error.set(e instanceof Error ? e.message : "Codebuff login failed");
     throw e;
   } finally {
     auth$.loggingIn.set(null);
