@@ -119,6 +119,7 @@ impl ConsoleDesktopApp {
             .flex_1()
             .min_h_0()
             .w_full()
+            .bg(theme.chat_canvas)
             .flex()
             .flex_col()
             .overflow_hidden()

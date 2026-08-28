@@ -141,9 +141,9 @@ pub fn todo_card(
                             })
                             .child(app_icon(
                                 if collapsed {
-                                    IconName::ChevronDown
-                                } else {
                                     IconName::ChevronUp
+                                } else {
+                                    IconName::ChevronDown
                                 },
                                 12.0,
                                 theme.text_tertiary,
