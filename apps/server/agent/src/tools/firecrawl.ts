@@ -5,8 +5,7 @@
  * via FIRECRAWL_BASE_URL.
  */
 
-const FIRECRAWL_BASE_URL = process.env.FIRECRAWL_BASE_URL?.replace(/\/+$/, "") || "https://api.firecrawl.dev/v1";
-const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
+const DEFAULT_FIRECRAWL_BASE_URL = "https://api.firecrawl.dev/v1";
 
 const MAX_MARKDOWN_CHARS = 25_000;
 const TRUNCATE_NOTICE = "\n\n[...content truncated...]";
@@ -16,10 +15,15 @@ function truncateMarkdown(text: string): string {
   return text.slice(0, MAX_MARKDOWN_CHARS) + TRUNCATE_NOTICE;
 }
 
+function getBaseUrl(): string {
+  return process.env.FIRECRAWL_BASE_URL?.replace(/\/+$/, "") || DEFAULT_FIRECRAWL_BASE_URL;
+}
+
 function buildHeaders(): Record<string, string> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (FIRECRAWL_API_KEY) {
-    headers["Authorization"] = `Bearer ${FIRECRAWL_API_KEY}`;
+  const apiKey = process.env.FIRECRAWL_API_KEY;
+  if (apiKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`;
   }
   return headers;
 }
@@ -42,7 +46,7 @@ export async function firecrawlSearch(
   limit = 5,
   signal?: AbortSignal,
 ): Promise<FirecrawlSearchResponse> {
-  const response = await fetch(`${FIRECRAWL_BASE_URL}/search`, {
+  const response = await fetch(`${getBaseUrl()}/search`, {
     method: "POST",
     headers: buildHeaders(),
     body: JSON.stringify({
@@ -85,7 +89,7 @@ export async function firecrawlScrape(
   url: string,
   signal?: AbortSignal,
 ): Promise<FirecrawlScrapeResponse> {
-  const response = await fetch(`${FIRECRAWL_BASE_URL}/scrape`, {
+  const response = await fetch(`${getBaseUrl()}/scrape`, {
     method: "POST",
     headers: buildHeaders(),
     body: JSON.stringify({

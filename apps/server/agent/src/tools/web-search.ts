@@ -155,11 +155,7 @@ async function searchBrave(
 
 export const webSearchTool: AgentTool<typeof inputSchema> = {
   name: "webSearch",
-  description: `Search the web and return a list of relevant results with full markdown.
-Uses Firecrawl keyless search (no API key) for JS-rendered, clean markdown; falls back to DuckDuckGo Lite on rate limit / network error.
-Returns result titles, URLs, descriptions, and markdown for each hit.
-Use this to find up-to-date information, documentation, package details, or to research topics.
-DuckDuckGo fallback requires no API key. Brave Search requires BRAVE_SEARCH_API_KEY env var (free tier available).`,
+  description: `Search the web for up-to-date information.`,
   inputSchema,
   execute: async (args: Input, parentSignal?: AbortSignal): Promise<unknown> => {
     const controller = new AbortController();

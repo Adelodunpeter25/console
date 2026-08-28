@@ -58,16 +58,7 @@ function htmlToText(html: string): string {
 
 export const fetchTool: AgentTool<typeof inputSchema> = {
   name: "fetch",
-  description: `Fetch content from a URL via HTTP. Returns the response body as text.
-Supports GET, POST, PUT, PATCH, DELETE requests with custom headers and body.
-For GET web pages, uses Firecrawl keyless scrape (JS-rendered, clean markdown) with fallback to direct fetch + HTML strip.
-HTML pages are automatically converted to plain text/markdown for readability.
-JSON responses are pretty-printed. Binary content is summarised (not returned raw).
-Use this to:
-  - Read public documentation, README files, and API references
-  - Call JSON REST APIs
-  - Download plain-text content
-Do NOT use for authentication-required pages.`,
+  description: `Fetch content from a URL.`,
   inputSchema,
   execute: async (args: Input, parentSignal?: AbortSignal): Promise<unknown> => {
     const controller = new AbortController();
