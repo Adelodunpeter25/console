@@ -14,7 +14,7 @@ use gpui::{
     deferred, div, point, prelude::FluentBuilder, px,
 };
 
-use crate::primitives::{IconName, app_icon};
+use crate::primitives::{IconName, app_icon, file_type_icon};
 use crate::theme::Theme;
 
 actions!(
@@ -359,15 +359,11 @@ impl RenderOnce for AutocompleteView {
                     )
                     .into_any_element(),
                 AutocompleteItem::File(file) => row
-                    .child(app_icon(
-                        if file.is_dir {
-                            IconName::Folder
-                        } else {
-                            IconName::File
-                        },
-                        13.0,
-                        theme.text_tertiary,
-                    ))
+                    .child(if file.is_dir {
+                        app_icon(IconName::Folder, 13.0, theme.text_tertiary).into_any_element()
+                    } else {
+                        file_type_icon(&file.relative_path, 13.0).into_any_element()
+                    })
                     .child(
                         div()
                             .min_w(px(0.0))
