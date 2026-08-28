@@ -56,6 +56,8 @@ interface QueuedSubscriber {
   queue: BufferEntry[];
   draining: boolean;
   dead: boolean;
+  /** Resolves when the current drain loop finishes (or immediately if not draining). */
+  drainPromise: Promise<void>;
 }
 
 function isSyntheticFrame(event: AgentSessionEvent): boolean {
@@ -102,7 +104,7 @@ export class RunEventHub {
    * where an event could be missed or double-delivered.
    */
   subscribe(sub: RunStreamSubscriber, since?: number): void {
-    const qs: QueuedSubscriber = { sub, queue: [], draining: false, dead: false };
+    const qs: QueuedSubscriber = { sub, queue: [], draining: false, dead: false, drainPromise: Promise.resolve() };
 
     if (since !== undefined) {
       for (const item of this.buffer) {
@@ -133,9 +135,23 @@ export class RunEventHub {
     return this.buffer.filter((item) => item.seq > since);
   }
 
-  /** Resolves when the owning run settles; also stops the heartbeat timer. */
-  destroy(): void {
+  /**
+   * Flush all in-flight drain queues, then tear down.
+   *
+   * Must be awaited so the final "done"/"aborted" broadcast that ran just
+   * before destroy() is called has a chance to fully deliver to every
+   * subscriber before their queues are cleared and the settled promise resolves.
+   */
+  async destroy(): Promise<void> {
     clearInterval(this.heartbeatTimer);
+    // Collect the live drain promises before we mark anything dead so we wait
+    // for the exact set of drains that are currently in-flight.
+    const drainPromises = [...this.subs.values()]
+      .filter((qs) => !qs.dead && qs.draining)
+      .map((qs) => qs.drainPromise);
+    if (drainPromises.length > 0) {
+      await Promise.allSettled(drainPromises);
+    }
     for (const qs of this.subs.values()) qs.dead = true;
     this.subs.clear();
     this.resolveSettle();
@@ -177,20 +193,23 @@ export class RunEventHub {
     while (this.buffer.length > MAX_REPLAY_BUFFER) this.buffer.shift();
   }
 
-  private async drain(qs: QueuedSubscriber): Promise<void> {
-    if (qs.draining || qs.dead) return;
+  private drain(qs: QueuedSubscriber): Promise<void> {
+    if (qs.draining || qs.dead) return qs.drainPromise;
     qs.draining = true;
-    try {
-      while (qs.queue.length > 0 && !qs.dead) {
-        const item = qs.queue.shift()!;
-        await qs.sub.deliver(item.seq, item.event);
+    qs.drainPromise = (async () => {
+      try {
+        while (qs.queue.length > 0 && !qs.dead) {
+          const item = qs.queue.shift()!;
+          await qs.sub.deliver(item.seq, item.event);
+        }
+      } catch {
+        // Socket write failed — detach so later broadcasts skip this surface.
+        this.detach(qs);
+      } finally {
+        qs.draining = false;
       }
-    } catch {
-      // Socket write failed — detach so later broadcasts skip this surface.
-      this.detach(qs);
-    } finally {
-      qs.draining = false;
-    }
+    })();
+    return qs.drainPromise;
   }
 
   private detach(qs: QueuedSubscriber): void {

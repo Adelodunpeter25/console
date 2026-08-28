@@ -92,7 +92,7 @@ export class RunService {
       await this.runAgentStreamInternal(sessionId, dto, hub, abortController);
     } finally {
       RunService.activeRuns.delete(sessionId);
-      hub.destroy();
+      await hub.destroy();
       this.hubs.delete(sessionId);
     }
   }

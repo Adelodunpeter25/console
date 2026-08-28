@@ -52,12 +52,10 @@ async function handleSearch(c: Context) {
   const session = sessionId ? sessionStorage.loadSession(sessionId) : null;
   const root = c.req.query("root") ?? session?.header.cwd ?? process.cwd();
 
-  if (!query) {
-    return c.json({ success: true, data: { root, query, items: [] } });
-  }
-
   try {
-    const items = await searchFiles(root, query);
+    // When query is empty (user just typed "@") fall back to a broad scan so
+    // the desktop autocomplete can show something instead of a blank popup.
+    const items = await searchFiles(root, query || ".");
     return c.json({ success: true, data: { root, query, items } });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
