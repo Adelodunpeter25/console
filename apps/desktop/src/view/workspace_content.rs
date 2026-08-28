@@ -151,25 +151,34 @@ impl ConsoleDesktopApp {
         .when_some(agent_notice, |el, notice| {
             el.child(notice_banner(notice, theme))
         })
-        .when(!todo_items.is_empty(), |el| {
-            let entity = entity.clone();
-            let toggle_pane_id = pane_id.clone();
-            let collapsed = self.is_todos_collapsed_for_pane(&pane_id);
-            el.child(todo_card(
-                todo_items.clone(),
-                collapsed,
-                Some(Rc::new(move |_window, cx| {
-                    if let Some(app) = entity.upgrade() {
-                        let pane_id = toggle_pane_id.clone();
-                        app.update(cx, |this, cx| {
-                            this.toggle_todos_collapsed_for_pane(&pane_id);
-                            cx.notify();
-                        });
-                    }
-                })),
-                theme,
-            ))
-        })
+        .when(
+            !todo_items.is_empty()
+                && todo_items.iter().any(|i| {
+                    !matches!(
+                        i.status.to_ascii_lowercase().as_str(),
+                        "done" | "completed" | "complete"
+                    )
+                }),
+            |el| {
+                let entity = entity.clone();
+                let toggle_pane_id = pane_id.clone();
+                let collapsed = self.is_todos_collapsed_for_pane(&pane_id);
+                el.child(todo_card(
+                    todo_items.clone(),
+                    collapsed,
+                    Some(Rc::new(move |_window, cx| {
+                        if let Some(app) = entity.upgrade() {
+                            let pane_id = toggle_pane_id.clone();
+                            app.update(cx, |this, cx| {
+                                this.toggle_todos_collapsed_for_pane(&pane_id);
+                                cx.notify();
+                            });
+                        }
+                    })),
+                    theme,
+                ))
+            },
+        )
         .when_some(self.pending_question_for_pane(&pane_id), |el, question| {
             let entity_for_answer = entity.clone();
             let question_input = self.question_input_for_pane(&pane_id);

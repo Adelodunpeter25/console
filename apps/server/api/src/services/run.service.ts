@@ -280,6 +280,13 @@ export class RunService {
         throw err;
       }
     } finally {
+      const activeTodos = this.todoLists.get(sessionId) ?? this.sessionStorage.getSessionTodos(sessionId);
+      if (activeTodos.length > 0 && activeTodos.every((item) => item.status === "completed")) {
+        this.sessionStorage.clearSessionTodos(sessionId);
+        this.todoLists.delete(sessionId);
+        hub.broadcast({ type: "todoUpdate", items: [], action: "updated" });
+      }
+
       this.sessionStorage.repairSession(sessionId);
       hub.broadcast(
         abortController.signal.aborted
