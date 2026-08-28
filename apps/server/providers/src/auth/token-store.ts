@@ -62,7 +62,9 @@ export function parseCredential(raw: GeminiOAuthCredential): ParsedCredential {
 const credentialPaths = new Map<CredentialType, string | null>();
 
 export async function loadCredential(type: CredentialType = "gemini"): Promise<ParsedCredential> {
-  const candidates = credentialCandidates(type);
+  const cachedPath = credentialPaths.get(type);
+  const rawCandidates = credentialCandidates(type);
+  const candidates = cachedPath ? [cachedPath, ...rawCandidates.filter((p) => p !== cachedPath)] : rawCandidates;
 
   for (const filePath of candidates) {
     let content: string;

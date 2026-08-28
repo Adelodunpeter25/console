@@ -15,6 +15,8 @@ import {
 import type { UsageFetchParams } from "@console/types";
 
 const CACHE_TTL_MS = 60_000;
+/** Hard upstream cap per provider — prevents slow APIs from blocking the entire /api/usage response. */
+const UPSTREAM_TIMEOUT_MS = 5_000;
 
 interface CacheEntry {
   report: UsageReport | null;
@@ -23,6 +25,8 @@ interface CacheEntry {
 
 export class UsageService {
   private cache = new Map<ProviderId, CacheEntry>();
+  /** In-flight deduplication: prevents multiple concurrent requests for the same provider. */
+  private inflight = new Map<ProviderId, Promise<UsageReport | null>>();
 
   private isCacheValid(entry: CacheEntry | undefined): boolean {
     if (!entry) return false;
@@ -52,6 +56,18 @@ export class UsageService {
       return cached!.report;
     }
 
+    // Return in-flight promise directly if a request for this provider is already underway.
+    const existing = this.inflight.get(provider);
+    if (existing) return existing;
+
+    const promise = this._fetchUsage(provider, signal).finally(() => {
+      this.inflight.delete(provider);
+    });
+    this.inflight.set(provider, promise);
+    return promise;
+  }
+
+  private async _fetchUsage(provider: ProviderId, signal?: AbortSignal): Promise<UsageReport | null> {
     const usageProvider = this.getUsageProvider(provider);
     if (!usageProvider) return null;
 
@@ -69,8 +85,8 @@ export class UsageService {
           email: cred.email,
         };
       } else {
-        const raw = await loadCredential(provider);
-        const cred = await refreshIfNeeded(raw, provider, signal);
+        const raw = await loadCredential(provider as import("@console/types").OAuthProviderId);
+        const cred = await refreshIfNeeded(raw, provider as import("@console/types").OAuthProviderId, signal);
         credential = {
           type: "oauth",
           accessToken: cred.accessToken,
@@ -81,9 +97,8 @@ export class UsageService {
       }
     } catch {
       // Not logged in or credential missing — cache null briefly to avoid tight loop
-      const report = null;
-      this.cache.set(provider, { report, fetchedAt: Date.now() });
-      return report;
+      this.cache.set(provider, { report: null, fetchedAt: Date.now() });
+      return null;
     }
 
     if (!credential) {
@@ -91,10 +106,18 @@ export class UsageService {
       return null;
     }
 
+    // Compose the caller signal with a per-provider hard timeout so a slow upstream
+    // (e.g. Gemini quota API taking 4s) never stalls the whole /api/usage response.
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), UPSTREAM_TIMEOUT_MS);
+    const composedSignal = signal
+      ? AbortSignal.any([signal, timeoutController.signal])
+      : timeoutController.signal;
+
     const params: UsageFetchParams = {
       provider,
       credential,
-      signal,
+      signal: composedSignal,
     };
 
     try {
@@ -107,12 +130,12 @@ export class UsageService {
       });
 
       this.cache.set(provider, { report, fetchedAt: Date.now() });
-      // TTL for null reports is shorter to retry auth failures sooner
       return report;
     } catch (err) {
       console.warn(`[usage:${provider}] fetch failed`, err);
-      // Don't cache failures long — let next request retry
       return null;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 

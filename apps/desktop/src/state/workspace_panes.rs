@@ -341,12 +341,12 @@ impl ConsoleDesktopApp {
     pub(crate) fn is_todos_collapsed_for_pane(&self, pane_id: &str) -> bool {
         self.active_session_for_pane(pane_id)
             .and_then(|sid| self.todos_collapsed.get(&sid).copied())
-            .unwrap_or(false)
+            .unwrap_or(true)
     }
 
     pub(crate) fn toggle_todos_collapsed_for_pane(&mut self, pane_id: &str) {
         if let Some(sid) = self.active_session_for_pane(pane_id) {
-            let current = self.todos_collapsed.get(&sid).copied().unwrap_or(false);
+            let current = self.todos_collapsed.get(&sid).copied().unwrap_or(true);
             self.todos_collapsed.insert(sid, !current);
         }
     }

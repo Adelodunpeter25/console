@@ -198,9 +198,25 @@ export const googleGeminiCliUsageProvider: UsageProvider = {
 
     const baseUrl = (params.baseUrl?.trim() || GEMINI_BASE_URL).replace(/\/$/, "");
 
-    const loadResponse = await loadCodeAssist(params, ctx, accessToken, baseUrl, credential.projectId);
-    const projectId = credential.projectId ?? getProjectId(loadResponse);
-    const quotaResponse = await fetchQuota(params, ctx, accessToken, baseUrl, projectId);
+    let loadResponse: LoadCodeAssistResponse | undefined;
+    let quotaResponse: RetrieveUserQuotaResponse | undefined;
+    let projectId = credential.projectId;
+
+    if (projectId) {
+      // Fast path: projectId is already known from OAuth credentials. Run both calls concurrently!
+      const [loadRes, quotaRes] = await Promise.all([
+        loadCodeAssist(params, ctx, accessToken, baseUrl, projectId).catch(() => undefined),
+        fetchQuota(params, ctx, accessToken, baseUrl, projectId).catch(() => undefined),
+      ]);
+      loadResponse = loadRes;
+      quotaResponse = quotaRes;
+    } else {
+      // Fallback: discover projectId from loadCodeAssist first
+      loadResponse = await loadCodeAssist(params, ctx, accessToken, baseUrl, undefined);
+      projectId = getProjectId(loadResponse);
+      quotaResponse = await fetchQuota(params, ctx, accessToken, baseUrl, projectId);
+    }
+
     if (!quotaResponse) {
       return null;
     }
