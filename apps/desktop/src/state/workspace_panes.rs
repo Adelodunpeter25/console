@@ -338,6 +338,19 @@ impl ConsoleDesktopApp {
             .unwrap_or_default()
     }
 
+    pub(crate) fn is_todos_collapsed_for_pane(&self, pane_id: &str) -> bool {
+        self.active_session_for_pane(pane_id)
+            .and_then(|sid| self.todos_collapsed.get(&sid).copied())
+            .unwrap_or(false)
+    }
+
+    pub(crate) fn toggle_todos_collapsed_for_pane(&mut self, pane_id: &str) {
+        if let Some(sid) = self.active_session_for_pane(pane_id) {
+            let current = self.todos_collapsed.get(&sid).copied().unwrap_or(false);
+            self.todos_collapsed.insert(sid, !current);
+        }
+    }
+
     pub(crate) fn set_todo_items_for_session(&mut self, session_id: &str, items: Vec<TodoItem>) {
         if items.is_empty() {
             self.todo_items.remove(session_id);

@@ -113,6 +113,7 @@ pub struct ConsoleDesktopApp {
     pub pending_questions: std::collections::HashMap<String, AskQuestionRequest>,
     pub question_selected: std::collections::HashMap<String, std::collections::HashSet<String>>,
     pub todo_items: std::collections::HashMap<String, Vec<TodoItem>>,
+    pub todos_collapsed: std::collections::HashMap<String, bool>,
     pub agent_notices: std::collections::HashMap<String, String>,
     /// App-level error banner (not tied to any chat); shown in every pane.
     pub error_message: Option<super::errors::BannerError>,
@@ -453,6 +454,7 @@ impl ConsoleDesktopApp {
             pending_questions: std::collections::HashMap::new(),
             question_selected: std::collections::HashMap::new(),
             todo_items: std::collections::HashMap::new(),
+            todos_collapsed: std::collections::HashMap::new(),
             agent_notices: std::collections::HashMap::new(),
             error_message: None,
             session_errors: std::collections::HashMap::new(),
