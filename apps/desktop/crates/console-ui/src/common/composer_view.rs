@@ -464,9 +464,6 @@ impl RenderOnce for ComposerView {
                                     .gap(px(4.0))
                                     .text_size(px(11.5))
                                     .line_height(px(14.0))
-                                    .child(model_control)
-                                    .child(approval_control)
-                                    .child(div().flex_1())
                                     .child(
                                         div()
                                             .id("btn-attach")
@@ -478,11 +475,14 @@ impl RenderOnce for ComposerView {
                                                 (on_pick)(window, cx);
                                             })
                                             .child(app_icon(
-                                                IconName::Paperclip,
+                                                IconName::Plus,
                                                 13.0,
                                                 theme.text_tertiary,
                                             )),
                                     )
+                                    .child(model_control)
+                                    .child(approval_control)
+                                    .child(div().flex_1())
                                     .child(match run_state {
                                         ComposerRunState::Preparing => div()
                                             .id("btn-composer-preparing")
