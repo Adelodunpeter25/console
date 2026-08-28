@@ -22,6 +22,7 @@ interface ComposerProps {
   running?: boolean;
   isAborting?: boolean;
   projectLocked?: boolean;
+  topBanner?: React.ReactNode;
 }
 
 export function Composer({
@@ -32,6 +33,7 @@ export function Composer({
   running,
   isAborting,
   projectLocked,
+  topBanner,
 }: ComposerProps) {
   const insets = useSafeAreaInsets();
   const keyboardVisible = useKeyboardState((s) => s.isVisible);
@@ -102,6 +104,8 @@ export function Composer({
     <>
       <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
         <View className="px-2.5 pt-2 bg-screen" style={{ paddingBottom }}>
+          {topBanner}
+
           <ComposerAutocomplete
             value={value}
             selectionStart={selection.start}

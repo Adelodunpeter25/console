@@ -16,7 +16,7 @@ export function TodoBanner({
   onPress,
 }: TodoBannerProps) {
   return (
-    <View className="px-4 pb-2">
+    <View className="pb-2.5 px-0.5">
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="View task list"

@@ -160,19 +160,19 @@ export function ChatScreen() {
         hasInteraction={hasPendingInteraction}
       />
 
-      {/* Floating Task Checklist Banner when active tasks exist */}
-      {hasActiveTodos ? (
-        <TodoBanner
-          completedCount={completedCount}
-          totalCount={totalCount}
-          nextTask={nextPendingTodo?.content}
-          onPress={openSheet}
-        />
-      ) : null}
-
       {/* Footer interaction panel or composer */}
       {hasPendingInteraction ? (
-        <InteractionPanel sessionId={selectedSessionId} />
+        <>
+          {hasActiveTodos ? (
+            <TodoBanner
+              completedCount={completedCount}
+              totalCount={totalCount}
+              nextTask={nextPendingTodo?.content}
+              onPress={openSheet}
+            />
+          ) : null}
+          <InteractionPanel sessionId={selectedSessionId} />
+        </>
       ) : (
         <Composer
           value={stream.inputVal}
@@ -185,6 +185,16 @@ export function ChatScreen() {
           onStop={handleStop}
           running={stream.running}
           projectLocked={stream.messages.length > 0}
+          topBanner={
+            hasActiveTodos ? (
+              <TodoBanner
+                completedCount={completedCount}
+                totalCount={totalCount}
+                nextTask={nextPendingTodo?.content}
+                onPress={openSheet}
+              />
+            ) : null
+          }
         />
       )}
 
