@@ -1,5 +1,7 @@
 # Devin Provider Implementation Specification
 
+# Before implementing i need you to review this file  /Users/adelodunpeter/Developer/Projects/oh-my-pi/packages/catalog/src/discovery/devin-proto.ts
+
 ## Overview
 
 This specification outlines the complete implementation of Devin (Codeium/Windsurf) as a provider in Console. Devin uses PKCE OAuth authentication and the Connect streaming protocol with protobuf encoding, as implemented in the oh-my-pi project.
