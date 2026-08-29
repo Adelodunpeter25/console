@@ -120,7 +120,7 @@ impl RenderOnce for WorkspaceTabBar {
                             // Tab Icon
                             .child(match &tab {
                                 console_core::WorkspaceTabConfig::Chat { .. } => app_icon(
-                                    IconName::Bot,
+                                    IconName::ChatRoundLine,
                                     11.0,
                                     if is_active {
                                         theme.text
