@@ -24,11 +24,9 @@ pub struct QuickOpenPalette {
     /// Confirmed file callback: receives the absolute path.
     on_open_file: Option<Rc<dyn Fn(String, &mut Window, &mut App)>>,
     /// Monotonic token so a stale in-flight search never overwrites a newer
-    /// one, and the debounce timer is always anchored to the latest query.
+    /// one. Checked on the wrapper before applying results — the modal's own
+    /// generation token is not used here (it stayed at 0 and dropped every hit).
     search_generation: u64,
-    /// The generation the modal last applied, to keep the query callback
-    /// from re-firing the same search on every render.
-    applied_generation: u64,
 }
 
 impl QuickOpenPalette {
@@ -44,7 +42,6 @@ impl QuickOpenPalette {
             root: None,
             on_open_file: None,
             search_generation: 0,
-            applied_generation: 0,
         }
     }
 
@@ -63,11 +60,12 @@ impl QuickOpenPalette {
         // Reset the debounce tokens so every open (even with an unchanged
         // query, e.g. reopening with an empty field) fires a fresh search.
         self.search_generation = 0;
-        self.applied_generation = 0;
         let this = cx.entity().downgrade();
         self.modal.update(cx, |modal, cx| {
-            modal.reset_search_generation(cx);
             modal.set_placeholder("Search files…", cx);
+            // Server-side search already answers the query; local filtering
+            // would hide rows whose labels don't substring-match the query.
+            modal.set_filterable(false, cx);
             modal.set_query_handler(
                 {
                     let this = this.clone();
@@ -97,17 +95,13 @@ impl QuickOpenPalette {
     fn schedule_search(&mut self, query: &str, cx: &mut Context<Self>) {
         self.search_generation += 1;
         let generation = self.search_generation;
-        if generation == self.applied_generation {
-            return;
-        }
-        self.applied_generation = generation;
         let modal = self.modal.clone();
         let client = self.client.clone();
         let root = self.root.clone();
         let query = query.to_string();
         let on_open_file = self.on_open_file.clone();
 
-        cx.spawn(async move |_, cx| {
+        cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(SEARCH_DEBOUNCE_MS))
                 .await;
@@ -116,12 +110,15 @@ impl QuickOpenPalette {
                 None => return,
             };
             let Ok(items) = items else { return };
-            cx.update(|cx| {
-                let modal = modal.clone();
-                modal.update(cx, |m, cx| {
+            // Apply on the wrapper so we can drop stale generations without
+            // relying on the modal's unused search_generation counter.
+            let _ = this.update(cx, |this, cx| {
+                if generation != this.search_generation {
+                    return;
+                }
+                this.modal.update(cx, |m, cx| {
                     if m.is_open() {
-                        m.set_entries_with_generation(
-                            generation,
+                        m.set_entries(
                             entries_from_results(items.items, &modal, &on_open_file),
                             cx,
                         );

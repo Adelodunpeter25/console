@@ -52,13 +52,11 @@ fn main() {
 
         cx.open_window(options, |window, cx| {
             let app_view = cx.new(|cx| ConsoleDesktopApp::new(window, cx));
-            // Global shortcut handlers (⌘W/⌘N/⌘K). Must be registered on
-            // the App, not the root element: element-level `.on_action` only
+            // Global shortcut handlers (⌘W/⌘N/⌘⇧O/⌘⇧P/⌘K/…). Must be registered
+            // on the App, not the root element: element-level `.on_action` only
             // sees actions along the focus path, which is empty until
-            // something is focused.
+            // something is focused. Menu items dispatch the same actions.
             keybindings::init_handlers(app_view.clone(), window.window_handle(), cx);
-            // Register window-specific handlers (⌘⇧O/⌘⇧P) before setting up the menu
-            keybindings::init_window_handlers(app_view.clone(), window.window_handle(), cx);
             // Initialize app menu after all handlers are registered
             app_menu::init(cx);
             // Root hosts overlay surfaces (palette, dialogs, popovers) above the app view.

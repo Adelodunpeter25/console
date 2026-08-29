@@ -2,10 +2,9 @@
 //!
 //! Every window-wide shortcut lives here: the actions are defined in this one
 //! module, their keystrokes are bound once in [`init`], and their handlers are
-//! registered once per window in [`init_handlers`] and [`init_window_handlers`].
-//! To add a shortcut: declare an action below, bind a key in [`init`], write a
-//! method on `ConsoleDesktopApp`, and register it in the appropriate handler
-//! function.
+//! registered once per window in [`init_handlers`]. To add a shortcut: declare
+//! an action below, bind a key in [`init`], write a method on
+//! `ConsoleDesktopApp`, and register it in [`init_handlers`].
 //!
 //! Bindings carry no key context on purpose, so they fire anywhere in the
 //! window that a deeper context (composer, menus, palette) has not claimed
@@ -106,30 +105,8 @@ pub fn init_handlers(app: Entity<ConsoleDesktopApp>, window: AnyWindowHandle, cx
             });
         }
     });
-    cx.on_action({
-        let app = app.clone();
-        move |_: &FocusComposer, cx| {
-            let app = app.clone();
-            cx.defer(move |cx| {
-                window
-                    .update(cx, |_, window, cx| {
-                        app.update(cx, |this, cx| this.focus_composer(window, cx));
-                    })
-                    .ok();
-            });
-        }
-    });
-    cx.on_action({
-        let app = app.clone();
-        move |_: &ToggleRightSidebar, cx| {
-            app.update(cx, |this, cx| this.toggle_right_sidebar(cx));
-        }
-    });
-}
-
-/// Register handlers for actions that require the window but can be deferred.
-/// These are registered after the app entity is created but before the menu is set.
-pub fn init_window_handlers(app: Entity<ConsoleDesktopApp>, window: AnyWindowHandle, cx: &mut App) {
+    // Same pattern as ⌘K: open the project browser / quick-open palettes.
+    // These also power the File menu items (Add Project / Quick Open File).
     cx.on_action({
         let app = app.clone();
         move |_: &AddProject, cx| {
@@ -154,6 +131,25 @@ pub fn init_window_handlers(app: Entity<ConsoleDesktopApp>, window: AnyWindowHan
                     })
                     .ok();
             });
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &FocusComposer, cx| {
+            let app = app.clone();
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.focus_composer(window, cx));
+                    })
+                    .ok();
+            });
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &ToggleRightSidebar, cx| {
+            app.update(cx, |this, cx| this.toggle_right_sidebar(cx));
         }
     });
 }
