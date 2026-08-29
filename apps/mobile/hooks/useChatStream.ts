@@ -16,7 +16,8 @@ import {
   attachServerRun,
 } from "@/stores/useChatStore";
 import { getController } from "@/stores/chat/run-stream-controller";
-import { app$ } from "@/stores/useAppStore";
+import { app$, setSelectedProjectId } from "@/stores/useAppStore";
+import { project$ } from "@/stores/useProjectStore";
 import { useValue } from "@legendapp/state/react";
 
 /**
@@ -107,6 +108,16 @@ export function useChatStream() {
           sessionCwd: nextCwd,
           approvalMode: nextApproval,
         });
+        
+        // Also update selectedProjectId if the cwd changed and matches a known project
+        // This ensures file browser and terminal pick up the new directory
+        if (nextCwd && nextCwd !== current.sessionCwd) {
+          const { projects } = project$.peek();
+          const matchingProject = projects.find((p) => p.path === nextCwd);
+          if (matchingProject && matchingProject.id !== app$.selectedProjectId.peek()) {
+            setSelectedProjectId(matchingProject.id);
+          }
+        }
       }
     }
   }, [selectedSessionId, messagesFingerprint, latestHeader, loadSessionMessages, allMessages]);
