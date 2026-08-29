@@ -41,8 +41,12 @@ pub struct PaletteEntry {
     pub label: SharedString,
     pub icon: Option<PaletteIcon>,
     /// When true the modal stays open after this entry is confirmed (used for
-    /// navigation entries such as drilling into a directory).
+    /// pure navigation rows such as ".." — Enter drills without selecting).
     pub keep_open: bool,
+    /// Optional path shown as a trailing chevron. Clicking the chevron drills
+    /// into that path (via the browse callback) without confirming the row —
+    /// so Enter can mean "use this folder" while the chevron means "open it".
+    pub drill_path: Option<SharedString>,
     #[allow(clippy::type_complexity)]
     pub handler: Rc<dyn Fn(&mut Window, &mut App)>,
 }
@@ -58,6 +62,7 @@ impl PaletteEntry {
             label: label.into(),
             icon: None,
             keep_open: false,
+            drill_path: None,
             handler: Rc::new(handler),
         }
     }
@@ -75,29 +80,42 @@ impl PaletteEntry {
     }
 
     /// Keep the palette open after this entry is confirmed. Navigation rows
-    /// (folders, …) use this; actions that finish the flow leave it `false`.
+    /// ("..", …) use this; actions that finish the flow leave it `false`.
     pub fn keep_open(mut self, keep_open: bool) -> Self {
         self.keep_open = keep_open;
         self
     }
+
+    /// Show a trailing chevron that drills into `path` without confirming.
+    /// Used by folder rows so Enter = select, chevron/▶ = open.
+    pub fn drill_into(mut self, path: impl Into<SharedString>) -> Self {
+        self.drill_path = Some(path.into());
+        self
+    }
 }
 
-/// Build the full row content (icon + label).
+/// Build the full row content (icon + label [+ optional drill chevron]).
 ///
 /// gpui-component's `CommandItem::child()` *replaces* the default icon+label
 /// row, so callers must render both. Using `.icon()` alone only accepts the
 /// library's monochrome `Icon` type — file-type SVGs need this path.
-fn render_entry_row(entry: &PaletteEntry, cx: &App) -> AnyElement {
+fn render_entry_row(
+    entry: &PaletteEntry,
+    palette: gpui::WeakEntity<CommandPaletteModal>,
+    cx: &App,
+) -> AnyElement {
     let theme = Theme::current(cx);
     let icon_el = match &entry.icon {
-        Some(PaletteIcon::App(name)) => app_icon(*name, 15.0, theme.text_secondary).into_any_element(),
+        Some(PaletteIcon::App(name)) => {
+            app_icon(*name, 15.0, theme.text_secondary).into_any_element()
+        }
         Some(PaletteIcon::FileType(path)) => {
             file_type_icon(path.as_ref(), 15.0).into_any_element()
         }
         None => div().size(px(15.0)).into_any_element(),
     };
 
-    div()
+    let mut row = div()
         .flex()
         .flex_1()
         .items_center()
@@ -120,8 +138,43 @@ fn render_entry_row(entry: &PaletteEntry, cx: &App) -> AnyElement {
                 .text_size(px(13.0))
                 .text_color(theme.text)
                 .child(entry.label.clone()),
-        )
-        .into_any_element()
+        );
+
+    if let Some(drill_path) = entry.drill_path.clone() {
+        let path_for_click = drill_path.clone();
+        row = row.child(
+            div()
+                .id(format!("palette-drill-{}", drill_path.as_ref()))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .size(px(24.0))
+                .rounded(px(6.0))
+                .cursor_pointer()
+                .hover(|s| s.bg(theme.raised))
+                .on_mouse_down(gpui::MouseButton::Left, {
+                    let palette = palette.clone();
+                    move |_, window, cx| {
+                        // Don't let the row's confirm handler fire.
+                        cx.stop_propagation();
+                        if let Some(palette) = palette.upgrade() {
+                            let callback = palette.read(cx).browse_callback.clone();
+                            if let Some(callback) = callback {
+                                callback(path_for_click.as_ref(), window, cx);
+                            }
+                        }
+                    }
+                })
+                .child(app_icon(
+                    IconName::ChevronRight,
+                    14.0,
+                    theme.text_tertiary,
+                )),
+        );
+    }
+
+    row.into_any_element()
 }
 
 /// The shared command palette modal shell.
@@ -266,11 +319,14 @@ impl Render for CommandPaletteModal {
             .max_h(px(360.0))
             .items(entries.iter().map(|entry| {
                 let entry = entry.clone();
+                let palette_handle = palette_handle.clone();
                 // Keep label for local filtering / accessibility, but draw the
                 // full icon+label row ourselves — `.child()` replaces default content.
                 CommandItem::new()
                     .label(entry.label.clone())
-                    .child(move |_window, cx| render_entry_row(&entry, cx))
+                    .child(move |_window, cx| {
+                        render_entry_row(&entry, palette_handle.clone(), cx)
+                    })
             }))
             .placeholder(self.placeholder.clone())
             // Escape with a non-empty query clears it; once the query is

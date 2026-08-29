@@ -6,10 +6,34 @@
 use std::rc::Rc;
 
 use console_core::CreateSessionDto;
-use console_ui::PaletteEntry;
-use gpui::{Context, Focusable as _, Window};
+use console_ui::{IconName, PaletteEntry};
+use gpui::{Context, Focusable as _, WeakEntity, Window};
 
 use super::ConsoleDesktopApp;
+
+/// Static ⌘K entries shared by toggle and open paths.
+fn command_palette_entries(entity: WeakEntity<ConsoleDesktopApp>) -> Vec<PaletteEntry> {
+    vec![
+        PaletteEntry::new("new-chat", "New Chat", {
+            let entity = entity.clone();
+            move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.create_new_chat(cx));
+                }
+            }
+        })
+        .icon(IconName::ChatRoundLine),
+        PaletteEntry::new("new-terminal", "New Terminal", {
+            let entity = entity.clone();
+            move |window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.open_terminal_tab(window, cx));
+                }
+            }
+        })
+        .icon(IconName::Terminal),
+    ]
+}
 
 impl ConsoleDesktopApp {
     /// Create a chat session for the active pane and open it as its tab.
@@ -156,27 +180,7 @@ impl ConsoleDesktopApp {
     pub fn toggle_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let entity = cx.entity().downgrade();
         self.command_palette.update(cx, |palette, cx| {
-            palette.set_entries(
-                vec![
-                    PaletteEntry::new("new-chat", "New Chat", {
-                        let entity = entity.clone();
-                        move |_window, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| this.create_new_chat(cx));
-                            }
-                        }
-                    }),
-                    PaletteEntry::new("new-terminal", "New Terminal", {
-                        let entity = entity.clone();
-                        move |window, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| this.open_terminal_tab(window, cx));
-                            }
-                        }
-                    }),
-                ],
-                cx,
-            );
+            palette.set_entries(command_palette_entries(entity), cx);
             palette.toggle(window, cx);
         });
         cx.notify();
@@ -217,27 +221,7 @@ impl ConsoleDesktopApp {
         }
         let entity = cx.entity().downgrade();
         self.command_palette.update(cx, |palette, cx| {
-            palette.set_entries(
-                vec![
-                    PaletteEntry::new("new-chat", "New Chat", {
-                        let entity = entity.clone();
-                        move |_window, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| this.create_new_chat(cx));
-                            }
-                        }
-                    }),
-                    PaletteEntry::new("new-terminal", "New Terminal", {
-                        let entity = entity.clone();
-                        move |window, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| this.open_terminal_tab(window, cx));
-                            }
-                        }
-                    }),
-                ],
-                cx,
-            );
+            palette.set_entries(command_palette_entries(entity), cx);
             palette.show(window, cx);
         });
         cx.notify();

@@ -1,14 +1,15 @@
-//! ⌘⇧O project browser palette, built on the central [`crate::CommandPaletteModal`].
+//! ⌘O project browser palette, built on the central [`crate::CommandPaletteModal`].
 //!
 //! Lists the remote backend's filesystem (starting at the user's home),
-//! lets the user drill into folders, and confirms the highlighted folder as a
-//! tracked project — the same flow a native folder picker would provide, but
-//! against the host the server runs on.
+//! lets the user drill into folders, and confirms a folder as a tracked
+//! project — the same flow a native folder picker would provide, but against
+//! the host the server runs on.
 //!
 //! Interaction:
-//! - **Enter / click on a folder** → open that folder (drill in)
-//! - **Enter / click on "Use this folder"** → register `current_path` as a project
+//! - **Enter / click on a folder** → use that folder as the project
+//! - **▶ chevron on a folder** → drill into that folder
 //! - **Enter / click on ".."** → go to the parent directory
+//! - **Enter / click on "Use this folder"** → register `current_path` as a project
 //! - Type to filter the listing locally
 
 use std::rc::Rc;
@@ -161,10 +162,30 @@ fn short_path(path: &str) -> String {
     path.to_string()
 }
 
+/// Build a row that confirms `path` as the project and closes the palette.
+fn select_folder_entry(
+    path: String,
+    label: String,
+    icon: IconName,
+    modal: &Entity<CommandPaletteModal>,
+    on_select_project: &Option<Rc<dyn Fn(String, &mut Window, &mut App)>>,
+) -> PaletteEntry {
+    let modal = modal.clone();
+    let on_select_project = on_select_project.clone();
+    PaletteEntry::new(format!("select:{path}"), label, move |window, cx| {
+        if let Some(on_select_project) = &on_select_project {
+            on_select_project(path.clone(), window, cx);
+        }
+        modal.update(cx, |modal, cx| modal.hide(cx));
+    })
+    .icon(icon)
+}
+
 /// Rows for a directory listing:
 /// 1. "Use this folder" — Enter/click registers `current_path` as a project
 /// 2. ".." parent (when available) — Enter/click drills up
-/// 3. Subfolders — Enter/click drills in
+/// 3. Subfolders — Enter/click **selects** that folder as the project;
+///    trailing ▶ chevron drills into it
 ///
 /// Files are omitted: this picker is for choosing a project root, not opening files.
 fn entries_from_browse(
@@ -174,32 +195,19 @@ fn entries_from_browse(
     modal: &Entity<CommandPaletteModal>,
     on_select_project: &Option<Rc<dyn Fn(String, &mut Window, &mut App)>>,
 ) -> Vec<PaletteEntry> {
-    let modal = modal.clone();
-    let on_select_project = on_select_project.clone();
     let mut out = Vec::with_capacity(entries.len() + 2);
 
     // Confirm current folder (Enter on this row adds the project).
     let folder_label = format!("Use this folder · {}", short_path(&current_path));
-    out.push(
-        PaletteEntry::new(
-            format!("select:{current_path}"),
-            folder_label,
-            {
-                let modal = modal.clone();
-                let on_select_project = on_select_project.clone();
-                let path = current_path.clone();
-                move |window, cx| {
-                    if let Some(on_select_project) = &on_select_project {
-                        on_select_project(path.clone(), window, cx);
-                    }
-                    modal.update(cx, |modal, cx| modal.hide(cx));
-                }
-            },
-        )
-        .icon(IconName::FolderOpen),
-    );
+    out.push(select_folder_entry(
+        current_path,
+        folder_label,
+        IconName::FolderOpen,
+        modal,
+        on_select_project,
+    ));
 
-    // Parent directory.
+    // Parent directory — pure navigation.
     if let Some(parent) = parent_path {
         out.push(
             PaletteEntry::new(parent, "..", |_window, _cx| {})
@@ -208,17 +216,23 @@ fn entries_from_browse(
         );
     }
 
-    // Subfolders only, alphabetical. Enter/click drills in via browse_callback.
+    // Subfolders: Enter/click selects; ▶ drills in.
     // Cap the listing so huge home directories stay snappy in the palette.
     const MAX_DIRS: usize = 200;
     let mut dirs: Vec<FsEntry> = entries.into_iter().filter(|e| e.is_dir).collect();
     dirs.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
     dirs.truncate(MAX_DIRS);
     for entry in dirs {
+        let path = entry.path.clone();
         out.push(
-            PaletteEntry::new(entry.path, entry.name, |_window, _cx| {})
-                .icon(IconName::Folder)
-                .keep_open(true),
+            select_folder_entry(
+                entry.path,
+                entry.name,
+                IconName::Folder,
+                modal,
+                on_select_project,
+            )
+            .drill_into(path),
         );
     }
 
