@@ -104,3 +104,9 @@ t3code/
 # compiled server binary (make build-server)
 console-server
 console-server-*
+
+# Bun compile output & source maps (root-level byproducts)
+/console
+/console.exe
+*.js.map
+*.tsbuildinfo
