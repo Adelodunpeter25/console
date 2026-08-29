@@ -39,7 +39,6 @@ fn main() {
         console_ui::init_autocomplete_keybindings(cx);
         console_ui::init_session_rename_keybindings(cx);
         console_ui::primitives::menu::init(cx);
-        app_menu::init(cx);
 
         let options = WindowOptions {
             window_bounds: Some(persistence::window::load_window_bounds(cx)),
@@ -53,11 +52,15 @@ fn main() {
 
         cx.open_window(options, |window, cx| {
             let app_view = cx.new(|cx| ConsoleDesktopApp::new(window, cx));
-            // Global shortcut handlers (⌘W/⌘N/⌘O/⌘K). Must be registered on
+            // Global shortcut handlers (⌘W/⌘N/⌘K). Must be registered on
             // the App, not the root element: element-level `.on_action` only
             // sees actions along the focus path, which is empty until
             // something is focused.
             keybindings::init_handlers(app_view.clone(), window.window_handle(), cx);
+            // Register window-specific handlers (⌘⇧O/⌘⇧P) before setting up the menu
+            keybindings::init_window_handlers(app_view.clone(), window.window_handle(), cx);
+            // Initialize app menu after all handlers are registered
+            app_menu::init(cx);
             // Root hosts overlay surfaces (palette, dialogs, popovers) above the app view.
             cx.new(|cx| gpui_component::Root::new(app_view, window, cx))
         })
