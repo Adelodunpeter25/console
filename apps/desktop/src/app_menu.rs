@@ -5,7 +5,7 @@
 //! desktop app registers its top-level menus during startup.
 
 use gpui::{App, Menu, MenuItem, actions};
-use crate::keybindings::OpenSettings;
+use crate::keybindings::{AddProject, OpenSettings, QuickOpenFile};
 
 actions!(console_app, [Quit]);
 
@@ -18,7 +18,11 @@ pub fn init(cx: &mut App) {
             MenuItem::action("Settings...", OpenSettings),
             MenuItem::action("Quit", Quit),
         ]),
-        Menu::new("File"),
+        // File menu with non-reserved shortcuts to avoid macOS AppKit conflicts
+        Menu::new("File").items([
+            MenuItem::action("Add Project…", AddProject),
+            MenuItem::action("Quick Open File…", QuickOpenFile),
+        ]),
         Menu::new("Edit"),
         Menu::new("View"),
         Menu::new("Window"),

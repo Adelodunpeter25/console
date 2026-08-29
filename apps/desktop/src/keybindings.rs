@@ -21,9 +21,9 @@ actions!(
         CloseTab,
         /// Create a chat session in the active pane.
         NewChat,
-        /// Open the project directory browser palette to add a project.
+        /// Open the project directory browser palette to add a project (cmd-shift-o).
         AddProject,
-        /// Open the quick file search palette scoped to the active pane's project.
+        /// Open the quick file search palette scoped to the active pane's project (cmd-shift-p).
         QuickOpenFile,
         /// Toggle the command palette.
         ToggleCommandPalette,
@@ -44,8 +44,10 @@ pub fn init(cx: &mut App) {
         // `secondary` is cmd on macOS and ctrl on Linux/Windows.
         KeyBinding::new("secondary-w", CloseTab, None),
         KeyBinding::new("secondary-n", NewChat, None),
-        KeyBinding::new("secondary-o", AddProject, None),
-        KeyBinding::new("secondary-p", QuickOpenFile, None),
+        // Use cmd-shift-o for Add Project to avoid macOS reserved cmd-o
+        KeyBinding::new("secondary-shift-o", AddProject, None),
+        // Use cmd-shift-p for Quick Open File to avoid macOS reserved cmd-p
+        KeyBinding::new("secondary-shift-p", QuickOpenFile, None),
         KeyBinding::new("secondary-k", ToggleCommandPalette, None),
         KeyBinding::new("secondary-l", FocusComposer, None),
         KeyBinding::new("secondary-,", OpenSettings, None),
