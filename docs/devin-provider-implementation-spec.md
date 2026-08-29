@@ -1,7 +1,5 @@
 # Devin Provider Implementation Specification
 
-# Before implementing i need you to review this file  /Users/adelodunpeter/Developer/Projects/oh-my-pi/packages/catalog/src/discovery/devin-proto.ts
-
 ## Overview
 
 This specification outlines the complete implementation of Devin (Codeium/Windsurf) as a provider in Console. Devin uses PKCE OAuth authentication and the Connect streaming protocol with protobuf encoding, as implemented in the oh-my-pi project.
@@ -10,6 +8,31 @@ This specification outlines the complete implementation of Devin (Codeium/Windsu
 - OAuth: `registry/oauth/devin.ts`
 - Provider Registry: `registry/devin.ts`  
 - Streaming: `providers/devin.ts`
+- Protobuf definitions: `packages/catalog/src/discovery/devin-proto.ts` (2037-line generated codec)
+- Protobuf runtime: `packages/catalog/src/discovery/protobuf.ts` (`create`/`toBinary`/`fromBinary`/`pb`)
+- Model discovery: `packages/catalog/src/discovery/devin.ts` (`fetchDevinModels` via `GetCliModelConfigs`)
+
+### Important: Two API domains
+
+Devin/Codeium spans **two different hosts** — don't conflate them:
+
+| Purpose | Host | Notes |
+|---|---|---|
+| OAuth login + token exchange | `app.devin.ai` / `api.devin.ai` | PKCE, returns a session token |
+| Chat streaming (`GetChatMessage`), JWT (`GetUserJwt`), model discovery (`GetCliModelConfigs`) | `server.codeium.com` | Codeium/Windsurf Cascade Connect API |
+
+The OAuth flow returns a session token; the streaming path first exchanges it for a
+short-lived **user JWT** via `GetUserJwt` (protobuf), which may also return a
+`customApiServerUrl` that overrides the chat base URL. **Verify before implementing**
+that a token from `api.devin.ai/auth/cli/token` is accepted by `server.codeium.com` —
+this is the riskiest assumption in the whole integration.
+
+### Console cannot depend on `@oh-my-pi/pi-catalog`
+
+The proto definitions and runtime must be **vendored** into Console
+(~3,100 lines total) — copy `devin-proto.ts` + `protobuf.ts` into
+`apps/server/providers/src/devin/proto/` and adapt imports. Do not add the
+oh-my-pi package as a dependency.
 
 ## Architecture Overview
 
@@ -30,8 +53,9 @@ Devin integration requires:
 **Tasks**:
 - Add `"devin"` to `ProviderId` type
 - Add Devin to `OAuthProviderId` type (uses OAuth flow)
-- Update `AuthStatusResponse` to include Devin status
+- `AuthStatusResponse` is `Record<OAuthProviderId, ProviderAuthStatus>` (`packages/types/src/api.ts`), so it extends automatically — but the server's `AuthService.getAuthStatus()` returns an explicit object and must add a `devin` key
 - Add Devin-specific types if needed (session tokens, JWT metadata)
+- **Ripple effect**: adding to `ProviderId` forces exhaustiveness updates everywhere (usage route gating in `apps/server/api/src/routes/usage.ts`, desktop Rust `OAuthProviderId` enum in `apps/desktop/crates/console-core/src/types/auth.rs`, mobile `INITIAL_STATUS` in `apps/mobile/stores/useAuthStore.ts`)
 
 **Reference**: `packages/ai/src/registry/devin.ts` (provider definition)
 
@@ -47,8 +71,17 @@ Devin integration requires:
   - `authMethod: "oauth"`
   - `models: DEFAULT_DEVIN_MODELS`
   - `getStreamFn: () => devinStreamFn`
-- Add Devin to `fetchModelsForProvider` function
-- Update `listProviders` and `getProvider` functions
+- Add a **Devin branch to `fetchModelsForProvider`** — do NOT use the generic
+  `fetchAvailableModels`. Devin discovery is the protobuf `GetCliModelConfigs`
+  unary RPC against `server.codeium.com` (`application/proto`, no Connect
+  streaming framing, gunzip fallback), ported from oh-my-pi's
+  `packages/catalog/src/discovery/devin.ts` (`fetchDevinModels`). It requires a
+  stored credential (session token in `Metadata.apiKey` with the
+  `devin-session-token$` prefix) and normalizes `ClientModelConfig` entries —
+  skip `disabled` ones, map `modelUid` → id, `label` → name,
+  `supportsImages`, `maxTokens` → context window.
+- `listProviders`/`getProvider` need no changes (`PROVIDER_CATALOG` is a
+  `Record<ProviderId, ProviderEntry>` — the catalog entry alone covers them)
 
 **Reference**: `packages/ai/src/registry/devin.ts` (provider structure)
 
@@ -131,6 +164,15 @@ const TOKEN_PATH = "/auth/cli/token";
 
 **Reference**: `packages/ai/src/providers/devin.ts` (streaming implementation)
 
+> **Adaptation required**: oh-my-pi's `streamDevin` is a
+> `StreamFunction<"devin-agent">` returning its own `AssistantMessageEventStream`.
+> Console's provider contract is `StreamFn`
+> (`apps/server/agent/src/service/types.ts`) which returns
+> `EventStream<AgentSessionEvent, AgentMessage[]>` — the protocol logic ports,
+> but the event emission must be rewritten to Console's event shapes
+> (`modelStreamPart` deltas, `toolCall` previews) as consumed by
+> `stream-turn.ts` / the `RunEventHub`.
+
 **Key Functions**:
 ```typescript
 export const streamDevin: StreamFunction<"devin"> = (
@@ -141,11 +183,14 @@ export const streamDevin: StreamFunction<"devin"> = (
 ```
 
 **Protocol Details**:
-- Base URL: `https://server.codeium.com`
+- Base URL: `https://server.codeium.com` (chat), not `api.devin.ai` (OAuth) — see "Two API domains" above
 - Chat endpoint: `/exa.api_server_pb.ApiServerService/GetChatMessage`
 - Auth endpoint: `/exa.auth_pb.AuthService/GetUserJwt`
 - Content-Type: `application/connect+proto`
-- Encoding: gzip with connect-protocol-version: 1
+- Connect **streaming framing**: 1 flag byte (`0x01` = gzip payload, `0x02` = end-of-stream JSON trailers) + 4-byte big-endian length prefix + payload. Enforce a max frame cap (oh-my-pi uses 16 MiB) — the length prefix is untrusted input
+- Request bodies are gzip-compressed protobuf (`connect-content-encoding: gzip`)
+- Errors often arrive as Connect trailers with HTTP 200 — parse the end-of-stream trailer JSON (`{ error: { code, message } }`), don't rely on response status
+- Context-overflow recovery: treat `invalid_argument` + "internal error" trailers on large histories (≥512 KB of shrinkable prompts) as context overflow, mirroring oh-my-pi's heuristic
 
 #### 3.2 Implement Auth Metadata Fetching
 **New File**: `apps/server/providers/src/devin/auth.ts`
@@ -179,15 +224,20 @@ locale: "en"
 
 **Reference**: `packages/ai/src/providers/devin.ts` (buildDevinChatRequest function)
 
-#### 3.4 Add Protobuf Dependencies
-**File**: `apps/server/package.json`
+#### 3.4 Vendor Protobuf Definitions and Runtime
+**New Files**: `apps/server/providers/src/devin/proto/devin-proto.ts`, `apps/server/providers/src/devin/proto/protobuf.ts`
 
 **Tasks**:
-- Add protobuf library dependency
-- Add gzip dependencies if not present
-- Add any required Devin protobuf definitions
-
-**Reference**: `packages/ai/src/providers/devin.ts` imports from `@oh-my-pi/pi-catalog/discovery/devin-proto`
+- Copy oh-my-pi's `packages/catalog/src/discovery/devin-proto.ts` (generated
+  message codecs: `GetChatMessageRequest/Response`, `Metadata`,
+  `ChatMessagePrompt`, `ChatToolCall/Definition`, `CompletionConfiguration`,
+  `GetUserJwtRequest/Response`, `GetCliModelConfigsRequest/Response`, enums)
+  and its `protobuf.ts` runtime into `apps/server/providers/src/devin/proto/`
+  and rewrite imports
+- Note: proto `uint64` fields (`Metadata.requestId`, cost fields) are TS
+  `bigint` — keep them out of any JSON-serialized SSE events
+- Gzip is already available via `node:zlib` (`gzipSync`/`gunzipSync`) — no new
+  dependency needed
 
 ## Phase 4: Desktop Integration
 
@@ -197,23 +247,22 @@ locale: "en"
 **File**: `apps/desktop/crates/console-core/src/types/auth.rs`
 
 **Tasks**:
-- Add Devin to `OAuthProviderId` enum
-- Update `AuthStatusResponse` to include Devin
-- Remove any codebuff-specific types if present
-
-**Reference**: Console's existing auth types
+- Add `Devin` to `OAuthProviderId` enum (`as_str()` returns `"devin"`)
+- Update `AuthStatusResponse` to include a `devin` field
+- Add a `"devin"` match arm to `login_provider` in `apps/desktop/src/state/auth.rs`
 
 #### 4.2 Implement Desktop OAuth Flow
 **File**: `apps/desktop/src/state/auth.rs`
 
 **Tasks**:
-- Add Devin to `login_provider` function
-- Implement PKCE OAuth flow for desktop
-- Handle callback server on port 59653
-- Update auth status refresh to include Devin
-
-**Reference**: `packages/ai/src/registry/oauth/devin.ts` (OAuth flow)
-**Reference**: Console's existing OAuth implementations (gemini/antigravity)
+- Add `"devin"` to the `login_provider` match in `apps/desktop/src/state/auth.rs`
+- No new OAuth code needed: the desktop already fetches the login URL from
+  `POST /api/auth/login/url`, parses the port from the returned `redirect_uri`,
+  binds a local `TcpListener`, catches the redirect, and POSTs the code back to
+  `/api/auth/login/callback`. Returning redirect port 59653 from the server's
+  Devin `getLoginUrl` is all the desktop needs
+- Update auth status refresh (automatic via `getAuthStatus` once the server
+  includes `devin`)
 
 #### 4.3 Update Desktop UI Components
 **Files**: Desktop UI components
@@ -245,9 +294,16 @@ locale: "en"
 **File**: `apps/mobile/hooks/useAuth.ts`
 
 **Tasks**:
-- Add Devin to OAuth login flow
+- Add Devin to the OAuth login flow
 - Update callback handling for Devin
-- Remove any codebuff-specific code
+
+> **Mobile caveat**: Devin's OAuth redirects to the loopback URI
+> `http://127.0.0.1:59653/callback`, which a phone cannot receive — the
+> redirect lands on nothing. Mobile's flow relies on an app deep link
+> (`scheme://auth?code=…&state=…` via `expo-linking`). Verify whether
+> `app.devin.ai` supports a custom redirect URI for the CLI flow; if not,
+> mobile needs a **manual code paste** fallback (oh-my-pi's registry marks
+> devin with `pasteCodeFlow: true` — likely for exactly this reason).
 
 **Reference**: Console's existing mobile auth hooks
 
@@ -278,7 +334,10 @@ locale: "en"
 - Test thinking blocks
 
 **Reference**: `packages/ai/src/providers/devin.ts` (streaming logic)
-**Reference**: Console's existing provider tests (codebuff-provider.test.ts as template)
+**Reference**: Console's existing provider tests (`codex-provider.test.ts` and
+`opencode.test.ts` are the templates — mock the fetch/protobuf transport and
+assert wire-level details; note the old `codebuff-provider.test.ts` template no
+longer exists, codebuff was removed)
 
 #### 6.2 Integration Testing
 **Tasks**:
@@ -331,10 +390,12 @@ locale: "en"
 
 ### Dependencies Required
 
-- Protobuf library for encoding/decoding
-- Gzip compression library
-- PKCE implementation (can use existing or adapt from oh-my-pi)
-- JWT parsing library
+- **Vendored protobuf codec** — `devin-proto.ts` + `protobuf.ts` copied from
+  oh-my-pi (no external protobuf runtime; `node:zlib` covers gzip)
+- PKCE implementation (adapt from oh-my-pi's `registry/oauth/pkce.ts` — ~20 lines
+  using Web Crypto)
+- JWT parsing is just base64url + `JSON.parse` on the payload (see
+  `getTokenExpiry` in oh-my-pi's `registry/oauth/devin.ts`) — no library needed
 
 ### Risk Mitigation
 
