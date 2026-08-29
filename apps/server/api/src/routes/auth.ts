@@ -6,9 +6,14 @@ import { Hono } from "hono";
 import { AuthService } from "@/api/src/services/auth.service.js";
 import type { OAuthCallbackDto, OAuthLoginUrlDto, ProjectIdDto } from "@/api/src/types/index.js";
 import type { OAuthProviderId } from "@console/types";
+import { clineAuthRoutes } from "./cline.js";
 
 export const authRoutes = new Hono();
 const authService = new AuthService();
+
+// Mount Cline API-key auth under /api/auth/cline/*
+// (clineAuthRoutes defines /cline/status, /cline/login, /cline/logout)
+authRoutes.route("/", clineAuthRoutes);
 
 /**
  * GET /api/auth/status — Check provider login credentials status.

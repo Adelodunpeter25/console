@@ -3,7 +3,7 @@
  * `ProviderId` is the single source of truth for valid provider names.
  */
 
-export type ProviderId = "gemini" | "antigravity" | "opencode" | "codex";
+export type ProviderId = "gemini" | "antigravity" | "opencode" | "codex" | "cline";
 
 /** Providers that authenticate via Google OAuth (login-only providers). */
 export type OAuthProviderId = "gemini" | "antigravity" | "codex";
@@ -27,5 +27,5 @@ export interface ProviderCatalogEntry {
   description: string;
   models: Model[];
   /** How the user authenticates with this provider (drives the Account UI). */
-  authMethod: "oauth" | "device-code" | "none";
+  authMethod: "oauth" | "device-code" | "none" | "api-key";
 }

@@ -8,6 +8,7 @@ import {
   createAntigravityStreamFn,
   fetchAvailableModels,
   fetchOpencodeFreeModels,
+  fetchClineFreeModels,
   geminiStreamFn,
   loadCredential,
   opencodeStreamFn,
@@ -17,6 +18,10 @@ import {
   loadCodexCredential,
   refreshCodexIfNeeded,
   OPENCODE_FREE_MODEL_IDS,
+  clineStreamFn,
+  CLINE_FREE_MODEL_IDS,
+  getClineContextWindow,
+  getClineSupportsImages,
 } from "@/providers/src/index.js";
 import { codexModelsUrl } from "@/providers/src/codex/constants.js";
 import type { StreamFn } from "@/agent/src/service/agent-loop.js";
@@ -68,6 +73,15 @@ export const DEFAULT_CODEX_MODELS: Model[] = [
   "gpt-5.4-mini",
 ].map((id) => ({ id, provider: "codex" as const, contextWindow: 272_000, supportsImages: true }));
 
+export const DEFAULT_CLINE_MODELS: Model[] = [...CLINE_FREE_MODEL_IDS]
+  .map((id) => ({
+    id,
+    provider: "cline" as const,
+    contextWindow: getClineContextWindow(id),
+    ...(getClineSupportsImages(id) ? { supportsImages: true } : {}),
+  }))
+  .sort((a, b) => a.id.localeCompare(b.id));
+
 export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
   gemini: {
     name: "gemini",
@@ -100,6 +114,14 @@ export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
     authMethod: "oauth",
     models: DEFAULT_CODEX_MODELS,
     getStreamFn: () => codexStreamFn,
+  },
+  cline: {
+    name: "cline",
+    displayName: "Cline",
+    description: "Free models via the Cline OpenAI-compatible gateway",
+    authMethod: "api-key",
+    models: DEFAULT_CLINE_MODELS,
+    getStreamFn: () => clineStreamFn,
   },
 };
 
@@ -165,6 +187,8 @@ export async function fetchModelsForProvider(
           }];
         });
       }
+    } else if (providerName === "cline") {
+      discovered = await fetchClineFreeModels(signal);
     } else {
       const rawCred = await loadCredential(providerName);
       const cred = await refreshIfNeeded(rawCred, providerName, signal);
@@ -190,9 +214,11 @@ export async function fetchModelsForProvider(
       ? DEFAULT_GEMINI_MODELS
       : providerName === "opencode"
         ? DEFAULT_OPENCODE_MODELS
-          : providerName === "codex"
-            ? DEFAULT_CODEX_MODELS
-          : DEFAULT_ANTIGRAVITY_MODELS;
+        : providerName === "codex"
+          ? DEFAULT_CODEX_MODELS
+          : providerName === "cline"
+            ? DEFAULT_CLINE_MODELS
+            : DEFAULT_ANTIGRAVITY_MODELS;
   if (!provider.models || provider.models.length === 0) {
     provider.models = staticFallback;
   }

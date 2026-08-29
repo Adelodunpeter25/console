@@ -21,6 +21,24 @@ export {
 } from "./codex/oauth.js";
 export type { CodexOAuthCredential, ParsedCodexCredential } from "./codex/oauth.js";
 
+/** Cline provider — OpenAI-compatible, free tier, Bearer auth */
+export {
+  clineStreamFn,
+  fetchClineFreeModels,
+  isClineFreeModelId,
+  getClineContextWindow,
+  getClineSupportsImages,
+  CLINE_BASE_URL,
+  CLINE_FREE_MODEL_IDS,
+  CLINE_CONTEXT_WINDOWS,
+  CLINE_CONTEXT_WINDOW_DEFAULT,
+  CLINE_SUPPORTS_IMAGES,
+  loadClineCredential,
+  saveClineCredential,
+  clearClineCredential,
+} from "./cline/index.js";
+export type { ClineCredential } from "./cline/index.js";
+
 /** Model discovery */
 export { fetchAvailableModels } from "./discovery/fetch-models.js";
 export type { FetchAvailableModelsOptions, DiscoveredApiModel } from "./discovery/fetch-models.js";
