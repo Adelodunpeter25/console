@@ -46,18 +46,20 @@ A model is "free" if and only if its ID ends with `:free`. No exceptions. v1 shi
 
 ## 3. Endpoint contract
 
-```
-POST https://api.cline.bot/api/v1/chat/completions
-Authorization: Bearer <CLINE_API_KEY>
-X-Title: Console
-Content-Type: application/json
-```
+Endpoint: `POST https://api.cline.bot/api/v1/chat/completions`
 
-Request body: standard OpenAI Chat Completions. We pass `stream: true`.
+Required headers:
+- `Authorization: Bearer <CLINE_API_KEY>`
+- `X-Title: Console`
+- `Content-Type: application/json`
 
-Response: SSE with `data: {...}\n\n` chunks, terminated by `data: [DONE]\n\n`. Schema: `delta.content` (string), `delta.tool_calls[]` (object with `id`, `type: "function"`, `function.name`, `function.arguments`).
+Request body: standard OpenAI Chat Completions. Pass `stream: true`.
+
+Response: SSE with `data: {...}\n\n` chunks, terminated by `data: [DONE]\n\n`. Schema fields used: `delta.content` (string), `delta.tool_calls[]` (object with `id`, `type: "function"`, `function.name`, `function.arguments`).
 
 The AI SDK's `createOpenAICompatible` already handles all of this. We mirror the OpenCode pattern.
+
+---
 
 ## 4. File changes
 
@@ -80,440 +82,85 @@ The AI SDK's `createOpenAICompatible` already handles all of this. We mirror the
 | File | Change |
 |---|---|
 | `packages/types/src/model.ts` | Add `"cline"` to `ProviderId`; add `"api-key"` to `authMethod` |
-| `apps/server/agent/src/commands/provider-registry.ts` | Import Cline, add `DEFAULT_CLINE_MODELS`, add `cline` to `PROVIDER_CATALOG`, extend `fetchModelsForProvider` switch + static-fallback ternary |
+| `apps/server/agent/src/commands/provider-registry.ts` | Import Cline barrel, add `DEFAULT_CLINE_MODELS`, add `cline` to `PROVIDER_CATALOG`, extend `fetchModelsForProvider` switch + static-fallback ternary |
 | `apps/server/providers/src/index.ts` | Re-export Cline barrel |
 | `apps/server/api/src/routes/providers.ts` | Whitelist `"cline"` in provider validation |
 | `apps/server/api/src/routes/auth.ts` | Mount the new Cline auth sub-router |
 
 ---
 
-## 5. File contents (sketch)
+## 5. Per-file design notes
 
 ### 5.1 `apps/server/providers/src/cline/constants.ts`
-
-```ts
-/**
- * Cline provider — OpenAI-compatible chat completions endpoint.
- * https://docs.cline.bot/api/overview
- *
- * Auth: Bearer token in Authorization header. No OAuth.
- *   Get key: app.cline.bot > Settings > API Keys.
- *   Env var: CLINE_API_KEY overrides stored credential.
- *
- * Free-tier filter: model IDs ending in ":free".
- * v1 ships only "minimax/minimax-m3:free".
- */
-export const CLINE_BASE_URL = "https://api.cline.bot/api/v1";
-
-/** Free Cline model IDs registered with the engine. v1 ships one. */
-export const CLINE_FREE_MODEL_IDS = [
-  "minimax/minimax-m3:free",
-] as const;
-
-/** Default context window when /v1/models doesn't tell us otherwise. */
-export const CLINE_CONTEXT_WINDOW_DEFAULT = 200_000;
-```
+- `CLINE_BASE_URL = "https://api.cline.bot/api/v1"`
+- `CLINE_FREE_MODEL_IDS = ["minimax/minimax-m3:free"]` — single entry for v1
+- `CLINE_CONTEXT_WINDOW_DEFAULT = 200_000`
+- All `as const`. Free IDs are vetted explicitly; the 17 other free models are deliberately excluded.
 
 ### 5.2 `apps/server/providers/src/cline/auth.ts`
-
-```ts
-/**
- * Cline API key storage. No OAuth — single static key.
- * Stored at ~/.console/cline-creds.json
- * Overridable via CLINE_CREDENTIALS_PATH env var.
- *
- * Lookup precedence (first non-empty wins):
- *   1. CLINE_API_KEY env var
- *   2. ~/.console/cline-creds.json
- *   3. null
- */
-import * as fs from "node:fs/promises";
-import * as os from "node:os";
-import * as path from "node:path";
-
-export interface ClineCredential {
-  apiKey: string;
-}
-
-function credentialFilePath(): string {
-  return (
-    process.env.CLINE_CREDENTIALS_PATH ??
-    path.join(os.homedir(), ".console", "cline-creds.json")
-  );
-}
-
-export async function loadClineCredential(): Promise<ClineCredential | null> {
-  const envKey = process.env.CLINE_API_KEY?.trim();
-  if (envKey) return { apiKey: envKey };
-
-  try {
-    const raw = await fs.readFile(credentialFilePath(), "utf-8");
-    const parsed = JSON.parse(raw) as Partial<ClineCredential>;
-    if (typeof parsed.apiKey === "string" && parsed.apiKey.length > 0) {
-      return { apiKey: parsed.apiKey };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-export async function saveClineCredential(cred: ClineCredential): Promise<void> {
-  const filePath = credentialFilePath();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(cred, null, 2), "utf-8");
-}
-
-export async function clearClineCredential(): Promise<void> {
-  try {
-    await fs.unlink(credentialFilePath());
-  } catch {
-    // Already gone
-  }
-}
-```
+- `interface ClineCredential { apiKey: string }`
+- Storage path: `~/.console/cline-creds.json`, overridable via `CLINE_CREDENTIALS_PATH`
+- `loadClineCredential()` lookup precedence: `CLINE_API_KEY` env var → stored file → `null`
+- `saveClineCredential(cred)` writes JSON, creates parent dir
+- `clearClineCredential()` deletes the file; missing-file is silent
+- Mirrors the simplicity of `codex/oauth.ts` but for a single key field instead of OAuth tokens
 
 ### 5.3 `apps/server/providers/src/cline/stream-fn.ts`
-
-```ts
-/**
- * Cline StreamFn — OpenAI-compatible /v1/chat/completions via the AI SDK.
- * Same wire format as OpenCode Zen. Auth: Bearer CLINE_API_KEY.
- *
- * The key is read per-call (not at module load) so the user can add it
- * mid-session. The AI SDK client is built once per call.
- */
-import { streamText } from "ai";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import type { StreamFn } from "@/agent/src/service/agent-loop.js";
-import { CLINE_BASE_URL } from "./constants.js";
-import { convertOpencodeMessages } from "@/providers/src/opencode/convert-messages.js";
-import { convertOpencodeTools } from "@/providers/src/opencode/convert-tools.js";
-import { loadClineCredential } from "./auth.js";
-
-export const clineStreamFn: StreamFn = async function* ({
-  model,
-  systemPrompt,
-  messages,
-  tools,
-  signal,
-}) {
-  const cred = await loadClineCredential();
-  if (!cred) {
-    throw new Error(
-      "Cline is not configured. Set CLINE_API_KEY or add a key via POST /api/auth/cline/login.",
-    );
-  }
-
-  const cline = createOpenAICompatible({
-    name: "cline",
-    baseURL: CLINE_BASE_URL,
-    apiKey: cred.apiKey,
-    headers: { "X-Title": "Console" },
-  });
-
-  const convertedMessages = convertOpencodeMessages(messages);
-  const convertedTools = convertOpencodeTools(tools);
-
-  let streamError: unknown = null;
-
-  const result = streamText({
-    model: cline.chatModel(model.id),
-    system: systemPrompt,
-    messages: convertedMessages,
-    ...(Object.keys(convertedTools).length > 0 ? { tools: convertedTools } : {}),
-    abortSignal: signal,
-    onError({ error }) {
-      streamError = error;
-    },
-  });
-
-  for await (const part of result.fullStream) {
-    if (part.type === "error") {
-      throw (part as any).error ?? new Error("Cline stream error");
-    }
-    if (part.type === "text-delta") {
-      yield { type: "text", text: part.text };
-    } else if (part.type === "reasoning-delta") {
-      yield { type: "thinking", text: part.text };
-    } else if (part.type === "tool-input-start") {
-      yield { type: "toolCall", id: part.id, name: part.toolName, argumentsJson: "" };
-    } else if (part.type === "tool-input-delta") {
-      yield { type: "toolCall", id: part.id, name: "", argumentsJson: part.delta };
-    }
-    // "tool-call" intentionally ignored: see opencode/stream-fn.ts comment.
-  }
-
-  if (streamError) {
-    throw streamError;
-  }
-};
-```
+- Factory: `clineStreamFn: StreamFn` (matches `opencodeStreamFn` shape)
+- On each call: read credential via `loadClineCredential()`. If null, throw with a clear "not configured" message.
+- Build a fresh `createOpenAICompatible({ name, baseURL, apiKey, headers: { "X-Title": "Console" } })` per call. The key is per-user, not per-process.
+- Call `streamText` with `model: cline.chatModel(model.id)`, `system`, `messages = convertOpencodeMessages(messages)`, `tools = convertOpencodeTools(tools)` (only if non-empty), `abortSignal: signal`, `onError` to capture.
+- `for await (const part of result.fullStream)`:
+  - `text-delta` → `{ type: "text", text }`
+  - `reasoning-delta` → `{ type: "thinking", text }` (best-effort; not emitted by v1 model)
+  - `tool-input-start` → `{ type: "toolCall", id, name, argumentsJson: "" }`
+  - `tool-input-delta` → `{ type: "toolCall", id, name: "", argumentsJson: delta }`
+  - `error` → throw
+  - `tool-call` → ignore (already accumulated)
+- After the loop, re-throw any captured `streamError`
 
 ### 5.4 `apps/server/providers/src/cline/convert-messages.ts`
-
-```ts
-// Identical wire format to OpenCode Zen. Re-export to keep cline/ self-contained.
-export { convertOpencodeMessages } from "@/providers/src/opencode/convert-messages.js";
-```
+- One-line re-export of `convertOpencodeMessages` from the OpenCode provider
+- Same wire format, no transformation needed
 
 ### 5.5 `apps/server/providers/src/cline/convert-tools.ts`
-
-```ts
-export { convertOpencodeTools } from "@/providers/src/opencode/convert-tools.js";
-```
+- One-line re-export of `convertOpencodeTools` from the OpenCode provider
 
 ### 5.6 `apps/server/providers/src/cline/discovery.ts`
-
-```ts
-/**
- * Cline model discovery.
- * GET /v1/models, filter to free-tier ids (suffix ":free").
- * Falls back to the static CLINE_FREE_MODEL_IDS on network/parse errors.
- *
- * v1 policy: surface only IDs that are registered in CLINE_FREE_MODEL_IDS.
- * The other 17 free IDs are filtered out at runtime so the model picker
- * always matches the static catalog.
- */
-import type { Model } from "@console/types";
-import {
-  CLINE_BASE_URL,
-  CLINE_CONTEXT_WINDOW_DEFAULT,
-  CLINE_FREE_MODEL_IDS,
-} from "./constants.js";
-import { loadClineCredential } from "./auth.js";
-
-interface ClineModelsResponse {
-  data?: Array<{ id: string }>;
-}
-
-export function isClineFreeModelId(id: string): boolean {
-  return id.endsWith(":free");
-}
-
-export async function fetchClineFreeModels(
-  signal?: AbortSignal,
-): Promise<Model[]> {
-  const cred = await loadClineCredential();
-  if (!cred) return fallbackClineModels();
-
-  try {
-    const response = await fetch(`${CLINE_BASE_URL}/models`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${cred.apiKey}`,
-        Accept: "application/json",
-        "X-Title": "Console",
-      },
-      signal,
-    });
-    if (!response.ok) return fallbackClineModels();
-
-    const payload = (await response.json()) as ClineModelsResponse;
-    const ids = (payload.data ?? []).map((m) => m.id).filter(isClineFreeModelId);
-    if (ids.length === 0) return fallbackClineModels();
-
-    const allowed = new Set<string>(CLINE_FREE_MODEL_IDS);
-    const vetted = ids.filter((id) => allowed.has(id));
-    if (vetted.length === 0) return fallbackClineModels();
-
-    return vetted.map((id) => ({
-      id,
-      provider: "cline",
-      contextWindow: CLINE_CONTEXT_WINDOW_DEFAULT,
-      supportsImages: true, // verified on minimax-m3:free
-    }));
-  } catch {
-    return fallbackClineModels();
-  }
-}
-
-function fallbackClineModels(): Model[] {
-  return CLINE_FREE_MODEL_IDS.map((id) => ({
-    id,
-    provider: "cline",
-    contextWindow: CLINE_CONTEXT_WINDOW_DEFAULT,
-    supportsImages: true,
-  }));
-}
-```
+- `isClineFreeModelId(id: string): boolean` → `id.endsWith(":free")`
+- `fetchClineFreeModels(signal?)`: if no credential, return static fallback. Else `GET ${CLINE_BASE_URL}/models` with `Authorization: Bearer <key>`, `X-Title: Console`, parse `{ data: [{ id }] }`, filter `isClineFreeModelId`, then **filter again against `CLINE_FREE_MODEL_IDS` allowlist** (this is the safety net: 17 free IDs are filtered out at runtime even if they appear in the upstream response), map to `Model[]` with `contextWindow: CLINE_CONTEXT_WINDOW_DEFAULT`, `supportsImages: true`. On any error/non-2xx, return static fallback.
+- `fallbackClineModels()`: returns `CLINE_FREE_MODEL_IDS` mapped to `Model[]`
 
 ### 5.7 `apps/server/providers/src/cline/index.ts`
-
-```ts
-export { clineStreamFn } from "./stream-fn.js";
-export { fetchClineFreeModels, isClineFreeModelId } from "./discovery.js";
-export { CLINE_FREE_MODEL_IDS } from "./constants.js";
-export {
-  loadClineCredential,
-  saveClineCredential,
-  clearClineCredential,
-} from "./auth.js";
-export type { ClineCredential } from "./auth.js";
-```
+Barrel exporting: `clineStreamFn`, `fetchClineFreeModels`, `isClineFreeModelId`, `CLINE_FREE_MODEL_IDS`, `loadClineCredential`, `saveClineCredential`, `clearClineCredential`, and the `ClineCredential` type.
 
 ### 5.8 `apps/server/api/src/routes/cline.ts`
-
-```ts
-/**
- * Cline auth routes (/api/auth/cline/*).
- *   GET  /cline/status   → { loggedIn: boolean }
- *   POST /cline/login    → body { apiKey: string } → saves after a live /v1/models probe
- *   POST /cline/logout   → clears the stored credential
- */
-import { Hono } from "hono";
-import {
-  CLINE_BASE_URL,
-  clearClineCredential,
-  loadClineCredential,
-  saveClineCredential,
-} from "@/providers/src/cline/index.js";
-
-export const clineAuthRoutes = new Hono();
-
-clineAuthRoutes.get("/cline/status", async (c) => {
-  const cred = await loadClineCredential();
-  return c.json({ success: true, data: { loggedIn: cred !== null } });
-});
-
-clineAuthRoutes.post("/cline/login", async (c) => {
-  const body = (await c.req.json().catch(() => null)) as { apiKey?: string } | null;
-  const apiKey = body?.apiKey?.trim();
-  if (!apiKey) {
-    return c.json({ success: false, error: "Missing apiKey." }, 400);
-  }
-
-  // Probe /v1/models with the new key before saving. Catches typos and
-  // revoked keys at login time, not at first chat.
-  const probe = await fetch(`${CLINE_BASE_URL}/models`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      Accept: "application/json",
-      "X-Title": "Console",
-    },
-  }).catch((err) => ({ ok: false, status: 0, _err: err } as const));
-
-  if (!("ok" in probe) || !probe.ok) {
-    return c.json(
-      { success: false, error: `Cline rejected the API key (HTTP ${probe.status}).` },
-      400,
-    );
-  }
-
-  await saveClineCredential({ apiKey });
-  return c.json({ success: true, data: { loggedIn: true } });
-});
-
-clineAuthRoutes.post("/cline/logout", async (c) => {
-  await clearClineCredential();
-  return c.json({ success: true, data: { loggedIn: false } });
-});
-```
+Three endpoints, mounted under `/api/auth/cline/*`:
+- `GET /cline/status` → `{ success: true, data: { loggedIn: cred !== null } }`
+- `POST /cline/login` — body `{ apiKey: string }`. Validates the key by probing `GET /v1/models` with it. If non-2xx, return 400. If 2xx, `saveClineCredential({ apiKey })`, return `{ success: true, data: { loggedIn: true } }`. The probe is the key correctness check.
+- `POST /cline/logout` — `clearClineCredential()`, return `{ success: true, data: { loggedIn: false } }`
 
 ### 5.9 `packages/types/src/model.ts`
-
-```ts
-// Add "cline" to the union
-export type ProviderId = "gemini" | "antigravity" | "opencode" | "codex" | "cline";
-
-// Add "api-key" to the auth method union
-export interface ProviderCatalogEntry {
-  // ... existing fields ...
-  authMethod: "oauth" | "device-code" | "none" | "api-key";
-}
-```
+Two string-union changes:
+- `ProviderId`: add `"cline"`
+- `ProviderCatalogEntry.authMethod`: add `"api-key"` as a fourth value
 
 ### 5.10 `apps/server/agent/src/commands/provider-registry.ts`
-
-Three additions:
-
-```ts
-// imports
-import {
-  clineStreamFn,
-  fetchClineFreeModels,
-  CLINE_FREE_MODEL_IDS,
-} from "@/providers/src/cline/index.js";
-
-// static defaults
-export const DEFAULT_CLINE_MODELS: Model[] = CLINE_FREE_MODEL_IDS.map((id) => ({
-  id,
-  provider: "cline" as const,
-  contextWindow: 200_000,
-  supportsImages: true,
-}));
-
-// registry entry
-cline: {
-  name: "cline",
-  displayName: "Cline",
-  description: "Free models via the Cline OpenAI-compatible gateway",
-  authMethod: "api-key",
-  models: DEFAULT_CLINE_MODELS,
-  getStreamFn: () => clineStreamFn,
-},
-
-// fetchModelsForProvider branch
-} else if (providerName === "cline") {
-  discovered = await fetchClineFreeModels(signal);
-} else { ... }
-```
-
-Also add `cline` to the static-fallback ternary in the same function:
-
-```ts
-const staticFallback =
-  providerName === "gemini"
-    ? DEFAULT_GEMINI_MODELS
-    : providerName === "opencode"
-      ? DEFAULT_OPENCODE_MODELS
-      : providerName === "codex"
-        ? DEFAULT_CODEX_MODELS
-        : providerName === "cline"
-          ? DEFAULT_CLINE_MODELS
-          : DEFAULT_ANTIGRAVITY_MODELS;
-```
+Three edits:
+- Add imports for `clineStreamFn`, `fetchClineFreeModels`, `CLINE_FREE_MODEL_IDS` from the new barrel
+- Add `DEFAULT_CLINE_MODELS: Model[]` derived from `CLINE_FREE_MODEL_IDS.map(id => ({ id, provider: "cline", contextWindow: 200_000, supportsImages: true }))`
+- Add `cline` to `PROVIDER_CATALOG` with `authMethod: "api-key"`, `models: DEFAULT_CLINE_MODELS`, `getStreamFn: () => clineStreamFn`
+- Extend the `fetchModelsForProvider` chain: `else if (providerName === "cline") discovered = await fetchClineFreeModels(signal)`
+- Extend the static-fallback ternary in the same function to include `providerName === "cline" ? DEFAULT_CLINE_MODELS : ...`
 
 ### 5.11 `apps/server/providers/src/index.ts`
-
-```ts
-/** Cline provider — OpenAI-compatible, free tier, Bearer auth */
-export {
-  clineStreamFn,
-  fetchClineFreeModels,
-  CLINE_FREE_MODEL_IDS,
-  loadClineCredential,
-  saveClineCredential,
-  clearClineCredential,
-} from "./cline/index.js";
-export type { ClineCredential } from "./cline/index.js";
-```
+Add a Cline section re-exporting the barrel's public surface (stream fn, discovery, constants, auth helpers) and the `ClineCredential` type.
 
 ### 5.12 `apps/server/api/src/routes/providers.ts`
-
-```ts
-if (
-  providerId !== "gemini" &&
-  providerId !== "antigravity" &&
-  providerId !== "opencode" &&
-  providerId !== "codex" &&
-  providerId !== "cline"        // ← add
-) {
-  return c.json({ success: false, error: `Invalid provider '${providerId}'.` }, 400);
-}
-```
+Whitelist `"cline"` in the existing `if (providerId !== "..." && ...)` validation block. One line added.
 
 ### 5.13 `apps/server/api/src/routes/auth.ts`
-
-```ts
-import { clineAuthRoutes } from "./cline.js";
-
-// in the existing authRoutes mount:
-api.route("/auth", clineAuthRoutes);
-```
-
-(Mount under `/auth` so the full paths are `/api/auth/cline/status`, `/api/auth/cline/login`, `/api/auth/cline/logout`.)
+Import `clineAuthRoutes` from `./cline.js` and mount it via `api.route("/auth", clineAuthRoutes)`. Result: paths become `/api/auth/cline/status`, `/api/auth/cline/login`, `/api/auth/cline/logout`.
 
 ---
 
@@ -538,12 +185,10 @@ Mirrors `tests/opencode.test.ts`. No LLM calls in offline cases; one real-API te
 | 13 | `cline.status` reflects stored cred | With a stub creds file in a temp dir, status returns `loggedIn: true` |
 | 14 | **Real API** (gated by `CLINE_REAL_API=1`) | Live `POST /v1/chat/completions` with a tool; assert tool-call deltas assemble into valid args |
 
-Tests 1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13 are pure offline. Test 3, 4 inject a credential via `process.env.CLINE_API_KEY` then `delete process.env.CLINE_API_KEY` in cleanup.
+Tests 1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13 are pure offline. Tests 3, 4 inject a credential via `process.env.CLINE_API_KEY` then `delete process.env.CLINE_API_KEY` in cleanup.
 
 Run command (per AGENTS.md):
-```bash
-cd apps/server && bun tests/cline.test.ts
-```
+- `cd apps/server && bun tests/cline.test.ts`
 
 ---
 
