@@ -49,8 +49,6 @@ export interface AgentLoopConfig {
   onEvent?: (event: AgentSessionEvent) => void;
   /** AbortSignal to cancel the run. */
   signal?: AbortSignal;
-  /** Maximum number of tool-call turns before the loop stops. Default: 50. */
-  maxTurns?: number;
   /** Compaction options for automated history summarization. */
   compaction?: CompactionOptions;
   /** Hook called before a tool is executed. Useful for approval flows. */

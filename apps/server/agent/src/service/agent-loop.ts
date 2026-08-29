@@ -8,7 +8,7 @@
  *  4. Handle tool call requests with Zod validation & Permission Approval check
  *  5. Execute tools concurrently (Promise.all)
  *  6. Add assistant turn & tool results to history
- *  7. Loop until stopReason === 'stop' or maxTurns reached
+ *  7. Loop until stopReason === 'stop' or signal aborted
  */
 import { randomUUID } from "node:crypto";
 import { compactHistory, shouldCompact } from "@/agent/src/compaction/index.js";
@@ -52,7 +52,6 @@ function runAgentLoop(
     onApproval,
     onEvent,
     signal,
-    maxTurns = 50,
     compaction,
     onToolCall,
     onToolResult,
@@ -81,20 +80,10 @@ function runAgentLoop(
           : { role: "user", content: prompt };
       messages.push(userMessage);
 
-      let turnCount = 0;
-
       while (true) {
         if (signal?.aborted) {
           // User-initiated abort is normal control flow, not an error.
           // Just break the loop — sessionEnd is emitted in finally.
-          break;
-        }
-
-        if (turnCount >= maxTurns) {
-          emit({
-            type: "error",
-            error: { message: `Maximum turns reached (${maxTurns}). Stopping loop.` },
-          });
           break;
         }
 
@@ -109,7 +98,6 @@ function runAgentLoop(
           emit({ type: "compaction", summary, originalMessageCount: originalCount });
         }
 
-        turnCount++;
         const turnId = randomUUID();
 
         const assistantMessage = await streamOneTurn(

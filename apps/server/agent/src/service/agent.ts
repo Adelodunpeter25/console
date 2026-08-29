@@ -38,8 +38,6 @@ export interface AgentOptions {
   approvalMode?: ApprovalMode;
   /** Hook called when a tool call requires user permission. */
   onApproval?: (request: PermissionRequest) => Promise<boolean> | boolean;
-  /** Max agentic turns per run. Default: 50 */
-  maxTurns?: number;
   /** Called for every event emitted during a run. */
   onEvent?: (event: AgentSessionEvent) => void;
 }
@@ -58,7 +56,6 @@ export class Agent {
   private _streamFn: StreamFn;
   private _approvalMode: ApprovalMode;
   private _onApproval?: AgentOptions["onApproval"];
-  private _maxTurns: number;
   private _onEvent?: (event: AgentSessionEvent) => void;
 
   private _messages: AgentMessage[] = [];
@@ -72,7 +69,6 @@ export class Agent {
     this._streamFn = options.streamFn;
     this._approvalMode = options.approvalMode ?? "always-ask";
     this._onApproval = options.onApproval;
-    this._maxTurns = options.maxTurns ?? 50;
     this._onEvent = options.onEvent;
   }
 
@@ -181,7 +177,6 @@ export class Agent {
       approvalMode: this._approvalMode,
       onApproval: this._onApproval,
       signal: this._abortController.signal,
-      maxTurns: this._maxTurns,
       onEvent: this._onEvent,
     };
 
