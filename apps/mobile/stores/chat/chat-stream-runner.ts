@@ -53,13 +53,12 @@ export function finalizeSessionRun(
       const runs = sessionState.runs.length > 0 ? [...sessionState.runs] : [];
       if (runs.length > 0) {
         const latest = runs[runs.length - 1]!;
-        if (latest.status === "working") {
-          runs[runs.length - 1] = {
-            ...latest,
-            status: hadError ? "failed" : "completed",
-            elapsedMs: latest.startedAt ? Date.now() - latest.startedAt : latest.elapsedMs,
-          };
-        }
+        // Always update the status when finalizing, regardless of current state
+        runs[runs.length - 1] = {
+          ...latest,
+          status: hadError ? "failed" : "completed",
+          elapsedMs: latest.startedAt ? Date.now() - latest.startedAt : latest.elapsedMs,
+        };
       }
       return {
         ...sessionState,
