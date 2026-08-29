@@ -1,4 +1,4 @@
-//! ⌘⇧P quick file open palette, built on the central [`crate::CommandPaletteModal`].
+//! ⌘P quick file open palette, built on the central [`crate::CommandPaletteModal`].
 //!
 //! Debounces the query, asks the server for fuzzy file matches scoped to the
 //! active chat's project root, and hands the confirmed file to the app via
@@ -14,8 +14,10 @@ use crate::IconName;
 use crate::PaletteEntry;
 use crate::primitives::base_name;
 
-/// Debounce between the query changing and the server search firing.
-const SEARCH_DEBOUNCE_MS: u64 = 200;
+/// Debounce for typed queries (first open fires immediately).
+const SEARCH_DEBOUNCE_MS: u64 = 80;
+/// Hard cap on rows painted — server already caps ~20, this guards growth.
+const MAX_RESULTS: usize = 40;
 
 pub struct QuickOpenPalette {
     modal: Entity<CommandPaletteModal>,
@@ -26,6 +28,9 @@ pub struct QuickOpenPalette {
     on_open_file: Option<Rc<dyn Fn(String, &mut Window, &mut App)>>,
     /// Monotonic token so a stale in-flight search never overwrites a newer one.
     search_generation: u64,
+    /// Last query we actually dispatched — skip identical re-fires from
+    /// CommandState re-renders / focus churn.
+    last_dispatched_query: Option<String>,
 }
 
 impl QuickOpenPalette {
@@ -41,6 +46,7 @@ impl QuickOpenPalette {
             root: None,
             on_open_file: None,
             search_generation: 0,
+            last_dispatched_query: None,
         }
     }
 
@@ -57,6 +63,7 @@ impl QuickOpenPalette {
     pub fn open(&mut self, root: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
         self.root = root;
         self.search_generation = 0;
+        self.last_dispatched_query = None;
         let this = cx.entity().downgrade();
         self.modal.update(cx, |modal, cx| {
             modal.set_placeholder("Search files…", cx);
@@ -68,7 +75,9 @@ impl QuickOpenPalette {
                     let this = this.clone();
                     move |query, _window, cx| {
                         if let Some(this) = this.upgrade() {
-                            this.update(cx, |this, cx| this.schedule_search(query, cx));
+                            this.update(cx, |this, cx| {
+                                this.schedule_search(query, /*immediate*/ false, cx)
+                            });
                         }
                     }
                 },
@@ -77,7 +86,8 @@ impl QuickOpenPalette {
             modal.set_entries(Vec::new(), cx);
             modal.show(window, cx);
         });
-        self.schedule_search("", cx);
+        // First paint: no debounce so the list appears ASAP.
+        self.schedule_search("", /*immediate*/ true, cx);
     }
 
     pub fn hide(&mut self, cx: &mut Context<Self>) {
@@ -88,24 +98,41 @@ impl QuickOpenPalette {
         self.modal.read(cx).is_open()
     }
 
-    fn schedule_search(&mut self, query: &str, cx: &mut Context<Self>) {
+    fn schedule_search(&mut self, query: &str, immediate: bool, cx: &mut Context<Self>) {
+        let query = query.to_string();
+        // Drop no-op re-fires (CommandState often re-emits the same query).
+        if self.last_dispatched_query.as_deref() == Some(query.as_str()) {
+            return;
+        }
+        self.last_dispatched_query = Some(query.clone());
         self.search_generation += 1;
         let generation = self.search_generation;
         let modal = self.modal.clone();
         let client = self.client.clone();
         let root = self.root.clone();
-        let query = query.to_string();
         let on_open_file = self.on_open_file.clone();
+        let delay_ms = if immediate { 0 } else { SEARCH_DEBOUNCE_MS };
 
         cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(std::time::Duration::from_millis(SEARCH_DEBOUNCE_MS))
-                .await;
+            if delay_ms > 0 {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(delay_ms))
+                    .await;
+            }
+            // Bail early if a newer keystroke already superseded us during the wait.
+            let still_current = this
+                .read_with(cx, |this, _| this.search_generation == generation)
+                .unwrap_or(false);
+            if !still_current {
+                return;
+            }
+
             let items = match root {
                 Some(root) => client.assist.search_files(None, &query, Some(&root)).await,
                 None => return,
             };
             let Ok(items) = items else { return };
+
             let _ = this.update(cx, |this, cx| {
                 if generation != this.search_generation {
                     return;
@@ -143,6 +170,7 @@ fn entries_from_results(
     let on_open_file = on_open_file.clone();
     items
         .into_iter()
+        .take(MAX_RESULTS)
         .map(|item| {
             let path = item.absolute_path;
             let label = item.relative_path;

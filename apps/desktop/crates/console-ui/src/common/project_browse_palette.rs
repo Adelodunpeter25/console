@@ -209,8 +209,11 @@ fn entries_from_browse(
     }
 
     // Subfolders only, alphabetical. Enter/click drills in via browse_callback.
-    let mut dirs: Vec<FsEntry> = entries.into_iter().filter(|e| e.is_directory).collect();
+    // Cap the listing so huge home directories stay snappy in the palette.
+    const MAX_DIRS: usize = 200;
+    let mut dirs: Vec<FsEntry> = entries.into_iter().filter(|e| e.is_dir).collect();
     dirs.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
+    dirs.truncate(MAX_DIRS);
     for entry in dirs {
         out.push(
             PaletteEntry::new(entry.path, entry.name, |_window, _cx| {})

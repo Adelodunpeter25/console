@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 pub struct FsEntry {
     pub name: String,
     pub path: String,
-    pub is_directory: bool,
+    /// Matches the server's `isDir` field (same as [`FsTreeEntry`]).
+    pub is_dir: bool,
     pub size: Option<u64>,
     pub modified_at: Option<i64>,
 }

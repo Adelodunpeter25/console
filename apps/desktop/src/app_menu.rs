@@ -18,7 +18,8 @@ pub fn init(cx: &mut App) {
             MenuItem::action("Settings...", OpenSettings),
             MenuItem::action("Quit", Quit),
         ]),
-        // File menu with non-reserved shortcuts to avoid macOS AppKit conflicts
+        // File menu owns ⌘O / ⌘P key equivalents so AppKit dispatches them
+        // to our actions (same pattern Zed uses for Open / Go to File).
         Menu::new("File").items([
             MenuItem::action("Add Project…", AddProject),
             MenuItem::action("Quick Open File…", QuickOpenFile),
