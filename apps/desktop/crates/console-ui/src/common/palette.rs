@@ -9,25 +9,37 @@
 //! confirmation.
 //!
 //! [`PaletteEntry`] is a plain row: a stable id, a display label, an optional
-//! icon, and the action to run on Enter. `keep_open` marks entries that
-//! navigate (e.g. drilling into a folder) instead of dismissing the palette.
+//! leading icon (built as a custom row so file-type icons work), and the
+//! action to run on Enter. `keep_open` marks entries that navigate (e.g.
+//! drilling into a folder) instead of dismissing the palette.
 
 use std::rc::Rc;
 
 use gpui::{
-    App, Context, Entity, Focusable, IntoElement, ParentElement, Render, SharedString, Styled,
-    Window, div, prelude::*, px,
+    AnyElement, App, Context, Entity, Focusable, IntoElement, ParentElement, Render, SharedString,
+    Styled, Window, div, prelude::*, px,
 };
 use gpui_component::command::{Command, CommandItem, CommandState};
 
 use crate::IconName;
+use crate::Theme;
+use crate::primitives::{app_icon, file_type_icon};
+
+/// How a palette row draws its leading icon.
+#[derive(Clone)]
+pub enum PaletteIcon {
+    /// Monochrome app icon (commands, folders, generic actions).
+    App(IconName),
+    /// Multicolor file-type icon resolved from a filename or path.
+    FileType(SharedString),
+}
 
 /// One palette row: a stable id, display label, and the action to run on Enter.
 #[derive(Clone)]
 pub struct PaletteEntry {
     pub id: SharedString,
     pub label: SharedString,
-    pub icon: Option<IconName>,
+    pub icon: Option<PaletteIcon>,
     /// When true the modal stays open after this entry is confirmed (used for
     /// navigation entries such as drilling into a directory).
     pub keep_open: bool,
@@ -50,9 +62,15 @@ impl PaletteEntry {
         }
     }
 
-    /// Set the leading icon for this row.
+    /// Leading monochrome app icon (Folder, commands, …).
     pub fn icon(mut self, icon: IconName) -> Self {
-        self.icon = Some(icon);
+        self.icon = Some(PaletteIcon::App(icon));
+        self
+    }
+
+    /// Leading multicolor file-type icon resolved from a filename or path.
+    pub fn file_icon(mut self, path_or_name: impl Into<SharedString>) -> Self {
+        self.icon = Some(PaletteIcon::FileType(path_or_name.into()));
         self
     }
 
@@ -62,6 +80,48 @@ impl PaletteEntry {
         self.keep_open = keep_open;
         self
     }
+}
+
+/// Build the full row content (icon + label).
+///
+/// gpui-component's `CommandItem::child()` *replaces* the default icon+label
+/// row, so callers must render both. Using `.icon()` alone only accepts the
+/// library's monochrome `Icon` type — file-type SVGs need this path.
+fn render_entry_row(entry: &PaletteEntry, cx: &App) -> AnyElement {
+    let theme = Theme::current(cx);
+    let icon_el = match &entry.icon {
+        Some(PaletteIcon::App(name)) => app_icon(*name, 15.0, theme.text_secondary).into_any_element(),
+        Some(PaletteIcon::FileType(path)) => {
+            file_type_icon(path.as_ref(), 15.0).into_any_element()
+        }
+        None => div().size(px(15.0)).into_any_element(),
+    };
+
+    div()
+        .flex()
+        .flex_1()
+        .items_center()
+        .gap(px(8.0))
+        .min_w(px(0.0))
+        .child(
+            div()
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .size(px(16.0))
+                .child(icon_el),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w(px(0.0))
+                .truncate()
+                .text_size(px(13.0))
+                .text_color(theme.text)
+                .child(entry.label.clone()),
+        )
+        .into_any_element()
 }
 
 /// The shared command palette modal shell.
@@ -104,8 +164,7 @@ impl CommandPaletteModal {
     }
 
     /// Replace the entry list. Safe to call from async contexts — notifies so
-    /// the modal re-renders with the fresh rows. When `generation` is `Some`,
-    /// the update is dropped if a newer search has been scheduled since.
+    /// the modal re-renders with the fresh rows.
     pub fn set_entries(&mut self, entries: Vec<PaletteEntry>, cx: &mut Context<Self>) {
         self.entries = Rc::new(entries);
         cx.notify();
@@ -204,15 +263,14 @@ impl Render for CommandPaletteModal {
         let palette_handle = cx.entity().downgrade();
         let command = Command::new(&self.state)
             .filterable(self.filterable)
+            .max_h(px(360.0))
             .items(entries.iter().map(|entry| {
-                let mut item = CommandItem::new().label(entry.label.clone());
-                if let Some(icon) = entry.icon {
-                    item = item.child(move |_window, cx| {
-                        let theme = crate::Theme::current(cx);
-                        icon.render(15.0, theme.text_secondary).into_any_element()
-                    });
-                }
-                item
+                let entry = entry.clone();
+                // Keep label for local filtering / accessibility, but draw the
+                // full icon+label row ourselves — `.child()` replaces default content.
+                CommandItem::new()
+                    .label(entry.label.clone())
+                    .child(move |_window, cx| render_entry_row(&entry, cx))
             }))
             .placeholder(self.placeholder.clone())
             // Escape with a non-empty query clears it; once the query is
@@ -276,7 +334,7 @@ impl Render for CommandPaletteModal {
                 div()
                     .occlude()
                     .w(px(560.0))
-                    .max_h(px(420.0))
+                    .max_h(px(480.0))
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
                         cx.stop_propagation();
                     })

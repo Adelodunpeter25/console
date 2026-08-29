@@ -1,4 +1,4 @@
-//! ⌘P quick file open palette, built on the central [`crate::CommandPaletteModal`].
+//! ⌘⇧P quick file open palette, built on the central [`crate::CommandPaletteModal`].
 //!
 //! Debounces the query, asks the server for fuzzy file matches scoped to the
 //! active chat's project root, and hands the confirmed file to the app via
@@ -12,6 +12,7 @@ use gpui::{App, AppContext, Context, Entity, IntoElement, Render, Window};
 use crate::CommandPaletteModal;
 use crate::IconName;
 use crate::PaletteEntry;
+use crate::primitives::base_name;
 
 /// Debounce between the query changing and the server search firing.
 const SEARCH_DEBOUNCE_MS: u64 = 200;
@@ -23,9 +24,7 @@ pub struct QuickOpenPalette {
     root: Option<String>,
     /// Confirmed file callback: receives the absolute path.
     on_open_file: Option<Rc<dyn Fn(String, &mut Window, &mut App)>>,
-    /// Monotonic token so a stale in-flight search never overwrites a newer
-    /// one. Checked on the wrapper before applying results — the modal's own
-    /// generation token is not used here (it stayed at 0 and dropped every hit).
+    /// Monotonic token so a stale in-flight search never overwrites a newer one.
     search_generation: u64,
 }
 
@@ -57,8 +56,6 @@ impl QuickOpenPalette {
     /// Open the palette scoped to `root` and immediately list its top files.
     pub fn open(&mut self, root: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
         self.root = root;
-        // Reset the debounce tokens so every open (even with an unchanged
-        // query, e.g. reopening with an empty field) fires a fresh search.
         self.search_generation = 0;
         let this = cx.entity().downgrade();
         self.modal.update(cx, |modal, cx| {
@@ -80,7 +77,6 @@ impl QuickOpenPalette {
             modal.set_entries(Vec::new(), cx);
             modal.show(window, cx);
         });
-        // Prime the list with the empty-query search.
         self.schedule_search("", cx);
     }
 
@@ -110,8 +106,6 @@ impl QuickOpenPalette {
                 None => return,
             };
             let Ok(items) = items else { return };
-            // Apply on the wrapper so we can drop stale generations without
-            // relying on the modal's unused search_generation counter.
             let _ = this.update(cx, |this, cx| {
                 if generation != this.search_generation {
                     return;
@@ -133,16 +127,13 @@ impl QuickOpenPalette {
 impl Render for QuickOpenPalette {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         // Return the modal entity directly — same as CommandPalette.
-        // Wrapping in an empty `div()` makes the absolute overlay size against
-        // a 0×0 parent (GPUI/Taffy absolute is relative to the parent node),
-        // so the palette never appears.
         self.modal.clone()
     }
 }
 
-/// Convert server search results into palette rows. The label carries the
-/// path relative to the project root; confirming runs the `on_open_file`
-/// callback with the absolute path and hides the palette.
+/// Convert server search results into palette rows. The label is the path
+/// relative to the project root; icons come from the file-type map (folders
+/// use the monochrome folder glyph). Confirming opens the file and hides.
 fn entries_from_results(
     items: Vec<FileSearchResult>,
     modal: &Entity<CommandPaletteModal>,
@@ -153,22 +144,24 @@ fn entries_from_results(
     items
         .into_iter()
         .map(|item| {
-            let icon = if item.is_dir {
-                IconName::Folder
-            } else {
-                IconName::File
-            };
             let path = item.absolute_path;
             let label = item.relative_path;
             let modal = modal.clone();
             let on_open_file = on_open_file.clone();
-            PaletteEntry::new(path.clone(), label, move |window, cx| {
+            let mut entry = PaletteEntry::new(path.clone(), label.clone(), move |window, cx| {
                 if let Some(on_open_file) = &on_open_file {
                     on_open_file(path.clone(), window, cx);
                 }
                 modal.update(cx, |modal, cx| modal.hide(cx));
-            })
-            .icon(icon)
+            });
+            if item.is_dir {
+                entry = entry.icon(IconName::Folder);
+            } else {
+                // Prefer basename so extension/name rules hit (Cargo.toml, *.rs, …).
+                let name = base_name(&label).to_string();
+                entry = entry.file_icon(name);
+            }
+            entry
         })
         .collect()
 }
