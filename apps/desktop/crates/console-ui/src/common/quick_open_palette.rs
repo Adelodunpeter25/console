@@ -7,7 +7,7 @@
 use std::rc::Rc;
 
 use console_core::{ConsoleClient, FileSearchResult};
-use gpui::{App, AppContext, Context, Entity, IntoElement, ParentElement, Render, Window, div};
+use gpui::{App, AppContext, Context, Entity, IntoElement, Render, Window};
 
 use crate::CommandPaletteModal;
 use crate::IconName;
@@ -132,7 +132,11 @@ impl QuickOpenPalette {
 
 impl Render for QuickOpenPalette {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div().child(self.modal.clone())
+        // Return the modal entity directly — same as CommandPalette.
+        // Wrapping in an empty `div()` makes the absolute overlay size against
+        // a 0×0 parent (GPUI/Taffy absolute is relative to the parent node),
+        // so the palette never appears.
+        self.modal.clone()
     }
 }
 
