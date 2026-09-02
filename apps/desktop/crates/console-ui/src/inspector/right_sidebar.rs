@@ -220,7 +220,7 @@ impl RenderOnce for RightSidebar {
                                                 .bg(theme.overlay)
                                                 .text_size(px(10.0))
                                                 .font_weight(gpui::FontWeight::BOLD)
-                                                .text_color(theme.text)
+                                                .text_color(theme.accent)
                                                 .child(changes_count.to_string()),
                                         )
                                     })
@@ -268,7 +268,7 @@ impl RenderOnce for RightSidebar {
                                                 .bg(theme.overlay)
                                                 .text_size(px(10.0))
                                                 .font_weight(gpui::FontWeight::BOLD)
-                                                .text_color(theme.text_secondary)
+                                                .text_color(theme.accent)
                                                 .child(subagents_count.to_string()),
                                         )
                                     })
