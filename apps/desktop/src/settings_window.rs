@@ -15,8 +15,6 @@ pub struct SettingsWindow {
     app: WeakEntity<ConsoleDesktopApp>,
     active_tab: SettingsTab,
     focus_handle: FocusHandle,
-    antigravity_project_input: Entity<ComposerInput>,
-    antigravity_project_seeded: bool,
     is_adding_env: bool,
     editing_env_id: Option<String>,
     new_env_name_input: Entity<ComposerInput>,
@@ -44,12 +42,6 @@ impl SettingsWindow {
             }
         }
 
-        let antigravity_project_input = cx.new(|cx| {
-            let mut input = ComposerInput::new(window, cx);
-            input.set_placeholder("e.g. my-gcp-project-123", cx);
-            input
-        });
-
         let new_env_name_input = cx.new(|cx| {
             let mut input = ComposerInput::new(window, cx);
             input.set_placeholder("e.g. Production Daemon", cx);
@@ -69,8 +61,6 @@ impl SettingsWindow {
             app,
             active_tab: initial_tab,
             focus_handle,
-            antigravity_project_input,
-            antigravity_project_seeded: false,
             is_adding_env: false,
             editing_env_id: None,
             new_env_name_input,
@@ -109,21 +99,6 @@ impl Render for SettingsWindow {
             return div().size_full().child("Application closed").into_any_element();
         };
 
-        let initial_pid = if !self.antigravity_project_seeded {
-            app_entity.read(cx).auth_status.as_ref().and_then(|st| {
-                st.antigravity.configured_project_id.as_ref().or(st.antigravity.project_id.as_ref()).cloned()
-            })
-        } else {
-            None
-        };
-
-        if let Some(pid) = initial_pid {
-            self.antigravity_project_input.update(cx, |input, cx| {
-                input.set_content(pid, cx);
-            });
-            self.antigravity_project_seeded = true;
-        }
-
         let app = app_entity.read(cx);
 
         let active_tab = self.active_tab;
@@ -159,26 +134,11 @@ impl Render for SettingsWindow {
                     })
                 };
 
-                let on_save_project: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-                    let app_handle = self.app.clone();
-                    let input_entity = self.antigravity_project_input.clone();
-                    Rc::new(move |_w: &mut Window, cx: &mut App| {
-                        let text = input_entity.read(cx).content().trim().to_string();
-                        if let Some(app) = app_handle.upgrade() {
-                            app.update(cx, |app_state, cx| {
-                                app_state.save_antigravity_project_id(text, cx);
-                            });
-                        }
-                    })
-                };
-
                 AccountsPage {
                     providers: app.providers.clone(),
                     auth_status: app.auth_status.clone(),
                     logging_in: app.auth_logging_in.clone(),
-                    antigravity_project_input: Some(self.antigravity_project_input.clone()),
                     on_login,
-                    on_save_antigravity_project_id: on_save_project,
                 }.into_any_element()
             }
             SettingsTab::Connection => {
