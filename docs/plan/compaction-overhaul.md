@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-Context window compaction is the safety net for unbounded agent runs. The current impl in `apps/server/agent/src/compaction/index.ts` is structurally fine but operationally broken: the "summary" is a metadata stub, the feature is off by default, and `keepRecentTurns: 4` discards most of the recent context window in real coding sessions. This plan ships three changes in order of cost/impact.
+Context window compaction is the safety net for unbounded agent runs. The current impl in `apps/server/agent/src/compaction/index.ts` is structurally fine but operationally broken: the "summary" is a metadata stub, the feature is off by default, and `keepRecentTurns: 4` discards most of the recent context window in real coding sessions. This plan ships three changes — implementation fixes (truncation + summary) **before** enabling the feature by default.
 
 ### Goals
 - Compaction runs on every session by default (not opt-in).
@@ -190,16 +190,18 @@ The single biggest source of context bloat in a coding agent is tool output. A `
 
 ---
 
-## 6. Rollout order
+## 6. Rollout order — implementation before enable
+
+Compaction must be **correct before it is on by default**. We fix the implementation (truncation + summary) first, then flip the default.
 
 | Order | Change | Risk | Lines of code (est.) | Notes |
 |---|---|---|---|---|
-| 1 | #1 default-on | Very low | ~10 | No new behavior, just new defaults |
-| 2 | #3 truncation | Low | ~80 | Pure function, easy to test, no schema changes |
-| 3 | #2 structural summary | Medium | ~150 | Bigger code change, but no event schema break |
-| 4 | #2 LLM summary | Higher | ~120 | Costs a model call; needs abort + timeout handling |
+| 1 | #3 truncation | Low | ~80 | Pure function, easy to test, no schema changes. Fixes `estimateMessageTokens` so threshold math is honest before anything else. |
+| 2 | #2 structural summary | Medium | ~150 | Core fix: replaces metadata stub with real recap. Makes every future compaction useful. No event schema break. |
+| 3 | #2 LLM summary | Higher | ~120 | Optional `summary: "llm"` — costs a model call; needs abort + timeout handling. Ship after structural is stable. |
+| 4 | #1 default-on | Very low | ~10 | Last step. Now safe to ship: `keepRecentTurns: 12`, `compaction` on by default, `false` to opt-out. |
 
-Ship 1 → 2 → 3 in one PR if you're feeling confident. Ship 4 separately once 1-3 are stable.
+Ship 1 → 2 together in one PR (both are pure implementation fixes). Ship 3 separately. Ship 4 separately once 1-2 are verified in prod.
 
 ---
 
