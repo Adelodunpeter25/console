@@ -1,165 +1,158 @@
 # Custom Provider Implementation Guide
 
 Adds user-defined LLM endpoints to the server so any **OpenAI-compatible** or
-**Anthropic-compatible** API (OpenRouter, aggregators, proxies, self-hosted
-gateways) works as a first-class provider with multiple saved endpoint profiles.
+**Anthropic-compatible** API (OpenRouter, DeepSeek, Together, Groq, Ollama, vLLM,
+corporate proxies) works as a first-class provider with saved endpoint profiles.
 
 Target layout: `apps/server/providers/src/custom/`
 
-## Core concepts
+---
 
-- **Profile** — one saved endpoint:
-  ```ts
-  interface CustomProviderProfile {
-    id: string;              // stable uuid
-    label: string;           // user-facing name, e.g. "OpenRouter main"
-    kind: "openai-compatible" | "anthropic-compatible";
-    baseUrl: string;         // e.g. https://openrouter.ai/api/v1
-    apiKey?: string;         // stored via token-store pattern, never returned raw
-    createdAt: number;
-  }
-  ```
-- Profiles are stored under the console storage dir (`~/.console`) alongside
-  other provider credentials (`providers/src/auth/token-store.ts` pattern).
-- A profile is addressable as a provider: `provider = "custom:<profileId>"`.
-- Primary live target for verification: **OpenRouter** (`https://openrouter.ai/api/v1`,
-  `Authorization: Bearer sk-or-…`, model ids like `vendor/model`, optional
-  `HTTP-Referer` / `X-Title` headers).
+## 1. Core Concepts
 
-## Non-negotiable gotchas (learned from opencode)
+### 1.1 Profile Model
+```ts
+export interface CustomModelConfig {
+  id: string;              // e.g. "anthropic/claude-3.7-sonnet" or "deepseek/deepseek-r1"
+  name?: string;           // Display name
+  contextWindow?: number;  // Default: 128_000
+  supportsImages?: boolean;// Default: true
+}
 
-1. Tools passed to `streamText` must be wrapped with the SDK's `tool()` helper
-   carrying the original zod schema under `inputSchema:`. Raw JSON Schema under
-   `parameters:` (v4 convention) makes `asSchema(undefined)` substitute
-   `{ properties: {}, additionalProperties: false }` — every parameterized call
-   then fails validation. See `opencode/convert-tools.ts` post-fix.
-2. Never await the stream inside WS open handlers; fragment accumulation for
-   streamed tool-call arguments already exists in the agent loop.
-3. API keys must never round-trip to clients in full — mask on read.
+export interface CustomProviderProfile {
+  id: string;              // Stable UUID
+  label: string;           // User-facing label, e.g. "OpenRouter Main" or "Local Ollama"
+  kind: "openai-compatible" | "anthropic-compatible";
+  baseUrl: string;         // e.g. "https://openrouter.ai/api/v1"
+  apiKey?: string;         // Stored in token store, masked on read
+  models?: CustomModelConfig[]; // Discovered or manually configured models
+  defaultModelId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+- **Persistence**: Saved under `<storageDir>/custom-providers.json` (mirroring `token-store.ts`).
+- **Addressability**: `provider = "custom:<profileId>"`.
+- **Primary Live Verification**: **OpenRouter** (`https://openrouter.ai/api/v1`, Bearer auth, `vendor/model` format, `HTTP-Referer` / `X-Title` headers).
 
 ---
 
-## Phase 1 — Profile storage & config service
+## 2. Non-Negotiable Gotchas & Invariants
 
-### Tasks
-
-1. Create `custom/profiles.ts`:
-   - `CustomProviderProfile` type (above).
-   - `listProfiles()`, `getProfile(id)`, `saveProfile(input)`, `deleteProfile(id)`
-     persisted as JSON under `<storageDir>/custom-providers.json`.
-   - `maskProfile(profile)` → replaces `apiKey` with `sk-…<last4>` for client responses.
-2. Add `kind` union export shared by both engines.
-3. Unit tests: CRUD round-trip, masked output, delete of unknown id.
-
-### Acceptance
-
-- [ ] Profiles survive daemon restart.
-- [ ] No API surface returns a full apiKey.
+1. **Tool Schema Convention**:
+   Tools passed to `streamText` must be wrapped with AI SDK's `tool()` helper with the Zod schema under `inputSchema:`. Passing raw JSON Schema under `parameters:` causes `asSchema(undefined)` to collapse fields into `{ properties: {}, additionalProperties: false }`, failing all parameterized tool calls.
+2. **Never Expose Raw API Keys**:
+   `apiKey` must be masked on read (`sk-…<last4>`). Only the internal runtime stream factory loads the plain text secret.
+3. **OpenRouter Headers**:
+   When `baseUrl` matches `openrouter.ai`, include:
+   - `HTTP-Referer`: `https://github.com/Adelodunpeter25/console`
+   - `X-Title`: `Console Assistant`
+4. **Fallback When `/models` Is Disabled**:
+   Certain private proxies, Ollama setups, or gateways disable `GET /models` or require separate auth. The profile allows explicit `models` overrides so a user can type a model ID directly.
+5. **Zero Client Breaking Changes**:
+   Exposing custom profiles dynamically through `listProviders()` in `apps/server/agent/src/commands/provider-registry.ts` means the existing model picker on mobile (`ModelPickerSheet`) and desktop (`right_sidebar.rs` / status bar) will automatically populate custom providers without requiring UI changes.
 
 ---
 
-## Phase 2 — OpenAI-compatible engine
+## 3. Phased Implementation Plan
 
-### Tasks
+### Phase 1 — Profile Storage & Config Service (Fast Track)
 
-1. `custom/openai-compatible/index.ts`:
-   - `createCustomOpenAIStreamFn(profile)` → StreamFn using
-     `createOpenAICompatible({ name: profile.id, baseURL: profile.baseUrl, apiKey: profile.apiKey })`
-     + `streamText` (clone of `opencode/stream-fn.ts` minus free-tier specifics).
-2. `custom/shared/convert-tools.ts`:
-   - `tool()`-wrapped ToolSet builder keyed off zod schemas (shared by both engines;
-     anthropic engine imports this too where applicable).
-3. `custom/openai-compatible/convert-messages.ts`:
-   - Start by reusing `opencode/convert-messages.ts`; extract to
-     `custom/shared/convert-messages.ts` if identical.
-4. `custom/openai-compatible/discovery.ts`:
-   - `GET {baseUrl}/models` with `Authorization: Bearer <key>`.
-   - Map response `{ data: [{ id }] }` → provider catalog entries.
-   - On failure return empty list + reason (server down / 401 / not supported).
-5. Error handling: connection refused, 401/403, non-JSON body, timeouts → typed
-   errors that map to clean SSE/error frames instead of HTTP 500.
-
-### Acceptance
-
-- [ ] Live OpenRouter run: chat turn streams text.
-- [ ] Live OpenRouter run with a tool-capable model executes `readFile` end-to-end.
-- [ ] `/models` listing populates the picker.
+#### Tasks
+1. `apps/server/providers/src/custom/profiles.ts`:
+   - Define `CustomProviderProfile`, `CustomModelConfig`.
+   - `loadProfiles()`, `getProfile(id)`, `saveProfile(input)`, `deleteProfile(id)`.
+   - File path: path joined to console storage dir (`<storageDir>/custom-providers.json`).
+   - `maskProfile(profile)`: replaces `apiKey` with `sk-…<last4>`.
+2. CRUD Validation:
+   - Validate `baseUrl` is a valid URL (`http://` or `https://`).
+   - Ensure `label` is non-empty.
+3. Tests: `apps/server/tests/custom-profile.test.ts` (CRUD, key masking, persistence across re-instantiation).
 
 ---
 
-## Phase 3 — Anthropic-compatible engine
+### Phase 2 — OpenAI-Compatible Engine & Discovery (OpenRouter Target)
 
-Anthropic's Messages API differs structurally (top-level `system`, `x-api-key`
-+ `anthropic-version` headers, `input_schema` tool fields, distinct event stream).
-
-### Tasks
-
-1. Add dependency `@ai-sdk/anthropic` (same major family as `ai@7`).
-2. `custom/anthropic-compatible/index.ts`:
-   - `createCustomAnthropicStreamFn(profile)` → StreamFn using
-     `createAnthropic({ baseURL: profile.baseUrl, apiKey: profile.apiKey })`.
-3. `custom/anthropic-compatible/discovery.ts`:
-   - `GET {baseUrl}/v1/models` with `x-api-key` + `anthropic-version` headers.
-4. Message conversion: verify AI SDK maps our UIMessages correctly through the
-   anthropic provider; add converter only if gaps appear (e.g. image parts,
-   thinking blocks).
-5. Same error taxonomy as Phase 2 step 5.
-
-### Acceptance
-
-- [ ] Run against an Anthropic-compatible endpoint streams text + tool calls.
-- [ ] `/models` listing works with `x-api-key`.
+#### Tasks
+1. `apps/server/providers/src/custom/shared/convert-tools.ts`:
+   - Zod-based `tool()` wrapper (reused by both OpenAI and Anthropic engines).
+2. `apps/server/providers/src/custom/shared/convert-messages.ts`:
+   - Standard AI SDK CoreMessage converter supporting text, images, thinking, and tool results.
+3. `apps/server/providers/src/custom/openai-compatible/discovery.ts`:
+   - `fetchCustomOpenAIModels(profile)`:
+     - `GET {baseUrl}/models` with `Authorization: Bearer <key>`.
+     - Maps `{ data: [{ id, name, context_length }] }` to `CustomModelConfig[]`.
+     - Graceful fallback on error (returns profile's manual `models` list or generic fallback).
+4. `apps/server/providers/src/custom/openai-compatible/stream-fn.ts`:
+   - `createCustomOpenAIStreamFn(profile)`:
+     - Uses `createOpenAICompatible({ name: profile.id, baseURL: profile.baseUrl, apiKey: profile.apiKey, headers: profile.isOpenerRouter ? ... : {} })`.
+     - Calls `streamText` yielding text deltas, thinking deltas, and tool calls.
+5. Error mapping:
+   - 401 Unauthorized -> "Invalid custom provider API key".
+   - 404 / connection refused -> "Custom provider unreachable at {baseUrl}".
 
 ---
 
-## Phase 4 — Registry & API surface
+### Phase 3 — Dynamic Registry & Provider Integration
 
-### Tasks
-
-1. `agent/src/commands/provider-registry.ts`:
-   - Expose each enabled profile as a provider entry with
-     `id: "custom:<profileId>"`, `authMethod: "apiKey"`, and its discovered models.
-2. `run.service.ts`:
-   - Resolve `custom:<profileId>` to the right StreamFn factory at run time
-     (factory is cheap; construct per-run from the stored profile).
-3. REST routes under `api/src/routes/providers.ts` (or new `custom-providers.ts`):
-   - `GET    /api/providers/custom`          → masked list
-   - `POST   /api/providers/custom`          → create (validate baseUrl URL)
-   - `PATCH  /api/providers/custom/:id`      → update (label/key/models)
-   - `DELETE /api/providers/custom/:id`
-   - `POST   /api/providers/custom/:id/test` → connectivity + models probe
-4. Permission/approval flow: unchanged — custom profiles are just another provider.
-
-### Acceptance
-
-- [ ] Mobile/desktop account screens can list/create/edit/delete profiles.
-- [ ] A run addressed to `custom:<profileId>` completes against OpenRouter.
-- [ ] Deleting a profile mid-session fails gracefully on next run.
-
----
-
-## Phase 5 — Tests & hardening
-
-### Tasks
-
-1. `tests/custom-openai.test.ts` — mirror `opencode.test.ts`: mocked fetch,
-   wire-schema assertions (real properties present — regression-guard the v4/v7
-   pitfall), streamed toolCall accumulation.
-2. `tests/custom-anthropic.test.ts` — same shape for the anthropic engine.
-3. Profile service tests (Phase 1) wired into `tests/run-all-tests.ts`.
-4. Docs: note OpenRouter specifics in README or provider docs (optional headers,
-   model-id format).
-
-### Acceptance
-
-- [ ] All new suites pass via `bun tests/<file>.test.ts`.
-- [ ] Roadmap updated (custom providers item checked).
+#### Tasks
+1. `apps/server/agent/src/commands/provider-registry.ts`:
+   - Import `listProfiles` from `custom/profiles.js`.
+   - In `getProvider(id)`:
+     - If `id.startsWith("custom:")`, parse `profileId = id.slice(7)`.
+     - Load profile and instantiate StreamFn on the fly.
+   - In `listProviders()`:
+     - Append custom profiles as active providers:
+       ```ts
+       {
+         id: `custom:${profile.id}`,
+         name: profile.label,
+         authMethod: "apiKey",
+         models: profile.models && profile.models.length > 0
+           ? profile.models.map(m => ({ id: m.id, provider: `custom:${profile.id}`, contextWindow: m.contextWindow ?? 128_000, supportsImages: m.supportsImages ?? true }))
+           : [{ id: "default", provider: `custom:${profile.id}`, contextWindow: 128_000 }]
+       }
+       ```
+2. `apps/server/api/src/services/run.service.ts`:
+   - Ensure `buildRunModel` handles dynamic `custom:*` provider prefixes safely.
 
 ---
 
-## Deliberately out of scope (v1)
+### Phase 4 — REST API Endpoints
 
-- OAuth flows for custom endpoints (static API keys only)
-- Per-profile tool allowlists/denylists
-- Streaming usage/cost accounting (OpenRouter reports usage — candidate for v2)
-- Aliasing actual first-party OpenAI/Anthropic accounts through these engines
+#### Tasks
+Under `apps/server/api/src/routes/custom-providers.ts` (mounted under `/api/providers/custom`):
+1. `GET    /api/providers/custom` — returns masked profiles.
+2. `POST   /api/providers/custom` — creates a new profile.
+3. `PATCH  /api/providers/custom/:id` — updates an existing profile.
+4. `DELETE /api/providers/custom/:id` — deletes a profile.
+5. `POST   /api/providers/custom/:id/probe` — tests connection and updates discovered models.
+
+---
+
+### Phase 5 — Anthropic-Compatible Engine
+
+#### Tasks
+1. Add `@ai-sdk/anthropic` (or native fetch to `{baseUrl}/v1/messages`).
+2. `apps/server/providers/src/custom/anthropic-compatible/stream-fn.ts`:
+   - Uses `createAnthropic({ baseURL: profile.baseUrl, apiKey: profile.apiKey })`.
+   - `x-api-key` and `anthropic-version: 2023-06-01` headers.
+3. `apps/server/providers/src/custom/anthropic-compatible/discovery.ts`:
+   - `GET {baseUrl}/v1/models` probe.
+
+---
+
+## 4. Verification Checklist
+
+1. **Profile Storage**:
+   - Save profile with API key. Assert file exists on disk.
+   - Read via API and assert key is masked (`sk-…abcd`).
+2. **OpenRouter Live Test**:
+   - Add OpenRouter profile with test API key.
+   - Probe models via `GET /models`.
+   - Send prompt `What is 2+2?` and verify streaming text response.
+   - Execute `read_file` tool call and verify tool call + tool result round-trip.
+3. **UI Integration**:
+   - Verify `/api/providers` returns `custom:<id>`.
+   - Verify model selector on mobile and desktop shows custom models.
