@@ -3,7 +3,6 @@
  */
 import {
   ANTIGRAVITY_OAUTH_CONFIG,
-  GEMINI_OAUTH_CONFIG,
   OAUTH_AUTH_URL,
 } from "@/providers/src/constants.js";
 import { loadCredential } from "@/providers/src/auth/token-store.js";
@@ -39,11 +38,10 @@ async function tryLoadCredential(type: OAuthProviderId) {
 
 export class AuthService {
   private readonly codexPending = new Map<string, { verifier: string; expiresAt: number }>();
-  /** Pending state tokens for gemini/antigravity loopback OAuth flows. */
+  /** Pending state tokens for antigravity loopback OAuth flows. */
   private readonly oauthPending = new Map<string, { provider: OAuthProviderId; expiresAt: number }>();
 
   async getAuthStatus(): Promise<AuthStatusResponse> {
-    const geminiCred = await tryLoadCredential("gemini");
     const antigravityCred = await tryLoadCredential("antigravity");
     const codexCred = await (async () => {
       try {
@@ -53,18 +51,9 @@ export class AuthService {
       }
     })();
 
-    const [geminiConfigured, antigravityConfigured] = await Promise.all([
-      getConfiguredProjectId("gemini"),
-      getConfiguredProjectId("antigravity"),
-    ]);
+    const antigravityConfigured = await getConfiguredProjectId("antigravity");
 
     return {
-      gemini: {
-        loggedIn: Boolean(geminiCred?.accessToken),
-        email: geminiCred?.email,
-        projectId: geminiCred?.projectId,
-        configuredProjectId: geminiConfigured,
-      },
       antigravity: {
         loggedIn: Boolean(antigravityCred?.accessToken),
         email: antigravityCred?.email,
@@ -92,7 +81,7 @@ export class AuthService {
       return { provider, authUrl: result.authUrl, state, redirectUri: result.redirectUri };
     }
 
-    const oauthConfig = provider === "gemini" ? GEMINI_OAUTH_CONFIG : ANTIGRAVITY_OAUTH_CONFIG;
+    const oauthConfig = ANTIGRAVITY_OAUTH_CONFIG;
 
     const state = crypto.randomBytes(24).toString("hex");
     this.oauthPending.set(state, { provider, expiresAt: Date.now() + 10 * 60_000 });
@@ -129,7 +118,7 @@ export class AuthService {
       return { provider, userEmail: credential.email };
     }
 
-    // Validate the state token for gemini/antigravity.
+    // Validate the state token for antigravity.
     if (state) {
       const pending = this.oauthPending.get(state);
       this.oauthPending.delete(state);

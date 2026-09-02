@@ -21,7 +21,7 @@ usageRoutes.get("/usage", async (c) => {
  */
 usageRoutes.get("/providers/:id/usage", async (c) => {
   const providerId = c.req.param("id") as ProviderId;
-  if (providerId !== "gemini" && providerId !== "antigravity" && providerId !== "codex") {
+  if (providerId !== "antigravity" && providerId !== "codex") {
     return c.json({ success: false, error: `Invalid provider '${providerId}' for usage.` }, 400);
   }
 

@@ -32,7 +32,7 @@ authRoutes.get("/status", async (c) => {
 authRoutes.post("/login/url", async (c) => {
   const body = await c.req.json<OAuthLoginUrlDto>();
   const provider = body.provider ?? "antigravity";
-  if (provider !== "gemini" && provider !== "antigravity" && provider !== "codex") {
+  if (provider !== "antigravity" && provider !== "codex") {
     return c.json({ success: false, error: "Invalid OAuth provider." }, 400);
   }
   const result = authService.getLoginUrl(provider);
@@ -50,7 +50,7 @@ authRoutes.post("/login/callback", async (c) => {
   const body = await c.req.json<OAuthCallbackDto>();
   const { provider, code, state } = body;
 
-  if (provider !== "gemini" && provider !== "antigravity" && provider !== "codex") {
+  if (provider !== "antigravity" && provider !== "codex") {
     return c.json({ success: false, error: "Invalid OAuth provider." }, 400);
   }
   if (!code) {
@@ -74,7 +74,7 @@ authRoutes.post("/login/callback", async (c) => {
  */
 authRoutes.get("/project-id/:provider", async (c) => {
   const provider = c.req.param("provider") as OAuthProviderId;
-  if (provider !== "gemini" && provider !== "antigravity") {
+  if (provider !== "antigravity") {
     return c.json({ success: false, error: "Invalid provider." }, 400);
   }
   const projectId = await authService.getProjectId(provider);
@@ -87,7 +87,7 @@ authRoutes.get("/project-id/:provider", async (c) => {
 authRoutes.post("/project-id", async (c) => {
   const body = await c.req.json<ProjectIdDto>();
   const { provider, projectId } = body;
-  if (provider !== "gemini" && provider !== "antigravity") {
+  if (provider !== "antigravity") {
     return c.json({ success: false, error: "Invalid provider." }, 400);
   }
   await authService.setProjectId(provider, projectId);

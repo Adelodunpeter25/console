@@ -1,11 +1,11 @@
 /**
  * Interactive Live Demo CLI Runner for Console Agent Engine.
  *
- * Runs real agent prompts against live Gemini / Antigravity LLM endpoints using your local credentials.
+ * Runs real agent prompts against live Antigravity / OpenCode / Codex LLM endpoints using your local credentials.
  *
  * Usage:
  *   bun scripts/demo-agent.ts "List files in this project and build a hello world script"
- *   bun scripts/demo-agent.ts --provider antigravity --model gemini-2.5-pro "What tools do you have?"
+ *   bun scripts/demo-agent.ts --provider antigravity --model claude-opus-4-6-thinking "What tools do you have?"
  */
 import readline from "node:readline";
 import { Agent } from "@/agent/src/service/agent.js";
@@ -13,7 +13,6 @@ import { allTools } from "@/agent/src/tools/index.js";
 import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
 import { buildSystemPrompt } from "@/agent/src/systemprompt/builder.js";
 import { createAntigravityStreamFn } from "@/providers/src/antigravity/stream-fn.js";
-import { geminiStreamFn } from "@/providers/src/gemini/stream-fn.js";
 import { opencodeStreamFn } from "@/providers/src/opencode/stream-fn.js";
 import type { AgentSessionEvent, Model, ProviderId } from "@console/types";
 
@@ -23,16 +22,16 @@ function parseArgs(): {
   modelId: string;
 } {
   const args = process.argv.slice(2);
-  let provider: ProviderId = "gemini";
-  let modelId = "gemini-2.5-pro";
+  let provider: ProviderId = "antigravity";
+  let modelId = "claude-opus-4-6-thinking";
   const promptParts: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--provider" && args[i + 1]) {
-      provider = (args[i + 1] ?? "gemini") as ProviderId;
+      provider = (args[i + 1] ?? "antigravity") as ProviderId;
       i++;
     } else if (args[i] === "--model" && args[i + 1]) {
-      modelId = args[i + 1] ?? "gemini-2.5-pro";
+      modelId = args[i + 1] ?? "claude-opus-4-6-thinking";
       i++;
     } else if (args[i]) {
       promptParts.push(args[i]!);
@@ -99,11 +98,9 @@ async function main() {
   };
 
   const streamFn =
-    parsed.provider === "gemini"
-      ? geminiStreamFn
-      : parsed.provider === "opencode"
-        ? opencodeStreamFn
-        : createAntigravityStreamFn();
+    parsed.provider === "opencode"
+      ? opencodeStreamFn
+      : createAntigravityStreamFn();
 
   const { systemPrompt } = await buildSystemPrompt({
     cwd,

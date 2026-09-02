@@ -2,6 +2,7 @@
  * Session Persistence Service wrapping SqliteSessionStorage.
  */
 import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
+import { DEFAULT_FALLBACK_MODEL } from "@/agent/src/commands/provider-registry.js";
 import type { SessionHeader } from "@console/types";
 import type { CreateSessionDto, SessionDetailResponse, UpdateSessionDto } from "@/api/src/types/index.js";
 import { RunService } from "./run.service.js";
@@ -19,7 +20,7 @@ export class SessionService {
 
   createSession(dto: CreateSessionDto): SessionHeader {
     const cwd = dto.cwd || process.cwd();
-    const modelId = dto.modelId || "gemini-2.5-pro";
+    const modelId = dto.modelId || DEFAULT_FALLBACK_MODEL;
     const provider = dto.provider || "antigravity";
     const title = dto.title || "New Session";
 

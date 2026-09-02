@@ -8,7 +8,6 @@ import { loadCredential } from "@/providers/src/auth/token-store.js";
 import { refreshIfNeeded } from "@/providers/src/auth/token-refresh.js";
 import { loadCodexCredential, refreshCodexIfNeeded } from "@/providers/src/codex/oauth.js";
 import {
-  googleGeminiCliUsageProvider,
   antigravityUsageProvider,
   openaiCodexUsageProvider,
 } from "@/providers/src/usage/index.js";
@@ -35,8 +34,6 @@ export class UsageService {
 
   private getUsageProvider(provider: ProviderId) {
     switch (provider) {
-      case "gemini":
-        return googleGeminiCliUsageProvider;
       case "antigravity":
         return antigravityUsageProvider;
       case "codex":
@@ -47,7 +44,7 @@ export class UsageService {
   }
 
   async getUsage(provider: ProviderId, signal?: AbortSignal): Promise<UsageReport | null> {
-    if (provider !== "gemini" && provider !== "antigravity" && provider !== "codex") {
+    if (provider !== "antigravity" && provider !== "codex") {
       return null;
     }
 
@@ -140,7 +137,7 @@ export class UsageService {
   }
 
   async getAllUsage(signal?: AbortSignal): Promise<Record<string, UsageReport | null>> {
-    const providers: ProviderId[] = ["gemini", "antigravity", "codex"];
+    const providers: ProviderId[] = ["antigravity", "codex"];
     const results = await Promise.all(
       providers.map(async (p) => {
         const report = await this.getUsage(p, signal);

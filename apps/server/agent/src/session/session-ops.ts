@@ -175,7 +175,7 @@ export function loadSession(
   const title = meta?.title ?? indexRow?.title ?? "New Session";
   const cwd = meta?.cwd ?? indexRow?.cwd ?? process.cwd();
   const resolvedProjectId = meta?.project_id ?? projectId ?? indexRow?.project_id ?? "default";
-  const modelId = meta?.model_id ?? indexRow?.model_id ?? "gemini-2.5-pro";
+  const modelId = meta?.model_id ?? indexRow?.model_id ?? "claude-opus-4-6-thinking";
   const provider = meta?.provider ?? indexRow?.provider ?? "antigravity";
   const approvalMode = meta?.approval_mode ?? indexRow?.approval_mode ?? "always-ask";
   const createdAt = meta?.created_at ?? indexRow?.created_at ?? Date.now();

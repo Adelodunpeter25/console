@@ -26,7 +26,6 @@ providerRoutes.get("/providers", (c) => {
 providerRoutes.get("/providers/:id/models", async (c) => {
   const providerId = c.req.param("id") as ProviderId;
   if (
-    providerId !== "gemini" &&
     providerId !== "antigravity" &&
     providerId !== "opencode" &&
     providerId !== "codex"

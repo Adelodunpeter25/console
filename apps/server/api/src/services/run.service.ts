@@ -6,7 +6,11 @@ import { Agent } from "@/agent/src/service/agent.js";
 import { type TodoItem } from "@/agent/src/tools/todo.js";
 import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
 import { buildSystemPrompt } from "@/agent/src/systemprompt/builder.js";
-import { findModelInProvider, getProvider } from "@/agent/src/commands/provider-registry.js";
+import {
+  DEFAULT_FALLBACK_MODEL,
+  findModelInProvider,
+  getProvider,
+} from "@/agent/src/commands/provider-registry.js";
 import type {
   AgentSessionEvent,
   ApprovalMode,
@@ -112,7 +116,7 @@ export class RunService {
         id: sessionId,
         title: autoTitle,
         cwd,
-        modelId: dto.modelId || "gemini-2.5-pro",
+        modelId: dto.modelId || DEFAULT_FALLBACK_MODEL,
         provider: dto.provider || "antigravity",
       });
       session = { header, messages: [] };
@@ -138,7 +142,7 @@ export class RunService {
     }
 
     const provider = dto.provider || session.header.provider || "antigravity";
-    const modelId = dto.modelId || session.header.modelId || "gemini-2.5-pro";
+    const modelId = dto.modelId || session.header.modelId || DEFAULT_FALLBACK_MODEL;
     const catalogModel = findModelInProvider(provider, modelId);
     if (dto.attachments && dto.attachments.length > 0 && catalogModel?.supportsImages === false) {
       throw new Error(`The selected model '${modelId}' does not support image attachments.`);
