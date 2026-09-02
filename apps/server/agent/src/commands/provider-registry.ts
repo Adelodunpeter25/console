@@ -1,6 +1,6 @@
 /**
  * Provider Registry & Hybrid Model Catalog.
- * Registers supported providers ("gemini", "antigravity") with dynamic
+ * Registers supported providers ("antigravity", "opencode", "codex", "cline") with dynamic
  * endpoint discovery via /v1internal:fetchAvailableModels (mirroring oh-my-pi).
  */
 
@@ -9,7 +9,6 @@ import {
   fetchAvailableModels,
   fetchOpencodeFreeModels,
   fetchClineFreeModels,
-  geminiStreamFn,
   loadCredential,
   opencodeStreamFn,
   refreshIfNeeded,
@@ -34,7 +33,7 @@ export interface ProviderEntry extends ProviderCatalogEntry {
 
 export type { ProviderCatalogEntry } from "@/agent/src/types/index.js";
 
-export const DEFAULT_FALLBACK_MODEL = "gemini-3-flash";
+export const DEFAULT_FALLBACK_MODEL = "claude-opus-4-6-thinking";
 
 export const AVAILABLE_MODELS = [
   "claude-opus-4-6-thinking",
@@ -46,13 +45,6 @@ export const AVAILABLE_MODELS = [
   "gemini-3.5-flash-low",
   "gpt-oss-120b-medium",
 ] as const;
-
-export const DEFAULT_GEMINI_MODELS: Model[] = [
-  { id: "gemini-3.1-pro-preview", provider: "gemini", contextWindow: 1_048_576 },
-  { id: "gemini-3-pro-preview", provider: "gemini", contextWindow: 1_048_576 },
-  { id: "gemini-2.5-pro", provider: "gemini", contextWindow: 1_048_576 },
-  { id: "gemini-2.5-flash", provider: "gemini", contextWindow: 1_048_576 },
-];
 
 export const DEFAULT_ANTIGRAVITY_MODELS: Model[] = AVAILABLE_MODELS.map((id) => ({
   id,
@@ -86,14 +78,6 @@ export const DEFAULT_CLINE_MODELS: Model[] = [...CLINE_FREE_MODEL_IDS]
 const DISABLED_PROVIDERS = new Set<ProviderId>(["cline"]);
 
 export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
-  gemini: {
-    name: "gemini",
-    displayName: "Google Gemini CLI",
-    description: "Cloud Code Assist REST endpoint with Gemini CLI OAuth",
-    authMethod: "oauth",
-    models: DEFAULT_GEMINI_MODELS,
-    getStreamFn: () => geminiStreamFn,
-  },
   antigravity: {
     name: "antigravity",
     displayName: "Google Antigravity",
@@ -217,15 +201,13 @@ export async function fetchModelsForProvider(
 
   // If dynamic fetch failed or yielded no models, return static/cached models
   const staticFallback =
-    providerName === "gemini"
-      ? DEFAULT_GEMINI_MODELS
-      : providerName === "opencode"
-        ? DEFAULT_OPENCODE_MODELS
-        : providerName === "codex"
-          ? DEFAULT_CODEX_MODELS
-          : providerName === "cline"
-            ? DEFAULT_CLINE_MODELS
-            : DEFAULT_ANTIGRAVITY_MODELS;
+    providerName === "opencode"
+      ? DEFAULT_OPENCODE_MODELS
+      : providerName === "codex"
+        ? DEFAULT_CODEX_MODELS
+        : providerName === "cline"
+          ? DEFAULT_CLINE_MODELS
+          : DEFAULT_ANTIGRAVITY_MODELS;
   if (!provider.models || provider.models.length === 0) {
     provider.models = staticFallback;
   }

@@ -54,7 +54,7 @@ export const modelCommand: SlashCommand = {
 
 export const providerCommand: SlashCommand = {
   name: "provider",
-  description: "Switch LLM provider (gemini, antigravity, opencode) or list providers",
+  description: "Switch LLM provider (antigravity, opencode, codex, cline) or list providers",
   execute: async (args: string, ctx: SlashCommandContext): Promise<SlashCommandResult> => {
     const targetProviderName = args.trim().toLowerCase();
 

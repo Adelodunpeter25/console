@@ -36,7 +36,7 @@ export interface AgentLoopConfig {
   systemPrompt: string;
   /** Tools available to the agent. */
   tools: AgentTool[];
-  /** Provider-specific streaming function — inject your Gemini/Antigravity client here. */
+  /** Provider-specific streaming function — inject your Antigravity/OpenCode/Codex/Cline client here. */
   streamFn: StreamFn;
   /** Security approval mode ("always-ask" | "accept-edits" | "plan-mode" | "full-access"). Default: "always-ask" */
   approvalMode?: ApprovalMode;
