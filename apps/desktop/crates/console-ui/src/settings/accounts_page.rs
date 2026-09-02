@@ -14,19 +14,19 @@ pub struct AccountsPage {
     pub providers: Rc<Vec<ProviderCatalogEntry>>,
     pub auth_status: Option<AuthStatusResponse>,
     pub logging_in: HashSet<String>,
-    pub gemini_project_input: Option<Entity<ComposerInput>>,
+    pub antigravity_project_input: Option<Entity<ComposerInput>>,
     pub on_login: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    pub on_save_gemini_project_id: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    pub on_save_antigravity_project_id: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
 
 impl RenderOnce for AccountsPage {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let on_login = self.on_login.clone();
-        let on_save_project = self.on_save_gemini_project_id.clone();
+        let on_save_project = self.on_save_antigravity_project_id.clone();
         let auth_status = self.auth_status.clone();
         let logging_in = self.logging_in.clone();
-        let gemini_input = self.gemini_project_input.clone();
+        let antigravity_input = self.antigravity_project_input.clone();
 
         div()
             .flex()
@@ -61,7 +61,6 @@ impl RenderOnce for AccountsPage {
                         let is_logging_in = logging_in.contains(&provider_id);
                         let prov_status = auth_status.as_ref().and_then(|st| {
                             match provider_id.as_str() {
-                                "gemini" => Some(&st.gemini),
                                 "antigravity" => Some(&st.antigravity),
                                 "codex" | "openai" => Some(&st.codex),
                                 _ => None,
@@ -94,7 +93,7 @@ impl RenderOnce for AccountsPage {
                         let pid = provider_id.clone();
                         let on_login_click = on_login.clone();
                         let on_save_click = on_save_project.clone();
-                        let gem_inp = gemini_input.clone();
+                        let antigravity_inp = antigravity_input.clone();
 
                         div()
                             .id(ElementId::from(format!("provider-row-{pid}")))
@@ -174,7 +173,7 @@ impl RenderOnce for AccountsPage {
                                             ),
                                     ),
                             )
-                            .when(provider_id == "gemini", move |row| {
+                            .when(provider_id == "antigravity", move |row| {
                                 row.child(
                                     div()
                                         .pt(px(8.0))
@@ -195,7 +194,7 @@ impl RenderOnce for AccountsPage {
                                                 .flex()
                                                 .items_center()
                                                 .gap(px(8.0))
-                                                .when_some(gem_inp, |d, input| {
+                                                .when_some(antigravity_inp, |d, input| {
                                                     d.child(
                                                         div()
                                                             .flex_1()
@@ -209,7 +208,7 @@ impl RenderOnce for AccountsPage {
                                                 })
                                                 .child(
                                                     div()
-                                                        .id("btn-save-gemini-project")
+                                                        .id("btn-save-antigravity-project")
                                                         .px(px(10.0))
                                                         .py(px(5.0))
                                                         .rounded(px(6.0))

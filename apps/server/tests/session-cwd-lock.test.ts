@@ -16,7 +16,7 @@ const service = new SessionService(storage);
 // 1. Create a session.
 const header = service.createSession({
   cwd: "/projects/alpha",
-  modelId: "gemini-2.5-pro",
+  modelId: "claude-opus-4-6-thinking",
   provider: "antigravity",
   title: "Cwd Lock Test",
 });

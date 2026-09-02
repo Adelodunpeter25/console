@@ -294,7 +294,7 @@ impl RenderOnce for ComposerView {
             .selected_model
             .as_ref()
             .map(|model| (format_model_name(&model.model_id), model.provider.clone()))
-            .unwrap_or_else(|| ("Select Model".to_owned(), "gemini".to_owned()));
+            .unwrap_or_else(|| ("Select Model".to_owned(), "antigravity".to_owned()));
         let model_is_open = self
             .model_menu
             .as_ref()

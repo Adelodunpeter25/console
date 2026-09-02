@@ -19,7 +19,7 @@ pub enum PickerTab {
 pub fn provider_svg_path(provider: &str) -> &'static str {
     let provider = provider.to_ascii_lowercase();
     match provider.as_str() {
-        "gemini" | "google" | "antigravity" | "opencode" | "codex" | "openai"
+        "google" | "antigravity" | "opencode" | "codex" | "openai"
         | "chatgpt" | "claude" | "anthropic" | "deepseek" | "grok" | "cursor" | "amp" | "pi" => {
             IconName::provider(&provider).path()
         }

@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  TextInput,
   Alert,
 } from "react-native";
 import type { OAuthProviderId, ProviderId } from "@console/types";
@@ -15,7 +14,6 @@ import {
   LogIn,
   RefreshCw,
   LoaderCircle,
-  Save,
 } from "lucide-react-native";
 import { GlassSurface } from "@/components/layout/glass-surface";
 import { useAuth, useLocalOAuthLogin } from "@/hooks";
@@ -27,13 +25,7 @@ export function AccountSettings() {
   const catalog = useProviderCatalog();
   const localOAuth = useLocalOAuthLogin();
 
-  const [geminiProjectId, setGeminiProjectId] = useState("");
   const [loggingInProvider, setLoggingInProvider] = useState<ProviderId | null>(null);
-
-  // Sync the Gemini project ID input with the store value.
-  React.useEffect(() => {
-    setGeminiProjectId(auth.projectIds.gemini ?? "");
-  }, [auth.projectIds.gemini]);
 
   const handleLogin = async (provider: ProviderId, authMethod?: string) => {
     setLoggingInProvider(provider);
@@ -48,14 +40,6 @@ export function AccountSettings() {
       Alert.alert("Login Failed", message);
     } finally {
       setLoggingInProvider(null);
-    }
-  };
-
-  const handleSaveProjectId = async () => {
-    try {
-      await auth.saveProjectId("gemini", geminiProjectId || undefined);
-    } catch {
-      Alert.alert("Error", "Failed to save project ID.");
     }
   };
 
@@ -98,7 +82,7 @@ export function AccountSettings() {
               <View key={id}>
                 <View
                   className={`flex-row items-center justify-between py-3.5 ${
-                    i < providers.length - 1 || id === "gemini" ? "border-b border-border/50" : ""
+                    i < providers.length - 1 ? "border-b border-border/50" : ""
                   }`}
                 >
                   {/* Status icon + name + email */}
@@ -150,42 +134,6 @@ export function AccountSettings() {
                     </Text>
                   </TouchableOpacity>
                 </View>
-
-                {/* Gemini-only: Google Cloud project ID */}
-                {id === "gemini" && (
-                  <View className="pb-4 pl-6">
-                    <Text className="text-xs font-medium text-foreground-secondary mb-1">
-                      Google Cloud project ID
-                    </Text>
-                    <Text className="text-[11px] text-foreground-secondary mb-2.5 leading-4.5">
-                      Used when automatic discovery can't select a project. Save
-                      before logging in if your account requires it.
-                    </Text>
-                    <View className="flex-row gap-2">
-                      <TextInput
-                        className="flex-1 h-9 bg-card border border-border rounded-lg px-3 text-foreground text-xs font-mono"
-                        value={geminiProjectId}
-                        onChangeText={setGeminiProjectId}
-                        placeholder="my-project-id"
-                        placeholderTextColor={theme.colors.text.muted}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                      />
-                      <TouchableOpacity
-                        className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg border border-border justify-center"
-                        onPress={handleSaveProjectId}
-                        disabled={auth.savingProjectId}
-                      >
-                        {auth.savingProjectId ? (
-                          <LoaderCircle size={12} color="#ffffff" />
-                        ) : (
-                          <Save size={12} color="#ffffff" />
-                        )}
-                        <Text className="text-xs font-semibold text-foreground">Save</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
               </View>
             );
           })}

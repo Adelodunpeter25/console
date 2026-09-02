@@ -199,7 +199,6 @@ pub enum IconName {
 /// Provider logos from both the root and `icons/providers` asset directories.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ProviderIcon {
-    Gemini,
     Antigravity,
     Openai,
     OpenaiNested,
@@ -529,8 +528,7 @@ impl IconName {
 impl ProviderIcon {
     pub fn from_name(name: &str) -> Self {
         match name.to_ascii_lowercase().as_str() {
-            "gemini" | "google" => Self::Gemini,
-            "antigravity" => Self::Antigravity,
+            "antigravity" | "google" => Self::Antigravity,
             "openai" | "codex" | "chatgpt" => Self::OpenaiNested,
             "opencode" => Self::OpencodeNested,
             "claude" | "anthropic" => Self::Claude,
@@ -545,7 +543,6 @@ impl ProviderIcon {
 
     pub const fn path(self) -> &'static str {
         match self {
-            Self::Gemini => "icons/providers/gemini.svg",
             Self::Antigravity => "icons/providers/antigravity.svg",
             Self::Openai => "icons/provider-openai.svg",
             Self::OpenaiNested => "icons/providers/openai.svg",

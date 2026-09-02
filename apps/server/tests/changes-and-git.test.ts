@@ -14,7 +14,7 @@ describe("Session File Changes & Git Endpoints", () => {
     const session = storage.createSession({
       title: "Test Session",
       cwd: process.cwd(),
-      modelId: "gemini-2.5-pro",
+      modelId: "claude-opus-4-6-thinking",
       provider: "antigravity",
     });
 

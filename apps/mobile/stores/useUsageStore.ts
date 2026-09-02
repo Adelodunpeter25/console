@@ -11,7 +11,7 @@ import { usageService } from "@console/api";
  * throttles to avoid tight polling — 30s staleTime in the hook layer.
  */
 export const usage$ = observable({
-  /** Reports keyed by provider id (gemini/antigravity/codex), null = not logged in / unavailable. */
+  /** Reports keyed by provider id (antigravity/codex), null = not logged in / unavailable. */
   reports: {} as Record<string, UsageReport | null>,
   loading: false,
   loadingByProvider: {} as Record<string, boolean>,

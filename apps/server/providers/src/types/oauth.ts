@@ -1,20 +1,20 @@
 /**
  * OAuth credential types.
- * Covers both the raw file format (multiple naming conventions across Gemini CLI versions)
+ * Covers both the raw file format (multiple naming conventions across Antigravity CLI versions)
  * and the normalised, validated form used throughout the providers.
  */
 
 /**
- * Raw shape of the credential file at ~/.gemini/oauth_creds.json.
- * The Gemini CLI has used different field names across versions —
+ * Raw shape of the credential file at ~/.console/antigravity-creds.json.
+ * The Antigravity CLI has used different field names across versions —
  * we support all of them and normalise in parseCredential().
  */
 export interface GeminiOAuthCredential {
-  /** Access token — current Gemini CLI (v0.35+) */
+  /** Access token — current Antigravity CLI (v0.35+) */
   access_token?: string;
-  /** Access token — older Gemini CLI versions */
+  /** Access token — older Antigravity CLI versions */
   token?: string;
-  /** Expiry as epoch ms — current Gemini CLI */
+  /** Expiry as epoch ms — current Antigravity CLI */
   expiry_date?: number;
   /** Expiry — alternative field names */
   expiresAt?: number;
@@ -24,9 +24,9 @@ export interface GeminiOAuthCredential {
   /** Older field name for refresh token */
   refreshToken?: string;
   refresh?: string;
-  /** Project ID — newer Gemini CLI */
+  /** Project ID — newer Antigravity CLI */
   projectId?: string;
-  /** Project ID — older Gemini CLI */
+  /** Project ID — older Antigravity CLI */
   project_id?: string;
   /** OAuth scopes */
   scope?: string;

@@ -122,7 +122,7 @@ const TOKEN_PATH = "/auth/cli/token";
 - Add `POST /api/auth/login/callback` support for Devin provider
 - Update provider validation to include "devin"
 
-**Reference**: Existing OAuth routes for gemini/antigravity/codex
+**Reference**: Existing OAuth routes for antigravity/codex
 
 #### 2.3 Implement Server-Side OAuth Service
 **File**: `apps/server/api/src/services/auth.service.ts`
@@ -439,7 +439,7 @@ longer exists, codebuff was removed)
 ### Console Implementation Patterns
 
 1. **Existing OAuth**: `apps/server/api/src/routes/auth.ts`, `apps/server/api/src/services/auth.service.ts`
-2. **Existing Providers**: `apps/server/providers/src/` (gemini, antigravity, opencode, codex)
+2. **Existing Providers**: `apps/server/providers/src/` (antigravity, opencode, codex)
 3. **Desktop Auth**: `apps/desktop/src/state/auth.rs`
 4. **Mobile Auth**: `apps/mobile/stores/useAuthStore.ts`, `apps/mobile/hooks/useAuth.ts`
 

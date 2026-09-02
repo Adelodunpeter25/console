@@ -46,7 +46,6 @@ impl ConsoleDesktopApp {
         cx.notify();
 
         let oauth_id = match provider_name.as_str() {
-            "gemini" => OAuthProviderId::Gemini,
             "antigravity" => OAuthProviderId::Antigravity,
             "codex" | "openai" => OAuthProviderId::Codex,
             _ => {
@@ -200,11 +199,11 @@ impl ConsoleDesktopApp {
         }).detach();
     }
 
-    pub fn save_gemini_project_id(&mut self, project_id: String, cx: &mut Context<Self>) {
+    pub fn save_antigravity_project_id(&mut self, project_id: String, cx: &mut Context<Self>) {
         let client = self.client.clone();
         let pid_opt = if project_id.is_empty() { None } else { Some(project_id) };
         cx.spawn(async move |entity, cx| {
-            let _ = client.auth.save_project_id(OAuthProviderId::Gemini, pid_opt.as_deref()).await;
+            let _ = client.auth.save_project_id(OAuthProviderId::Antigravity, pid_opt.as_deref()).await;
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {

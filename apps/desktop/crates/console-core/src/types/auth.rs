@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 /// OAuth-capable providers with credential state (`OAuthProviderId`).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum OAuthProviderId {
-    Gemini,
     Antigravity,
     Codex,
 }
@@ -14,7 +13,6 @@ pub enum OAuthProviderId {
 impl OAuthProviderId {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Gemini => "gemini",
             Self::Antigravity => "antigravity",
             Self::Codex => "codex",
         }
@@ -39,7 +37,6 @@ pub struct ProviderAuthStatus {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AuthStatusResponse {
-    pub gemini: ProviderAuthStatus,
     pub antigravity: ProviderAuthStatus,
     pub codex: ProviderAuthStatus,
 }

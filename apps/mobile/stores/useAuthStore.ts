@@ -5,7 +5,6 @@ import { authService, getConsoleApiClient } from "@console/api";
 export type { OAuthProviderId, ProviderId } from "@console/types";
 
 const INITIAL_STATUS: AuthStatusResponse = {
-  gemini: { loggedIn: false },
   antigravity: { loggedIn: false },
   codex: { loggedIn: false },
 };
@@ -39,7 +38,6 @@ export async function loadAuthStatus(): Promise<void> {
       auth$.status.set(status);
       auth$.loading.set(false);
       auth$.projectIds.set({
-        gemini: status.gemini.configuredProjectId,
         antigravity: status.antigravity.configuredProjectId,
       });
     });

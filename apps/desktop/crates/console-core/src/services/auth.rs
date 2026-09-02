@@ -1,5 +1,5 @@
 //! Client for the server's `/api/auth/*` routes: provider login status,
-//! OAuth (URL + code exchange), and the Gemini Cloud project id setting.
+//! OAuth (URL + code exchange), and the Antigravity Cloud project id setting.
 
 use crate::types::*;
 use crate::utils::HttpTransport;

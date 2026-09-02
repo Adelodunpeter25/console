@@ -20,13 +20,6 @@ export function useUsageViewModel() {
       email: auth.status?.antigravity?.email ?? undefined,
     },
     {
-      key: "gemini" as const,
-      displayName: "Google Gemini",
-      report: allUsage?.gemini ?? null,
-      loggedIn: Boolean(auth.status?.gemini?.loggedIn),
-      email: auth.status?.gemini?.email ?? undefined,
-    },
-    {
       key: "codex" as const,
       displayName: "OpenAI Codex",
       report: allUsage?.codex ?? null,

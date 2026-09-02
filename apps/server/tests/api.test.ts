@@ -26,8 +26,8 @@ const app = createApiApp();
   assert.equal(res.status, 200);
   const json = await res.json();
   assert.equal(json.success, true);
-  assert.ok(json.data.gemini);
   assert.ok(json.data.antigravity);
+  assert.ok(json.data.codex);
   console.log("  ✅ GET /api/auth/status");
 }
 
@@ -136,7 +136,7 @@ const app = createApiApp();
 
 // 7. Model Favorites
 {
-  const favorite = { provider: "gemini", modelId: "api-test-model" };
+  const favorite = { provider: "antigravity", modelId: "api-test-model" };
   const saveRes = await app.request("/api/model-favorites", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -167,7 +167,7 @@ const app = createApiApp();
     body: JSON.stringify({
       title: "API Test Session",
       cwd: process.cwd(),
-      modelId: "gemini-2.5-pro",
+      modelId: "claude-opus-4-6-thinking",
       provider: "antigravity",
     }),
   });

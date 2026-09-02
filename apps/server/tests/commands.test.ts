@@ -100,12 +100,12 @@ function buildContext(): SlashCommandContext {
 
 // 3. Test /provider command
 {
-  const switchRes = await registry.parseAndExecute("/provider gemini", buildContext());
+  const switchRes = await registry.parseAndExecute("/provider antigravity", buildContext());
   assert.equal(switchRes.handled, true);
   assert.equal(switchRes.action, "switch_provider");
-  assert.equal(currentProvider, "gemini");
-  assert.equal(agent.model.provider, "gemini");
-  assert.equal(agent.model.id, "gemini-3.1-pro-preview");
+  assert.equal(currentProvider, "antigravity");
+  assert.equal(agent.model.provider, "antigravity");
+  assert.equal(agent.model.id, "claude-opus-4-6-thinking");
   console.log("  ✅ /provider command (switch provider & default model)");
 }
 

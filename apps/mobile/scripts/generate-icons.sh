@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ASSETS_DIR="$(cd "$SCRIPT_DIR/../assets" && pwd)"
 
-SOURCE_IMAGE="${1:-/Users/adelodunpeter/.gemini/antigravity-cli/brain/00df29d5-dbfc-4cc2-bb18-6869b4b72719/simplified_prism_clean_1787225536979.jpg}"
+SOURCE_IMAGE="${1:-$HOME/.console/antigravity/brain/00df29d5-dbfc-4cc2-bb18-6869b4b72719/simplified_prism_clean_1787225536979.jpg}"
 
 if [ ! -f "$SOURCE_IMAGE" ]; then
   echo "Error: Source image not found at $SOURCE_IMAGE"

@@ -451,7 +451,7 @@ impl ConsoleDesktopApp {
             models_by_provider: Rc::new(std::collections::HashMap::new()),
             loading_models: std::collections::HashSet::new(),
             selected_model: None,
-            active_picker_tab: PickerTab::Provider("gemini".to_string()),
+            active_picker_tab: PickerTab::Provider("antigravity".to_string()),
             favorites: Rc::new(std::collections::HashSet::new()),
             approval_mode: ApprovalMode::AlwaysAsk,
             model_menu,

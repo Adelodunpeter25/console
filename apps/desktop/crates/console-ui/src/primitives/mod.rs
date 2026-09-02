@@ -66,7 +66,6 @@ pub fn contain_scroll(handle: &ScrollHandle, cx: &mut App) {
 pub fn provider_color(theme: &Theme, provider: &str) -> Hsla {
     match provider {
         "antigravity" => rgb(0xE2795B).into(),
-        "gemini" => rgb(0x1A73E8).into(),
         "claude" | "anthropic" => rgb(0xD97757).into(),
         "deepseek" => rgb(0x4D6BFE).into(),
         _ => {
@@ -83,7 +82,7 @@ pub fn provider_color(theme: &Theme, provider: &str) -> Hsla {
 pub fn provider_icon(provider: &str) -> &'static str {
     let provider = provider.to_ascii_lowercase();
     match provider.as_str() {
-        "antigravity" | "gemini" | "google" | "opencode" | "codex" | "openai"
+        "antigravity" | "google" | "opencode" | "codex" | "openai"
         | "chatgpt" | "claude" | "anthropic" | "deepseek" | "grok" | "cursor" | "amp" | "pi" => {
             IconName::provider(&provider).path()
         }
