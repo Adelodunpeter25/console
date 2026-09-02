@@ -1,13 +1,14 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { View, Text, Pressable, ActivityIndicator, ScrollView, BackHandler } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Search, RefreshCw, File as FileIcon } from "lucide-react-native";
+import { Search, RefreshCw, File as FileIcon, Eye, Code2 } from "lucide-react-native";
 import { TextInput } from "react-native";
 import { useDirectoryChildren, useReadFile, useSearchFiles } from "@/hooks/queries";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { getLanguageFromPath, renderHighlightedLine } from "@/components/common/syntax-highlighter";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { FileTreeBrowser } from "@/components/files/FileTreeBrowser";
+import { MarkdownFilePreview, isMarkdownPath } from "@/components/files/markdown-file-preview";
 import { getFilePreviewBlock } from "@console/types";
 import { theme } from "@/styles/theme";
 import { app$, setActiveTab } from "@/stores/useAppStore";
@@ -33,6 +34,13 @@ export function FilesScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
   const selectedFilePath = selectedFile?.path ?? null;
+  const [markdownMode, setMarkdownMode] = useState<"preview" | "code">("preview");
+
+  const isMarkdownFile = useMemo(() => isMarkdownPath(selectedFilePath ?? undefined), [selectedFilePath]);
+
+  useEffect(() => {
+    setMarkdownMode("preview");
+  }, [selectedFilePath]);
 
   const project = useMemo(
     () => projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null,
@@ -161,53 +169,79 @@ export function FilesScreen() {
             </Text>
           </View>
         ) : (
-          <ScrollView
-            className="flex-1 bg-screen"
-            contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={{ flexDirection: "row", padding: 16, minWidth: "100%" }}>
-              {/* Gutter - not selectable, not copied */}
-              <View style={{ width: 32, marginRight: 8, alignItems: "flex-end" }}>
-                {(fileData?.content ?? "").split("\n").map((_, i) => (
-                  <Text
-                    key={`ln-${i}`}
-                    className="text-[10px] leading-4 font-mono text-right pr-2 text-foreground-secondary/40"
-                    selectable={false}
-                    style={{ lineHeight: 16 }}
+          <View className="flex-1 bg-screen">
+            {isMarkdownFile ? (
+              <View className="flex-row items-center justify-center px-3 py-2 border-b border-border bg-card/40">
+                <View className="flex-row rounded-full bg-card border border-border p-0.5">
+                  <Pressable
+                    onPress={() => setMarkdownMode("preview")}
+                    className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full ${markdownMode === "preview" ? "bg-foreground" : ""}`}
                   >
-                    {i + 1}
-                  </Text>
-                ))}
+                    <Eye size={13} color={markdownMode === "preview" ? "#000" : theme.colors.text.secondary} />
+                    <Text className={`text-xs font-semibold ${markdownMode === "preview" ? "text-black" : "text-foreground-secondary"}`}>Preview</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setMarkdownMode("code")}
+                    className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full ${markdownMode === "code" ? "bg-foreground" : ""}`}
+                  >
+                    <Code2 size={13} color={markdownMode === "code" ? "#000" : theme.colors.text.secondary} />
+                    <Text className={`text-xs font-semibold ${markdownMode === "code" ? "text-black" : "text-foreground-secondary"}`}>Code</Text>
+                  </Pressable>
+                </View>
               </View>
-
-              {/* Code - single selectable Text so handles span multiple lines, horizontal scroll for long lines */}
+            ) : null}
+            {isMarkdownFile && markdownMode === "preview" ? (
+              <MarkdownFilePreview content={fileData?.content ?? ""} />
+            ) : (
               <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ flex: 1 }}
-                contentContainerStyle={{ flexGrow: 1 }}
+                className="flex-1 bg-screen"
+                contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+                showsVerticalScrollIndicator={false}
               >
-                <Text
-                  selectable
-                  selectionColor="rgba(255,255,255,0.3)"
-                  style={{
-                    color: theme.colors.text.primary,
-                    fontSize: 11,
-                    lineHeight: 16,
-                    fontFamily: "monospace",
-                  }}
-                >
-                  {(fileData?.content ?? "").split("\n").map((line, i, arr) => (
-                    <Text key={`lc-${i}`} style={{ lineHeight: 16 }}>
-                      {renderHighlightedLine(line, getLanguageFromPath(selectedFilePath ?? undefined), String(i)) || " "}
-                      {i < arr.length - 1 ? "\n" : ""}
+                <View style={{ flexDirection: "row", padding: 16, minWidth: "100%" }}>
+                  {/* Gutter - not selectable, not copied */}
+                  <View style={{ width: 32, marginRight: 8, alignItems: "flex-end" }}>
+                    {(fileData?.content ?? "").split("\n").map((_, i) => (
+                      <Text
+                        key={`ln-${i}`}
+                        className="text-[10px] leading-4 font-mono text-right pr-2 text-foreground-secondary/40"
+                        selectable={false}
+                        style={{ lineHeight: 16 }}
+                      >
+                        {i + 1}
+                      </Text>
+                    ))}
+                  </View>
+
+                  {/* Code - single selectable Text so handles span multiple lines, horizontal scroll for long lines */}
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{ flexGrow: 1 }}
+                  >
+                    <Text
+                      selectable
+                      selectionColor="rgba(255,255,255,0.3)"
+                      style={{
+                        color: theme.colors.text.primary,
+                        fontSize: 11,
+                        lineHeight: 16,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {(fileData?.content ?? "").split("\n").map((line, i, arr) => (
+                        <Text key={`lc-${i}`} style={{ lineHeight: 16 }}>
+                          {renderHighlightedLine(line, getLanguageFromPath(selectedFilePath ?? undefined), String(i)) || " "}
+                          {i < arr.length - 1 ? "\n" : ""}
+                        </Text>
+                      ))}
                     </Text>
-                  ))}
-                </Text>
+                  </ScrollView>
+                </View>
               </ScrollView>
-            </View>
-          </ScrollView>
+            )}
+          </View>
         )}
       </View>
     );
