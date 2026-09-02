@@ -62,6 +62,9 @@ impl ConsoleDesktopApp {
             return;
         }
         self.inspector_active_tab = tab;
+        if tab == InspectorTab::Subagents {
+            self.fetch_inspector_subagents(cx);
+        }
         cx.notify();
     }
 
@@ -89,6 +92,7 @@ impl ConsoleDesktopApp {
     pub fn view_subagent_in_panel(&mut self, _call_or_subagent_id: &str, cx: &mut Context<Self>) {
         self.right_sidebar_visible = true;
         self.inspector_active_tab = InspectorTab::Subagents;
+        self.fetch_inspector_subagents(cx);
         self.persist_layout();
         cx.notify();
     }
@@ -126,6 +130,7 @@ impl ConsoleDesktopApp {
         self.fetch_inspector_fs_tree(cx);
         self.fetch_inspector_git_changes(cx);
         self.fetch_inspector_session_changes(cx);
+        self.fetch_inspector_subagents(cx);
         self.ensure_inspector_fs_watcher(cx);
     }
 
@@ -248,6 +253,32 @@ impl ConsoleDesktopApp {
                 }
                 Err(err) => {
                     log::warn!("Failed to fetch inspector session changes: {}", err);
+                }
+            }
+        })
+        .detach();
+    }
+
+    pub fn fetch_inspector_subagents(&mut self, cx: &mut Context<Self>) {
+        let Some(session_id) = self.selected_session_id.clone() else {
+            return;
+        };
+
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            match client.sessions.get_subagents(&session_id).await {
+                Ok(subagents) => {
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.session_subagents.insert(session_id, Rc::new(subagents));
+                                cx.notify();
+                            });
+                        }
+                    });
+                }
+                Err(err) => {
+                    log::warn!("Failed to fetch inspector session subagents: {}", err);
                 }
             }
         })

@@ -105,6 +105,32 @@ impl SessionService {
         }
     }
 
+    pub async fn get_subagents(&self, id: &str) -> Result<Vec<SubagentInfo>> {
+        let url = self.transport.url(&format!("/api/sessions/{}/subagents", id)).await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to get session subagents")?;
+
+        let body: ApiResponse<Vec<SubagentInfo>> = resp
+            .json()
+            .await
+            .context("Failed to parse session subagents response")?;
+        if body.success {
+            body.data
+                .ok_or_else(|| anyhow!("Session subagents data is missing"))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to load session subagents".into())
+            ))
+        }
+    }
+
     /// `GET /api/sessions/:id/todos` — persisted todo checklist for a session.
     pub async fn get_todos(&self, id: &str) -> Result<Vec<TodoItem>> {
         let url = self
