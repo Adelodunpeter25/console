@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { agentLoop, type StreamFn } from "@/agent/src/service/agent-loop.js";
-import type { AgentSessionEvent, AgentTool, Model } from "@/agent/src/types/index.js";
+import type { AgentSessionEvent, AgentTool, ApprovalMode, Model, PermissionRequest } from "@/agent/src/types/index.js";
 
 export interface SubagentToolContext {
   model: Model;
   streamFn: StreamFn;
   tools: AgentTool[];
   systemPrompt?: string;
+  approvalMode?: ApprovalMode;
+  onApproval?: (request: PermissionRequest) => Promise<boolean>;
   onEvent?: (event: AgentSessionEvent) => void;
 }
 
@@ -54,7 +56,15 @@ export function createSubagentTool(context?: SubagentToolContext): AgentTool {
         };
       }
 
-      const { model, streamFn, tools, systemPrompt = "", onEvent } = context;
+      const {
+        model,
+        streamFn,
+        tools,
+        systemPrompt = "",
+        approvalMode = "always-ask",
+        onApproval,
+        onEvent,
+      } = context;
       const subagentSystemPrompt = `You are a specialized subagent (${role}). Execute the task thoroughly and summarize your findings cleanly.\n${systemPrompt}`;
 
       onEvent?.({
@@ -73,7 +83,8 @@ export function createSubagentTool(context?: SubagentToolContext): AgentTool {
           systemPrompt: subagentSystemPrompt,
           tools: tools.filter((t) => t.name !== "subagent"),
           streamFn,
-          approvalMode: "accept-edits",
+          approvalMode,
+          onApproval,
           signal,
           onEvent: (event) => {
             if (event.type === "turnStart") {
