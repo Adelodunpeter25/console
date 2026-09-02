@@ -1,6 +1,6 @@
 import { batch, observable } from "@legendapp/state";
 
-export type MobileTab = "home" | "chat" | "settings" | "terminal" | "files";
+export type MobileTab = "home" | "chat" | "settings" | "terminal" | "files" | "subagents" | "subagent-details";
 
 /**
  * Global app UI state (active tab, selected project/session, backend URL) as
@@ -14,6 +14,7 @@ export const app$ = observable({
   previousTab: null as MobileTab | null,
   selectedProjectId: null as string | null,
   selectedSessionId: null as string | null,
+  selectedSubagentId: null as string | null,
   backendUrl: null as string | null,
   pendingConnectionSection: false,
 });
@@ -35,6 +36,10 @@ export function setSelectedSessionId(id: string | null): void {
   app$.selectedSessionId.set(id);
 }
 
+export function setSelectedSubagentId(id: string | null): void {
+  app$.selectedSubagentId.set(id);
+}
+
 export function setBackendUrl(url: string | null): void {
   app$.backendUrl.set(url);
 }
@@ -47,5 +52,6 @@ export function clearAppSelections(): void {
   batch(() => {
     app$.selectedProjectId.set(null);
     app$.selectedSessionId.set(null);
+    app$.selectedSubagentId.set(null);
   });
 }

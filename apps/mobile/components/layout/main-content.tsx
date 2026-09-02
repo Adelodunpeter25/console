@@ -1,7 +1,7 @@
 import React from "react";
 import { View } from "react-native";
 import { AppShell } from "./app-shell";
-import { HomeScreen, ChatScreen, SettingsScreen, TerminalScreen } from "@/screens";
+import { HomeScreen, ChatScreen, SettingsScreen, TerminalScreen, SubagentsScreen, SubagentDetailsScreen } from "@/screens";
 import { FilesScreen } from "@/screens/files/files-screen";
 import { app$ } from "@/stores/useAppStore";
 import { useValue } from "@legendapp/state/react";
@@ -27,6 +27,8 @@ export function MainContent() {
       {/* Conditional like chat: the native terminal surface carries heavy side effects. */}
       {activeTab === "terminal" ? <TerminalScreen /> : null}
       {activeTab === "files" ? <FilesScreen /> : null}
+      {activeTab === "subagents" ? <SubagentsScreen /> : null}
+      {activeTab === "subagent-details" ? <SubagentDetailsScreen /> : null}
     </AppShell>
   );
 }

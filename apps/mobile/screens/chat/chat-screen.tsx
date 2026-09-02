@@ -14,7 +14,6 @@ import {
   TodoBanner,
   TodoBottomSheet,
   SubagentBanner,
-  SubagentBottomSheet,
 } from "@/components/chat";
 import { ChatScreenSkeleton } from "@/components/common";
 import { app$, setActiveTab, setSelectedProjectId, setSelectedSessionId } from "@/stores/useAppStore";
@@ -145,10 +144,6 @@ export function ChatScreen() {
     hasSubagents,
     hasRunningSubagents,
     latestSubagent,
-    selectedSubagentId,
-    setSelectedSubagentId,
-    bottomSheetRef: subagentsSheetRef,
-    openSheet: openSubagentsSheet,
   } = useSessionSubagents(selectedSessionId);
 
   return (
@@ -190,7 +185,7 @@ export function ChatScreen() {
               subagentsCount={subagentsCount}
               latestSubagent={latestSubagent}
               hasRunningSubagents={hasRunningSubagents}
-              onPress={() => openSubagentsSheet()}
+              onPress={() => setActiveTab("subagents")}
             />
           ) : null}
           <InteractionPanel sessionId={selectedSessionId} />
@@ -222,7 +217,7 @@ export function ChatScreen() {
                   subagentsCount={subagentsCount}
                   latestSubagent={latestSubagent}
                   hasRunningSubagents={hasRunningSubagents}
-                  onPress={() => openSubagentsSheet()}
+                  onPress={() => setActiveTab("subagents")}
                 />
               ) : null}
             </>
@@ -236,14 +231,6 @@ export function ChatScreen() {
         todoItems={todoItems}
         completedCount={completedCount}
         totalCount={totalCount}
-      />
-
-      {/* Expandable Subagents Inspector Bottom Sheet */}
-      <SubagentBottomSheet
-        ref={subagentsSheetRef}
-        subagents={subagents}
-        selectedSubagentId={selectedSubagentId}
-        onSelectSubagent={setSelectedSubagentId}
       />
     </View>
   );
