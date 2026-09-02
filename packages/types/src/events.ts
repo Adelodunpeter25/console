@@ -49,6 +49,31 @@ export type SubagentEvent =
   | SubagentActivityEvent
   | SubagentEndEvent;
 
+export interface SubagentActivityItem {
+  turnIndex: number;
+  toolCallId: string;
+  toolName: string;
+  args?: Record<string, unknown>;
+  status: "running" | "completed" | "error";
+  error?: string;
+}
+
+export interface SubagentInfo {
+  subagentId: string;
+  parentToolCallId: string;
+  name: string;
+  role: string;
+  prompt: string;
+  maxTurns: number;
+  currentTurn: number;
+  status: "running" | "completed" | "aborted" | "error";
+  summary?: string;
+  error?: string;
+  activities: SubagentActivityItem[];
+  createdAt?: number;
+  updatedAt?: number;
+}
+
 export type AgentSessionEvent =
   | { type: "sessionStart" }
   | { type: "turnStart"; prompt: string }

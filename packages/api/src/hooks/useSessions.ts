@@ -7,6 +7,7 @@ export const sessionKeys = {
   lists: (params?: { cwd?: string; projectId?: string; onlyDeleted?: boolean }) =>
     [...sessionKeys.all, "list", params] as const,
   detail: (id: string) => [...sessionKeys.all, "detail", id] as const,
+  subagents: (id: string) => [...sessionKeys.all, "subagents", id] as const,
 };
 
 export function useSessions(params?: { cwd?: string; projectId?: string; onlyDeleted?: boolean }) {
@@ -82,5 +83,16 @@ export function usePermanentlyDeleteSession() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: sessionKeys.all });
     },
+  });
+}
+
+export function useSessionSubagents(id: string) {
+  return useQuery({
+    queryKey: sessionKeys.subagents(id),
+    queryFn: () => sessionService.getSubagents(id),
+    enabled: Boolean(id),
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }

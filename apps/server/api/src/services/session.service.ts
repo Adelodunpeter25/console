@@ -117,4 +117,8 @@ export class SessionService {
   saveSessionTodos(sessionId: string, items: readonly import("@console/types").TodoItem[]): void {
     this.storage.saveSessionTodos(sessionId, items);
   }
+
+  getSessionSubagents(sessionId: string): import("@console/types").SubagentInfo[] {
+    return this.storage.getSessionSubagents(sessionId);
+  }
 }

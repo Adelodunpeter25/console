@@ -6,3 +6,4 @@ export * from "./session-messages.js";
 export * from "./session-ops.js";
 export * from "./session-changes.js";
 export * from "./session-todos.js";
+export * from "./session-subagents.js";

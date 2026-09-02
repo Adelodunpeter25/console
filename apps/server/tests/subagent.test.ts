@@ -116,3 +116,88 @@ const dummySearchTool: AgentTool = {
 
   console.log("  ✅ Subagent streaming lifecycle and activity events");
 }
+
+// 2. Test SQLite Session Storage subagent persistence
+{
+  const { SqliteSessionStorage } = await import("@/agent/src/session/storage.js");
+  const storage = new SqliteSessionStorage({ dbPath: ":memory:" });
+
+  const project = storage.createProject({
+    name: "test-project",
+    dir: "/tmp/test-project",
+  });
+
+  const session = storage.createSession({
+    cwd: "/tmp/test-project",
+    modelId: "mock-model",
+    provider: "antigravity",
+    title: "Test Subagent Session",
+    projectId: project.id,
+  });
+
+  // Test upsertSubagentStart
+  storage.upsertSubagentStart(session.id, {
+    type: "subagentStart",
+    subagentId: "subagent_123",
+    parentToolCallId: "parent_call_1",
+    name: "Architect",
+    role: "Database Architect",
+    prompt: "Design the schema for subagents",
+    maxTurns: 5,
+  });
+
+  let subagents = storage.getSessionSubagents(session.id);
+  assert.equal(subagents.length, 1);
+  assert.equal(subagents[0].subagentId, "subagent_123");
+  assert.equal(subagents[0].role, "Database Architect");
+  assert.equal(subagents[0].status, "running");
+  assert.equal(subagents[0].activities.length, 0);
+
+  // Test appendSubagentActivity
+  storage.appendSubagentActivity(session.id, {
+    type: "subagentActivity",
+    subagentId: "subagent_123",
+    turnIndex: 1,
+    toolCallId: "call_abc",
+    toolName: "read_file",
+    args: { path: "schema.sql" },
+    status: "running",
+  });
+
+  subagents = storage.getSessionSubagents(session.id);
+  assert.equal(subagents[0].activities.length, 1);
+  assert.equal(subagents[0].activities[0].toolName, "read_file");
+  assert.equal(subagents[0].activities[0].status, "running");
+
+  // Update activity to completed
+  storage.appendSubagentActivity(session.id, {
+    type: "subagentActivity",
+    subagentId: "subagent_123",
+    turnIndex: 1,
+    toolCallId: "call_abc",
+    toolName: "read_file",
+    args: { path: "schema.sql" },
+    status: "completed",
+  });
+
+  subagents = storage.getSessionSubagents(session.id);
+  assert.equal(subagents[0].activities.length, 1);
+  assert.equal(subagents[0].activities[0].status, "completed");
+
+  // Complete subagent
+  storage.completeSubagent(session.id, {
+    type: "subagentEnd",
+    subagentId: "subagent_123",
+    status: "completed",
+    summary: "Schema design complete.",
+    totalTurns: 2,
+  });
+
+  subagents = storage.getSessionSubagents(session.id);
+  assert.equal(subagents.length, 1);
+  assert.equal(subagents[0].status, "completed");
+  assert.equal(subagents[0].summary, "Schema design complete.");
+  assert.equal(subagents[0].currentTurn, 2);
+
+  console.log("  ✅ Subagent SQLite persistence and retrieval");
+}

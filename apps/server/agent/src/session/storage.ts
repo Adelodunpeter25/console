@@ -207,6 +207,22 @@ export class SqliteSessionStorage {
     Sessions.clearSessionTodos(this.state, sessionId);
   }
 
+  upsertSubagentStart(sessionId: string, event: import("@console/types").SubagentStartEvent): void {
+    Sessions.upsertSubagentStart(this.state, sessionId, event);
+  }
+
+  appendSubagentActivity(sessionId: string, event: import("@console/types").SubagentActivityEvent): void {
+    Sessions.appendSubagentActivity(this.state, sessionId, event);
+  }
+
+  completeSubagent(sessionId: string, event: import("@console/types").SubagentEndEvent): void {
+    Sessions.completeSubagent(this.state, sessionId, event);
+  }
+
+  getSessionSubagents(sessionId: string): import("@console/types").SubagentInfo[] {
+    return Sessions.getSessionSubagents(this.state, sessionId);
+  }
+
   // MARK: - Lifecycle
 
   clearAll(): void {

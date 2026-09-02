@@ -67,4 +67,9 @@ export const sessionService = {
     const res = await getConsoleApiClient().get(`/api/sessions/${id}/todos`);
     return unwrapData(res.data, "get session todos");
   },
+
+  async getSubagents(id: string): Promise<import("@console/types").SubagentInfo[]> {
+    const res = await getConsoleApiClient().get(`/api/sessions/${id}/subagents`);
+    return unwrapData(res.data, "get session subagents");
+  },
 };

@@ -162,3 +162,15 @@ sessionRoutes.get("/sessions/:id/todos", (c) => {
   });
 });
 
+/**
+ * GET /api/sessions/:id/subagents — Get persisted subagents for a session.
+ */
+sessionRoutes.get("/sessions/:id/subagents", (c) => {
+  const id = c.req.param("id");
+  const subagents = sessionService.getSessionSubagents(id);
+  return c.json({
+    success: true,
+    data: subagents,
+  });
+});
+

@@ -106,6 +106,24 @@ export function initSessionDatabase(db: Database): void {
       status TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS session_subagents (
+      id TEXT PRIMARY KEY,
+      parent_tool_call_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL,
+      prompt TEXT NOT NULL,
+      max_turns INTEGER NOT NULL DEFAULT 10,
+      current_turn INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL,
+      summary TEXT,
+      error TEXT,
+      activities TEXT NOT NULL DEFAULT '[]',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_session_subagents_created_at ON session_subagents(created_at);
   `);
 
   // Migration: add repair state to pre-existing per-session databases.

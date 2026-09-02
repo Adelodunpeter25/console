@@ -237,6 +237,14 @@ export class RunService {
           pendingToolCalls.clear();
         }
 
+        if (event.type === "subagentStart") {
+          this.sessionStorage.upsertSubagentStart(sessionId, event);
+        } else if (event.type === "subagentActivity") {
+          this.sessionStorage.appendSubagentActivity(sessionId, event);
+        } else if (event.type === "subagentEnd") {
+          this.sessionStorage.completeSubagent(sessionId, event);
+        }
+
         if (event.type === "askQuestion" || event.type === "permissionRequest") {
           this.sessionStorage.updateSessionStatus(sessionId, "needs_attention");
         }
