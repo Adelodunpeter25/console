@@ -44,19 +44,20 @@
 |------|--------|
 | `apps/server/providers/src/gemini/stream-fn.ts` | **Delete file** |
 | `apps/server/providers/src/gemini/index.ts` | **Delete file** (or directory) |
-| `apps/server/providers/src/index.ts:5-6,51,54` | Remove `export { geminiStreamFn }`, remove `loginGemini` re-export, clean `GeminiOAuthCredential` re-export if gemini-only (keep type if still used by antigravity — it is shared; leave type but rename if desired) |
-| `apps/server/providers/src/constants.ts:1-14,38,51-59,82-94` | Delete `GEMINI_CLI_CLIENT_ID/SECRET`, `GEMINI_BASE_URL`, `DEFAULT_GEMINI_CLI_VERSION`, `GEMINI_SCOPES`, `GEMINI_OAUTH_CONFIG`, `getGeminiCliUserAgent`, `getGeminiCliHeaders`; keep `ANTIGRAVITY_*` + generic OAuth URLs. `ANTIGRAVITY_SCOPES` currently spreads `GEMINI_SCOPES` — inline the 3 scopes. |
-| `apps/server/providers/src/auth/login.ts` | Shares logic. Remove `GEMINI_OAUTH_CONFIG` import, `loginGemini()` export, `provider === "gemini"` branches in `completeAuthFlowWithCode` / `loadCodeAssist` / `onboardUser` (projectId/duetProject/mimeType branches), debug env path `gemini-onboard-poll`. Keep `loginAntigravity` + generic `loginWithConfig`. Simplify `OAuthConfig` type to `typeof ANTIGRAVITY_OAUTH_CONFIG`. |
-| `apps/server/providers/src/auth/token-store.ts:2,6,9,23-29` | Remove gemini fallback paths (`~/.gemini/oauth_creds.json`, `~/.config/gemini/oauth_creds.json`, `GEMINI_CREDENTIALS_PATH` handling) and gemini-specific comment; keep `antigravity` path only. Default param `"gemini"` → `"antigravity"`. |
-| `apps/server/providers/src/auth/token-refresh.ts:12-13,35,37` | Remove `GEMINI_CLI_CLIENT_ID/SECRET` branch; keep antigravity only |
+| `apps/server/providers/src/index.ts:5-6,51,54` | Remove `export { geminiStreamFn }`, remove `loginGemini` re-export, delete `// Gemini CLI provider` comment (`index.ts:5`), clean `GeminiOAuthCredential` re-export if gemini-only (keep type if still used by antigravity — it is shared; leave type but rename if desired) |
+| `apps/server/providers/src/constants.ts:1-14,38,51-59,82-94` | Delete `GEMINI_CLI_CLIENT_ID/SECRET` (`1-10`), `GEMINI_BASE_URL` (`13`), `DEFAULT_GEMINI_CLI_VERSION` (`14`), `GEMINI_SCOPES` (`38`), `GEMINI_OAUTH_CONFIG` (`51-59`), `getGeminiCliUserAgent` (`82-87`), `getGeminiCliHeaders` (`89-94`) — note `Client-Metadata: pluginType=GEMINI` (`92`) is gemini-branded but CCA spec requires it even for Antigravity; decide to keep header literal vs. delete with function (verify Antigravity still needs `pluginType=GEMINI`). Keep `ANTIGRAVITY_*` + generic OAuth URLs. `ANTIGRAVITY_SCOPES` currently `...GEMINI_SCOPES` (`45`) — inline the 3 scopes. |
+| `apps/server/providers/src/auth/login.ts:2,8,21,24,27,76,82,231,247,254,260,296,344,352,359,371,386,393,402,404,485,542,565` | Shares logic. Remove `GEMINI_OAUTH_CONFIG` import (`21`) + `getGeminiCliHeaders` import (`24`), `OAuthConfig` union (`27`) → `typeof ANTIGRAVITY_OAUTH_CONFIG`, header doc `both Gemini+Antigravity` (`2`) + `~/.console/{gemini,antigravity}` (`8`), debug env `gemini-onboard-poll.env` (`76`) + session `gemini-onboard-poll` (`82`), `ideType: "GEMINI_CLI" | "ANTIGRAVITY"` (`231`) → `"ANTIGRAVITY"` only, header ternaries `getGeminiCliHeaders()` → `getAntigravityUserAgent()` in `loadCodeAssist` (`247`) + `onboardUser` (`386`), `GEMINI_CLI && envProjectId` / `duetProject` / `pluginType: GEMINI` branches (`254,260-261,296,352,371,402,404`), VPC error `GOO.GLE/gemini-cli-auth-docs` strings (`344,359,485`), `loginGemini()` export (`565`) + `completeAuthFlowWithCode` `provider==="gemini"` ternary (`542`). Keep `loginAntigravity` + generic `loginWithConfig`. |
+| `apps/server/providers/src/auth/token-store.ts:2,6,9,23-29,64,95,107` | Remove gemini fallback paths (`~/.gemini/oauth_creds.json`, `~/.config/gemini/oauth_creds.json`, `GEMINI_CREDENTIALS_PATH` handling) and gemini-specific comment (`2`); keep `antigravity` path only. Defaults `loadCredential(type="gemini")` (`64`) + `saveCredential(..., "gemini")` (`95`) + `credentialExists("gemini")` (`107`) → `"antigravity"`. |
+| `apps/server/providers/src/auth/token-refresh.ts:12-13,35,37,81` | Remove `GEMINI_CLI_CLIENT_ID/SECRET` branch (`12-13,35,37`); default `refreshIfNeeded(..., type="gemini")` (`81`) → `"antigravity"`; keep antigravity only |
 | `apps/server/providers/src/auth/provider-config.ts:3` | Remove gemini projectId comment/branch if present |
-| `apps/server/providers/src/discovery/fetch-models.ts:6,12,14,42,52` | Generic fetch for gemini/antigravity — keep but remove `GEMINI_BASE_URL` default; branch now only antigravity (or make antigravity the only OAuth CCA discovery) |
+| `apps/server/providers/src/discovery/fetch-models.ts:6,12,14,42,52` | Generic fetch for gemini/antigravity — keep but remove `GEMINI_BASE_URL` default (`12`) + `getGeminiCliUserAgent` import (`14`); branch (`42,52`) now only antigravity (or make antigravity the only OAuth CCA discovery) |
 | `apps/server/providers/src/usage/gemini.ts` | **Delete file** |
 | `apps/server/providers/src/usage/index.ts:1` | Remove `export { googleGeminiCliUsageProvider }` |
 | `apps/server/providers/src/usage/google-antigravity.ts:170` | Keep (antigravity-only); verify no gemini case remains |
 | `apps/server/providers/src/shared/convert-messages.ts`, `convert-tools.ts`, `stream-core.ts`, `sse-parser.ts` | **Keep** — now antigravity-only helpers. Optional rename `stream-core` comment header removing "Gemini CLI and Antigravity" → "Antigravity (CCA SSE)". Do not delete. |
 | `apps/server/providers/src/antigravity/stream-fn.ts:4,23,42-63` | Keep; remove `GeminiFunctionDeclaration` import if gemini-only type, otherwise keep shared type. Remove gemini-specific fallback model comments. |
-| `apps/server/providers/src/types/{index,cca,oauth}.ts` | Keep `GeminiOAuthCredential` name (used by antigravity) or rename to `GoogleOAuthCredential` in a follow-up; not required for deletion |
+| `apps/server/providers/src/types/{index,cca,oauth}.ts` | Keep `GeminiOAuthCredential` name (used by antigravity) or rename to `GoogleOAuthCredential` in a follow-up; not required for deletion. Update gemini-branded comments `oauth.ts:8-9` (`Raw shape at ~/.gemini/oauth_creds.json`) + `12-13,15,17` (`current Gemini CLI (v0.35+)`)  |
+| `apps/server/providers/src/index.ts:5` comment | Delete `// Gemini CLI provider — OAuth, cloudcode-pa endpoint` line (covered above) |
 
 ### 2.4 Server — API layer
 | File | Lines | Action |
@@ -89,8 +90,9 @@
 | `apps/desktop/src/settings_window.rs:18-19,46,68-69,107,109,116,119,159,164,174,176` | gemini settings UI | Remove |
 | `apps/desktop/crates/console-ui/src/settings/accounts_page.rs:17,19,26,29,64,97,177,212` | gemini project input | Remove gemini row; keep antigravity |
 | `apps/desktop/crates/console-ui/src/settings/usage_page.rs:128,133` | gemini usage section | Remove |
-| `apps/desktop/crates/console-ui/src/common/{model_picker.rs:22, composer_view.rs:297, primitives/mod.rs:69,86, primitives/icons.rs:202,532,548}` | gemini icons / picker | Remove gemini icon/picker entry |
+| `apps/desktop/crates/console-ui/src/common/{model_picker.rs:22, composer_view.rs:297, primitives/mod.rs:69,86, primitives/icons.rs:202,532,548}` | gemini icons / picker | Remove gemini icon/picker entry; note `model_picker.rs:22` orphaned `"google"` alias |
 | `apps/desktop/assets/icons/providers/gemini.svg` | **Delete file** |
+| `apps/desktop` deep-link | None — generic `console://auth` scheme (`app.json`), no hard-coded gemini deep-link | Correctly omitted |
 
 ### 2.7 Mobile
 | File | Action |
@@ -99,7 +101,8 @@
 | `apps/mobile/stores/useUsageStore.ts:14`, `hooks/useUsageViewModel.ts:23-27` | `key: "gemini"` | Remove |
 | `apps/mobile/screens/settings/account-settings.tsx:30,33,35-36,56,101,154-155,167-168` | Gemini project-ID field | Remove gemini section; keep antigravity |
 | `apps/mobile/utils/icons/provider-icons.ts:9,11,17`, `components/icons/provider-icon.tsx:11` | gemini icon | Remove |
-| `apps/mobile/scripts/generate-icons.sh:7` | default `~/.gemini/...` | Change default to `~/.console/...` or remove |
+| `apps/mobile/hooks/useAuth.ts:78, useLocalOAuthLogin.ts:1, app.json:8` | OAuth deep-link (`console://auth?code=&state=&provider=`) — generic, no hard-coded `gemini`; no action | Correctly omitted — generic handler, no gemini string to delete |
+| `apps/mobile/scripts/generate-icons.sh:7` | default `~/.gemini/antigravity-cli/...` (`SOURCE_IMAGE`) | Change default to `~/.console/...` — residual `/.gemini/` is Antigravity artifact living under `~/.gemini/antigravity-cli`; update to explicit antigravity path |
 
 ### 2.8 Docs & misc
 | File | Action |
