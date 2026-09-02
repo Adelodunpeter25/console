@@ -98,9 +98,7 @@ export function SubagentDetailsScreen() {
                   style={{ color: statusColor }}
                 >
                   {isRunning
-                    ? subagent.maxTurns && subagent.maxTurns > 0
-                      ? `Running (${Math.max(1, subagent.currentTurn)}/${subagent.maxTurns})`
-                      : "Running"
+                    ? "Running"
                     : isCompleted
                     ? "Completed"
                     : subagent.status === "aborted"
@@ -139,16 +137,44 @@ export function SubagentDetailsScreen() {
                     const actRunning = act.status === "running";
                     const actDone = act.status === "completed";
 
-                    const argsSummary = act.args
-                      ? (act.args as Record<string, unknown>).command ||
-                        (act.args as Record<string, unknown>).CommandLine ||
-                        (act.args as Record<string, unknown>).path ||
-                        (act.args as Record<string, unknown>).AbsolutePath ||
-                        (act.args as Record<string, unknown>).TargetFile ||
-                        (act.args as Record<string, unknown>).pattern ||
-                        (act.args as Record<string, unknown>).Query ||
-                        (act.args as Record<string, unknown>).query
-                      : null;
+                    const argsSummary = (() => {
+                      const a = act.args as Record<string, unknown> | undefined;
+                      if (!a) return null;
+                      // Ordered by priority — first match wins
+                      const val =
+                        a.command ??
+                        a.CommandLine ??
+                        a.path ??
+                        a.AbsolutePath ??
+                        a.SearchDirectory ??
+                        a.TargetFile ??
+                        a.pattern ??
+                        a.Pattern ??
+                        a.Query ??
+                        a.query ??
+                        a.url ??
+                        a.Url ??
+                        a.question ??
+                        a.directory ??
+                        a.SearchPath ??
+                        a.Prompt ??
+                        a.prompt ??
+                        a.filePath ??
+                        a.targetFile ??
+                        a.absolutePath ??
+                        a.content;
+                      if (val != null) {
+                        const s = String(val);
+                        return s.length > 60 ? s.slice(0, 57) + "…" : s;
+                      }
+                      // Fallback: show first key=value pair
+                      const firstKey = Object.keys(a)[0];
+                      if (firstKey) {
+                        const fv = String(a[firstKey]).slice(0, 40);
+                        return `${firstKey}: ${fv}`;
+                      }
+                      return null;
+                    })();
 
                     return (
                       <View

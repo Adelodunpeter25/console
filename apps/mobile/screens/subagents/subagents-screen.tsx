@@ -64,9 +64,7 @@ export function SubagentsScreen() {
                 : "#ef4444";
 
               const statusText = isRunning
-                ? subagent.maxTurns && subagent.maxTurns > 0
-                  ? `Running (Turn ${Math.max(1, subagent.currentTurn)}/${subagent.maxTurns})`
-                  : "Running"
+                ? "Running"
                 : isCompleted
                 ? "Done"
                 : subagent.status === "aborted"

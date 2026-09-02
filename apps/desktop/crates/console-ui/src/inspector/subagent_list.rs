@@ -100,11 +100,7 @@ impl RenderOnce for SubagentListView {
                         let on_toggle = on_toggle.clone();
 
                         let status_label = if is_running {
-                            if subagent.max_turns > 0 {
-                                format!("Running (Turn {}/{})", subagent.current_turn.max(1), subagent.max_turns)
-                            } else {
-                                format!("Running (Turn {})", subagent.current_turn.max(1))
-                            }
+                            "Running".to_string()
                         } else if is_completed {
                             "Done".to_string()
                         } else if subagent.status == "aborted" {
