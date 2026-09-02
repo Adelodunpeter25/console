@@ -42,3 +42,10 @@ export function setBackendUrl(url: string | null): void {
 export function setPendingConnectionSection(pending: boolean): void {
   app$.pendingConnectionSection.set(pending);
 }
+
+export function clearAppSelections(): void {
+  batch(() => {
+    app$.selectedProjectId.set(null);
+    app$.selectedSessionId.set(null);
+  });
+}

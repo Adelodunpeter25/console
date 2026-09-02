@@ -5,6 +5,9 @@ import { resetServerState } from "@/utils/server-state";
 import { queryClient } from "@/query-client";
 import { loadAuthStatus } from "@/stores/useAuthStore";
 import { setBackendUrl } from "./useAppStore";
+import { loadProjects, loadSessions } from "./useProjectStore";
+import { loadProviders } from "./useProviderStore";
+import { loadAllUsage } from "./useUsageStore";
 
 /** Legacy single-URL key kept in sync so downgrades / other readers don't break. */
 const BACKEND_URL_KEY = "@console_backend_url";
@@ -84,11 +87,15 @@ function activeUrlOf(state: { environments: Environment[]; activeId: string | nu
   return state.environments.find((e) => e.id === state.activeId)?.url ?? null;
 }
 
-/** Push the active URL into the API client, app store and auth status. */
+/** Push the active URL into the API client, app store and refresh all server-scoped data. */
 function applyActive(url: string) {
   configureConsoleApi({ baseUrl: url });
   setBackendUrl(url);
   void loadAuthStatus();
+  void loadProjects().catch(() => {});
+  void loadSessions().catch(() => {});
+  void loadProviders().catch(() => {});
+  void loadAllUsage().catch(() => {});
   queryClient.resumePausedMutations?.();
 }
 
@@ -116,11 +123,15 @@ export function addEnvironment(name: string, url: string): Environment {
 }
 
 export function updateEnvironment(id: string, patch: Partial<Pick<Environment, "name" | "url">>): void {
-  const envs = environments$.environments.peek().map((e) =>
-    e.id === id ? { ...e, ...patch } : e,
-  );
+  const beforeEnvs = environments$.environments.peek();
+  const oldEnv = beforeEnvs.find((e) => e.id === id) ?? null;
+  const envs = beforeEnvs.map((e) => (e.id === id ? { ...e, ...patch } : e));
   const isActive = environments$.activeId.peek() === id;
   const active = envs.find((e) => e.id === id) ?? null;
+  const urlChanged = Boolean(isActive && patch.url !== undefined && oldEnv && oldEnv.url !== patch.url);
+  if (urlChanged) {
+    resetServerState();
+  }
   environments$.environments.set(envs);
   persist(envs, environments$.activeId.peek(), isActive && active ? active.url : activeUrlOf({ environments: envs, activeId: environments$.activeId.peek() }));
   if (isActive && active) {

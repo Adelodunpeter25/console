@@ -29,3 +29,7 @@ export function setStatus(sessionId: string, status: SessionStatus): void {
 export function clearStatus(sessionId: string): void {
   sessionStatuses$[sessionId].delete();
 }
+
+export function clearAllStatuses(): void {
+  sessionStatuses$.set({});
+}

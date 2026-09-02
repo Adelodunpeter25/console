@@ -9,7 +9,7 @@ export interface SubagentToolContext {
   tools: AgentTool[];
   systemPrompt?: string;
   approvalMode?: ApprovalMode;
-  onApproval?: (request: PermissionRequest) => Promise<boolean>;
+  onApproval?: (request: PermissionRequest) => Promise<boolean> | boolean;
   onEvent?: (event: AgentSessionEvent) => void;
 }
 

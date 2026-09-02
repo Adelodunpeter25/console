@@ -311,3 +311,24 @@ function sinkTerminalId(sink: TerminalSink, id?: string): string | undefined {
   }
   return sinkIdMap.get(sink);
 }
+
+export function clearAllTerminals(): void {
+  // Close live sockets and drop pending buffers so old server PTYs don't leak.
+  for (const sink of Object.values(terminalSinks)) {
+    try {
+      sink.close();
+    } catch {}
+  }
+  for (const key of Object.keys(terminalSinks)) delete terminalSinks[key];
+  for (const key of Object.keys(listeners)) delete listeners[key];
+  for (const key of Object.keys(pendingAppends)) delete pendingAppends[key];
+  if (flushTimer) {
+    clearInterval(flushTimer);
+    flushTimer = null;
+  }
+  openingPromises.clear();
+  batch(() => {
+    terminals$.set({} as Record<string, TerminalRecord>);
+    terminalBuffers$.set({} as Record<string, string>);
+  });
+}

@@ -89,3 +89,15 @@ export async function loadApprovalModes(): Promise<void> {
 export function clearProviderError(): void {
   provider$.error.set(null);
 }
+
+export function clearProviderState(): void {
+  batch(() => {
+    provider$.providers.set([]);
+    provider$.modelsByProvider.set({} as Record<string, Model[]>);
+    provider$.loadingProviders.set(false);
+    provider$.loadingModels.set({} as Record<string, boolean>);
+    provider$.approvalModes.set([]);
+    provider$.loadingApprovalModes.set(false);
+    provider$.error.set(null);
+  });
+}

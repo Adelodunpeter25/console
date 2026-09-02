@@ -1,6 +1,14 @@
 import { chat$ } from "@/stores/useChatStore";
 import { clearChatStorage } from "@/stores/chat/chat-persist";
 import { queryClient } from "@/query-client";
+import { clearProjectState } from "@/stores/useProjectStore";
+import { clearProviderState } from "@/stores/useProviderStore";
+import { invalidateUsage } from "@/stores/useUsageStore";
+import { clearSessions } from "@/stores/useSessionStore";
+import { clearAllStatuses } from "@/stores/useSessionStatusStore";
+import { clearFsState } from "@/stores/useFsStore";
+import { clearAllTerminals } from "@/stores/useTerminalStore";
+import { clearAppSelections } from "@/stores/useAppStore";
 
 /** Clear the local chat cache (in-memory + persisted). Called when the
  *  backend URL changes so stale messages from a different server don't
@@ -20,4 +28,12 @@ export function clearChatCache() {
 export function resetServerState() {
   clearChatCache();
   queryClient.clear();
+  clearProjectState();
+  clearProviderState();
+  invalidateUsage();
+  clearSessions();
+  clearAllStatuses();
+  clearFsState();
+  clearAllTerminals();
+  clearAppSelections();
 }

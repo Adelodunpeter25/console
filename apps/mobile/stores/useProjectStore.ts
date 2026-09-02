@@ -141,3 +141,14 @@ export async function refreshSessionHeader(sessionId: string): Promise<void> {
     // Ignore refresh failures — the header will update on next load.
   }
 }
+
+export function clearProjectState(): void {
+  batch(() => {
+    project$.projects.set([]);
+    project$.sessions.set([]);
+    project$.deletedSessions.set([]);
+    project$.loading.set(false);
+    project$.sessionsLoading.set(false);
+    project$.deletedSessionsLoading.set(false);
+  });
+}

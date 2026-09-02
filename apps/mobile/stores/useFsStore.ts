@@ -160,6 +160,17 @@ export function clearError(): void {
   fs$.error.set(null);
 }
 
+export function clearFsState(): void {
+  batch(() => {
+    fs$.browse.set(null);
+    fs$.browsing.set(false);
+    fs$.treesByPath.set({} as Record<string, DirectoryTreeResult>);
+    fs$.fileContentsByPath.set({} as Record<string, ReadFileResult>);
+    fs$.busyPaths.set({} as Record<string, boolean>);
+    fs$.error.set(null);
+  });
+}
+
 /** Render a tree entry as an indented text line (for mobile tree previews). */
 function formatTreeEntry(entry: FsTreeEntry, depth = 0): string {
   const indent = "  ".repeat(depth);
