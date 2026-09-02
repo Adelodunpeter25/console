@@ -95,7 +95,6 @@ impl RenderOnce for RightSidebar {
         let on_resize = self.on_begin_resize;
         let changes_count = self.working_changes.len() + self.session_changes.len();
         let subagents_count = self.subagents.len();
-        let has_running_subagents = self.subagents.iter().any(|s| s.status == "running");
 
         div()
             .id("right-sidebar-shell")
@@ -269,16 +268,8 @@ impl RenderOnce for RightSidebar {
                                                 .bg(theme.overlay)
                                                 .text_size(px(10.0))
                                                 .font_weight(gpui::FontWeight::BOLD)
-                                                .text_color(if has_running_subagents { theme.accent } else { theme.text_secondary })
+                                                .text_color(theme.text_secondary)
                                                 .child(subagents_count.to_string()),
-                                        )
-                                    })
-                                    .when(has_running_subagents, |el| {
-                                        el.child(
-                                            div()
-                                                .size(px(6.0))
-                                                .rounded_full()
-                                                .bg(theme.accent),
                                         )
                                     })
                             }),

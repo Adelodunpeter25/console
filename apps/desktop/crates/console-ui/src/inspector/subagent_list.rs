@@ -132,12 +132,12 @@ impl RenderOnce for SubagentListView {
                             .bg(theme.surface)
                             .border_1()
                             .border_color(if is_running {
-                                theme.accent.opacity(0.4)
+                                theme.accent.opacity(0.3)
                             } else {
                                 theme.sidebar_border
                             });
 
-                        // Header row (using only subagent.role as the title)
+                        // Header row (Role as title, clean status text without dot badge)
                         card = card.child(
                             div()
                                 .id(format!("subagent-header-{}", subagent.subagent_id))
@@ -175,15 +175,7 @@ impl RenderOnce for SubagentListView {
                                             div()
                                                 .flex()
                                                 .items_center()
-                                                .gap(px(4.0))
-                                                .when(is_running, |el| {
-                                                    el.child(
-                                                        div()
-                                                            .size(px(6.0))
-                                                            .rounded_full()
-                                                            .bg(theme.accent),
-                                                    )
-                                                })
+                                                .gap(px(6.0))
                                                 .when(!is_running, |el| {
                                                     let icon = if is_completed {
                                                         IconName::CircleCheck
@@ -225,14 +217,6 @@ impl RenderOnce for SubagentListView {
                             let on_copy_summary = on_copy.clone();
                             let summary_to_copy = summary_text.clone().unwrap_or_default();
 
-                            let prompt_view = Rc::new(RefCell::new(MarkdownView::new()));
-                            let prompt_ctx = MarkdownCtx::new(
-                                format!("subagent-prompt-{}", subagent.subagent_id),
-                                &palette,
-                                Metrics::BODY,
-                                self.selection.clone(),
-                            );
-
                             card = card.child(
                                 div()
                                     .flex()
@@ -242,7 +226,7 @@ impl RenderOnce for SubagentListView {
                                     .border_t_1()
                                     .border_color(theme.sidebar_border)
                                     .bg(theme.sidebar)
-                                    // 1. Mission Prompt (Selectable Markdown)
+                                    // 1. Mission Prompt (Clean text display)
                                     .child(
                                         div()
                                             .flex()
@@ -260,15 +244,12 @@ impl RenderOnce for SubagentListView {
                                                     .p(px(6.0))
                                                     .rounded(px(4.0))
                                                     .bg(theme.surface)
-                                                    .child(render_selectable_markdown(
-                                                        &subagent.prompt,
-                                                        Some(&prompt_view),
-                                                        &prompt_ctx,
-                                                        false,
-                                                    )),
+                                                    .text_size(px(11.5))
+                                                    .text_color(theme.text_secondary)
+                                                    .child(subagent.prompt.clone()),
                                             ),
                                     )
-                                    // 2. Activity Timeline
+                                    // 2. Activity Timeline (Fast, clean native GPUI elements)
                                     .child(
                                         div()
                                             .flex()
@@ -293,38 +274,33 @@ impl RenderOnce for SubagentListView {
                                                     .flex()
                                                     .flex_col()
                                                     .gap(px(4.0))
-                                                    .children(subagent.activities.iter().enumerate().map(|(act_idx, act)| {
+                                                    .children(subagent.activities.iter().map(|act| {
                                                         let act_running = act.status == "running";
                                                         let act_completed = act.status == "completed";
 
-                                                        let args_summary = act.args.as_ref().map(|v| {
+                                                        let args_summary = act.args.as_ref().and_then(|v| {
                                                             if let Some(obj) = v.as_object() {
-                                                                if let Some(path) = obj.get("path").and_then(|p| p.as_str()) {
-                                                                    format!("\"{}\"", path)
-                                                                } else if let Some(pattern) = obj.get("pattern").and_then(|p| p.as_str()) {
-                                                                    format!("\"{}\"", pattern)
-                                                                } else if let Some(cmd) = obj.get("command").and_then(|c| c.as_str()) {
-                                                                    format!("\"{}\"", cmd)
+                                                                if let Some(cmd) = obj.get("command").or_else(|| obj.get("CommandLine")).and_then(|c| c.as_str()) {
+                                                                    Some(cmd.to_string())
+                                                                } else if let Some(path) = obj.get("path").or_else(|| obj.get("AbsolutePath")).or_else(|| obj.get("TargetFile")).and_then(|p| p.as_str()) {
+                                                                    Some(path.to_string())
+                                                                } else if let Some(pattern) = obj.get("pattern").or_else(|| obj.get("Query")).or_else(|| obj.get("query")).and_then(|p| p.as_str()) {
+                                                                    Some(pattern.to_string())
                                                                 } else {
-                                                                    v.to_string()
+                                                                    None
                                                                 }
                                                             } else {
-                                                                v.to_string()
+                                                                None
                                                             }
-                                                        }).unwrap_or_default();
+                                                        });
 
-                                                        let act_view = Rc::new(RefCell::new(MarkdownView::new()));
-                                                        let act_text = if !args_summary.is_empty() {
-                                                            format!("`{}` {}", act.tool_name, args_summary)
+                                                        let (icon, color) = if act_running {
+                                                            (IconName::Bot, theme.accent)
+                                                        } else if act_completed {
+                                                            (IconName::CircleCheck, theme.success)
                                                         } else {
-                                                            format!("`{}`", act.tool_name)
+                                                            (IconName::Alert, theme.danger)
                                                         };
-                                                        let act_ctx = MarkdownCtx::new(
-                                                            format!("subagent-act-{}-{act_idx}", subagent.subagent_id),
-                                                            &palette,
-                                                            Metrics::BODY,
-                                                            self.selection.clone(),
-                                                        );
 
                                                         div()
                                                             .flex()
@@ -334,33 +310,31 @@ impl RenderOnce for SubagentListView {
                                                             .py(px(4.0))
                                                             .rounded(px(4.0))
                                                             .bg(theme.surface)
-                                                            .when(act_running, |el| {
-                                                                el.child(
-                                                                    div()
-                                                                        .size(px(6.0))
-                                                                        .rounded_full()
-                                                                        .bg(theme.accent),
-                                                                )
-                                                            })
-                                                            .when(!act_running, |el| {
-                                                                let (icon, color) = if act_completed {
-                                                                    (IconName::CircleCheck, theme.success)
-                                                                } else {
-                                                                    (IconName::Alert, theme.danger)
-                                                                };
-                                                                el.child(app_icon(icon, 11.0, color))
-                                                            })
+                                                            .child(app_icon(icon, 12.0, color))
                                                             .child(
                                                                 div()
-                                                                    .flex_1()
-                                                                    .min_w_0()
-                                                                    .child(render_selectable_markdown(
-                                                                        &act_text,
-                                                                        Some(&act_view),
-                                                                        &act_ctx,
-                                                                        false,
-                                                                    )),
+                                                                    .px(px(4.0))
+                                                                    .py(px(1.0))
+                                                                    .rounded(px(3.0))
+                                                                    .bg(theme.overlay)
+                                                                    .text_size(px(11.0))
+                                                                    .font_weight(FontWeight::MEDIUM)
+                                                                    .font_family(crate::markdown::render::MONO_FAMILY)
+                                                                    .text_color(theme.text_secondary)
+                                                                    .child(act.tool_name.clone()),
                                                             )
+                                                            .when_some(args_summary, |el, args| {
+                                                                el.child(
+                                                                    div()
+                                                                        .flex_1()
+                                                                        .min_w_0()
+                                                                        .truncate()
+                                                                        .text_size(px(11.0))
+                                                                        .font_family(crate::markdown::render::MONO_FAMILY)
+                                                                        .text_color(theme.text_tertiary)
+                                                                        .child(args),
+                                                                )
+                                                            })
                                                             .when_some(act.error.clone(), |el, err| {
                                                                 el.child(
                                                                     div()
@@ -374,7 +348,7 @@ impl RenderOnce for SubagentListView {
                                                     .into_any_element()
                                             }),
                                     )
-                                    // 3. Summary Section (Selectable Markdown with drag-to-select copy)
+                                    // 3. Summary Section (Only Summary uses Markdown renderer)
                                     .child(
                                         div()
                                             .flex()
