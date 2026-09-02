@@ -117,15 +117,16 @@ export class RunService {
       });
       session = { header, messages: [] };
     } else {
-      const currentTitle = session.header.title;
+      const currentTitle = session.header.title?.trim();
       const isGenericTitle =
         !currentTitle ||
         currentTitle === "New Session" ||
         currentTitle === "New mobile session" ||
         currentTitle === "New Chat" ||
+        currentTitle === "New chat" ||
         currentTitle === "Untitled";
 
-      if (isGenericTitle || session.messages.length === 0) {
+      if (isGenericTitle) {
         const autoTitle = prompt.length > 35 ? `${prompt.slice(0, 35)}...` : prompt;
         this.sessionStorage.updateTitle(sessionId, autoTitle);
         session.header.title = autoTitle;

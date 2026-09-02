@@ -399,6 +399,7 @@ impl ToolCalls {
                                 .cursor_pointer()
                                 .hover(|s| s.bg(theme.overlay_strong))
                                 .on_click(move |_, window, cx| {
+                                    cx.stop_propagation();
                                     if let Some(on_action) = &on_action {
                                         on_action(
                                             ToolCallsAction::ViewSubagentInPanel {
