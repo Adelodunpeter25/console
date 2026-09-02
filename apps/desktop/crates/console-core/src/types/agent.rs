@@ -122,3 +122,35 @@ pub struct TodoItem {
     pub content: String,
     pub status: String,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentActivityItem {
+    pub turn_index: usize,
+    pub tool_call_id: String,
+    pub tool_name: String,
+    #[serde(default)]
+    pub args: Option<serde_json::Value>,
+    pub status: String, // "running", "completed", "error"
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentInfo {
+    pub subagent_id: String,
+    pub parent_tool_call_id: String,
+    pub name: String,
+    pub role: String,
+    pub prompt: String,
+    pub max_turns: usize,
+    pub current_turn: usize,
+    pub status: String, // "running", "completed", "aborted", "error"
+    #[serde(default)]
+    pub summary: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+    #[serde(default)]
+    pub activities: Vec<SubagentActivityItem>,
+}

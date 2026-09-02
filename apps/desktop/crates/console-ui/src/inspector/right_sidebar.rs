@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use console_core::types::{GitFileEntry, SessionFileChange};
+use console_core::types::{GitFileEntry, SessionFileChange, SubagentInfo};
 use gpui::{
     App, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
@@ -11,6 +11,7 @@ use gpui::{
 
 use crate::inspector::changes_list::ChangesListView;
 use crate::inspector::file_tree::{FileTreeNode, FileTreeView};
+use crate::inspector::subagent_list::SubagentListView;
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 
@@ -19,6 +20,7 @@ pub enum InspectorTab {
     #[default]
     AllFiles,
     Changes,
+    Subagents,
 }
 
 #[derive(IntoElement)]
@@ -29,16 +31,21 @@ pub struct RightSidebar {
     tree: Rc<Vec<FileTreeNode>>,
     working_changes: Rc<Vec<GitFileEntry>>,
     session_changes: Rc<Vec<SessionFileChange>>,
+    subagents: Rc<Vec<SubagentInfo>>,
     expanded_folders: HashSet<String>,
+    expanded_subagents: HashSet<String>,
     selected_path: Option<String>,
     on_select_tab: Rc<dyn Fn(InspectorTab, &mut Window, &mut App) + 'static>,
     on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_toggle_subagent: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_copy_summary: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_begin_resize: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static>,
 }
 
 impl RightSidebar {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         width: f32,
         active_tab: InspectorTab,
@@ -46,11 +53,15 @@ impl RightSidebar {
         tree: Rc<Vec<FileTreeNode>>,
         working_changes: Rc<Vec<GitFileEntry>>,
         session_changes: Rc<Vec<SessionFileChange>>,
+        subagents: Rc<Vec<SubagentInfo>>,
         expanded_folders: HashSet<String>,
+        expanded_subagents: HashSet<String>,
         selected_path: Option<String>,
         on_select_tab: Rc<dyn Fn(InspectorTab, &mut Window, &mut App) + 'static>,
         on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
         on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+        on_toggle_subagent: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+        on_copy_summary: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
         on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
         on_begin_resize: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static>,
     ) -> Self {
@@ -61,11 +72,15 @@ impl RightSidebar {
             tree,
             working_changes,
             session_changes,
+            subagents,
             expanded_folders,
+            expanded_subagents,
             selected_path,
             on_select_tab,
             on_toggle_folder,
             on_select_file,
+            on_toggle_subagent,
+            on_copy_summary,
             on_refresh,
             on_begin_resize,
         }
@@ -79,6 +94,8 @@ impl RenderOnce for RightSidebar {
         let on_refresh = self.on_refresh;
         let on_resize = self.on_begin_resize;
         let changes_count = self.working_changes.len() + self.session_changes.len();
+        let subagents_count = self.subagents.len();
+        let has_running_subagents = self.subagents.iter().any(|s| s.status == "running");
 
         div()
             .id("right-sidebar-shell")
@@ -109,7 +126,7 @@ impl RenderOnce for RightSidebar {
                         },
                     ),
             )
-            // Header: Segmented Tabs (All files | Changes) & Refresh Button
+            // Header: Segmented Tabs (All files | Changes | Subagents) & Refresh Button
             .child(
                 div()
                     .h(px(36.0))
@@ -159,7 +176,7 @@ impl RenderOnce for RightSidebar {
                                     .on_click(move |_, window, cx| {
                                         (on_tab)(InspectorTab::AllFiles, window, cx);
                                     })
-                                    .child("All files")
+                                    .child("All")
                             })
                             // Tab 2: Changes (N)
                             .child({
@@ -208,6 +225,62 @@ impl RenderOnce for RightSidebar {
                                                 .child(changes_count.to_string()),
                                         )
                                     })
+                            })
+                            // Tab 3: Subagents (N)
+                            .child({
+                                let on_tab = on_tab.clone();
+                                let is_active = self.active_tab == InspectorTab::Subagents;
+                                div()
+                                    .id("tab-subagents")
+                                    .px(px(8.0))
+                                    .py(px(3.0))
+                                    .rounded(px(4.0))
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(4.0))
+                                    .text_size(px(11.0))
+                                    .font_weight(if is_active {
+                                        gpui::FontWeight::SEMIBOLD
+                                    } else {
+                                        gpui::FontWeight::NORMAL
+                                    })
+                                    .text_color(if is_active {
+                                        theme.text
+                                    } else {
+                                        theme.text_tertiary
+                                    })
+                                    .bg(if is_active {
+                                        theme.overlay_strong
+                                    } else {
+                                        gpui::transparent_black()
+                                    })
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(theme.overlay))
+                                    .on_click(move |_, window, cx| {
+                                        (on_tab)(InspectorTab::Subagents, window, cx);
+                                    })
+                                    .child("Subagents")
+                                    .when(subagents_count > 0, |el| {
+                                        el.child(
+                                            div()
+                                                .px(px(4.0))
+                                                .py(px(1.0))
+                                                .rounded(px(4.0))
+                                                .bg(theme.overlay)
+                                                .text_size(px(10.0))
+                                                .font_weight(gpui::FontWeight::BOLD)
+                                                .text_color(if has_running_subagents { theme.accent } else { theme.text_secondary })
+                                                .child(subagents_count.to_string()),
+                                        )
+                                    })
+                                    .when(has_running_subagents, |el| {
+                                        el.child(
+                                            div()
+                                                .size(px(6.0))
+                                                .rounded_full()
+                                                .bg(theme.accent),
+                                        )
+                                    })
                             }),
                     )
                     // Refresh icon button
@@ -243,6 +316,13 @@ impl RenderOnce for RightSidebar {
                     self.session_changes,
                     self.selected_path,
                     self.on_select_file,
+                )
+                .into_any_element(),
+                InspectorTab::Subagents => SubagentListView::new(
+                    self.subagents,
+                    self.expanded_subagents,
+                    self.on_toggle_subagent,
+                    self.on_copy_summary,
                 )
                 .into_any_element(),
             })

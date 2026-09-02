@@ -281,9 +281,25 @@ impl Render for ConsoleDesktopApp {
                             console_ui::InspectorTab::Changes => {
                                 this.open_diff_tab(path, cx);
                             }
+                            console_ui::InspectorTab::Subagents => {}
                         }
                     });
                 }
+            })
+        };
+        let on_toggle_subagent: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |subagent_id, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.toggle_subagent_expanded(subagent_id, cx);
+                    });
+                }
+            })
+        };
+        let on_copy_summary: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+            Rc::new(move |summary, _w, cx| {
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(summary));
             })
         };
         let on_refresh_inspector: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
@@ -691,8 +707,14 @@ impl Render for ConsoleDesktopApp {
                                 )
                             }),
                     )
-                    // Conductor-style Right Sidebar Inspector (All files & Changes)
+                    // Conductor-style Right Sidebar Inspector (All files & Changes & Subagents)
                     .when(self.right_sidebar_visible, |el| {
+                        let subagents = self
+                            .selected_session_id
+                            .as_deref()
+                            .and_then(|id| self.session_subagents.get(id).cloned())
+                            .unwrap_or_else(|| Rc::new(Vec::new()));
+
                         el.child(RightSidebar::new(
                             self.right_sidebar_width,
                             self.inspector_active_tab,
@@ -700,11 +722,15 @@ impl Render for ConsoleDesktopApp {
                             self.inspector_tree.clone(),
                             self.inspector_working_changes.clone(),
                             self.inspector_session_changes.clone(),
+                            subagents,
                             (*self.inspector_expanded_folders).clone(),
+                            self.expanded_subagents.clone(),
                             self.inspector_selected_path.clone(),
                             on_select_inspector_tab,
                             on_toggle_inspector_folder,
                             on_select_inspector_file,
+                            on_toggle_subagent,
+                            on_copy_summary,
                             on_refresh_inspector,
                             on_begin_right_sidebar_resize,
                         ))

@@ -148,6 +148,8 @@ pub struct ConsoleDesktopApp {
     pub inspector_session_changes: Rc<Vec<console_core::types::SessionFileChange>>,
     pub inspector_expanded_folders: Rc<std::collections::HashSet<String>>,
     pub inspector_selected_path: Option<String>,
+    pub session_subagents: std::collections::HashMap<String, Rc<Vec<console_core::types::SubagentInfo>>>,
+    pub expanded_subagents: std::collections::HashSet<String>,
     pub preview_tab: Option<(String, std::time::Instant)>,
     pub open_file_contents: std::collections::HashMap<String, String>,
     pub open_diff_contents: std::collections::HashMap<String, (console_core::DiffResult, String)>,
@@ -248,13 +250,26 @@ impl ConsoleDesktopApp {
         {
             let entity = entity.clone();
             transcript_view.update(cx, |transcript, _| {
-                transcript.set_on_preview_image(move |image, _window, cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.preview_image_data(image, cx);
-                        });
-                    }
-                });
+                {
+                    let entity = entity.clone();
+                    transcript.set_on_preview_image(move |image, _window, cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.preview_image_data(image, cx);
+                            });
+                        }
+                    });
+                }
+                {
+                    let entity = entity.clone();
+                    transcript.set_on_view_subagent(move |call_id, _window, cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.view_subagent_in_panel(&call_id, cx);
+                            });
+                        }
+                    });
+                }
             });
         }
         let model_menu = ContextMenuHandle::new(cx).on_toggle({
@@ -481,6 +496,8 @@ impl ConsoleDesktopApp {
             inspector_session_changes: Rc::new(Vec::new()),
             inspector_expanded_folders: Rc::new(std::collections::HashSet::new()),
             inspector_selected_path: None,
+            session_subagents: std::collections::HashMap::new(),
+            expanded_subagents: std::collections::HashSet::new(),
             preview_tab: None,
             open_file_contents: std::collections::HashMap::new(),
             open_diff_contents: std::collections::HashMap::new(),

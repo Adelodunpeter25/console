@@ -79,6 +79,39 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    pub fn toggle_subagent_expanded(&mut self, subagent_id: String, cx: &mut Context<Self>) {
+        if !self.expanded_subagents.remove(&subagent_id) {
+            self.expanded_subagents.insert(subagent_id);
+        }
+        cx.notify();
+    }
+
+    pub fn view_subagent_in_panel(&mut self, call_or_subagent_id: &str, cx: &mut Context<Self>) {
+        self.right_sidebar_visible = true;
+        self.inspector_active_tab = InspectorTab::Subagents;
+        // If an active session has a subagent matching this id or parent tool call id, expand it
+        if let Some(session_id) = self.selected_session_id.clone() {
+            if let Some(subagents) = self.session_subagents.get(&session_id) {
+                if let Some(target) = subagents.iter().find(|s| {
+                    s.subagent_id == call_or_subagent_id
+                        || s.parent_tool_call_id == call_or_subagent_id
+                }) {
+                    self.expanded_subagents.insert(target.subagent_id.clone());
+                }
+            }
+        }
+        self.persist_layout();
+        cx.notify();
+    }
+
+    #[allow(dead_code)]
+    pub fn session_subagents(&self, session_id: &str) -> Rc<Vec<console_core::types::SubagentInfo>> {
+        self.session_subagents
+            .get(session_id)
+            .cloned()
+            .unwrap_or_else(|| Rc::new(Vec::new()))
+    }
+
     #[allow(dead_code)]
     pub fn select_inspector_file(&mut self, path: String, cx: &mut Context<Self>) {
         self.inspector_selected_path = Some(path);

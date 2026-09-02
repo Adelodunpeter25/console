@@ -70,6 +70,7 @@ pub struct TranscriptView {
     /// Opens the image preview modal with the decoded image when the user
     /// clicks an image inside a message bubble.
     on_preview_image: Option<Rc<dyn Fn(Arc<gpui::Image>, &mut Window, &mut App) + 'static>>,
+    on_view_subagent: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
 }
 
 impl TranscriptView {
@@ -97,6 +98,7 @@ impl TranscriptView {
             tool_activity_cache: RefCell::new(HashMap::new()),
             tool_activity_cache_version: std::cell::Cell::new(0),
             on_preview_image: None,
+            on_view_subagent: None,
         }
     }
 
@@ -107,6 +109,13 @@ impl TranscriptView {
         handler: impl Fn(Arc<gpui::Image>, &mut Window, &mut App) + 'static,
     ) {
         self.on_preview_image = Some(Rc::new(handler));
+    }
+
+    pub fn set_on_view_subagent(
+        &mut self,
+        handler: impl Fn(String, &mut Window, &mut App) + 'static,
+    ) {
+        self.on_view_subagent = Some(Rc::new(handler));
     }
 
     /// Record the active session's working directory so tool-call rows can
@@ -733,7 +742,12 @@ impl TranscriptView {
         cx.notify();
     }
 
-    fn apply_tool_calls_action(&mut self, action: ToolCallsAction, cx: &mut Context<Self>) {
+    fn apply_tool_calls_action(
+        &mut self,
+        action: ToolCallsAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let mut state = self.tool_calls_state.borrow_mut();
         match action {
             ToolCallsAction::ToggleRun { run_id, expanded } => {
@@ -758,6 +772,14 @@ impl TranscriptView {
                 } else {
                     state.thinking_expanded.remove(&id);
                 }
+            }
+            ToolCallsAction::ViewSubagentInPanel { call_id } => {
+                let handler = self.on_view_subagent.clone();
+                drop(state);
+                if let Some(handler) = handler {
+                    handler(call_id, window, cx);
+                }
+                return;
             }
         }
         drop(state);
@@ -883,10 +905,10 @@ fn transcript_row(
                         )
                         .cwd(view_ref.session_cwd.clone())
                         .selection(view_ref.selection.clone())
-                        .on_action(move |action, _window, cx| {
+                        .on_action(move |action, window, cx| {
                             if let Some(view) = activity_entity.upgrade() {
                                 view.update(cx, |view, cx| {
-                                    view.apply_tool_calls_action(action, cx);
+                                    view.apply_tool_calls_action(action, window, cx);
                                 });
                             }
                         });

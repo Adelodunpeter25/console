@@ -444,6 +444,95 @@ impl ConsoleDesktopApp {
             AgentSessionEvent::TodoUpdate { items, .. } => {
                 self.set_todo_items_for_session(run_session_id, items);
             }
+            AgentSessionEvent::SubagentStart {
+                subagent_id,
+                parent_tool_call_id,
+                name,
+                role,
+                prompt,
+                max_turns,
+            } => {
+                let list = self
+                    .session_subagents
+                    .entry(run_session_id.to_string())
+                    .or_insert_with(|| Rc::new(Vec::new()));
+                let list_mut = Rc::make_mut(list);
+                if let Some(existing) = list_mut.iter_mut().find(|s| s.subagent_id == subagent_id) {
+                    existing.name = name;
+                    existing.role = role;
+                    existing.prompt = prompt;
+                    existing.max_turns = max_turns;
+                    existing.status = "running".to_string();
+                } else {
+                    list_mut.push(console_core::types::SubagentInfo {
+                        subagent_id,
+                        parent_tool_call_id,
+                        name,
+                        role,
+                        prompt,
+                        max_turns,
+                        current_turn: 1,
+                        status: "running".to_string(),
+                        summary: None,
+                        error: None,
+                        activities: Vec::new(),
+                    });
+                }
+            }
+            AgentSessionEvent::SubagentActivity {
+                subagent_id,
+                turn_index,
+                tool_call_id,
+                tool_name,
+                args,
+                status,
+                error,
+            } => {
+                if let Some(list) = self.session_subagents.get_mut(run_session_id) {
+                    let list_mut = Rc::make_mut(list);
+                    if let Some(subagent) = list_mut.iter_mut().find(|s| s.subagent_id == subagent_id) {
+                        subagent.current_turn = subagent.current_turn.max(turn_index);
+                        if let Some(act) = subagent.activities.iter_mut().find(|a| a.tool_call_id == tool_call_id) {
+                            act.status = status;
+                            if error.is_some() {
+                                act.error = error;
+                            }
+                        } else {
+                            subagent.activities.push(console_core::types::SubagentActivityItem {
+                                turn_index,
+                                tool_call_id,
+                                tool_name,
+                                args,
+                                status,
+                                error,
+                            });
+                        }
+                    }
+                }
+            }
+            AgentSessionEvent::SubagentEnd {
+                subagent_id,
+                status,
+                summary,
+                error,
+                total_turns,
+            } => {
+                if let Some(list) = self.session_subagents.get_mut(run_session_id) {
+                    let list_mut = Rc::make_mut(list);
+                    if let Some(subagent) = list_mut.iter_mut().find(|s| s.subagent_id == subagent_id) {
+                        subagent.status = status;
+                        if summary.is_some() {
+                            subagent.summary = summary;
+                        }
+                        if error.is_some() {
+                            subagent.error = error;
+                        }
+                        if total_turns > 0 {
+                            subagent.current_turn = total_turns;
+                        }
+                    }
+                }
+            }
             AgentSessionEvent::Compaction { summary, .. } => {
                 self.set_agent_notice_for_session(
                     run_session_id,

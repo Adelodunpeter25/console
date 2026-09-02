@@ -79,6 +79,43 @@ pub enum AgentSessionEvent {
         #[serde(rename = "turnId")]
         turn_id: String,
     },
+    SubagentStart {
+        #[serde(rename = "subagentId")]
+        subagent_id: String,
+        #[serde(rename = "parentToolCallId")]
+        parent_tool_call_id: String,
+        name: String,
+        role: String,
+        prompt: String,
+        #[serde(rename = "maxTurns")]
+        max_turns: usize,
+    },
+    SubagentActivity {
+        #[serde(rename = "subagentId")]
+        subagent_id: String,
+        #[serde(rename = "turnIndex")]
+        turn_index: usize,
+        #[serde(rename = "toolCallId")]
+        tool_call_id: String,
+        #[serde(rename = "toolName")]
+        tool_name: String,
+        #[serde(default)]
+        args: Option<serde_json::Value>,
+        status: String,
+        #[serde(default)]
+        error: Option<String>,
+    },
+    SubagentEnd {
+        #[serde(rename = "subagentId")]
+        subagent_id: String,
+        status: String,
+        #[serde(default)]
+        summary: Option<String>,
+        #[serde(default)]
+        error: Option<String>,
+        #[serde(rename = "totalTurns")]
+        total_turns: usize,
+    },
     SessionEnd,
     Error {
         error: ServerErrorPayload,

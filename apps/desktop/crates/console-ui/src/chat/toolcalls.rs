@@ -62,6 +62,7 @@ pub enum ToolCallsAction {
     ToggleRun { run_id: String, expanded: bool },
     ToggleCall { call_id: String, expanded: bool },
     ToggleThinking { id: String, expanded: bool },
+    ViewSubagentInPanel { call_id: String },
 }
 
 /// Join separately persisted tool results to their calls by stable backend ID.
@@ -302,6 +303,7 @@ impl ToolCalls {
             None
         };
         let has_diff = diff.is_some();
+        let header_action = on_action.clone();
         let mut row = div()
             .id(ElementId::Name(format!("tool-call-{call_id}").into()))
             .w_full()
@@ -326,7 +328,7 @@ impl ToolCalls {
                         format!("tool-call-header-{call_id}").into(),
                     ))
                     .on_click(move |_, window, cx| {
-                        if let Some(on_action) = &on_action {
+                        if let Some(on_action) = &header_action {
                             on_action(
                                 ToolCallsAction::ToggleCall {
                                     call_id: call_id_for_action.clone(),
@@ -379,6 +381,41 @@ impl ToolCalls {
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .child(div().text_color(theme.success).child(format!("+{}", d.added)))
                                 .child(div().text_color(theme.danger).child(format!("-{}", d.removed))),
+                        )
+                    })
+                    .when(entry.call.name == "subagent", |element| {
+                        let on_action = on_action.clone();
+                        let call_id = call_id.clone();
+                        element.child(
+                            div()
+                                .id(format!("view-subagent-btn-{}", call_id))
+                                .flex()
+                                .items_center()
+                                .gap(px(4.0))
+                                .px(px(6.0))
+                                .py(px(2.0))
+                                .rounded(px(4.0))
+                                .bg(theme.overlay)
+                                .cursor_pointer()
+                                .hover(|s| s.bg(theme.overlay_strong))
+                                .on_click(move |_, window, cx| {
+                                    if let Some(on_action) = &on_action {
+                                        on_action(
+                                            ToolCallsAction::ViewSubagentInPanel {
+                                                call_id: call_id.clone(),
+                                            },
+                                            window,
+                                            cx,
+                                        );
+                                    }
+                                })
+                                .child(
+                                    div()
+                                        .text_size(px(10.5))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(theme.accent)
+                                        .child("View in Panel →"),
+                                ),
                         )
                     })
                     .child(
