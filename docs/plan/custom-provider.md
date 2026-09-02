@@ -1,158 +1,144 @@
-# Custom Provider Implementation Guide
+# Generic Wire Providers Architecture & Implementation Guide
 
-Adds user-defined LLM endpoints to the server so any **OpenAI-compatible** or
-**Anthropic-compatible** API (OpenRouter, DeepSeek, Together, Groq, Ollama, vLLM,
-corporate proxies) works as a first-class provider with saved endpoint profiles.
+Unifies third-party and user-defined LLM endpoints into a protocol-driven provider system.
+Following the architecture proven in `oh-my-pi`, services like **OpenRouter, DeepSeek, Groq, Mistral, Together, Ollama, LM Studio, vLLM**, and arbitrary private proxies are **not** snowflake providers. They are declarative configurations running on top of a single **OpenAI-Compatible Wire Engine** (and eventually an Anthropic Messages Wire Engine).
 
-Target layout: `apps/server/providers/src/custom/`
-
----
-
-## 1. Core Concepts
-
-### 1.1 Profile Model
-```ts
-export interface CustomModelConfig {
-  id: string;              // e.g. "anthropic/claude-3.7-sonnet" or "deepseek/deepseek-r1"
-  name?: string;           // Display name
-  contextWindow?: number;  // Default: 128_000
-  supportsImages?: boolean;// Default: true
-}
-
-export interface CustomProviderProfile {
-  id: string;              // Stable UUID
-  label: string;           // User-facing label, e.g. "OpenRouter Main" or "Local Ollama"
-  kind: "openai-compatible" | "anthropic-compatible";
-  baseUrl: string;         // e.g. "https://openrouter.ai/api/v1"
-  apiKey?: string;         // Stored in token store, masked on read
-  models?: CustomModelConfig[]; // Discovered or manually configured models
-  defaultModelId?: string;
-  createdAt: number;
-  updatedAt: number;
-}
-```
-
-- **Persistence**: Saved under `<storageDir>/custom-providers.json` (mirroring `token-store.ts`).
-- **Addressability**: `provider = "custom:<profileId>"`.
-- **Primary Live Verification**: **OpenRouter** (`https://openrouter.ai/api/v1`, Bearer auth, `vendor/model` format, `HTTP-Referer` / `X-Title` headers).
+Target layout: `apps/server/providers/src/wire/` and `apps/server/providers/src/custom/`
 
 ---
 
-## 2. Non-Negotiable Gotchas & Invariants
+## 1. Architectural Principles
 
-1. **Tool Schema Convention**:
-   Tools passed to `streamText` must be wrapped with AI SDK's `tool()` helper with the Zod schema under `inputSchema:`. Passing raw JSON Schema under `parameters:` causes `asSchema(undefined)` to collapse fields into `{ properties: {}, additionalProperties: false }`, failing all parameterized tool calls.
-2. **Never Expose Raw API Keys**:
-   `apiKey` must be masked on read (`sk-…<last4>`). Only the internal runtime stream factory loads the plain text secret.
-3. **OpenRouter Headers**:
-   When `baseUrl` matches `openrouter.ai`, include:
-   - `HTTP-Referer`: `https://github.com/Adelodunpeter25/console`
-   - `X-Title`: `Console Assistant`
-4. **Fallback When `/models` Is Disabled**:
-   Certain private proxies, Ollama setups, or gateways disable `GET /models` or require separate auth. The profile allows explicit `models` overrides so a user can type a model ID directly.
-5. **Zero Client Breaking Changes**:
-   Exposing custom profiles dynamically through `listProviders()` in `apps/server/agent/src/commands/provider-registry.ts` means the existing model picker on mobile (`ModelPickerSheet`) and desktop (`right_sidebar.rs` / status bar) will automatically populate custom providers without requiring UI changes.
+### 1.1 Wire Protocol vs Provider Instance
+- A **Wire Protocol** is the transport and serialization dialect:
+  - `openai-compatible`: Standard `/v1/chat/completions` + `/v1/models` SSE stream with tool-call streaming and reasoning/thinking support.
+  - `anthropic-compatible`: Anthropic Messages API (`/v1/messages` with `x-api-key`).
+- A **Provider Instance** is simply a declarative configuration binding to a wire protocol:
+  ```ts
+  interface ProviderEndpointConfig {
+    id: string;               // e.g. "openrouter", "deepseek", "ollama", or "custom:<uuid>"
+    label: string;            // Display name e.g. "OpenRouter", "DeepSeek", "Local Ollama"
+    protocol: "openai-compatible" | "anthropic-compatible";
+    baseUrl: string;          // e.g. "https://openrouter.ai/api/v1", "http://localhost:11434/v1"
+    apiKey?: string;          // Stored securely, masked on client read
+    headers?: Record<string, string>; // e.g. OpenRouter HTTP-Referer, X-Title
+    models?: ProviderModelConfig[];   // Discovered or manually pinned models
+    isBuiltinPreset?: boolean;// True for standard bundled presets, false for user custom
+    createdAt: number;
+    updatedAt: number;
+  }
+
+  interface ProviderModelConfig {
+    id: string;               // e.g. "anthropic/claude-3.7-sonnet", "deepseek-reasoner"
+    name?: string;            // Human-readable label
+    contextWindow?: number;   // Default: 128_000
+    supportsImages?: boolean; // Default: true
+  }
+  ```
+
+### 1.2 Preset Catalog vs Custom Profiles
+Both presets and custom endpoints share the exact same runtime pipeline:
+- **Built-in Presets** (zero setup beyond setting an API key):
+  - `openrouter`: `https://openrouter.ai/api/v1` (with `HTTP-Referer: ...` and `X-Title: ...`)
+  - `deepseek`: `https://api.deepseek.com`
+  - `groq`: `https://api.groq.com/openai/v1`
+  - `ollama`: `http://127.0.0.1:11434/v1` (keyless by default)
+  - `lm-studio`: `http://127.0.0.1:1234/v1` (keyless by default)
+- **Custom Endpoints**:
+  - Any URL entered by the user (self-hosted vLLM, corporate proxies, custom fine-tunes).
+  - Addressed as `custom:<id>`.
+
+---
+
+## 2. Technical Invariants & Gotchas
+
+1. **Zod Tool Schema Wrapping**:
+   Tools passed to `streamText` must use the SDK's `tool()` helper with the Zod schema under `inputSchema:`. Never pass raw JSON Schema under `parameters:` (which triggers `asSchema(undefined)` collapsing schemas into empty objects).
+2. **Streaming Protocol Parity**:
+   The engine maps:
+   - `text-delta` -> `AgentSessionEvent` with text chunks
+   - `reasoning-delta` / `thinking` -> thinking chunks
+   - `tool-input-start` / `tool-input-delta` -> progressive tool argument accumulation
+3. **Keyless Local Support**:
+   Endpoints running on `localhost` or `127.0.0.1` (Ollama, LM Studio) do not require `Authorization` headers when no key is set.
+4. **Key Masking**:
+   Any stored `apiKey` is masked on client reads (`sk-…<last4>`). Plain keys are only accessible in the server runtime stream factory.
+5. **Universal Discovery**:
+   A single discovery function `fetchModelsForEndpoint(endpoint)` calls `GET {baseUrl}/models` with Bearer auth, normalizes models, and falls back gracefully to manual model definitions when `/models` is disabled or blocked.
 
 ---
 
 ## 3. Phased Implementation Plan
 
-### Phase 1 — Profile Storage & Config Service (Fast Track)
+### Phase 1: Shared OpenAI-Compatible Wire Engine
+**Goal**: A rock-solid, reusable stream engine that powers any OpenAI-compatible endpoint.
 
-#### Tasks
-1. `apps/server/providers/src/custom/profiles.ts`:
-   - Define `CustomProviderProfile`, `CustomModelConfig`.
-   - `loadProfiles()`, `getProfile(id)`, `saveProfile(input)`, `deleteProfile(id)`.
-   - File path: path joined to console storage dir (`<storageDir>/custom-providers.json`).
-   - `maskProfile(profile)`: replaces `apiKey` with `sk-…<last4>`.
-2. CRUD Validation:
-   - Validate `baseUrl` is a valid URL (`http://` or `https://`).
-   - Ensure `label` is non-empty.
-3. Tests: `apps/server/tests/custom-profile.test.ts` (CRUD, key masking, persistence across re-instantiation).
-
----
-
-### Phase 2 — OpenAI-Compatible Engine & Discovery (OpenRouter Target)
-
-#### Tasks
-1. `apps/server/providers/src/custom/shared/convert-tools.ts`:
-   - Zod-based `tool()` wrapper (reused by both OpenAI and Anthropic engines).
-2. `apps/server/providers/src/custom/shared/convert-messages.ts`:
-   - Standard AI SDK CoreMessage converter supporting text, images, thinking, and tool results.
-3. `apps/server/providers/src/custom/openai-compatible/discovery.ts`:
-   - `fetchCustomOpenAIModels(profile)`:
-     - `GET {baseUrl}/models` with `Authorization: Bearer <key>`.
-     - Maps `{ data: [{ id, name, context_length }] }` to `CustomModelConfig[]`.
-     - Graceful fallback on error (returns profile's manual `models` list or generic fallback).
-4. `apps/server/providers/src/custom/openai-compatible/stream-fn.ts`:
-   - `createCustomOpenAIStreamFn(profile)`:
-     - Uses `createOpenAICompatible({ name: profile.id, baseURL: profile.baseUrl, apiKey: profile.apiKey, headers: profile.isOpenerRouter ? ... : {} })`.
-     - Calls `streamText` yielding text deltas, thinking deltas, and tool calls.
-5. Error mapping:
-   - 401 Unauthorized -> "Invalid custom provider API key".
-   - 404 / connection refused -> "Custom provider unreachable at {baseUrl}".
+- `apps/server/providers/src/wire/openai-compatible/stream-fn.ts`:
+  - `createOpenAICompatibleStreamFn(options: { baseUrl, apiKey?, headers? }): StreamFn`
+  - Built on `@ai-sdk/openai-compatible` and `streamText`.
+  - Emits `text`, `thinking`, and `toolCall` deltas.
+- `apps/server/providers/src/wire/openai-compatible/convert-tools.ts`:
+  - Shared Zod tool schema wrapper.
+- `apps/server/providers/src/wire/openai-compatible/convert-messages.ts`:
+  - Shared message format converter.
+- `apps/server/providers/src/wire/openai-compatible/discovery.ts`:
+  - Generic `fetchOpenAICompatibleModels(baseUrl, apiKey?, headers?)`.
+- **Verification**: `apps/server/tests/wire-openai-compatible.test.ts` (mock server verifying streaming text, tool calling, and thinking chunks).
 
 ---
 
-### Phase 3 — Dynamic Registry & Provider Integration
+### Phase 2: Preset Definitions & Endpoint Store
+**Goal**: Store credentials for presets (OpenRouter, DeepSeek, Groq, Ollama) and user custom endpoints.
 
-#### Tasks
-1. `apps/server/agent/src/commands/provider-registry.ts`:
-   - Import `listProfiles` from `custom/profiles.js`.
-   - In `getProvider(id)`:
-     - If `id.startsWith("custom:")`, parse `profileId = id.slice(7)`.
-     - Load profile and instantiate StreamFn on the fly.
-   - In `listProviders()`:
-     - Append custom profiles as active providers:
-       ```ts
-       {
-         id: `custom:${profile.id}`,
-         name: profile.label,
-         authMethod: "apiKey",
-         models: profile.models && profile.models.length > 0
-           ? profile.models.map(m => ({ id: m.id, provider: `custom:${profile.id}`, contextWindow: m.contextWindow ?? 128_000, supportsImages: m.supportsImages ?? true }))
-           : [{ id: "default", provider: `custom:${profile.id}`, contextWindow: 128_000 }]
-       }
-       ```
-2. `apps/server/api/src/services/run.service.ts`:
-   - Ensure `buildRunModel` handles dynamic `custom:*` provider prefixes safely.
+- `apps/server/providers/src/custom/presets.ts`:
+  - Declarative preset definitions:
+    - `openrouter`: `https://openrouter.ai/api/v1`, headers, default model IDs.
+    - `deepseek`: `https://api.deepseek.com`, models `deepseek-chat`, `deepseek-reasoner`.
+    - `groq`: `https://api.groq.com/openai/v1`, fast inference models.
+    - `ollama`: `http://127.0.0.1:11434/v1`, keyless local defaults.
+- `apps/server/providers/src/custom/endpoint-store.ts`:
+  - Persisted under `<storageDir>/endpoints.json` (or `custom-providers.json`).
+  - CRUD operations: `listEndpoints()`, `getEndpoint(id)`, `saveEndpoint(config)`, `deleteEndpoint(id)`.
+  - `maskEndpoint(endpoint)` for API outputs.
+- **Verification**: `apps/server/tests/endpoint-store.test.ts` (CRUD, key masking, persistence across re-instantiations).
 
 ---
 
-### Phase 4 — REST API Endpoints
+### Phase 3: Registry Integration & Dynamic Model Injection
+**Goal**: Expose both presets and custom endpoints to the client without modifying front-end chat screens.
 
-#### Tasks
-Under `apps/server/api/src/routes/custom-providers.ts` (mounted under `/api/providers/custom`):
-1. `GET    /api/providers/custom` — returns masked profiles.
-2. `POST   /api/providers/custom` — creates a new profile.
-3. `PATCH  /api/providers/custom/:id` — updates an existing profile.
-4. `DELETE /api/providers/custom/:id` — deletes a profile.
-5. `POST   /api/providers/custom/:id/probe` — tests connection and updates discovered models.
-
----
-
-### Phase 5 — Anthropic-Compatible Engine
-
-#### Tasks
-1. Add `@ai-sdk/anthropic` (or native fetch to `{baseUrl}/v1/messages`).
-2. `apps/server/providers/src/custom/anthropic-compatible/stream-fn.ts`:
-   - Uses `createAnthropic({ baseURL: profile.baseUrl, apiKey: profile.apiKey })`.
-   - `x-api-key` and `anthropic-version: 2023-06-01` headers.
-3. `apps/server/providers/src/custom/anthropic-compatible/discovery.ts`:
-   - `GET {baseUrl}/v1/models` probe.
+- `apps/server/agent/src/commands/provider-registry.ts`:
+  - In `getProvider(id)`:
+    - If `id` matches a preset (e.g. `openrouter`, `deepseek`, `groq`, `ollama`) or starts with `custom:`, resolve endpoint from store/presets and instantiate `createOpenAICompatibleStreamFn(endpoint)`.
+  - In `listProviders()`:
+    - Append active presets (those with configured keys or keyless local engines) and custom profiles.
+    - Expose their models with correct context windows.
+- `apps/server/api/src/routes/endpoints.ts`:
+  - `GET    /api/endpoints` (list all configured presets & custom endpoints, masked)
+  - `POST   /api/endpoints` (save/update endpoint configuration)
+  - `DELETE /api/endpoints/:id` (delete custom endpoint)
+  - `POST   /api/endpoints/:id/probe` (probe connection and fetch models)
+- **Verification**: `apps/server/tests/provider-registry-wire.test.ts` (resolving providers, listing models in API).
 
 ---
 
-## 4. Verification Checklist
+### Phase 4: Anthropic-Compatible Wire Engine
+**Goal**: Support Anthropic Messages API format for compatible proxies.
 
-1. **Profile Storage**:
-   - Save profile with API key. Assert file exists on disk.
-   - Read via API and assert key is masked (`sk-…abcd`).
-2. **OpenRouter Live Test**:
-   - Add OpenRouter profile with test API key.
-   - Probe models via `GET /models`.
-   - Send prompt `What is 2+2?` and verify streaming text response.
-   - Execute `read_file` tool call and verify tool call + tool result round-trip.
-3. **UI Integration**:
-   - Verify `/api/providers` returns `custom:<id>`.
-   - Verify model selector on mobile and desktop shows custom models.
+- `apps/server/providers/src/wire/anthropic-compatible/stream-fn.ts`:
+  - `createAnthropicCompatibleStreamFn(options: { baseUrl, apiKey })`.
+  - Maps top-level system, `x-api-key`, and tool calls.
+- `apps/server/providers/src/wire/anthropic-compatible/discovery.ts`:
+  - Probes `GET {baseUrl}/v1/models`.
+
+---
+
+## 4. Verification & Testing Matrix
+
+| Test Case | Method | Expected Outcome |
+| :--- | :--- | :--- |
+| **OpenAI Wire Unit** | `bun tests/wire-openai-compatible.test.ts` | Streams text, tool calls, and thinking with mocked HTTP |
+| **Local Ollama** | Keyless local test (`http://127.0.0.1:11434/v1`) | Connects and executes without Authorization header |
+| **OpenRouter Preset** | Live or mock with Bearer token | Passes `HTTP-Referer` and executes chat + tools |
+| **Client Model Picker** | `GET /api/providers` | Custom and active preset endpoints appear with models |
+| **Key Masking** | API query verification | Never leaks full API key in logs or JSON responses |
