@@ -1,12 +1,8 @@
 /**
- * Reads and writes OAuth credential files for both Gemini and Antigravity.
+ * Reads and writes OAuth credential files for Antigravity.
  *
  * Default directory: ~/.console
- *
- * Gemini credentials: ~/.console/gemini-creds.json
  * Antigravity credentials: ~/.console/antigravity-creds.json
- *
- * Also falls back to Gemini CLI's default ~/.gemini/oauth_creds.json for compatibility.
  */
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
@@ -19,17 +15,6 @@ export type CredentialType = OAuthProviderId;
 function credentialCandidates(type: CredentialType): string[] {
   const custom = process.env[`${type.toUpperCase()}_CREDENTIALS_PATH`];
   const defaultPath = path.join(os.homedir(), ".console", `${type}-creds.json`);
-
-  // For Gemini, also check the default Gemini CLI path for compatibility
-  if (type === "gemini") {
-    const geminiCliPath1 = path.join(os.homedir(), ".gemini", "oauth_creds.json");
-    const geminiCliPath2 = path.join(os.homedir(), ".config", "gemini", "oauth_creds.json");
-    return custom
-      ? [custom, defaultPath, geminiCliPath1, geminiCliPath2]
-      : [defaultPath, geminiCliPath1, geminiCliPath2];
-  }
-
-  // For Antigravity, only use our default path (no legacy)
   return custom ? [custom, defaultPath] : [defaultPath];
 }
 
@@ -61,7 +46,7 @@ export function parseCredential(raw: GeminiOAuthCredential): ParsedCredential {
 
 const credentialPaths = new Map<CredentialType, string | null>();
 
-export async function loadCredential(type: CredentialType = "gemini"): Promise<ParsedCredential> {
+export async function loadCredential(type: CredentialType = "antigravity"): Promise<ParsedCredential> {
   const cachedPath = credentialPaths.get(type);
   const rawCandidates = credentialCandidates(type);
   const candidates = cachedPath ? [cachedPath, ...rawCandidates.filter((p) => p !== cachedPath)] : rawCandidates;
@@ -92,7 +77,7 @@ export async function loadCredential(type: CredentialType = "gemini"): Promise<P
 
 export async function saveCredential(
   raw: GeminiOAuthCredential,
-  type: CredentialType = "gemini",
+  type: CredentialType = "antigravity",
 ): Promise<void> {
   let filePath = credentialPaths.get(type);
   if (!filePath) {
@@ -104,7 +89,7 @@ export async function saveCredential(
   await fs.writeFile(filePath, JSON.stringify(raw, null, 2), "utf-8");
 }
 
-export async function credentialExists(type: CredentialType = "gemini"): Promise<boolean> {
+export async function credentialExists(type: CredentialType = "antigravity"): Promise<boolean> {
   const candidates = credentialCandidates(type);
   for (const filePath of candidates) {
     try {

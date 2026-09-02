@@ -9,8 +9,6 @@ import { parseCredential, saveCredential, type CredentialType } from "./token-st
 import {
   OAUTH_TOKEN_URL,
   REFRESH_SKEW_MS,
-  GEMINI_CLI_CLIENT_ID,
-  GEMINI_CLI_CLIENT_SECRET,
   ANTIGRAVITY_CLIENT_ID,
   ANTIGRAVITY_CLIENT_SECRET,
 } from "@/providers/src/constants.js";
@@ -32,9 +30,8 @@ async function doRefresh(
     throw new Error("OAuth token expired and no refresh_token available. Please login again.");
   }
 
-  const clientId = type === "antigravity" ? ANTIGRAVITY_CLIENT_ID : GEMINI_CLI_CLIENT_ID;
-  const clientSecret =
-    type === "antigravity" ? ANTIGRAVITY_CLIENT_SECRET : GEMINI_CLI_CLIENT_SECRET;
+  const clientId = ANTIGRAVITY_CLIENT_ID;
+  const clientSecret = ANTIGRAVITY_CLIENT_SECRET;
 
   const body = new URLSearchParams({
     client_id: clientId,
@@ -78,7 +75,7 @@ async function doRefresh(
  */
 export async function refreshIfNeeded(
   cred: ParsedCredential,
-  type: CredentialType = "gemini",
+  type: CredentialType = "antigravity",
   signal?: AbortSignal,
 ): Promise<ParsedCredential> {
   const needsRefresh =

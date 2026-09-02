@@ -3,15 +3,13 @@
  * Mirrors oh-my-pi/packages/catalog/src/discovery/antigravity.ts.
  *
  * Hits the /v1internal:fetchAvailableModels endpoint with an OAuth token
- * to fetch live discoverable models for Gemini CLI and Antigravity.
+ * to fetch live discoverable models for Antigravity.
  */
 import type { Model, OAuthProviderId } from "@console/types";
 
 import {
   ANTIGRAVITY_BASE_URL,
-  GEMINI_BASE_URL,
   getAntigravityUserAgent,
-  getGeminiCliUserAgent,
 } from "@/providers/src/constants.js";
 
 const DENYLIST = new Set(["chat_20706", "chat_23310"]);
@@ -38,8 +36,8 @@ export interface FetchAvailableModelsResponse {
   models?: Record<string, DiscoveredApiModel>;
 }
 
-function getDefaultUserAgent(provider: OAuthProviderId): string {
-  return provider === "antigravity" ? getAntigravityUserAgent() : getGeminiCliUserAgent();
+function getDefaultUserAgent(_provider: OAuthProviderId): string {
+  return getAntigravityUserAgent();
 }
 
 /**
@@ -49,7 +47,7 @@ function getDefaultUserAgent(provider: OAuthProviderId): string {
 export async function fetchAvailableModels(
   options: FetchAvailableModelsOptions,
 ): Promise<Model[] | null> {
-  const defaultBase = options.provider === "antigravity" ? ANTIGRAVITY_BASE_URL : GEMINI_BASE_URL;
+  const defaultBase = ANTIGRAVITY_BASE_URL;
   const baseUrl = (options.baseUrl ?? defaultBase).replace(/\/+$/, "");
   const url = `${baseUrl}/v1internal:fetchAvailableModels`;
   const userAgent = options.userAgent ?? getDefaultUserAgent(options.provider);

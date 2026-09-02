@@ -1,11 +1,11 @@
 /**
- * OAuth login flow implementation for both Gemini CLI and Antigravity.
+ * OAuth login flow implementation for Antigravity.
  *
  * - Spins up local callback server
  * - Opens browser for auth
  * - Exchanges code for tokens
  * - Calls loadCodeAssist / onboardUser to get projectId
- * - Saves credential to ~/.console/{gemini,antigravity}-creds.json
+ * - Saves credential to ~/.console/antigravity-creds.json
  */
 
 import * as crypto from "node:crypto";
@@ -18,13 +18,9 @@ import {
   OAUTH_AUTH_URL,
   OAUTH_TOKEN_URL,
   USERINFO_URL,
-  GEMINI_OAUTH_CONFIG,
   ANTIGRAVITY_OAUTH_CONFIG,
   getAntigravityUserAgent,
-  getGeminiCliHeaders,
 } from "@/providers/src/constants.js";
-
-type OAuthConfig = typeof GEMINI_OAUTH_CONFIG | typeof ANTIGRAVITY_OAUTH_CONFIG;
 
 const execAsync = promisify(exec);
 
@@ -73,13 +69,14 @@ async function reportDebugEvent(
   try {
     const envText = await import("node:fs/promises").then((fs) =>
       fs.readFile(
-        "/Users/techclub/Documents/projects/console/.dbg/gemini-onboard-poll.env",
+        "/Users/techclub/Documents/projects/console/.dbg/antigravity-onboard-poll.env",
         "utf8",
       ),
     );
     const serverUrl =
       envText.match(/DEBUG_SERVER_URL=(.+)/)?.[1]?.trim() ?? "http://127.0.0.1:7777/event";
-    const sessionId = envText.match(/DEBUG_SESSION_ID=(.+)/)?.[1]?.trim() ?? "gemini-onboard-poll";
+    const sessionId =
+      envText.match(/DEBUG_SESSION_ID=(.+)/)?.[1]?.trim() ?? "antigravity-onboard-poll";
     await fetch(serverUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -168,13 +165,12 @@ function startCallbackServer(
  * Exchanges authorization code for tokens
  */
 async function exchangeCodeForTokens(
-  config: OAuthConfig,
   code: string,
   redirectUri: string,
 ): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
   const body = new URLSearchParams({
-    client_id: config.clientId,
-    client_secret: config.clientSecret,
+    client_id: ANTIGRAVITY_OAUTH_CONFIG.clientId,
+    client_secret: ANTIGRAVITY_OAUTH_CONFIG.clientSecret,
     code,
     redirect_uri: redirectUri,
     grant_type: "authorization_code",
@@ -228,37 +224,26 @@ async function getUserEmail(accessToken: string): Promise<string> {
  */
 async function loadCodeAssist(
   accessToken: string,
-  ideType: "GEMINI_CLI" | "ANTIGRAVITY",
   explicitProjectId?: string,
 ): Promise<string> {
   // Precedence: explicit (from UI/config) > env var
   const envProjectId = explicitProjectId || process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID;
-  const baseEndpoint =
-    ideType === "ANTIGRAVITY"
-      ? "https://daily-cloudcode-pa.googleapis.com"
-      : "https://cloudcode-pa.googleapis.com";
-  const endpoint = `${baseEndpoint}/v1internal:loadCodeAssist`;
+  const endpoint = `https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist`;
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${accessToken}`,
     "Content-Type": "application/json",
-    ...(ideType === "ANTIGRAVITY"
-      ? { "User-Agent": getAntigravityUserAgent() }
-      : getGeminiCliHeaders()),
+    "User-Agent": getAntigravityUserAgent(),
   };
 
   const response = await fetch(endpoint, {
     method: "POST",
     headers,
     body: JSON.stringify({
-      ...(ideType === "GEMINI_CLI" && envProjectId
-        ? { cloudaicompanionProject: envProjectId }
-        : {}),
       metadata: {
-        ideType: ideType === "ANTIGRAVITY" ? "ANTIGRAVITY" : "IDE_UNSPECIFIED",
+        ideType: "ANTIGRAVITY",
         platform: "PLATFORM_UNSPECIFIED",
         pluginType: "GEMINI",
-        ...(ideType === "GEMINI_CLI" && envProjectId ? { duetProject: envProjectId } : {}),
       },
     }),
   });
@@ -269,7 +254,6 @@ async function loadCodeAssist(
     "login.ts:loadCodeAssist",
     "[DEBUG] loadCodeAssist response received",
     {
-      ideType,
       status: response.status,
       ok: response.ok,
       contentType: response.headers.get("content-type"),
@@ -286,19 +270,8 @@ async function loadCodeAssist(
   };
 
   if (!response.ok) {
-    let errorPayload: unknown;
-    try {
-      errorPayload = await response.clone().json();
-    } catch {
-      errorPayload = undefined;
-    }
-
-    if (ideType === "GEMINI_CLI" && isVpcScAffectedUser(errorPayload)) {
-      data = { currentTier: { id: TIER_STANDARD } };
-    } else {
-      const detail = await response.text().catch(() => "");
-      throw new Error(`loadCodeAssist failed (${response.status}): ${detail}`);
-    }
+    const detail = await response.text().catch(() => "");
+    throw new Error(`loadCodeAssist failed (${response.status}): ${detail}`);
   } else {
     data = (await response.json()) as {
       cloudaicompanionProject?: string | { id?: string };
@@ -311,7 +284,6 @@ async function loadCodeAssist(
 
   // #region debug-point C:load-code-assist-payload
   await reportDebugEvent("C", "login.ts:loadCodeAssist", "[DEBUG] loadCodeAssist payload parsed", {
-    ideType,
     hasCurrentTier: Boolean(data.currentTier),
     allowedTierIds: data.allowedTiers?.map((tier) => tier.id).filter(Boolean) ?? [],
     defaultTierId: getDefaultTier(data.allowedTiers)?.id,
@@ -340,27 +312,13 @@ async function loadCodeAssist(
       !envProjectId
     ) {
       throw new Error(
-        "This account requires setting the GOOGLE_CLOUD_PROJECT or GOOGLE_CLOUD_PROJECT_ID environment variable. " +
-          "See https://goo.gle/gemini-cli-auth-docs#workspace-gca",
+        "This account requires setting the GOOGLE_CLOUD_PROJECT or GOOGLE_CLOUD_PROJECT_ID environment variable.",
       );
     }
     // For free tier or legacy tier, proceed to provision
   }
 
-  // Additional check for non-free tiers
-  if (
-    ideType === "GEMINI_CLI" &&
-    tierId !== TIER_FREE &&
-    tierId !== "legacy-tier" &&
-    !envProjectId
-  ) {
-    throw new Error(
-      "This account requires setting the GOOGLE_CLOUD_PROJECT or GOOGLE_CLOUD_PROJECT_ID environment variable. " +
-        "See https://goo.gle/gemini-cli-auth-docs#workspace-gca",
-    );
-  }
-
-  return onboardUser(accessToken, ideType, tierId, envProjectId);
+  return onboardUser(accessToken, tierId, envProjectId);
 }
 
 /**
@@ -368,27 +326,20 @@ async function loadCodeAssist(
  */
 async function onboardUser(
   accessToken: string,
-  ideType: "GEMINI_CLI" | "ANTIGRAVITY",
   tierId?: string,
   envProjectId?: string,
 ): Promise<string> {
-  const baseEndpoint =
-    ideType === "ANTIGRAVITY"
-      ? "https://daily-cloudcode-pa.googleapis.com"
-      : "https://cloudcode-pa.googleapis.com";
-  const endpoint = `${baseEndpoint}/v1internal:onboardUser`;
+  const endpoint = `https://daily-cloudcode-pa.googleapis.com/v1internal:onboardUser`;
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${accessToken}`,
     "Content-Type": "application/json",
-    ...(ideType === "ANTIGRAVITY"
-      ? { "User-Agent": getAntigravityUserAgent() }
-      : getGeminiCliHeaders()),
+    "User-Agent": getAntigravityUserAgent(),
   };
 
   const body: Record<string, unknown> = {
     metadata: {
-      ideType: ideType === "ANTIGRAVITY" ? "ANTIGRAVITY" : "IDE_UNSPECIFIED",
+      ideType: "ANTIGRAVITY",
       platform: "PLATFORM_UNSPECIFIED",
       pluginType: "GEMINI",
     },
@@ -396,16 +347,6 @@ async function onboardUser(
 
   if (tierId) {
     body.tierId = tierId;
-  }
-
-  if (
-    ideType === "GEMINI_CLI" &&
-    tierId !== TIER_FREE &&
-    tierId !== "legacy-tier" &&
-    envProjectId
-  ) {
-    body.cloudaicompanionProject = envProjectId;
-    (body.metadata as Record<string, unknown>).duetProject = envProjectId;
   }
 
   const response = await fetch(endpoint, {
@@ -416,7 +357,6 @@ async function onboardUser(
 
   // #region debug-point A:onboard-user-response
   await reportDebugEvent("A", "login.ts:onboardUser", "[DEBUG] onboardUser response received", {
-    ideType,
     tierId,
     status: response.status,
     ok: response.ok,
@@ -438,7 +378,6 @@ async function onboardUser(
 
   // #region debug-point A:onboard-user-payload
   await reportDebugEvent("A", "login.ts:onboardUser", "[DEBUG] onboardUser payload parsed", {
-    ideType,
     tierId,
     done: operation.done,
     name: operation.name,
@@ -455,7 +394,7 @@ async function onboardUser(
   if (!operation.done && operation.name) {
     for (let i = 0; i < 30; i++) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      const pollEndpoint = `${baseEndpoint}/v1internal/${operation.name}`;
+      const pollEndpoint = `https://daily-cloudcode-pa.googleapis.com/v1internal/${operation.name}`;
       const pollResponse = await fetch(pollEndpoint, {
         headers,
       });
@@ -481,15 +420,15 @@ async function onboardUser(
 
   throw new Error(
     "Could not discover or provision a Google Cloud project. " +
-      "Try setting the GOOGLE_CLOUD_PROJECT or GOOGLE_CLOUD_PROJECT_ID environment variable. " +
-      "See https://goo.gle/gemini-cli-auth-docs#workspace-gca",
+      "Try setting the GOOGLE_CLOUD_PROJECT or GOOGLE_CLOUD_PROJECT_ID environment variable.",
   );
 }
 
 /**
- * Performs full OAuth login flow for a given config
+ * Performs full OAuth login flow for Antigravity
  */
-async function loginWithConfig(config: OAuthConfig): Promise<void> {
+async function loginWithConfig(): Promise<void> {
+  const config = ANTIGRAVITY_OAUTH_CONFIG;
   const state = crypto.randomBytes(16).toString("hex");
   const redirectUri = `http://localhost:${config.port}${config.callbackPath}`;
 
@@ -516,9 +455,9 @@ async function loginWithConfig(config: OAuthConfig): Promise<void> {
     throw new Error("State mismatch");
   }
 
-  const tokens = await exchangeCodeForTokens(config, code, redirectUri);
+  const tokens = await exchangeCodeForTokens(code, redirectUri);
   const email = await getUserEmail(tokens.access_token);
-  const projectId = await loadCodeAssist(tokens.access_token, config.ideType);
+  const projectId = await loadCodeAssist(tokens.access_token);
 
   const credential: GeminiOAuthCredential = {
     token: tokens.access_token,
@@ -535,16 +474,16 @@ async function loginWithConfig(config: OAuthConfig): Promise<void> {
 }
 
 export async function completeAuthFlowWithCode(
-  provider: OAuthProviderId,
+  _provider: OAuthProviderId,
   code: string,
   explicitProjectId?: string,
 ): Promise<GeminiOAuthCredential> {
-  const config = provider === "gemini" ? GEMINI_OAUTH_CONFIG : ANTIGRAVITY_OAUTH_CONFIG;
+  const config = ANTIGRAVITY_OAUTH_CONFIG;
   const redirectUri = `http://localhost:${config.port}${config.callbackPath}`;
 
-  const tokens = await exchangeCodeForTokens(config, code, redirectUri);
+  const tokens = await exchangeCodeForTokens(code, redirectUri);
   const email = await getUserEmail(tokens.access_token);
-  const projectId = await loadCodeAssist(tokens.access_token, config.ideType, explicitProjectId);
+  const projectId = await loadCodeAssist(tokens.access_token, explicitProjectId);
 
   const credential: GeminiOAuthCredential = {
     token: tokens.access_token,
@@ -559,15 +498,8 @@ export async function completeAuthFlowWithCode(
 }
 
 /**
- * Login for Gemini CLI
- */
-export async function loginGemini(): Promise<void> {
-  return loginWithConfig(GEMINI_OAUTH_CONFIG);
-}
-
-/**
  * Login for Antigravity
  */
 export async function loginAntigravity(): Promise<void> {
-  return loginWithConfig(ANTIGRAVITY_OAUTH_CONFIG);
+  return loginWithConfig();
 }

@@ -2,9 +2,6 @@
 export { createAntigravityStreamFn } from "./antigravity/index.js";
 export type { AntigravitySessionState } from "./antigravity/index.js";
 
-/** Gemini CLI provider — OAuth, cloudcode-pa endpoint */
-export { geminiStreamFn } from "./gemini/index.js";
-
 /** OpenCode Zen provider — free OpenAI-compatible endpoint */
 export { opencodeStreamFn, fetchOpencodeFreeModels, OPENCODE_FREE_MODEL_IDS } from "./opencode/index.js";
 
@@ -48,7 +45,7 @@ export { loadCredential, saveCredential, parseCredential } from "./auth/token-st
 export { refreshIfNeeded } from "./auth/token-refresh.js";
 
 /** OAuth login flows */
-export { loginGemini, loginAntigravity } from "./auth/login.js";
+export { loginAntigravity } from "./auth/login.js";
 
 /** Types */
 export type { ParsedCredential, GeminiOAuthCredential } from "./types/index.js";

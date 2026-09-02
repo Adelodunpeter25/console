@@ -1,6 +1,6 @@
 /**
  * Per-provider configuration storage (non-secret settings like the
- * configured Google Cloud project ID for Gemini).
+ * configured Google Cloud project ID for Antigravity).
  *
  * Stored at ~/.console/{provider}-config.json so it persists across
  * restarts and is available before the user has logged in.
