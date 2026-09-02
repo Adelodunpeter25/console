@@ -111,7 +111,7 @@ export function useChatStream() {
         
         // Also update selectedProjectId if the cwd changed and matches a known project
         // This ensures file browser and terminal pick up the new directory
-        if (nextCwd && nextCwd !== current.sessionCwd) {
+        if (nextCwd && nextCwd !== current?.sessionCwd) {
           const { projects } = project$.peek();
           const matchingProject = projects.find((p) => p.path === nextCwd);
           if (matchingProject && matchingProject.id !== app$.selectedProjectId.peek()) {
