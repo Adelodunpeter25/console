@@ -77,6 +77,8 @@ export function createSubagentTool(context?: SubagentToolContext): AgentTool {
         maxTurns: 10,
       });
 
+      const activeToolCalls = new Map<string, Record<string, unknown>>();
+
       try {
         const stream = agentLoop(prompt, {
           model,
@@ -92,23 +94,32 @@ export function createSubagentTool(context?: SubagentToolContext): AgentTool {
               totalTurns = turnIndex;
             } else if (event.type === "toolExecutionStart") {
               for (const call of event.calls) {
+                const callArgs =
+                  call.arguments && typeof call.arguments === "object"
+                    ? (call.arguments as Record<string, unknown>)
+                    : undefined;
+                if (callArgs) {
+                  activeToolCalls.set(call.id, callArgs);
+                }
                 onEvent?.({
                   type: "subagentActivity",
                   subagentId,
                   turnIndex,
                   toolCallId: call.id,
                   toolName: call.name,
-                  args: call.arguments && typeof call.arguments === "object" ? (call.arguments as Record<string, unknown>) : undefined,
+                  args: callArgs,
                   status: "running",
                 });
               }
             } else if (event.type === "toolExecutionResult") {
+              const savedArgs = activeToolCalls.get(event.result.toolCallId);
               onEvent?.({
                 type: "subagentActivity",
                 subagentId,
                 turnIndex,
                 toolCallId: event.result.toolCallId,
                 toolName: event.result.toolName || "",
+                args: savedArgs,
                 status: event.result.isError ? "error" : "completed",
                 error: event.result.isError
                   ? typeof event.result.content === "string"

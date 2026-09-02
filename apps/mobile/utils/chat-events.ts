@@ -283,13 +283,14 @@ export function applyChatEvent(
         target.currentTurn = Math.max(target.currentTurn, event.turnIndex);
         const activities = [...target.activities];
         const actIdx = activities.findIndex((a) => a.toolCallId === event.toolCallId);
+        const existing = actIdx >= 0 ? activities[actIdx] : undefined;
         const item = {
           turnIndex: event.turnIndex,
           toolCallId: event.toolCallId,
-          toolName: event.toolName,
-          args: event.args,
+          toolName: event.toolName || existing?.toolName || "",
+          args: event.args ?? existing?.args,
           status: event.status,
-          error: event.error,
+          error: event.error ?? existing?.error,
         };
         if (actIdx >= 0) {
           activities[actIdx] = item;

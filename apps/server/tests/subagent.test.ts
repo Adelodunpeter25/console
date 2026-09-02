@@ -104,6 +104,7 @@ const dummySearchTool: AgentTool = {
   assert.ok(completedActivity, "completed subagentActivity event should be emitted");
   if (completedActivity && completedActivity.type === "subagentActivity") {
     assert.equal(completedActivity.toolName, "searchFiles");
+    assert.deepEqual(completedActivity.args, { pattern: "user" });
   }
 
   const endEvent = emittedEvents.find((e) => e.type === "subagentEnd");

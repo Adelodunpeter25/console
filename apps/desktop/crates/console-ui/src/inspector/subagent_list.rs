@@ -275,19 +275,55 @@ impl RenderOnce for SubagentListView {
                                                         let act_completed = act.status == "completed";
 
                                                         let args_summary = act.args.as_ref().and_then(|v| {
-                                                            if let Some(obj) = v.as_object() {
+                                                            let raw_str = if let Some(obj) = v.as_object() {
                                                                 if let Some(cmd) = obj.get("command").or_else(|| obj.get("CommandLine")).and_then(|c| c.as_str()) {
                                                                     Some(cmd.to_string())
-                                                                } else if let Some(path) = obj.get("path").or_else(|| obj.get("AbsolutePath")).or_else(|| obj.get("TargetFile")).and_then(|p| p.as_str()) {
+                                                                } else if let Some(path) = obj.get("path")
+                                                                    .or_else(|| obj.get("filePath"))
+                                                                    .or_else(|| obj.get("targetFile"))
+                                                                    .or_else(|| obj.get("TargetFile"))
+                                                                    .or_else(|| obj.get("absolutePath"))
+                                                                    .or_else(|| obj.get("AbsolutePath"))
+                                                                    .or_else(|| obj.get("SearchDirectory"))
+                                                                    .or_else(|| obj.get("directory"))
+                                                                    .and_then(|p| p.as_str()) {
                                                                     Some(path.to_string())
-                                                                } else if let Some(pattern) = obj.get("pattern").or_else(|| obj.get("Query")).or_else(|| obj.get("query")).and_then(|p| p.as_str()) {
+                                                                } else if let Some(pattern) = obj.get("pattern")
+                                                                    .or_else(|| obj.get("Pattern"))
+                                                                    .or_else(|| obj.get("Query"))
+                                                                    .or_else(|| obj.get("query"))
+                                                                    .and_then(|p| p.as_str()) {
                                                                     Some(pattern.to_string())
+                                                                } else if let Some(prompt) = obj.get("Prompt")
+                                                                    .or_else(|| obj.get("prompt"))
+                                                                    .and_then(|p| p.as_str()) {
+                                                                    Some(prompt.to_string())
+                                                                } else if let Some(url) = obj.get("url")
+                                                                    .or_else(|| obj.get("Url"))
+                                                                    .and_then(|p| p.as_str()) {
+                                                                    Some(url.to_string())
+                                                                } else if let Some((first_key, first_val)) = obj.iter().next() {
+                                                                    if let Some(s) = first_val.as_str() {
+                                                                        Some(format!("{}: {}", first_key, s))
+                                                                    } else {
+                                                                        Some(format!("{}: {}", first_key, first_val))
+                                                                    }
                                                                 } else {
                                                                     None
                                                                 }
+                                                            } else if let Some(s) = v.as_str() {
+                                                                Some(s.to_string())
                                                             } else {
                                                                 None
-                                                            }
+                                                            };
+
+                                                            raw_str.map(|s| {
+                                                                if s.len() > 60 {
+                                                                    format!("{}…", &s[..57])
+                                                                } else {
+                                                                    s
+                                                                }
+                                                            })
                                                         });
 
                                                         let (icon, color) = if act_running {

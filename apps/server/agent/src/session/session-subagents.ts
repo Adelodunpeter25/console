@@ -93,13 +93,15 @@ export function appendSubagentActivity(
   }
 
   const existingIdx = activities.findIndex((a) => a.toolCallId === event.toolCallId);
+  const existing = existingIdx >= 0 ? activities[existingIdx] : undefined;
+
   const activityItem: SubagentActivityItem = {
     turnIndex: event.turnIndex,
     toolCallId: event.toolCallId,
-    toolName: event.toolName,
-    args: event.args,
+    toolName: event.toolName || existing?.toolName || "",
+    args: event.args ?? existing?.args,
     status: event.status,
-    error: event.error,
+    error: event.error ?? existing?.error,
   };
 
   if (existingIdx >= 0) {
