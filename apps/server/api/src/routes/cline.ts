@@ -14,12 +14,22 @@ import {
 
 export const clineAuthRoutes = new Hono();
 
+// Cline provider is currently disabled — keep routes but return disabled error
+// so existing clients get a clear message instead of silently succeeding.
+const CLINE_DISABLED = true;
+
 clineAuthRoutes.get("/cline/status", async (c) => {
+  if (CLINE_DISABLED) {
+    return c.json({ success: false, error: "Cline provider is disabled." }, 404);
+  }
   const cred = await loadClineCredential();
   return c.json({ success: true, data: { loggedIn: cred !== null } });
 });
 
 clineAuthRoutes.post("/cline/login", async (c) => {
+  if (CLINE_DISABLED) {
+    return c.json({ success: false, error: "Cline provider is disabled." }, 404);
+  }
   const body = (await c.req.json().catch(() => null)) as { apiKey?: string } | null;
   const apiKey = body?.apiKey?.trim();
   if (!apiKey) {
@@ -57,6 +67,9 @@ clineAuthRoutes.post("/cline/login", async (c) => {
 });
 
 clineAuthRoutes.post("/cline/logout", async (c) => {
+  if (CLINE_DISABLED) {
+    return c.json({ success: false, error: "Cline provider is disabled." }, 404);
+  }
   await clearClineCredential();
   return c.json({ success: true, data: { loggedIn: false } });
 });

@@ -82,6 +82,9 @@ export const DEFAULT_CLINE_MODELS: Model[] = [...CLINE_FREE_MODEL_IDS]
   }))
   .sort((a, b) => a.id.localeCompare(b.id));
 
+/** Providers that are temporarily disabled (kept in code but hidden from catalog). */
+const DISABLED_PROVIDERS = new Set<ProviderId>(["cline"]);
+
 export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
   gemini: {
     name: "gemini",
@@ -126,10 +129,13 @@ export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
 };
 
 export function listProviders(): ProviderCatalogEntry[] {
-  return Object.values(PROVIDER_CATALOG).map(({ getStreamFn: _getStreamFn, ...rest }) => rest);
+  return Object.values(PROVIDER_CATALOG)
+    .filter((p) => !DISABLED_PROVIDERS.has(p.name))
+    .map(({ getStreamFn: _getStreamFn, ...rest }) => rest);
 }
 
 export function getProvider(name: string): ProviderEntry | undefined {
+  if (DISABLED_PROVIDERS.has(name as ProviderId)) return undefined;
   return PROVIDER_CATALOG[name as ProviderId];
 }
 
@@ -152,6 +158,7 @@ export async function fetchModelsForProvider(
   providerName: ProviderId,
   signal?: AbortSignal,
 ): Promise<Model[]> {
+  if (DISABLED_PROVIDERS.has(providerName)) return [];
   const provider = getProvider(providerName);
   if (!provider) return [];
 
