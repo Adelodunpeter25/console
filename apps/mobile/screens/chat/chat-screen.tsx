@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from "react"
 import { View, Keyboard, BackHandler, Pressable } from "react-native";
 import { SquareTerminal, Folder } from "lucide-react-native";
 import type { LegendListRef } from "@legendapp/list/react-native";
-import { useChatStream, useAbort, useSessionTodos } from "@/hooks";
+import { useChatStream, useAbort, useSessionTodos, useSessionSubagents } from "@/hooks";
 import { sessionsView$ } from "@/stores/useSessionStore";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import {
@@ -13,6 +13,8 @@ import {
   InteractionPanel,
   TodoBanner,
   TodoBottomSheet,
+  SubagentBanner,
+  SubagentBottomSheet,
 } from "@/components/chat";
 import { ChatScreenSkeleton } from "@/components/common";
 import { app$, setActiveTab, setSelectedProjectId, setSelectedSessionId } from "@/stores/useAppStore";
@@ -137,6 +139,18 @@ export function ChatScreen() {
     openSheet,
   } = useSessionTodos(selectedSessionId);
 
+  const {
+    subagents,
+    totalCount: subagentsCount,
+    hasSubagents,
+    hasRunningSubagents,
+    latestSubagent,
+    selectedSubagentId,
+    setSelectedSubagentId,
+    bottomSheetRef: subagentsSheetRef,
+    openSheet: openSubagentsSheet,
+  } = useSessionSubagents(selectedSessionId);
+
   return (
     <View className="flex-1 bg-screen">
       <ScreenHeader title={stream.chatTitle} onBack={handleBackToHome} rightAction={headerRightActions} />
@@ -171,6 +185,14 @@ export function ChatScreen() {
               onPress={openSheet}
             />
           ) : null}
+          {hasSubagents ? (
+            <SubagentBanner
+              subagentsCount={subagentsCount}
+              latestSubagent={latestSubagent}
+              hasRunningSubagents={hasRunningSubagents}
+              onPress={() => openSubagentsSheet()}
+            />
+          ) : null}
           <InteractionPanel sessionId={selectedSessionId} />
         </>
       ) : (
@@ -186,14 +208,24 @@ export function ChatScreen() {
           running={stream.running}
           projectLocked={stream.messages.length > 0}
           topBanner={
-            hasActiveTodos ? (
-              <TodoBanner
-                completedCount={completedCount}
-                totalCount={totalCount}
-                nextTask={nextPendingTodo?.content}
-                onPress={openSheet}
-              />
-            ) : null
+            <>
+              {hasActiveTodos ? (
+                <TodoBanner
+                  completedCount={completedCount}
+                  totalCount={totalCount}
+                  nextTask={nextPendingTodo?.content}
+                  onPress={openSheet}
+                />
+              ) : null}
+              {hasSubagents ? (
+                <SubagentBanner
+                  subagentsCount={subagentsCount}
+                  latestSubagent={latestSubagent}
+                  hasRunningSubagents={hasRunningSubagents}
+                  onPress={() => openSubagentsSheet()}
+                />
+              ) : null}
+            </>
           }
         />
       )}
@@ -204,6 +236,14 @@ export function ChatScreen() {
         todoItems={todoItems}
         completedCount={completedCount}
         totalCount={totalCount}
+      />
+
+      {/* Expandable Subagents Inspector Bottom Sheet */}
+      <SubagentBottomSheet
+        ref={subagentsSheetRef}
+        subagents={subagents}
+        selectedSubagentId={selectedSubagentId}
+        onSelectSubagent={setSelectedSubagentId}
       />
     </View>
   );

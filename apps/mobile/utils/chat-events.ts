@@ -242,6 +242,86 @@ export function applyChatEvent(
           elapsedMs: run.startedAt ? Date.now() - run.startedAt : run.elapsedMs,
         };
       });
+    case "subagentStart": {
+      const subagents = session.subagents ? [...session.subagents] : [];
+      const existingIdx = subagents.findIndex((s) => s.subagentId === event.subagentId);
+      if (existingIdx >= 0) {
+        subagents[existingIdx] = {
+          ...subagents[existingIdx]!,
+          name: event.name,
+          role: event.role,
+          prompt: event.prompt,
+          maxTurns: event.maxTurns,
+          status: "running",
+          updatedAt: Date.now(),
+        };
+      } else {
+        subagents.push({
+          subagentId: event.subagentId,
+          parentToolCallId: event.parentToolCallId,
+          name: event.name,
+          role: event.role,
+          prompt: event.prompt,
+          maxTurns: event.maxTurns,
+          currentTurn: 1,
+          status: "running",
+          activities: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+      }
+      return {
+        ...session,
+        subagents,
+      };
+    }
+    case "subagentActivity": {
+      const subagents = session.subagents ? [...session.subagents] : [];
+      const idx = subagents.findIndex((s) => s.subagentId === event.subagentId);
+      if (idx >= 0) {
+        const target = { ...subagents[idx]! };
+        target.currentTurn = Math.max(target.currentTurn, event.turnIndex);
+        const activities = [...target.activities];
+        const actIdx = activities.findIndex((a) => a.toolCallId === event.toolCallId);
+        const item = {
+          turnIndex: event.turnIndex,
+          toolCallId: event.toolCallId,
+          toolName: event.toolName,
+          args: event.args,
+          status: event.status,
+          error: event.error,
+        };
+        if (actIdx >= 0) {
+          activities[actIdx] = item;
+        } else {
+          activities.push(item);
+        }
+        target.activities = activities;
+        target.updatedAt = Date.now();
+        subagents[idx] = target;
+      }
+      return {
+        ...session,
+        subagents,
+      };
+    }
+    case "subagentEnd": {
+      const subagents = session.subagents ? [...session.subagents] : [];
+      const idx = subagents.findIndex((s) => s.subagentId === event.subagentId);
+      if (idx >= 0) {
+        const target = { ...subagents[idx]! };
+        target.status = event.status;
+        if (event.summary !== undefined) target.summary = event.summary;
+        if (event.error !== undefined) target.error = event.error;
+        if (event.totalTurns > 0) target.currentTurn = event.totalTurns;
+        target.updatedAt = Date.now();
+        subagents[idx] = target;
+      }
+      return {
+        ...session,
+        subagents,
+      };
+    }
     case "streamReset":
       // Re-attach replay is about to arrive — clear streaming buffers so the
       // replayed coalesced snapshots don't duplicate already-seen text.
@@ -317,6 +397,7 @@ export function toChatSnapshot(session: ChatSessionState): ChatSnapshot {
     pendingPermissions: session.pendingPermissions,
     pendingQuestions: session.pendingQuestions,
     todoItems: session.todoItems ?? [],
+    subagents: session.subagents ?? [],
     running: session.running,
     runs: session.runs,
   };

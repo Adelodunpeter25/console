@@ -7,6 +7,7 @@ import type {
   ToolCall,
   ToolResult,
   TodoItem,
+  SubagentInfo,
 } from "@console/types";
 
 export interface PendingQuestion {
@@ -45,6 +46,7 @@ export interface ChatSessionState {
   pendingPermissions: PendingPermission[];
   activeToolCalls: ToolCall[];
   todoItems: TodoItem[];
+  subagents: SubagentInfo[];
   runs: RunActivityState[];
   attachments: ImageAttachment[];
   /** Last time draft (input/attachments) changed — for DRAFT sorting. */
@@ -69,6 +71,7 @@ export interface ChatStoreState {
   clear: (sessionId: string) => void;
   reset: (sessionId: string) => void;
   setTodoItems: (sessionId: string, items: TodoItem[]) => void;
+  setSubagents: (sessionId: string, subagents: SubagentInfo[]) => void;
   handleEvent: (sessionId: string, event: AgentSessionEvent) => void;
 }
 
@@ -84,6 +87,7 @@ export type ChatSnapshot = {
   pendingPermissions: PendingPermission[];
   pendingQuestions: PendingQuestion[];
   todoItems: TodoItem[];
+  subagents: SubagentInfo[];
   running: boolean;
   runs: RunActivityState[];
 };

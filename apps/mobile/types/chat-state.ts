@@ -11,6 +11,7 @@ export function createChatSessionState(): ChatSessionState {
     pendingPermissions: [],
     activeToolCalls: [],
     todoItems: [],
+    subagents: [],
     runs: [],
     attachments: [],
     draftUpdatedAt: undefined,
@@ -30,6 +31,7 @@ export const emptyChatSnapshot: ChatSnapshot = {
   pendingPermissions: [],
   pendingQuestions: [],
   todoItems: [],
+  subagents: [],
   runs: [],
   running: false,
 };

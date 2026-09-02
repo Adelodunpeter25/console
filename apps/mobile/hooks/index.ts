@@ -16,4 +16,5 @@ export * from "./useProjectBranches";
 export * from "./useHomeSessions";
 export * from "./useUsage";
 export * from "./useSessionTodos";
+export * from "./useSessionSubagents";
 export * from "./queries";

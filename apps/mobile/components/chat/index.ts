@@ -15,4 +15,6 @@ export * from "./chat-streaming-footer";
 export * from "./chat-message-list";
 export * from "./todo-banner";
 export * from "./todo-bottom-sheet";
+export * from "./subagent-banner";
+export * from "./subagent-bottom-sheet";
 

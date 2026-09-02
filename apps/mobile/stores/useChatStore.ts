@@ -137,6 +137,15 @@ export function setTodoItems(sessionId: string, items: import("@console/types").
   );
 }
 
+export function setSubagents(sessionId: string, subagents: import("@console/types").SubagentInfo[]): void {
+  setSessions((sessions) =>
+    updateSession(sessions, sessionId, (current) => ({
+      ...current,
+      subagents,
+    })),
+  );
+}
+
 export function addAttachments(sessionId: string, attachments: ImageAttachment[]): void {
   if (attachments.length === 0) return;
   setSessions((sessions) =>
