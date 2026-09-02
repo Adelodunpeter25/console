@@ -1,5 +1,6 @@
 //! Subagent List & Activity Timeline for the Right Inspector Panel.
 
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 
@@ -9,6 +10,8 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
+use crate::chat::message_bubble::render_selectable_markdown;
+use crate::markdown::render::{Ctx as MarkdownCtx, MarkdownView, Metrics, Palette, TranscriptSelection};
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 
@@ -16,6 +19,7 @@ use crate::theme::Theme;
 pub struct SubagentListView {
     subagents: Rc<Vec<SubagentInfo>>,
     expanded_subagents: HashSet<String>,
+    selection: TranscriptSelection,
     on_toggle_subagent: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_copy_summary: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
 }
@@ -30,15 +34,22 @@ impl SubagentListView {
         Self {
             subagents,
             expanded_subagents,
+            selection: TranscriptSelection::default(),
             on_toggle_subagent,
             on_copy_summary,
         }
+    }
+
+    pub fn selection(mut self, selection: TranscriptSelection) -> Self {
+        self.selection = selection;
+        self
     }
 }
 
 impl RenderOnce for SubagentListView {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
+        let palette = Palette::from_theme(&theme);
         let on_toggle = self.on_toggle_subagent;
         let on_copy = self.on_copy_summary;
 
@@ -88,19 +99,28 @@ impl RenderOnce for SubagentListView {
                         let subagent_id = subagent.subagent_id.clone();
                         let on_toggle = on_toggle.clone();
 
-                        let (status_label, status_color, status_icon) = if is_running {
-                            let turn_str = if subagent.max_turns > 0 {
-                                format!("Turn {}/{}", subagent.current_turn.max(1), subagent.max_turns)
+                        let status_label = if is_running {
+                            if subagent.max_turns > 0 {
+                                format!("Running (Turn {}/{})", subagent.current_turn.max(1), subagent.max_turns)
                             } else {
-                                format!("Turn {}", subagent.current_turn.max(1))
-                            };
-                            (format!("Running ({turn_str})"), theme.accent, IconName::LoaderCircle)
+                                format!("Running (Turn {})", subagent.current_turn.max(1))
+                            }
                         } else if is_completed {
-                            ("Done".to_string(), theme.success, IconName::CircleCheck)
+                            "Done".to_string()
                         } else if subagent.status == "aborted" {
-                            ("Aborted".to_string(), theme.warning, IconName::Alert)
+                            "Aborted".to_string()
                         } else {
-                            ("Failed".to_string(), theme.danger, IconName::Alert)
+                            "Failed".to_string()
+                        };
+
+                        let status_color = if is_running {
+                            theme.accent
+                        } else if is_completed {
+                            theme.success
+                        } else if subagent.status == "aborted" {
+                            theme.warning
+                        } else {
+                            theme.danger
                         };
 
                         let mut card = div()
@@ -117,7 +137,7 @@ impl RenderOnce for SubagentListView {
                                 theme.sidebar_border
                             });
 
-                        // Header row (always visible)
+                        // Header row (using only subagent.role as the title)
                         card = card.child(
                             div()
                                 .id(format!("subagent-header-{}", subagent.subagent_id))
@@ -148,16 +168,6 @@ impl RenderOnce for SubagentListView {
                                                         .font_weight(FontWeight::SEMIBOLD)
                                                         .text_color(theme.text)
                                                         .truncate()
-                                                        .child(subagent.name.clone()),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .px(px(4.0))
-                                                        .py(px(1.0))
-                                                        .rounded(px(3.0))
-                                                        .bg(theme.overlay)
-                                                        .text_size(px(10.0))
-                                                        .text_color(theme.text_tertiary)
                                                         .child(subagent.role.clone()),
                                                 ),
                                         )
@@ -166,7 +176,22 @@ impl RenderOnce for SubagentListView {
                                                 .flex()
                                                 .items_center()
                                                 .gap(px(4.0))
-                                                .child(app_icon(status_icon, 11.0, status_color))
+                                                .when(is_running, |el| {
+                                                    el.child(
+                                                        div()
+                                                            .size(px(6.0))
+                                                            .rounded_full()
+                                                            .bg(theme.accent),
+                                                    )
+                                                })
+                                                .when(!is_running, |el| {
+                                                    let icon = if is_completed {
+                                                        IconName::CircleCheck
+                                                    } else {
+                                                        IconName::Alert
+                                                    };
+                                                    el.child(app_icon(icon, 11.0, status_color))
+                                                })
                                                 .child(
                                                     div()
                                                         .text_size(px(10.5))
@@ -200,6 +225,14 @@ impl RenderOnce for SubagentListView {
                             let on_copy_summary = on_copy.clone();
                             let summary_to_copy = summary_text.clone().unwrap_or_default();
 
+                            let prompt_view = Rc::new(RefCell::new(MarkdownView::new()));
+                            let prompt_ctx = MarkdownCtx::new(
+                                format!("subagent-prompt-{}", subagent.subagent_id),
+                                &palette,
+                                Metrics::BODY,
+                                self.selection.clone(),
+                            );
+
                             card = card.child(
                                 div()
                                     .flex()
@@ -209,7 +242,7 @@ impl RenderOnce for SubagentListView {
                                     .border_t_1()
                                     .border_color(theme.sidebar_border)
                                     .bg(theme.sidebar)
-                                    // 1. Mission Prompt
+                                    // 1. Mission Prompt (Selectable Markdown)
                                     .child(
                                         div()
                                             .flex()
@@ -227,9 +260,12 @@ impl RenderOnce for SubagentListView {
                                                     .p(px(6.0))
                                                     .rounded(px(4.0))
                                                     .bg(theme.surface)
-                                                    .text_size(px(11.0))
-                                                    .text_color(theme.text_secondary)
-                                                    .child(subagent.prompt.clone()),
+                                                    .child(render_selectable_markdown(
+                                                        &subagent.prompt,
+                                                        Some(&prompt_view),
+                                                        &prompt_ctx,
+                                                        false,
+                                                    )),
                                             ),
                                     )
                                     // 2. Activity Timeline
@@ -257,12 +293,9 @@ impl RenderOnce for SubagentListView {
                                                     .flex()
                                                     .flex_col()
                                                     .gap(px(4.0))
-                                                    .children(subagent.activities.iter().map(|act| {
-                                                        let (act_icon, act_color) = match act.status.as_str() {
-                                                            "running" => (IconName::LoaderCircle, theme.accent),
-                                                            "completed" => (IconName::CircleCheck, theme.success),
-                                                            _ => (IconName::Alert, theme.danger),
-                                                        };
+                                                    .children(subagent.activities.iter().enumerate().map(|(act_idx, act)| {
+                                                        let act_running = act.status == "running";
+                                                        let act_completed = act.status == "completed";
 
                                                         let args_summary = act.args.as_ref().map(|v| {
                                                             if let Some(obj) = v.as_object() {
@@ -280,6 +313,19 @@ impl RenderOnce for SubagentListView {
                                                             }
                                                         }).unwrap_or_default();
 
+                                                        let act_view = Rc::new(RefCell::new(MarkdownView::new()));
+                                                        let act_text = if !args_summary.is_empty() {
+                                                            format!("`{}` {}", act.tool_name, args_summary)
+                                                        } else {
+                                                            format!("`{}`", act.tool_name)
+                                                        };
+                                                        let act_ctx = MarkdownCtx::new(
+                                                            format!("subagent-act-{}-{act_idx}", subagent.subagent_id),
+                                                            &palette,
+                                                            Metrics::BODY,
+                                                            self.selection.clone(),
+                                                        );
+
                                                         div()
                                                             .flex()
                                                             .items_center()
@@ -288,23 +334,33 @@ impl RenderOnce for SubagentListView {
                                                             .py(px(4.0))
                                                             .rounded(px(4.0))
                                                             .bg(theme.surface)
-                                                            .child(app_icon(act_icon, 11.0, act_color))
-                                                            .child(
-                                                                div()
-                                                                    .text_size(px(11.0))
-                                                                    .font_weight(FontWeight::MEDIUM)
-                                                                    .text_color(theme.text)
-                                                                    .child(act.tool_name.clone()),
-                                                            )
-                                                            .when(!args_summary.is_empty(), |el| {
+                                                            .when(act_running, |el| {
                                                                 el.child(
                                                                     div()
-                                                                        .text_size(px(10.5))
-                                                                        .text_color(theme.text_tertiary)
-                                                                        .truncate()
-                                                                        .child(args_summary),
+                                                                        .size(px(6.0))
+                                                                        .rounded_full()
+                                                                        .bg(theme.accent),
                                                                 )
                                                             })
+                                                            .when(!act_running, |el| {
+                                                                let (icon, color) = if act_completed {
+                                                                    (IconName::CircleCheck, theme.success)
+                                                                } else {
+                                                                    (IconName::Alert, theme.danger)
+                                                                };
+                                                                el.child(app_icon(icon, 11.0, color))
+                                                            })
+                                                            .child(
+                                                                div()
+                                                                    .flex_1()
+                                                                    .min_w_0()
+                                                                    .child(render_selectable_markdown(
+                                                                        &act_text,
+                                                                        Some(&act_view),
+                                                                        &act_ctx,
+                                                                        false,
+                                                                    )),
+                                                            )
                                                             .when_some(act.error.clone(), |el, err| {
                                                                 el.child(
                                                                     div()
@@ -318,7 +374,7 @@ impl RenderOnce for SubagentListView {
                                                     .into_any_element()
                                             }),
                                     )
-                                    // 3. Summary Section
+                                    // 3. Summary Section (Selectable Markdown with drag-to-select copy)
                                     .child(
                                         div()
                                             .flex()
@@ -366,13 +422,24 @@ impl RenderOnce for SubagentListView {
                                                     }),
                                             )
                                             .child(if let Some(ref sum) = summary_text {
+                                                let sum_view = Rc::new(RefCell::new(MarkdownView::new()));
+                                                let sum_ctx = MarkdownCtx::new(
+                                                    format!("subagent-summary-{}", subagent.subagent_id),
+                                                    &palette,
+                                                    Metrics::BODY,
+                                                    self.selection.clone(),
+                                                );
+
                                                 div()
                                                     .p(px(6.0))
                                                     .rounded(px(4.0))
                                                     .bg(theme.surface)
-                                                    .text_size(px(11.0))
-                                                    .text_color(theme.text)
-                                                    .child(sum.clone())
+                                                    .child(render_selectable_markdown(
+                                                        sum,
+                                                        Some(&sum_view),
+                                                        &sum_ctx,
+                                                        is_running,
+                                                    ))
                                                     .into_any_element()
                                             } else if is_running {
                                                 div()

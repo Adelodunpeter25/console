@@ -176,7 +176,7 @@ impl RenderOnce for RightSidebar {
                                     .on_click(move |_, window, cx| {
                                         (on_tab)(InspectorTab::AllFiles, window, cx);
                                     })
-                                    .child("All")
+                                    .child("All files")
                             })
                             // Tab 2: Changes (N)
                             .child({

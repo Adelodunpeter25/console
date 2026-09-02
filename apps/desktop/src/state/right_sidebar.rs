@@ -86,20 +86,9 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    pub fn view_subagent_in_panel(&mut self, call_or_subagent_id: &str, cx: &mut Context<Self>) {
+    pub fn view_subagent_in_panel(&mut self, _call_or_subagent_id: &str, cx: &mut Context<Self>) {
         self.right_sidebar_visible = true;
         self.inspector_active_tab = InspectorTab::Subagents;
-        // If an active session has a subagent matching this id or parent tool call id, expand it
-        if let Some(session_id) = self.selected_session_id.clone() {
-            if let Some(subagents) = self.session_subagents.get(&session_id) {
-                if let Some(target) = subagents.iter().find(|s| {
-                    s.subagent_id == call_or_subagent_id
-                        || s.parent_tool_call_id == call_or_subagent_id
-                }) {
-                    self.expanded_subagents.insert(target.subagent_id.clone());
-                }
-            }
-        }
         self.persist_layout();
         cx.notify();
     }
