@@ -196,6 +196,7 @@ pub struct ConsoleDesktopApp {
     pub deleted_sessions: Vec<SessionHeader>,
     pub settings_window_handle: Option<gpui::AnyWindowHandle>,
     pub settings_window_view: Option<gpui::WeakEntity<crate::settings_window::SettingsWindow>>,
+    pub main_window_handle: Option<gpui::AnyWindowHandle>,
     pub drafts: std::collections::HashMap<String, crate::persistence::store::PersistedDraft>,
     /// Session IDs whose draft is confirmed for sidebar display.
     /// Only updated when a tab closes (or submit). Typing never touches this —
@@ -510,6 +511,7 @@ impl ConsoleDesktopApp {
             deleted_sessions: Vec::new(),
             settings_window_handle: None,
             settings_window_view: None,
+            main_window_handle: Some(window.window_handle().into()),
             drafts,
             sidebar_draft_ids,
             drafts_collapsed: false,

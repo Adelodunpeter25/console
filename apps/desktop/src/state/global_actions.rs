@@ -208,6 +208,7 @@ impl ConsoleDesktopApp {
 
     /// ⌘O — open the remote directory browser palette to add a project.
     pub fn open_project_browse(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.close_settings(cx);
         self.project_browse_palette
             .update(cx, |palette, cx| palette.open(window, cx));
         cx.notify();

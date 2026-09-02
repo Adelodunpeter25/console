@@ -1,8 +1,8 @@
 use std::rc::Rc;
 use std::time::Duration;
 use gpui::{
-    App, AppContext, Context, Entity, FocusHandle, Focusable, IntoElement, ParentElement, Render,
-    Styled, WeakEntity, Window, div,
+    App, AppContext, Context, Entity, FocusHandle, Focusable, IntoElement, KeyDownEvent,
+    ParentElement, Render, Styled, WeakEntity, Window, div,
 };
 use console_ui::input::ComposerInput;
 use console_ui::settings::{
@@ -62,10 +62,13 @@ impl SettingsWindow {
             input
         });
 
+        let focus_handle = cx.focus_handle();
+        window.focus(&focus_handle, cx);
+
         Self {
             app,
             active_tab: initial_tab,
-            focus_handle: cx.focus_handle(),
+            focus_handle,
             gemini_project_input,
             gemini_project_seeded: false,
             is_adding_env: false,
@@ -375,9 +378,22 @@ impl Render for SettingsWindow {
                 let on_add_project: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
                     let app_handle = self.app.clone();
                     Rc::new(move |window: &mut Window, cx: &mut App| {
+                        window.remove_window();
                         if let Some(app) = app_handle.upgrade() {
                             app.update(cx, |app_state, cx| {
-                                app_state.open_project_browse(window, cx);
+                                app_state.settings_window_handle = None;
+                                app_state.settings_window_view = None;
+                                if let Some(main_handle) = app_state.main_window_handle {
+                                    let app_entity = cx.entity().clone();
+                                    cx.defer(move |cx| {
+                                        let _ = main_handle.update(cx, |_root, main_window, cx| {
+                                            main_window.activate_window();
+                                            app_entity.update(cx, |this, cx| {
+                                                this.open_project_browse(main_window, cx);
+                                            });
+                                        });
+                                    });
+                                }
                             });
                         }
                     })
@@ -431,6 +447,20 @@ impl Render for SettingsWindow {
             }
         };
 
-        SettingsShell::new(active_tab, on_select_tab, content).into_any_element()
+        div()
+            .size_full()
+            .track_focus(&self.focus_handle)
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                if event.keystroke.key == "escape" {
+                    if let Some(app) = this.app.upgrade() {
+                        app.update(cx, |app_state, _cx| {
+                            app_state.settings_window_handle = None;
+                            app_state.settings_window_view = None;
+                        });
+                    }
+                    window.remove_window();
+                }
+            }))
+            .child(SettingsShell::new(active_tab, on_select_tab, content))
     }
 }

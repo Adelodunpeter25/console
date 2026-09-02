@@ -70,4 +70,13 @@ impl ConsoleDesktopApp {
         self.refresh_deleted_sessions(cx);
         cx.notify();
     }
+
+    pub fn close_settings(&mut self, cx: &mut Context<Self>) {
+        if let Some(handle) = self.settings_window_handle.take() {
+            self.settings_window_view = None;
+            let _ = cx.update_window(handle, |_root, window, _cx| {
+                window.remove_window();
+            });
+        }
+    }
 }
