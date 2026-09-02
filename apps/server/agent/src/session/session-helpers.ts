@@ -16,6 +16,18 @@ export function getSessionDbPath(storageDir: string, projectId: string, sessionI
   return path.join(getProjectSessionsDir(storageDir, projectId), `${sessionId}.db`);
 }
 
+export function getScratchSessionsDir(storageDir: string): string {
+  return path.join(storageDir, "scratch", "sessions");
+}
+
+export function getScratchSessionDbPath(storageDir: string, sessionId: string): string {
+  return path.join(getScratchSessionsDir(storageDir), `${sessionId}.db`);
+}
+
+export function isScratchProjectId(projectId: string | null | undefined): boolean {
+  return projectId == null;
+}
+
 export function ensureDir(filePath: string): void {
   try {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -56,6 +68,9 @@ export function findSessionDbPath(storageDir: string, sessionId: string): string
     const candidate = getSessionDbPath(storageDir, projId, sessionId);
     if (fs.existsSync(candidate)) return candidate;
   }
+  // Also check scratch sessions
+  const scratchCandidate = getScratchSessionDbPath(storageDir, sessionId);
+  if (fs.existsSync(scratchCandidate)) return scratchCandidate;
   return undefined;
 }
 
@@ -69,11 +84,13 @@ export function getProjectIdBySessionId(globalDb: DatabaseType, sessionId: strin
 export function getSessionDb(
   state: StorageState,
   sessionId: string,
-  projectId: string,
+  projectId: string | null,
 ): DatabaseType {
   let db = state.sessionDbs.get(sessionId);
   if (!db) {
-    const dbPath = getSessionDbPath(state.storageDir, projectId, sessionId);
+    const dbPath = projectId == null
+      ? getScratchSessionDbPath(state.storageDir, sessionId)
+      : getSessionDbPath(state.storageDir, projectId, sessionId);
     ensureDir(dbPath);
     db = new DatabaseConstructor(dbPath);
     initSessionDatabase(db);

@@ -158,6 +158,22 @@ export function useHomeSessions() {
     });
 
     for (const session of nonDraftSessions) {
+      // Scratchpad / General sessions: projectId == null (explicit scratch)
+      if (session.projectId == null) {
+        const groupKey = "general";
+        const existing = byProject.get(groupKey);
+        if (existing) {
+          existing.list.push(session);
+        } else {
+          byProject.set(groupKey, {
+            projectId: null,
+            projectName: "General",
+            list: [session],
+          });
+        }
+        continue;
+      }
+
       const project =
         projects.find((p) => p.path && session.cwd && p.path === session.cwd) ??
         (session.projectId ? projects.find((p) => p.id === session.projectId) : undefined);
@@ -202,6 +218,22 @@ export function useHomeSessions() {
 
   const composeSession = async (targetProjectId?: string | null) => {
     if (createSession.isPending) return;
+
+    // Explicit null => scratchpad session (General)
+    if (targetProjectId === null) {
+      try {
+        const session = await createSession.mutateAsync({
+          projectId: null,
+          title: "New Chat",
+        });
+        setSelectedSessionId(session.id);
+        setActiveTab("chat");
+      } catch (error) {
+        console.error("Failed to create session:", error);
+        throw error;
+      }
+      return;
+    }
 
     const project = targetProjectId
       ? projects.find((p) => p.id === targetProjectId)

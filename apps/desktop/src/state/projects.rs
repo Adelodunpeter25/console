@@ -116,9 +116,8 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// Drop the project selection: new sessions fall back to the current
-    /// directory with no project scope, and the active session is released
-    /// from its project.
+    /// Drop the project selection: new sessions use the sandboxed scratch
+    /// directory (`~/.console/scratch/<sessionId>`) with no project scope.
     pub fn clear_project_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
         // Same lock as select_project_for_pane — clearing the project
         // changes cwd, which is unsafe once a chat has messages.
@@ -133,13 +132,14 @@ impl ConsoleDesktopApp {
         }
         cx.notify();
 
-        let fallback_cwd = std::env::current_dir()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|_| ".".to_string());
-
         let Some(session_id) = self.active_session_for_pane(&pane_id) else {
             return;
         };
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        let is_dev = std::env::var("CONSOLE_ENV").map(|v| v == "dev").unwrap_or(false);
+        let folder = if is_dev { ".console-dev" } else { ".console" };
+        let fallback_cwd = format!("{}/{}/scratch/{}", home, folder, session_id);
+
         if let Some(session) = Rc::make_mut(&mut self.sessions)
             .iter_mut()
             .find(|s| s.id == session_id)

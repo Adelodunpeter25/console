@@ -49,8 +49,8 @@ pub struct SessionDetailResponse {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionDto {
-    pub cwd: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
     pub project_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,

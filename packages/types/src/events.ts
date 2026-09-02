@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "./agent";
+import type { AgentMessage, AssistantMessage } from "./agent";
 import type { PermissionRequest, ToolCall, ToolCallPreview, ToolResult } from "./tool";
 import type { TodoItem } from "./todo";
 
@@ -77,6 +77,7 @@ export interface SubagentInfo {
 export type AgentSessionEvent =
   | { type: "sessionStart" }
   | { type: "turnStart"; prompt: string }
+  | { type: "turnEnd"; turnId: string }
   | { type: "modelStreamStart"; turnId: string }
   | { type: "modelStreamPart"; part: { text?: string; thinking?: string; toolCall?: ToolCallPreview } }
   | { type: "modelStreamEnd"; turnId: string; turn: AssistantMessage }
@@ -85,6 +86,7 @@ export type AgentSessionEvent =
   | { type: "askQuestion"; request: AskQuestionRequest }
   | { type: "toolExecutionResult"; result: ToolResult }
   | { type: "toolExecutionEnd"; results: ToolResult[] }
+  | { type: "todoUpdate"; items: TodoItem[]; action?: string }
   | {
       type: "compaction";
       summary: string;

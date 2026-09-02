@@ -92,12 +92,7 @@ impl ConsoleDesktopApp {
         let session_project_id = self.pane_project_id(&run_pane_id);
         let session_cwd = self
             .selected_project_for_pane(&run_pane_id)
-            .map(|project| project.path.clone())
-            .unwrap_or_else(|| {
-                std::env::current_dir()
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_else(|_| ".".to_string())
-            });
+            .map(|project| project.path.clone());
         let client = self.client.clone();
 
         self.composer_for_pane(&run_pane_id)

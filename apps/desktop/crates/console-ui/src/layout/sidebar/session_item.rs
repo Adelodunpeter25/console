@@ -104,10 +104,13 @@ impl RenderOnce for SidebarSessionItem {
         let is_renaming = self.is_renaming;
         let rename_input = self.rename_input;
 
-        let folder_name = self
-            .project_name
-            .clone()
-            .unwrap_or_else(|| crate::utils::format_folder_display_name(&session.cwd));
+        let folder_name = if self.session.project_id.is_none() {
+            "General".to_string()
+        } else {
+            self.project_name
+                .clone()
+                .unwrap_or_else(|| crate::utils::format_folder_display_name(&session.cwd))
+        };
 
         let display_title = session.display_title().to_string();
         let drag = WorkspaceDrag::new(

@@ -51,3 +51,18 @@ export function getProjectSessionsDir(projectId: string): string {
 export function getSessionDbPath(projectId: string, sessionId: string): string {
   return path.join(getProjectSessionsDir(projectId), `${sessionId}.db`);
 }
+
+/**
+ * Returns the scratchpad directory for projectless sessions.
+ * Sandboxed cwd ensuring temporary files stay isolated.
+ */
+export function getScratchDir(): string {
+  return path.join(getConsoleStorageDir(), "scratch");
+}
+
+/**
+ * Returns the per-session scratch working directory.
+ */
+export function getSessionScratchDir(sessionId: string): string {
+  return path.join(getScratchDir(), sessionId);
+}

@@ -1,8 +1,11 @@
 /**
  * Session Persistence Service wrapping SqliteSessionStorage.
  */
+import crypto from "node:crypto";
+import fs from "node:fs";
 import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
 import { DEFAULT_FALLBACK_MODEL } from "@/agent/src/commands/provider-registry.js";
+import { getSessionScratchDir } from "@/agent/src/session/apppaths.js";
 import type { SessionHeader } from "@console/types";
 import type { CreateSessionDto, SessionDetailResponse, UpdateSessionDto } from "@/api/src/types/index.js";
 import { RunService } from "./run.service.js";
@@ -19,13 +22,31 @@ export class SessionService {
   }
 
   createSession(dto: CreateSessionDto): SessionHeader {
-    const cwd = dto.cwd || process.cwd();
     const modelId = dto.modelId || DEFAULT_FALLBACK_MODEL;
     const provider = dto.provider || "antigravity";
     const title = dto.title || "New Session";
 
-    let projectId = dto.projectId;
-    if (!projectId) {
+    // Explicit null => scratchpad session: sandboxed cwd, no project link.
+    if (dto.projectId === null) {
+      const id = crypto.randomUUID();
+      const cwd = dto.cwd || getSessionScratchDir(id);
+      try {
+        fs.mkdirSync(cwd, { recursive: true });
+      } catch {}
+      return this.storage.createSession({
+        id,
+        title,
+        cwd,
+        projectId: null,
+        modelId,
+        provider,
+        approvalMode: dto.approvalMode,
+      });
+    }
+
+    const cwd = dto.cwd || process.cwd();
+    let projectId: string | undefined = dto.projectId ?? undefined;
+    if (projectId === undefined) {
       const project = this.storage.getProjectByDir(cwd);
       if (project) {
         projectId = project.id;
@@ -35,7 +56,7 @@ export class SessionService {
     return this.storage.createSession({
       title,
       cwd,
-      projectId,
+      projectId: projectId ?? undefined,
       modelId,
       provider,
       approvalMode: dto.approvalMode,

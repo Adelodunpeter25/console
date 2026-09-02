@@ -8,6 +8,7 @@ import { replaceMessages } from "./session-messages.js";
 import {
   findSessionDbPath,
   getProjectIdBySessionId,
+  getScratchSessionDbPath,
   getSessionDb,
   getSessionDbPath,
   removeDbFile,
@@ -18,7 +19,7 @@ export interface CreateSessionOptions {
   id?: string;
   title?: string;
   cwd: string;
-  projectId?: string;
+  projectId?: string | null;
   modelId: string;
   provider: string;
   approvalMode?: string;
@@ -29,7 +30,7 @@ export function createSession(state: StorageState, options: CreateSessionOptions
   const id = options.id ?? crypto.randomUUID();
   const now = Date.now();
   const title = options.title?.trim() || "New Session";
-  const projectId = options.projectId || "default";
+  const projectId = options.projectId ?? null;
   const approvalMode = options.approvalMode ?? "always-ask";
 
   // 1. Write header to the global index.
@@ -174,7 +175,7 @@ export function loadSession(
 
   const title = meta?.title ?? indexRow?.title ?? "New Session";
   const cwd = meta?.cwd ?? indexRow?.cwd ?? process.cwd();
-  const resolvedProjectId = meta?.project_id ?? projectId ?? indexRow?.project_id ?? "default";
+  const resolvedProjectId = meta?.project_id ?? projectId ?? indexRow?.project_id ?? null;
   const modelId = meta?.model_id ?? indexRow?.model_id ?? "claude-opus-4-6-thinking";
   const provider = meta?.provider ?? indexRow?.provider ?? "antigravity";
   const approvalMode = meta?.approval_mode ?? indexRow?.approval_mode ?? "always-ask";
@@ -215,7 +216,7 @@ export function loadSession(
       id: sessionId,
       title,
       cwd,
-      projectId: resolvedProjectId,
+      projectId: resolvedProjectId ?? undefined,
       modelId,
       provider,
       approvalMode,
@@ -368,8 +369,8 @@ export function updateTitle(state: StorageState, sessionId: string, title: strin
   const now = Date.now();
   const trimmed = title.trim();
 
-  if (projectId) {
-    const dbPath = getSessionDbPath(storageDir, projectId, sessionId);
+  {
+    const dbPath = projectId == null ? getScratchSessionDbPath(storageDir, sessionId) : getSessionDbPath(storageDir, projectId, sessionId);
     if (state.sessionDbs.has(sessionId) || fs.existsSync(dbPath)) {
       const sessionDb = getSessionDb(state, sessionId, projectId);
       sessionDb
@@ -394,8 +395,8 @@ export function updateModel(
   const projectId = getProjectIdBySessionId(globalDb, sessionId);
   const now = Date.now();
 
-  if (projectId) {
-    const dbPath = getSessionDbPath(storageDir, projectId, sessionId);
+  {
+    const dbPath = projectId == null ? getScratchSessionDbPath(storageDir, sessionId) : getSessionDbPath(storageDir, projectId, sessionId);
     if (state.sessionDbs.has(sessionId) || fs.existsSync(dbPath)) {
       const sessionDb = getSessionDb(state, sessionId, projectId);
       sessionDb
@@ -416,8 +417,8 @@ export function updateCwd(state: StorageState, sessionId: string, cwd: string): 
   const now = Date.now();
   const trimmed = cwd.trim();
 
-  if (projectId) {
-    const dbPath = getSessionDbPath(storageDir, projectId, sessionId);
+  {
+    const dbPath = projectId == null ? getScratchSessionDbPath(storageDir, sessionId) : getSessionDbPath(storageDir, projectId, sessionId);
     if (state.sessionDbs.has(sessionId) || fs.existsSync(dbPath)) {
       const sessionDb = getSessionDb(state, sessionId, projectId);
       sessionDb
@@ -441,8 +442,8 @@ export function updateApprovalMode(
   const projectId = getProjectIdBySessionId(globalDb, sessionId);
   const now = Date.now();
 
-  if (projectId) {
-    const dbPath = getSessionDbPath(storageDir, projectId, sessionId);
+  {
+    const dbPath = projectId == null ? getScratchSessionDbPath(storageDir, sessionId) : getSessionDbPath(storageDir, projectId, sessionId);
     if (state.sessionDbs.has(sessionId) || fs.existsSync(dbPath)) {
       const sessionDb = getSessionDb(state, sessionId, projectId);
       sessionDb

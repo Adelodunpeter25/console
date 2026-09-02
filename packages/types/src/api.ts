@@ -9,8 +9,8 @@ export interface ApiResponse<T = unknown> {
 }
 
 export interface CreateSessionDto {
-  cwd: string;
-  projectId?: string;
+  cwd?: string;
+  projectId?: string | null;
   modelId?: string;
   provider?: ProviderId;
   title?: string;

@@ -81,13 +81,13 @@ export async function loadDeletedSessions(): Promise<void> {
 }
 
 export async function createSession(
-  cwd: string,
-  projectId: string,
+  cwd?: string,
+  projectId?: string | null,
   title?: string,
 ): Promise<SessionHeader> {
   const session = await sessionService.createSession({
-    cwd,
-    projectId,
+    ...(cwd ? { cwd } : {}),
+    projectId: projectId ?? null,
     title: title ?? "New Chat",
   });
   project$.sessions.unshift(session);
