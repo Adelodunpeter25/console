@@ -40,6 +40,26 @@ where
     })
 }
 
+/// Attach the draft context menu to a sidebar draft row.
+///
+/// Drafts only need a destructive discard action — no rename.
+pub fn draft_context_menu<E>(
+    element: E,
+    on_delete: impl Fn(&mut Window, &mut App) + 'static,
+) -> ContextMenu<E>
+where
+    E: InteractiveElement + ParentElement + Styled + IntoElement + 'static,
+{
+    let on_delete = Rc::new(on_delete);
+    element.context_menu(move |menu, _, _| {
+        let on_delete = on_delete.clone();
+        menu.min_w(px(200.0)).item(
+            entry("Delete Draft", IconName::TrashBinMinimalistic, true)
+                .on_click(move |_, window, cx| on_delete(window, cx)),
+        )
+    })
+}
+
 /// One menu entry drawn with the app's own icon set and palette.
 ///
 /// The component library's stock item has no destructive styling, and its icon

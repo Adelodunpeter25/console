@@ -121,4 +121,15 @@ impl ConsoleDesktopApp {
     pub fn revoke_sidebar_draft(&mut self, session_id: &str) {
         self.sidebar_draft_ids.remove(session_id);
     }
+
+    /// Discard a draft via the sidebar context menu.
+    /// `key` is the draft map key: a session id or `"new_chat"`.
+    pub fn discard_draft(&mut self, key: &str) {
+        let is_new_chat = key == "new_chat";
+        let session_opt = if is_new_chat { None } else { Some(key) };
+        self.clear_draft_for_session(session_opt);
+        if !is_new_chat {
+            self.sidebar_draft_ids.remove(key);
+        }
+    }
 }

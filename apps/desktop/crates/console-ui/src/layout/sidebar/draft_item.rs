@@ -4,7 +4,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
-use crate::primitives::{IconName, app_icon};
+use crate::primitives::{IconName, app_icon, draft_context_menu};
 use crate::theme::Theme;
 use crate::utils::format_time_ago;
 
@@ -22,6 +22,7 @@ pub fn render_sidebar_draft_item(
     selected_id: Option<&str>,
     on_select: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_chat: &Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_delete_draft: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     theme: Theme,
 ) -> gpui::AnyElement {
     let is_active = match &draft.session_id {
@@ -44,7 +45,13 @@ pub fn render_sidebar_draft_item(
         .clone()
         .unwrap_or_else(|| "Workspace".to_string());
 
-    div()
+    let delete_key = draft
+        .session_id
+        .clone()
+        .unwrap_or_else(|| "new_chat".to_string());
+    let on_delete = on_delete_draft.clone();
+
+    let row = div()
         .id(ElementId::Name(
             format!("draft-row-{}", draft.session_id.as_deref().unwrap_or("new-chat")).into(),
         ))
@@ -113,6 +120,10 @@ pub fn render_sidebar_draft_item(
                         .text_color(theme.text_ghost)
                         .child(format_time_ago(draft.updated_at)),
                 ),
-        )
-        .into_any_element()
+        );
+
+    draft_context_menu(row, move |window, cx| {
+        on_delete(delete_key.clone(), window, cx);
+    })
+    .into_any_element()
 }

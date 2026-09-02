@@ -74,6 +74,7 @@ pub struct SidebarView {
     on_commit_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_cancel_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_delete_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_delete_draft: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     renaming_session_id: Option<String>,
     rename_input: Option<Entity<ComposerInput>>,
     on_resize_start: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static>,
@@ -110,6 +111,7 @@ impl SidebarView {
         on_commit_rename: impl Fn(&mut Window, &mut App) + 'static,
         on_cancel_rename: impl Fn(&mut Window, &mut App) + 'static,
         on_delete_session: impl Fn(String, &mut Window, &mut App) + 'static,
+        on_delete_draft: impl Fn(String, &mut Window, &mut App) + 'static,
         renaming_session_id: Option<String>,
         rename_input: Option<Entity<ComposerInput>>,
         on_resize_start: impl Fn(f32, &mut Window, &mut App) + 'static,
@@ -139,6 +141,7 @@ impl SidebarView {
             on_commit_rename: Rc::new(on_commit_rename),
             on_cancel_rename: Rc::new(on_cancel_rename),
             on_delete_session: Rc::new(on_delete_session),
+            on_delete_draft: Rc::new(on_delete_draft),
             renaming_session_id,
             rename_input,
             on_resize_start: Rc::new(on_resize_start),
@@ -178,6 +181,7 @@ impl RenderOnce for SidebarView {
         let on_commit_rename = self.on_commit_rename;
         let on_cancel_rename = self.on_cancel_rename;
         let on_del = self.on_delete_session;
+        let on_delete_draft = self.on_delete_draft;
         let renaming_session_id = self.renaming_session_id;
         let rename_input = self.rename_input;
         let on_resize_start = self.on_resize_start;
@@ -286,6 +290,7 @@ impl RenderOnce for SidebarView {
         let list_on_commit_rename = on_commit_rename;
         let list_on_cancel_rename = on_cancel_rename;
         let list_on_del = on_del;
+        let list_on_delete_draft = on_delete_draft;
         let list_renaming_session_id = renaming_session_id;
         let list_rename_input = rename_input;
         let list_on_add = on_add.clone();
@@ -304,6 +309,7 @@ impl RenderOnce for SidebarView {
                         list_selected_id.as_deref(),
                         &list_on_sel,
                         &list_on_new,
+                        &list_on_delete_draft,
                         theme,
                     )
                 }

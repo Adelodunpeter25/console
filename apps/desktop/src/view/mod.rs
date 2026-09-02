@@ -579,6 +579,35 @@ impl Render for ConsoleDesktopApp {
                                 }
                             }
                         },
+                        {
+                            let entity = entity.clone();
+                            move |key: String, _w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        let is_new_chat = key == "new_chat";
+                                        this.discard_draft(&key);
+                                        // If the discarded draft is currently shown in the
+                                        // active composer, clear the input so stale text
+                                        // doesn't remain.
+                                        let active_sid = this
+                                            .active_pane_id
+                                            .as_deref()
+                                            .and_then(|pane_id| this.active_session_for_pane(pane_id))
+                                            .map(|s| s.to_string());
+                                        let should_clear = if is_new_chat {
+                                            active_sid.is_none()
+                                        } else {
+                                            active_sid.as_deref() == Some(key.as_str())
+                                        };
+                                        if should_clear {
+                                            let composer = this.active_composer_input();
+                                            composer.update(cx, |input, cx| input.clear(cx));
+                                        }
+                                        cx.notify();
+                                    });
+                                }
+                            }
+                        },
                         self.session_rename_id.clone(),
                         Some(self.session_rename_input.clone()),
                         {
