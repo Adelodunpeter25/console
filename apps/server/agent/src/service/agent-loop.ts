@@ -55,7 +55,6 @@ function runAgentLoop(
     compaction,
     onToolCall,
     onToolResult,
-    maxTurns,
   } = config;
 
   const stream = new EventStream<AgentSessionEvent, AgentMessage[]>(
@@ -81,12 +80,7 @@ function runAgentLoop(
           : { role: "user", content: prompt };
       messages.push(userMessage);
 
-      let turnCount = 0;
       while (true) {
-        if (maxTurns !== undefined && turnCount >= maxTurns) {
-          break;
-        }
-        turnCount++;
         if (signal?.aborted) {
           // User-initiated abort is normal control flow, not an error.
           // Just break the loop — sessionEnd is emitted in finally.

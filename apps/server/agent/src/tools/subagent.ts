@@ -23,14 +23,6 @@ const inputSchema = z.object({
     .optional()
     .default("Subagent Researcher")
     .describe("Role or job title for the subagent (e.g. 'Codebase Inspector', 'Test Runner')"),
-  maxTurns: z
-    .number()
-    .int()
-    .min(1)
-    .max(20)
-    .optional()
-    .default(10)
-    .describe("Maximum turns for the subagent run"),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -46,7 +38,7 @@ export function createSubagentTool(context?: SubagentToolContext): AgentTool {
     tier: "read",
     inputSchema,
     execute: async (args: Input, signal?: AbortSignal): Promise<unknown> => {
-      const { prompt, name, role, maxTurns = 10 } = args;
+      const { prompt, name, role } = args;
       const displayName = name || role;
 
       if (!context) {
@@ -68,7 +60,6 @@ export function createSubagentTool(context?: SubagentToolContext): AgentTool {
         systemPrompt: subagentSystemPrompt,
         tools: tools.filter((t) => t.name !== "subagent"),
         streamFn,
-        maxTurns,
         approvalMode: "accept-edits",
         signal,
       });

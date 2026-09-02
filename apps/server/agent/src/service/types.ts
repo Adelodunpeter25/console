@@ -55,8 +55,6 @@ export interface AgentLoopConfig {
   onToolCall?: (call: ToolCall) => Promise<void> | void;
   /** Hook called after a tool finishes executing. */
   onToolResult?: (call: ToolCall, result: ToolResult) => Promise<void> | void;
-  /** Maximum agentic turns (LLM calls) before the loop stops. */
-  maxTurns?: number;
 }
 
 export interface StreamParams {
