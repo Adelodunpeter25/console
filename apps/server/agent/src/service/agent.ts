@@ -158,6 +158,8 @@ export class Agent {
       signal.addEventListener("abort", () => this._abortController?.abort());
     }
 
+    let eventEmitter: ((event: AgentSessionEvent) => void) | undefined;
+
     const tools = this._tools.map((tool) =>
       tool.name === "subagent"
         ? createSubagentTool({
@@ -165,6 +167,7 @@ export class Agent {
             streamFn: this._streamFn,
             tools: this._tools,
             systemPrompt: this._systemPrompt,
+            onEvent: (event) => eventEmitter?.(event),
           })
         : tool,
     );
@@ -186,6 +189,11 @@ export class Agent {
       this._messages.length === 0
         ? agentLoop(prompt, config, attachments)
         : agentLoopContinue(this._messages, prompt, config, attachments);
+
+    eventEmitter = (event) => {
+      this._onEvent?.(event);
+      eventStream.push(event);
+    };
 
     // When the run finishes, collect new messages and mark as idle
     eventStream.result().then(

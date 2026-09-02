@@ -14,6 +14,41 @@ export interface AskQuestionRequest {
   batchId?: string;
 }
 
+export interface SubagentStartEvent {
+  type: "subagentStart";
+  subagentId: string;
+  parentToolCallId: string;
+  name: string;
+  role: string;
+  prompt: string;
+  maxTurns: number;
+}
+
+export interface SubagentActivityEvent {
+  type: "subagentActivity";
+  subagentId: string;
+  turnIndex: number;
+  toolCallId: string;
+  toolName: string;
+  args?: Record<string, unknown>;
+  status: "running" | "completed" | "error";
+  error?: string;
+}
+
+export interface SubagentEndEvent {
+  type: "subagentEnd";
+  subagentId: string;
+  status: "completed" | "aborted" | "error";
+  summary?: string;
+  error?: string;
+  totalTurns: number;
+}
+
+export type SubagentEvent =
+  | SubagentStartEvent
+  | SubagentActivityEvent
+  | SubagentEndEvent;
+
 export type AgentSessionEvent =
   | { type: "sessionStart" }
   | { type: "turnStart"; prompt: string }
@@ -30,6 +65,9 @@ export type AgentSessionEvent =
   | { type: "turnEnd"; turnId: string }
   | { type: "sessionEnd" }
   | { type: "error"; error: { message: string; data?: unknown } }
+  | SubagentStartEvent
+  | SubagentActivityEvent
+  | SubagentEndEvent
   /** Synthetic frame (re-attach streams only): run completed. */
   | { type: "done"; summary?: string }
   /** Synthetic frame (re-attach streams only): run was aborted. */

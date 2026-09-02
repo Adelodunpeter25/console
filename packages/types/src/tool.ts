@@ -53,7 +53,7 @@ export interface AgentTool<T extends z.ZodTypeAny = z.ZodTypeAny> {
   description: string;
   tier?: ToolTier;
   inputSchema: T;
-  execute: (args: z.infer<T>, signal?: AbortSignal) => Promise<unknown>;
+  execute: (args: z.infer<T>, signal?: AbortSignal, callId?: string) => Promise<unknown>;
 }
 
 export class ToolError extends Error {
@@ -87,6 +87,6 @@ export function bindToolCwd<T extends z.ZodTypeAny>(
   return {
     ...tool,
     inputSchema: modelInputSchema as unknown as T,
-    execute: async (args, signal) => originalExecute({ ...args, cwd } as z.infer<T>, signal),
+    execute: async (args, signal, callId) => originalExecute({ ...args, cwd } as z.infer<T>, signal, callId),
   };
 }

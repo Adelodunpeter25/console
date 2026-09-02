@@ -1,16 +1,14 @@
-/**
- * Subagent Task Tool ('subagent').
- * Spawns an isolated child AgentLoop to execute a focused sub-task without cluttering the main conversation history.
- */
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { agentLoop, type StreamFn } from "@/agent/src/service/agent-loop.js";
-import type { AgentTool, Model } from "@/agent/src/types/index.js";
+import type { AgentSessionEvent, AgentTool, Model } from "@/agent/src/types/index.js";
 
 export interface SubagentToolContext {
   model: Model;
   streamFn: StreamFn;
   tools: AgentTool[];
   systemPrompt?: string;
+  onEvent?: (event: AgentSessionEvent) => void;
 }
 
 const inputSchema = z.object({
@@ -37,9 +35,13 @@ export function createSubagentTool(context?: SubagentToolContext): AgentTool {
     description,
     tier: "read",
     inputSchema,
-    execute: async (args: Input, signal?: AbortSignal): Promise<unknown> => {
-      const { prompt, name, role } = args;
+    execute: async (args: Input, signal?: AbortSignal, callId?: string): Promise<unknown> => {
+      const { prompt, name, role = "Subagent Researcher" } = args;
       const displayName = name || role;
+      const subagentId = `subagent-${randomUUID()}`;
+      const parentToolCallId = callId || "";
+      let turnIndex = 0;
+      let totalTurns = 0;
 
       if (!context) {
         return {
@@ -52,51 +54,122 @@ export function createSubagentTool(context?: SubagentToolContext): AgentTool {
         };
       }
 
-      const { model, streamFn, tools, systemPrompt = "" } = context;
+      const { model, streamFn, tools, systemPrompt = "", onEvent } = context;
       const subagentSystemPrompt = `You are a specialized subagent (${role}). Execute the task thoroughly and summarize your findings cleanly.\n${systemPrompt}`;
 
-      const stream = agentLoop(prompt, {
-        model,
-        systemPrompt: subagentSystemPrompt,
-        tools: tools.filter((t) => t.name !== "subagent"),
-        streamFn,
-        approvalMode: "accept-edits",
-        signal,
+      onEvent?.({
+        type: "subagentStart",
+        subagentId,
+        parentToolCallId,
+        name: displayName,
+        role,
+        prompt,
+        maxTurns: 10,
       });
 
-      const messages = await stream.result();
+      try {
+        const stream = agentLoop(prompt, {
+          model,
+          systemPrompt: subagentSystemPrompt,
+          tools: tools.filter((t) => t.name !== "subagent"),
+          streamFn,
+          approvalMode: "accept-edits",
+          signal,
+          onEvent: (event) => {
+            if (event.type === "turnStart") {
+              turnIndex++;
+              totalTurns = turnIndex;
+            } else if (event.type === "toolExecutionStart") {
+              for (const call of event.calls) {
+                onEvent?.({
+                  type: "subagentActivity",
+                  subagentId,
+                  turnIndex,
+                  toolCallId: call.id,
+                  toolName: call.name,
+                  args: call.arguments && typeof call.arguments === "object" ? (call.arguments as Record<string, unknown>) : undefined,
+                  status: "running",
+                });
+              }
+            } else if (event.type === "toolExecutionResult") {
+              onEvent?.({
+                type: "subagentActivity",
+                subagentId,
+                turnIndex,
+                toolCallId: event.result.toolCallId,
+                toolName: event.result.toolName || "",
+                status: event.result.isError ? "error" : "completed",
+                error: event.result.isError
+                  ? typeof event.result.content === "string"
+                    ? event.result.content
+                    : JSON.stringify(event.result.content)
+                  : undefined,
+              });
+            }
+          },
+        });
 
-      if (signal?.aborted) {
+        const messages = await stream.result();
+
+        if (signal?.aborted) {
+          onEvent?.({
+            type: "subagentEnd",
+            subagentId,
+            status: "aborted",
+            summary: `Subagent [${displayName}] cancelled by user abort.`,
+            totalTurns,
+          });
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Subagent [${displayName}] cancelled by user abort.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const lastAssistantMessage = [...messages].reverse().find((m) => m.role === "assistant");
+
+        let summaryText = "";
+        if (lastAssistantMessage) {
+          for (const part of lastAssistantMessage.content) {
+            if (part.type === "text") {
+              summaryText += part.text + "\n";
+            }
+          }
+        }
+
+        const finalSummary = summaryText.trim() || "Subagent finished with no text output.";
+
+        onEvent?.({
+          type: "subagentEnd",
+          subagentId,
+          status: "completed",
+          summary: finalSummary,
+          totalTurns,
+        });
+
         return {
           content: [
             {
               type: "text",
-              text: `Subagent [${displayName}] cancelled by user abort.`,
+              text: `Subagent [${displayName}] Completed Task:\n${finalSummary}`,
             },
           ],
-          isError: true,
         };
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        onEvent?.({
+          type: "subagentEnd",
+          subagentId,
+          status: "error",
+          error: errorMsg,
+          totalTurns,
+        });
+        throw err;
       }
-
-      const lastAssistantMessage = [...messages].reverse().find((m) => m.role === "assistant");
-
-      let summaryText = "";
-      if (lastAssistantMessage) {
-        for (const part of lastAssistantMessage.content) {
-          if (part.type === "text") {
-            summaryText += part.text + "\n";
-          }
-        }
-      }
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Subagent [${displayName}] Completed Task:\n${summaryText.trim() || "Subagent finished with no text output."}`,
-          },
-        ],
-      };
     },
   };
 }

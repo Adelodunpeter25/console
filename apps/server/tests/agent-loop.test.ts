@@ -117,14 +117,19 @@ const dummyTool: AgentTool = {
 
 // 3. Tool-call previews remain JSON-safe before arguments finish streaming
 {
+  let turns = 0;
   const mockStreamFn: StreamFn = async function* () {
-    yield {
-      type: "toolCall",
-      id: "preview-call",
-      name: "readFile",
-      argumentsJson: "{\"path\":\"README.md\"}",
-    };
-    yield { type: "text", text: "Finished." };
+    turns++;
+    if (turns === 1) {
+      yield {
+        type: "toolCall",
+        id: "preview-call",
+        name: "readFile",
+        argumentsJson: "{\"path\":\"README.md\"}",
+      };
+    } else {
+      yield { type: "text", text: "Finished." };
+    }
   };
 
   const stream = agentLoop("Inspect the README", {

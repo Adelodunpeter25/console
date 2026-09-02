@@ -131,7 +131,7 @@ export async function executeTool(
 
   try {
     await onToolCall?.(call);
-    const output = await tool.execute(parsedData, signal);
+    const output = await tool.execute(parsedData, signal, call.id);
     const normalized = normalizeToolOutput(output);
     const result: ToolResult = {
       toolCallId: call.id,
