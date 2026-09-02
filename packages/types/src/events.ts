@@ -85,9 +85,15 @@ export type AgentSessionEvent =
   | { type: "askQuestion"; request: AskQuestionRequest }
   | { type: "toolExecutionResult"; result: ToolResult }
   | { type: "toolExecutionEnd"; results: ToolResult[] }
-  | { type: "todoUpdate"; items: TodoItem[]; action: "created" | "updated" }
-  | { type: "compaction"; summary: string; originalMessageCount: number }
-  | { type: "turnEnd"; turnId: string }
+  | {
+      type: "compaction";
+      summary: string;
+      originalMessageCount: number;
+      compactedMessageCount?: number;
+      tokensBefore?: number;
+      tokensAfter?: number;
+      compactedMessages?: AgentMessage[];
+    }
   | { type: "sessionEnd" }
   | { type: "error"; error: { message: string; data?: unknown } }
   | SubagentStartEvent

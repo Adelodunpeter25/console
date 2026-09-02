@@ -9,6 +9,7 @@ import type {
 } from "@/agent/src/types/index.js";
 import { createSubagentTool } from "@/agent/src/tools/subagent.js";
 import { bindToolCwd } from "@console/types";
+import type { CompactionOptions } from "../compaction/index.js";
 import { agentLoop, agentLoopContinue, type AgentLoopConfig, type StreamFn } from "./agent-loop.js";
 import type { EventStream } from "./event-stream.js";
 
@@ -36,6 +37,8 @@ export interface AgentOptions {
   streamFn: StreamFn;
   /** Security approval mode ("always-ask" | "accept-edits" | "plan-mode" | "full-access"). Default: "always-ask" */
   approvalMode?: ApprovalMode;
+  /** Context window auto-compaction configuration, or `false` to disable. */
+  compaction?: CompactionOptions | false;
   /** Hook called when a tool call requires user permission. */
   onApproval?: (request: PermissionRequest) => Promise<boolean> | boolean;
   /** Called for every event emitted during a run. */
@@ -55,6 +58,7 @@ export class Agent {
   private _systemPrompt: string;
   private _streamFn: StreamFn;
   private _approvalMode: ApprovalMode;
+  private _compaction?: CompactionOptions;
   private _onApproval?: AgentOptions["onApproval"];
   private _onEvent?: (event: AgentSessionEvent) => void;
 
@@ -70,6 +74,19 @@ export class Agent {
     this._approvalMode = options.approvalMode ?? "always-ask";
     this._onApproval = options.onApproval;
     this._onEvent = options.onEvent;
+
+    if (options.compaction === false) {
+      this._compaction = undefined;
+    } else {
+      this._compaction = {
+        enabled: true,
+        maxThresholdRatio: 0.8,
+        keepRecentTokens: 20_000,
+        maxToolResultChars: 8_000,
+        summaryStrategy: "structural",
+        ...(options.compaction ?? {}),
+      };
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -181,6 +198,7 @@ export class Agent {
       streamFn: this._streamFn,
       approvalMode: this._approvalMode,
       onApproval: this._onApproval,
+      compaction: this._compaction,
       signal: this._abortController.signal,
       onEvent: this._onEvent,
     };
@@ -194,15 +212,16 @@ export class Agent {
 
     eventEmitter = (event) => {
       this._onEvent?.(event);
+      if (event.type === "compaction" && event.compactedMessages) {
+        this._messages = [...event.compactedMessages];
+      }
       eventStream.push(event);
     };
 
     // When the run finishes, collect new messages and mark as idle
     eventStream.result().then(
-      (newMessages) => {
-        // Append only the NEW messages (those not already in history)
-        const newOnly = newMessages.slice(this._messages.length);
-        this._messages.push(...newOnly);
+      (finalMessages) => {
+        this._messages = [...finalMessages];
         this._running = false;
         this._abortController = undefined;
       },

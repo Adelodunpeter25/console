@@ -1,44 +1,42 @@
 /**
  * Context Window Compaction Engine.
- * Monitors token usage and condenses old turns when approaching context limits.
- * Inspired by oh-my-pi/packages/agent/src/compaction/ & oh-my-pi/packages/coding-agent/src/compaction/.
+ * Monitors token usage, elides bloated tool results, and compacts old turns
+ * into structured checkpoint summaries with cumulative file tracking.
+ *
+ * Inspired by oh-my-pi/packages/agent/src/compaction/.
  */
+import crypto from "node:crypto";
 import type { AgentMessage, Model } from "@/agent/src/types/index.js";
+import { findCutPoint } from "./cut-point.js";
+import { estimateMessageTokens } from "./token-estimator.js";
+import { buildStructuralSummary } from "./structural-summary.js";
+
+export * from "./token-estimator.js";
+export * from "./cut-point.js";
+export * from "./file-tracker.js";
+export * from "./structural-summary.js";
 
 export interface CompactionOptions {
+  /** Enable automatic context window compaction. Default: true */
+  enabled?: boolean;
   /** Maximum ratio of contextWindow before auto-compaction triggers. Default: 0.8 (80%) */
   maxThresholdRatio?: number;
-  /** Keep the most recent N message turns uncompacted. Default: 4 */
-  keepRecentTurns?: number;
+  /** Keep the most recent N tokens uncompacted. Default: 20_000 (or 20% of context window) */
+  keepRecentTokens?: number;
   /** Hard token threshold override. */
   tokenThreshold?: number;
+  /** Max characters allowed per tool result before truncation. Default: 8,000 */
+  maxToolResultChars?: number;
+  /** Strategy for generating summary text. Default: "structural" */
+  summaryStrategy?: "structural" | "llm";
 }
 
-/**
- * Estimate token count for a list of messages (~4 chars per token).
- */
-export function estimateMessageTokens(messages: AgentMessage[]): number {
-  let totalChars = 0;
-
-  for (const msg of messages) {
-    if (msg.role === "user") {
-      totalChars += msg.content.length;
-    } else if (msg.role === "assistant") {
-      for (const part of msg.content) {
-        if (part.type === "text" || part.type === "thinking") {
-          totalChars += part.text.length;
-        } else if (part.type === "toolCall") {
-          totalChars += part.call.name.length + JSON.stringify(part.call.arguments).length;
-        }
-      }
-    } else if (msg.role === "toolResult") {
-      for (const res of msg.results) {
-        totalChars += JSON.stringify(res.content).length;
-      }
-    }
-  }
-
-  return Math.ceil(totalChars / 4);
+export interface CompactionResult {
+  compactedMessages: AgentMessage[];
+  summary: string;
+  originalCount: number;
+  tokensBefore: number;
+  tokensAfter: number;
 }
 
 /**
@@ -49,6 +47,10 @@ export function shouldCompact(
   model: Model,
   options: CompactionOptions = {},
 ): boolean {
+  if (options.enabled === false) {
+    return false;
+  }
+
   const { maxThresholdRatio = 0.8, tokenThreshold } = options;
   const tokens = estimateMessageTokens(messages);
   const limit = tokenThreshold ?? Math.floor(model.contextWindow * maxThresholdRatio);
@@ -62,47 +64,69 @@ export function shouldCompact(
 export function compactHistory(
   messages: AgentMessage[],
   options: CompactionOptions = {},
-): { compactedMessages: AgentMessage[]; summary: string; originalCount: number } {
-  const keepRecent = options.keepRecentTurns ?? 4;
-  if (messages.length <= keepRecent + 2) {
+): CompactionResult {
+  const tokensBefore = estimateMessageTokens(messages);
+  const keepRecent = options.keepRecentTokens ?? 20_000;
+
+  const { firstKeptIndex, isUserBoundary } = findCutPoint(messages, keepRecent);
+
+  if (firstKeptIndex === 0 || messages.length <= 4) {
     return {
       compactedMessages: [...messages],
-      summary: "History too short to compact.",
+      summary: "History too short or cannot be safely partitioned.",
       originalCount: messages.length,
+      tokensBefore,
+      tokensAfter: tokensBefore,
     };
   }
 
-  const splitIndex = Math.max(0, messages.length - keepRecent);
-  const olderMessages = messages.slice(0, splitIndex);
-  const recentMessages = messages.slice(splitIndex);
+  const olderMessages = messages.slice(0, firstKeptIndex);
+  const recentMessages = messages.slice(firstKeptIndex);
 
-  const userCount = olderMessages.filter((m) => m.role === "user").length;
-  const assistantCount = olderMessages.filter((m) => m.role === "assistant").length;
-  const toolResultCount = olderMessages.filter((m) => m.role === "toolResult").length;
-
-  const summary = `[Conversation Checkpoint: Compacted ${olderMessages.length} prior messages (${userCount} user prompts, ${assistantCount} assistant turns, ${toolResultCount} tool results).]`;
+  const summary = buildStructuralSummary(olderMessages);
 
   const summaryUserMessage: AgentMessage = {
     role: "user",
-    content: "Summarize conversation checkpoint",
+    content: summary,
   };
 
-  const summaryAssistantMessage: AgentMessage = {
-    role: "assistant",
-    id: crypto.randomUUID(),
-    content: [{ type: "text", text: summary }],
-    stopReason: "stop",
-  };
+  let compactedMessages: AgentMessage[];
 
-  const compactedMessages: AgentMessage[] = [
-    summaryUserMessage,
-    summaryAssistantMessage,
-    ...recentMessages,
-  ];
+  if (isUserBoundary) {
+    // [User summary, Assistant ack, User prompt, Assistant turn, ...]
+    // Strictly alternates roles across providers.
+    const summaryAssistantMessage: AgentMessage = {
+      role: "assistant",
+      id: crypto.randomUUID(),
+      content: [
+        {
+          type: "text",
+          text: "Understood. I have the context of prior work and files touched. Ready to proceed.",
+        },
+      ],
+      stopReason: "stop",
+    };
+
+    compactedMessages = [
+      summaryUserMessage,
+      summaryAssistantMessage,
+      ...recentMessages,
+    ];
+  } else {
+    // If recentMessages begins with assistant, just user summary -> assistant
+    compactedMessages = [
+      summaryUserMessage,
+      ...recentMessages,
+    ];
+  }
+
+  const tokensAfter = estimateMessageTokens(compactedMessages);
 
   return {
     compactedMessages,
     summary,
     originalCount: messages.length,
+    tokensBefore,
+    tokensAfter,
   };
 }

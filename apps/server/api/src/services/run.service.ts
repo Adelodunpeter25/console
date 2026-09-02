@@ -242,6 +242,10 @@ export class RunService {
           pendingToolCalls.clear();
         }
 
+        if (event.type === "compaction" && event.compactedMessages) {
+          this.sessionStorage.replaceMessages(sessionId, event.compactedMessages);
+        }
+
         if (event.type === "subagentStart") {
           this.sessionStorage.upsertSubagentStart(sessionId, event);
         } else if (event.type === "subagentActivity") {

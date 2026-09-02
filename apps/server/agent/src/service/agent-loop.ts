@@ -12,6 +12,11 @@
  */
 import { randomUUID } from "node:crypto";
 import { compactHistory, shouldCompact } from "@/agent/src/compaction/index.js";
+import {
+  DEFAULT_TOOL_RESULT_MAX_CHARS,
+  truncateMessageToolResults,
+  truncateToolResultContent,
+} from "../utils/text-truncate.js";
 import { EventStream } from "./event-stream.js";
 import { executeTool } from "./tool-executor.js";
 import { streamOneTurn } from "./stream-turn.js";
@@ -62,7 +67,10 @@ function runAgentLoop(
     () => messages,
   );
 
-  const messages: AgentMessage[] = [...initialMessages];
+  const maxToolChars = compaction?.maxToolResultChars ?? DEFAULT_TOOL_RESULT_MAX_CHARS;
+  const messages: AgentMessage[] = initialMessages.map((m) =>
+    truncateMessageToolResults(m, maxToolChars),
+  );
 
   const emit = (event: AgentSessionEvent) => {
     onEvent?.(event);
@@ -89,13 +97,21 @@ function runAgentLoop(
 
         // Auto-compaction check
         if (compaction && shouldCompact(messages, model, compaction)) {
-          const { compactedMessages, summary, originalCount } = compactHistory(
+          const { compactedMessages, summary, originalCount, tokensBefore, tokensAfter } = compactHistory(
             messages,
             compaction,
           );
           messages.length = 0;
           messages.push(...compactedMessages);
-          emit({ type: "compaction", summary, originalMessageCount: originalCount });
+          emit({
+            type: "compaction",
+            summary,
+            originalMessageCount: originalCount,
+            compactedMessageCount: compactedMessages.length,
+            tokensBefore,
+            tokensAfter,
+            compactedMessages: [...compactedMessages],
+          });
         }
 
         const turnId = randomUUID();
@@ -139,12 +155,17 @@ function runAgentLoop(
           ),
         );
 
+        const boundedResults = results.map((r) => ({
+          ...r,
+          content: truncateToolResultContent(r.content, maxToolChars),
+        }));
+
         const toolResultMessage: ToolResultMessage = {
           role: "toolResult",
-          results,
+          results: boundedResults,
         };
         messages.push(toolResultMessage);
-        emit({ type: "toolExecutionEnd", results });
+        emit({ type: "toolExecutionEnd", results: boundedResults });
         emit({ type: "turnEnd", turnId });
       }
     } catch (err) {
