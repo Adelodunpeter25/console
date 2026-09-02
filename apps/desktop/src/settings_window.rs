@@ -18,6 +18,7 @@ pub struct SettingsWindow {
     gemini_project_input: Entity<ComposerInput>,
     gemini_project_seeded: bool,
     is_adding_env: bool,
+    editing_env_id: Option<String>,
     new_env_name_input: Entity<ComposerInput>,
     new_env_url_input: Entity<ComposerInput>,
     new_env_probe: ProbeState,
@@ -68,6 +69,7 @@ impl SettingsWindow {
             gemini_project_input,
             gemini_project_seeded: false,
             is_adding_env: false,
+            editing_env_id: None,
             new_env_name_input,
             new_env_url_input,
             new_env_probe: ProbeState::Unknown,
@@ -212,10 +214,55 @@ impl Render for SettingsWindow {
 
                 let on_toggle_add: Rc<dyn Fn(bool, &mut Window, &mut App) + 'static> = {
                     let entity = cx.entity().clone();
+                    let name_input = self.new_env_name_input.clone();
+                    let url_input = self.new_env_url_input.clone();
                     Rc::new(move |is_adding: bool, _w: &mut Window, cx: &mut App| {
+                        if is_adding {
+                            name_input.update(cx, |input, cx| {
+                                input.clear(cx);
+                            });
+                            url_input.update(cx, |input, cx| {
+                                input.clear(cx);
+                            });
+                        }
                         entity.update(cx, |this, cx| {
                             this.is_adding_env = is_adding;
+                            this.editing_env_id = None;
                             this.new_env_probe = ProbeState::Unknown;
+                            cx.notify();
+                        });
+                    })
+                };
+
+                let on_edit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+                    let entity = cx.entity().clone();
+                    let app_handle = self.app.clone();
+                    let name_input = self.new_env_name_input.clone();
+                    let url_input = self.new_env_url_input.clone();
+                    Rc::new(move |env_id: String, _w: &mut Window, cx: &mut App| {
+                        let (name, url, probe) = if let Some(app) = app_handle.upgrade() {
+                            let app_state = app.read(cx);
+                            if let Some(env) = app_state.environments.iter().find(|e| e.id == env_id) {
+                                let probe = app_state.env_probes.get(&env.id).copied().unwrap_or(ProbeState::Unknown);
+                                (env.name.clone(), env.url.clone(), probe)
+                            } else {
+                                return;
+                            }
+                        } else {
+                            return;
+                        };
+
+                        name_input.update(cx, |input, cx| {
+                            input.set_content(name, cx);
+                        });
+                        url_input.update(cx, |input, cx| {
+                            input.set_content(url, cx);
+                        });
+
+                        entity.update(cx, |this, cx| {
+                            this.is_adding_env = true;
+                            this.editing_env_id = Some(env_id);
+                            this.new_env_probe = probe;
                             cx.notify();
                         });
                     })
@@ -255,14 +302,21 @@ impl Render for SettingsWindow {
                         if url.is_empty() { return; }
                         let final_name = if name.is_empty() { "Custom Server".to_string() } else { name };
 
+                        let editing_id = entity.read(cx).editing_env_id.clone();
+
                         if let Some(app) = app_handle.upgrade() {
                             app.update(cx, |app_state, cx| {
-                                app_state.add_environment(final_name, url, cx);
+                                if let Some(id) = editing_id {
+                                    app_state.update_environment(id, final_name, url, cx);
+                                } else {
+                                    app_state.add_environment(final_name, url, cx);
+                                }
                             });
                         }
 
                         entity.update(cx, |this, cx| {
                             this.is_adding_env = false;
+                            this.editing_env_id = None;
                             this.new_env_probe = ProbeState::Unknown;
                             cx.notify();
                         });
@@ -272,11 +326,13 @@ impl Render for SettingsWindow {
                 ConnectionPage {
                     environments: app.environment_rows(),
                     is_adding: self.is_adding_env,
+                    is_editing: self.editing_env_id.is_some(),
                     name_input: Some(self.new_env_name_input.clone()),
                     url_input: Some(self.new_env_url_input.clone()),
                     new_probe_state: self.new_env_probe,
                     on_activate,
                     on_probe,
+                    on_edit,
                     on_remove,
                     on_toggle_add,
                     on_probe_new,

@@ -127,6 +127,37 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    pub fn update_environment(&mut self, env_id: String, name: String, url: String, cx: &mut Context<Self>) {
+        if let Some(env) = self.environments.iter_mut().find(|e| e.id == env_id) {
+            env.name = name;
+            let url_changed = env.url != url;
+            env.url = url.clone();
+            self.save_persisted_environments();
+
+            if self.active_env_id.as_deref() == Some(&env_id) && url_changed {
+                let client = self.client.clone();
+                cx.spawn(async move |entity, cx| {
+                    client.set_base_url(&url).await;
+                    let _ = cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.load_sessions(cx);
+                                this.load_providers(cx);
+                                this.load_projects(cx);
+                                this.refresh_auth_status(cx);
+                                this.fetch_usage(cx);
+                                cx.notify();
+                            });
+                        }
+                    });
+                }).detach();
+            }
+
+            self.probe_environment(env_id, cx);
+            cx.notify();
+        }
+    }
+
     pub fn remove_environment(&mut self, env_id: String, cx: &mut Context<Self>) {
         if self.active_env_id.as_deref() == Some(&env_id) {
             return; // Cannot remove active

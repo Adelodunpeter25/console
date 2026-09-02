@@ -13,11 +13,13 @@ use crate::theme::Theme;
 pub struct ConnectionPage {
     pub environments: Vec<EnvironmentRow>,
     pub is_adding: bool,
+    pub is_editing: bool,
     pub name_input: Option<Entity<ComposerInput>>,
     pub url_input: Option<Entity<ComposerInput>>,
     pub new_probe_state: ProbeState,
     pub on_activate: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     pub on_probe: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    pub on_edit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     pub on_remove: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     pub on_toggle_add: Rc<dyn Fn(bool, &mut Window, &mut App) + 'static>,
     pub on_probe_new: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -29,6 +31,7 @@ impl RenderOnce for ConnectionPage {
         let theme = Theme::current(cx);
         let on_activate = self.on_activate.clone();
         let on_probe = self.on_probe.clone();
+        let on_edit = self.on_edit.clone();
         let on_remove = self.on_remove.clone();
         let on_toggle_add = self.on_toggle_add.clone();
         let on_probe_new = self.on_probe_new.clone();
@@ -120,7 +123,11 @@ impl RenderOnce for ConnectionPage {
                                 .text_size(px(13.5))
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(theme.text)
-                                .child("Add New Server Environment"),
+                                .child(if self.is_editing {
+                                    "Edit Server Environment"
+                                } else {
+                                    "Add New Server Environment"
+                                }),
                         )
                         .child(
                             div()
@@ -174,7 +181,7 @@ impl RenderOnce for ConnectionPage {
                                                     .child(input),
                                             )
                                         }),
-                                ),
+                                )
                         )
                         .child(
                             div()
@@ -277,9 +284,11 @@ impl RenderOnce for ConnectionPage {
                     .children(self.environments.into_iter().map(|env| {
                         let env_id_for_activate = env.id.clone();
                         let env_id_for_probe = env.id.clone();
+                        let env_id_for_edit = env.id.clone();
                         let env_id_for_remove = env.id.clone();
                         let on_act = on_activate.clone();
                         let on_prb = on_probe.clone();
+                        let on_edt = on_edit.clone();
                         let on_rem = on_remove.clone();
 
                         let (probe_text, probe_color) = match env.probe_state {
@@ -389,6 +398,28 @@ impl RenderOnce for ConnectionPage {
                                                     .child("Test"),
                                             ),
                                     )
+                                    .child(
+                                        div()
+                                            .id(ElementId::from(format!("btn-edit-{}", env_id_for_edit)))
+                                            .px(px(8.0))
+                                            .py(px(4.0))
+                                            .rounded(px(5.0))
+                                            .border_1()
+                                            .border_color(theme.border_strong)
+                                            .bg(theme.raised)
+                                            .cursor_pointer()
+                                            .hover(|s| s.bg(theme.overlay))
+                                            .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                                                cx.stop_propagation();
+                                                (on_edt)(env_id_for_edit.clone(), window, cx);
+                                            })
+                                            .child(
+                                                div()
+                                                    .text_size(px(11.5))
+                                                    .text_color(theme.text_secondary)
+                                                    .child("Edit"),
+                                            ),
+                                    )
                                     .when(!env.is_active, |el| {
                                         let env_id_activate = env_id_for_activate.clone();
                                         let on_act_click = on_act.clone();
@@ -411,7 +442,7 @@ impl RenderOnce for ConnectionPage {
                                                     div()
                                                         .text_size(px(11.5))
                                                         .text_color(theme.text)
-                                                        .child("Switch to"),
+                                                        .child("Use"),
                                                 ),
                                         )
                                     })
