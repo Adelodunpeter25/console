@@ -2,265 +2,331 @@
 
 ## 1. Overview
 
-Context window compaction is the safety net for unbounded agent runs. The current impl in `apps/server/agent/src/compaction/index.ts` is structurally fine but operationally broken: the "summary" is a metadata stub, the feature is off by default, and `keepRecentTurns: 4` discards most of the recent context window in real coding sessions. This plan ships three changes — implementation fixes (truncation + summary) **before** enabling the feature by default.
+Context window compaction is the safety net for unbounded agent runs. In a coding assistant, sessions routinely accumulate hundreds of thousands of tokens across iterative edits, large file reads, compiler errors, test logs, and multi-turn refactors.
+
+The current implementation in `apps/server/agent/src/compaction/index.ts` has several critical limitations:
+1. **Default-off**: The compaction config is never passed by `Agent.run()`, leaving the engine dead unless manually enabled in code.
+2. **Metadata stub summary**: Discarded messages are replaced with an empty count: `"[Conversation Checkpoint: Compacted 12 prior messages...]"`, causing the model to lose all context of past work, re-read previously inspected files, and repeat mistakes.
+3. **Turn-unsafe slicing**: Slicing by raw index (`messages.length - keepRecentTurns`) splits right between an `assistant` tool-call and its `toolResult`, or between adjacent assistant turns, causing immediate **HTTP 400 Bad Request** errors from Anthropic, Gemini, and OpenAI providers.
+4. **No tool output truncation in context**: A 200k-char `npm test` log or 5,000-line file read sits verbatim in `messages`, artificially blowing past token limits turns too early.
+5. **Disconnected persistence**: Compaction inside `agent-loop` mutates an internal array, but `Agent._messages`, `sessionStorage`, and UI state are never updated. On the next user prompt, the uncompacted history is reloaded from disk and immediately re-triggers compaction.
+
+This plan overhauls compaction in `console`, drawing direct inspiration from the production-tested compaction architecture in **`oh-my-pi`** (`docs/compaction.md` and `packages/agent/src/compaction/`).
+
+---
 
 ### Goals
-- Compaction runs on every session by default (not opt-in).
-- The "summary" is a real, useful recap — not a count of dropped messages.
-- Big tool outputs are aggressively truncated **before** they reach the compaction decision, so the threshold math reflects what actually matters.
-- The model after compaction still has the structure of what happened: which files were touched, which commands ran, which errors were hit.
+- **Turn-safe boundary selection**: Never slice at a `toolResult` or orphan tool calls; preserve provider role alternation invariants.
+- **In-place tool result truncation**: Cap oversized tool outputs (head + tail with elision marker) so single noisy tools don't consume the context window.
+- **High-signal summary**: Generate a structured recap containing the original user task, decisions, errors encountered, and a cumulative file operations tree (`<files>` with `Read`, `Write`, and `RW` markers).
+- **Default-on with token-based budgeting**: Default to `keepRecentTokens: 20_000` (or ~15-20% context window reserve) rather than arbitrary message counts.
+- **End-to-end persistence**: Sync compacted history to `sessionStorage` and `Agent._messages`, and broadcast rich `compaction` events to mobile and desktop clients.
 
 ### Non-goals
-- No vector / semantic retrieval of old context. Compaction stays linear.
-- No changes to providers or system-prompt builder. Compaction only touches `compaction/`, `agent-loop.ts`, `agent.ts`, `tool-executor.ts`, and the message type.
-- No new event variant on the wire. The existing `compaction` event gains richer fields.
+- Vector / semantic retrieval of old context (linear compaction remains the source of truth).
+- Native snapshot bitmap rasterization (`snapcompact` PNG frames); we keep text-based context summaries.
+- Altering the system prompt builder or provider wire drivers.
 
 ---
 
-## 2. Current state (audit)
+## 2. Architectural Audit & Lessons from `oh-my-pi`
 
-### 2.1 Existing code
-- `compaction/index.ts:20-42` — `estimateMessageTokens()` uses `chars / 4`. Counts user prompt chars, assistant text/thinking/tool-arg JSON, and tool-result content JSON. No weighting for images or tool metadata.
-- `compaction/index.ts:47-57` — `shouldCompact()` fires at 80% of `model.contextWindow` (or `tokenThreshold` if set).
-- `compaction/index.ts:62-107` — `compactHistory()` splits at `messages.length - keepRecentTurns` (default **4**), drops the prefix, replaces it with a fake user+assistant pair whose assistant text is literally `"[Conversation Checkpoint: Compacted 12 prior messages (3 user, 5 assistant, 4 tool results).]"` — i.e. only metadata, no content.
-- `service/agent-loop.ts:93-101` — calls `compactHistory()` when `compaction && shouldCompact(...)`. Emits a `compaction` event with `summary` and `originalMessageCount`.
-- `service/agent.ts:176-186` — `Agent.run()` builds `AgentLoopConfig` but **never sets `compaction`**. The feature is dead unless a caller passes it explicitly.
+In `oh-my-pi`, compaction is structured around three core invariants:
 
-### 2.2 What's wrong
-1. **Default-off.** A user who never reads the source code will never get auto-compaction. Sessions blow past context window, get truncated by the provider, and look like the model "forgot" the task.
-2. **Lossy summary.** The model in the next turn sees a line that says "12 messages were compacted" but no idea what they were about. It re-derives the same exploration, hits the same files, re-asks the same questions.
-3. **`keepRecentTurns: 4` is too small.** A "turn" in this codebase is one model response. 4 responses × tool output is roughly 8-20 messages. Real coding sessions blow past 4 within the first 60 seconds of work.
-4. **No truncation before estimation.** A 200k-token `npm test` log is one `toolResult.results[0].content`. It inflates `estimateMessageTokens` by 50k and triggers compaction 4 turns too early.
+```text
+Before compaction:
+  entry:   0     1     2     3      4     5     6      7      8     9
+         ┌─────┬─────┬─────┬──────┬─────┬─────┬──────┬──────┬─────┬──────┐
+         │ hdr │ usr │ ass │ tool │ usr │ ass │ tool │ tool │ ass │ tool │
+         └─────┴─────┴─────┴──────┴─────┴─────┴──────┴──────┴─────┴──────┘
+                 └────────┬───────┘ └──────────────┬──────────────┘
+                messagesToSummarize            kept messages
+                                    ↑
+                           firstKeptEntryIndex (Turn boundary: never a toolResult)
 
----
-
-## 3. Change #1 — Default compaction on, larger keep window
-
-The smallest, lowest-risk change. Touches two lines in `agent.ts` and updates the default in `compaction/index.ts`.
-
-### 3.1 Behavior
-- `AgentOptions` gains no new field. `Agent` constructor always passes a `compaction` config to `runAgentLoop` unless one is explicitly disabled.
-- Default `keepRecentTurns` raised from `4` → `12`.
-- A caller can still opt out by passing `compaction: false` (or a new `compaction: undefined` after we tighten the type — see 3.3).
-
-### 3.2 File changes
-- `apps/server/agent/src/compaction/index.ts`
-  - Update the default in the JSDoc on `CompactionOptions.keepRecentTurns` (line 11): `Default: 12`.
-  - Update the default in `compactHistory()` (line 66): `?? 12`.
-- `apps/server/agent/src/service/agent.ts`
-  - In `run()` where the `config: AgentLoopConfig` is built (lines 176-186), always set:
-    ```ts
-    compaction: options.compaction ?? {
-      maxThresholdRatio: 0.8,
-      keepRecentTurns: 12,
-    },
-    ```
-  - Where `options` here is the run-time options (we may need a small refactor to thread a `compaction` override through `Agent.run()`'s params — see 3.3).
-
-### 3.3 Open question (resolved here)
-Today `AgentOptions` has no `compaction` field. We need one. Decision: add `compaction?: CompactionOptions | false` to `AgentOptions`; `false` means "off", `undefined` means "use defaults". `run()` resolves the user's value to the final config.
-
-### 3.4 Tests
-- New `apps/server/tests/compaction-defaults.test.ts`:
-  - Construct an `Agent` with no `compaction` option. Inspect the resolved `AgentLoopConfig.compaction` after calling `agent.run(...)` (or extract a small `buildRunConfig()` helper to test directly).
-  - Assert it equals `{ maxThresholdRatio: 0.8, keepRecentTurns: 12 }`.
-  - Construct with `compaction: false`. Assert it's omitted from the config.
-  - Construct with `compaction: { keepRecentTurns: 3 }`. Assert the override is preserved.
-
----
-
-## 4. Change #2 — Real summary, not a metadata stub
-
-Replace the placeholder summary string with a structured recap generated from the dropped messages. Two layers:
-
-### 4.1 Layer A — Structural recap (zero model calls, free)
-
-For each dropped message, extract:
-- `user` → the prompt text (truncated to first 500 chars).
-- `assistant` → tool call names + argument keys (never argument values); text parts truncated to first 200 chars; thinking parts dropped.
-- `toolResult` → tool names + the **first 500 chars** of each result; a one-line tag like `[ok]` / `[err]` based on `isError`.
-
-Compile this into a deterministic format:
-
-```
-[Conversation Checkpoint — 12 messages compacted at 14:32]
-
-User asked: "Refactor the auth middleware to use the new token store."
-Assistant called: read_file({"path": "src/auth/middleware.ts"}), read_file({"path": "src/auth/store.ts"})
-Tool read_file (src/auth/middleware.ts): 487 chars [ok]
-  > import { tokenStore } from './store'...
-Assistant called: edit_file(...)
-Tool edit_file (src/auth/middleware.ts): 23 chars [ok]
-User asked: "Now add rate limiting."
-Assistant called: write_file({"path": "src/middleware/rate-limit.ts"})
-Tool write_file: 1,204 chars [ok]
-  > import { RequestHandler } from 'express'...
-... 6 more turns
+What the LLM sees after compaction:
+         ┌────────┬────────────────────────────┬─────┬─────┬──────┬──────┬─────┬──────┐
+         │ system │ user: <summary> + <files>  │ usr │ ass │ tool │ tool │ ass │ tool │
+         └────────┴────────────────────────────┴─────┴─────┴──────┴──────┴─────┴──────┘
+              ↑                 ↑              └─────────────────┬────────────────┘
+           prompt       compaction checkpoint       kept messages from cut point
 ```
 
-This is the **default** summary strategy. Free, deterministic, and gives the model enough breadcrumbs to continue without re-deriving.
+### Invariants adopted for `console`:
+1. **Valid Cut Points**: A cut point can ONLY occur at a `user` turn or an `assistant` turn whose tool results are fully contained in the kept window. It must **never** cut at a `toolResult`.
+2. **File Operations Tracking**: Cumulative tracking across discarded turns (`read_file`, `edit_file`, `write_file`, `batch_write`) builds a folded directory tree with `(Read)`, `(Write)`, and `(RW)` markers.
+3. **Prompt Cache Protection**: The summary is wrapped in a dedicated prompt template:
+   ```markdown
+   Prior model work/tool state available.
+   MUST build on prior work; NEVER duplicate prior work.
 
-### 4.2 Layer B — Optional LLM-generated prose (opt-in, costs a model call)
+   <summary>
+   {{summary}}
+   </summary>
 
-Add a new option `compaction.summary: "structural" | "llm"`. Default `"structural"`. When `"llm"`:
-- After structural recap is built, call the model's `streamFn` with a tiny prompt: "Summarize the above conversation checkpoint in 3-5 sentences for your future self."
-- Stream the result; replace the structural block's preamble with the LLM's text.
-- Keep the structural detail below the LLM prose so the model still has the data.
-- On LLM failure or abort, fall back to the structural recap silently.
+   <files>
+   {{files}}
+   </files>
+   ```
+4. **Synchronized Storage**: Persisting the compaction replaces or marks compacted entries in `sessionStorage` so subsequent turns don't reload discarded messages.
 
-Costs an extra model call per compaction event. For a 1M-token run with 5 compactions, that's 5 extra calls. Opt-in is the right default.
+---
 
-### 4.3 File changes
-- `apps/server/agent/src/compaction/index.ts`
-  - New internal function `buildStructuralSummary(messages: AgentMessage[]): string`.
-  - New internal function `buildLlmSummary(structural: string, streamFn, model, signal): Promise<string>`.
-  - `compactHistory()` calls the configured strategy. Signature changes to optionally take `{ streamFn, model, signal, strategy }`.
-- `apps/server/agent/src/compaction/types.ts` (new) — re-export `SummaryStrategy = "structural" | "llm"`.
-- `apps/server/agent/src/compaction/index.ts` — extend `CompactionOptions`:
-  ```ts
-  summary?: SummaryStrategy;            // default "structural"
-  streamFn?: StreamFn;                  // required when summary === "llm"
-  model?: Model;                        // required when summary === "llm"
-  signal?: AbortSignal;                 // propagated into the LLM call
+## 3. Core Technical Specifications
+
+### 3.1 Turn-Safe Cut-Point Selection (`findCutPoint`)
+
+Instead of slicing by raw message count (`messages.length - 4`), implement `findCutPoint` in `apps/server/agent/src/compaction/cut-point.ts`:
+
+1. **Calculate Token Budget**:
+   - `keepRecentTokens` default: `20_000` tokens (or 20% of `model.contextWindow`, whichever is larger).
+2. **Find Valid Cut Points**:
+   - Scan `messages` from index 0 to `messages.length - 1`.
+   - A message is a candidate cut point if:
+     - `role === "user"`
+     - `role === "assistant"` (only if it has no tool calls, or if its tool calls are followed by toolResults that stay with it).
+     - **NEVER** `role === "toolResult"`.
+3. **Accumulate From Newest to Oldest**:
+   - Walk backwards from `messages.length - 1`, summing estimated tokens.
+   - Once accumulated tokens exceed `keepRecentTokens`, select the closest valid cut point `cutIndex <= i`.
+   - If no valid cut point exists, fall back to the earliest user message in the session.
+4. **Boundary Integrity Check**:
+   - Verify that no kept `toolResult` has its parent `toolCall` in the discarded partition.
+   - If an assistant message with `toolCall` is kept, all its matching `toolResult`s must be in the kept partition.
+
+---
+
+### 3.2 In-Place Tool Result Truncation (`truncateToolResults`)
+
+Massive tool results (e.g. `npm test`, `git log`, `read_file` on large binaries/dumps) must be bounded **in the active message list**:
+
+1. **Per-Result Char Budget**:
+   - Default: `8_000` chars (~2,000 tokens) per tool result item.
+   - Configurable via `compaction.maxToolResultChars` (default `8000`, `0` to disable).
+2. **Head + Tail Preservation**:
+   - Keep `4_000` chars from the start (captures initial output/status/file headers).
+   - Keep `4_000` chars from the end (captures test summaries, final errors, stack traces).
+   - Insert placeholder in the middle:
+     ```text
+     \n\n[... Tool output truncated: 142,500 characters elided ...]\n\n
+     ```
+3. **Execution Point**:
+   - Applied in `agent-loop.ts` when a `toolExecutionResult` arrives, before pushing to `messages`.
+   - Applied retroactively to any uncompacted messages when initializing `runAgentLoop`.
+
+---
+
+### 3.3 High-Signal Summary Generation
+
+Compaction replaces discarded messages with a rich checkpoint.
+
+#### Layer A — Structural Summary + Cumulative File Operations (Default, Free, Fast)
+Constructed deterministically without any extra LLM calls:
+1. **User Prompt History**:
+   - Truncated extract of each user prompt in the discarded window.
+2. **Tool Invocations & Outcomes**:
+   - Command names and arguments: `bash(git status)`, `read_file(src/index.ts)`.
+   - Result status: `[ok]` or `[err: exit code 1]`.
+3. **File Operation Tracking (`<files>`)**:
+   - Tracks all touched paths in the discarded window.
+   - Deduplicates and strips line selectors (`:1-50`).
+   - Categorizes each file:
+     - `(Read)` — read but never modified.
+     - `(Write)` — written/created without prior read.
+     - `(RW)` — read and subsequently modified.
+   - Formats into a folded prefix tree capped at 25 files.
+
+Example structural summary output:
+```markdown
+Prior model work/tool state available.
+MUST build on prior work; NEVER duplicate prior work.
+
+<summary>
+[Session Checkpoint: 18 turns compacted at 15:42]
+
+Initial Task: "Refactor session storage to use per-project SQLite databases and migrate tests."
+
+Chronological Highlights:
+- User requested SQLite migration and storage interface overhaul.
+- Read existing memory and JSON storage implementations.
+- Created `apps/server/agent/src/session/storage.ts` and `session-messages.ts`.
+- Ran `bun test tests/session-storage.test.ts` [err: table missing columns].
+- Modified schema migrations in `schema.ts` and re-tested [ok].
+</summary>
+
+<files>
+# apps/server/agent/src/session/
+schema.ts (RW)
+session-messages.ts (Write)
+storage.ts (Write)
+utils.ts (Read)
+# tests/
+session-storage.test.ts (RW)
+</files>
+```
+
+#### Layer B — Optional LLM Prose Summary (Opt-in)
+When `compaction.summaryStrategy === "llm"`:
+- Calls `streamFn` with a compact prompt:
+  ```text
+  You are an AI assistant compacting your previous context. Summarize the conversation so far into 3-5 concise bullet points highlighting:
+  1. The core user request.
+  2. What has been completed.
+  3. Key architectural/code decisions.
+  4. Known issues or next steps.
   ```
-- `apps/server/agent/src/service/agent-loop.ts` — pass `streamFn` and `model` into `compactHistory` when calling it.
-- `apps/server/agent/src/service/agent.ts` — pass `streamFn` into the resolved `compaction` config so Layer B can use it.
-- `apps/server/agent/src/utils/text-truncate.ts` (new) — shared `truncate(s, n)` used by both the structural summarizer and the tool-result truncator (Change #3).
+- Uses `temperature: 0` and max tokens `500`.
+- On timeout, abort, or error, falls back instantly to Layer A structural summary.
 
-### 4.4 The `compaction` event gets richer
+---
 
-Currently:
+### 3.4 Context Window Invariant & Role Alternation
+
+When the summary replaces discarded turns:
+1. Create `summaryUserMessage: AgentMessage`:
+   ```ts
+   {
+     role: "user",
+     content: renderCompactionSummaryContext(summaryText),
+   }
+   ```
+2. Create `summaryAssistantMessage: AgentMessage`:
+   ```ts
+   {
+     role: "assistant",
+     id: randomUUID(),
+     content: [{ type: "text", text: "Acknowledged. I have the context of prior work and touched files. Ready to proceed." }],
+     stopReason: "stop",
+   }
+   ```
+3. Because `firstKeptEntryIndex` is guaranteed to be a `user` turn:
+   - The stream format will be:
+     `[summaryUserMessage, summaryAssistantMessage, keptUserMessage, keptAssistantMessage, ...]`
+   - This satisfies strict provider role alternation (User → Model → User → Model) for Anthropic, Gemini, and OpenAI without any consecutive duplicate roles.
+
+---
+
+### 3.5 Persistence & State Synchronization
+
+In `apps/server/api/src/services/run.service.ts`:
+1. When `event.type === "compaction"` is received:
+   - Call `this.sessionStorage.replaceMessages(sessionId, event.compactedMessages)`.
+   - Update `agent.loadHistory(event.compactedMessages)` so the active agent instance holds the compacted state.
+   - Broadcast the enriched `compaction` event to the event hub.
+2. In `SqliteSessionStorage`:
+   - `replaceMessages` atomically clears and rewrites the session's `messages` table with the compacted set in a transaction, updating `message_count` and `updated_at`.
+3. Reconnection / Reload Resilience:
+   - If the user disconnects or server restarts, `loadSession(sessionId)` loads the clean, compacted history with the checkpoint message at the root.
+
+---
+
+## 4. Configuration & Defaults
+
+Extend `CompactionOptions` in `apps/server/agent/src/compaction/index.ts`:
+
 ```ts
-{ type: "compaction", summary: string, originalMessageCount: number }
-```
-
-Becomes:
-```ts
-{
-  type: "compaction",
-  summary: string,             // the recap text (now actually useful)
-  strategy: "structural" | "llm",
-  originalMessageCount: number,
-  compactedMessageCount: number,
-  droppedTokens: number,       // how many tokens we shed (before → after)
+export interface CompactionOptions {
+  /** Enable automatic context window compaction. Default: true */
+  enabled?: boolean;
+  /** Trigger compaction when estimated tokens reach this ratio of contextWindow. Default: 0.8 (80%) */
+  maxThresholdRatio?: number;
+  /** Keep recent tokens uncompacted. Default: 20_000 tokens (or 20% of contextWindow) */
+  keepRecentTokens?: number;
+  /** Hard token threshold override. */
+  tokenThreshold?: number;
+  /** Max character budget per tool result content. Default: 8000. 0 disables. */
+  maxToolResultChars?: number;
+  /** Strategy for generating summary text. Default: "structural" */
+  summaryStrategy?: "structural" | "llm";
 }
 ```
 
-Additive — no client breakage. The new fields are optional in the type.
-
-### 4.5 Tests
-- `apps/server/tests/compaction-summary.test.ts` (new):
-  - **Structural recap correctness.** Build a synthetic 20-message history. Run `compactHistory()`. Assert the summary mentions every tool name, every file path, contains no tool result body beyond 500 chars, no thinking parts.
-  - **No-op when short.** A 5-message history returns the original messages verbatim.
-  - **LLM fallback.** Mock `streamFn` returns text. Run with `summary: "llm"`. Assert the LLM text appears and the structural preamble appears below it.
-  - **LLM failure fallback.** Mock `streamFn` throws. Assert the structural recap is still returned and the function does not throw.
-
----
-
-## 5. Change #3 — Truncate tool results before they hit the context window
-
-The single biggest source of context bloat in a coding agent is tool output. A `bash` that runs `npm test` or a `read_file` on a 5000-line file both produce massive `toolResult` content. Today, this content sits in the message array verbatim until the next compaction, inflating `estimateMessageTokens` and forcing premature compactions.
-
-### 5.1 Behavior
-- A new function `truncateToolResults(messages, options)` runs **before** `shouldCompact()` is called. It returns a new array where each `toolResult.results[*].content` is capped at a configurable character budget.
-- Default per-result cap: `8000` chars (~2000 tokens). Head + tail kept with a `[truncated N chars]` marker in the middle.
-- Truncation is **lossy** but **reversible on the file system** — the model can always re-`read_file` if it needs the missing region.
-- The truncation budget is configurable: `compaction.maxToolResultChars` (default 8000). `0` disables.
-
-### 5.2 Why this matters
-- `estimateMessageTokens` becomes a much better signal. A 200k-char `npm test` log no longer counts as 50k tokens — it counts as 2000.
-- Compaction triggers at the right time, not when one big tool result blows the budget.
-- Sessions with many large reads survive far longer before compaction.
-
-### 5.3 File changes
-- `apps/server/agent/src/utils/text-truncate.ts` (new) — `truncate(s: string, max: number): string`. Keep head + tail with a marker line.
-- `apps/server/agent/src/compaction/index.ts`
-  - New exported function `truncateToolResults(messages, { maxChars }): AgentMessage[]`.
-  - Extend `CompactionOptions` with `maxToolResultChars?: number` (default 8000).
-  - `shouldCompact` is replaced by `shouldCompact(messages, model, options)` that internally calls `truncateToolResults` first and operates on the truncated view. The loop in `agent-loop.ts` is unchanged.
-- `apps/server/agent/src/service/agent.ts` — `compaction` config now includes `maxToolResultChars: 8000` by default.
-
-### 5.4 Tests
-- `apps/server/tests/compaction-truncation.test.ts` (new):
-  - **Big tool result is truncated.** A `toolResult` with 50,000 chars. After `truncateToolResults`, each result is ≤ 8000 chars and contains head + tail + `[truncated …]` marker.
-  - **Small tool results are untouched.** A 100-char result comes through unchanged.
-  - **`maxToolResultChars: 0` disables.** All results pass through untouched.
-  - **Estimation is honest.** After truncation, `estimateMessageTokens` returns a value lower by the expected amount.
-  - **Compaction is delayed.** A history that triggers compaction before truncation does **not** trigger it after truncation.
-
----
-
-## 6. Rollout order — implementation before enable
-
-Compaction must be **correct before it is on by default**. We fix the implementation (truncation + summary) first, then flip the default.
-
-| Order | Change | Risk | Lines of code (est.) | Notes |
-|---|---|---|---|---|
-| 1 | #3 truncation | Low | ~80 | Pure function, easy to test, no schema changes. Fixes `estimateMessageTokens` so threshold math is honest before anything else. |
-| 2 | #2 structural summary | Medium | ~150 | Core fix: replaces metadata stub with real recap. Makes every future compaction useful. No event schema break. |
-| 3 | #2 LLM summary | Higher | ~120 | Optional `summary: "llm"` — costs a model call; needs abort + timeout handling. Ship after structural is stable. |
-| 4 | #1 default-on | Very low | ~10 | Last step. Now safe to ship: `keepRecentTurns: 12`, `compaction` on by default, `false` to opt-out. |
-
-Ship 1 → 2 together in one PR (both are pure implementation fixes). Ship 3 separately. Ship 4 separately once 1-2 are verified in prod.
-
----
-
-## 7. Event schema additions
-
-The wire format only **adds** fields. Old clients ignore them.
-
+In `apps/server/agent/src/service/agent.ts`:
 ```ts
-// types/events.ts — additive extension
-export type CompactionEvent = {
-  type: "compaction";
-  summary: string;
-  strategy: "structural" | "llm";        // new
-  originalMessageCount: number;          // existing
-  compactedMessageCount: number;        // new
-  droppedTokens: number;                 // new
+const defaultCompaction: CompactionOptions = {
+  enabled: true,
+  maxThresholdRatio: 0.8,
+  keepRecentTokens: 20_000,
+  maxToolResultChars: 8_000,
+  summaryStrategy: "structural",
 };
 ```
 
-No breaking changes. The `AgentSessionEvent` union gains no new variant.
+---
+
+## 5. Wire Event Schema Additions
+
+In `packages/types/src/events.ts`, extend the `compaction` event:
+
+```ts
+export interface CompactionEvent {
+  type: "compaction";
+  summary: string;
+  strategy: "structural" | "llm";
+  originalMessageCount: number;
+  compactedMessageCount: number;
+  tokensBefore: number;
+  tokensAfter: number;
+  compactedMessages: AgentMessage[];
+}
+```
+
+This is completely additive; existing web/mobile/desktop listeners remain backward-compatible while gaining the ability to render a clean `── Compacted ──` divider.
 
 ---
 
-## 8. Test plan summary
+## 6. Implementation Plan & Work Phases
 
-| Test file | Covers |
-|---|---|
-| `compaction-defaults.test.ts` (new) | #1 — defaults are on, opt-out works, overrides preserved |
-| `compaction-truncation.test.ts` (new) | #3 — tool result truncation, estimation impact, opt-out |
-| `compaction-summary.test.ts` (new) | #2 — structural recap correctness, LLM fallback on failure |
-| `agent-loop.test.ts` (extend) | End-to-end: a long session with 1+ compactions completes without `error` events |
-| `permissions.test.ts` (unchanged) | Confirm permission flow is unaffected |
+### Phase 1: In-Place Tool Result Truncation & Token Estimation
+- Implement `apps/server/agent/src/utils/text-truncate.ts` (`truncateHeadTail(text, maxChars)`).
+- Apply truncation to incoming tool results in `apps/server/agent/src/service/agent-loop.ts`.
+- Update `estimateMessageTokens` to accurately account for tool result truncations and image attachments.
+- **Verification**: Tests in `apps/server/tests/compaction-truncation.test.ts`.
 
-The three new test files use mock `StreamFn` only — no real LLM calls. They follow the existing pattern in `agent-loop.test.ts`.
+### Phase 2: Turn-Safe Cut-Point Engine
+- Implement `apps/server/agent/src/compaction/cut-point.ts` (`findCutPoint`).
+- Guarantee never splitting at `toolResult` or orphaning tool call pairs.
+- Implement turn boundary validation and fallback to user turn start.
+- **Verification**: Tests in `apps/server/tests/compaction-cutpoint.test.ts`.
+
+### Phase 3: File Operation Tracking & Structural Summary
+- Implement `apps/server/agent/src/compaction/file-tracker.ts` (`extractFileOps`, `formatFileTree`).
+- Implement `apps/server/agent/src/compaction/structural-summary.ts`.
+- Construct the prompt-cache friendly wrapper template.
+- Implement `compactHistory` using `findCutPoint` and structural summary.
+- **Verification**: Tests in `apps/server/tests/compaction-summary.test.ts`.
+
+### Phase 4: State Synchronization & Persistence
+- Update `AgentLoopConfig` to accept `compaction: CompactionOptions`.
+- Wire `agent-loop.ts` compaction execution to emit `compactedMessages`.
+- Update `apps/server/agent/src/service/agent.ts` to sync `this._messages` on compaction.
+- Update `apps/server/api/src/services/run.service.ts` to invoke `sessionStorage.replaceMessages` on compaction.
+- Enable compaction by default in `AgentOptions`.
+- **Verification**: Integration test in `apps/server/tests/compaction-lifecycle.test.ts`.
+
+### Phase 5: UI & Client Visibility
+- Add divider handling for `compaction` event in mobile `chat-message-list.tsx` and desktop `message_list.rs`.
+- Render a clean, collapsible checkpoint indicator showing token savings.
+- Run mobile export verification (`bunx expo export --platform android`).
 
 ---
 
-## 9. File changes summary
+## 7. Verification Checklist
 
-| File | Change |
-|---|---|
-| `apps/server/agent/src/compaction/index.ts` | Major: defaults, `truncateToolResults`, `buildStructuralSummary`, optional LLM summary, richer return type |
-| `apps/server/agent/src/compaction/types.ts` (new) | `SummaryStrategy` type |
-| `apps/server/agent/src/service/types.ts` | No change (compaction config is just richer) |
-| `apps/server/agent/src/service/agent.ts` | Default-on `compaction`; pass `streamFn` for LLM summary |
-| `apps/server/agent/src/service/agent-loop.ts` | Call `truncateToolResults` before `shouldCompact`; pass `streamFn` to `compactHistory`; richer `compaction` event |
-| `apps/server/agent/src/utils/text-truncate.ts` (new) | `truncate(s, max)` helper |
-| `packages/types/src/events.ts` | Extend `compaction` event with `strategy`, `compactedMessageCount`, `droppedTokens` |
-| `apps/server/tests/compaction-defaults.test.ts` (new) | #1 tests |
-| `apps/server/tests/compaction-truncation.test.ts` (new) | #3 tests |
-| `apps/server/tests/compaction-summary.test.ts` (new) | #2 tests |
-
----
-
-## 10. Out of scope (deferred)
-
-These are real ideas but not part of this plan:
-
-- **Vector / semantic retrieval of past context.** Useful for cross-session memory but the gain is unclear for within-session compaction.
-- **Compaction over images.** `ImagePart.attachments` is counted as raw bytes today. Real vision tokens are ~765 per image. Out of scope.
-- **Cross-session memory.** Different problem — `roadmap.md` covers it under "Cross-chat memory".
-- **User-visible "Compact now" button.** Pairs nicely with these changes but is a UI feature, not an engine one.
+1. **Turn Integrity**:
+   - `findCutPoint` tested on synthetic histories with:
+     - Mid-tool execution sequences (`user -> assistant [call] -> toolResult`).
+     - Multiple consecutive tool calls in a single assistant turn.
+     - Long histories exceeding 100 turns.
+2. **Provider API Compatibility**:
+   - Verify converted messages pass provider strict role alternation validation for:
+     - Anthropic (no consecutive user/user or assistant/assistant messages, no orphan tool results).
+     - Gemini (role alternating `user` / `model`).
+     - OpenAI CoreMessage / Responses format.
+3. **Persistence Round-Trip**:
+   - Run a test session triggering compaction.
+   - Reload session from `SqliteSessionStorage` and assert message count matches compacted count.
+   - Run turn N+1 and verify agent completes without context re-inflation.
+4. **Mobile & Desktop Compilation**:
+   - `cd apps/server && bun test tests/compaction*.test.ts`
+   - `cd apps/mobile && bunx expo export --platform android`
