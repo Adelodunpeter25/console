@@ -363,6 +363,7 @@ impl ConsoleDesktopApp {
     }
 
     /// Load a chat into one pane without replacing another pane's transcript.
+    /// Uses tail pagination (limit 50) for fast initial paint; older messages load on demand.
     pub fn load_session_messages_for_pane(
         &mut self,
         pane_id: String,
@@ -372,7 +373,7 @@ impl ConsoleDesktopApp {
         let client = self.client.clone();
         let saved_position = self.transcript_scroll_positions.get(&session_id).copied();
         cx.spawn(async move |entity, cx| {
-            match client.sessions.get(&session_id).await {
+            match client.sessions.get_paginated(&session_id, Some(50), None).await {
                 Ok(detail) => {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
@@ -400,8 +401,20 @@ impl ConsoleDesktopApp {
                                         cx,
                                     );
                                 });
+                                let app_entity_for_older = entity.clone();
                                 transcript.update(cx, |t, cx| {
                                     t.set_messages(detail.messages, cx);
+                                    t.set_pagination(detail.has_more, detail.next_cursor);
+                                    // Wire Load older handler for this pane/session
+                                    let pane_for_older = pane_id.clone();
+                                    let app_entity = app_entity_for_older.clone();
+                                    t.set_on_load_older(move |_window, cx| {
+                                        if let Some(app) = app_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.load_older_messages_for_pane(pane_for_older.clone(), cx);
+                                            });
+                                        }
+                                    });
                                     if let Some(started_at) = running_started_at {
                                         t.resume_streaming(started_at, cx);
                                     }
@@ -414,6 +427,15 @@ impl ConsoleDesktopApp {
                                         );
                                     }
                                 });
+                                // Store pagination for scroll-based loading
+                                this.set_pagination_for_session(
+                                    &session_id,
+                                    crate::state::pagination::SessionPaginationState {
+                                        has_more: detail.has_more,
+                                        next_cursor: detail.next_cursor,
+                                    },
+                                    cx,
+                                );
 
                                 if detail.header.status == Some(console_core::SessionStatus::Working)
                                     && !this.is_session_running(&session_id)

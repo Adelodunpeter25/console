@@ -67,6 +67,12 @@ pub struct TranscriptView {
     /// invalidated when messages or streaming state changes.
     tool_activity_cache: RefCell<HashMap<usize, (u64, Option<(Vec<ActivityEvent>, Option<i64>, u64, bool)>)>>,
     tool_activity_cache_version: std::cell::Cell<u64>,
+    /// Pagination for incremental loading: whether older messages exist and cursor.
+    has_more: bool,
+    next_cursor: Option<i64>,
+    /// Whether a pagination fetch is in flight.
+    loading_older: bool,
+    on_load_older: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     /// Opens the image preview modal with the decoded image when the user
     /// clicks an image inside a message bubble.
     on_preview_image: Option<Rc<dyn Fn(Arc<gpui::Image>, &mut Window, &mut App) + 'static>>,
@@ -97,6 +103,10 @@ impl TranscriptView {
             session_cwd: None,
             tool_activity_cache: RefCell::new(HashMap::new()),
             tool_activity_cache_version: std::cell::Cell::new(0),
+            has_more: false,
+            next_cursor: None,
+            loading_older: false,
+            on_load_older: None,
             on_preview_image: None,
             on_view_subagent: None,
         }
@@ -125,6 +135,72 @@ impl TranscriptView {
         // Summaries are derived per render, not cached.
         self.tool_activity_cache.borrow_mut().clear();
         self
+    }
+
+    pub fn set_pagination(&mut self, has_more: bool, next_cursor: Option<i64>) {
+        self.has_more = has_more;
+        self.next_cursor = next_cursor;
+        self.loading_older = false;
+    }
+
+    pub fn set_on_load_older(
+        &mut self,
+        handler: impl Fn(&mut Window, &mut App) + 'static,
+    ) {
+        self.on_load_older = Some(Rc::new(handler));
+    }
+
+    pub fn prepend_messages(&mut self, older: Vec<AgentMessage>, has_more: bool, next_cursor: Option<i64>, cx: &mut Context<Self>) {
+        if older.is_empty() {
+            self.has_more = has_more;
+            self.next_cursor = next_cursor;
+            self.loading_older = false;
+            cx.notify();
+            return;
+        }
+        // Preserve scroll anchor at current top item before prepending
+        let anchor = self.scroll_anchor();
+        let old_len = self.messages.len();
+        // Prepend older messages
+        let mut new_messages = older;
+        new_messages.extend(self.messages.drain(..));
+        self.messages = new_messages;
+        // Rebuild revisions for new messages (simple: reset all)
+        self.content_revisions = vec![0; self.messages.len()];
+        self.presentation_cache.borrow_mut().clear();
+        self.markdown_cache.borrow_mut().clear();
+        self.tool_calls_state.borrow_mut().clear();
+        self.thinking_expanded.borrow_mut().clear();
+        self.invalidate_activity_cache();
+        self.has_more = has_more;
+        self.next_cursor = next_cursor;
+        self.loading_older = false;
+        // Keep scroll position stable: offset by number of prepended items
+        let prepended = self.messages.len() - old_len;
+        if let Some((row, offset, _at_tail)) = anchor {
+            let new_row = row + prepended;
+            // Delay one frame to let list remeasure
+            let entity = cx.entity().downgrade();
+            cx.spawn(async move |_, cx| {
+                cx.background_executor().timer(Duration::from_millis(16)).await;
+                cx.update(|cx| {
+                    if let Some(e) = entity.upgrade() {
+                        e.update(cx, |this, _| {
+                            this.list_state.scroll_to(ListOffset {
+                                item_ix: new_row,
+                                offset_in_item: px(offset),
+                            });
+                        });
+                    }
+                });
+            }).detach();
+        }
+        self.refresh_list();
+        cx.notify();
+    }
+
+    pub fn set_loading_older(&mut self, loading: bool) {
+        self.loading_older = loading;
     }
 
     /// Re-anchor the list after the message set changed: keep following the
@@ -793,6 +869,9 @@ impl Render for TranscriptView {
         let selection = self.selection.clone();
         let entity = cx.entity().downgrade();
         let is_streaming = self.is_streaming;
+        let has_more = self.has_more;
+        let loading_older = self.loading_older;
+        let on_load_older = self.on_load_older.clone();
 
         div()
             .id("transcript-view")
@@ -805,10 +884,51 @@ impl Render for TranscriptView {
             .child(if self.messages.is_empty() && !is_streaming {
                 empty_state(theme).into_any_element()
             } else {
+                let load_older_header = if has_more {
+                    let on_load = on_load_older.clone();
+                    div()
+                        .w_full()
+                        .flex()
+                        .justify_center()
+                        .py(px(8.0))
+                        .child(
+                            div()
+                                .id("load-older-btn")
+                                .px(px(12.0))
+                                .py(px(6.0))
+                                .rounded(px(6.0))
+                                .bg(theme.surface)
+                                .border_1()
+                                .border_color(theme.border)
+                                .cursor_pointer()
+                                .hover(|s| s.bg(theme.overlay))
+                                .when(!loading_older, |el| {
+                                    el.on_click(move |_, window, cx| {
+                                        if let Some(handler) = &on_load {
+                                            handler(window, cx);
+                                        }
+                                    })
+                                })
+                                .child(
+                                    div()
+                                        .text_size(px(12.0))
+                                        .text_color(theme.text_secondary)
+                                        .child(if loading_older {
+                                            "Loading older messages..."
+                                        } else {
+                                            "Load older messages"
+                                        }),
+                                ),
+                        )
+                        .into_any_element()
+                } else {
+                    div().into_any_element()
+                };
                 div()
                     .size_full()
                     .flex()
                     .flex_col()
+                    .child(load_older_header)
                     .child(
                         list(self.list_state.clone(), move |index, _window, cx| {
                             transcript_row(entity.clone(), index, cx)

@@ -16,6 +16,7 @@ mod execution;
 mod global_actions;
 mod layout;
 mod notifications;
+mod pagination;
 mod projects;
 mod providers;
 mod right_sidebar;

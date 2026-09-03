@@ -55,7 +55,27 @@ impl SessionService {
     }
 
     pub async fn get(&self, id: &str) -> Result<SessionDetailResponse> {
-        let url = self.transport.url(&format!("/api/sessions/{}", id)).await;
+        self.get_paginated(id, None, None).await
+    }
+
+    pub async fn get_paginated(
+        &self,
+        id: &str,
+        limit: Option<usize>,
+        before: Option<i64>,
+    ) -> Result<SessionDetailResponse> {
+        let mut url = self.transport.url(&format!("/api/sessions/{}", id)).await;
+        let mut query = Vec::new();
+        if let Some(l) = limit {
+            query.push(format!("limit={}", l));
+        }
+        if let Some(b) = before {
+            query.push(format!("before={}", b));
+        }
+        if !query.is_empty() {
+            url.push('?');
+            url.push_str(&query.join("&"));
+        }
         let resp = self
             .transport
             .client()

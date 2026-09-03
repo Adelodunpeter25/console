@@ -44,6 +44,10 @@ pub struct SessionDetailResponse {
     #[serde(alias = "session")]
     pub header: SessionHeader,
     pub messages: Vec<AgentMessage>,
+    #[serde(default)]
+    pub has_more: bool,
+    #[serde(default)]
+    pub next_cursor: Option<i64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
