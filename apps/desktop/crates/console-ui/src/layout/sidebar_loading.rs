@@ -36,7 +36,7 @@ pub fn session_loading_state(
 
     if let Some(started_at) = running_started_at {
         let started_at = if started_at > 0 {
-            started_at
+            normalize_timestamp(started_at)
         } else {
             unix_time()
         };
@@ -70,9 +70,12 @@ pub fn working_label(state: SidebarLoadingState, now: i64) -> Option<SharedStrin
     let SidebarLoadingState::Working { started_at } = state else {
         return None;
     };
+    let now = normalize_timestamp(now);
+    let started_at = normalize_timestamp(started_at);
+    let elapsed = (now - started_at).max(0) as u64;
     Some(SharedString::from(format!(
         "Working for {}",
-        format_working_elapsed(now.saturating_sub(started_at) as u64)
+        format_working_elapsed(elapsed)
     )))
 }
 

@@ -11,7 +11,7 @@ use gpui::{IntoElement, ParentElement, Styled, div, px};
 pub fn centered_stripe(child: impl IntoElement, padding_y: f32) -> impl IntoElement {
     div()
         .w_full()
-        .px(px(24.0))
+        .px(px(20.0))
         .py(px(padding_y))
         .flex()
         .justify_center()

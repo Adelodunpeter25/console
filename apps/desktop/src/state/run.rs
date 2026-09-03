@@ -604,7 +604,7 @@ impl ConsoleDesktopApp {
             return;
         }
 
-        let now = chrono::Utc::now().timestamp_millis();
+        let now = chrono::Utc::now().timestamp();
         self.set_session_running(&session_id, Some(now));
         let run_token = self.next_run_token_for_session(&session_id);
 

@@ -53,7 +53,7 @@ pub fn todo_card(
     centered_stripe(
         div()
             .w_full()
-            .max_w(px(768.0))
+            .max_w(px(728.0))
             .p(px(9.0))
             .rounded(px(8.0))
             .bg(theme.composer)

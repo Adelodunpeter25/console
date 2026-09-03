@@ -55,7 +55,11 @@ impl WorkingIndicator {
 impl RenderOnce for WorkingIndicator {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let theme = self.theme;
-        let started_at = self.started_at;
+        let started_at = if self.started_at > 10_000_000_000 {
+            self.started_at / 1000
+        } else {
+            self.started_at
+        };
         let now = chrono::Utc::now().timestamp();
         let seconds = (now - started_at).max(0) as u64;
 

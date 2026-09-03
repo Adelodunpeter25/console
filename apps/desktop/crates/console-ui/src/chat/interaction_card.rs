@@ -39,7 +39,7 @@ impl RenderOnce for PermissionInteractionCard {
 
         div()
             .w_full()
-            .max_w(px(768.0))
+            .max_w(px(728.0))
             .p(px(14.0))
             .rounded(px(12.0))
             .bg(theme.surface)
@@ -239,7 +239,7 @@ impl RenderOnce for QuestionInteractionCard {
 
         div()
             .w_full()
-            .max_w(px(768.0))
+            .max_w(px(728.0))
             .p(px(14.0))
             .rounded(px(12.0))
             .bg(theme.surface)
