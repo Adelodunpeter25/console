@@ -1,15 +1,15 @@
-use std::rc::Rc;
-use std::time::Duration;
-use gpui::{
-    App, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
-    KeyDownEvent, ParentElement, Render, Styled, WeakEntity, Window, div,
-};
+use crate::state::ConsoleDesktopApp;
 use console_ui::input::ComposerInput;
 use console_ui::settings::{
     AccountsPage, ConnectionPage, DeletedChatsPage, ProbeState, ProjectsPage, SettingsShell,
     SettingsTab, UsagePage,
 };
-use crate::state::ConsoleDesktopApp;
+use gpui::{
+    App, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
+    KeyDownEvent, ParentElement, Render, Styled, WeakEntity, Window, div,
+};
+use std::rc::Rc;
+use std::time::Duration;
 
 pub struct SettingsWindow {
     app: WeakEntity<ConsoleDesktopApp>,
@@ -30,9 +30,9 @@ impl SettingsWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let subscription = app.upgrade().map(|app_entity| {
-            cx.observe(&app_entity, |_this, _app, cx| cx.notify())
-        });
+        let subscription = app
+            .upgrade()
+            .map(|app_entity| cx.observe(&app_entity, |_this, _app, cx| cx.notify()));
 
         if initial_tab == SettingsTab::Usage {
             if let Some(app_entity) = app.upgrade() {
@@ -96,7 +96,10 @@ impl Render for SettingsWindow {
         }
 
         let Some(app_entity) = self.app.upgrade() else {
-            return div().size_full().child("Application closed").into_any_element();
+            return div()
+                .size_full()
+                .child("Application closed")
+                .into_any_element();
         };
 
         let app = app_entity.read(cx);
@@ -139,7 +142,8 @@ impl Render for SettingsWindow {
                     auth_status: app.auth_status.clone(),
                     logging_in: app.auth_logging_in.clone(),
                     on_login,
-                }.into_any_element()
+                }
+                .into_any_element()
             }
             SettingsTab::Connection => {
                 let on_activate: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
@@ -205,8 +209,14 @@ impl Render for SettingsWindow {
                     Rc::new(move |env_id: String, _w: &mut Window, cx: &mut App| {
                         let (name, url, probe) = if let Some(app) = app_handle.upgrade() {
                             let app_state = app.read(cx);
-                            if let Some(env) = app_state.environments.iter().find(|e| e.id == env_id) {
-                                let probe = app_state.env_probes.get(&env.id).copied().unwrap_or(ProbeState::Unknown);
+                            if let Some(env) =
+                                app_state.environments.iter().find(|e| e.id == env_id)
+                            {
+                                let probe = app_state
+                                    .env_probes
+                                    .get(&env.id)
+                                    .copied()
+                                    .unwrap_or(ProbeState::Unknown);
                                 (env.name.clone(), env.url.clone(), probe)
                             } else {
                                 return;
@@ -236,21 +246,30 @@ impl Render for SettingsWindow {
                     let url_input = self.new_env_url_input.clone();
                     Rc::new(move |_w: &mut Window, cx: &mut App| {
                         let url = url_input.read(cx).content().trim().to_string();
-                        if url.is_empty() { return; }
+                        if url.is_empty() {
+                            return;
+                        }
                         entity.update(cx, |this, cx| {
                             this.new_env_probe = ProbeState::Probing;
                             cx.notify();
                         });
                         let ent = entity.clone();
                         cx.spawn(async move |cx| {
-                            let ok = console_core::utils::probe_backend(&url, Duration::from_secs(3)).await;
+                            let ok =
+                                console_core::utils::probe_backend(&url, Duration::from_secs(3))
+                                    .await;
                             let _ = cx.update(|cx| {
                                 ent.update(cx, |this, cx| {
-                                    this.new_env_probe = if ok.is_ok() { ProbeState::Ok } else { ProbeState::Failed };
+                                    this.new_env_probe = if ok.is_ok() {
+                                        ProbeState::Ok
+                                    } else {
+                                        ProbeState::Failed
+                                    };
                                     cx.notify();
                                 });
                             });
-                        }).detach();
+                        })
+                        .detach();
                     })
                 };
 
@@ -262,8 +281,14 @@ impl Render for SettingsWindow {
                     Rc::new(move |_w: &mut Window, cx: &mut App| {
                         let name = name_input.read(cx).content().trim().to_string();
                         let url = url_input.read(cx).content().trim().to_string();
-                        if url.is_empty() { return; }
-                        let final_name = if name.is_empty() { "Custom Server".to_string() } else { name };
+                        if url.is_empty() {
+                            return;
+                        }
+                        let final_name = if name.is_empty() {
+                            "Custom Server".to_string()
+                        } else {
+                            name
+                        };
 
                         let editing_id = entity.read(cx).editing_env_id.clone();
 
@@ -300,7 +325,8 @@ impl Render for SettingsWindow {
                     on_toggle_add,
                     on_probe_new,
                     on_save_new,
-                }.into_any_element()
+                }
+                .into_any_element()
             }
             SettingsTab::Usage => {
                 let on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
@@ -332,7 +358,8 @@ impl Render for SettingsWindow {
                     loading: app.usage_loading,
                     on_refresh,
                     on_login,
-                }.into_any_element()
+                }
+                .into_any_element()
             }
             SettingsTab::Projects => {
                 let on_add_project: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
@@ -374,7 +401,8 @@ impl Render for SettingsWindow {
                     projects: app.projects.clone(),
                     on_add_project,
                     on_remove_project,
-                }.into_any_element()
+                }
+                .into_any_element()
             }
             SettingsTab::DeletedChats => {
                 let on_restore: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
@@ -403,7 +431,8 @@ impl Render for SettingsWindow {
                     deleted_sessions: app.deleted_sessions.clone(),
                     on_restore,
                     on_permanent_delete,
-                }.into_any_element()
+                }
+                .into_any_element()
             }
         };
 

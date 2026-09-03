@@ -27,6 +27,8 @@ impl NotificationService {
             .await
             .context("Failed to connect to notifications stream")?;
 
-        Ok(Box::pin(SseStreamReader::parse_typed_stream::<NotificationEvent>(resp)))
+        Ok(Box::pin(SseStreamReader::parse_typed_stream::<
+            NotificationEvent,
+        >(resp)))
     }
 }

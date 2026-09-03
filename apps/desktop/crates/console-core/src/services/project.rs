@@ -84,7 +84,8 @@ impl ProjectService {
             Ok(())
         } else {
             Err(anyhow!(
-                body.error.unwrap_or_else(|| "Failed to remove project".into())
+                body.error
+                    .unwrap_or_else(|| "Failed to remove project".into())
             ))
         }
     }

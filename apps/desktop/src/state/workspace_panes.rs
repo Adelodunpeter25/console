@@ -46,8 +46,7 @@ impl ConsoleDesktopApp {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
                             this.approval_menu.close(window, cx);
-                            if let PickerTab::Provider(name) =
-                                this.pane_picker_tab(&pane_id_owned)
+                            if let PickerTab::Provider(name) = this.pane_picker_tab(&pane_id_owned)
                             {
                                 this.load_models_for_provider(&name, cx);
                             }
@@ -387,7 +386,6 @@ impl ConsoleDesktopApp {
             .map(str::to_owned)
     }
 
-
     /// The active leaf's tab id, for places that still want the flat view.
     pub fn active_tab_id(&self) -> Option<String> {
         let pane_id = self.active_pane_id.as_deref()?;
@@ -522,8 +520,8 @@ impl ConsoleDesktopApp {
         // Fetch file content if not cached
         let client = self.client.clone();
         let file_path = path.clone();
-        cx.spawn(async move |entity, cx| {
-            match client.fs.read_file(&file_path).await {
+        cx.spawn(
+            async move |entity, cx| match client.fs.read_file(&file_path).await {
                 Ok(resp) => {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
@@ -537,8 +535,8 @@ impl ConsoleDesktopApp {
                 Err(err) => {
                     log::warn!("Failed to read file for tab {}: {}", file_path, err);
                 }
-            }
-        })
+            },
+        )
         .detach();
 
         cx.notify();
@@ -622,7 +620,8 @@ impl ConsoleDesktopApp {
             cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.open_diff_contents.insert(file_path, (diff_result, diff_raw));
+                        this.open_diff_contents
+                            .insert(file_path, (diff_result, diff_raw));
                         cx.notify();
                     });
                 }
@@ -800,7 +799,9 @@ impl ConsoleDesktopApp {
         self.active_pane_id = Some(new_pane_id.clone());
         if let WorkspaceTabConfig::Chat { session_id, .. } = tab {
             self.selected_session_id = Some(session_id.clone());
-            let draft = self.get_draft_for_session(Some(&session_id)).map(|s| s.to_string());
+            let draft = self
+                .get_draft_for_session(Some(&session_id))
+                .map(|s| s.to_string());
             self.composer_for_pane(&new_pane_id)
                 .update(cx, |input, cx| {
                     input.set_prompt_history(Vec::new(), cx);

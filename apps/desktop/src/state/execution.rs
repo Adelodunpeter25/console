@@ -58,7 +58,10 @@ impl ConsoleDesktopApp {
 
     /// Read the current run token for a session without advancing it.
     pub(crate) fn current_run_token_for_session(&self, session_id: &str) -> u64 {
-        self.session_run_tokens.get(session_id).copied().unwrap_or(0)
+        self.session_run_tokens
+            .get(session_id)
+            .copied()
+            .unwrap_or(0)
     }
 
     /// Whether the session currently displayed in a pane is running. Used by
@@ -70,7 +73,10 @@ impl ConsoleDesktopApp {
     }
 
     pub(crate) fn stream_render_pending_for_pane(&self, pane_id: &str) -> bool {
-        self.stream_render_pending.get(pane_id).copied().unwrap_or(false)
+        self.stream_render_pending
+            .get(pane_id)
+            .copied()
+            .unwrap_or(false)
     }
 
     pub(crate) fn set_stream_render_pending_for_pane(&mut self, pane_id: &str, pending: bool) {
@@ -129,14 +135,12 @@ impl ConsoleDesktopApp {
         if selected.is_empty() {
             self.question_selected.remove(session_id);
         } else {
-            self.question_selected.insert(session_id.to_string(), selected);
+            self.question_selected
+                .insert(session_id.to_string(), selected);
         }
     }
 
-    pub(crate) fn question_selected_for_session(
-        &self,
-        session_id: &str,
-    ) -> HashSet<String> {
+    pub(crate) fn question_selected_for_session(&self, session_id: &str) -> HashSet<String> {
         self.question_selected
             .get(session_id)
             .cloned()
@@ -185,7 +189,11 @@ impl ConsoleDesktopApp {
             .and_then(|sid| self.agent_notices.get(&sid).cloned())
     }
 
-    pub(crate) fn set_agent_notice_for_session(&mut self, session_id: &str, notice: Option<String>) {
+    pub(crate) fn set_agent_notice_for_session(
+        &mut self,
+        session_id: &str,
+        notice: Option<String>,
+    ) {
         if let Some(n) = notice {
             self.agent_notices.insert(session_id.to_string(), n);
         } else {

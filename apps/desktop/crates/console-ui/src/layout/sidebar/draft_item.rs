@@ -1,8 +1,8 @@
-use std::rc::Rc;
 use gpui::{
     App, ElementId, FontWeight, InteractiveElement, IntoElement, ParentElement,
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
+use std::rc::Rc;
 
 use crate::primitives::{IconName, app_icon, draft_context_menu};
 use crate::theme::Theme;
@@ -53,7 +53,11 @@ pub fn render_sidebar_draft_item(
 
     let row = div()
         .id(ElementId::Name(
-            format!("draft-row-{}", draft.session_id.as_deref().unwrap_or("new-chat")).into(),
+            format!(
+                "draft-row-{}",
+                draft.session_id.as_deref().unwrap_or("new-chat")
+            )
+            .into(),
         ))
         .w_full()
         .h(px(55.0))
@@ -63,7 +67,9 @@ pub fn render_sidebar_draft_item(
         .cursor_default()
         .group("sidebar-draft-card")
         .when(is_active, |s| s.bg(theme.sidebar_item_background))
-        .when(!is_active, |s| s.hover(|h| h.bg(theme.sidebar_item_background)))
+        .when(!is_active, |s| {
+            s.hover(|h| h.bg(theme.sidebar_item_background))
+        })
         .on_click(move |_, window, cx| on_click(window, cx))
         .flex()
         .flex_col()
@@ -76,17 +82,14 @@ pub fn render_sidebar_draft_item(
                 .justify_between()
                 .gap_x(px(6.0))
                 .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .child(
-                            div()
-                                .truncate()
-                                .text_size(px(13.0))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(theme.text)
-                                .child(draft.title.clone()),
-                        ),
+                    div().flex_1().min_w_0().child(
+                        div()
+                            .truncate()
+                            .text_size(px(13.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme.text)
+                            .child(draft.title.clone()),
+                    ),
                 ),
         )
         .child(

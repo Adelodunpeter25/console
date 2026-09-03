@@ -1,11 +1,11 @@
-use std::time::Duration;
-use gpui::Context;
-use serde::{Deserialize, Serialize};
-use console_ui::settings::{EnvironmentRow, ProbeState};
+use super::ConsoleDesktopApp;
 use crate::persistence::store::{
     PersistedEnvironment, PersistedEnvironmentsState, load_environments, save_environments,
 };
-use super::ConsoleDesktopApp;
+use console_ui::settings::{EnvironmentRow, ProbeState};
+use gpui::Context;
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Environment {
@@ -31,20 +31,28 @@ impl ConsoleDesktopApp {
         let def = Environment::default_local();
         if let Some(persisted) = load_environments() {
             if !persisted.environments.is_empty() {
-                self.environments = persisted.environments.into_iter().map(|e| {
-                    // Fix legacy mock 4040 port or placeholder from initial test to true default local url
-                    let url = if e.url == "http://127.0.0.1:4040" || e.url == "http://localhost:4040" {
-                        def.url.clone()
-                    } else {
-                        e.url
-                    };
-                    Environment {
-                        id: e.id,
-                        name: e.name,
-                        url,
-                    }
-                }).collect();
-                self.active_env_id = persisted.active_id.or_else(|| self.environments.first().map(|e| e.id.clone()));
+                self.environments = persisted
+                    .environments
+                    .into_iter()
+                    .map(|e| {
+                        // Fix legacy mock 4040 port or placeholder from initial test to true default local url
+                        let url = if e.url == "http://127.0.0.1:4040"
+                            || e.url == "http://localhost:4040"
+                        {
+                            def.url.clone()
+                        } else {
+                            e.url
+                        };
+                        Environment {
+                            id: e.id,
+                            name: e.name,
+                            url,
+                        }
+                    })
+                    .collect();
+                self.active_env_id = persisted
+                    .active_id
+                    .or_else(|| self.environments.first().map(|e| e.id.clone()));
             }
         }
         if self.environments.is_empty() {
@@ -57,7 +65,8 @@ impl ConsoleDesktopApp {
         let client = self.client.clone();
         cx.spawn(async move |_entity, _cx| {
             client.set_base_url(&active_url).await;
-        }).detach();
+        })
+        .detach();
 
         // Auto probe configured environments
         let env_ids: Vec<String> = self.environments.iter().map(|e| e.id.clone()).collect();
@@ -76,32 +85,45 @@ impl ConsoleDesktopApp {
 
     pub fn save_persisted_environments(&self) {
         let state = PersistedEnvironmentsState {
-            environments: self.environments.iter().map(|e| PersistedEnvironment {
-                id: e.id.clone(),
-                name: e.name.clone(),
-                url: e.url.clone(),
-            }).collect(),
+            environments: self
+                .environments
+                .iter()
+                .map(|e| PersistedEnvironment {
+                    id: e.id.clone(),
+                    name: e.name.clone(),
+                    url: e.url.clone(),
+                })
+                .collect(),
             active_id: self.active_env_id.clone(),
         };
         save_environments(state);
     }
 
     pub fn environment_rows(&self) -> Vec<EnvironmentRow> {
-        self.environments.iter().map(|e| {
-            let is_active = self.active_env_id.as_deref() == Some(&e.id);
-            let probe_state = self.env_probes.get(&e.id).copied().unwrap_or(ProbeState::Unknown);
-            EnvironmentRow {
-                id: e.id.clone(),
-                name: e.name.clone(),
-                url: e.url.clone(),
-                is_active,
-                probe_state,
-            }
-        }).collect()
+        self.environments
+            .iter()
+            .map(|e| {
+                let is_active = self.active_env_id.as_deref() == Some(&e.id);
+                let probe_state = self
+                    .env_probes
+                    .get(&e.id)
+                    .copied()
+                    .unwrap_or(ProbeState::Unknown);
+                EnvironmentRow {
+                    id: e.id.clone(),
+                    name: e.name.clone(),
+                    url: e.url.clone(),
+                    is_active,
+                    probe_state,
+                }
+            })
+            .collect()
     }
 
     pub fn probe_environment(&mut self, env_id: String, cx: &mut Context<Self>) {
-        let Some(env) = self.environments.iter().find(|e| e.id == env_id) else { return; };
+        let Some(env) = self.environments.iter().find(|e| e.id == env_id) else {
+            return;
+        };
         let url = env.url.clone();
         self.env_probes.insert(env_id.clone(), ProbeState::Probing);
         cx.notify();
@@ -111,23 +133,43 @@ impl ConsoleDesktopApp {
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.env_probes.insert(env_id, if ok.is_ok() { ProbeState::Ok } else { ProbeState::Failed });
+                        this.env_probes.insert(
+                            env_id,
+                            if ok.is_ok() {
+                                ProbeState::Ok
+                            } else {
+                                ProbeState::Failed
+                            },
+                        );
                         cx.notify();
                     });
                 }
             });
-        }).detach();
+        })
+        .detach();
     }
 
     pub fn add_environment(&mut self, name: String, url: String, cx: &mut Context<Self>) {
-        let id = format!("env-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis());
+        let id = format!(
+            "env-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+        );
         let env = Environment { id, name, url };
         self.environments.push(env);
         self.save_persisted_environments();
         cx.notify();
     }
 
-    pub fn update_environment(&mut self, env_id: String, name: String, url: String, cx: &mut Context<Self>) {
+    pub fn update_environment(
+        &mut self,
+        env_id: String,
+        name: String,
+        url: String,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(env) = self.environments.iter_mut().find(|e| e.id == env_id) {
             env.name = name;
             let url_changed = env.url != url;
@@ -150,7 +192,8 @@ impl ConsoleDesktopApp {
                             });
                         }
                     });
-                }).detach();
+                })
+                .detach();
             }
 
             self.probe_environment(env_id, cx);
@@ -169,7 +212,9 @@ impl ConsoleDesktopApp {
     }
 
     pub fn activate_environment(&mut self, env_id: String, cx: &mut Context<Self>) {
-        let Some(env) = self.environments.iter().find(|e| e.id == env_id).cloned() else { return; };
+        let Some(env) = self.environments.iter().find(|e| e.id == env_id).cloned() else {
+            return;
+        };
         self.active_env_id = Some(env_id);
         self.save_persisted_environments();
 
@@ -199,7 +244,8 @@ impl ConsoleDesktopApp {
                         this.todo_items.clear();
                         this.running_sessions.clear();
                         this.stream_render_pending.clear();
-                        this.transcript_view.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
+                        this.transcript_view
+                            .update(cx, |t, cx| t.set_messages(Vec::new(), cx));
                         this.composer_input.update(cx, |input, cx| input.clear(cx));
 
                         this.usage_reports = None;
@@ -216,6 +262,7 @@ impl ConsoleDesktopApp {
                     });
                 }
             });
-        }).detach();
+        })
+        .detach();
     }
 }

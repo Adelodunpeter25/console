@@ -20,7 +20,10 @@ pub struct GitStatusSummary {
 
 impl GitStatusSummary {
     pub fn modified_count(&self) -> usize {
-        self.files.iter().filter(|f| f.status == "M" && !f.staged).count()
+        self.files
+            .iter()
+            .filter(|f| f.status == "M" && !f.staged)
+            .count()
     }
     pub fn staged_count(&self) -> usize {
         self.files.iter().filter(|f| f.staged).count()
@@ -32,7 +35,6 @@ impl GitStatusSummary {
         self.clean
     }
 }
-
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,4 +56,3 @@ pub struct GitBranchesResponse {
     pub branches: Vec<GitBranchInfo>,
     pub is_git_repository: bool,
 }
-

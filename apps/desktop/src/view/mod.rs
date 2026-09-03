@@ -73,7 +73,8 @@ impl Render for ConsoleDesktopApp {
                                     cx.notify();
                                     return;
                                 }
-                                let draft = this.get_draft_for_session(Some(sid)).map(|s| s.to_string());
+                                let draft =
+                                    this.get_draft_for_session(Some(sid)).map(|s| s.to_string());
                                 this.composer_for_pane(&pane_id).update(cx, |input, cx| {
                                     input.set_prompt_history(Vec::new(), cx);
                                     if let Some(draft_text) = draft {
@@ -120,7 +121,9 @@ impl Render for ConsoleDesktopApp {
                                 .active_session_for_pane(&pane_id)
                                 .map(|s| s.to_string());
 
-                            if new_active_session == prev_active_session && new_active_session.is_some() {
+                            if new_active_session == prev_active_session
+                                && new_active_session.is_some()
+                            {
                                 if this.right_sidebar_visible {
                                     this.refresh_inspector(cx);
                                 }
@@ -142,7 +145,9 @@ impl Render for ConsoleDesktopApp {
                                     cx.notify();
                                     return;
                                 }
-                                let draft = this.get_draft_for_session(Some(&sid)).map(|s| s.to_string());
+                                let draft = this
+                                    .get_draft_for_session(Some(&sid))
+                                    .map(|s| s.to_string());
                                 composer.update(cx, |input, cx| {
                                     input.set_prompt_history(Vec::new(), cx);
                                     if let Some(draft_text) = draft {
@@ -152,11 +157,7 @@ impl Render for ConsoleDesktopApp {
                                     }
                                 });
                                 transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
-                                this.load_session_messages_for_pane(
-                                    pane_id.clone(),
-                                    sid,
-                                    cx,
-                                );
+                                this.load_session_messages_for_pane(pane_id.clone(), sid, cx);
                             } else {
                                 this.selected_session_id = None;
                                 let draft = this.get_draft_for_session(None).map(|s| s.to_string());
@@ -233,21 +234,40 @@ impl Render for ConsoleDesktopApp {
         // "filename — folder", otherwise the selected chat's "title — folder".
         let titlebar_text: Option<String> = {
             let active_pane_id = active_pane.as_deref().unwrap_or("pane-main");
-            let active_tab = workspace_root.leaves().into_iter().find(|l| l.id == active_pane_id).and_then(|leaf| {
-                leaf.active_tab_id
-                    .as_deref()
-                    .and_then(|id| leaf.tabs.iter().find(|t| t.id() == id))
-            });
+            let active_tab = workspace_root
+                .leaves()
+                .into_iter()
+                .find(|l| l.id == active_pane_id)
+                .and_then(|leaf| {
+                    leaf.active_tab_id
+                        .as_deref()
+                        .and_then(|id| leaf.tabs.iter().find(|t| t.id() == id))
+                });
             match active_tab {
-                Some(console_core::WorkspaceTabConfig::File { title, project_id, .. })
-                | Some(console_core::WorkspaceTabConfig::Diff { title, project_id, .. })
-                | Some(console_core::WorkspaceTabConfig::Terminal { title, project_id, .. }) => {
+                Some(console_core::WorkspaceTabConfig::File {
+                    title, project_id, ..
+                })
+                | Some(console_core::WorkspaceTabConfig::Diff {
+                    title, project_id, ..
+                })
+                | Some(console_core::WorkspaceTabConfig::Terminal {
+                    title, project_id, ..
+                }) => {
                     let folder = project_id
                         .as_deref()
-                        .and_then(|pid| self.projects.iter().find(|p| p.id == pid).map(|p| p.name.clone()))
+                        .and_then(|pid| {
+                            self.projects
+                                .iter()
+                                .find(|p| p.id == pid)
+                                .map(|p| p.name.clone())
+                        })
                         .or_else(|| {
-                            self.pane_project_id(active_pane_id)
-                                .and_then(|pid| self.projects.iter().find(|p| p.id == pid).map(|p| p.name.clone()))
+                            self.pane_project_id(active_pane_id).and_then(|pid| {
+                                self.projects
+                                    .iter()
+                                    .find(|p| p.id == pid)
+                                    .map(|p| p.name.clone())
+                            })
                         })
                         .or_else(|| {
                             self.selected_session_id
@@ -263,7 +283,9 @@ impl Render for ConsoleDesktopApp {
                                             if cwd.is_empty() {
                                                 None
                                             } else {
-                                                Some(console_ui::utils::format_folder_display_name(cwd))
+                                                Some(console_ui::utils::format_folder_display_name(
+                                                    cwd,
+                                                ))
                                             }
                                         })
                                 })
@@ -283,7 +305,9 @@ impl Render for ConsoleDesktopApp {
                             .iter()
                             .find(|project| project.matches_session(session))
                             .map(|project| project.name.clone())
-                            .unwrap_or_else(|| console_ui::utils::format_folder_display_name(&session.cwd));
+                            .unwrap_or_else(|| {
+                                console_ui::utils::format_folder_display_name(&session.cwd)
+                            });
                         if folder.is_empty() {
                             session.display_title().to_string()
                         } else {
@@ -313,7 +337,9 @@ impl Render for ConsoleDesktopApp {
                 }
             })
         };
-        let on_select_inspector_tab: Rc<dyn Fn(console_ui::InspectorTab, &mut Window, &mut App) + 'static> = {
+        let on_select_inspector_tab: Rc<
+            dyn Fn(console_ui::InspectorTab, &mut Window, &mut App) + 'static,
+        > = {
             let entity = entity.clone();
             Rc::new(move |tab, _w, cx| {
                 if let Some(app) = entity.upgrade() {
@@ -337,16 +363,14 @@ impl Render for ConsoleDesktopApp {
             let entity = entity.clone();
             Rc::new(move |path, _w, cx| {
                 if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        match this.inspector_active_tab {
-                            console_ui::InspectorTab::AllFiles => {
-                                this.open_file_tab(path, cx);
-                            }
-                            console_ui::InspectorTab::Changes => {
-                                this.open_diff_tab(path, cx);
-                            }
-                            console_ui::InspectorTab::Subagents => {}
+                    app.update(cx, |this, cx| match this.inspector_active_tab {
+                        console_ui::InspectorTab::AllFiles => {
+                            this.open_file_tab(path, cx);
                         }
+                        console_ui::InspectorTab::Changes => {
+                            this.open_diff_tab(path, cx);
+                        }
+                        console_ui::InspectorTab::Subagents => {}
                     });
                 }
             })
@@ -436,12 +460,8 @@ impl Render for ConsoleDesktopApp {
                 }
             })
             .child(
-                TitleBar::new(
-                    titlebar_text,
-                    self.sidebar_width,
-                    on_toggle_sidebar,
-                )
-                .with_right_sidebar_toggle(self.right_sidebar_visible, on_toggle_right_sidebar),
+                TitleBar::new(titlebar_text, self.sidebar_width, on_toggle_sidebar)
+                    .with_right_sidebar_toggle(self.right_sidebar_visible, on_toggle_right_sidebar),
             )
             // Sidebar + workspace sit in a row below the title bar.
             .child(
@@ -633,7 +653,9 @@ impl Render for ConsoleDesktopApp {
                                         let active_sid = this
                                             .active_pane_id
                                             .as_deref()
-                                            .and_then(|pane_id| this.active_session_for_pane(pane_id))
+                                            .and_then(|pane_id| {
+                                                this.active_session_for_pane(pane_id)
+                                            })
                                             .map(|s| s.to_string());
                                         let should_clear = if is_new_chat {
                                             active_sid.is_none()

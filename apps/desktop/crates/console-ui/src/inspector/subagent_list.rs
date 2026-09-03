@@ -11,7 +11,9 @@ use gpui::{
 };
 
 use crate::chat::message_bubble::render_selectable_markdown;
-use crate::markdown::render::{Ctx as MarkdownCtx, MarkdownView, Metrics, Palette, TranscriptSelection};
+use crate::markdown::render::{
+    Ctx as MarkdownCtx, MarkdownView, Metrics, Palette, TranscriptSelection,
+};
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 

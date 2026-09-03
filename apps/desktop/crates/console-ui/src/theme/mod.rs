@@ -209,7 +209,11 @@ pub fn init(cx: &mut App) {
     let system_appearance = cx.window_appearance();
     let is_dark = resolves_to_dark(ThemePreference::System, system_appearance);
     set_active_theme(
-        if is_dark { Theme::dark() } else { Theme::light() },
+        if is_dark {
+            Theme::dark()
+        } else {
+            Theme::light()
+        },
         cx,
     );
     sync_component_theme(is_dark, cx);
@@ -219,7 +223,11 @@ pub fn init(cx: &mut App) {
 /// `Theme`; keep its light/dark mode aligned with ours so overlays match.
 fn sync_component_theme(is_dark: bool, cx: &mut App) {
     ComponentTheme::change(
-        if is_dark { ThemeMode::Dark } else { ThemeMode::Light },
+        if is_dark {
+            ThemeMode::Dark
+        } else {
+            ThemeMode::Light
+        },
         None,
         cx,
     );
@@ -229,7 +237,11 @@ fn sync_component_theme(is_dark: bool, cx: &mut App) {
 pub fn apply_theme_preference(preference: ThemePreference, window: &mut Window, cx: &mut App) {
     let is_dark = resolves_to_dark(preference, cx.window_appearance());
     set_active_theme(
-        if is_dark { Theme::dark() } else { Theme::light() },
+        if is_dark {
+            Theme::dark()
+        } else {
+            Theme::light()
+        },
         cx,
     );
     sync_component_theme(is_dark, cx);

@@ -13,8 +13,8 @@ use std::path::Path;
 
 use gpui::Img;
 
-use crate::primitives::icons::FileTypeIcon;
 use crate::primitives::file_icon;
+use crate::primitives::icons::FileTypeIcon;
 
 /// Resolve a filename to its file-type icon asset path.
 pub fn file_icon_for_name(name: &str) -> &'static str {

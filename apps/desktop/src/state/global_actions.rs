@@ -80,12 +80,8 @@ impl ConsoleDesktopApp {
                 .create(CreateSessionDto {
                     cwd: session_cwd,
                     project_id: session_project_id,
-                    model_id: selected_model
-                        .as_ref()
-                        .map(|model| model.model_id.clone()),
-                    provider: selected_model
-                        .as_ref()
-                        .map(|model| model.provider.clone()),
+                    model_id: selected_model.as_ref().map(|model| model.model_id.clone()),
+                    provider: selected_model.as_ref().map(|model| model.provider.clone()),
                     title: Some("New Chat".into()),
                     approval_mode: Some(approval_mode.value().to_string()),
                 })
@@ -107,7 +103,8 @@ impl ConsoleDesktopApp {
                                     new_session.id.clone(),
                                     "New Chat",
                                 );
-                                let new_chat_draft = this.get_draft_for_session(None).map(|s| s.to_string());
+                                let new_chat_draft =
+                                    this.get_draft_for_session(None).map(|s| s.to_string());
                                 this.composer_for_pane(&pane_id).update(cx, |input, cx| {
                                     input.set_prompt_history(Vec::new(), cx);
                                     if let Some(draft_text) = &new_chat_draft {
@@ -150,12 +147,18 @@ impl ConsoleDesktopApp {
         let Some(tab_id) = self.active_tab_id() else {
             return;
         };
-        let prev_active_session = self.active_session_for_pane(&pane_id).map(|s| s.to_string());
+        let prev_active_session = self
+            .active_session_for_pane(&pane_id)
+            .map(|s| s.to_string());
 
         // Commit the current composer text to sidebar draft state at close time.
         // This is the ONLY moment the sidebar updates for this session's draft.
         if let Some(ref sid) = prev_active_session {
-            let text = self.composer_for_pane(&pane_id).read(cx).content().to_string();
+            let text = self
+                .composer_for_pane(&pane_id)
+                .read(cx)
+                .content()
+                .to_string();
             self.commit_draft_to_sidebar(sid, &text);
         }
 
@@ -163,7 +166,9 @@ impl ConsoleDesktopApp {
         self.close_workspace_tab(&pane_id, &tab_id);
         let transcript = self.transcript_for_pane(&pane_id);
         let composer = self.composer_for_pane(&pane_id);
-        let new_active_session = self.active_session_for_pane(&pane_id).map(|s| s.to_string());
+        let new_active_session = self
+            .active_session_for_pane(&pane_id)
+            .map(|s| s.to_string());
 
         if new_active_session == prev_active_session && new_active_session.is_some() {
             if self.right_sidebar_visible {

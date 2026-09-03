@@ -22,7 +22,6 @@ pub struct FsTreeEntry {
     pub children: Option<Vec<FsTreeEntry>>,
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowseDirectoryResponse {

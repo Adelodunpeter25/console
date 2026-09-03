@@ -35,4 +35,3 @@ pub(crate) use app::{
     RIGHT_SIDEBAR_MAX_WIDTH, RIGHT_SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
     user_prompt_history,
 };
-

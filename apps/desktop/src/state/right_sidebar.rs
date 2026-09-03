@@ -37,10 +37,8 @@ impl ConsoleDesktopApp {
             return false;
         };
         // Right sidebar expands when dragged left (decreasing x)
-        let width = (start_width + (start_x - current_x)).clamp(
-            RIGHT_SIDEBAR_MIN_WIDTH,
-            RIGHT_SIDEBAR_MAX_WIDTH,
-        );
+        let width = (start_width + (start_x - current_x))
+            .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH);
         if (self.right_sidebar_width - width).abs() < 0.5 {
             return false;
         }
@@ -98,7 +96,10 @@ impl ConsoleDesktopApp {
     }
 
     #[allow(dead_code)]
-    pub fn session_subagents(&self, session_id: &str) -> Rc<Vec<console_core::types::SubagentInfo>> {
+    pub fn session_subagents(
+        &self,
+        session_id: &str,
+    ) -> Rc<Vec<console_core::types::SubagentInfo>> {
         self.session_subagents
             .get(session_id)
             .cloned()
@@ -212,8 +213,8 @@ impl ConsoleDesktopApp {
         let cwd = session.cwd.clone();
 
         let client = self.client.clone();
-        cx.spawn(async move |entity, cx| {
-            match client.git.get_status(Some(&cwd)).await {
+        cx.spawn(
+            async move |entity, cx| match client.git.get_status(Some(&cwd)).await {
                 Ok(status) => {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
@@ -227,8 +228,8 @@ impl ConsoleDesktopApp {
                 Err(err) => {
                     log::warn!("Failed to fetch inspector git changes: {}", err);
                 }
-            }
-        })
+            },
+        )
         .detach();
     }
 
@@ -239,8 +240,8 @@ impl ConsoleDesktopApp {
         };
 
         let client = self.client.clone();
-        cx.spawn(async move |entity, cx| {
-            match client.sessions.get_changes(&session_id).await {
+        cx.spawn(
+            async move |entity, cx| match client.sessions.get_changes(&session_id).await {
                 Ok(changes) => {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
@@ -254,8 +255,8 @@ impl ConsoleDesktopApp {
                 Err(err) => {
                     log::warn!("Failed to fetch inspector session changes: {}", err);
                 }
-            }
-        })
+            },
+        )
         .detach();
     }
 
@@ -265,13 +266,14 @@ impl ConsoleDesktopApp {
         };
 
         let client = self.client.clone();
-        cx.spawn(async move |entity, cx| {
-            match client.sessions.get_subagents(&session_id).await {
+        cx.spawn(
+            async move |entity, cx| match client.sessions.get_subagents(&session_id).await {
                 Ok(subagents) => {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.session_subagents.insert(session_id, Rc::new(subagents));
+                                this.session_subagents
+                                    .insert(session_id, Rc::new(subagents));
                                 cx.notify();
                             });
                         }
@@ -280,8 +282,8 @@ impl ConsoleDesktopApp {
                 Err(err) => {
                     log::warn!("Failed to fetch inspector session subagents: {}", err);
                 }
-            }
-        })
+            },
+        )
         .detach();
     }
 }

@@ -1,9 +1,9 @@
+use super::ConsoleDesktopApp;
+use console_core::types::OAuthProviderId;
+use gpui::Context;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::time::Duration;
-use gpui::Context;
-use console_core::types::OAuthProviderId;
-use super::ConsoleDesktopApp;
 
 fn open_browser(url: &str) {
     #[cfg(target_os = "macos")]
@@ -12,7 +12,9 @@ fn open_browser(url: &str) {
     }
     #[cfg(target_os = "windows")]
     {
-        let _ = std::process::Command::new("cmd").args(["/C", "start", url]).spawn();
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", url])
+            .spawn();
     }
     #[cfg(target_os = "linux")]
     {
@@ -34,7 +36,8 @@ impl ConsoleDesktopApp {
                     }
                 });
             }
-        }).detach();
+        })
+        .detach();
     }
 
     pub fn login_provider(&mut self, provider_name: String, cx: &mut Context<Self>) {

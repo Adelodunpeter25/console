@@ -1,11 +1,11 @@
-use std::rc::Rc;
+use crate::primitives::icons::{IconName, app_icon};
+use crate::theme::Theme;
+use console_core::types::ProjectInfo;
 use gpui::{
     App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
     Styled, Window, div, prelude::*, px,
 };
-use console_core::types::ProjectInfo;
-use crate::primitives::icons::{IconName, app_icon};
-use crate::theme::Theme;
+use std::rc::Rc;
 
 #[derive(IntoElement)]
 pub struct ProjectsPage {
@@ -45,7 +45,9 @@ impl RenderOnce for ProjectsPage {
                                 div()
                                     .text_size(px(12.5))
                                     .text_color(theme.text_secondary)
-                                    .child("Working directories accessible to local tools and agents."),
+                                    .child(
+                                        "Working directories accessible to local tools and agents.",
+                                    ),
                             ),
                     )
                     .child(
@@ -75,87 +77,89 @@ impl RenderOnce for ProjectsPage {
                             ),
                     ),
             )
-            .child(
-                if self.projects.is_empty() {
-                    div()
-                        .p(px(24.0))
-                        .rounded(px(8.0))
-                        .border_1()
-                        .border_color(theme.border)
-                        .bg(theme.surface)
-                        .flex()
-                        .flex_col()
-                        .items_center()
-                        .justify_center()
-                        .gap(px(8.0))
-                        .child(app_icon(IconName::Folder, 24.0, theme.text_ghost))
-                        .child(
-                            div()
-                                .text_size(px(13.0))
-                                .text_color(theme.text_secondary)
-                                .child("No active projects found."),
-                        )
-                } else {
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(8.0))
-                        .children(self.projects.iter().map(|proj| {
-                            let proj_id = proj.id.clone();
-                            let on_rem = on_remove.clone();
+            .child(if self.projects.is_empty() {
+                div()
+                    .p(px(24.0))
+                    .rounded(px(8.0))
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.surface)
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(8.0))
+                    .child(app_icon(IconName::Folder, 24.0, theme.text_ghost))
+                    .child(
+                        div()
+                            .text_size(px(13.0))
+                            .text_color(theme.text_secondary)
+                            .child("No active projects found."),
+                    )
+            } else {
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(8.0))
+                    .children(self.projects.iter().map(|proj| {
+                        let proj_id = proj.id.clone();
+                        let on_rem = on_remove.clone();
 
-                            div()
-                                .id(ElementId::from(format!("proj-row-{}", proj.id)))
-                                .p(px(12.0))
-                                .rounded(px(8.0))
-                                .border_1()
-                                .border_color(theme.border)
-                                .bg(theme.surface)
-                                .flex()
-                                .items_center()
-                                .justify_between()
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(10.0))
-                                        .child(app_icon(IconName::Folder, 16.0, theme.accent))
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .flex_col()
-                                                .gap(px(2.0))
-                                                .child(
-                                                    div()
-                                                        .text_size(px(13.5))
-                                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                                        .text_color(theme.text)
-                                                        .child(proj.name.clone()),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_size(px(11.5))
-                                                        .text_color(theme.text_tertiary)
-                                                        .child(proj.path.clone()),
-                                                ),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .id(ElementId::from(format!("btn-remove-proj-{}", proj_id)))
-                                        .px(px(6.0))
-                                        .py(px(4.0))
-                                        .rounded(px(5.0))
-                                        .cursor_pointer()
-                                        .hover(|s| s.bg(theme.overlay_strong))
-                                        .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                            cx.stop_propagation();
-                                            (on_rem)(proj_id.clone(), window, cx);
-                                        })
-                                        .child(app_icon(IconName::TrashBinMinimalistic, 13.0, theme.text_ghost)),
-                                )
-                        }))
-                },
-            )
+                        div()
+                            .id(ElementId::from(format!("proj-row-{}", proj.id)))
+                            .p(px(12.0))
+                            .rounded(px(8.0))
+                            .border_1()
+                            .border_color(theme.border)
+                            .bg(theme.surface)
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(10.0))
+                                    .child(app_icon(IconName::Folder, 16.0, theme.accent))
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap(px(2.0))
+                                            .child(
+                                                div()
+                                                    .text_size(px(13.5))
+                                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                                    .text_color(theme.text)
+                                                    .child(proj.name.clone()),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(11.5))
+                                                    .text_color(theme.text_tertiary)
+                                                    .child(proj.path.clone()),
+                                            ),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .id(ElementId::from(format!("btn-remove-proj-{}", proj_id)))
+                                    .px(px(6.0))
+                                    .py(px(4.0))
+                                    .rounded(px(5.0))
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(theme.overlay_strong))
+                                    .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                                        cx.stop_propagation();
+                                        (on_rem)(proj_id.clone(), window, cx);
+                                    })
+                                    .child(app_icon(
+                                        IconName::TrashBinMinimalistic,
+                                        13.0,
+                                        theme.text_ghost,
+                                    )),
+                            )
+                    }))
+            })
     }
 }

@@ -19,4 +19,3 @@ impl ProjectInfo {
         project_id == Some(self.id.as_str()) || (!cwd.is_empty() && cwd == self.path)
     }
 }
-

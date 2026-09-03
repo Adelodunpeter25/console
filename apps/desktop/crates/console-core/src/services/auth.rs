@@ -44,10 +44,7 @@ impl AuthService {
 
     /// `POST /api/auth/login/url` — build the browser OAuth URL for a
     /// provider, plus the loopback redirect URI to catch the callback on.
-    pub async fn login_url(
-        &self,
-        provider: OAuthProviderId,
-    ) -> Result<OAuthLoginUrlResponse> {
+    pub async fn login_url(&self, provider: OAuthProviderId) -> Result<OAuthLoginUrlResponse> {
         let url = self.transport.url("/api/auth/login/url").await;
         let resp = self
             .transport
@@ -64,7 +61,8 @@ impl AuthService {
             .await
             .context("Failed to parse login URL response")?;
         if body.success {
-            body.data.ok_or_else(|| anyhow!("Login URL response missing data"))
+            body.data
+                .ok_or_else(|| anyhow!("Login URL response missing data"))
         } else {
             Err(anyhow!(
                 body.error
@@ -104,8 +102,7 @@ impl AuthService {
             Ok(())
         } else {
             Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "OAuth callback failed".into())
+                body.error.unwrap_or_else(|| "OAuth callback failed".into())
             ))
         }
     }
@@ -146,10 +143,7 @@ impl AuthService {
     }
 
     /// `GET /api/auth/project-id/:provider` — read the configured project id.
-    pub async fn get_project_id(
-        &self,
-        provider: OAuthProviderId,
-    ) -> Result<Option<String>> {
+    pub async fn get_project_id(&self, provider: OAuthProviderId) -> Result<Option<String>> {
         let url = self
             .transport
             .url(&format!("/api/auth/project-id/{}", provider.as_str()))
@@ -168,7 +162,10 @@ impl AuthService {
             .await
             .context("Failed to parse project id response")?;
         if body.success {
-            Ok(body.data.and_then(|d| d.project_id).filter(|id| !id.is_empty()))
+            Ok(body
+                .data
+                .and_then(|d| d.project_id)
+                .filter(|id| !id.is_empty()))
         } else {
             Err(anyhow!(
                 body.error

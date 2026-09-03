@@ -77,47 +77,43 @@ impl FileTreeView {
             let node_path = path.clone();
             let is_dir = node.is_dir;
 
-            let row = div()
-                .id(format!("file-tree-item-{}", path))
-                .flex()
-                .items_center()
-                .h(px(26.0))
-                .w_full()
-                .px(px(8.0))
-                .pl(px(8.0 + (depth as f32 * 14.0)))
-                .rounded(px(4.0))
-                .cursor_pointer()
-                .hover(|s| s.bg(theme.overlay))
-                .when(is_selected, |s| s.bg(theme.overlay_strong))
-                .on_click(move |_, window, cx| {
-                    if is_dir {
-                        (on_toggle)(node_path.clone(), window, cx);
-                    } else {
-                        (on_select)(node_path.clone(), window, cx);
-                    }
-                })
-                .child(
-                    div()
-                        .w(px(16.0))
-                        .flex_none()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .when(node.is_dir, |el| {
-                            el.child(if is_expanded {
-                                app_icon(IconName::ChevronDown, 12.0, theme.text_tertiary)
-                            } else {
-                                app_icon(IconName::ChevronRight, 12.0, theme.text_tertiary)
-                            })
-                        }),
-                )
-                .child(
-                    div()
-                        .mr(px(6.0))
-                        .flex_none()
-                        .flex()
-                        .items_center()
-                        .child(if node.is_dir {
+            let row =
+                div()
+                    .id(format!("file-tree-item-{}", path))
+                    .flex()
+                    .items_center()
+                    .h(px(26.0))
+                    .w_full()
+                    .px(px(8.0))
+                    .pl(px(8.0 + (depth as f32 * 14.0)))
+                    .rounded(px(4.0))
+                    .cursor_pointer()
+                    .hover(|s| s.bg(theme.overlay))
+                    .when(is_selected, |s| s.bg(theme.overlay_strong))
+                    .on_click(move |_, window, cx| {
+                        if is_dir {
+                            (on_toggle)(node_path.clone(), window, cx);
+                        } else {
+                            (on_select)(node_path.clone(), window, cx);
+                        }
+                    })
+                    .child(
+                        div()
+                            .w(px(16.0))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .when(node.is_dir, |el| {
+                                el.child(if is_expanded {
+                                    app_icon(IconName::ChevronDown, 12.0, theme.text_tertiary)
+                                } else {
+                                    app_icon(IconName::ChevronRight, 12.0, theme.text_tertiary)
+                                })
+                            }),
+                    )
+                    .child(div().mr(px(6.0)).flex_none().flex().items_center().child(
+                        if node.is_dir {
                             if is_expanded {
                                 app_icon(IconName::FolderOpen, 14.0, theme.text_secondary)
                                     .into_any_element()
@@ -127,20 +123,20 @@ impl FileTreeView {
                             }
                         } else {
                             file_icon(file_icon_for_name(&node.name), 14.0).into_any_element()
-                        }),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .truncate()
-                        .text_size(px(12.0))
-                        .text_color(if is_selected {
-                            theme.text
-                        } else {
-                            theme.text_secondary
-                        })
-                        .child(node.name.clone()),
-                );
+                        },
+                    ))
+                    .child(
+                        div()
+                            .flex_1()
+                            .truncate()
+                            .text_size(px(12.0))
+                            .text_color(if is_selected {
+                                theme.text
+                            } else {
+                                theme.text_secondary
+                            })
+                            .child(node.name.clone()),
+                    );
 
             elements.push(row.into_any_element());
         }
@@ -277,8 +273,11 @@ impl RenderOnce for FileTreeView {
                     })
                     .into_any_element()
             } else {
-                div().flex().flex_col().children(children).into_any_element()
+                div()
+                    .flex()
+                    .flex_col()
+                    .children(children)
+                    .into_any_element()
             })
     }
 }
-

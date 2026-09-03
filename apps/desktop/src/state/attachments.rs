@@ -80,7 +80,10 @@ impl ConsoleDesktopApp {
         }
 
         if !staged.is_empty() {
-            let pane_id = self.active_pane_id.clone().unwrap_or_else(|| "pane-main".to_string());
+            let pane_id = self
+                .active_pane_id
+                .clone()
+                .unwrap_or_else(|| "pane-main".to_string());
             self.append_attachments_for_pane(&pane_id, staged);
             cx.notify();
         }
@@ -193,7 +196,10 @@ impl ConsoleDesktopApp {
 
     /// Remove a staged attachment by index.
     pub fn remove_attachment(&mut self, index: usize, cx: &mut Context<Self>) {
-        let pane_id = self.active_pane_id.clone().unwrap_or_else(|| "pane-main".to_string());
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".to_string());
         if let Some(staged) = self.attachments.get_mut(&pane_id) {
             if index < staged.len() {
                 Rc::make_mut(staged).remove(index);
@@ -207,7 +213,10 @@ impl ConsoleDesktopApp {
 
     /// Open the image preview modal for a staged attachment.
     pub fn preview_attachment(&mut self, index: usize, cx: &mut Context<Self>) {
-        let pane_id = self.active_pane_id.clone().unwrap_or_else(|| "pane-main".to_string());
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".to_string());
         if let Some(attachment) = self
             .attachments
             .get(&pane_id)

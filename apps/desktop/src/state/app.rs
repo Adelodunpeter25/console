@@ -5,17 +5,17 @@
 //! `errors`, `sessions`, `layout`, `run`) as additional `impl` blocks.
 
 use console_core::{
-    AgentMessage, ApprovalMode, AskQuestionRequest, ConsoleClient, GitBranchInfo,
-    ImageAttachment, Model, ModelFavorite, PermissionRequest, ProjectInfo,
-    ProviderCatalogEntry, SelectedModel, SessionHeader, TodoItem, WorkspaceNode,
+    AgentMessage, ApprovalMode, AskQuestionRequest, ConsoleClient, GitBranchInfo, ImageAttachment,
+    Model, ModelFavorite, PermissionRequest, ProjectInfo, ProviderCatalogEntry, SelectedModel,
+    SessionHeader, TodoItem, WorkspaceNode,
 };
 use console_ui::markdown::render::TranscriptSelection;
+use console_ui::terminal::TerminalView;
 use console_ui::utils::SessionDateGroup;
 use console_ui::{
     CommandPalette, ComposerAttachmentPaste, ComposerEvent, ComposerInput, ContextMenuHandle,
     PickerTab, ProjectBrowsePalette, QuickOpenPalette, TranscriptView,
 };
-use console_ui::terminal::TerminalView;
 use gpui::{AppContext, Context, Entity, ListAlignment, ListState, Subscription, Window, px};
 use std::rc::Rc;
 
@@ -43,7 +43,6 @@ pub(crate) const SIDEBAR_MAX_WIDTH: f32 = 520.0;
 pub(crate) const RIGHT_SIDEBAR_DEFAULT_WIDTH: f32 = 280.0;
 pub(crate) const RIGHT_SIDEBAR_MIN_WIDTH: f32 = 220.0;
 pub(crate) const RIGHT_SIDEBAR_MAX_WIDTH: f32 = 550.0;
-
 
 pub struct ConsoleDesktopApp {
     pub client: ConsoleClient,
@@ -98,17 +97,14 @@ pub struct ConsoleDesktopApp {
         String,
         crate::state::transcript_scroll::TranscriptScrollPosition,
     >,
-    pub(crate) transcript_pagination: std::collections::HashMap<
-        String,
-        crate::state::pagination::SessionPaginationState,
-    >,
+    pub(crate) transcript_pagination:
+        std::collections::HashMap<String, crate::state::pagination::SessionPaginationState>,
     pub(crate) pagination_in_flight: std::collections::HashSet<String>,
     pub composer_input: Entity<ComposerInput>,
     pub question_input: Entity<ComposerInput>,
     /// Staged composer images keyed by pane. Values are `Rc` so per-frame
     /// renders clone a refcount instead of megabyte base64 payloads.
-    pub attachments:
-        std::collections::HashMap<String, Rc<Vec<ImageAttachment>>>,
+    pub attachments: std::collections::HashMap<String, Rc<Vec<ImageAttachment>>>,
     /// Run-derived interactive and display state. All of these are keyed by
     /// session id (not pane id) so a run's permission prompt, question, todos,
     /// and notices stay attached to the chat that owns the run. Switching a
@@ -156,18 +152,37 @@ pub struct ConsoleDesktopApp {
     pub inspector_session_changes: Rc<Vec<console_core::types::SessionFileChange>>,
     pub inspector_expanded_folders: Rc<std::collections::HashSet<String>>,
     pub inspector_selected_path: Option<String>,
-    pub session_subagents: std::collections::HashMap<String, Rc<Vec<console_core::types::SubagentInfo>>>,
+    pub session_subagents:
+        std::collections::HashMap<String, Rc<Vec<console_core::types::SubagentInfo>>>,
     pub expanded_subagents: std::collections::HashSet<String>,
     pub preview_tab: Option<(String, std::time::Instant)>,
     pub open_file_contents: std::collections::HashMap<String, String>,
     pub open_diff_contents: std::collections::HashMap<String, (console_core::DiffResult, String)>,
     pub viewer_list_states: std::collections::HashMap<String, ListState>,
-    pub viewer_selection_states: std::collections::HashMap<String, std::rc::Rc<std::cell::RefCell<console_ui::SelectionState>>>,
-    pub viewer_scrollbar_states: std::collections::HashMap<String, std::rc::Rc<console_ui::ScrollbarState>>,
-    pub viewer_cached_file_lines: std::collections::HashMap<String, (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>)>,
-    pub viewer_cached_diff_lines: std::collections::HashMap<String, (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>)>,
-    pub viewer_cached_markdown_views: std::collections::HashMap<String, (usize, u64, std::rc::Rc<std::cell::RefCell<console_ui::MarkdownView>>)>,
-    pub viewer_markdown_selections: std::collections::HashMap<String, console_ui::markdown::render::TranscriptSelection>,
+    pub viewer_selection_states: std::collections::HashMap<
+        String,
+        std::rc::Rc<std::cell::RefCell<console_ui::SelectionState>>,
+    >,
+    pub viewer_scrollbar_states:
+        std::collections::HashMap<String, std::rc::Rc<console_ui::ScrollbarState>>,
+    pub viewer_cached_file_lines: std::collections::HashMap<
+        String,
+        (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>),
+    >,
+    pub viewer_cached_diff_lines: std::collections::HashMap<
+        String,
+        (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>),
+    >,
+    pub viewer_cached_markdown_views: std::collections::HashMap<
+        String,
+        (
+            usize,
+            u64,
+            std::rc::Rc<std::cell::RefCell<console_ui::MarkdownView>>,
+        ),
+    >,
+    pub viewer_markdown_selections:
+        std::collections::HashMap<String, console_ui::markdown::render::TranscriptSelection>,
     /// Retained virtualization state for the sidebar session history.
     pub sidebar_list_state: ListState,
     /// Live drag-resize anchor, owned by `layout`.
@@ -201,7 +216,8 @@ pub struct ConsoleDesktopApp {
     pub terminals: std::collections::HashMap<String, Entity<TerminalView>>,
     pub auth_status: Option<console_core::types::AuthStatusResponse>,
     pub auth_logging_in: std::collections::HashSet<String>,
-    pub usage_reports: Option<Rc<std::collections::HashMap<String, Option<console_core::types::UsageReport>>>>,
+    pub usage_reports:
+        Option<Rc<std::collections::HashMap<String, Option<console_core::types::UsageReport>>>>,
     pub usage_loading: bool,
     pub usage_last_fetched: Option<std::time::SystemTime>,
     pub environments: Vec<super::environments::Environment>,
@@ -297,9 +313,7 @@ impl ConsoleDesktopApp {
                             // Static catalog stays visible as fallback, so we
                             // avoid N network calls on every open. Favorites
                             // shows static until its tab is visited.
-                            if let PickerTab::Provider(name) =
-                                this.pane_picker_tab("pane-main")
-                            {
+                            if let PickerTab::Provider(name) = this.pane_picker_tab("pane-main") {
                                 this.load_models_for_provider(&name, cx);
                             }
                         });
@@ -371,47 +385,51 @@ impl ConsoleDesktopApp {
         }
 
         let subscriptions = vec![
-            cx.subscribe(
-                &composer_input,
-                |this, input, event: &ComposerEvent, cx| {
-                    match event {
-                        ComposerEvent::Submit(prompt) => {
-                            // The main composer belongs to "pane-main" even when
-                            // another split holds focus; pin the pane before
-                            // submitting so attachments and run state resolve
-                            // against the chat this input is mounted in.
-                            this.active_pane_id = Some("pane-main".to_string());
-                            this.selected_session_id =
-                                this.active_session_for_pane("pane-main");
-                            // Deep-copy only at the submit boundary; the Rc
-                            // keeps per-frame renders cheap.
-                            let attachments =
-                                (*this.attachments_for_pane("pane-main")).clone();
-                            this.submit_prompt(prompt.clone(), attachments, cx);
-                        }
-                        ComposerEvent::Edited => {
-                            // Save raw text for crash safety; does NOT update sidebar_draft_ids.
-                            let text = input.read(cx).content().to_string();
-                            let session_id = this.active_session_for_pane("pane-main");
-                            this.save_draft_for_session(session_id.as_deref(), &text);
-                        }
-                        ComposerEvent::Focus => cx.notify(),
-                        // Backspace on an empty composer removes the last staged
-                        // attachment, the chat idiom for discarding a chip.
-                        ComposerEvent::BackspaceOnEmpty if !this.attachments_for_pane(this.active_pane_id.as_deref().unwrap_or("pane-main")).is_empty() => {
-                            let pane_id = this.active_pane_id.clone().unwrap_or_else(|| "pane-main".to_string());
-                            if let Some(staged) = this.attachments.get_mut(&pane_id) {
-                                Rc::make_mut(staged).pop();
-                                if staged.is_empty() {
-                                    this.attachments.remove(&pane_id);
-                                }
-                            }
-                            cx.notify();
-                        }
-                        _ => {}
+            cx.subscribe(&composer_input, |this, input, event: &ComposerEvent, cx| {
+                match event {
+                    ComposerEvent::Submit(prompt) => {
+                        // The main composer belongs to "pane-main" even when
+                        // another split holds focus; pin the pane before
+                        // submitting so attachments and run state resolve
+                        // against the chat this input is mounted in.
+                        this.active_pane_id = Some("pane-main".to_string());
+                        this.selected_session_id = this.active_session_for_pane("pane-main");
+                        // Deep-copy only at the submit boundary; the Rc
+                        // keeps per-frame renders cheap.
+                        let attachments = (*this.attachments_for_pane("pane-main")).clone();
+                        this.submit_prompt(prompt.clone(), attachments, cx);
                     }
-                },
-            ),
+                    ComposerEvent::Edited => {
+                        // Save raw text for crash safety; does NOT update sidebar_draft_ids.
+                        let text = input.read(cx).content().to_string();
+                        let session_id = this.active_session_for_pane("pane-main");
+                        this.save_draft_for_session(session_id.as_deref(), &text);
+                    }
+                    ComposerEvent::Focus => cx.notify(),
+                    // Backspace on an empty composer removes the last staged
+                    // attachment, the chat idiom for discarding a chip.
+                    ComposerEvent::BackspaceOnEmpty
+                        if !this
+                            .attachments_for_pane(
+                                this.active_pane_id.as_deref().unwrap_or("pane-main"),
+                            )
+                            .is_empty() =>
+                    {
+                        let pane_id = this
+                            .active_pane_id
+                            .clone()
+                            .unwrap_or_else(|| "pane-main".to_string());
+                        if let Some(staged) = this.attachments.get_mut(&pane_id) {
+                            Rc::make_mut(staged).pop();
+                            if staged.is_empty() {
+                                this.attachments.remove(&pane_id);
+                            }
+                        }
+                        cx.notify();
+                    }
+                    _ => {}
+                }
+            }),
             // Pasting an image (or image files) stages them as attachment
             // chips instead of inserting text.
             cx.subscribe(
@@ -530,12 +548,10 @@ impl ConsoleDesktopApp {
             saved_window_state: persistence::store::load_window(),
             pending_window_state: None,
             command_palette: cx.new(|cx| CommandPalette::new(window, cx)),
-            quick_open_palette: cx.new(|cx| {
-                QuickOpenPalette::new(client_for_palettes.clone(), window, cx)
-            }),
-            project_browse_palette: cx.new(|cx| {
-                ProjectBrowsePalette::new(client_for_palettes.clone(), window, cx)
-            }),
+            quick_open_palette: cx
+                .new(|cx| QuickOpenPalette::new(client_for_palettes.clone(), window, cx)),
+            project_browse_palette: cx
+                .new(|cx| ProjectBrowsePalette::new(client_for_palettes.clone(), window, cx)),
             terminals: std::collections::HashMap::new(),
             auth_status: None,
             auth_logging_in: std::collections::HashSet::new(),
@@ -674,10 +690,9 @@ impl ConsoleDesktopApp {
                                     let first_name = first.name.clone();
                                     let needs_init = match &this.active_picker_tab {
                                         PickerTab::Favorites => true,
-                                        PickerTab::Provider(name) => !this
-                                            .providers
-                                            .iter()
-                                            .any(|p| &p.name == name),
+                                        PickerTab::Provider(name) => {
+                                            !this.providers.iter().any(|p| &p.name == name)
+                                        }
                                     };
                                     if needs_init {
                                         this.active_picker_tab =
@@ -785,8 +800,7 @@ impl ConsoleDesktopApp {
                                 Ok(branches) => cx.update(|cx| {
                                     if let Some(app) = entity.upgrade() {
                                         app.update(cx, |this, cx| {
-                                            this.branches =
-                                                Rc::new(branches.branches.clone());
+                                            this.branches = Rc::new(branches.branches.clone());
                                             this.branch_loaded = true;
                                             this.branch_is_git_repository =
                                                 branches.is_git_repository;
@@ -822,19 +836,21 @@ impl ConsoleDesktopApp {
 
         // 5. Periodic polling for session list / working status sync across surfaces.
         let poll_client = app.client.clone();
-        cx.spawn(async move |entity, cx| loop {
-            cx.background_executor()
-                .timer(std::time::Duration::from_secs(30))
-                .await;
-            if let Ok(sessions) = poll_client.sessions.list(None, None).await {
-                let _ = cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.sessions = Rc::new(sessions);
-                            cx.notify();
-                        });
-                    }
-                });
+        cx.spawn(async move |entity, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_secs(30))
+                    .await;
+                if let Ok(sessions) = poll_client.sessions.list(None, None).await {
+                    let _ = cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.sessions = Rc::new(sessions);
+                                cx.notify();
+                            });
+                        }
+                    });
+                }
             }
         })
         .detach();
@@ -842,7 +858,12 @@ impl ConsoleDesktopApp {
         app
     }
 
-    pub fn viewer_list_state(&mut self, id: &str, count: usize, row_height: f32) -> gpui::ListState {
+    pub fn viewer_list_state(
+        &mut self,
+        id: &str,
+        count: usize,
+        row_height: f32,
+    ) -> gpui::ListState {
         let state = self
             .viewer_list_states
             .entry(id.to_string())
@@ -862,14 +883,15 @@ impl ConsoleDesktopApp {
     ) -> std::rc::Rc<std::cell::RefCell<console_ui::SelectionState>> {
         self.viewer_selection_states
             .entry(id.to_string())
-            .or_insert_with(|| std::rc::Rc::new(std::cell::RefCell::new(console_ui::SelectionState::default())))
+            .or_insert_with(|| {
+                std::rc::Rc::new(std::cell::RefCell::new(
+                    console_ui::SelectionState::default(),
+                ))
+            })
             .clone()
     }
 
-    pub fn viewer_scrollbar_state(
-        &mut self,
-        id: &str,
-    ) -> std::rc::Rc<console_ui::ScrollbarState> {
+    pub fn viewer_scrollbar_state(&mut self, id: &str) -> std::rc::Rc<console_ui::ScrollbarState> {
         self.viewer_scrollbar_states
             .entry(id.to_string())
             .or_insert_with(console_ui::ScrollbarState::new)
@@ -887,14 +909,17 @@ impl ConsoleDesktopApp {
         let hash = hasher.finish();
         let len = content.len();
 
-        if let Some((cached_len, cached_hash, cached_lines)) = self.viewer_cached_file_lines.get(path) {
+        if let Some((cached_len, cached_hash, cached_lines)) =
+            self.viewer_cached_file_lines.get(path)
+        {
             if *cached_len == len && *cached_hash == hash {
                 return cached_lines.clone();
             }
         }
 
         let lines = std::rc::Rc::new(console_ui::build_file_lines(path, content));
-        self.viewer_cached_file_lines.insert(path.to_string(), (len, hash, lines.clone()));
+        self.viewer_cached_file_lines
+            .insert(path.to_string(), (len, hash, lines.clone()));
         lines
     }
 
@@ -913,14 +938,17 @@ impl ConsoleDesktopApp {
         let hash = hasher.finish();
         let len = diff.lines.len();
 
-        if let Some((cached_len, cached_hash, cached_lines)) = self.viewer_cached_diff_lines.get(path) {
+        if let Some((cached_len, cached_hash, cached_lines)) =
+            self.viewer_cached_diff_lines.get(path)
+        {
             if *cached_len == len && *cached_hash == hash {
                 return cached_lines.clone();
             }
         }
 
         let lines = std::rc::Rc::new(console_ui::build_diff_lines(path, diff, theme));
-        self.viewer_cached_diff_lines.insert(path.to_string(), (len, hash, lines.clone()));
+        self.viewer_cached_diff_lines
+            .insert(path.to_string(), (len, hash, lines.clone()));
         lines
     }
 
@@ -944,11 +972,15 @@ impl ConsoleDesktopApp {
         let mut view = console_ui::MarkdownView::new();
         view.set_text(content, false);
         let rc = std::rc::Rc::new(std::cell::RefCell::new(view));
-        self.viewer_cached_markdown_views.insert(path.to_string(), (len, hash, rc.clone()));
+        self.viewer_cached_markdown_views
+            .insert(path.to_string(), (len, hash, rc.clone()));
         rc
     }
 
-    pub fn viewer_markdown_selection(&mut self, path: &str) -> console_ui::markdown::render::TranscriptSelection {
+    pub fn viewer_markdown_selection(
+        &mut self,
+        path: &str,
+    ) -> console_ui::markdown::render::TranscriptSelection {
         self.viewer_markdown_selections
             .entry(path.to_string())
             .or_default()

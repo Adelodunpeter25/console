@@ -56,8 +56,7 @@ impl ConsoleDesktopApp {
                     app.update(cx, |this, cx| {
                         this.loading_models.remove(&provider_id);
                         if let Ok(models) = result {
-                            Rc::make_mut(&mut this.models_by_provider)
-                                .insert(provider_id, models);
+                            Rc::make_mut(&mut this.models_by_provider).insert(provider_id, models);
                         }
                         // On error the static fallback stays in place; no
                         // error banner — the picker is still usable.

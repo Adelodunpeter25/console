@@ -1,11 +1,11 @@
-use std::rc::Rc;
+use crate::primitives::icons::{IconName, app_icon};
+use crate::theme::Theme;
+use console_core::types::SessionHeader;
 use gpui::{
     App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
     Styled, Window, div, px,
 };
-use console_core::types::SessionHeader;
-use crate::primitives::icons::{IconName, app_icon};
-use crate::theme::Theme;
+use std::rc::Rc;
 
 #[derive(IntoElement)]
 pub struct DeletedChatsPage {

@@ -5,7 +5,7 @@ use crate::types::terminal::{
 use crate::utils::HttpTransport;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 
 /// Client-side terminal service — manages WS lifecycle against `GET /api/terminals`
 /// and owns the set of live `TerminalRecord`s. The VT grid itself lives in a
@@ -100,9 +100,9 @@ pub struct TerminalHandle {
 
 impl TerminalHandle {
     pub fn send_input(&self, data: impl Into<String>) {
-        let _ = self.sender.send(TerminalClientMessage::Input {
-            data: data.into(),
-        });
+        let _ = self
+            .sender
+            .send(TerminalClientMessage::Input { data: data.into() });
     }
 
     pub fn resize(&self, size: TerminalSize) {
@@ -167,9 +167,7 @@ impl TerminalService {
         let url = self.ws_url(&params).await;
         let (tx, mut rx) = mpsc::unbounded_channel::<TerminalClientMessage>();
 
-        let backend = Arc::new(tokio::sync::Mutex::new(AlacrittyBackend::new(
-            initial_size,
-        )));
+        let backend = Arc::new(tokio::sync::Mutex::new(AlacrittyBackend::new(initial_size)));
         let id: Arc<RwLock<Option<TerminalId>>> = Arc::new(RwLock::new(None));
         let status: Arc<RwLock<TerminalStatus>> = Arc::new(RwLock::new(TerminalStatus::Spawning));
         let error: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));

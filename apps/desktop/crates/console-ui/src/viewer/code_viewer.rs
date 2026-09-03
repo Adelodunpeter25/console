@@ -234,11 +234,7 @@ pub fn build_diff_lines(
         .collect()
 }
 
-fn copy_selection_to_clipboard(
-    lines: &[CodeViewerLine],
-    selection: CodeSelection,
-    cx: &mut App,
-) {
+fn copy_selection_to_clipboard(lines: &[CodeViewerLine], selection: CodeSelection, cx: &mut App) {
     if selection.is_empty() {
         return;
     }
@@ -284,7 +280,9 @@ impl RenderOnce for CodeViewer {
 
         if self.lines.is_empty() {
             return div()
-                .id(ElementId::Name(format!("code-viewer-empty-{}", self.id).into()))
+                .id(ElementId::Name(
+                    format!("code-viewer-empty-{}", self.id).into(),
+                ))
                 .size_full()
                 .flex()
                 .items_center()
@@ -351,20 +349,27 @@ impl RenderOnce for CodeViewer {
                                 if state.is_dragging {
                                     if let Some(mut sel) = state.selection {
                                         let viewport = list_state.viewport_bounds();
-                                        let scroll_offset = -list_state.scroll_px_offset_for_scrollbar().y;
-                                        let rel_y = event.position.y - viewport.origin.y + scroll_offset;
+                                        let scroll_offset =
+                                            -list_state.scroll_px_offset_for_scrollbar().y;
+                                        let rel_y =
+                                            event.position.y - viewport.origin.y + scroll_offset;
                                         let line_idx = if rel_y > px(0.0) {
-                                            ((rel_y / px(CODE_LINE_HEIGHT)).floor() as usize).min(lines_len.saturating_sub(1))
+                                            ((rel_y / px(CODE_LINE_HEIGHT)).floor() as usize)
+                                                .min(lines_len.saturating_sub(1))
                                         } else {
                                             0
                                         };
-                                        let rel_x = f32::from(event.position.x - viewport.origin.x) - gutter_offset;
+                                        let rel_x = f32::from(event.position.x - viewport.origin.x)
+                                            - gutter_offset;
                                         let col = if rel_x > 0.0 {
                                             (rel_x / CHAR_WIDTH).round() as usize
                                         } else {
                                             0
                                         };
-                                        let target_pos = CodePosition { line: line_idx, col };
+                                        let target_pos = CodePosition {
+                                            line: line_idx,
+                                            col,
+                                        };
                                         if sel.head != target_pos {
                                             sel.head = target_pos;
                                             state.selection = Some(sel);
@@ -396,7 +401,9 @@ impl RenderOnce for CodeViewer {
         };
 
         let mut container = div()
-            .id(ElementId::Name(format!("code-viewer-container-{}", self.id).into()))
+            .id(ElementId::Name(
+                format!("code-viewer-container-{}", self.id).into(),
+            ))
             .size_full()
             .min_h_0()
             .min_w_0()
@@ -426,7 +433,9 @@ impl RenderOnce for CodeViewer {
             .map(|s| scrollbar::vertical(&self.list_state, s));
 
         div()
-            .id(ElementId::Name(format!("code-viewer-root-{}", self.id).into()))
+            .id(ElementId::Name(
+                format!("code-viewer-root-{}", self.id).into(),
+            ))
             .relative()
             .size_full()
             .min_h_0()
@@ -443,154 +452,167 @@ impl RenderOnce for CodeViewer {
                         .min_h_0()
                         .child(
                             list(self.list_state, move |index, _window, _cx| {
-                            let Some(line) = lines_rc.get(index) else {
-                                return div().into_any_element();
-                            };
+                                let Some(line) = lines_rc.get(index) else {
+                                    return div().into_any_element();
+                                };
 
-                            let bg = line.bg_color.unwrap_or(gpui::transparent_black());
-                            let default_text_color = line.text_color.unwrap_or(theme.text);
+                                let bg = line.bg_color.unwrap_or(gpui::transparent_black());
+                                let default_text_color = line.text_color.unwrap_or(theme.text);
 
-                            let gutter_view = if has_dual_line_numbers {
-                                let old_str = line.old_line_no.map_or(String::new(), |n| n.to_string());
-                                let new_str = line.new_line_no.map_or(String::new(), |n| n.to_string());
+                                let gutter_view = if has_dual_line_numbers {
+                                    let old_str =
+                                        line.old_line_no.map_or(String::new(), |n| n.to_string());
+                                    let new_str =
+                                        line.new_line_no.map_or(String::new(), |n| n.to_string());
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .flex_none()
+                                        .child(
+                                            div()
+                                                .w(px(28.0))
+                                                .flex_none()
+                                                .text_align(gpui::TextAlign::Right)
+                                                .pr(px(5.0))
+                                                .font_family(MONO_FAMILY)
+                                                .text_size(px(9.5))
+                                                .text_color(theme.text_ghost)
+                                                .child(old_str),
+                                        )
+                                        .child(
+                                            div()
+                                                .w(px(28.0))
+                                                .flex_none()
+                                                .text_align(gpui::TextAlign::Right)
+                                                .pr(px(6.0))
+                                                .font_family(MONO_FAMILY)
+                                                .text_size(px(9.5))
+                                                .text_color(theme.text_ghost)
+                                                .child(new_str),
+                                        )
+                                        .when_some(line.gutter, |el, g| {
+                                            let fg =
+                                                line.gutter_color.unwrap_or(default_text_color);
+                                            el.child(
+                                                div()
+                                                    .w(px(12.0))
+                                                    .flex_none()
+                                                    .text_size(px(10.5))
+                                                    .font_weight(FontWeight::BOLD)
+                                                    .text_color(fg)
+                                                    .child(g),
+                                            )
+                                        })
+                                        .into_any_element()
+                                } else {
+                                    let num_str =
+                                        line.line_no.map_or(String::new(), |n| n.to_string());
+                                    div()
+                                        .w(px(line_num_width as f32))
+                                        .flex_none()
+                                        .text_align(gpui::TextAlign::Right)
+                                        .pr(px(10.0))
+                                        .font_family(MONO_FAMILY)
+                                        .text_size(px(10.0))
+                                        .text_color(theme.text_ghost)
+                                        .child(num_str)
+                                        .into_any_element()
+                                };
+
+                                let display_str = if line.text.is_empty() {
+                                    " "
+                                } else {
+                                    line.text.as_str()
+                                };
+
+                                let line_sel_range = selection_rc
+                                    .borrow()
+                                    .selection
+                                    .and_then(|sel| sel.line_col_range(index, line.text.len()));
+
+                                let runs = code_runs_for_tokens(
+                                    display_str,
+                                    &line.tokens,
+                                    default_text_color,
+                                    &code_font,
+                                    &palette,
+                                    line_sel_range,
+                                    selection_bg,
+                                );
+
+                                let sel_mouse_down = selection_rc.clone();
+                                let sel_mouse_move = selection_rc.clone();
+                                let ls_down = list_state_for_items.clone();
+                                let ls_move = list_state_for_items.clone();
+                                let line_len = line.text.len();
+
                                 div()
+                                    .id(ElementId::Name(format!("code-row-{}", index).into()))
                                     .flex()
                                     .items_center()
-                                    .flex_none()
-                                    .child(
-                                        div()
-                                            .w(px(28.0))
-                                            .flex_none()
-                                            .text_align(gpui::TextAlign::Right)
-                                            .pr(px(5.0))
-                                            .font_family(MONO_FAMILY)
-                                            .text_size(px(9.5))
-                                            .text_color(theme.text_ghost)
-                                            .child(old_str),
-                                    )
-                                    .child(
-                                        div()
-                                            .w(px(28.0))
-                                            .flex_none()
-                                            .text_align(gpui::TextAlign::Right)
-                                            .pr(px(6.0))
-                                            .font_family(MONO_FAMILY)
-                                            .text_size(px(9.5))
-                                            .text_color(theme.text_ghost)
-                                            .child(new_str),
-                                    )
-                                    .when_some(line.gutter, |el, g| {
-                                        let fg = line.gutter_color.unwrap_or(default_text_color);
-                                        el.child(
-                                            div()
-                                                .w(px(12.0))
-                                                .flex_none()
-                                                .text_size(px(10.5))
-                                                .font_weight(FontWeight::BOLD)
-                                                .text_color(fg)
-                                                .child(g),
-                                        )
+                                    .h(px(CODE_LINE_HEIGHT))
+                                    .min_w_full()
+                                    .w_auto()
+                                    .px(px(6.0))
+                                    .bg(bg)
+                                    .cursor_text()
+                                    .on_mouse_down(MouseButton::Left, move |event, window, _cx| {
+                                        let x = f32::from(
+                                            event.position.x - ls_down.viewport_bounds().origin.x,
+                                        ) - gutter_offset;
+                                        let col = if x > 0.0 {
+                                            min((x / CHAR_WIDTH).round() as usize, line_len)
+                                        } else {
+                                            0
+                                        };
+                                        let mut state = sel_mouse_down.borrow_mut();
+                                        let pos = CodePosition { line: index, col };
+                                        state.selection = Some(CodeSelection::new(pos, pos));
+                                        state.is_dragging = true;
+                                        window.refresh();
                                     })
-                                    .into_any_element()
-                            } else {
-                                let num_str = line.line_no.map_or(String::new(), |n| n.to_string());
-                                div()
-                                    .w(px(line_num_width as f32))
-                                    .flex_none()
-                                    .text_align(gpui::TextAlign::Right)
-                                    .pr(px(10.0))
-                                    .font_family(MONO_FAMILY)
-                                    .text_size(px(10.0))
-                                    .text_color(theme.text_ghost)
-                                    .child(num_str)
-                                    .into_any_element()
-                            };
-
-                            let display_str = if line.text.is_empty() {
-                                " "
-                            } else {
-                                line.text.as_str()
-                            };
-
-                            let line_sel_range = selection_rc
-                                .borrow()
-                                .selection
-                                .and_then(|sel| sel.line_col_range(index, line.text.len()));
-
-                            let runs = code_runs_for_tokens(
-                                display_str,
-                                &line.tokens,
-                                default_text_color,
-                                &code_font,
-                                &palette,
-                                line_sel_range,
-                                selection_bg,
-                            );
-
-                            let sel_mouse_down = selection_rc.clone();
-                            let sel_mouse_move = selection_rc.clone();
-                            let ls_down = list_state_for_items.clone();
-                            let ls_move = list_state_for_items.clone();
-                            let line_len = line.text.len();
-
-                            div()
-                                .id(ElementId::Name(format!("code-row-{}", index).into()))
-                                .flex()
-                                .items_center()
-                                .h(px(CODE_LINE_HEIGHT))
-                                .min_w_full()
-                                .w_auto()
-                                .px(px(6.0))
-                                .bg(bg)
-                                .cursor_text()
-                                .on_mouse_down(MouseButton::Left, move |event, window, _cx| {
-                                    let x = f32::from(event.position.x - ls_down.viewport_bounds().origin.x) - gutter_offset;
-                                    let col = if x > 0.0 {
-                                        min((x / CHAR_WIDTH).round() as usize, line_len)
-                                    } else {
-                                        0
-                                    };
-                                    let mut state = sel_mouse_down.borrow_mut();
-                                    let pos = CodePosition { line: index, col };
-                                    state.selection = Some(CodeSelection::new(pos, pos));
-                                    state.is_dragging = true;
-                                    window.refresh();
-                                })
-                                .on_mouse_move(move |event, window, _cx| {
-                                    let mut state = sel_mouse_move.borrow_mut();
-                                    if state.is_dragging {
-                                        if let Some(mut sel) = state.selection {
-                                            let x = f32::from(event.position.x - ls_move.viewport_bounds().origin.x) - gutter_offset;
-                                            let col = if x > 0.0 {
-                                                min((x / CHAR_WIDTH).round() as usize, line_len)
-                                            } else {
-                                                0
-                                            };
-                                            let target_pos = CodePosition { line: index, col };
-                                            if sel.head != target_pos {
-                                                sel.head = target_pos;
-                                                state.selection = Some(sel);
-                                                window.refresh();
+                                    .on_mouse_move(move |event, window, _cx| {
+                                        let mut state = sel_mouse_move.borrow_mut();
+                                        if state.is_dragging {
+                                            if let Some(mut sel) = state.selection {
+                                                let x = f32::from(
+                                                    event.position.x
+                                                        - ls_move.viewport_bounds().origin.x,
+                                                ) - gutter_offset;
+                                                let col = if x > 0.0 {
+                                                    min((x / CHAR_WIDTH).round() as usize, line_len)
+                                                } else {
+                                                    0
+                                                };
+                                                let target_pos = CodePosition { line: index, col };
+                                                if sel.head != target_pos {
+                                                    sel.head = target_pos;
+                                                    state.selection = Some(sel);
+                                                    window.refresh();
+                                                }
                                             }
                                         }
-                                    }
-                                })
-                                .child(gutter_view)
-                                .child(
-                                    div()
-                                        .flex_none()
-                                        .font_family(MONO_FAMILY)
-                                        .text_size(px(11.0))
-                                        .line_height(px(CODE_LINE_HEIGHT))
-                                        .whitespace_nowrap()
-                                        .child(StyledText::new(display_str.to_string()).with_runs(runs)),
-                                )
-                                .into_any_element()
-                        })
-                        .flex_1()
-                        .size_full(),
+                                    })
+                                    .child(gutter_view)
+                                    .child(
+                                        div()
+                                            .flex_none()
+                                            .font_family(MONO_FAMILY)
+                                            .text_size(px(11.0))
+                                            .line_height(px(CODE_LINE_HEIGHT))
+                                            .whitespace_nowrap()
+                                            .child(
+                                                StyledText::new(display_str.to_string())
+                                                    .with_runs(runs),
+                                            ),
+                                    )
+                                    .into_any_element()
+                            })
+                            .flex_1()
+                            .size_full(),
+                        ),
                 ),
-            ))
+            )
             .children(scrollbar)
             .into_any_element()
     }

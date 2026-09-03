@@ -1,8 +1,8 @@
-use std::rc::Rc;
 use gpui::{
-    App, ElementId, FontWeight, InteractiveElement, IntoElement, KeyDownEvent,
-    ParentElement, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
+    App, ElementId, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, ParentElement,
+    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
+use std::rc::Rc;
 
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;

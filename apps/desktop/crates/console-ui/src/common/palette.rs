@@ -109,9 +109,7 @@ fn render_entry_row(
         Some(PaletteIcon::App(name)) => {
             app_icon(*name, 15.0, theme.text_secondary).into_any_element()
         }
-        Some(PaletteIcon::FileType(path)) => {
-            file_type_icon(path.as_ref(), 15.0).into_any_element()
-        }
+        Some(PaletteIcon::FileType(path)) => file_type_icon(path.as_ref(), 15.0).into_any_element(),
         None => div().size(px(15.0)).into_any_element(),
     };
 
@@ -166,11 +164,7 @@ fn render_entry_row(
                         }
                     }
                 })
-                .child(app_icon(
-                    IconName::ChevronRight,
-                    14.0,
-                    theme.text_tertiary,
-                )),
+                .child(app_icon(IconName::ChevronRight, 14.0, theme.text_tertiary)),
         );
     }
 
@@ -243,7 +237,11 @@ impl CommandPaletteModal {
     }
 
     /// Set the placeholder shown in the search field.
-    pub fn set_placeholder(&mut self, placeholder: impl Into<SharedString>, cx: &mut Context<Self>) {
+    pub fn set_placeholder(
+        &mut self,
+        placeholder: impl Into<SharedString>,
+        cx: &mut Context<Self>,
+    ) {
         self.placeholder = placeholder.into();
         cx.notify();
     }
@@ -324,9 +322,7 @@ impl Render for CommandPaletteModal {
                 // full icon+label row ourselves — `.child()` replaces default content.
                 CommandItem::new()
                     .label(entry.label.clone())
-                    .child(move |_window, cx| {
-                        render_entry_row(&entry, palette_handle.clone(), cx)
-                    })
+                    .child(move |_window, cx| render_entry_row(&entry, palette_handle.clone(), cx))
             }))
             .placeholder(self.placeholder.clone())
             // Escape with a non-empty query clears it; once the query is
@@ -417,7 +413,8 @@ impl CommandPalette {
     /// Replace the entry list. Call before `show()` so filtering and
     /// IndexPath addressing match.
     pub fn set_entries(&mut self, entries: Vec<PaletteEntry>, cx: &mut Context<Self>) {
-        self.modal.update(cx, |modal, cx| modal.set_entries(entries, cx));
+        self.modal
+            .update(cx, |modal, cx| modal.set_entries(entries, cx));
     }
 
     pub fn show(&mut self, window: &mut Window, cx: &mut Context<Self>) {

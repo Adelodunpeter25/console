@@ -100,7 +100,10 @@ impl SessionService {
     }
 
     pub async fn get_changes(&self, id: &str) -> Result<Vec<SessionFileChange>> {
-        let url = self.transport.url(&format!("/api/sessions/{}/changes", id)).await;
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/changes", id))
+            .await;
         let resp = self
             .transport
             .client()
@@ -126,7 +129,10 @@ impl SessionService {
     }
 
     pub async fn get_subagents(&self, id: &str) -> Result<Vec<SubagentInfo>> {
-        let url = self.transport.url(&format!("/api/sessions/{}/subagents", id)).await;
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/subagents", id))
+            .await;
         let resp = self
             .transport
             .client()
@@ -144,10 +150,9 @@ impl SessionService {
             body.data
                 .ok_or_else(|| anyhow!("Session subagents data is missing"))
         } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to load session subagents".into())
-            ))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to load session subagents".into()
+            })))
         }
     }
 
@@ -303,10 +308,9 @@ impl SessionService {
         if body.success {
             Ok(body.data.unwrap_or_default())
         } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to list deleted sessions".into())
-            ))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to list deleted sessions".into()
+            })))
         }
     }
 
@@ -362,10 +366,9 @@ impl SessionService {
         if body.success {
             Ok(())
         } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to permanently delete session".into())
-            ))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to permanently delete session".into()
+            })))
         }
     }
 }

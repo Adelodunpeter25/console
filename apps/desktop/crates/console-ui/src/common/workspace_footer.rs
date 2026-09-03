@@ -124,43 +124,43 @@ impl RenderOnce for WorkspaceFooter {
             } else {
                 dropdown_menu(
                     project_chip,
-                "workspace-project-menu",
-                &self.project_menu,
-                MenuAlign::AboveLeft,
-                move |_| {
-                    let mut items = projects
-                        .iter()
-                        .map(|project| {
-                            let project_id = project.id.clone();
-                            let on_select_project = on_select_project.clone();
-                            let selected = Some(project.id.as_str()) == selected_id.as_deref();
-                            MenuItem::new(project.name.clone(), move |window, cx| {
-                                (on_select_project)(project_id.clone(), window, cx);
+                    "workspace-project-menu",
+                    &self.project_menu,
+                    MenuAlign::AboveLeft,
+                    move |_| {
+                        let mut items = projects
+                            .iter()
+                            .map(|project| {
+                                let project_id = project.id.clone();
+                                let on_select_project = on_select_project.clone();
+                                let selected = Some(project.id.as_str()) == selected_id.as_deref();
+                                MenuItem::new(project.name.clone(), move |window, cx| {
+                                    (on_select_project)(project_id.clone(), window, cx);
+                                })
+                                .selected(selected)
                             })
-                            .selected(selected)
-                        })
-                        .collect::<Vec<_>>();
-                    if !items.is_empty() {
-                        items.push(MenuItem::Separator);
-                    }
-                    let on_new_project = on_new_project.clone();
-                    let on_no_project = on_no_project.clone();
-                    items.push(
-                        MenuItem::new("New project…", move |window, cx| {
-                            (on_new_project)(window, cx);
-                        })
-                        .icon(IconName::FolderNew.path()),
-                    );
-                    items.push(
-                        MenuItem::new("No project", move |window, cx| {
-                            (on_no_project)(window, cx);
-                        })
-                        .icon(IconName::X.path())
-                        .selected(selected_id.is_none()),
-                    );
-                    items
-                },
-            )
+                            .collect::<Vec<_>>();
+                        if !items.is_empty() {
+                            items.push(MenuItem::Separator);
+                        }
+                        let on_new_project = on_new_project.clone();
+                        let on_no_project = on_no_project.clone();
+                        items.push(
+                            MenuItem::new("New project…", move |window, cx| {
+                                (on_new_project)(window, cx);
+                            })
+                            .icon(IconName::FolderNew.path()),
+                        );
+                        items.push(
+                            MenuItem::new("No project", move |window, cx| {
+                                (on_no_project)(window, cx);
+                            })
+                            .icon(IconName::X.path())
+                            .selected(selected_id.is_none()),
+                        );
+                        items
+                    },
+                )
             }
         };
 

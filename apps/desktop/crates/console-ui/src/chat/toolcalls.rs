@@ -286,17 +286,19 @@ impl ToolCalls {
                 } else {
                     let computed = extract_edit_args(&entry.call.arguments)
                         .map(|(old, new)| diff_lines(old, new, 3));
-                    cache
-                        .diff_cache
-                        .insert(call_id.clone(), (entry.call.arguments.clone(), computed.clone()));
+                    cache.diff_cache.insert(
+                        call_id.clone(),
+                        (entry.call.arguments.clone(), computed.clone()),
+                    );
                     computed
                 }
             } else {
                 let computed = extract_edit_args(&entry.call.arguments)
                     .map(|(old, new)| diff_lines(old, new, 3));
-                cache
-                    .diff_cache
-                    .insert(call_id.clone(), (entry.call.arguments.clone(), computed.clone()));
+                cache.diff_cache.insert(
+                    call_id.clone(),
+                    (entry.call.arguments.clone(), computed.clone()),
+                );
                 computed
             }
         } else {
@@ -379,8 +381,16 @@ impl ToolCalls {
                                 .gap(px(4.0))
                                 .text_size(px(10.0))
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .child(div().text_color(theme.success).child(format!("+{}", d.added)))
-                                .child(div().text_color(theme.danger).child(format!("-{}", d.removed))),
+                                .child(
+                                    div()
+                                        .text_color(theme.success)
+                                        .child(format!("+{}", d.added)),
+                                )
+                                .child(
+                                    div()
+                                        .text_color(theme.danger)
+                                        .child(format!("-{}", d.removed)),
+                                ),
                         )
                     })
                     .when(entry.call.name == "subagent", |element| {
@@ -426,11 +436,7 @@ impl ToolCalls {
                             .flex()
                             .items_center()
                             .gap(px(6.0))
-                            .child(app_icon(
-                                status_icon,
-                                13.0,
-                                status_color,
-                            ))
+                            .child(app_icon(status_icon, 13.0, status_color))
                             // Reserve the chevron's width so this row's status
                             // icon aligns with group rows that show a chevron
                             // after the status icon.
@@ -803,7 +809,9 @@ impl ToolCalls {
     ) -> AnyElement {
         let lang_tag = path.and_then(highlight::lang_tag_for_path);
         let Some(lang_tag) = lang_tag else {
-            return self.section(call_id, "Result", raw, theme).into_any_element();
+            return self
+                .section(call_id, "Result", raw, theme)
+                .into_any_element();
         };
 
         let palette = Palette::from_theme(&theme);
@@ -826,7 +834,9 @@ impl ToolCalls {
             )
             .child(
                 div()
-                    .id(ElementId::Name(format!("tool-output-{call_id}-result").into()))
+                    .id(ElementId::Name(
+                        format!("tool-output-{call_id}-result").into(),
+                    ))
                     .max_h(px(240.0))
                     .overflow_y_scroll()
                     .rounded(px(5.0))
@@ -873,7 +883,9 @@ impl ToolCalls {
             )
             .child(
                 div()
-                    .id(ElementId::Name(format!("tool-output-{call_id}-{label}").into()))
+                    .id(ElementId::Name(
+                        format!("tool-output-{call_id}-{label}").into(),
+                    ))
                     .max_h(px(160.0))
                     .overflow_y_scroll()
                     .rounded(px(5.0))
@@ -934,7 +946,11 @@ fn normalize_read_file_output(raw: &str) -> String {
         .skip(1)
         .position(|line| line.is_empty())
         .filter(|&end| end > 0 && end <= 6)
-        .filter(|_| lines.first().is_some_and(|first| first.starts_with("File:")))
+        .filter(|_| {
+            lines
+                .first()
+                .is_some_and(|first| first.starts_with("File:"))
+        })
         .map(|end| end + 1);
     let code: &[&str] = match header_end {
         Some(end) => &lines[end..],
@@ -946,10 +962,7 @@ fn normalize_read_file_output(raw: &str) -> String {
         .count();
     if numbered * 2 > code.len() {
         code.iter()
-            .map(|line| {
-                line_number_prefix_len(line)
-                    .map_or(*line, |prefix| &line[prefix..])
-            })
+            .map(|line| line_number_prefix_len(line).map_or(*line, |prefix| &line[prefix..]))
             .collect::<Vec<_>>()
             .join("\n")
     } else {

@@ -75,11 +75,7 @@ pub fn todo_card(
                             .flex()
                             .items_center()
                             .gap(px(6.0))
-                            .child(app_icon(
-                                IconName::Checklist,
-                                13.0,
-                                theme.text_secondary,
-                            ))
+                            .child(app_icon(IconName::Checklist, 13.0, theme.text_secondary))
                             .child(
                                 div()
                                     .text_size(px(11.0))
@@ -152,81 +148,65 @@ pub fn todo_card(
             )
             // Expanded task checklist
             .when(!collapsed, |el| {
-                el.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.0))
-                        .pt(px(2.0))
-                        .children(items.into_iter().map(|item| {
-                            let completed = matches!(
-                                item.status.to_ascii_lowercase().as_str(),
-                                "done" | "completed" | "complete"
-                            );
-                            let in_progress = matches!(
-                                item.status.to_ascii_lowercase().as_str(),
-                                "in_progress" | "started" | "running"
-                            );
+                el.child(div().flex().flex_col().gap(px(4.0)).pt(px(2.0)).children(
+                    items.into_iter().map(|item| {
+                        let completed = matches!(
+                            item.status.to_ascii_lowercase().as_str(),
+                            "done" | "completed" | "complete"
+                        );
+                        let in_progress = matches!(
+                            item.status.to_ascii_lowercase().as_str(),
+                            "in_progress" | "started" | "running"
+                        );
 
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.0))
-                                .py(px(2.0))
-                                .text_size(px(12.0))
-                                .text_color(if completed {
-                                    theme.text_tertiary
-                                } else {
-                                    theme.text
-                                })
-                                // Checkbox square
-                                .child(
-                                    div()
-                                        .size(px(15.0))
-                                        .rounded(px(3.5))
-                                        .flex_none()
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .border_1()
-                                        .when(completed, |box_el| {
-                                            box_el
-                                                .bg(theme.success.opacity(0.16))
-                                                .border_color(theme.success)
-                                                .child(app_icon(
-                                                    IconName::Check,
-                                                    9.5,
-                                                    theme.success,
-                                                ))
-                                        })
-                                        .when(in_progress, |box_el| {
-                                            box_el
-                                                .bg(theme.accent.opacity(0.12))
-                                                .border_color(theme.accent)
-                                                .child(
-                                                    div()
-                                                        .size(px(5.0))
-                                                        .rounded_full()
-                                                        .bg(theme.accent),
-                                                )
-                                        })
-                                        .when(!completed && !in_progress, |box_el| {
-                                            box_el
-                                                .bg(theme.composer)
-                                                .border_color(theme.border_strong)
-                                        }),
-                                )
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .when(completed, |text_el| {
-                                            text_el.line_through()
-                                        })
-                                        .child(item.content),
-                                )
-                        })),
-                )
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.0))
+                            .py(px(2.0))
+                            .text_size(px(12.0))
+                            .text_color(if completed {
+                                theme.text_tertiary
+                            } else {
+                                theme.text
+                            })
+                            // Checkbox square
+                            .child(
+                                div()
+                                    .size(px(15.0))
+                                    .rounded(px(3.5))
+                                    .flex_none()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .border_1()
+                                    .when(completed, |box_el| {
+                                        box_el
+                                            .bg(theme.success.opacity(0.16))
+                                            .border_color(theme.success)
+                                            .child(app_icon(IconName::Check, 9.5, theme.success))
+                                    })
+                                    .when(in_progress, |box_el| {
+                                        box_el
+                                            .bg(theme.accent.opacity(0.12))
+                                            .border_color(theme.accent)
+                                            .child(
+                                                div().size(px(5.0)).rounded_full().bg(theme.accent),
+                                            )
+                                    })
+                                    .when(!completed && !in_progress, |box_el| {
+                                        box_el.bg(theme.composer).border_color(theme.border_strong)
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .when(completed, |text_el| text_el.line_through())
+                                    .child(item.content),
+                            )
+                    }),
+                ))
             }),
         6.0,
     )

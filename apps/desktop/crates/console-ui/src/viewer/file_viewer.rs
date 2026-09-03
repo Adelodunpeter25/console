@@ -46,9 +46,9 @@ impl FileViewer {
 
 impl RenderOnce for FileViewer {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let lines = self.rc_lines.unwrap_or_else(|| {
-            Rc::new(build_file_lines(&self.path, &self.content))
-        });
+        let lines = self
+            .rc_lines
+            .unwrap_or_else(|| Rc::new(build_file_lines(&self.path, &self.content)));
 
         let mut viewer = CodeViewer::new(format!("file-{}", self.path), self.list_state)
             .rc_lines(lines)

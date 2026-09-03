@@ -74,8 +74,7 @@ impl GitService {
             .await
             .context("Failed to parse git diff response")?;
         if body.success {
-            body.data
-                .ok_or_else(|| anyhow!("Git diff data is missing"))
+            body.data.ok_or_else(|| anyhow!("Git diff data is missing"))
         } else {
             Err(anyhow!(
                 body.error

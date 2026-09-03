@@ -184,7 +184,8 @@ impl FsService {
     pub async fn watch_events(
         &self,
         path: &str,
-    ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<serde_json::Value>> + Send>>> {
+    ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<serde_json::Value>> + Send>>>
+    {
         use eventsource_stream::Eventsource;
         use futures_util::StreamExt;
 

@@ -44,9 +44,9 @@ impl ConsoleDesktopApp {
         // change immediately; persist the cwd change on the backend.
         if let Some(session_id) = self.active_session_for_pane(&pane_id) {
             if let Some(session) = Rc::make_mut(&mut self.sessions)
-            .iter_mut()
-            .find(|s| s.id == session_id)
-        {
+                .iter_mut()
+                .find(|s| s.id == session_id)
+            {
                 session.project_id = Some(project.id.clone());
                 session.cwd = project.path.clone();
             }
@@ -136,7 +136,9 @@ impl ConsoleDesktopApp {
             return;
         };
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        let is_dev = std::env::var("CONSOLE_ENV").map(|v| v == "dev").unwrap_or(false);
+        let is_dev = std::env::var("CONSOLE_ENV")
+            .map(|v| v == "dev")
+            .unwrap_or(false);
         let folder = if is_dev { ".console-dev" } else { ".console" };
         let fallback_cwd = format!("{}/{}/scratch/{}", home, folder, session_id);
 
@@ -185,31 +187,28 @@ impl ConsoleDesktopApp {
             .unwrap_or_else(|| "pane-main".to_string());
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
-        cx.spawn(async move |_, cx| {
-            match client.projects.add(&path).await {
-                Ok(project) => cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            if !this.projects.iter().any(|p| p.id == project.id) {
-                                Rc::make_mut(&mut this.projects).push(project.clone());
-                            }
-                            this.select_project_for_pane(pane_id.clone(), project.id, cx);
-                        });
-                    }
-                }),
-                Err(error) => {
-                    let message = format!("Unable to add project: {error}");
-                    cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| this.set_error(message, cx));
+        cx.spawn(async move |_, cx| match client.projects.add(&path).await {
+            Ok(project) => cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        if !this.projects.iter().any(|p| p.id == project.id) {
+                            Rc::make_mut(&mut this.projects).push(project.clone());
                         }
+                        this.select_project_for_pane(pane_id.clone(), project.id, cx);
                     });
                 }
+            }),
+            Err(error) => {
+                let message = format!("Unable to add project: {error}");
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.set_error(message, cx));
+                    }
+                });
             }
         })
         .detach();
     }
-
 
     /// Check out a branch in the selected pane's project and refresh its branch list.
     pub fn checkout_branch_for_pane(

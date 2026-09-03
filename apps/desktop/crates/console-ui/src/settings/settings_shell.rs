@@ -1,11 +1,11 @@
-use std::rc::Rc;
+use super::SettingsTab;
+use crate::primitives::icons::{IconName, app_icon};
+use crate::theme::Theme;
 use gpui::{
     AnyElement, App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement,
     RenderOnce, StatefulInteractiveElement, Styled, Window, div, px,
 };
-use super::SettingsTab;
-use crate::primitives::icons::{IconName, app_icon};
-use crate::theme::Theme;
+use std::rc::Rc;
 
 #[derive(IntoElement)]
 pub struct SettingsShell {
@@ -37,7 +37,11 @@ impl RenderOnce for SettingsShell {
             (SettingsTab::Connection, IconName::Server, "Connection"),
             (SettingsTab::Usage, IconName::ChartColumn, "Usage"),
             (SettingsTab::Projects, IconName::Folder, "Projects"),
-            (SettingsTab::DeletedChats, IconName::TrashBinMinimalistic, "Deleted chats"),
+            (
+                SettingsTab::DeletedChats,
+                IconName::TrashBinMinimalistic,
+                "Deleted chats",
+            ),
         ];
 
         div()
@@ -73,46 +77,67 @@ impl RenderOnce for SettingsShell {
                                     .text_color(theme.text)
                                     .child("Settings"),
                             )
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(2.0))
-                                    .children(tabs.into_iter().map(|(tab, icon_name, label)| {
-                                        let is_active = self.active_tab == tab;
-                                        let on_tab_click = on_select.clone();
-                                        let tab_id = format!("settings-tab-{:?}", tab);
+                            .child(div().flex().flex_col().gap(px(2.0)).children(
+                                tabs.into_iter().map(|(tab, icon_name, label)| {
+                                    let is_active = self.active_tab == tab;
+                                    let on_tab_click = on_select.clone();
+                                    let tab_id = format!("settings-tab-{:?}", tab);
 
-                                        div()
-                                            .id(ElementId::from(tab_id))
-                                            .px(px(8.0))
-                                            .py(px(6.0))
-                                            .rounded(px(6.0))
-                                            .cursor_pointer()
-                                            .bg(if is_active { theme.accent } else { gpui::transparent_black() })
-                                            .hover(|s| if !is_active { s.bg(theme.overlay) } else { s })
-                                            .active(|s| if !is_active { s.bg(theme.overlay_strong) } else { s })
-                                            .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                                    div()
+                                        .id(ElementId::from(tab_id))
+                                        .px(px(8.0))
+                                        .py(px(6.0))
+                                        .rounded(px(6.0))
+                                        .cursor_pointer()
+                                        .bg(if is_active {
+                                            theme.accent
+                                        } else {
+                                            gpui::transparent_black()
+                                        })
+                                        .hover(|s| if !is_active { s.bg(theme.overlay) } else { s })
+                                        .active(|s| {
+                                            if !is_active {
+                                                s.bg(theme.overlay_strong)
+                                            } else {
+                                                s
+                                            }
+                                        })
+                                        .on_mouse_down(
+                                            MouseButton::Left,
+                                            move |_event, window, cx| {
                                                 cx.stop_propagation();
                                                 (on_tab_click)(tab, window, cx);
-                                            })
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(8.0))
-                                            .child(app_icon(
-                                                icon_name,
-                                                14.0,
-                                                if is_active { theme.on_inverse } else { theme.text_secondary },
-                                            ))
-                                            .child(
-                                                div()
-                                                    .text_size(px(13.0))
-                                                    .font_weight(if is_active { gpui::FontWeight::MEDIUM } else { gpui::FontWeight::NORMAL })
-                                                    .text_color(if is_active { theme.on_inverse } else { theme.text })
-                                                    .child(label),
-                                            )
-                                    })),
-                            ),
+                                            },
+                                        )
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(8.0))
+                                        .child(app_icon(
+                                            icon_name,
+                                            14.0,
+                                            if is_active {
+                                                theme.on_inverse
+                                            } else {
+                                                theme.text_secondary
+                                            },
+                                        ))
+                                        .child(
+                                            div()
+                                                .text_size(px(13.0))
+                                                .font_weight(if is_active {
+                                                    gpui::FontWeight::MEDIUM
+                                                } else {
+                                                    gpui::FontWeight::NORMAL
+                                                })
+                                                .text_color(if is_active {
+                                                    theme.on_inverse
+                                                } else {
+                                                    theme.text
+                                                })
+                                                .child(label),
+                                        )
+                                }),
+                            )),
                     ),
             )
             // Right content container

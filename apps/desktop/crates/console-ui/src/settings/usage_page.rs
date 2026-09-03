@@ -1,13 +1,15 @@
-use std::collections::HashMap;
-use std::rc::Rc;
-use console_core::types::{AuthStatusResponse, ProviderCatalogEntry, UsageLimit, UsageReport, UsageStatus};
-use gpui::prelude::FluentBuilder;
-use gpui::{
-    App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    RenderOnce, StatefulInteractiveElement, Styled, Window, div, px,
-};
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
+use console_core::types::{
+    AuthStatusResponse, ProviderCatalogEntry, UsageLimit, UsageReport, UsageStatus,
+};
+use gpui::prelude::FluentBuilder;
+use gpui::{
+    App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
+    StatefulInteractiveElement, Styled, Window, div, px,
+};
+use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(IntoElement)]
 pub struct UsagePage {

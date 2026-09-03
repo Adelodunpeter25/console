@@ -1,9 +1,9 @@
 //! Client for `/api/usage` and `/api/providers/:id/usage` endpoints.
 
-use std::collections::HashMap;
 use crate::types::{ApiResponse, UsageReport};
 use crate::utils::HttpTransport;
 use anyhow::{Context, Result, anyhow};
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct UsageService {
@@ -36,7 +36,8 @@ impl UsageService {
             Ok(body.data.unwrap_or_default())
         } else {
             Err(anyhow!(
-                body.error.unwrap_or_else(|| "Failed to fetch usage reports".into())
+                body.error
+                    .unwrap_or_else(|| "Failed to fetch usage reports".into())
             ))
         }
     }
@@ -65,7 +66,8 @@ impl UsageService {
             Ok(body.data.flatten())
         } else {
             Err(anyhow!(
-                body.error.unwrap_or_else(|| "Failed to fetch provider usage".into())
+                body.error
+                    .unwrap_or_else(|| "Failed to fetch provider usage".into())
             ))
         }
     }

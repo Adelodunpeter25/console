@@ -13,8 +13,8 @@ use super::user_prompt_history;
 impl ConsoleDesktopApp {
     pub fn load_sessions(&mut self, cx: &mut Context<Self>) {
         let client = self.client.clone();
-        cx.spawn(async move |entity, cx| {
-            match client.sessions.list(None, None).await {
+        cx.spawn(
+            async move |entity, cx| match client.sessions.list(None, None).await {
                 Ok(sessions) => {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
@@ -33,8 +33,8 @@ impl ConsoleDesktopApp {
                         }
                     });
                 }
-            }
-        })
+            },
+        )
         .detach();
     }
 
@@ -277,9 +277,10 @@ impl ConsoleDesktopApp {
         // Tool-call rows render paths relative to the session's working
         // directory; empty when the backend has not reported one yet.
         let cwd = (!header.cwd.is_empty()).then(|| header.cwd.clone());
-        self.transcript_for_pane(pane_id).update(cx, |transcript, _| {
-            transcript.set_session_cwd(cwd);
-        });
+        self.transcript_for_pane(pane_id)
+            .update(cx, |transcript, _| {
+                transcript.set_session_cwd(cwd);
+            });
 
         if self.right_sidebar_visible {
             self.refresh_inspector(cx);
@@ -415,7 +416,11 @@ impl ConsoleDesktopApp {
         let client = self.client.clone();
         let saved_position = self.transcript_scroll_positions.get(&session_id).copied();
         cx.spawn(async move |entity, cx| {
-            match client.sessions.get_paginated(&session_id, Some(50), None).await {
+            match client
+                .sessions
+                .get_paginated(&session_id, Some(50), None)
+                .await
+            {
                 Ok(detail) => {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
@@ -453,7 +458,10 @@ impl ConsoleDesktopApp {
                                     t.set_on_load_older(move |_window, cx| {
                                         if let Some(app) = app_entity.upgrade() {
                                             app.update(cx, |this, cx| {
-                                                this.load_older_messages_for_pane(pane_for_older.clone(), cx);
+                                                this.load_older_messages_for_pane(
+                                                    pane_for_older.clone(),
+                                                    cx,
+                                                );
                                             });
                                         }
                                     });
@@ -479,7 +487,8 @@ impl ConsoleDesktopApp {
                                     cx,
                                 );
 
-                                if detail.header.status == Some(console_core::SessionStatus::Working)
+                                if detail.header.status
+                                    == Some(console_core::SessionStatus::Working)
                                     && !this.is_session_running(&session_id)
                                 {
                                     this.attach_session_run_for_pane(

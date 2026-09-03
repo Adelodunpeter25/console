@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use console_core::{
     ApprovalMode, ApproveToolPermissionDto, ModelFavorite, SelectedModel, UpdateSessionDto,
 };
@@ -8,7 +7,10 @@ use console_ui::{
     QuestionInteractionCard, Theme, WorkspaceFooter, centered_stripe, error_banner, notice_banner,
     todo_card,
 };
-use gpui::{App, Context, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder, px};
+use gpui::{
+    App, Context, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder, px,
+};
+use std::rc::Rc;
 
 use crate::state::ConsoleDesktopApp;
 
@@ -61,11 +63,7 @@ impl ConsoleDesktopApp {
                 let view = self.get_or_build_markdown_view(path, &content);
                 let selection = self.viewer_markdown_selection(path);
                 let block_count = view.borrow().block_count();
-                let list_state = self.viewer_list_state(
-                    &format!("md:{}", path),
-                    block_count,
-                    60.0,
-                );
+                let list_state = self.viewer_list_state(&format!("md:{}", path), block_count, 60.0);
                 let scrollbar_state = self.viewer_scrollbar_state(&format!("md:{}", path));
                 return console_ui::MarkdownViewer::new(path.clone(), view, list_state)
                     .selection(selection)
@@ -144,7 +142,9 @@ impl ConsoleDesktopApp {
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
         let client = self.client.clone();
-        let error_message = self.error_for_pane(&pane_id).map(|error| error.message.clone());
+        let error_message = self
+            .error_for_pane(&pane_id)
+            .map(|error| error.message.clone());
         let error_pane_id = pane_id.clone();
         let error_selection = self.error_selection.clone();
         let agent_notice = self.agent_notice_for_pane(&pane_id);

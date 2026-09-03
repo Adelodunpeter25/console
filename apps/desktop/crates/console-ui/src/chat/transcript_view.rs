@@ -65,7 +65,8 @@ pub struct TranscriptView {
     session_cwd: Option<String>,
     /// Cache for run activity derived from messages. Keyed by user_index,
     /// invalidated when messages or streaming state changes.
-    tool_activity_cache: RefCell<HashMap<usize, (u64, Option<(Vec<ActivityEvent>, Option<i64>, u64, bool)>)>>,
+    tool_activity_cache:
+        RefCell<HashMap<usize, (u64, Option<(Vec<ActivityEvent>, Option<i64>, u64, bool)>)>>,
     tool_activity_cache_version: std::cell::Cell<u64>,
     /// Pagination for incremental loading: whether older messages exist and cursor.
     has_more: bool,
@@ -143,18 +144,26 @@ impl TranscriptView {
         self.loading_older = false;
     }
 
-    pub fn set_on_load_older(
-        &mut self,
-        handler: impl Fn(&mut Window, &mut App) + 'static,
-    ) {
+    pub fn set_on_load_older(&mut self, handler: impl Fn(&mut Window, &mut App) + 'static) {
         self.on_load_older = Some(Rc::new(handler));
     }
 
-    pub fn prepend_messages(&mut self, older: Vec<AgentMessage>, has_more: bool, next_cursor: Option<i64>, cx: &mut Context<Self>) {
+    pub fn prepend_messages(
+        &mut self,
+        older: Vec<AgentMessage>,
+        has_more: bool,
+        next_cursor: Option<i64>,
+        cx: &mut Context<Self>,
+    ) {
         // Filter out any older messages that are already present in self.messages
         let older: Vec<AgentMessage> = older
             .into_iter()
-            .filter(|old_msg| !self.messages.iter().any(|existing| messages_match(old_msg, existing)))
+            .filter(|old_msg| {
+                !self
+                    .messages
+                    .iter()
+                    .any(|existing| messages_match(old_msg, existing))
+            })
             .collect();
 
         if older.is_empty() {
@@ -276,13 +285,16 @@ impl TranscriptView {
             .iter()
             .rposition(|message| matches!(message, AgentMessage::User { .. }))
             .is_some_and(|user_index| {
-                self.messages.iter().skip(user_index + 1).any(|message| match message {
-                    AgentMessage::Assistant { content, .. } => content
-                        .iter()
-                        .any(|part| matches!(part, AssistantContentPart::ToolCall { .. })),
-                    AgentMessage::User { .. } => false,
-                    AgentMessage::ToolResult { .. } => false,
-                })
+                self.messages
+                    .iter()
+                    .skip(user_index + 1)
+                    .any(|message| match message {
+                        AgentMessage::Assistant { content, .. } => content
+                            .iter()
+                            .any(|part| matches!(part, AssistantContentPart::ToolCall { .. })),
+                        AgentMessage::User { .. } => false,
+                        AgentMessage::ToolResult { .. } => false,
+                    })
             });
         self.messages.len() + usize::from(self.is_streaming && !has_active_tool_activity)
     }
@@ -716,9 +728,7 @@ impl TranscriptView {
         user_index: usize,
     ) -> Option<(Vec<ActivityEvent>, Option<i64>, u64, bool)> {
         let version = self.tool_activity_cache_version.get();
-        if let Some((cached_version, cached)) =
-            self.tool_activity_cache.borrow().get(&user_index)
-        {
+        if let Some((cached_version, cached)) = self.tool_activity_cache.borrow().get(&user_index) {
             if *cached_version == version {
                 return cached.clone();
             }
@@ -761,17 +771,13 @@ impl TranscriptView {
                     }
                     for part in content {
                         match part {
-                            AssistantContentPart::Thinking { text }
-                                if !text.trim().is_empty() =>
-                            {
+                            AssistantContentPart::Thinking { text } if !text.trim().is_empty() => {
                                 events.push(ActivityEvent::Thinking {
                                     id: format!("run-thinking-{user_index}-{}", events.len()),
                                     text: text.clone(),
                                 });
                             }
-                            AssistantContentPart::Text { text, .. }
-                                if !text.trim().is_empty() =>
-                            {
+                            AssistantContentPart::Text { text, .. } if !text.trim().is_empty() => {
                                 events.push(ActivityEvent::Text {
                                     id: format!("run-text-{user_index}-{}", events.len()),
                                     text: text.clone(),
@@ -925,11 +931,14 @@ impl Render for TranscriptView {
                     let window_handle = _window.window_handle();
                     cx.spawn(async move |_, cx| {
                         // Defer to next frame to avoid re-entrancy during render
-                        cx.background_executor().timer(std::time::Duration::from_millis(16)).await;
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(16))
+                            .await;
                         let _ = cx.update_window(window_handle, |_, window, cx| {
                             handler(window, cx);
                         });
-                    }).detach();
+                    })
+                    .detach();
                 }
             }
         }
@@ -1164,20 +1173,12 @@ fn messages_match(a: &AgentMessage, b: &AgentMessage) -> bool {
             },
         ) => c1 == c2 && (t1.is_none() || t2.is_none() || t1 == t2),
         (
-            AgentMessage::Assistant {
-                id: Some(id1), ..
-            },
-            AgentMessage::Assistant {
-                id: Some(id2), ..
-            },
+            AgentMessage::Assistant { id: Some(id1), .. },
+            AgentMessage::Assistant { id: Some(id2), .. },
         ) => id1 == id2,
         (
-            AgentMessage::ToolResult {
-                results: r1, ..
-            },
-            AgentMessage::ToolResult {
-                results: r2, ..
-            },
+            AgentMessage::ToolResult { results: r1, .. },
+            AgentMessage::ToolResult { results: r2, .. },
         ) => !r1.is_empty() && !r2.is_empty() && r1[0].tool_call_id == r2[0].tool_call_id,
         _ => false,
     }

@@ -155,7 +155,11 @@ impl RunService {
         if !resp.status().is_success() {
             let status = resp.status();
             let err_text = resp.text().await.unwrap_or_default();
-            return Err(anyhow!("Attach stream failed with status {}: {}", status, err_text));
+            return Err(anyhow!(
+                "Attach stream failed with status {}: {}",
+                status,
+                err_text
+            ));
         }
 
         Ok(SseStreamReader::parse_stream(resp))

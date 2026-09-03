@@ -165,13 +165,7 @@ fn apply_context_window(lines: Vec<DiffLine>, context: usize) -> Vec<DiffLine> {
     lines
         .into_iter()
         .enumerate()
-        .filter_map(|(i, line)| {
-            if keep[i] {
-                Some(line)
-            } else {
-                None
-            }
-        })
+        .filter_map(|(i, line)| if keep[i] { Some(line) } else { None })
         .collect()
 }
 

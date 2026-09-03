@@ -1,5 +1,5 @@
-use gpui::Context;
 use super::ConsoleDesktopApp;
+use gpui::Context;
 
 impl ConsoleDesktopApp {
     pub fn refresh_deleted_sessions(&mut self, cx: &mut Context<Self>) {
@@ -15,7 +15,8 @@ impl ConsoleDesktopApp {
                     }
                 });
             }
-        }).detach();
+        })
+        .detach();
     }
 
     pub fn restore_deleted_session(&mut self, session_id: String, cx: &mut Context<Self>) {
@@ -32,7 +33,8 @@ impl ConsoleDesktopApp {
                     }
                 });
             }
-        }).detach();
+        })
+        .detach();
     }
 
     pub fn permanent_delete_session(&mut self, session_id: String, cx: &mut Context<Self>) {
@@ -48,6 +50,7 @@ impl ConsoleDesktopApp {
                     }
                 });
             }
-        }).detach();
+        })
+        .detach();
     }
 }

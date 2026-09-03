@@ -1,9 +1,9 @@
+use super::ConsoleDesktopApp;
+use crate::persistence::store::load_settings_window;
+use crate::settings_window::SettingsWindow;
 use gpui::{
     AppContext, Context, TitlebarOptions, Window, WindowBounds, WindowOptions, point, px, size,
 };
-use crate::persistence::store::load_settings_window;
-use crate::settings_window::SettingsWindow;
-use super::ConsoleDesktopApp;
 
 impl ConsoleDesktopApp {
     pub fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -18,12 +18,15 @@ impl ConsoleDesktopApp {
     ) {
         if let Some(handle) = self.settings_window_handle {
             if let Some(view) = self.settings_window_view.as_ref().and_then(|v| v.upgrade()) {
-                if cx.update_window(handle, |_root, window, cx| {
-                    window.activate_window();
-                    view.update(cx, |settings, cx| {
-                        settings.set_tab(tab, cx);
-                    });
-                }).is_ok() {
+                if cx
+                    .update_window(handle, |_root, window, cx| {
+                        window.activate_window();
+                        view.update(cx, |settings, cx| {
+                            settings.set_tab(tab, cx);
+                        });
+                    })
+                    .is_ok()
+                {
                     return;
                 }
             }
@@ -51,11 +54,14 @@ impl ConsoleDesktopApp {
 
         cx.defer(move |cx| {
             let mut settings_weak = None;
-            let handle = cx.open_window(options, |window, cx| {
-                let settings_view = cx.new(|cx| SettingsWindow::new(app_entity, tab, window, cx));
-                settings_weak = Some(settings_view.downgrade());
-                cx.new(|cx| gpui_component::Root::new(settings_view, window, cx))
-            }).ok();
+            let handle = cx
+                .open_window(options, |window, cx| {
+                    let settings_view =
+                        cx.new(|cx| SettingsWindow::new(app_entity, tab, window, cx));
+                    settings_weak = Some(settings_view.downgrade());
+                    cx.new(|cx| gpui_component::Root::new(settings_view, window, cx))
+                })
+                .ok();
 
             if let Some(h) = handle {
                 entity.update(cx, |this, _cx| {

@@ -29,14 +29,14 @@ where
         let on_delete = on_delete.clone();
         menu.min_w(px(200.0))
             .item(
-            entry("Rename", IconName::Pencil, false)
-                .on_click(move |_, window, cx| on_rename(window, cx)),
-        )
-        .separator()
-        .item(
-            entry("Delete", IconName::TrashBinMinimalistic, true)
-                .on_click(move |_, window, cx| on_delete(window, cx)),
-        )
+                entry("Rename", IconName::Pencil, false)
+                    .on_click(move |_, window, cx| on_rename(window, cx)),
+            )
+            .separator()
+            .item(
+                entry("Delete", IconName::TrashBinMinimalistic, true)
+                    .on_click(move |_, window, cx| on_delete(window, cx)),
+            )
     })
 }
 

@@ -11,8 +11,8 @@ use gpui::{
     Styled, Window, div, prelude::*, px,
 };
 
-use crate::primitives::{base_name, file_type_icon};
 use crate::markdown::render::MONO_FAMILY;
+use crate::primitives::{base_name, file_type_icon};
 use crate::theme::Theme;
 
 const MAX_RENDER_LINES: usize = 500;
@@ -142,11 +142,7 @@ fn diff_line_row(line: &DiffLine, theme: &Theme) -> impl IntoElement {
             theme.success,
             gpui::hsla(145.0 / 360.0, 0.50, 0.66, 0.08),
         ),
-        DiffLineKind::Removed => (
-            "-",
-            theme.danger,
-            gpui::hsla(4.0 / 360.0, 0.55, 0.63, 0.08),
-        ),
+        DiffLineKind::Removed => ("-", theme.danger, gpui::hsla(4.0 / 360.0, 0.55, 0.63, 0.08)),
         DiffLineKind::Context => (" ", theme.text_tertiary, gpui::transparent_black()),
     };
 

@@ -195,24 +195,25 @@ impl RenderOnce for SidebarView {
         // Filter out sessions that have drafts so they appear exclusively in the
         // Drafts section without duplicating in date groups below.
         let sessions = self.sessions;
-        let grouped: Vec<(SessionDateGroup, Vec<usize>)> = group_indices_by_date(sessions.len(), |index| {
-            let session = &sessions[index];
-            if draft_sessions.contains(&session.id) {
-                0
-            } else {
-                session.updated_at.max(session.created_at)
-            }
-        })
-        .into_iter()
-        .map(|(group, positions)| {
-            let filtered: Vec<usize> = positions
-                .into_iter()
-                .filter(|&idx| !draft_sessions.contains(&sessions[idx].id))
-                .collect();
-            (group, filtered)
-        })
-        .filter(|(_, positions)| !positions.is_empty())
-        .collect();
+        let grouped: Vec<(SessionDateGroup, Vec<usize>)> =
+            group_indices_by_date(sessions.len(), |index| {
+                let session = &sessions[index];
+                if draft_sessions.contains(&session.id) {
+                    0
+                } else {
+                    session.updated_at.max(session.created_at)
+                }
+            })
+            .into_iter()
+            .map(|(group, positions)| {
+                let filtered: Vec<usize> = positions
+                    .into_iter()
+                    .filter(|&idx| !draft_sessions.contains(&sessions[idx].id))
+                    .collect();
+                (group, filtered)
+            })
+            .filter(|(_, positions)| !positions.is_empty())
+            .collect();
 
         let has_drafts = !draft_summaries.is_empty();
 
@@ -228,7 +229,10 @@ impl RenderOnce for SidebarView {
             )
             .into_any_element()
         } else {
-            let first_group = grouped.first().map(|(g, _)| *g).unwrap_or(SessionDateGroup::Today);
+            let first_group = grouped
+                .first()
+                .map(|(g, _)| *g)
+                .unwrap_or(SessionDateGroup::Today);
             group_header(
                 theme,
                 first_group.label(),

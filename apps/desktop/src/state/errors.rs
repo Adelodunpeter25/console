@@ -106,11 +106,7 @@ impl ConsoleDesktopApp {
             .or(self.error_message.as_ref())
     }
 
-    pub(crate) fn clear_error_for_session(
-        &mut self,
-        session_id: &str,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn clear_error_for_session(&mut self, session_id: &str, cx: &mut Context<Self>) {
         if self.session_errors.remove(session_id).is_some() {
             self.error_selection.clear();
             cx.notify();

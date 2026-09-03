@@ -1,7 +1,7 @@
+use super::ConsoleDesktopApp;
+use gpui::Context;
 use std::rc::Rc;
 use std::time::SystemTime;
-use gpui::Context;
-use super::ConsoleDesktopApp;
 
 impl ConsoleDesktopApp {
     pub fn fetch_usage(&mut self, cx: &mut Context<Self>) {
@@ -33,6 +33,7 @@ impl ConsoleDesktopApp {
                     });
                 }
             });
-        }).detach();
+        })
+        .detach();
     }
 }

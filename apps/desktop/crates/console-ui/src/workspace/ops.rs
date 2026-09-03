@@ -331,10 +331,8 @@ pub fn resize_split(root: &mut WorkspaceNode, split_id: &str, size_0: f32) -> bo
 pub fn find_split_sizes(root: &WorkspaceNode, split_id: &str) -> Option<[f32; 2]> {
     match root {
         WorkspaceNode::Split(split) if split.id == split_id => Some(split.sizes),
-        WorkspaceNode::Split(split) => {
-            find_split_sizes(&split.children[0], split_id)
-                .or_else(|| find_split_sizes(&split.children[1], split_id))
-        }
+        WorkspaceNode::Split(split) => find_split_sizes(&split.children[0], split_id)
+            .or_else(|| find_split_sizes(&split.children[1], split_id)),
         WorkspaceNode::Leaf(_) => None,
     }
 }

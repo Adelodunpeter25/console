@@ -348,11 +348,7 @@ pub fn render_sidebar_session_item(
     rename_input: Option<Entity<ComposerInput>>,
 ) -> gpui::AnyElement {
     let is_active = selected_id == Some(session.id.as_str());
-    let loading_state = sidebar::session_loading_state(
-        &session,
-        running_started_at,
-        is_waiting,
-    );
+    let loading_state = sidebar::session_loading_state(&session, running_started_at, is_waiting);
     let project_name = projects
         .iter()
         .find(|project| project.matches_session(&session))

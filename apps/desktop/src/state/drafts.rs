@@ -26,7 +26,12 @@ impl ConsoleDesktopApp {
             if key != "new_chat" && !self.sidebar_draft_ids.contains(key) {
                 continue;
             }
-            let first_line = prompt_trimmed.lines().next().unwrap_or("").trim().to_string();
+            let first_line = prompt_trimmed
+                .lines()
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string();
             let preview = if first_line.chars().count() > 42 {
                 let truncated: String = first_line.chars().take(40).collect();
                 format!("{truncated}…")

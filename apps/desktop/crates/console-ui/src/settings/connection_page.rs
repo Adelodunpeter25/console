@@ -1,13 +1,13 @@
-use std::rc::Rc;
+use super::{EnvironmentRow, ProbeState};
+use crate::input::ComposerInput;
+use crate::primitives::icons::{IconName, app_icon};
+use crate::theme::Theme;
 use gpui::prelude::FluentBuilder;
 use gpui::{
     App, ElementId, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement,
     RenderOnce, StatefulInteractiveElement, Styled, Window, div, px,
 };
-use super::{EnvironmentRow, ProbeState};
-use crate::input::ComposerInput;
-use crate::primitives::icons::{IconName, app_icon};
-use crate::theme::Theme;
+use std::rc::Rc;
 
 #[derive(IntoElement)]
 pub struct ConnectionPage {

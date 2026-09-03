@@ -1,13 +1,13 @@
-use console_core::types::terminal::{TerminalSize, TerminalSpawnParams, TerminalStatus};
 use console_core::ConsoleClient;
-use std::sync::Arc;
+use console_core::types::terminal::{TerminalSize, TerminalSpawnParams, TerminalStatus};
 use gpui::{
-    App, Context, FocusHandle, Focusable, IntoElement, KeyDownEvent, ParentElement, Render, Styled,
-    Window, div, prelude::*, px, SharedString,
+    App, Context, FocusHandle, Focusable, IntoElement, KeyDownEvent, ParentElement, Render,
+    SharedString, Styled, Window, div, prelude::*, px,
 };
+use std::sync::Arc;
 
-use crate::theme::Theme;
 use super::theme::TerminalTheme;
+use crate::theme::Theme;
 
 /// Drop-in terminal pane. Owns its `AlacrittyBackend` + WS `TerminalHandle`,
 /// feeds server output → grid → snapshot, and forwards keyboard → `input`.
@@ -51,7 +51,12 @@ impl TerminalView {
         this
     }
 
-    pub fn with_cwd(cwd: impl Into<String>, client: ConsoleClient, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn with_cwd(
+        cwd: impl Into<String>,
+        client: ConsoleClient,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let params = TerminalSpawnParams {
             cwd: cwd.into(),
             ..Default::default()
@@ -59,7 +64,12 @@ impl TerminalView {
         Self::new(params, client, window, cx)
     }
 
-    fn spawn(&mut self, params: TerminalSpawnParams, client: ConsoleClient, cx: &mut Context<Self>) {
+    fn spawn(
+        &mut self,
+        params: TerminalSpawnParams,
+        client: ConsoleClient,
+        cx: &mut Context<Self>,
+    ) {
         let size = self.size;
 
         cx.spawn(async move |this, cx| {
@@ -240,7 +250,9 @@ impl Render for TerminalView {
         let status_banner = match self.status {
             TerminalStatus::Spawning => Some(("Spawning shell…", theme.text_ghost)),
             TerminalStatus::Error => self.error.as_deref().map(|e| (e as &str, theme.warning)),
-            TerminalStatus::Exited => Some(("Shell exited — close or respawn", theme.text_tertiary)),
+            TerminalStatus::Exited => {
+                Some(("Shell exited — close or respawn", theme.text_tertiary))
+            }
             TerminalStatus::Running => None,
         };
 
@@ -260,37 +272,42 @@ impl Render for TerminalView {
             .bg(ttheme.background)
             .text_color(ttheme.foreground)
             .overflow_hidden()
-            .on_key_down(move |event: &KeyDownEvent, window: &mut Window, cx: &mut App| {
-                if !focus_for_key.is_focused(window) {
-                    window.focus(&focus_for_key, cx);
-                }
-                let is_paste = (event.keystroke.modifiers.platform && event.keystroke.key == "v")
-                    || (event.keystroke.modifiers.control
-                        && event.keystroke.modifiers.shift
-                        && event.keystroke.key == "v");
-                if is_paste {
-                    if let Some(clipboard) = cx.read_from_clipboard() {
-                        if let Some(text) = clipboard.text() {
-                            if let Some(h) = &handle_for_key {
-                                h.send_input(text);
+            .on_key_down(
+                move |event: &KeyDownEvent, window: &mut Window, cx: &mut App| {
+                    if !focus_for_key.is_focused(window) {
+                        window.focus(&focus_for_key, cx);
+                    }
+                    let is_paste = (event.keystroke.modifiers.platform
+                        && event.keystroke.key == "v")
+                        || (event.keystroke.modifiers.control
+                            && event.keystroke.modifiers.shift
+                            && event.keystroke.key == "v");
+                    if is_paste {
+                        if let Some(clipboard) = cx.read_from_clipboard() {
+                            if let Some(text) = clipboard.text() {
+                                if let Some(h) = &handle_for_key {
+                                    h.send_input(text);
+                                }
                             }
                         }
+                        cx.stop_propagation();
+                        return;
                     }
-                    cx.stop_propagation();
-                    return;
-                }
-                if let Some(bytes) = TerminalView::key_to_bytes(event) {
-                    if let Some(h) = &handle_for_key {
-                        h.send_input(bytes);
+                    if let Some(bytes) = TerminalView::key_to_bytes(event) {
+                        if let Some(h) = &handle_for_key {
+                            h.send_input(bytes);
+                        }
+                        cx.stop_propagation();
                     }
-                    cx.stop_propagation();
-                }
-            })
+                },
+            )
             .on_scroll_wheel(move |event, _window, cx| {
                 if let Some(h) = &handle_for_scroll {
                     let delta = match event.delta {
                         gpui::ScrollDelta::Lines(lines) => lines.y.round() as i32,
-                        gpui::ScrollDelta::Pixels(pixels) => (f32::from(pixels.y) / 16.0).round() as i32,
+                        gpui::ScrollDelta::Pixels(pixels) => {
+                            (f32::from(pixels.y) / 16.0).round() as i32
+                        }
                     };
                     if delta != 0 {
                         h.scroll(delta);
@@ -309,67 +326,62 @@ impl Render for TerminalView {
                 )
             })
             .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .w_full()
-                    .overflow_hidden()
-                    .child(
-                        gpui::canvas(
-                            move |bounds, window, _cx| {
-                                let pad_x = px(8.0);
-                                let pad_y = px(8.0);
-                                let avail_w = (bounds.size.width - pad_x * 2.0).max(px(0.0));
-                                let avail_h = (bounds.size.height - pad_y * 2.0).max(px(0.0));
+                div().flex_1().min_h_0().w_full().overflow_hidden().child(
+                    gpui::canvas(
+                        move |bounds, window, _cx| {
+                            let pad_x = px(8.0);
+                            let pad_y = px(8.0);
+                            let avail_w = (bounds.size.width - pad_x * 2.0).max(px(0.0));
+                            let avail_h = (bounds.size.height - pad_y * 2.0).max(px(0.0));
 
-                                let run = gpui::TextRun {
-                                    len: 10,
-                                    font: gpui::font(crate::markdown::render::MONO_FAMILY),
-                                    color: gpui::white(),
-                                    ..Default::default()
-                                };
-                                let sample = window.text_system().shape_line(
-                                    SharedString::from("0123456789"),
-                                    px(12.0),
-                                    &[run],
-                                    None,
-                                );
-                                let cell_w = (sample.width / 10.0).max(px(1.0));
-                                let cell_h = px(16.0);
+                            let run = gpui::TextRun {
+                                len: 10,
+                                font: gpui::font(crate::markdown::render::MONO_FAMILY),
+                                color: gpui::white(),
+                                ..Default::default()
+                            };
+                            let sample = window.text_system().shape_line(
+                                SharedString::from("0123456789"),
+                                px(12.0),
+                                &[run],
+                                None,
+                            );
+                            let cell_w = (sample.width / 10.0).max(px(1.0));
+                            let cell_h = px(16.0);
 
-                                let cols = ((avail_w / cell_w).floor() as u16).max(20);
-                                let rows = ((avail_h / cell_h).floor() as u16).max(5);
+                            let cols = ((avail_w / cell_w).floor() as u16).max(20);
+                            let rows = ((avail_h / cell_h).floor() as u16).max(5);
 
-                                (cols, rows, cell_w, cell_h)
-                            },
-                            {
-                                let snapshot = snapshot.clone();
-                                move |bounds, (cols, rows, cell_w, cell_h), window, cx| {
-                                    view_handle.update(cx, |view, _| {
-                                        if view.size.cols != cols || view.size.rows != rows {
-                                            view.size = TerminalSize { cols, rows };
-                                            if let Some(h) = &view.handle {
-                                                h.resize(view.size);
-                                            }
+                            (cols, rows, cell_w, cell_h)
+                        },
+                        {
+                            let snapshot = snapshot.clone();
+                            move |bounds, (cols, rows, cell_w, cell_h), window, cx| {
+                                view_handle.update(cx, |view, _| {
+                                    if view.size.cols != cols || view.size.rows != rows {
+                                        view.size = TerminalSize { cols, rows };
+                                        if let Some(h) = &view.handle {
+                                            h.resize(view.size);
                                         }
-                                    });
+                                    }
+                                });
 
-                                    render_canvas_grid(
-                                        bounds,
-                                        cols,
-                                        rows,
-                                        cell_w,
-                                        cell_h,
-                                        snapshot.as_ref(),
-                                        ttheme,
-                                        window,
-                                        cx,
-                                    );
-                                }
-                            },
-                        )
-                        .size_full(),
-                    ),
+                                render_canvas_grid(
+                                    bounds,
+                                    cols,
+                                    rows,
+                                    cell_w,
+                                    cell_h,
+                                    snapshot.as_ref(),
+                                    ttheme,
+                                    window,
+                                    cx,
+                                );
+                            }
+                        },
+                    )
+                    .size_full(),
+                ),
             )
     }
 }
@@ -557,7 +569,10 @@ pub fn estimate_size(width: f32, height: f32, font_size: f32) -> TerminalSize {
     }
 }
 
-pub fn advance_backend<B: console_core::types::terminal::TerminalBackend>(backend: &mut B, data: &str) -> console_core::types::terminal::TerminalGridSnapshot {
+pub fn advance_backend<B: console_core::types::terminal::TerminalBackend>(
+    backend: &mut B,
+    data: &str,
+) -> console_core::types::terminal::TerminalGridSnapshot {
     backend.advance(data);
     backend.snapshot()
 }

@@ -146,10 +146,7 @@ pub fn save_environments(state: PersistedEnvironmentsState) {
 }
 
 pub fn load_drafts() -> std::collections::HashMap<String, PersistedDraft> {
-    read_document()
-        .drafts
-        .map(|s| s.drafts)
-        .unwrap_or_default()
+    read_document().drafts.map(|s| s.drafts).unwrap_or_default()
 }
 
 pub fn save_drafts(drafts: std::collections::HashMap<String, PersistedDraft>) {

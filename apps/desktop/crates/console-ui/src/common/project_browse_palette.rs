@@ -33,11 +33,7 @@ pub struct ProjectBrowsePalette {
 }
 
 impl ProjectBrowsePalette {
-    pub fn new(
-        client: ConsoleClient,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new(client: ConsoleClient, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let modal = cx.new(|cx| CommandPaletteModal::new(window, cx));
         Self {
             modal,
@@ -220,7 +216,11 @@ fn entries_from_browse(
     // Cap the listing so huge home directories stay snappy in the palette.
     const MAX_DIRS: usize = 200;
     let mut dirs: Vec<FsEntry> = entries.into_iter().filter(|e| e.is_dir).collect();
-    dirs.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
+    dirs.sort_by(|a, b| {
+        a.name
+            .to_ascii_lowercase()
+            .cmp(&b.name.to_ascii_lowercase())
+    });
     dirs.truncate(MAX_DIRS);
     for entry in dirs {
         let path = entry.path.clone();

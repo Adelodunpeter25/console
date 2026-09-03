@@ -59,7 +59,9 @@ impl ConsoleDesktopApp {
         // Fresh slate for this pane only: its active chat's error, or the
         // app-level banner if that is what is showing.
         self.clear_error_for_pane(&run_pane_id, cx);
-        let active_session = self.active_session_for_pane(&run_pane_id).map(|s| s.to_string());
+        let active_session = self
+            .active_session_for_pane(&run_pane_id)
+            .map(|s| s.to_string());
         self.clear_draft_for_session(active_session.as_deref());
         if let Some(ref sid) = active_session {
             self.revoke_sidebar_draft(sid);
@@ -373,10 +375,8 @@ impl ConsoleDesktopApp {
         event: AgentSessionEvent,
         cx: &mut Context<Self>,
     ) {
-        let pane_shows_run = self
-            .active_session_for_pane(run_pane_id)
-            .as_deref()
-            == Some(run_session_id);
+        let pane_shows_run =
+            self.active_session_for_pane(run_pane_id).as_deref() == Some(run_session_id);
 
         match event {
             AgentSessionEvent::ModelStreamPart { part } => {
@@ -494,22 +494,30 @@ impl ConsoleDesktopApp {
             } => {
                 if let Some(list) = self.session_subagents.get_mut(run_session_id) {
                     let list_mut = Rc::make_mut(list);
-                    if let Some(subagent) = list_mut.iter_mut().find(|s| s.subagent_id == subagent_id) {
+                    if let Some(subagent) =
+                        list_mut.iter_mut().find(|s| s.subagent_id == subagent_id)
+                    {
                         subagent.current_turn = subagent.current_turn.max(turn_index);
-                        if let Some(act) = subagent.activities.iter_mut().find(|a| a.tool_call_id == tool_call_id) {
+                        if let Some(act) = subagent
+                            .activities
+                            .iter_mut()
+                            .find(|a| a.tool_call_id == tool_call_id)
+                        {
                             act.status = status;
                             if error.is_some() {
                                 act.error = error;
                             }
                         } else {
-                            subagent.activities.push(console_core::types::SubagentActivityItem {
-                                turn_index,
-                                tool_call_id,
-                                tool_name,
-                                args,
-                                status,
-                                error,
-                            });
+                            subagent
+                                .activities
+                                .push(console_core::types::SubagentActivityItem {
+                                    turn_index,
+                                    tool_call_id,
+                                    tool_name,
+                                    args,
+                                    status,
+                                    error,
+                                });
                         }
                     }
                 }
@@ -523,7 +531,9 @@ impl ConsoleDesktopApp {
             } => {
                 if let Some(list) = self.session_subagents.get_mut(run_session_id) {
                     let list_mut = Rc::make_mut(list);
-                    if let Some(subagent) = list_mut.iter_mut().find(|s| s.subagent_id == subagent_id) {
+                    if let Some(subagent) =
+                        list_mut.iter_mut().find(|s| s.subagent_id == subagent_id)
+                    {
                         subagent.status = status;
                         if summary.is_some() {
                             subagent.summary = summary;
@@ -662,10 +672,9 @@ impl ConsoleDesktopApp {
                                     if !this.is_session_running(&run_session_id) {
                                         return;
                                     }
-                                    let pane_shows_run = this
-                                        .active_session_for_pane(&run_pane_id)
-                                        .as_deref()
-                                        == Some(run_session_id.as_str());
+                                    let pane_shows_run =
+                                        this.active_session_for_pane(&run_pane_id).as_deref()
+                                            == Some(run_session_id.as_str());
                                     let defer_render = matches!(
                                         &event,
                                         AgentSessionEvent::ModelStreamPart { part }
@@ -673,7 +682,12 @@ impl ConsoleDesktopApp {
                                                 && (part.text.is_some() || part.thinking.is_some())
                                     );
 
-                                    this.process_agent_event(&run_session_id, &run_pane_id, event, cx);
+                                    this.process_agent_event(
+                                        &run_session_id,
+                                        &run_pane_id,
+                                        event,
+                                        cx,
+                                    );
 
                                     if defer_render && pane_shows_run {
                                         this.schedule_stream_render(run_pane_id.clone(), cx);
@@ -698,8 +712,14 @@ impl ConsoleDesktopApp {
                                 return;
                             }
                             this.set_session_running(&run_session_id, None);
-                            if this.active_session_for_pane(&run_pane_id).as_deref() == Some(session_id.as_str()) {
-                                this.apply_session_header_for_pane(&run_pane_id, &detail.header, cx);
+                            if this.active_session_for_pane(&run_pane_id).as_deref()
+                                == Some(session_id.as_str())
+                            {
+                                this.apply_session_header_for_pane(
+                                    &run_pane_id,
+                                    &detail.header,
+                                    cx,
+                                );
                                 this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
                                     if detail.messages.len() >= t.message_count() {
                                         t.set_messages(detail.messages, cx);
@@ -719,7 +739,9 @@ impl ConsoleDesktopApp {
                                 return;
                             }
                             this.set_session_running(&run_session_id, None);
-                            if this.active_session_for_pane(&run_pane_id).as_deref() == Some(session_id.as_str()) {
+                            if this.active_session_for_pane(&run_pane_id).as_deref()
+                                == Some(session_id.as_str())
+                            {
                                 this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
                                     t.finish_streaming(cx);
                                 });
@@ -729,6 +751,7 @@ impl ConsoleDesktopApp {
                     }
                 });
             }
-        }).detach();
+        })
+        .detach();
     }
 }

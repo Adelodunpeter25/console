@@ -4,8 +4,8 @@
 //! GPUI does not provide the macOS application menu automatically, so the
 //! desktop app registers its top-level menus during startup.
 
-use gpui::{App, Menu, MenuItem, actions};
 use crate::keybindings::{AddProject, OpenSettings, QuickOpenFile};
+use gpui::{App, Menu, MenuItem, actions};
 
 actions!(console_app, [Quit]);
 

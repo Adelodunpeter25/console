@@ -135,9 +135,7 @@ impl ConsoleDesktopApp {
             return;
         }
         cx.spawn(async move |entity, cx| {
-            cx.background_executor()
-                .timer(WINDOW_SAVE_DEBOUNCE)
-                .await;
+            cx.background_executor().timer(WINDOW_SAVE_DEBOUNCE).await;
             cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, _| this.flush_pending_window_state());

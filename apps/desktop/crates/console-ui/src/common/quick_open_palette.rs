@@ -34,11 +34,7 @@ pub struct QuickOpenPalette {
 }
 
 impl QuickOpenPalette {
-    pub fn new(
-        client: ConsoleClient,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new(client: ConsoleClient, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let modal = cx.new(|cx| CommandPaletteModal::new(window, cx));
         Self {
             modal,
@@ -139,10 +135,7 @@ impl QuickOpenPalette {
                 }
                 this.modal.update(cx, |m, cx| {
                     if m.is_open() {
-                        m.set_entries(
-                            entries_from_results(items.items, &modal, &on_open_file),
-                            cx,
-                        );
+                        m.set_entries(entries_from_results(items.items, &modal, &on_open_file), cx);
                     }
                 });
             });
