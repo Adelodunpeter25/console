@@ -384,6 +384,9 @@ impl ConsoleDesktopApp {
                                     return;
                                 }
                                 this.apply_session_header_for_pane(&pane_id, &detail.header, cx);
+                                if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
+                                    state.loaded_session_id = Some(session_id.clone());
+                                }
                                 let composer = this.composer_for_pane(&pane_id);
                                 let transcript = this.transcript_for_pane(&pane_id);
                                 let running_started_at = this

@@ -158,6 +158,7 @@ pub struct ConsoleDesktopApp {
     pub viewer_scrollbar_states: std::collections::HashMap<String, std::rc::Rc<console_ui::ScrollbarState>>,
     pub viewer_cached_file_lines: std::collections::HashMap<String, (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>)>,
     pub viewer_cached_diff_lines: std::collections::HashMap<String, (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>)>,
+    pub viewer_cached_markdown_views: std::collections::HashMap<String, (usize, u64, std::rc::Rc<std::cell::RefCell<console_ui::MarkdownView>>)>,
     /// Retained virtualization state for the sidebar session history.
     pub sidebar_list_state: ListState,
     /// Live drag-resize anchor, owned by `layout`.
@@ -509,6 +510,7 @@ impl ConsoleDesktopApp {
             viewer_scrollbar_states: std::collections::HashMap::new(),
             viewer_cached_file_lines: std::collections::HashMap::new(),
             viewer_cached_diff_lines: std::collections::HashMap::new(),
+            viewer_cached_markdown_views: std::collections::HashMap::new(),
             sidebar_list_state: ListState::new(0, ListAlignment::Top, px(55.0)),
             sidebar_resize_start: None,
             split_resize: None,
@@ -607,6 +609,7 @@ impl ConsoleDesktopApp {
                 project_menu: app.project_menu.clone(),
                 branch_menu: app.branch_menu.clone(),
                 model_search,
+                loaded_session_id: None,
             },
         );
 
@@ -903,5 +906,29 @@ impl ConsoleDesktopApp {
         let lines = std::rc::Rc::new(console_ui::build_diff_lines(path, diff, theme));
         self.viewer_cached_diff_lines.insert(path.to_string(), (len, hash, lines.clone()));
         lines
+    }
+
+    pub fn get_or_build_markdown_view(
+        &mut self,
+        path: &str,
+        content: &str,
+    ) -> std::rc::Rc<std::cell::RefCell<console_ui::MarkdownView>> {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        content.hash(&mut hasher);
+        let hash = hasher.finish();
+        let len = content.len();
+
+        if let Some((cached_len, cached_hash, view)) = self.viewer_cached_markdown_views.get(path) {
+            if *cached_len == len && *cached_hash == hash {
+                return view.clone();
+            }
+        }
+
+        let mut view = console_ui::MarkdownView::new();
+        view.set_text(content, false);
+        let rc = std::rc::Rc::new(std::cell::RefCell::new(view));
+        self.viewer_cached_markdown_views.insert(path.to_string(), (len, hash, rc.clone()));
+        rc
     }
 }

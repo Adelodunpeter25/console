@@ -147,6 +147,7 @@ impl ConsoleDesktopApp {
                 project_menu,
                 branch_menu,
                 model_search,
+                loaded_session_id: None,
             },
         );
     }

@@ -58,7 +58,8 @@ impl ConsoleDesktopApp {
             };
 
             if is_markdown {
-                return console_ui::MarkdownViewer::new(path.clone(), content)
+                let view = self.get_or_build_markdown_view(path, &content);
+                return console_ui::MarkdownViewer::new(path.clone(), view)
                     .into_any_element();
             }
 

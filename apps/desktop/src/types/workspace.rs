@@ -35,4 +35,6 @@ pub(crate) struct WorkspacePaneState {
     /// app so the dropdown re-renders, and the field is cleared and focused
     /// each time the popover opens.
     pub(crate) model_search: Entity<ComposerInput>,
+    /// The session id whose messages are currently loaded in this pane's transcript.
+    pub(crate) loaded_session_id: Option<String>,
 }

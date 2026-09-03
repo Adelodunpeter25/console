@@ -61,7 +61,15 @@ impl Render for ConsoleDesktopApp {
                             this.select_workspace_tab(&pane_id, &tab_id);
                             if let Some(sid) = tab_id.strip_prefix("chat:") {
                                 this.selected_session_id = Some(sid.to_string());
-                                if prev_sid.as_deref() == Some(sid) {
+                                let already_loaded = this
+                                    .workspace_pane_states
+                                    .get(&pane_id)
+                                    .and_then(|state| state.loaded_session_id.as_deref())
+                                    == Some(sid);
+                                if already_loaded || prev_sid.as_deref() == Some(sid) {
+                                    if this.right_sidebar_visible {
+                                        this.refresh_inspector(cx);
+                                    }
                                     cx.notify();
                                     return;
                                 }
@@ -122,6 +130,18 @@ impl Render for ConsoleDesktopApp {
 
                             if let Some(sid) = new_active_session {
                                 this.selected_session_id = Some(sid.clone());
+                                let already_loaded = this
+                                    .workspace_pane_states
+                                    .get(&pane_id)
+                                    .and_then(|state| state.loaded_session_id.as_deref())
+                                    == Some(&sid);
+                                if already_loaded {
+                                    if this.right_sidebar_visible {
+                                        this.refresh_inspector(cx);
+                                    }
+                                    cx.notify();
+                                    return;
+                                }
                                 let draft = this.get_draft_for_session(Some(&sid)).map(|s| s.to_string());
                                 composer.update(cx, |input, cx| {
                                     input.set_prompt_history(Vec::new(), cx);
