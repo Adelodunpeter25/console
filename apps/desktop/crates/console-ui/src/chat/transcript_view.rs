@@ -870,11 +870,11 @@ impl Render for TranscriptView {
         let entity = cx.entity().downgrade();
         let is_streaming = self.is_streaming;
 
-        // Auto-load older when scrolled to top (covers wheel, scrollbar, touch).
-        // Checks on every render: if at top and has_more, trigger load.
+        // Auto-load older when scrolled near top (covers wheel, scrollbar, touch).
+        // Checks on every render: if near top and has_more, trigger load.
         if self.has_more && !self.loading_older && !self.messages.is_empty() {
             let top = self.list_state.logical_scroll_top();
-            if top.item_ix == 0 && top.offset_in_item == px(0.0) {
+            if top.item_ix <= 1 {
                 if let Some(handler) = self.on_load_older.clone() {
                     let window_handle = _window.window_handle();
                     cx.spawn(async move |_, cx| {
