@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { View, Text, Pressable, ActivityIndicator, ScrollView, BackHandler } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Search, RefreshCw, File as FileIcon, Eye, Code2 } from "lucide-react-native";
+import { Search, RefreshCw, File as FileIcon } from "lucide-react-native";
 import { TextInput } from "react-native";
 import { useDirectoryChildren, useReadFile, useSearchFiles } from "@/hooks/queries";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -34,13 +34,8 @@ export function FilesScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
   const selectedFilePath = selectedFile?.path ?? null;
-  const [markdownMode, setMarkdownMode] = useState<"preview" | "code">("preview");
 
   const isMarkdownFile = useMemo(() => isMarkdownPath(selectedFilePath ?? undefined), [selectedFilePath]);
-
-  useEffect(() => {
-    setMarkdownMode("preview");
-  }, [selectedFilePath]);
 
   const project = useMemo(
     () => projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null,
@@ -171,26 +166,6 @@ export function FilesScreen() {
         ) : (
           <View className="flex-1 bg-screen">
             {isMarkdownFile ? (
-              <View className="flex-row items-center justify-center px-3 py-2 border-b border-border bg-card/40">
-                <View className="flex-row rounded-full bg-card border border-border p-0.5">
-                  <Pressable
-                    onPress={() => setMarkdownMode("preview")}
-                    className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full ${markdownMode === "preview" ? "bg-foreground" : ""}`}
-                  >
-                    <Eye size={13} color={markdownMode === "preview" ? "#000" : theme.colors.text.secondary} />
-                    <Text className={`text-xs font-semibold ${markdownMode === "preview" ? "text-black" : "text-foreground-secondary"}`}>Preview</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setMarkdownMode("code")}
-                    className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full ${markdownMode === "code" ? "bg-foreground" : ""}`}
-                  >
-                    <Code2 size={13} color={markdownMode === "code" ? "#000" : theme.colors.text.secondary} />
-                    <Text className={`text-xs font-semibold ${markdownMode === "code" ? "text-black" : "text-foreground-secondary"}`}>Code</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ) : null}
-            {isMarkdownFile && markdownMode === "preview" ? (
               <MarkdownFilePreview content={fileData?.content ?? ""} />
             ) : (
               <ScrollView
