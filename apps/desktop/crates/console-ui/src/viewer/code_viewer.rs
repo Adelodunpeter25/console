@@ -320,6 +320,10 @@ impl RenderOnce for CodeViewer {
             line_num_width as f32 + 12.0
         };
 
+        let max_cols = self.lines.iter().map(|l| l.text.len()).max().unwrap_or(80);
+        let content_width = gutter_offset + (max_cols as f32 * CHAR_WIDTH) + 64.0;
+        let list_state_for_items = self.list_state.clone();
+
         let lines_rc = self.lines.clone();
         let selection_rc = self.selection_state.clone();
         let selection_for_copy = self.selection_state.clone();
@@ -421,16 +425,24 @@ impl RenderOnce for CodeViewer {
             .as_ref()
             .map(|s| scrollbar::vertical(&self.list_state, s));
 
-        container
+        div()
+            .id(ElementId::Name(format!("code-viewer-root-{}", self.id).into()))
+            .relative()
+            .size_full()
+            .min_h_0()
+            .min_w_0()
+            .bg(theme.canvas)
             .child(mouse_tracker)
             .child(
-                div()
-                    .relative()
-                    .size_full()
-                    .min_h_0()
-                    .min_w_0()
-                    .child(
-                        list(self.list_state, move |index, _window, _cx| {
+                container.child(
+                    div()
+                        .relative()
+                        .min_w(px(content_width))
+                        .w_full()
+                        .h_full()
+                        .min_h_0()
+                        .child(
+                            list(self.list_state, move |index, _window, _cx| {
                             let Some(line) = lines_rc.get(index) else {
                                 return div().into_any_element();
                             };
@@ -517,6 +529,8 @@ impl RenderOnce for CodeViewer {
 
                             let sel_mouse_down = selection_rc.clone();
                             let sel_mouse_move = selection_rc.clone();
+                            let ls_down = list_state_for_items.clone();
+                            let ls_move = list_state_for_items.clone();
                             let line_len = line.text.len();
 
                             div()
@@ -530,7 +544,7 @@ impl RenderOnce for CodeViewer {
                                 .bg(bg)
                                 .cursor_text()
                                 .on_mouse_down(MouseButton::Left, move |event, window, _cx| {
-                                    let x = f32::from(event.position.x) - gutter_offset;
+                                    let x = f32::from(event.position.x - ls_down.viewport_bounds().origin.x) - gutter_offset;
                                     let col = if x > 0.0 {
                                         min((x / CHAR_WIDTH).round() as usize, line_len)
                                     } else {
@@ -546,7 +560,7 @@ impl RenderOnce for CodeViewer {
                                     let mut state = sel_mouse_move.borrow_mut();
                                     if state.is_dragging {
                                         if let Some(mut sel) = state.selection {
-                                            let x = f32::from(event.position.x) - gutter_offset;
+                                            let x = f32::from(event.position.x - ls_move.viewport_bounds().origin.x) - gutter_offset;
                                             let col = if x > 0.0 {
                                                 min((x / CHAR_WIDTH).round() as usize, line_len)
                                             } else {
@@ -575,9 +589,9 @@ impl RenderOnce for CodeViewer {
                         })
                         .flex_1()
                         .size_full(),
-                    )
-                    .children(scrollbar),
-            )
+                ),
+            ))
+            .children(scrollbar)
             .into_any_element()
     }
 }
