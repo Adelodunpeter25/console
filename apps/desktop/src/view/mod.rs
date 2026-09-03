@@ -229,25 +229,68 @@ impl Render for ConsoleDesktopApp {
                 }
             })
         };
-        // The unified title bar shows the selected session's identity:
-        // "chat title — folder name", mirroring the Electron app.
-        let titlebar_text = self
-            .selected_session_id
-            .as_deref()
-            .and_then(|sid| self.sessions.iter().find(|s| s.id == sid))
-            .map(|session| {
-                let folder = self
-                    .projects
-                    .iter()
-                    .find(|project| project.matches_session(session))
-                    .map(|project| project.name.clone())
-                    .unwrap_or_else(|| console_ui::utils::format_folder_display_name(&session.cwd));
-                if folder.is_empty() {
-                    session.display_title().to_string()
-                } else {
-                    format!("{} — {}", session.title, folder)
-                }
+        // Title reflects the active tab in the focused pane: File/Diff shows
+        // "filename — folder", otherwise the selected chat's "title — folder".
+        let titlebar_text: Option<String> = {
+            let active_pane_id = active_pane.as_deref().unwrap_or("pane-main");
+            let active_tab = workspace_root.leaves().into_iter().find(|l| l.id == active_pane_id).and_then(|leaf| {
+                leaf.active_tab_id
+                    .as_deref()
+                    .and_then(|id| leaf.tabs.iter().find(|t| t.id() == id))
             });
+            match active_tab {
+                Some(console_core::WorkspaceTabConfig::File { title, project_id, .. })
+                | Some(console_core::WorkspaceTabConfig::Diff { title, project_id, .. }) => {
+                    let folder = project_id
+                        .as_deref()
+                        .and_then(|pid| self.projects.iter().find(|p| p.id == pid).map(|p| p.name.clone()))
+                        .or_else(|| {
+                            self.pane_project_id(active_pane_id)
+                                .and_then(|pid| self.projects.iter().find(|p| p.id == pid).map(|p| p.name.clone()))
+                        })
+                        .or_else(|| {
+                            self.selected_session_id
+                                .as_deref()
+                                .and_then(|sid| self.sessions.iter().find(|s| s.id == sid))
+                                .and_then(|session| {
+                                    self.projects
+                                        .iter()
+                                        .find(|p| p.matches_session(session))
+                                        .map(|p| p.name.clone())
+                                        .or_else(|| {
+                                            let cwd = &session.cwd;
+                                            if cwd.is_empty() {
+                                                None
+                                            } else {
+                                                Some(console_ui::utils::format_folder_display_name(cwd))
+                                            }
+                                        })
+                                })
+                        });
+                    match folder {
+                        Some(f) if !f.is_empty() => Some(format!("{} — {}", title, f)),
+                        _ => Some(title.clone()),
+                    }
+                }
+                _ => self
+                    .selected_session_id
+                    .as_deref()
+                    .and_then(|sid| self.sessions.iter().find(|s| s.id == sid))
+                    .map(|session| {
+                        let folder = self
+                            .projects
+                            .iter()
+                            .find(|project| project.matches_session(session))
+                            .map(|project| project.name.clone())
+                            .unwrap_or_else(|| console_ui::utils::format_folder_display_name(&session.cwd));
+                        if folder.is_empty() {
+                            session.display_title().to_string()
+                        } else {
+                            format!("{} — {}", session.title, folder)
+                        }
+                    }),
+            }
+        };
         let on_toggle_sidebar: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
             let entity = entity.clone();
             Rc::new(move |_w, cx| {
