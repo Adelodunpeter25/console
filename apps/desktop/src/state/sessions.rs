@@ -265,6 +265,7 @@ impl ConsoleDesktopApp {
                     },
                     header.title.clone(),
                 );
+                cx.notify();
             }
         }
 
