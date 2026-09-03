@@ -870,6 +870,24 @@ impl Render for TranscriptView {
         let entity = cx.entity().downgrade();
         let is_streaming = self.is_streaming;
 
+        // Auto-load older when scrolled to top (covers wheel, scrollbar, touch).
+        // Checks on every render: if at top and has_more, trigger load.
+        if self.has_more && !self.loading_older && !self.messages.is_empty() {
+            let top = self.list_state.logical_scroll_top();
+            if top.item_ix == 0 && top.offset_in_item == px(0.0) {
+                if let Some(handler) = self.on_load_older.clone() {
+                    let window_handle = _window.window_handle();
+                    cx.spawn(async move |_, cx| {
+                        // Defer to next frame to avoid re-entrancy during render
+                        cx.background_executor().timer(std::time::Duration::from_millis(16)).await;
+                        let _ = cx.update_window(window_handle, |_, window, cx| {
+                            handler(window, cx);
+                        });
+                    }).detach();
+                }
+            }
+        }
+
         div()
             .id("transcript-view")
             .key_context("TranscriptView")
@@ -885,24 +903,6 @@ impl Render for TranscriptView {
                     .size_full()
                     .flex()
                     .flex_col()
-                    .on_scroll_wheel({
-                        let list_state_for_scroll = self.list_state.clone();
-                        let has_more_for_scroll = self.has_more;
-                        let loading_for_scroll = self.loading_older;
-                        let on_load_for_scroll = self.on_load_older.clone();
-                        move |_event, window, cx| {
-                            if !has_more_for_scroll || loading_for_scroll {
-                                return;
-                            }
-                            let top = list_state_for_scroll.logical_scroll_top();
-                            // When at very top, auto-load older messages
-                            if top.item_ix == 0 && top.offset_in_item == px(0.0) {
-                                if let Some(handler) = &on_load_for_scroll {
-                                    handler(window, cx);
-                                }
-                            }
-                        }
-                    })
                     .child(
                         list(self.list_state.clone(), move |index, _window, cx| {
                             transcript_row(entity.clone(), index, cx)
