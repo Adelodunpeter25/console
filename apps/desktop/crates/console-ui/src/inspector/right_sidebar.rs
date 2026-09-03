@@ -93,7 +93,7 @@ impl RenderOnce for RightSidebar {
         let on_tab = self.on_select_tab;
         let on_refresh = self.on_refresh;
         let on_resize = self.on_begin_resize;
-        let changes_count = self.working_changes.len() + self.session_changes.len();
+        let changes_count = self.working_changes.len();
         let subagents_count = self.subagents.len();
 
         div()
