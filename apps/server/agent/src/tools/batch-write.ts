@@ -11,20 +11,10 @@ const fileEntrySchema = z.object({
 
 const inputSchema = z.object({
   files: z
-    .preprocess(
-      (val) => {
-        if (val && typeof val === "object" && !Array.isArray(val)) {
-          return Object.entries(val as Record<string, unknown>).map(([path, content]) => ({
-            path,
-            content: typeof content === "string" ? content : String(content ?? ""),
-          }));
-        }
-        return val;
-      },
-      z.array(fileEntrySchema).min(1),
-    )
+    .array(fileEntrySchema)
+    .min(1)
     .describe(
-      "List of files to write. Each entry has a path and content. All writes happen concurrently. Also accepts map form {\"path\":\"content\"} for backward compat.",
+      "List of files to write. Each entry has a path and content. All writes happen concurrently.",
     ),
   cwd: z
     .string()
