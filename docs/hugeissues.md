@@ -239,3 +239,32 @@ In `apps/server/api/src/services/session.service.ts`:
    Call `setStatuses(sessions)` in `useHomeSessions` so recent and home-screen sessions have accurate cached statuses.
 3. **Dynamic Status on Server**:
    In `sessionService.getSession` and `sessionService.listSessions`, dynamically override `session.status = "working"` (or `header.status = "working"`) if `RunService.isRunActive(session.id)` is `true`.
+
+---
+
+## 5. Post-Streaming Transcript Regressing to Old Messages (Replaced by Stale Settled State)
+
+### Symptoms
+- An agent finishes streaming a response on Desktop.
+- Immediately after streaming completes (or a moment later), the latest response vanishes or snaps back to older messages.
+- The user has to close the chat tab and re-open it to see the latest messages.
+
+### Correlation with `docs/papercut-fixes-spec.md` (Fix 3)
+This is directly caused by the **`wait_until_settled` post-stream reconciliation race** specified in Fix 3 of [`docs/papercut-fixes-spec.md`](papercut-fixes-spec.md#fix-3--after-second-prompt-completes-ui-shows-first-prompts-state-stale-transcript):
+
+1. **The In-Memory vs Canonical Collision**: While the agent is running, Desktop streams tokens directly into `TranscriptView` via `AgentSessionEvent` deltas (optimistic/live state).
+2. **Premature / Out-of-Order Overwrite**: Once the SSE stream terminates, `run.rs` (line 278) awaits `client.sessions.wait_until_settled(&session_id)`. When it returns, line 298 executes:
+   ```rust
+   this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
+       t.set_messages(detail.messages, cx); // <--- Overwrites live transcript
+   });
+   ```
+3. **The Race Condition**:
+   - For sequential prompts (Prompt A followed by Prompt B): Run A's detached `wait_until_settled` resolves *after* Prompt B has streamed, calling `set_messages([Prompt A, Result A])`, obliterating Prompt B and Result B.
+   - For single-prompt boundary races: If `wait_until_settled` polls `GET /api/sessions/:id` before SQLite has committed the final turn row from `RunService`, `detail.messages` returns without the latest turn, clobbering the live stream with the previous turn.
+   - When the user closes and re-opens the tab, `load_session_messages_for_pane` fetches the now-settled SQLite database from scratch, which finally shows the latest prompt.
+
+### Remedy
+As specified in `papercut-fixes-spec.md`:
+1. Use **monotonic run tokens** (`run_token`) per session to discard any `wait_until_settled` payload that belongs to an earlier run.
+2. In `wait_until_settled`, ensure the payload contains at least the message count of the current transcript before calling `t.set_messages(...)`, preventing regression to a shorter or older message list.
