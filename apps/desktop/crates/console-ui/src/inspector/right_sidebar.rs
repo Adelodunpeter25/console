@@ -117,10 +117,10 @@ impl RenderOnce for RightSidebar {
                     .bottom_0()
                     .w(px(6.0))
                     .cursor_col_resize()
-                    .hover(|s| s.bg(theme.accent.opacity(0.3)))
                     .on_mouse_down(
                         MouseButton::Left,
                         move |event: &MouseDownEvent, window, cx| {
+                            cx.stop_propagation();
                             (on_resize)(f32::from(event.position.x), window, cx);
                         },
                     ),
