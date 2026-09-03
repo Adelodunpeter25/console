@@ -19,3 +19,8 @@
 ## Scope
 - Don't over-engineer. Make the minimal change that satisfies the task.
 - Follow existing code patterns and conventions.
+
+## Working Tree & User Changes
+- **Never discard, checkout, or reset uncommitted user changes** (`git checkout <file>`, `git restore`, `git reset`, etc.).
+- As long as a modified file was not touched by your current task, leave it completely alone.
+- Even if user changes cause compilation errors, do NOT revert or fix them without explicit permission; report the compilation error to the user instead.
