@@ -1,5 +1,3 @@
-//! Full-page File Viewer component for workspace tabs.
-
 use std::cell::RefCell;
 use std::rc::Rc;
 

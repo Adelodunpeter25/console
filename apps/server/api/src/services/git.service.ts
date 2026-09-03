@@ -137,22 +137,57 @@ export class GitService {
    */
   async getDiff(repoPath: string, filePath?: string): Promise<string> {
     try {
-      const target = filePath ? ` -- "${filePath}"` : "";
-      const diffRes = await execAsync(`git diff HEAD${target}`, { cwd: repoPath });
+      let cwd = repoPath;
+      let targetPath = filePath;
+
+      if (filePath && path.isAbsolute(filePath)) {
+        try {
+          const rootRes = await execAsync("git rev-parse --show-toplevel", {
+            cwd: path.dirname(filePath),
+          });
+          if (rootRes.stdout.trim()) {
+            cwd = rootRes.stdout.trim();
+            targetPath = path.relative(cwd, filePath);
+          }
+        } catch {
+          // If rev-parse fails, keep cwd as repoPath
+        }
+      }
+
+      const target = targetPath ? ` -- "${targetPath}"` : "";
+
+      // 1. Try staged + unstaged diff against HEAD
+      const diffRes = await execAsync(`git diff HEAD${target}`, { cwd });
       if (diffRes.stdout.trim()) {
         return diffRes.stdout;
       }
-      const unstagedRes = await execAsync(`git diff${target}`, { cwd: repoPath });
-      return unstagedRes.stdout;
-    } catch {
-      try {
-        const target = filePath ? ` -- "${filePath}"` : "";
-        const fallbackRes = await execAsync(`git diff${target}`, { cwd: repoPath });
-        return fallbackRes.stdout;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return `Failed to compute git diff: ${msg}`;
+
+      // 2. Try unstaged diff (e.g. in fresh repository without commits)
+      const unstagedRes = await execAsync(`git diff${target}`, { cwd });
+      if (unstagedRes.stdout.trim()) {
+        return unstagedRes.stdout;
       }
+
+      // 3. If file is untracked, produce unified diff against /dev/null
+      if (targetPath) {
+        try {
+          const statusRes = await execAsync(`git status --porcelain -- "${targetPath}"`, { cwd });
+          const statusLine = statusRes.stdout.trim();
+          if (statusLine.startsWith("?") || statusLine.startsWith("A")) {
+            const noIndexRes = await execAsync(
+              `git diff --no-index /dev/null "${targetPath}"`,
+              { cwd }
+            ).catch((err: { stdout?: string }) => ({ stdout: err.stdout || "" }));
+            if (noIndexRes.stdout.trim()) {
+              return noIndexRes.stdout;
+            }
+          }
+        } catch {}
+      }
+
+      return "";
+    } catch {
+      return "";
     }
   }
 

@@ -44,13 +44,24 @@ impl ConsoleDesktopApp {
             };
         }
 
-        // File tab: render full-page FileViewer
+        // File tab: render full-page MarkdownViewer if markdown, or FileViewer
         if let Some(console_core::WorkspaceTabConfig::File { path, .. }) = active_tab {
             let content = self
                 .open_file_contents
                 .get(path)
                 .cloned()
                 .unwrap_or_else(|| "Loading file content...".to_string());
+
+            let is_markdown = {
+                let lower = path.to_lowercase();
+                lower.ends_with(".md") || lower.ends_with(".markdown") || lower.ends_with(".mdx")
+            };
+
+            if is_markdown {
+                return console_ui::MarkdownViewer::new(path.clone(), content)
+                    .into_any_element();
+            }
+
             let lines = self.get_or_build_file_lines(path, &content);
             let line_count = lines.len();
             let list_state = self.viewer_list_state(

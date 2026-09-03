@@ -598,7 +598,13 @@ impl ConsoleDesktopApp {
             .selected_session_id
             .as_deref()
             .and_then(|id| self.sessions.iter().find(|s| s.id == id))
-            .map(|s| s.cwd.clone());
+            .map(|s| s.cwd.clone())
+            .or_else(|| {
+                self.selected_project_id
+                    .as_deref()
+                    .and_then(|id| self.projects.iter().find(|p| p.id == id))
+                    .map(|p| p.path.clone())
+            });
 
         cx.spawn(async move |entity, cx| {
             let mut diff_raw = String::new();
@@ -608,24 +614,6 @@ impl ConsoleDesktopApp {
 
             let diff_result = if !diff_raw.trim().is_empty() {
                 console_core::utils::diff::parse_unified_diff(&diff_raw)
-            } else if let Ok(file_resp) = client.fs.read_file(&file_path).await {
-                let lines: Vec<console_core::DiffLine> = file_resp
-                    .content
-                    .lines()
-                    .enumerate()
-                    .map(|(i, line)| console_core::DiffLine {
-                        kind: console_core::DiffLineKind::Added,
-                        text: line.to_string(),
-                        old_no: None,
-                        new_no: Some(i + 1),
-                    })
-                    .collect();
-                let len = lines.len();
-                console_core::DiffResult {
-                    lines,
-                    added: len,
-                    removed: 0,
-                }
             } else {
                 console_core::DiffResult::default()
             };

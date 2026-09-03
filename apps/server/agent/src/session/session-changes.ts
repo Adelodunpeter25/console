@@ -1,16 +1,23 @@
 import type { SessionFileChange } from "@console/types";
-import { getProjectIdBySessionId, getSessionDb } from "./session-helpers.js";
+import { getSessionDb } from "./session-helpers.js";
 import type { StorageState } from "./utils.js";
+
+function getSessionDbForSession(state: StorageState, sessionId: string) {
+  const row = state.globalDb
+    .prepare("SELECT project_id FROM sessions WHERE id = ?")
+    .get(sessionId) as { project_id: string | null } | undefined;
+  if (!row) return null;
+  return getSessionDb(state, sessionId, row.project_id);
+}
 
 export function recordFileChange(
   state: StorageState,
   sessionId: string,
   change: SessionFileChange,
 ): void {
-  const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) return;
+  const sessionDb = getSessionDbForSession(state, sessionId);
+  if (!sessionDb) return;
 
-  const sessionDb = getSessionDb(state, sessionId, projectId);
   const now = change.updatedAt || Date.now();
 
   sessionDb
@@ -38,10 +45,9 @@ export function getSessionFileChanges(
   state: StorageState,
   sessionId: string,
 ): SessionFileChange[] {
-  const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) return [];
+  const sessionDb = getSessionDbForSession(state, sessionId);
+  if (!sessionDb) return [];
 
-  const sessionDb = getSessionDb(state, sessionId, projectId);
   const rows = sessionDb
     .prepare(
       `SELECT path, status, additions, deletions, turn_index as turnIndex, updated_at as updatedAt
@@ -57,9 +63,8 @@ export function clearSessionFileChanges(
   state: StorageState,
   sessionId: string,
 ): void {
-  const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) return;
+  const sessionDb = getSessionDbForSession(state, sessionId);
+  if (!sessionDb) return;
 
-  const sessionDb = getSessionDb(state, sessionId, projectId);
   sessionDb.prepare(`DELETE FROM session_file_changes`).run();
 }
