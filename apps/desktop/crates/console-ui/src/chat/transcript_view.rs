@@ -175,11 +175,20 @@ impl TranscriptView {
         self.has_more = has_more;
         self.next_cursor = next_cursor;
         self.loading_older = false;
-        // Keep scroll position stable: offset by number of prepended items
+        // Keep scroll position visually stable. Hidden tool-transport rows
+        // have zero height, so offsetting by item count alone leaves the
+        // viewport on the same logical item but hides the newly prepended
+        // prompt above the fold. Preserve pixel offset instead: if we were
+        // at the very top (item 0-2), stay at the top so the older prompt
+        // is immediately visible; otherwise offset by prepended items.
         let prepended = self.messages.len() - old_len;
-        if let Some((row, offset, _at_tail)) = anchor {
+        let stay_at_top = anchor.map(|(r, _, _)| r <= 2).unwrap_or(false);
+        if stay_at_top {
+            // Let refresh_list reset to 0 and keep the viewport at the top
+            // so the newly loaded older prompt is visible.
+            self.refresh_list();
+        } else if let Some((row, offset, _at_tail)) = anchor {
             let new_row = row + prepended;
-            // Delay one frame to let list remeasure
             let entity = cx.entity().downgrade();
             cx.spawn(async move |_, cx| {
                 cx.background_executor().timer(Duration::from_millis(16)).await;
@@ -194,8 +203,10 @@ impl TranscriptView {
                     }
                 });
             }).detach();
+            self.refresh_list();
+        } else {
+            self.refresh_list();
         }
-        self.refresh_list();
         cx.notify();
     }
 
@@ -871,10 +882,12 @@ impl Render for TranscriptView {
         let is_streaming = self.is_streaming;
 
         // Auto-load older when scrolled near top (covers wheel, scrollbar, touch).
-        // Checks on every render: if near top and has_more, trigger load.
+        // Hidden tool-transport rows have zero height, so the first visible
+        // row can be at item_ix >1 even when visually at the top. Use a
+        // generous threshold so scrolling to the top always triggers.
         if self.has_more && !self.loading_older && !self.messages.is_empty() {
             let top = self.list_state.logical_scroll_top();
-            if top.item_ix <= 1 {
+            if top.item_ix <= 5 {
                 if let Some(handler) = self.on_load_older.clone() {
                     let window_handle = _window.window_handle();
                     cx.spawn(async move |_, cx| {
