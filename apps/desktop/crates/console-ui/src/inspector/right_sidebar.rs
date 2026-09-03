@@ -1,6 +1,7 @@
 //! Conductor-style Right Sidebar Inspector Shell.
 
-use std::collections::HashSet;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use console_core::types::{GitFileEntry, SessionFileChange, SubagentInfo};
@@ -12,6 +13,7 @@ use gpui::{
 use crate::inspector::changes_list::ChangesListView;
 use crate::inspector::file_tree::{FileTreeNode, FileTreeView};
 use crate::inspector::subagent_list::SubagentListView;
+use crate::markdown::render::MarkdownView;
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 
@@ -35,6 +37,7 @@ pub struct RightSidebar {
     expanded_folders: HashSet<String>,
     expanded_subagents: HashSet<String>,
     selected_path: Option<String>,
+    subagent_markdown_views: Option<Rc<RefCell<HashMap<String, Rc<RefCell<MarkdownView>>>>>>,
     on_select_tab: Rc<dyn Fn(InspectorTab, &mut Window, &mut App) + 'static>,
     on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -76,6 +79,7 @@ impl RightSidebar {
             expanded_folders,
             expanded_subagents,
             selected_path,
+            subagent_markdown_views: None,
             on_select_tab,
             on_toggle_folder,
             on_select_file,
@@ -84,6 +88,14 @@ impl RightSidebar {
             on_refresh,
             on_begin_resize,
         }
+    }
+
+    pub fn subagent_markdown_views(
+        mut self,
+        views: Rc<RefCell<HashMap<String, Rc<RefCell<MarkdownView>>>>>,
+    ) -> Self {
+        self.subagent_markdown_views = Some(views);
+        self
     }
 }
 
@@ -309,13 +321,18 @@ impl RenderOnce for RightSidebar {
                     self.on_select_file,
                 )
                 .into_any_element(),
-                InspectorTab::Subagents => SubagentListView::new(
-                    self.subagents,
-                    self.expanded_subagents,
-                    self.on_toggle_subagent,
-                    self.on_copy_summary,
-                )
-                .into_any_element(),
+                InspectorTab::Subagents => {
+                    let mut list = SubagentListView::new(
+                        self.subagents,
+                        self.expanded_subagents,
+                        self.on_toggle_subagent,
+                        self.on_copy_summary,
+                    );
+                    if let Some(views) = self.subagent_markdown_views {
+                        list = list.markdown_views(views);
+                    }
+                    list.into_any_element()
+                }
             })
     }
 }

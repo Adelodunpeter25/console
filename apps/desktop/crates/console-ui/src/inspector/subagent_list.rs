@@ -1,7 +1,7 @@
 //! Subagent List & Activity Timeline for the Right Inspector Panel.
 
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use console_core::types::SubagentInfo;
@@ -21,6 +21,7 @@ use crate::theme::Theme;
 pub struct SubagentListView {
     subagents: Rc<Vec<SubagentInfo>>,
     expanded_subagents: HashSet<String>,
+    markdown_views: Option<Rc<RefCell<HashMap<String, Rc<RefCell<MarkdownView>>>>>>,
     selection: TranscriptSelection,
     on_toggle_subagent: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_copy_summary: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -36,10 +37,19 @@ impl SubagentListView {
         Self {
             subagents,
             expanded_subagents,
+            markdown_views: None,
             selection: TranscriptSelection::default(),
             on_toggle_subagent,
             on_copy_summary,
         }
+    }
+
+    pub fn markdown_views(
+        mut self,
+        views: Rc<RefCell<HashMap<String, Rc<RefCell<MarkdownView>>>>>,
+    ) -> Self {
+        self.markdown_views = Some(views);
+        self
     }
 
     pub fn selection(mut self, selection: TranscriptSelection) -> Self {
@@ -430,7 +440,25 @@ impl RenderOnce for SubagentListView {
                                                     }),
                                             )
                                             .child(if let Some(ref sum) = summary_text {
-                                                let sum_view = Rc::new(RefCell::new(MarkdownView::new()));
+                                                let subagent_id = subagent.subagent_id.clone();
+                                                let sum_view = if let Some(ref cache) = self.markdown_views {
+                                                    cache
+                                                        .borrow_mut()
+                                                        .entry(subagent_id)
+                                                        .or_insert_with(|| Rc::new(RefCell::new(MarkdownView::new())))
+                                                        .clone()
+                                                } else {
+                                                    thread_local! {
+                                                        static LOCAL_SUBAGENT_VIEWS: RefCell<HashMap<String, Rc<RefCell<MarkdownView>>>> =
+                                                            RefCell::new(HashMap::new());
+                                                    }
+                                                    LOCAL_SUBAGENT_VIEWS.with(|cell| {
+                                                        cell.borrow_mut()
+                                                            .entry(subagent_id)
+                                                            .or_insert_with(|| Rc::new(RefCell::new(MarkdownView::new())))
+                                                            .clone()
+                                                    })
+                                                };
                                                 let sum_ctx = MarkdownCtx::new(
                                                     format!("subagent-summary-{}", subagent.subagent_id),
                                                     &palette,

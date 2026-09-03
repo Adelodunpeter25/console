@@ -750,25 +750,28 @@ impl Render for ConsoleDesktopApp {
                             .and_then(|id| self.session_subagents.get(id).cloned())
                             .unwrap_or_else(|| Rc::new(Vec::new()));
 
-                        el.child(RightSidebar::new(
-                            self.right_sidebar_width,
-                            self.inspector_active_tab,
-                            self.inspector_search_query.clone(),
-                            self.inspector_tree.clone(),
-                            self.inspector_working_changes.clone(),
-                            self.inspector_session_changes.clone(),
-                            subagents,
-                            (*self.inspector_expanded_folders).clone(),
-                            self.expanded_subagents.clone(),
-                            self.inspector_selected_path.clone(),
-                            on_select_inspector_tab,
-                            on_toggle_inspector_folder,
-                            on_select_inspector_file,
-                            on_toggle_subagent,
-                            on_copy_summary,
-                            on_refresh_inspector,
-                            on_begin_right_sidebar_resize,
-                        ))
+                        el.child(
+                            RightSidebar::new(
+                                self.right_sidebar_width,
+                                self.inspector_active_tab,
+                                self.inspector_search_query.clone(),
+                                self.inspector_tree.clone(),
+                                self.inspector_working_changes.clone(),
+                                self.inspector_session_changes.clone(),
+                                subagents,
+                                (*self.inspector_expanded_folders).clone(),
+                                self.expanded_subagents.clone(),
+                                self.inspector_selected_path.clone(),
+                                on_select_inspector_tab,
+                                on_toggle_inspector_folder,
+                                on_select_inspector_file,
+                                on_toggle_subagent,
+                                on_copy_summary,
+                                on_refresh_inspector,
+                                on_begin_right_sidebar_resize,
+                            )
+                            .subagent_markdown_views(self.subagent_markdown_views.clone()),
+                        )
                     }),
             )
             .when_some(self.zoomed_image.clone(), |el, image| {

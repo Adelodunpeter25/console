@@ -17,6 +17,7 @@ use console_ui::{
     PickerTab, ProjectBrowsePalette, QuickOpenPalette, TranscriptView,
 };
 use gpui::{AppContext, Context, Entity, ListAlignment, ListState, Subscription, Window, px};
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::persistence;
@@ -155,6 +156,8 @@ pub struct ConsoleDesktopApp {
     pub session_subagents:
         std::collections::HashMap<String, Rc<Vec<console_core::types::SubagentInfo>>>,
     pub expanded_subagents: std::collections::HashSet<String>,
+    pub subagent_markdown_views:
+        Rc<RefCell<std::collections::HashMap<String, Rc<RefCell<console_ui::markdown::render::MarkdownView>>>>>,
     pub preview_tab: Option<(String, std::time::Instant)>,
     pub open_file_contents: std::collections::HashMap<String, String>,
     pub open_diff_contents: std::collections::HashMap<String, (console_core::DiffResult, String)>,
@@ -536,6 +539,7 @@ impl ConsoleDesktopApp {
             inspector_selected_path: None,
             session_subagents: std::collections::HashMap::new(),
             expanded_subagents: std::collections::HashSet::new(),
+            subagent_markdown_views: Rc::new(RefCell::new(std::collections::HashMap::new())),
             preview_tab: None,
             open_file_contents: std::collections::HashMap::new(),
             open_diff_contents: std::collections::HashMap::new(),
