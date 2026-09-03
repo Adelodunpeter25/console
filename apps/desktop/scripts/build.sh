@@ -49,7 +49,7 @@ done
 
 if [[ -z "$BUNDLE_ID" ]]; then
     if [[ "$MODE" == "prod" ]]; then
-        BUNDLE_ID="com.console.desktop.prod"
+        BUNDLE_ID="com.console.desktop"
     else
         BUNDLE_ID="com.console.desktop.dev"
     fi
