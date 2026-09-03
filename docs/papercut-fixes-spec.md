@@ -101,79 +101,12 @@ in `workspace_root` (cloned at line 23), but `titlebar_text` never consults it.
 
 ### Fix
 
-Before falling through to the session-based title, inspect the active pane's active tab.
-If it is a `WorkspaceTabConfig::File` or `WorkspaceTabConfig::Diff`, build the title from
-the tab's own `title` field (which is the filename, already set when the tab is opened) and
-the project/cwd for context.
+Derive the title from the active tab in the focused pane before falling back to the session title:
 
-```rust
-// mod.rs — replace the titlebar_text block
-let titlebar_text: Option<String> = {
-    // First: derive from the active tab in the active pane.
-    let active_pane_id = active_pane.as_deref().unwrap_or("pane-main");
-    let active_tab = workspace_root
-        .leaf(active_pane_id)
-        .and_then(|leaf| {
-            leaf.active_tab_id.as_deref()
-                .and_then(|id| leaf.tabs.iter().find(|t| t.id() == id))
-        });
+* If the active tab is a File or Diff, the title is the tab's filename with the project/folder as suffix (`filename — folder`), mirroring the chat format. Resolve the folder from the tab's own project association or the pane's project, not from the global `selected_session_id`.
+* Otherwise (Chat, Terminal, empty pane), keep the existing session-based title (`chat title — folder` or folder only).
 
-    match active_tab {
-        Some(console_core::WorkspaceTabConfig::File { title, .. })
-        | Some(console_core::WorkspaceTabConfig::Diff { title, .. }) => {
-            // Use the file/diff tab's title (filename) plus the project folder
-            // for context, mirroring the chat tab format.
-            let folder = self
-                .selected_session_id
-                .as_deref()
-                .and_then(|sid| self.sessions.iter().find(|s| s.id == sid))
-                .and_then(|session| {
-                    self.projects
-                        .iter()
-                        .find(|p| p.matches_session(session))
-                        .map(|p| p.name.clone())
-                        .or_else(|| {
-                            let cwd = &session.cwd;
-                            if cwd.is_empty() { None }
-                            else { Some(console_ui::utils::format_folder_display_name(cwd)) }
-                        })
-                });
-            Some(match folder {
-                Some(f) if !f.is_empty() => format!("{} — {}", title, f),
-                _ => title.clone(),
-            })
-        }
-        // Chat, Terminal, or no tab: fall through to session-based title (existing logic)
-        _ => self
-            .selected_session_id
-            .as_deref()
-            .and_then(|sid| self.sessions.iter().find(|s| s.id == sid))
-            .map(|session| {
-                let folder = self
-                    .projects
-                    .iter()
-                    .find(|project| project.matches_session(session))
-                    .map(|project| project.name.clone())
-                    .unwrap_or_else(|| {
-                        console_ui::utils::format_folder_display_name(&session.cwd)
-                    });
-                if folder.is_empty() {
-                    session.display_title().to_string()
-                } else {
-                    format!("{} — {}", session.title, folder)
-                }
-            }),
-    }
-};
-```
-
-**File to edit:**
-`apps/desktop/src/view/mod.rs` — lines 234–250.
-
-Note: `workspace_root` is already cloned as `let workspace_root = self.workspace_root.clone()`
-at line 23, and `active_pane` as `let active_pane = self.active_pane_id.clone()` at line 24,
-so both are in scope without any additional borrowing gymnastics. The `WorkspaceNode` type
-needs a `leaf(&str)` accessor — check if `leaf()` exists or use `leaves().find(|l| l.id == id)`.
+**File to edit:** `apps/desktop/src/view/mod.rs` — `titlebar_text` (around lines 234–250). `workspace_root` and `active_pane` are already cloned at the top of `render`, so the active leaf/tab is available without extra borrows.
 
 ### Test
 Manual verification: open a file from the Inspector or Changes panel, confirm the title bar
