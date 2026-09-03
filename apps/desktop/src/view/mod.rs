@@ -240,7 +240,8 @@ impl Render for ConsoleDesktopApp {
             });
             match active_tab {
                 Some(console_core::WorkspaceTabConfig::File { title, project_id, .. })
-                | Some(console_core::WorkspaceTabConfig::Diff { title, project_id, .. }) => {
+                | Some(console_core::WorkspaceTabConfig::Diff { title, project_id, .. })
+                | Some(console_core::WorkspaceTabConfig::Terminal { title, project_id, .. }) => {
                     let folder = project_id
                         .as_deref()
                         .and_then(|pid| self.projects.iter().find(|p| p.id == pid).map(|p| p.name.clone()))
