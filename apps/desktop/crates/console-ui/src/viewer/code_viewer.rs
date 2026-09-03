@@ -9,7 +9,7 @@ use gpui::{
     App, ClipboardItem, DispatchPhase, ElementId, FocusHandle, Font, FontWeight, Hsla,
     InteractiveElement, IntoElement, ListState, MouseButton, MouseMoveEvent, MouseUpEvent,
     ParentElement, RenderOnce, StatefulInteractiveElement, Styled, StyledText, TextRun, Window,
-    actions, div, list, prelude::*, px,
+    actions, canvas, div, list, prelude::*, px,
 };
 
 use crate::markdown::highlight::{self, Carry, lang_for_tag, lang_tag_for_path};
@@ -278,20 +278,17 @@ fn copy_selection_to_clipboard(
 }
 
 impl RenderOnce for CodeViewer {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let palette = Palette::from_theme(&theme);
 
         if self.lines.is_empty() {
             return div()
-                .id(ElementId::Name(format!("code-viewer-{}", self.id).into()))
+                .id(ElementId::Name(format!("code-viewer-empty-{}", self.id).into()))
                 .size_full()
-                .min_h_0()
-                .min_w_0()
                 .flex()
                 .items_center()
                 .justify_center()
-                .py(px(48.0))
                 .bg(theme.canvas)
                 .text_size(px(11.0))
                 .text_color(theme.text_tertiary)
@@ -331,56 +328,68 @@ impl RenderOnce for CodeViewer {
 
         let selection_bg = theme.selection;
 
-        // Window-level mouse tracking while dragging ensures smooth, continuous selection
-        // even when moving the pointer across rows quickly, into padding, or outside the viewport.
-        window.on_mouse_event({
+        // Window-level mouse tracking runs during the paint phase via canvas, satisfying
+        // GPUI's requirement that window.on_mouse_event may only be called during paint.
+        let mouse_tracker = {
             let selection_state = self.selection_state.clone();
             let list_state = self.list_state.clone();
             let lines_len = self.lines.len();
-            move |event: &MouseMoveEvent, phase, window, _cx| {
-                if phase == DispatchPhase::Bubble {
-                    let mut state = selection_state.borrow_mut();
-                    if state.is_dragging {
-                        if let Some(mut sel) = state.selection {
-                            let viewport = list_state.viewport_bounds();
-                            let scroll_offset = -list_state.scroll_px_offset_for_scrollbar().y;
-                            let rel_y = event.position.y - viewport.origin.y + scroll_offset;
-                            let line_idx = if rel_y > px(0.0) {
-                                ((rel_y / px(CODE_LINE_HEIGHT)).floor() as usize).min(lines_len.saturating_sub(1))
-                            } else {
-                                0
-                            };
-                            let rel_x = f32::from(event.position.x - viewport.origin.x) - gutter_offset;
-                            let col = if rel_x > 0.0 {
-                                (rel_x / CHAR_WIDTH).round() as usize
-                            } else {
-                                0
-                            };
-                            let target_pos = CodePosition { line: line_idx, col };
-                            if sel.head != target_pos {
-                                sel.head = target_pos;
-                                state.selection = Some(sel);
-                                window.refresh();
+
+            canvas(
+                |_, _, _| (),
+                move |_bounds, _, window, _| {
+                    window.on_mouse_event({
+                        let selection_state = selection_state.clone();
+                        let list_state = list_state.clone();
+                        move |event: &MouseMoveEvent, phase, window, _cx| {
+                            if phase == DispatchPhase::Bubble {
+                                let mut state = selection_state.borrow_mut();
+                                if state.is_dragging {
+                                    if let Some(mut sel) = state.selection {
+                                        let viewport = list_state.viewport_bounds();
+                                        let scroll_offset = -list_state.scroll_px_offset_for_scrollbar().y;
+                                        let rel_y = event.position.y - viewport.origin.y + scroll_offset;
+                                        let line_idx = if rel_y > px(0.0) {
+                                            ((rel_y / px(CODE_LINE_HEIGHT)).floor() as usize).min(lines_len.saturating_sub(1))
+                                        } else {
+                                            0
+                                        };
+                                        let rel_x = f32::from(event.position.x - viewport.origin.x) - gutter_offset;
+                                        let col = if rel_x > 0.0 {
+                                            (rel_x / CHAR_WIDTH).round() as usize
+                                        } else {
+                                            0
+                                        };
+                                        let target_pos = CodePosition { line: line_idx, col };
+                                        if sel.head != target_pos {
+                                            sel.head = target_pos;
+                                            state.selection = Some(sel);
+                                            window.refresh();
+                                        }
+                                    }
+                                }
                             }
                         }
-                    }
-                }
-            }
-        });
+                    });
 
-        // Window-level mouse up ensures dragging stops cleanly even if the mouse release happens outside.
-        window.on_mouse_event({
-            let selection_state = self.selection_state.clone();
-            move |_: &MouseUpEvent, phase, window, _cx| {
-                if phase == DispatchPhase::Bubble {
-                    let mut state = selection_state.borrow_mut();
-                    if state.is_dragging {
-                        state.is_dragging = false;
-                        window.refresh();
-                    }
-                }
-            }
-        });
+                    window.on_mouse_event({
+                        let selection_state = selection_state.clone();
+                        move |_: &MouseUpEvent, phase, window, _cx| {
+                            if phase == DispatchPhase::Bubble {
+                                let mut state = selection_state.borrow_mut();
+                                if state.is_dragging {
+                                    state.is_dragging = false;
+                                    window.refresh();
+                                }
+                            }
+                        }
+                    });
+                },
+            )
+            .absolute()
+            .w(px(0.0))
+            .h(px(0.0))
+        };
 
         let mut container = div()
             .id(ElementId::Name(format!("code-viewer-container-{}", self.id).into()))
@@ -413,6 +422,7 @@ impl RenderOnce for CodeViewer {
             .map(|s| scrollbar::vertical(&self.list_state, s));
 
         container
+            .child(mouse_tracker)
             .child(
                 div()
                     .relative()
