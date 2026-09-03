@@ -74,11 +74,12 @@ export function findSessionDbPath(storageDir: string, sessionId: string): string
   return undefined;
 }
 
-export function getProjectIdBySessionId(globalDb: DatabaseType, sessionId: string): string | null {
+export function getProjectIdBySessionId(globalDb: DatabaseType, sessionId: string): string | null | undefined {
   const row = globalDb.prepare("SELECT project_id FROM sessions WHERE id = ?").get(sessionId) as
-    | { project_id: string }
+    | { project_id: string | null }
     | undefined;
-  return row ? row.project_id : null;
+  if (!row) return undefined;
+  return row.project_id && row.project_id !== "scratch" ? row.project_id : null;
 }
 
 export function getSessionDb(
@@ -88,11 +89,16 @@ export function getSessionDb(
 ): DatabaseType {
   let db = state.sessionDbs.get(sessionId);
   if (!db) {
-    const dbPath = projectId == null
-      ? getScratchSessionDbPath(state.storageDir, sessionId)
-      : getSessionDbPath(state.storageDir, projectId, sessionId);
-    ensureDir(dbPath);
-    db = new DatabaseConstructor(dbPath);
+    if (state.storageDir === ":memory:") {
+      db = new DatabaseConstructor(":memory:");
+    } else {
+      const isScratch = projectId == null || projectId === "" || projectId === "scratch";
+      const dbPath = isScratch
+        ? getScratchSessionDbPath(state.storageDir, sessionId)
+        : getSessionDbPath(state.storageDir, projectId, sessionId);
+      ensureDir(dbPath);
+      db = new DatabaseConstructor(dbPath);
+    }
     initSessionDatabase(db);
     state.sessionDbs.set(sessionId, db);
   }

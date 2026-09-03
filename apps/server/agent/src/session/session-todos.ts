@@ -8,7 +8,7 @@ export function saveSessionTodos(
   items: readonly TodoItem[],
 ): void {
   const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) return;
+  if (projectId === undefined) return;
 
   const sessionDb = getSessionDb(state, sessionId, projectId);
   const now = Date.now();
@@ -31,7 +31,7 @@ export function getSessionTodos(
   sessionId: string,
 ): TodoItem[] {
   const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) return [];
+  if (projectId === undefined) return [];
 
   const sessionDb = getSessionDb(state, sessionId, projectId);
   const rows = sessionDb
@@ -50,7 +50,7 @@ export function clearSessionTodos(
   sessionId: string,
 ): void {
   const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) return;
+  if (projectId === undefined) return;
 
   const sessionDb = getSessionDb(state, sessionId, projectId);
   sessionDb.run("DELETE FROM session_todos");

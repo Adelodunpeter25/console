@@ -30,7 +30,7 @@ export function upsertSubagentStart(
   event: SubagentStartEvent,
 ): void {
   const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) return;
+  if (projectId === undefined) return;
 
   const sessionDb = getSessionDb(state, sessionId, projectId);
   const now = Date.now();
@@ -71,7 +71,7 @@ export function appendSubagentActivity(
   event: SubagentActivityEvent,
 ): void {
   const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) return;
+  if (projectId === undefined) return;
 
   const sessionDb = getSessionDb(state, sessionId, projectId);
   const now = Date.now();
@@ -125,7 +125,7 @@ export function completeSubagent(
   event: SubagentEndEvent,
 ): void {
   const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) return;
+  if (projectId === undefined) return;
 
   const sessionDb = getSessionDb(state, sessionId, projectId);
   const now = Date.now();
@@ -152,7 +152,7 @@ export function getSessionSubagents(
   sessionId: string,
 ): SubagentInfo[] {
   const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) return [];
+  if (projectId === undefined) return [];
 
   const sessionDb = getSessionDb(state, sessionId, projectId);
   const rows = sessionDb

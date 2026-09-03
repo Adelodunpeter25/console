@@ -97,22 +97,29 @@ export function loadSession(
     return null;
   }
 
-  let projectId: string | null = indexRow?.project_id ?? null;
+  let projectId: string | null = indexRow?.project_id && indexRow.project_id !== "scratch" ? indexRow.project_id : null;
   let dbPath: string | undefined;
 
-  if (projectId) {
+  if (state.storageDir === ":memory:") {
+    dbPath = undefined;
+  } else if (projectId) {
     dbPath = getSessionDbPath(storageDir, projectId, sessionId);
   } else {
-    dbPath = findSessionDbPath(storageDir, sessionId);
-    if (dbPath) {
-      const sessionsIdx = dbPath.indexOf(`${path.sep}sessions${path.sep}`);
-      if (sessionsIdx > 0) {
-        projectId = path.basename(dbPath.slice(0, sessionsIdx));
+    dbPath = getScratchSessionDbPath(storageDir, sessionId);
+    if (!fs.existsSync(dbPath)) {
+      const found = findSessionDbPath(storageDir, sessionId);
+      if (found) {
+        dbPath = found;
+        const sessionsIdx = dbPath.indexOf(`${path.sep}sessions${path.sep}`);
+        if (sessionsIdx > 0) {
+          const dir = path.basename(dbPath.slice(0, sessionsIdx));
+          projectId = dir === "scratch" ? null : dir;
+        }
       }
     }
   }
 
-  const hasDbFile = !!dbPath && fs.existsSync(dbPath);
+  const hasDbFile = state.sessionDbs.has(sessionId) || (!!dbPath && fs.existsSync(dbPath));
   if (!indexRow && !hasDbFile) return null;
 
   let meta: SessionMetaRow | null = null;
@@ -121,7 +128,7 @@ export function loadSession(
   let nextCursor: number | null = null;
   let storedMessageCount: number | undefined = indexRow?.message_count;
 
-  if (hasDbFile && projectId) {
+  if (hasDbFile) {
     const sessionDb = getSessionDb(state, sessionId, projectId);
     meta =
       (sessionDb
@@ -236,17 +243,7 @@ export function loadSession(
 /** Repair an interrupted tool history once, then remember that the check ran. */
 export function repairSession(state: StorageState, sessionId: string): boolean {
   let projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) {
-    const dbPath = findSessionDbPath(state.storageDir, sessionId);
-    const sessionsIdx = dbPath?.indexOf(`${path.sep}sessions${path.sep}`) ?? -1;
-    if (dbPath && sessionsIdx > 0) {
-      projectId = path.basename(dbPath.slice(0, sessionsIdx));
-    }
-  }
-  if (!projectId) return false;
-
-  const sessionDbPath = getSessionDbPath(state.storageDir, projectId, sessionId);
-  if (!state.sessionDbs.has(sessionId) && !fs.existsSync(sessionDbPath)) return false;
+  if (projectId === undefined) return false;
 
   const sessionDb = getSessionDb(state, sessionId, projectId);
   const meta = sessionDb.prepare(`SELECT repaired FROM session_meta WHERE id = 1`).get() as
@@ -268,7 +265,7 @@ export function repairSession(state: StorageState, sessionId: string): boolean {
 /** Mark a session dirty before a new run so its final history is checked. */
 export function markSessionNeedsRepair(state: StorageState, sessionId: string): void {
   const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) return;
+  if (projectId === undefined) return;
 
   const sessionDb = getSessionDb(state, sessionId, projectId);
   sessionDb.prepare(`UPDATE session_meta SET repaired = 0 WHERE id = 1`).run();

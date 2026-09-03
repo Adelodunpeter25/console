@@ -5,7 +5,7 @@ import { truncateForPersistence, type StorageState } from "./utils.js";
 
 export function appendMessage(state: StorageState, sessionId: string, message: AgentMessage): void {
   const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) return;
+  if (projectId === undefined) return;
 
   const now = Date.now();
   const safeMsg = truncateForPersistence(message);
@@ -27,7 +27,7 @@ export function appendMessages(
 ): void {
   if (messages.length === 0) return;
   const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) return;
+  if (projectId === undefined) return;
 
   const now = Date.now();
   const sessionDb = getSessionDb(state, sessionId, projectId);
@@ -58,7 +58,7 @@ export function replaceMessages(
   messages: AgentMessage[],
 ): void {
   const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) return;
+  if (projectId === undefined) return;
 
   const now = Date.now();
   const sessionDb = getSessionDb(state, sessionId, projectId);
@@ -101,7 +101,7 @@ export function upsertToolResult(
   result: ToolResult,
 ): void {
   const projectId = getProjectIdBySessionId(state.globalDb, sessionId);
-  if (!projectId) return;
+  if (projectId === undefined) return;
 
   const now = Date.now();
   const sessionDb = getSessionDb(state, sessionId, projectId);
