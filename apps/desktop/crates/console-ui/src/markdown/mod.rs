@@ -5,4 +5,6 @@ pub mod render;
 pub mod selection;
 pub mod veil;
 
-pub use render::{MarkdownView, Metrics, Palette, markdown, render_markdown};
+pub use render::{
+    MarkdownView, Metrics, Palette, markdown, render_markdown, render_markdown_block,
+};

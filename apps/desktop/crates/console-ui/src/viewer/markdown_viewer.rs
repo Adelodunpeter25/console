@@ -1,31 +1,40 @@
-//! Full-page Markdown Preview component for workspace tabs.
+//! High-performance virtualized Markdown Preview component for workspace tabs.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{
-    App, ClipboardItem, ElementId, IntoElement, KeyDownEvent, ParentElement, RenderOnce,
-    StatefulInteractiveElement, Styled, Window, canvas, div, prelude::*, px,
+    App, ClipboardItem, ElementId, IntoElement, KeyDownEvent, ListState, ParentElement, RenderOnce,
+    Styled, Window, canvas, div, list, prelude::*, px,
 };
 
 use crate::markdown::render::{
-    self, Ctx, MarkdownView, Metrics, Palette, TranscriptSelection, markdown,
+    self, Ctx, MarkdownView, Metrics, Palette, TranscriptSelection, render_markdown_block,
 };
+use crate::primitives::scrollbar::{self, ScrollbarState};
 use crate::theme::Theme;
 
 #[derive(IntoElement)]
 pub struct MarkdownViewer {
     path: String,
     view: Rc<RefCell<MarkdownView>>,
+    list_state: ListState,
     selection: Option<TranscriptSelection>,
+    scrollbar_state: Option<Rc<ScrollbarState>>,
 }
 
 impl MarkdownViewer {
-    pub fn new(path: impl Into<String>, view: Rc<RefCell<MarkdownView>>) -> Self {
+    pub fn new(
+        path: impl Into<String>,
+        view: Rc<RefCell<MarkdownView>>,
+        list_state: ListState,
+    ) -> Self {
         Self {
             path: path.into(),
             view,
+            list_state,
             selection: None,
+            scrollbar_state: None,
         }
     }
 
@@ -33,15 +42,21 @@ impl MarkdownViewer {
         self.selection = Some(selection);
         self
     }
+
+    pub fn scrollbar_state(mut self, state: Rc<ScrollbarState>) -> Self {
+        self.scrollbar_state = Some(state);
+        self
+    }
 }
 
 impl RenderOnce for MarkdownViewer {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
-        let palette = Palette::from_theme(&theme);
+        let block_count = self.view.borrow().block_count();
+        if self.list_state.item_count() != block_count {
+            self.list_state.reset(block_count);
+        }
         let selection = self.selection.unwrap_or_default();
-        let ctx = Ctx::new("md-block", &palette, Metrics::BODY, selection.clone());
-
         let selection_listener = {
             let selection = selection.clone();
             canvas(
@@ -52,6 +67,13 @@ impl RenderOnce for MarkdownViewer {
             .w(px(0.0))
             .h(px(0.0))
         };
+
+        let view_rc = self.view.clone();
+        let selection_for_list = selection.clone();
+        let scrollbar = self
+            .scrollbar_state
+            .as_ref()
+            .map(|s| scrollbar::vertical(&self.list_state, s));
 
         div()
             .id(ElementId::Name(format!("md-viewer-{}", self.path).into()))
@@ -76,11 +98,10 @@ impl RenderOnce for MarkdownViewer {
             .child(selection_listener)
             .child(
                 div()
-                    .id(ElementId::Name(format!("md-preview-scroll-{}", self.path).into()))
+                    .id(ElementId::Name(format!("md-list-container-{}", self.path).into()))
                     .size_full()
                     .min_h_0()
                     .min_w_0()
-                    .overflow_y_scroll()
                     .bg(theme.canvas)
                     .px(px(32.0))
                     .py(px(24.0))
@@ -88,9 +109,25 @@ impl RenderOnce for MarkdownViewer {
                         div()
                             .max_w(px(820.0))
                             .w_full()
+                            .h_full()
                             .mx_auto()
-                            .children(markdown(&self.view.borrow(), &ctx)),
+                            .child(list(self.list_state.clone(), move |block_ix, _window, cx| {
+                                let theme = Theme::current(cx);
+                                let palette = Palette::from_theme(&theme);
+                                let ctx = Ctx::new("md-block", &palette, Metrics::BODY, selection_for_list.clone());
+                                let view = view_rc.borrow();
+                                if let Some(el) = render_markdown_block(&view, &ctx, block_ix) {
+                                    div()
+                                        .w_full()
+                                        .pb(px(ctx.metrics.block_gap))
+                                        .child(el)
+                                        .into_any_element()
+                                } else {
+                                    div().into_any_element()
+                                }
+                            })),
                     ),
             )
+            .children(scrollbar)
     }
 }

@@ -60,8 +60,16 @@ impl ConsoleDesktopApp {
             if is_markdown {
                 let view = self.get_or_build_markdown_view(path, &content);
                 let selection = self.viewer_markdown_selection(path);
-                return console_ui::MarkdownViewer::new(path.clone(), view)
+                let block_count = view.borrow().block_count();
+                let list_state = self.viewer_list_state(
+                    &format!("md:{}", path),
+                    block_count,
+                    60.0,
+                );
+                let scrollbar_state = self.viewer_scrollbar_state(&format!("md:{}", path));
+                return console_ui::MarkdownViewer::new(path.clone(), view, list_state)
                     .selection(selection)
+                    .scrollbar_state(scrollbar_state)
                     .into_any_element();
             }
 

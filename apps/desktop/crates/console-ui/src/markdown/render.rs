@@ -492,6 +492,32 @@ impl MarkdownView {
             .chain(self.tail.iter())
             .map(|top| &top.block)
     }
+
+    /// Total count of top-level blocks in the document.
+    pub fn block_count(&self) -> usize {
+        let all = &self.parser.tree().blocks;
+        let settled = if self.tail.is_empty() {
+            all.len()
+        } else {
+            all.len().saturating_sub(1)
+        };
+        settled + self.tail.len()
+    }
+
+    /// Retrieve a single top-level block by index in O(1) time without allocation.
+    pub fn get_block(&self, index: usize) -> Option<&Block> {
+        let all = &self.parser.tree().blocks;
+        let settled = if self.tail.is_empty() {
+            all.len()
+        } else {
+            all.len().saturating_sub(1)
+        };
+        if index < settled {
+            all.get(index).map(|top| &top.block)
+        } else {
+            self.tail.get(index - settled).map(|top| &top.block)
+        }
+    }
 }
 
 // ── Render context ─────────────────────────────────────────────────────────
@@ -502,7 +528,7 @@ impl MarkdownView {
 pub struct Ctx<'a> {
     row: Rc<str>,
     palette: &'a Palette,
-    metrics: Metrics,
+    pub metrics: Metrics,
     selection: TranscriptSelection,
     link_handler: Option<LinkHandler>,
     /// Cross-frame flatten cache, when this render has one to consult.
@@ -1008,6 +1034,20 @@ pub fn render_markdown(text: &str, theme: &Theme) -> AnyElement {
             .child(text.to_string())
             .into_any_element()
     }
+}
+
+/// Render a single top-level markdown block by index for virtualized lists.
+pub fn render_markdown_block<'a>(
+    view: &'a MarkdownView,
+    ctx: &Ctx<'a>,
+    block_ix: usize,
+) -> Option<AnyElement> {
+    let block = view.get_block(block_ix)?;
+    view.sync_style(ctx.palette, &ctx.metrics);
+    let ctx = ctx.with_cache(view);
+    let base = block_ordinal_base(block_ix);
+    ctx.next_ordinal.set(base);
+    Some(render_block(block, &ctx))
 }
 
 /// Like [`markdown`], but builds only the trailing `max_blocks` top-level
