@@ -81,6 +81,9 @@ impl RenderOnce for MarkdownViewer {
             .min_h_0()
             .min_w_0()
             .relative()
+            .flex()
+            .flex_col()
+            .bg(theme.canvas)
             .tab_index(0)
             .on_key_down({
                 let selection = selection.clone();
@@ -97,36 +100,36 @@ impl RenderOnce for MarkdownViewer {
             .child(render::frame_reset(selection))
             .child(selection_listener)
             .child(
-                div()
-                    .id(ElementId::Name(format!("md-list-container-{}", self.path).into()))
-                    .size_full()
-                    .min_h_0()
-                    .min_w_0()
-                    .bg(theme.canvas)
-                    .px(px(32.0))
-                    .py(px(24.0))
-                    .child(
+                list(self.list_state.clone(), move |block_ix, _window, cx| {
+                    let theme = Theme::current(cx);
+                    let palette = Palette::from_theme(&theme);
+                    let ctx = Ctx::new(
+                        "md-block",
+                        &palette,
+                        Metrics::BODY,
+                        selection_for_list.clone(),
+                    );
+                    let view = view_rc.borrow();
+                    if let Some(el) = render_markdown_block(&view, &ctx, block_ix) {
                         div()
-                            .max_w(px(820.0))
                             .w_full()
-                            .h_full()
-                            .mx_auto()
-                            .child(list(self.list_state.clone(), move |block_ix, _window, cx| {
-                                let theme = Theme::current(cx);
-                                let palette = Palette::from_theme(&theme);
-                                let ctx = Ctx::new("md-block", &palette, Metrics::BODY, selection_for_list.clone());
-                                let view = view_rc.borrow();
-                                if let Some(el) = render_markdown_block(&view, &ctx, block_ix) {
-                                    div()
-                                        .w_full()
-                                        .pb(px(ctx.metrics.block_gap))
-                                        .child(el)
-                                        .into_any_element()
-                                } else {
-                                    div().into_any_element()
-                                }
-                            })),
-                    ),
+                            .child(
+                                div()
+                                    .max_w(px(820.0))
+                                    .w_full()
+                                    .mx_auto()
+                                    .px(px(32.0))
+                                    .pt(if block_ix == 0 { px(24.0) } else { px(0.0) })
+                                    .pb(px(ctx.metrics.block_gap))
+                                    .child(el),
+                            )
+                            .into_any_element()
+                    } else {
+                        div().into_any_element()
+                    }
+                })
+                .flex_1()
+                .size_full(),
             )
             .children(scrollbar)
     }
