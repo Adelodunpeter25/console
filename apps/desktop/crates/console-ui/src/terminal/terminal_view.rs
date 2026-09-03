@@ -264,6 +264,21 @@ impl Render for TerminalView {
                 if !focus_for_key.is_focused(window) {
                     window.focus(&focus_for_key, cx);
                 }
+                let is_paste = (event.keystroke.modifiers.platform && event.keystroke.key == "v")
+                    || (event.keystroke.modifiers.control
+                        && event.keystroke.modifiers.shift
+                        && event.keystroke.key == "v");
+                if is_paste {
+                    if let Some(clipboard) = cx.read_from_clipboard() {
+                        if let Some(text) = clipboard.text() {
+                            if let Some(h) = &handle_for_key {
+                                h.send_input(text);
+                            }
+                        }
+                    }
+                    cx.stop_propagation();
+                    return;
+                }
                 if let Some(bytes) = TerminalView::key_to_bytes(event) {
                     if let Some(h) = &handle_for_key {
                         h.send_input(bytes);
