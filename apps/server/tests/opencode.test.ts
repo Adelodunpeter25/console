@@ -210,7 +210,7 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
 
   const models = listModelsForProvider("opencode");
   assert.ok(models.length > 0);
-  assert.ok(models.some((m) => m.id === "deepseek-v4-flash-free"));
+  assert.ok(models.some((m) => m.id === "big-pickle"));
   assert.ok(models.every((m) => m.provider === "opencode"));
   assert.ok(models.every((m) => m.contextWindow === 200_000));
   console.log("  ✅ provider-registry opencode catalog entry (200k context)");

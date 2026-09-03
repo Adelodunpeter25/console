@@ -14,10 +14,6 @@ export const OPENCODE_USER_AGENT = "opencode/1.18.27";
  *  (currently just "big-pickle") — it also serves as the offline fallback. */
 export const OPENCODE_FREE_MODEL_IDS = [
   "big-pickle",
-  "deepseek-v4-flash-free",
-  "mimo-v2.5-free",
-  "nemotron-3-ultra-free",
-  "laguna-s-2.1-free",
 ] as const;
 
 export const OPENCODE_CONTEXT_WINDOW = 200_000;
