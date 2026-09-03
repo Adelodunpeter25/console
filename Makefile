@@ -1,4 +1,4 @@
-.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop build-desktop-mac typecheck check generate-icons generate-theme help
+.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop package-desktop build-desktop-mac typecheck check generate-icons generate-theme help
 
 # Default target
 .DEFAULT_GOAL := help
@@ -19,9 +19,13 @@ dev-console:
 dev-mobile:
 	bun run --cwd apps/mobile android
 
-## dev-desktop: Start the GPUI desktop app in dev mode with auto-reload (requires server running)
+## dev-desktop: Build and launch the GPUI desktop app in dev mode (Console Dev.app)
 dev-desktop:
 	bash apps/desktop/scripts/dev.sh
+
+## package-desktop: Package the GPUI desktop app into a production macOS .app bundle (Console.app)
+package-desktop:
+	bash apps/desktop/scripts/package.sh
 
 ## build-desktop: Build the GPUI desktop app for production
 build-desktop:
@@ -59,6 +63,7 @@ help:
 	@echo "  make dev-console       - Start the console agent as a background daemon (PORT=nnnn to set port)"
 	@echo "  make dev-mobile        - Start the Expo mobile app dev server"
 	@echo "  make dev-desktop       - Start the GPUI desktop app in dev mode"
+	@echo "  make package-desktop   - Package the GPUI desktop app for production (.app bundle)"
 	@echo "  make build-desktop     - Build the GPUI desktop app for production"
 	@echo "  make build-server      - Compile the multi-call console binary (CLI + server)"
 	@echo "  make build-preview - Build the Android apk with eas"

@@ -72,7 +72,10 @@ echo "========================================="
 # 1. Generate macOS AppIcon.icns if needed
 ASSETS_DIR="$DESKTOP_DIR/assets"
 ICNS_FILE="$ASSETS_DIR/AppIcon.icns"
-ICON_PNG="$WORKSPACE_ROOT/apps/mobile/assets/icon.png"
+ICON_PNG="$ASSETS_DIR/icon_transparent.png"
+if [[ ! -f "$ICON_PNG" ]]; then
+    ICON_PNG="$WORKSPACE_ROOT/apps/mobile/assets/icon.png"
+fi
 
 mkdir -p "$ASSETS_DIR"
 
