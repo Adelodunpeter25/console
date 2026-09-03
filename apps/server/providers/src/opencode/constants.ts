@@ -6,6 +6,7 @@
  * Model discovery: https://opencode.ai/zen/v1/models (filtered to free ids)
  */
 export const OPENCODE_BASE_URL = "https://opencode.ai/zen/v1";
+export const OPENCODE_USER_AGENT = "opencode/1.18.27";
 
 /** Models confirmed free on the OpenCode Zen tier. Most free models use the
  *  `-free` id suffix and are auto-discovered by `isOpencodeFreeModelId`.

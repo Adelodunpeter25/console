@@ -8,6 +8,7 @@ import {
   OPENCODE_BASE_URL,
   OPENCODE_CONTEXT_WINDOW,
   OPENCODE_FREE_MODEL_IDS,
+  OPENCODE_USER_AGENT,
 } from "./constants.js";
 
 interface OpenCodeModelsResponse {
@@ -31,7 +32,10 @@ export async function fetchOpencodeFreeModels(
   try {
     const response = await fetch(`${OPENCODE_BASE_URL}/models`, {
       method: "GET",
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        "User-Agent": OPENCODE_USER_AGENT,
+      },
       signal,
     });
 

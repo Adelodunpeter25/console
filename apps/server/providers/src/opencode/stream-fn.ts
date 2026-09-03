@@ -6,13 +6,16 @@
 import { streamText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { StreamFn } from "@/agent/src/service/agent-loop.js";
-import { OPENCODE_BASE_URL } from "./constants.js";
+import { OPENCODE_BASE_URL, OPENCODE_USER_AGENT } from "./constants.js";
 import { convertOpencodeMessages } from "./convert-messages.js";
 import { convertOpencodeTools } from "./convert-tools.js";
 
 const opencode = createOpenAICompatible({
   name: "opencode",
   baseURL: OPENCODE_BASE_URL,
+  headers: {
+    "User-Agent": OPENCODE_USER_AGENT,
+  },
   // No apiKey — the free tier requires no Authorization header (verified live).
 });
 
