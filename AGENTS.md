@@ -26,4 +26,4 @@
 - Even if user changes cause compilation errors, do NOT revert or fix them without explicit permission; report the compilation error to the user instead.
 
 ## Communication & Summaries
-- After finishing each task, always provide a clear explanation in **plain English** (not code or technical jargon) describing what the problem was, how it was solved, and what the user should expect.
+- After finishing each task, provide a **short, concise summary in plain English** (2-4 sentences max, no code or technical jargon) describing what broke, how it was fixed, and what to expect.
