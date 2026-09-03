@@ -11,9 +11,12 @@ use gpui::{Context, Focusable as _, WeakEntity, Window};
 
 use super::ConsoleDesktopApp;
 
-/// Static ⌘K entries shared by toggle and open paths.
-fn command_palette_entries(entity: WeakEntity<ConsoleDesktopApp>) -> Vec<PaletteEntry> {
-    vec![
+/// Static ⌘K entries shared by toggle and open paths, including chat sessions.
+fn command_palette_entries(
+    entity: WeakEntity<ConsoleDesktopApp>,
+    sessions: &[console_core::SessionHeader],
+) -> Vec<PaletteEntry> {
+    let mut entries = vec![
         PaletteEntry::new("new-chat", "New Chat", {
             let entity = entity.clone();
             move |_window, cx| {
@@ -32,7 +35,26 @@ fn command_palette_entries(entity: WeakEntity<ConsoleDesktopApp>) -> Vec<Palette
             }
         })
         .icon(IconName::Terminal),
-    ]
+    ];
+
+    for session in sessions {
+        let sid = session.id.clone();
+        let entity = entity.clone();
+        let title = session.display_title().to_string();
+        let label = format!("Chat: {}", title);
+        entries.push(
+            PaletteEntry::new(format!("session-{}", sid), label, move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.select_and_open_session(sid.clone(), cx);
+                    });
+                }
+            })
+            .icon(IconName::ChatRoundLine),
+        );
+    }
+
+    entries
 }
 
 impl ConsoleDesktopApp {
@@ -174,8 +196,9 @@ impl ConsoleDesktopApp {
     /// closures; async modes replace them via their own wrappers.
     pub fn toggle_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let entity = cx.entity().downgrade();
+        let sessions = self.sessions.clone();
         self.command_palette.update(cx, |palette, cx| {
-            palette.set_entries(command_palette_entries(entity), cx);
+            palette.set_entries(command_palette_entries(entity, &sessions), cx);
             palette.toggle(window, cx);
         });
         cx.notify();
@@ -216,8 +239,9 @@ impl ConsoleDesktopApp {
             return;
         }
         let entity = cx.entity().downgrade();
+        let sessions = self.sessions.clone();
         self.command_palette.update(cx, |palette, cx| {
-            palette.set_entries(command_palette_entries(entity), cx);
+            palette.set_entries(command_palette_entries(entity, &sessions), cx);
             palette.show(window, cx);
         });
         cx.notify();
