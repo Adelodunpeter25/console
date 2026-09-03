@@ -213,12 +213,37 @@ if this.current_run_token(&session_id) == run_token
 Stale Run A sees a token mismatch and skips; fresh Run B matches and applies.
 Single-run case is unaffected (token matches).
 
-**File to edit:**
-`apps/desktop/src/state/run.rs`
-— add the counter (+ `next_run_token` / `current_run_token` helpers, e.g. in
-`workspace_panes.rs` or `app.rs` next to `running_sessions`), capture at
-`submit_prompt`, guard the `wait_until_settled` completion block around
-line 284.
+**Files to edit:**
+- New `apps/desktop/src/state/token.rs` — owns the counter and helpers:
+  ```rust
+  // token.rs
+  use std::collections::HashMap;
+
+  #[derive(Default)]
+  pub struct RunTokenCounter {
+      tokens: HashMap<String, u64>,
+  }
+
+  impl RunTokenCounter {
+      pub fn next_run_token(&mut self, session_id: &str) -> u64 {
+          let entry = self.tokens.entry(session_id.to_string()).or_insert(0);
+          *entry = entry.wrapping_add(1);
+          *entry
+      }
+
+      pub fn current_run_token(&self, session_id: &str) -> u64 {
+          self.tokens.get(session_id).copied().unwrap_or(0)
+      }
+  }
+  ```
+  Wire it into `ConsoleDesktopApp` (e.g. `pub(crate) run_tokens: RunTokenCounter`
+  in `app.rs` next to `running_sessions`, declared in `state/mod.rs`).
+- `apps/desktop/src/state/run.rs` — capture `let run_token =
+  self.run_tokens.next_run_token(&key)` in `submit_prompt` (key on session id
+  once known, falling back to the pane id for the pre-creation case), move it
+  into the spawned closure, and guard the `wait_until_settled` completion
+  block around line 284 with `this.run_tokens.current_run_token(&session_id)
+  == run_token` alongside the existing pane check.
 
 Apply the same guard to the equivalent `wait_until_settled` block in `attach_session_run_for_pane`
 (around line 690) if it also calls `t.set_messages`.
