@@ -151,6 +151,12 @@ impl TranscriptView {
     }
 
     pub fn prepend_messages(&mut self, older: Vec<AgentMessage>, has_more: bool, next_cursor: Option<i64>, cx: &mut Context<Self>) {
+        // Filter out any older messages that are already present in self.messages
+        let older: Vec<AgentMessage> = older
+            .into_iter()
+            .filter(|old_msg| !self.messages.iter().any(|existing| messages_match(old_msg, existing)))
+            .collect();
+
         if older.is_empty() {
             self.has_more = has_more;
             self.next_cursor = next_cursor;
@@ -175,35 +181,23 @@ impl TranscriptView {
         self.has_more = has_more;
         self.next_cursor = next_cursor;
         self.loading_older = false;
-        // Keep scroll position visually stable. Hidden tool-transport rows
-        // have zero height, so offsetting by item count alone leaves the
-        // viewport on the same logical item but hides the newly prepended
-        // prompt above the fold. Preserve pixel offset instead: if we were
-        // at the very top (item 0-2), stay at the top so the older prompt
-        // is immediately visible; otherwise offset by prepended items.
+
+        // Keep scroll position visually stable by preserving current offset immediately
         let prepended = self.messages.len() - old_len;
-        let stay_at_top = anchor.map(|(r, _, _)| r <= 2).unwrap_or(false);
-        if stay_at_top {
-            // Let refresh_list reset to 0 and keep the viewport at the top
-            // so the newly loaded older prompt is visible.
-            self.refresh_list();
-        } else if let Some((row, offset, _at_tail)) = anchor {
-            let new_row = row + prepended;
-            let entity = cx.entity().downgrade();
-            cx.spawn(async move |_, cx| {
-                cx.background_executor().timer(Duration::from_millis(16)).await;
-                cx.update(|cx| {
-                    if let Some(e) = entity.upgrade() {
-                        e.update(cx, |this, _| {
-                            this.list_state.scroll_to(ListOffset {
-                                item_ix: new_row,
-                                offset_in_item: px(offset),
-                            });
-                        });
-                    }
+        if let Some((row, offset, at_tail)) = anchor {
+            if at_tail {
+                self.list_state.set_follow_mode(FollowMode::Tail);
+                self.refresh_list();
+                self.list_state.scroll_to_end();
+            } else {
+                let new_row = row + prepended;
+                self.list_state.set_follow_mode(FollowMode::Normal);
+                self.refresh_list();
+                self.list_state.scroll_to(ListOffset {
+                    item_ix: new_row,
+                    offset_in_item: px(offset),
                 });
-            }).detach();
-            self.refresh_list();
+            }
         } else {
             self.refresh_list();
         }
@@ -892,6 +886,7 @@ impl Render for TranscriptView {
         if self.has_more && !self.loading_older && !self.messages.is_empty() {
             let top = self.list_state.logical_scroll_top();
             if top.item_ix <= 5 {
+                self.loading_older = true;
                 if let Some(handler) = self.on_load_older.clone() {
                     let window_handle = _window.window_handle();
                     cx.spawn(async move |_, cx| {
@@ -1118,4 +1113,38 @@ fn empty_state(theme: Theme) -> impl IntoElement {
                 .text_color(theme.text_ghost)
                 .child("Start a conversation"),
         )
+}
+
+fn messages_match(a: &AgentMessage, b: &AgentMessage) -> bool {
+    match (a, b) {
+        (
+            AgentMessage::User {
+                content: c1,
+                created_at: t1,
+                ..
+            },
+            AgentMessage::User {
+                content: c2,
+                created_at: t2,
+                ..
+            },
+        ) => c1 == c2 && (t1.is_none() || t2.is_none() || t1 == t2),
+        (
+            AgentMessage::Assistant {
+                id: Some(id1), ..
+            },
+            AgentMessage::Assistant {
+                id: Some(id2), ..
+            },
+        ) => id1 == id2,
+        (
+            AgentMessage::ToolResult {
+                results: r1, ..
+            },
+            AgentMessage::ToolResult {
+                results: r2, ..
+            },
+        ) => !r1.is_empty() && !r2.is_empty() && r1[0].tool_call_id == r2[0].tool_call_id,
+        _ => false,
+    }
 }

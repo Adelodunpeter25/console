@@ -22,6 +22,7 @@ impl ConsoleDesktopApp {
     #[allow(dead_code)]
     pub(crate) fn clear_transcript_pagination(&mut self) {
         self.transcript_pagination.clear();
+        self.pagination_in_flight.clear();
     }
 
     /// Look up the pagination state for the session a pane currently shows.
@@ -61,6 +62,9 @@ impl ConsoleDesktopApp {
         let Some(session_id) = self.active_session_for_pane(&pane_id).map(|s| s.to_string()) else {
             return;
         };
+        if self.pagination_in_flight.contains(&session_id) {
+            return;
+        }
         let Some(pagination) = self.pagination_for_session(&session_id) else {
             return;
         };
@@ -68,27 +72,30 @@ impl ConsoleDesktopApp {
             return;
         }
         let before = pagination.next_cursor.unwrap();
+        self.pagination_in_flight.insert(session_id.clone());
         // Mark loading
         self.transcript_for_pane(&pane_id).update(cx, |t, _| t.set_loading_older(true));
         cx.notify();
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
+        let session_id_for_task = session_id.clone();
         cx.spawn(async move |_, cx| {
-            match client.sessions.get_paginated(&session_id, Some(50), Some(before)).await {
+            match client.sessions.get_paginated(&session_id_for_task, Some(50), Some(before)).await {
                 Ok(detail) => {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
+                                this.pagination_in_flight.remove(&session_id_for_task);
                                 // Only prepend if still showing same session
-                                if this.active_session_for_pane(&pane_id).as_deref() != Some(session_id.as_str()) {
+                                if this.active_session_for_pane(&pane_id).as_deref() != Some(session_id_for_task.as_str()) {
                                     return;
                                 }
                                 this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
                                     t.prepend_messages(detail.messages, detail.has_more, detail.next_cursor, cx);
                                 });
                                 this.set_pagination_for_session(
-                                    &session_id,
+                                    &session_id_for_task,
                                     SessionPaginationState {
                                         has_more: detail.has_more,
                                         next_cursor: detail.next_cursor,
@@ -104,6 +111,7 @@ impl ConsoleDesktopApp {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
+                                this.pagination_in_flight.remove(&session_id_for_task);
                                 this.transcript_for_pane(&pane_id).update(cx, |t, _| t.set_loading_older(false));
                                 cx.notify();
                             });

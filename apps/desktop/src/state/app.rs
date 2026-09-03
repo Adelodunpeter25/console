@@ -102,6 +102,7 @@ pub struct ConsoleDesktopApp {
         String,
         crate::state::pagination::SessionPaginationState,
     >,
+    pub(crate) pagination_in_flight: std::collections::HashSet<String>,
     pub composer_input: Entity<ComposerInput>,
     pub question_input: Entity<ComposerInput>,
     /// Staged composer images keyed by pane. Values are `Rc` so per-frame
@@ -481,6 +482,7 @@ impl ConsoleDesktopApp {
             autocomplete_states: std::collections::HashMap::new(),
             transcript_scroll_positions: std::collections::HashMap::new(),
             transcript_pagination: std::collections::HashMap::new(),
+            pagination_in_flight: std::collections::HashSet::new(),
             composer_input,
             question_input,
             attachments: std::collections::HashMap::new(),
