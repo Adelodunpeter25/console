@@ -72,67 +72,8 @@ During agent streaming, `schedule_stream_render` flushes new tokens every 33ms. 
 
 ---
 
-## 2. Mobile-to-Desktop Real-Time Re-Attach & Run-Hub Desync
 
-### Symptoms
-- When initiating a prompt/task on mobile via `@console/utils` `RunEventHub`, opening that project on Desktop shows only old SQLite-persisted data.
-- Desktop does not seamlessly stream the active in-progress run or shows a stale state until the entire run completes.
-
-### Root Cause Analysis
-
-Located in:
-- [`packages/utils/src/run-hub.ts`](../packages/utils/src/run-hub.ts)
-- [`apps/server/api/src/routes/run.ts`](../apps/server/api/src/routes/run.ts)
-- [`apps/server/api/src/services/session.service.ts`](../apps/server/api/src/services/session.service.ts)
-- [`apps/desktop/src/state/sessions.rs`](../apps/desktop/src/state/sessions.rs)
-- [`apps/desktop/src/state/run.rs`](../apps/desktop/src/state/run.rs)
-
-#### A. Empty Replay Queue When Attaching With No `since` Parameter
-In `packages/utils/src/run-hub.ts` (lines 106–117):
-```typescript
-subscribe(sub: RunStreamSubscriber, since?: number): void {
-  const qs: QueuedSubscriber = { sub, queue: [], draining: false, dead: false, drainPromise: Promise.resolve() };
-
-  if (since !== undefined) {
-    for (const item of this.buffer) {
-      if (item.seq > since) qs.queue.push(item);
-    }
-  }
-  this.subs.set(sub.id, qs);
-  void this.drain(qs);
-}
-```
-And in Desktop's `attach_session_run_for_pane` (`apps/desktop/src/state/run.rs`, line 613):
-```rust
-client.runs.attach_run_stream(&session_id, None).await
-```
-When Desktop attaches to an in-flight run started on mobile, it passes `since: None`.
-Because `since === undefined`, `run-hub.ts` queues **zero** items from `this.buffer` (`MAX_REPLAY_BUFFER = 500`). It only registers for future broadcast events.
-However, in SQLite, the active assistant turn is not yet finalized or saved (it only commits on `TurnEnd` / `SessionEnd`).
-**Result**: Desktop loads older history from SQLite, skips the replay buffer of the active turn, and misses all tokens/tool calls generated before Desktop connected.
-
-#### B. Dynamic `status` Not Reflected in Session Header
-In `apps/server/api/src/services/session.service.ts` (`getSession`, lines 70–78):
-```typescript
-const session = this.storage.loadSessionPage(sessionId, options);
-if (!session) return null;
-
-if (!RunService.isRunActive(sessionId)) {
-  if (session.header.status === "working" || session.header.status === "needs_attention") {
-    this.storage.updateSessionStatus(sessionId, "done");
-    session.header.status = "done";
-  }
-}
-```
-If `RunService.isRunActive(sessionId)` is `true`, `session.header.status` is **not dynamically forced to `"working"`**. If SQLite had not yet flushed or if `listSessions` is queried, the desktop client may observe a null or non-`Working` status, causing `detail.header.status == Some(Working)` in `load_session_messages_for_pane` to evaluate to `false` and bypass `attach_session_run_for_pane` altogether.
-
-### Proposed Remediation
-1. **Replay Buffer on Initial Re-Attach**: When a client attaches to `/api/sessions/:id/run/stream` without a `since` parameter (or with `since=0`), `RunEventHub` must replay the active turn's buffered frames (coalesced deltas and tool execution starts) so the joining client catches up to the current streaming state.
-2. **Authoritative Run Status**: Ensure `sessionService.getSession` and `sessionService.listSessions` inject `status: "working"` whenever `RunService.isRunActive(sessionId)` is true.
-
----
-
-## 3. Terminal View: Missing Paste & Caps Lock Support
+## 2. Terminal View: Missing Paste & Caps Lock Support
 
 ### Symptoms
 - Pressing `Cmd+V` (macOS) in the terminal does not paste clipboard contents; instead, it literally sends the character `'v'` to the pty shell.

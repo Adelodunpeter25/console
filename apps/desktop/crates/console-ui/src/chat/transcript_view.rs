@@ -881,11 +881,18 @@ impl Render for TranscriptView {
 
         // Auto-load older when scrolled near top (covers wheel, scrollbar, touch).
         // Hidden tool-transport rows have zero height, so the first visible
-        // row can be at item_ix >1 even when visually at the top. Use a
-        // generous threshold so scrolling to the top always triggers.
+        // row can be at item_ix > 1 even when visually at the top. We find the
+        // index of the first non-hidden message so that pages beginning with
+        // long runs of tool transport rows (which take zero height) correctly
+        // trigger older message pagination when the user scrolls near the top.
         if self.has_more && !self.loading_older && !self.messages.is_empty() {
             let top = self.list_state.logical_scroll_top();
-            if top.item_ix <= 5 {
+            let first_visible_ix = self
+                .messages
+                .iter()
+                .position(|m| !is_hidden_tool_transport(m))
+                .unwrap_or(0);
+            if top.item_ix <= first_visible_ix.saturating_add(5) {
                 self.loading_older = true;
                 if let Some(handler) = self.on_load_older.clone() {
                     let window_handle = _window.window_handle();
