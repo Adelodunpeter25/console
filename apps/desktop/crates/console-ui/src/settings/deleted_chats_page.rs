@@ -124,11 +124,15 @@ impl RenderOnce for DeletedChatsPage {
                                                 .border_color(theme.border_strong)
                                                 .bg(theme.raised)
                                                 .cursor_pointer()
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(5.0))
                                                 .hover(|s| s.bg(theme.overlay))
                                                 .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
                                                     cx.stop_propagation();
                                                     (on_rest)(session_id_restore.clone(), window, cx);
                                                 })
+                                                .child(app_icon(IconName::Restart, 13.0, theme.accent))
                                                 .child(
                                                     div()
                                                         .text_size(px(11.5))
@@ -143,11 +147,15 @@ impl RenderOnce for DeletedChatsPage {
                                                 .py(px(4.0))
                                                 .rounded(px(5.0))
                                                 .cursor_pointer()
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(5.0))
                                                 .hover(|s| s.bg(theme.overlay_strong))
                                                 .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
                                                     cx.stop_propagation();
                                                     (on_perm)(session_id_delete.clone(), window, cx);
                                                 })
+                                                .child(app_icon(IconName::TrashBinMinimalistic, 13.0, theme.danger))
                                                 .child(
                                                     div()
                                                         .text_size(px(11.5))
