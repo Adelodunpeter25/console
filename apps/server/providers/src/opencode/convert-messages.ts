@@ -56,11 +56,14 @@ export function convertOpencodeMessages(messages: AgentMessage[]): ModelMessage[
         }
       }
 
-      if (!hasReasoning) {
-        content.push({ type: "reasoning", text: " " });
-      }
+      // The Responses API only accepts encrypted OpenAI reasoning tokens;
+      // third-party plain-text reasoning parts would be rejected with a
+      // warning and lose us the model's chain-of-thought across turns.
+      const wireContent = content.filter(
+        (part) => part.type !== "reasoning",
+      );
 
-      out.push({ role: "assistant", content });
+      out.push({ role: "assistant", content: wireContent });
       continue;
     }
 

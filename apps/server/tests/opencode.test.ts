@@ -55,13 +55,18 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
   const assistant = wire[1]!;
   assert.equal(assistant.role, "assistant");
   assert.ok(Array.isArray(assistant.content));
-  const reasoningPart = (assistant.content as Array<Record<string, unknown>>)[0];
-  assert.equal(reasoningPart?.type, "reasoning");
-  assert.equal(reasoningPart?.text, "I should list the files.");
-  const textPart = (assistant.content as Array<Record<string, unknown>>)[1];
+  // Reasoning parts are stripped from outgoing wire messages — the Responses
+  // API only accepts encrypted OpenAI reasoning tokens, not plain-text thinking
+  // blocks from third-party models.
+  const assistantParts = assistant.content as Array<Record<string, unknown>>;
+  assert.ok(
+    !assistantParts.some((p) => p.type === "reasoning"),
+    "reasoning parts must be stripped from outgoing wire messages",
+  );
+  const textPart = assistantParts[0];
   assert.equal(textPart?.type, "text");
   assert.equal(textPart?.text, "Listing now.");
-  const toolPart = (assistant.content as Array<Record<string, unknown>>)[2];
+  const toolPart = assistantParts[1];
   assert.equal(toolPart?.type, "tool-call");
   assert.equal(toolPart?.toolName, "listDir");
   assert.equal(toolPart?.toolCallId, "call_123");
