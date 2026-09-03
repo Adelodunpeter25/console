@@ -869,9 +869,6 @@ impl Render for TranscriptView {
         let selection = self.selection.clone();
         let entity = cx.entity().downgrade();
         let is_streaming = self.is_streaming;
-        let has_more = self.has_more;
-        let loading_older = self.loading_older;
-        let on_load_older = self.on_load_older.clone();
 
         div()
             .id("transcript-view")
@@ -884,51 +881,28 @@ impl Render for TranscriptView {
             .child(if self.messages.is_empty() && !is_streaming {
                 empty_state(theme).into_any_element()
             } else {
-                let load_older_header = if has_more {
-                    let on_load = on_load_older.clone();
-                    div()
-                        .w_full()
-                        .flex()
-                        .justify_center()
-                        .py(px(8.0))
-                        .child(
-                            div()
-                                .id("load-older-btn")
-                                .px(px(12.0))
-                                .py(px(6.0))
-                                .rounded(px(6.0))
-                                .bg(theme.surface)
-                                .border_1()
-                                .border_color(theme.border)
-                                .cursor_pointer()
-                                .hover(|s| s.bg(theme.overlay))
-                                .when(!loading_older, |el| {
-                                    el.on_click(move |_, window, cx| {
-                                        if let Some(handler) = &on_load {
-                                            handler(window, cx);
-                                        }
-                                    })
-                                })
-                                .child(
-                                    div()
-                                        .text_size(px(12.0))
-                                        .text_color(theme.text_secondary)
-                                        .child(if loading_older {
-                                            "Loading older messages..."
-                                        } else {
-                                            "Load older messages"
-                                        }),
-                                ),
-                        )
-                        .into_any_element()
-                } else {
-                    div().into_any_element()
-                };
                 div()
                     .size_full()
                     .flex()
                     .flex_col()
-                    .child(load_older_header)
+                    .on_scroll_wheel({
+                        let list_state_for_scroll = self.list_state.clone();
+                        let has_more_for_scroll = self.has_more;
+                        let loading_for_scroll = self.loading_older;
+                        let on_load_for_scroll = self.on_load_older.clone();
+                        move |_event, window, cx| {
+                            if !has_more_for_scroll || loading_for_scroll {
+                                return;
+                            }
+                            let top = list_state_for_scroll.logical_scroll_top();
+                            // When at very top, auto-load older messages
+                            if top.item_ix == 0 && top.offset_in_item == px(0.0) {
+                                if let Some(handler) = &on_load_for_scroll {
+                                    handler(window, cx);
+                                }
+                            }
+                        }
+                    })
                     .child(
                         list(self.list_state.clone(), move |index, _window, cx| {
                             transcript_row(entity.clone(), index, cx)

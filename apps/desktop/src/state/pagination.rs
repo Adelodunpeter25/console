@@ -19,6 +19,7 @@ pub(crate) struct SessionPaginationState {
 impl ConsoleDesktopApp {
     /// Forget pagination state for a session whose chat was switched out.
     /// Called from environments.rs alongside the scroll-position clearing.
+    #[allow(dead_code)]
     pub(crate) fn clear_transcript_pagination(&mut self) {
         self.transcript_pagination.clear();
     }
