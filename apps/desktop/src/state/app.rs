@@ -835,7 +835,10 @@ impl ConsoleDesktopApp {
         let state = self
             .viewer_list_states
             .entry(id.to_string())
-            .or_insert_with(|| gpui::ListState::new(count, gpui::ListAlignment::Top, gpui::px(row_height)));
+            .or_insert_with(|| {
+                gpui::ListState::new(count, gpui::ListAlignment::Top, gpui::px(120.0))
+                    .with_uniform_item_height(gpui::px(row_height))
+            });
         if state.item_count() != count {
             state.reset_with_uniform_height(count, gpui::px(row_height));
         }
