@@ -59,7 +59,9 @@ impl ConsoleDesktopApp {
 
             if is_markdown {
                 let view = self.get_or_build_markdown_view(path, &content);
+                let selection = self.viewer_markdown_selection(path);
                 return console_ui::MarkdownViewer::new(path.clone(), view)
+                    .selection(selection)
                     .into_any_element();
             }
 

@@ -159,6 +159,7 @@ pub struct ConsoleDesktopApp {
     pub viewer_cached_file_lines: std::collections::HashMap<String, (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>)>,
     pub viewer_cached_diff_lines: std::collections::HashMap<String, (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>)>,
     pub viewer_cached_markdown_views: std::collections::HashMap<String, (usize, u64, std::rc::Rc<std::cell::RefCell<console_ui::MarkdownView>>)>,
+    pub viewer_markdown_selections: std::collections::HashMap<String, console_ui::markdown::render::TranscriptSelection>,
     /// Retained virtualization state for the sidebar session history.
     pub sidebar_list_state: ListState,
     /// Live drag-resize anchor, owned by `layout`.
@@ -511,6 +512,7 @@ impl ConsoleDesktopApp {
             viewer_cached_file_lines: std::collections::HashMap::new(),
             viewer_cached_diff_lines: std::collections::HashMap::new(),
             viewer_cached_markdown_views: std::collections::HashMap::new(),
+            viewer_markdown_selections: std::collections::HashMap::new(),
             sidebar_list_state: ListState::new(0, ListAlignment::Top, px(55.0)),
             sidebar_resize_start: None,
             split_resize: None,
@@ -930,5 +932,12 @@ impl ConsoleDesktopApp {
         let rc = std::rc::Rc::new(std::cell::RefCell::new(view));
         self.viewer_cached_markdown_views.insert(path.to_string(), (len, hash, rc.clone()));
         rc
+    }
+
+    pub fn viewer_markdown_selection(&mut self, path: &str) -> console_ui::markdown::render::TranscriptSelection {
+        self.viewer_markdown_selections
+            .entry(path.to_string())
+            .or_default()
+            .clone()
     }
 }
