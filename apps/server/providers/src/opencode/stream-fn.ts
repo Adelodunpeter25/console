@@ -5,19 +5,50 @@
  */
 import { streamText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { createOpenAI } from "@ai-sdk/openai";
 import type { StreamFn } from "@/agent/src/service/agent-loop.js";
 import { OPENCODE_BASE_URL, OPENCODE_USER_AGENT } from "./constants.js";
 import { convertOpencodeMessages } from "./convert-messages.js";
 import { convertOpencodeTools } from "./convert-tools.js";
 
-const opencode = createOpenAICompatible({
+const opencodeChat = createOpenAICompatible({
   name: "opencode",
   baseURL: OPENCODE_BASE_URL,
   headers: {
     "User-Agent": OPENCODE_USER_AGENT,
   },
-  // No apiKey — the free tier requires no Authorization header (verified live).
 });
+
+const opencodeResponses = createOpenAI({
+  baseURL: OPENCODE_BASE_URL,
+  apiKey: "dummy",
+  headers: {
+    "User-Agent": OPENCODE_USER_AGENT,
+  },
+  fetch: (url, options) => {
+    const headers = new Headers(options?.headers);
+    headers.delete("authorization");
+    return fetch(url, { ...options, headers });
+  },
+});
+
+/**
+ * OpenCode Zen routes reasoning/modern models (Muse, GPT-5, Grok) through
+ * the OpenAI Responses API (/v1/responses) rather than /chat/completions.
+ */
+export function isOpencodeResponsesModel(modelId: string): boolean {
+  return (
+    modelId.startsWith("muse-") ||
+    modelId.startsWith("gpt-5") ||
+    modelId.startsWith("grok-")
+  );
+}
+
+export function getOpencodeLanguageModel(modelId: string) {
+  return isOpencodeResponsesModel(modelId)
+    ? opencodeResponses.responses(modelId)
+    : opencodeChat.chatModel(modelId);
+}
 
 export const opencodeStreamFn: StreamFn = async function* ({
   model,
@@ -32,7 +63,7 @@ export const opencodeStreamFn: StreamFn = async function* ({
   let streamError: unknown = null;
 
   const result = streamText({
-    model: opencode.chatModel(model.id),
+    model: getOpencodeLanguageModel(model.id),
     system: systemPrompt,
     messages: convertedMessages,
     ...(Object.keys(convertedTools).length > 0 ? { tools: convertedTools } : {}),

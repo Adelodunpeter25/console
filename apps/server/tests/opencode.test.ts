@@ -17,7 +17,7 @@ import { asSchema } from "@ai-sdk/provider-utils";
 import { listProviders, listModelsForProvider } from "@/agent/src/commands/provider-registry.js";
 import { convertOpencodeMessages } from "@/providers/src/opencode/convert-messages.js";
 import { convertOpencodeTools } from "@/providers/src/opencode/convert-tools.js";
-import { opencodeStreamFn } from "@/providers/src/opencode/stream-fn.js";
+import { opencodeStreamFn, isOpencodeResponsesModel } from "@/providers/src/opencode/stream-fn.js";
 import { fetchOpencodeFreeModels } from "@/providers/src/opencode/discovery.js";
 import { OPENCODE_BASE_URL } from "@/providers/src/opencode/constants.js";
 
@@ -214,6 +214,12 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
   assert.ok(models.every((m) => m.provider === "opencode"));
   assert.ok(models.every((m) => m.contextWindow === 200_000));
   console.log("  ✅ provider-registry opencode catalog entry (200k context)");
+
+  assert.equal(isOpencodeResponsesModel("muse-spark-1.3-contributor-free"), true);
+  assert.equal(isOpencodeResponsesModel("muse-spark-1.2-contributor-free"), true);
+  assert.equal(isOpencodeResponsesModel("big-pickle"), false);
+  assert.equal(isOpencodeResponsesModel("mimo-v2.5-free"), false);
+  console.log("  ✅ isOpencodeResponsesModel routes Muse models to /v1/responses");
 }
 
 // 6. Real-API round trip — calls the live OpenCode Zen endpoint via our own

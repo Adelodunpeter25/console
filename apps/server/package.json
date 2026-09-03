@@ -8,6 +8,7 @@
     "start": "bun index.ts"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.57",
     "@ai-sdk/openai-compatible": "^3.0.25",
     "@console/types": "*",
     "@console/utils": "*",
