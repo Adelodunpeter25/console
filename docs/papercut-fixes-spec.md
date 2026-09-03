@@ -182,19 +182,25 @@ run still the latest run for that session?** If a newer run has started since, t
 
 ### Fix
 
-Track the **run sequence number** (or a "latest run started_at") per session. Before calling
-`t.set_messages`, guard on whether the current `wait_until_settled` completion belongs to the
-most recently started run for this session.
+Track a **per-session run token**. The `is_session_running` guard alone is
+incorrect: `set_session_running(..., None)` only happens *after* the
+`wait_until_settled` block (`run.rs:342`), so at resolve time the flag is
+`true` for both the stale Run A and the fresh Run B — the guard would block
+Run B's own legitimate canonical update too.
 
-**Simplest approach — guard on `is_session_running`:**
-
-The second prompt sets the session back to running immediately via `set_session_running`.
-Run A's `wait_until_settled` resolves *while the session is still running* for Run B.
-So the guard becomes:
+Add a `session_run_token: HashMap<String, u64>` (monotonic counter; do not
+reuse `run_started_at`, which is second-granularity `timestamp()` and can
+collide for rapid sequential prompts). Increment it in `submit_prompt`,
+capture the value into the spawned closure, and check equality before
+`set_messages`:
 
 ```rust
-if this.active_session_for_pane(&run_pane_id).as_deref() == Some(session_id.as_str())
-    && !this.is_session_running(&session_id)   // ← ADD THIS
+// At submit time (before cx.spawn):
+let run_token = self.next_run_token(&run_session_key);
+
+// In wait_until_settled handler (run.rs ~284):
+if this.current_run_token(&session_id) == run_token
+    && this.active_session_for_pane(&run_pane_id).as_deref() == Some(session_id.as_str())
 {
     this.apply_session_header_for_pane(&run_pane_id, &detail.header, cx);
     // ...
@@ -204,35 +210,15 @@ if this.active_session_for_pane(&run_pane_id).as_deref() == Some(session_id.as_s
 }
 ```
 
-This prevents Run A from overwriting the transcript while Run B is actively streaming. Run B's
-own `wait_until_settled` fires after B's `set_session_running(..., None)` call, so it sees
-`is_session_running == false` and correctly applies the full canonical message set.
-
-**More robust approach — per-session run token:**
-
-Add a `HashMap<String, u64>` called `session_run_counter`. Increment it at
-`submit_prompt` time, capture the value into the closure, and check that the counter
-still matches when `wait_until_settled` resolves.
-
-```rust
-// At submit time:
-let run_token = self.next_run_token_for_session(&session_id);
-
-// In wait_until_settled handler:
-if this.current_run_token_for_session(&session_id) == run_token
-    && this.active_session_for_pane(&run_pane_id).as_deref() == Some(session_id.as_str())
-{
-    t.set_messages(detail.messages, cx);
-}
-```
-
-**Recommended: the `is_session_running` guard.** It requires touching one line in run.rs
-and is correct in all normal single-user scenarios. The run-token approach is more future-proof
-if parallel runs per session are ever supported, but that adds new state to maintain.
+Stale Run A sees a token mismatch and skips; fresh Run B matches and applies.
+Single-run case is unaffected (token matches).
 
 **File to edit:**
 `apps/desktop/src/state/run.rs`
-— the `wait_until_settled` completion block around line 284.
+— add the counter (+ `next_run_token` / `current_run_token` helpers, e.g. in
+`workspace_panes.rs` or `app.rs` next to `running_sessions`), capture at
+`submit_prompt`, guard the `wait_until_settled` completion block around
+line 284.
 
 Apply the same guard to the equivalent `wait_until_settled` block in `attach_session_run_for_pane`
 (around line 690) if it also calls `t.set_messages`.
