@@ -218,9 +218,19 @@ impl TranscriptView {
     fn refresh_list(&self) {
         let row_count = self.row_count();
         if self.list_state.item_count() != row_count {
-            self.list_state.reset(row_count);
-        }
-        if self.list_state.is_following_tail() {
+            if self.list_state.is_following_tail() {
+                self.list_state.reset(row_count);
+                self.list_state.scroll_to_end();
+            } else {
+                let top = self.list_state.logical_scroll_top();
+                let item_ix = top.item_ix.min(row_count.saturating_sub(1));
+                self.list_state.reset(row_count);
+                self.list_state.scroll_to(ListOffset {
+                    item_ix,
+                    offset_in_item: top.offset_in_item,
+                });
+            }
+        } else if self.list_state.is_following_tail() {
             self.list_state.scroll_to_end();
         }
     }
@@ -424,6 +434,7 @@ impl TranscriptView {
             .borrow_mut()
             .retain(|key, _| valid_keys.contains(key));
         self.presentation_cache.borrow_mut().clear();
+        let anchor = self.scroll_anchor();
         self.messages = messages;
         self.content_revisions = vec![0; self.messages.len()];
         self.scroll_restore_generation = self.scroll_restore_generation.wrapping_add(1);
@@ -433,11 +444,27 @@ impl TranscriptView {
         self.invalidate_activity_cache();
         self.is_streaming = false;
         self.streaming_started_at = None;
-        // Re-engage tail-following so a freshly loaded session lands on its
-        // latest message (or at the top when it is still short).
-        self.list_state.set_follow_mode(FollowMode::Tail);
-        self.list_state.reset(self.row_count());
-        self.list_state.scroll_to_end();
+        // Keep following tail if the user was already at the tail or this is a
+        // freshly loaded session; otherwise restore their previous scroll anchor
+        // so settling never teleports an inspecting user back down or up.
+        let was_at_tail = anchor.map(|(_, _, at_tail)| at_tail).unwrap_or(true);
+        if was_at_tail {
+            self.list_state.set_follow_mode(FollowMode::Tail);
+            self.list_state.reset(self.row_count());
+            self.list_state.scroll_to_end();
+        } else if let Some((row, offset, _)) = anchor {
+            self.list_state.set_follow_mode(FollowMode::Normal);
+            let row_index = row.min(self.row_count().saturating_sub(1));
+            self.list_state.reset(self.row_count());
+            self.list_state.scroll_to(ListOffset {
+                item_ix: row_index,
+                offset_in_item: px(offset),
+            });
+        } else {
+            self.list_state.set_follow_mode(FollowMode::Tail);
+            self.list_state.reset(self.row_count());
+            self.list_state.scroll_to_end();
+        }
         cx.notify();
     }
 
