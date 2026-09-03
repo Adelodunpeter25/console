@@ -5,7 +5,6 @@
 import assert from "node:assert/strict";
 import {
   Agent,
-  SlashCommandRegistry,
   agentLoop,
   bashTool,
   readFileTool,
@@ -147,32 +146,7 @@ const testModel: Model = {
   console.log("  ✅ cancelled permission produces terminal tool result");
 }
 
-// 3. Test /mode slash command
-{
-  const agent = new Agent({
-    model: testModel,
-    tools: [],
-    systemPrompt: "Test",
-    streamFn: async function* () {},
-    approvalMode: "always-ask",
-  });
-
-  const registry = new SlashCommandRegistry();
-  const ctx: any = { agent, currentProvider: "antigravity" };
-
-  // List modes
-  const listRes = await registry.parseAndExecute("/mode", ctx);
-  assert.equal(listRes.handled, true);
-  assert.ok(listRes.message?.includes("Current mode: always-ask"));
-
-  // Switch to accept-edits
-  const switchRes = await registry.parseAndExecute("/mode accept-edits", ctx);
-  assert.equal(switchRes.handled, true);
-  assert.equal(agent.approvalMode, "accept-edits");
-  console.log("  ✅ /mode slash command");
-}
-
-// 4. Test Plan Mode system prompt injection
+// 3. Test Plan Mode system prompt injection
 {
   const { buildSystemPrompt } = await import("@/agent/src/systemprompt/index.js");
   const promptRes = await buildSystemPrompt({

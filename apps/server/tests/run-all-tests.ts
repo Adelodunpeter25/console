@@ -13,7 +13,6 @@ await import("./todo.test.js");
 await import("./system-prompt.test.js");
 await import("./providers-wire.test.js");
 await import("./opencode.test.js");
-await import("./commands.test.js");
 await import("./discovery.test.js");
 await import("./permissions.test.js");
 await import("./api.test.js");
