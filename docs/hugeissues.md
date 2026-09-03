@@ -184,3 +184,58 @@ Consequently, typing with Caps Lock engaged produces lowercase input in the term
    ```
 2. **Support Caps Lock in `key_to_bytes`**:
    If `event.keystroke.modifiers.caps_lock` is true, uppercase single alphabetic ascii characters (`'a'..='z'`) before sending.
+
+---
+
+## 4. Mobile Stale Database Loading & Failed Real-Time Re-Attach
+
+### Symptoms
+- When starting a task on Desktop (or server) and opening the chat on Mobile, Mobile displays only stale SQLite-persisted history instead of joining the live stream.
+- The chat on Mobile appears frozen in an idle state or fails to show that an agent run is actively in progress.
+- Messages that were streamed live on Desktop do not show up in Mobile until the run has fully concluded.
+
+### Root Cause Analysis
+
+Located in:
+- [`apps/mobile/hooks/useChatStream.ts`](../apps/mobile/hooks/useChatStream.ts)
+- [`apps/mobile/stores/useProjectStore.ts`](../apps/mobile/stores/useProjectStore.ts)
+- [`apps/mobile/hooks/useHomeSessions.ts`](../apps/mobile/hooks/useHomeSessions.ts)
+- [`apps/server/api/src/services/session.service.ts`](../apps/server/api/src/services/session.service.ts)
+
+#### A. Disconnected Status Source in `useChatStream.ts`
+In `apps/mobile/hooks/useChatStream.ts` (lines 83–87):
+```typescript
+const serverStatus = sessionStatuses$[selectedSessionId].peek();
+const hasLocalStream = getController(selectedSessionId);
+if (!isRunning && serverStatus === "working" && !hasLocalStream && selectedSessionId) {
+    attachServerRun(selectedSessionId);
+}
+```
+`useChatStream` relies entirely on `sessionStatuses$[selectedSessionId].peek()`.
+However:
+1. `sessionStatuses$` is **only** populated inside `useProjectStore.ts` (line 64) when listing sessions for an active project view.
+2. If a user opens a chat from the Home screen (`useHomeSessions.ts`), Search, Recent Chats, or Scratchpad, `setStatuses` is **never called**.
+3. In `useChatStream.ts`, `latestHeader` is fetched directly from `GET /api/sessions/:id` (via `useSession`):
+   ```typescript
+   const latestHeader = sessionQuery.data?.pages[0]?.header;
+   ```
+   **`useChatStream` completely ignores `latestHeader.status`!** It never updates `sessionStatuses$`, nor does it check `latestHeader.status === "working"` directly.
+4. Because `sessionStatuses$[selectedSessionId]` is `undefined`, `serverStatus === "working"` evaluates to `false`.
+5. Mobile falls into `loadSessionMessages(selectedSessionId, allMessages)` (which only contains static completed turns from SQLite) and **never calls `attachServerRun`**.
+
+#### B. Server-Side Session Status Is Not Dynamically Authoritative
+In `apps/server/api/src/services/session.service.ts`:
+1. `getSession()` checks if a run is *inactive* to reset `"working"` to `"done"`, but it **never forces `status: "working"`** if `RunService.isRunActive(sessionId)` is `true`. If SQLite had an un-flushed or default status, the response header still reports `"idle"` or `null`.
+2. `listSessions()` directly returns SQLite rows without enriching with `RunService.isRunActive(session.id)`. Mobile and Desktop session lists therefore fail to show the live "working" badge unless SQLite was written synchronously beforehand.
+
+### Proposed Remediation
+1. **Direct Header Check in Mobile `useChatStream.ts`**:
+   Update `useChatStream` to inspect `latestHeader?.status === "working"`:
+   ```typescript
+   const serverStatus = latestHeader?.status ?? sessionStatuses$[selectedSessionId].peek();
+   ```
+   Also sync `latestHeader.status` into `sessionStatuses$[selectedSessionId].set(latestHeader.status)` whenever `latestHeader` arrives.
+2. **Seed Statuses in `useHomeSessions.ts`**:
+   Call `setStatuses(sessions)` in `useHomeSessions` so recent and home-screen sessions have accurate cached statuses.
+3. **Dynamic Status on Server**:
+   In `sessionService.getSession` and `sessionService.listSessions`, dynamically override `session.status = "working"` (or `header.status = "working"`) if `RunService.isRunActive(session.id)` is `true`.
