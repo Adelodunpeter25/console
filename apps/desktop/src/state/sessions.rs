@@ -363,7 +363,9 @@ impl ConsoleDesktopApp {
     }
 
     /// Load a chat into one pane without replacing another pane's transcript.
-    /// Uses tail pagination (limit 50) for fast initial paint; older messages load on demand.
+    /// Uses tail pagination (limit 100) to include the first prompt for most
+    /// chats (e.g. 69-msg hls-server) without an extra scroll; older pages
+    /// still load on demand via before cursor.
     pub fn load_session_messages_for_pane(
         &mut self,
         pane_id: String,
@@ -373,7 +375,7 @@ impl ConsoleDesktopApp {
         let client = self.client.clone();
         let saved_position = self.transcript_scroll_positions.get(&session_id).copied();
         cx.spawn(async move |entity, cx| {
-            match client.sessions.get_paginated(&session_id, Some(50), None).await {
+            match client.sessions.get_paginated(&session_id, Some(100), None).await {
                 Ok(detail) => {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
