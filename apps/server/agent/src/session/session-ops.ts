@@ -13,6 +13,7 @@ import {
   getSessionDbPath,
   removeDbFile,
 } from "./session-helpers.js";
+import { getScratchDir, getSessionScratchDir } from "./apppaths.js";
 import { type SessionIndexRow, type SessionMetaRow, type StorageState } from "./utils.js";
 
 export interface CreateSessionOptions {
@@ -66,6 +67,7 @@ export function createSession(state: StorageState, options: CreateSessionOptions
     id,
     title,
     cwd: options.cwd,
+    projectId: projectId ?? undefined,
     modelId: options.modelId,
     provider: options.provider,
     approvalMode,
@@ -358,6 +360,20 @@ export function permanentlyDeleteSession(state: StorageState, sessionId: string)
     ? getSessionDbPath(storageDir, row.project_id, sessionId)
     : findSessionDbPath(storageDir, sessionId);
   if (dbPath) removeDbFile(dbPath);
+
+  // Cleanup scratch working directory for scratchpad sessions
+  if (row.project_id == null) {
+    try {
+      const scratchDir = getSessionScratchDir(sessionId);
+      // Safety: only delete if under the scratch root
+      const scratchRoot = getScratchDir();
+      if (scratchDir.startsWith(scratchRoot) && fs.existsSync(scratchDir)) {
+        fs.rmSync(scratchDir, { recursive: true, force: true });
+      }
+    } catch {
+      // Ignored
+    }
+  }
 
   const info = globalDb.prepare(`DELETE FROM sessions WHERE id = ?`).run(sessionId);
   return info.changes > 0;

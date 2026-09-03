@@ -105,7 +105,7 @@ impl RenderOnce for SidebarSessionItem {
         let rename_input = self.rename_input;
 
         let folder_name = if self.session.project_id.is_none() {
-            "General".to_string()
+            "No Folder".to_string()
         } else {
             self.project_name
                 .clone()
