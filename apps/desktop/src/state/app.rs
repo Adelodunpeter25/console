@@ -137,6 +137,9 @@ pub struct ConsoleDesktopApp {
     /// pane to a different chat never transfers the working indicator or
     /// streamed text.
     pub running_sessions: std::collections::HashMap<String, i64>,
+    /// Monotonic token per session incremented on each prompt submission.
+    /// Ensures out-of-order or late settling calls cannot overwrite newer runs.
+    pub session_run_tokens: std::collections::HashMap<String, u64>,
     /// A stream burst can contain many provider chunks. The render loop uses
     /// this latch to publish at most one transcript repaint per cadence window.
     pub(crate) stream_render_pending: std::collections::HashMap<String, bool>,
@@ -493,6 +496,7 @@ impl ConsoleDesktopApp {
             error_generation: 0,
             zoomed_image: None,
             running_sessions: std::collections::HashMap::new(),
+            session_run_tokens: std::collections::HashMap::new(),
             stream_render_pending: std::collections::HashMap::new(),
             sidebar_visible: layout.sidebar_visible,
             sidebar_width,

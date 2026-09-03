@@ -107,16 +107,19 @@ impl ConsoleDesktopApp {
         // an existing chat we know the session id now; for a brand-new chat the
         // id is resolved after creation inside the spawned run.
         let run_started_at = chrono::Utc::now().timestamp();
-        if let Some(ref sid) = active_sid {
+        let initial_run_token = if let Some(ref sid) = active_sid {
             self.set_session_running(sid, Some(run_started_at));
-        }
+            self.next_run_token_for_session(sid)
+        } else {
+            0
+        };
         cx.notify();
 
         // Spawn async streaming run
         cx.spawn(async move |entity, cx| {
             // Resolve or create session ID
-            let session_id = match active_sid {
-                Some(id) => id,
+            let (session_id, run_token) = match active_sid {
+                Some(id) => (id, initial_run_token),
                 None => {
                     match client.sessions.create(CreateSessionDto {
                         cwd: session_cwd,
@@ -129,6 +132,7 @@ impl ConsoleDesktopApp {
                         Ok(s) => {
                             let sid = s.id.clone();
                             let new_session = s;
+                            let mut assigned_token = 0;
                             cx.update(|cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
@@ -139,15 +143,13 @@ impl ConsoleDesktopApp {
                                         }
                                         Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
                                         this.open_chat_tab_in_pane(&run_pane_id, sid.clone(), new_session.title.clone());
-                                        // Now that the new session exists, mark it
-                                        // running under its real id. For an existing
-                                        // chat this was already set at submit time.
                                         this.set_session_running(&sid, Some(run_started_at));
+                                        assigned_token = this.next_run_token_for_session(&sid);
                                         cx.notify();
                                     });
                                 }
                             });
-                            sid
+                            (sid, assigned_token)
                         }
                         Err(error) => {
                             let message = format!("Unable to create a session: {error}");
@@ -281,7 +283,9 @@ impl ConsoleDesktopApp {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                if this.active_session_for_pane(&run_pane_id).as_deref() == Some(session_id.as_str()) {
+                                if this.active_session_for_pane(&run_pane_id).as_deref() == Some(session_id.as_str())
+                                    && this.current_run_token_for_session(&session_id) == run_token
+                                {
                                     this.apply_session_header_for_pane(&run_pane_id, &detail.header, cx);
                                     this.composer_for_pane(&run_pane_id).update(cx, |input, cx| {
                                         input.set_prompt_history(
@@ -295,7 +299,9 @@ impl ConsoleDesktopApp {
                                         cx,
                                     );
                                     this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                        t.set_messages(detail.messages, cx);
+                                        if detail.messages.len() >= t.message_count() {
+                                            t.set_messages(detail.messages, cx);
+                                        }
                                     });
                                 }
                                 cx.notify();
@@ -318,6 +324,9 @@ impl ConsoleDesktopApp {
             cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
+                        if this.current_run_token_for_session(&run_session_id) != run_token {
+                            return;
+                        }
                         let pane_shows_run = this
                             .active_session_for_pane(&run_pane_id)
                             .as_deref()
@@ -597,6 +606,7 @@ impl ConsoleDesktopApp {
 
         let now = chrono::Utc::now().timestamp_millis();
         self.set_session_running(&session_id, Some(now));
+        let run_token = self.next_run_token_for_session(&session_id);
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
@@ -684,11 +694,16 @@ impl ConsoleDesktopApp {
                 cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
+                            if this.current_run_token_for_session(&run_session_id) != run_token {
+                                return;
+                            }
                             this.set_session_running(&run_session_id, None);
                             if this.active_session_for_pane(&run_pane_id).as_deref() == Some(session_id.as_str()) {
                                 this.apply_session_header_for_pane(&run_pane_id, &detail.header, cx);
                                 this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
-                                    t.set_messages(detail.messages, cx);
+                                    if detail.messages.len() >= t.message_count() {
+                                        t.set_messages(detail.messages, cx);
+                                    }
                                     t.finish_streaming(cx);
                                 });
                             }
@@ -700,6 +715,9 @@ impl ConsoleDesktopApp {
                 cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
+                            if this.current_run_token_for_session(&run_session_id) != run_token {
+                                return;
+                            }
                             this.set_session_running(&run_session_id, None);
                             if this.active_session_for_pane(&run_pane_id).as_deref() == Some(session_id.as_str()) {
                                 this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {

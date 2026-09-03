@@ -46,6 +46,21 @@ impl ConsoleDesktopApp {
         self.running_sessions.clone()
     }
 
+    /// Advance and return the monotonic run token for a session.
+    pub(crate) fn next_run_token_for_session(&mut self, session_id: &str) -> u64 {
+        let token = self
+            .session_run_tokens
+            .entry(session_id.to_string())
+            .or_insert(0);
+        *token = token.wrapping_add(1);
+        *token
+    }
+
+    /// Read the current run token for a session without advancing it.
+    pub(crate) fn current_run_token_for_session(&self, session_id: &str) -> u64 {
+        self.session_run_tokens.get(session_id).copied().unwrap_or(0)
+    }
+
     /// Whether the session currently displayed in a pane is running. Used by
     /// the composer to show Stop vs Send for the chat the pane is actually
     /// showing, not whichever chat happened to start its run from this pane.

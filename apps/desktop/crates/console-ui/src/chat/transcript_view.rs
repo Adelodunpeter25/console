@@ -214,6 +214,10 @@ impl TranscriptView {
         self.loading_older = loading;
     }
 
+    pub fn message_count(&self) -> usize {
+        self.messages.len()
+    }
+
     /// Re-anchor the list after the message set changed: keep following the
     /// tail when the user is already following it (streaming, new prompts),
     /// otherwise leave the scroll position alone.
