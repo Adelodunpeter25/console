@@ -4,7 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 "$SCRIPT_DIR/build.sh" \
-    --mode dev \
-    --bundle-id com.console.mobile.dev \
-    --app-name "Console Dev" \
+    --mode prod \
+    --release \
+    --bundle-id com.console.mobile.prod \
+    --app-name "Console" \
     "$@"
