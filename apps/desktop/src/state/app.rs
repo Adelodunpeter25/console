@@ -155,6 +155,9 @@ pub struct ConsoleDesktopApp {
     pub open_diff_contents: std::collections::HashMap<String, (console_core::DiffResult, String)>,
     pub viewer_list_states: std::collections::HashMap<String, ListState>,
     pub viewer_selection_states: std::collections::HashMap<String, std::rc::Rc<std::cell::RefCell<console_ui::SelectionState>>>,
+    pub viewer_scrollbar_states: std::collections::HashMap<String, std::rc::Rc<console_ui::ScrollbarState>>,
+    pub viewer_cached_file_lines: std::collections::HashMap<String, (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>)>,
+    pub viewer_cached_diff_lines: std::collections::HashMap<String, (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>)>,
     /// Retained virtualization state for the sidebar session history.
     pub sidebar_list_state: ListState,
     /// Live drag-resize anchor, owned by `layout`.
@@ -503,6 +506,9 @@ impl ConsoleDesktopApp {
             open_diff_contents: std::collections::HashMap::new(),
             viewer_list_states: std::collections::HashMap::new(),
             viewer_selection_states: std::collections::HashMap::new(),
+            viewer_scrollbar_states: std::collections::HashMap::new(),
+            viewer_cached_file_lines: std::collections::HashMap::new(),
+            viewer_cached_diff_lines: std::collections::HashMap::new(),
             sidebar_list_state: ListState::new(0, ListAlignment::Top, px(55.0)),
             sidebar_resize_start: None,
             split_resize: None,
@@ -839,5 +845,63 @@ impl ConsoleDesktopApp {
             .entry(id.to_string())
             .or_insert_with(|| std::rc::Rc::new(std::cell::RefCell::new(console_ui::SelectionState::default())))
             .clone()
+    }
+
+    pub fn viewer_scrollbar_state(
+        &mut self,
+        id: &str,
+    ) -> std::rc::Rc<console_ui::ScrollbarState> {
+        self.viewer_scrollbar_states
+            .entry(id.to_string())
+            .or_insert_with(console_ui::ScrollbarState::new)
+            .clone()
+    }
+
+    pub fn get_or_build_file_lines(
+        &mut self,
+        path: &str,
+        content: &str,
+    ) -> std::rc::Rc<Vec<console_ui::CodeViewerLine>> {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        content.hash(&mut hasher);
+        let hash = hasher.finish();
+        let len = content.len();
+
+        if let Some((cached_len, cached_hash, cached_lines)) = self.viewer_cached_file_lines.get(path) {
+            if *cached_len == len && *cached_hash == hash {
+                return cached_lines.clone();
+            }
+        }
+
+        let lines = std::rc::Rc::new(console_ui::build_file_lines(path, content));
+        self.viewer_cached_file_lines.insert(path.to_string(), (len, hash, lines.clone()));
+        lines
+    }
+
+    pub fn get_or_build_diff_lines(
+        &mut self,
+        path: &str,
+        diff: &console_core::DiffResult,
+        theme: &console_ui::Theme,
+    ) -> std::rc::Rc<Vec<console_ui::CodeViewerLine>> {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        diff.lines.len().hash(&mut hasher);
+        for line in &diff.lines {
+            line.text.hash(&mut hasher);
+        }
+        let hash = hasher.finish();
+        let len = diff.lines.len();
+
+        if let Some((cached_len, cached_hash, cached_lines)) = self.viewer_cached_diff_lines.get(path) {
+            if *cached_len == len && *cached_hash == hash {
+                return cached_lines.clone();
+            }
+        }
+
+        let lines = std::rc::Rc::new(console_ui::build_diff_lines(path, diff, theme));
+        self.viewer_cached_diff_lines.insert(path.to_string(), (len, hash, lines.clone()));
+        lines
     }
 }

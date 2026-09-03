@@ -51,15 +51,19 @@ impl ConsoleDesktopApp {
                 .get(path)
                 .cloned()
                 .unwrap_or_else(|| "Loading file content...".to_string());
-            let line_count = content.lines().count();
+            let lines = self.get_or_build_file_lines(path, &content);
+            let line_count = lines.len();
             let list_state = self.viewer_list_state(
                 &format!("file:{}", path),
                 line_count,
                 console_ui::CODE_LINE_HEIGHT,
             );
             let selection_state = self.viewer_selection_state(&format!("file:{}", path));
+            let scrollbar_state = self.viewer_scrollbar_state(&format!("file:{}", path));
             return console_ui::FileViewer::new(path.clone(), content, list_state)
+                .rc_lines(lines)
                 .selection_state(selection_state)
+                .scrollbar_state(scrollbar_state)
                 .into_any_element();
         }
 
@@ -70,15 +74,20 @@ impl ConsoleDesktopApp {
                 .get(path)
                 .cloned()
                 .unwrap_or_else(|| (console_core::DiffResult::default(), String::new()));
-            let line_count = diff_result.lines.len();
+            let theme = Theme::current(cx);
+            let lines = self.get_or_build_diff_lines(path, &diff_result, &theme);
+            let line_count = lines.len();
             let list_state = self.viewer_list_state(
                 &format!("diff:{}", path),
                 line_count,
                 console_ui::CODE_LINE_HEIGHT,
             );
             let selection_state = self.viewer_selection_state(&format!("diff:{}", path));
+            let scrollbar_state = self.viewer_scrollbar_state(&format!("diff:{}", path));
             return console_ui::DiffViewer::new(path.clone(), diff_result, raw_diff, list_state)
+                .rc_lines(lines)
                 .selection_state(selection_state)
+                .scrollbar_state(scrollbar_state)
                 .into_any_element();
         }
 

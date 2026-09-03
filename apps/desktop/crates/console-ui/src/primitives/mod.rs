@@ -23,6 +23,7 @@ pub use file_icons::{
 };
 pub use icons::{FileTypeIcon, IconName, ProviderIcon, app_icon, provider_app_icon};
 pub use menu::{ContextMenuHandle, MenuAlign, MenuItem, dropdown_menu, popover};
+pub use scrollbar::ScrollbarState;
 pub use text_field::TextField;
 
 /// A monochrome icon from the embedded set, tinted via text color.
