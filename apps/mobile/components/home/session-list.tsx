@@ -98,8 +98,8 @@ export function SessionList({
 
   return (
     <>
-      {sections.map((section) => (
-        <View key={section.projectId ?? "no-project"} className="mb-6">
+      {sections.map((section, sIdx) => (
+        <View key={`section-${section.projectId ?? section.projectName}-${sIdx}`} className="mb-6">
           {/* Section header */}
           <View className="flex-row items-center justify-between mb-2 px-1">
             <View className="flex-row items-center gap-2">
@@ -138,7 +138,7 @@ export function SessionList({
 
               return (
                 <Pressable
-                  key={session.id}
+                  key={`session-${section.projectId ?? "p"}-${session.id}-${index}`}
                   className={`flex-row items-center px-4 py-3.5 ${
                     !isLast ? "border-b border-border/40" : ""
                   }`}

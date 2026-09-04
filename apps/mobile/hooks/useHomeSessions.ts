@@ -153,8 +153,12 @@ export function useHomeSessions() {
     >();
 
     // Exclude drafts with 0 messages from normal grouping — they live in DRAFT section
+    // Also deduplicate any duplicate session ids returned by query
+    const seenSessionIds = new Set<string>();
     const nonDraftSessions = filteredSessions.filter((s) => {
-      return !(s.id in draftSummaries);
+      if (s.id in draftSummaries || seenSessionIds.has(s.id)) return false;
+      seenSessionIds.add(s.id);
+      return true;
     });
 
     for (const session of nonDraftSessions) {
@@ -178,7 +182,10 @@ export function useHomeSessions() {
         projects.find((p) => p.path && session.cwd && p.path === session.cwd) ??
         (session.projectId ? projects.find((p) => p.id === session.projectId) : undefined);
 
-      const groupKey = project ? project.id : (folderName(session.cwd) || "draft").toLowerCase();
+      const resolvedProjectId = project?.id ?? session.projectId ?? null;
+      const groupKey = resolvedProjectId
+        ? `project-${resolvedProjectId}`
+        : (folderName(session.cwd) || "draft").toLowerCase();
       const rawName = project ? project.name : (folderName(session.cwd) || "Drafts");
       const groupName = formatProjectTitle(rawName);
 
@@ -187,7 +194,7 @@ export function useHomeSessions() {
         existing.list.push(session);
       } else {
         byProject.set(groupKey, {
-          projectId: project?.id ?? session.projectId ?? null,
+          projectId: resolvedProjectId,
           projectName: groupName,
           list: [session],
         });
