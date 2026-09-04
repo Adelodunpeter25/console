@@ -87,6 +87,27 @@ impl TerminalBackend for TermyBackend {
             }
             out_rows.push(row);
         }
+
+        let mut detected_links = Vec::new();
+        for r in 0..rows {
+            let mut c = 0;
+            while c < cols {
+                if let Some(link) = self.term.link_at(r, c) {
+                    let end_col = link.end_col.min(cols.saturating_sub(1));
+                    detected_links.push(crate::types::terminal::TerminalLink {
+                        start_row: link.start_row as u16,
+                        start_col: link.start_col as u16,
+                        end_row: link.end_row as u16,
+                        end_col: end_col as u16,
+                        target: link.target,
+                    });
+                    c = end_col + 1;
+                } else {
+                    c += 1;
+                }
+            }
+        }
+
         let cursor = frame.cursor;
         let cursor_pos = if let Some(cur) = cursor {
             CursorPosition {
@@ -105,6 +126,9 @@ impl TerminalBackend for TermyBackend {
             rows: out_rows,
             cursor: cursor_pos,
             size: self.size,
+            links: detected_links,
+            keyboard_mode: self.term.keyboard_mode(),
+            bracketed_paste: self.term.bracketed_paste_mode(),
         }
     }
 
@@ -130,5 +154,9 @@ impl TermyBackend {
 
     pub fn bracketed_paste(&self) -> bool {
         self.term.bracketed_paste_mode()
+    }
+
+    pub fn link_at(&self, row: usize, col: usize) -> Option<termy_core::DetectedViewportLink> {
+        self.term.link_at(row, col)
     }
 }

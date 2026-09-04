@@ -154,7 +154,7 @@ impl TerminalView {
         TerminalTheme::from_app_theme(&Theme::current(cx))
     }
 
-    fn key_to_bytes(event: &KeyDownEvent) -> Option<String> {
+    fn key_to_bytes(event: &KeyDownEvent, mode: TerminalKeyboardMode) -> Option<String> {
         let mods = TermyModifiers {
             control: event.keystroke.modifiers.control,
             alt: event.keystroke.modifiers.alt,
@@ -169,7 +169,6 @@ impl TerminalView {
         };
         // Use termy_core's full keyboard encoder — key_char already carries
         // Caps-correct case from GPUI (and IME for CJK), kitty/disambiguate handled.
-        let mode = TerminalKeyboardMode::default();
         let bytes = keystroke_to_input(&ks, TerminalKeyEventKind::Press, mode, true)?;
         Some(String::from_utf8_lossy(&bytes).into_owned())
     }
@@ -200,6 +199,14 @@ impl Render for TerminalView {
         let handle_for_key = self.handle.clone();
         let handle_for_scroll = self.handle.clone();
         let focus_for_key = self.focus.clone();
+        let keyboard_mode = snapshot
+            .as_ref()
+            .map(|s| s.keyboard_mode)
+            .unwrap_or_default();
+        let bracketed_paste = snapshot
+            .as_ref()
+            .map(|s| s.bracketed_paste)
+            .unwrap_or(false);
 
         div()
             .id("terminal-view")
@@ -225,14 +232,18 @@ impl Render for TerminalView {
                         if let Some(clipboard) = cx.read_from_clipboard() {
                             if let Some(text) = clipboard.text() {
                                 if let Some(h) = &handle_for_key {
-                                    h.send_input(text);
+                                    if bracketed_paste {
+                                        h.send_input(format!("\x1b[200~{}\x1b[201~", text));
+                                    } else {
+                                        h.send_input(text);
+                                    }
                                 }
                             }
                         }
                         cx.stop_propagation();
                         return;
                     }
-                    if let Some(bytes) = TerminalView::key_to_bytes(event) {
+                    if let Some(bytes) = TerminalView::key_to_bytes(event, keyboard_mode) {
                         if let Some(h) = &handle_for_key {
                             h.send_input(bytes);
                         }
@@ -405,12 +416,34 @@ fn render_canvas_grid(
                 cell.c
             };
 
+            let mut is_link = false;
+            if let Some(links) = snapshot.map(|s| &s.links) {
+                let r = row_idx as u16;
+                let c = col_idx as u16;
+                for l in links {
+                    if r >= l.start_row && r <= l.end_row {
+                        let in_start = r > l.start_row || c >= l.start_col;
+                        let in_end = r < l.end_row || c <= l.end_col;
+                        if in_start && in_end {
+                            is_link = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if is_link {
+                fg = gpui::blue();
+            }
+
+            let cell_underline = cell.flags.underline || is_link;
+
             let can_merge = if let Some(last) = runs.last() {
                 last.fg == fg
                     && last.bg == bg
                     && last.bold == cell.flags.bold
                     && last.italic == cell.flags.italic
-                    && last.underline == cell.flags.underline
+                    && last.underline == cell_underline
             } else {
                 false
             };
@@ -427,7 +460,7 @@ fn render_canvas_grid(
                     bg,
                     bold: cell.flags.bold,
                     italic: cell.flags.italic,
-                    underline: cell.flags.underline,
+                    underline: cell_underline,
                     text: c.to_string(),
                 });
             }

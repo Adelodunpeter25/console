@@ -144,12 +144,25 @@ pub struct TerminalCellFlags {
 /// One row of cells.
 pub type TerminalRow = Vec<TerminalCell>;
 
+/// Detected link in the terminal viewport.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TerminalLink {
+    pub start_row: u16,
+    pub start_col: u16,
+    pub end_row: u16,
+    pub end_col: u16,
+    pub target: String,
+}
+
 /// Full viewport snapshot, top-to-bottom lines.
 #[derive(Clone, Debug)]
 pub struct TerminalGridSnapshot {
     pub rows: Vec<TerminalRow>,
     pub cursor: CursorPosition,
     pub size: TerminalSize,
+    pub links: Vec<TerminalLink>,
+    pub keyboard_mode: termy_core::TerminalKeyboardMode,
+    pub bracketed_paste: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
