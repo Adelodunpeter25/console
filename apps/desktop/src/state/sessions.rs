@@ -2,9 +2,11 @@
 //! persisting settings changes, answering agent questions, and loading a
 //! session's messages into the transcript.
 
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use console_core::{ApprovalMode, SelectedModel, SessionHeader, UpdateSessionDto};
+use console_ui::utils::group_indices_by_date;
 use gpui::{Context, Window};
 
 use super::ConsoleDesktopApp;
@@ -394,6 +396,56 @@ impl ConsoleDesktopApp {
         });
         self.load_session_messages(id, cx);
         cx.notify();
+    }
+
+    /// Visible sidebar session ids top-to-bottom, mirroring the sidebar
+    /// render: sessions with confirmed drafts live in Drafts (excluded here)
+    /// and collapsed date groups are skipped.
+    pub fn visible_session_ids(&self) -> Vec<String> {
+        let draft_ids: HashSet<String> = self
+            .draft_summaries()
+            .into_iter()
+            .filter_map(|d| d.session_id)
+            .collect();
+        let grouped = group_indices_by_date(self.sessions.len(), |index| {
+            let session = &self.sessions[index];
+            if draft_ids.contains(&session.id) {
+                0
+            } else {
+                session.updated_at.max(session.created_at)
+            }
+        });
+        let mut ids = Vec::new();
+        for (group, positions) in grouped {
+            if self.collapsed_groups.contains(&group) {
+                continue;
+            }
+            for idx in positions {
+                let session = &self.sessions[idx];
+                if draft_ids.contains(&session.id) {
+                    continue;
+                }
+                ids.push(session.id.clone());
+            }
+        }
+        ids
+    }
+
+    /// Browser-tab style jump: 0..7 go to nth visible session, index 8 goes
+    /// to the last one when there are more than nine. No-op when empty.
+    pub fn select_session_by_visible_index(&mut self, index: usize, cx: &mut Context<Self>) {
+        let ids = self.visible_session_ids();
+        if ids.is_empty() {
+            return;
+        }
+        let target = if index == 8 && ids.len() > 9 {
+            ids.last().cloned()
+        } else {
+            ids.get(index).cloned()
+        };
+        if let Some(id) = target {
+            self.select_and_open_session(id, cx);
+        }
     }
 
     pub fn load_session_messages(&mut self, session_id: String, cx: &mut Context<Self>) {

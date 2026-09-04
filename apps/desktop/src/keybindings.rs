@@ -35,6 +35,16 @@ actions!(
         ToggleLeftSidebar,
         /// Toggle the right workspace inspector panel.
         ToggleRightSidebar,
+        /// Jump to the nth visible sidebar session (browser-tab style).
+        SwitchSession1,
+        SwitchSession2,
+        SwitchSession3,
+        SwitchSession4,
+        SwitchSession5,
+        SwitchSession6,
+        SwitchSession7,
+        SwitchSession8,
+        SwitchSession9,
     ]
 );
 
@@ -55,6 +65,15 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-,", OpenSettings, None),
         KeyBinding::new("secondary-b", ToggleLeftSidebar, None),
         KeyBinding::new("secondary-shift-b", ToggleRightSidebar, None),
+        KeyBinding::new("secondary-1", SwitchSession1, None),
+        KeyBinding::new("secondary-2", SwitchSession2, None),
+        KeyBinding::new("secondary-3", SwitchSession3, None),
+        KeyBinding::new("secondary-4", SwitchSession4, None),
+        KeyBinding::new("secondary-5", SwitchSession5, None),
+        KeyBinding::new("secondary-6", SwitchSession6, None),
+        KeyBinding::new("secondary-7", SwitchSession7, None),
+        KeyBinding::new("secondary-8", SwitchSession8, None),
+        KeyBinding::new("secondary-9", SwitchSession9, None),
     ]);
 }
 
@@ -159,6 +178,62 @@ pub fn init_handlers(app: Entity<ConsoleDesktopApp>, window: AnyWindowHandle, cx
         let app = app.clone();
         move |_: &ToggleRightSidebar, cx| {
             app.update(cx, |this, cx| this.toggle_right_sidebar(cx));
+        }
+    });
+    // Browser-tab style session jumps: cmd+1..8 go to nth visible session,
+    // cmd+9 jumps to the last one when there are more than nine.
+    cx.on_action({
+        let app = app.clone();
+        move |_: &SwitchSession1, cx| {
+            app.update(cx, |this, cx| this.select_session_by_visible_index(0, cx));
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &SwitchSession2, cx| {
+            app.update(cx, |this, cx| this.select_session_by_visible_index(1, cx));
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &SwitchSession3, cx| {
+            app.update(cx, |this, cx| this.select_session_by_visible_index(2, cx));
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &SwitchSession4, cx| {
+            app.update(cx, |this, cx| this.select_session_by_visible_index(3, cx));
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &SwitchSession5, cx| {
+            app.update(cx, |this, cx| this.select_session_by_visible_index(4, cx));
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &SwitchSession6, cx| {
+            app.update(cx, |this, cx| this.select_session_by_visible_index(5, cx));
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &SwitchSession7, cx| {
+            app.update(cx, |this, cx| this.select_session_by_visible_index(6, cx));
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &SwitchSession8, cx| {
+            app.update(cx, |this, cx| this.select_session_by_visible_index(7, cx));
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &SwitchSession9, cx| {
+            app.update(cx, |this, cx| this.select_session_by_visible_index(8, cx));
         }
     });
 }
