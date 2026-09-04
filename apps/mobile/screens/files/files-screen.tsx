@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useMemo } from "react";
-import { View, Text, Pressable, ActivityIndicator, ScrollView, BackHandler } from "react-native";
+import React, { useState, useCallback, useMemo, useRef } from "react";
+import { View, Text, Pressable, ActivityIndicator, ScrollView, BackHandler, InteractionManager } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Search, RefreshCw, File as FileIcon } from "lucide-react-native";
 import { TextInput } from "react-native";
@@ -96,17 +96,57 @@ export function FilesScreen() {
     error: fileError,
   } = useReadFile(selectedFilePath ?? "", { enabled: !previewBlock });
 
-  // Tokenize once per file (single Prism pass), not per line per render.
-  // Language resolved once; lines memoized so re-renders reuse segments.
+  // Raw lines paint instantly on open. Highlight fills in progressively:
+  // first 40 lines right after interactions, rest in 50-line idle chunks.
+  // Each chunk is its own small tokenize so no frame blocks the open.
   const fileContent = fileData?.content ?? "";
   const fileLanguage = useMemo(
     () => getLanguageFromPath(selectedFilePath ?? undefined),
     [selectedFilePath],
   );
-  const tokenizedLines = useMemo(
-    () => (isMarkdownFile || !fileContent ? [] : tokenizeLines(fileContent, fileLanguage)),
-    [isMarkdownFile, fileContent, fileLanguage],
-  );
+  const rawLines = useMemo(() => (fileContent ? fileContent.split("\n") : []), [fileContent]);
+  const [highlightedLines, setHighlightedLines] = useState<HighlightSegment[][]>([]);
+  const highlightTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  React.useEffect(() => {
+    highlightTimers.current.forEach(clearTimeout);
+    highlightTimers.current = [];
+    setHighlightedLines([]);
+    if (isMarkdownFile || !fileContent || rawLines.length === 0) return;
+    let cancelled = false;
+    const schedule = (fn: () => void, delay = 0) => {
+      const t = setTimeout(() => {
+        if (!cancelled) fn();
+      }, delay);
+      highlightTimers.current.push(t);
+    };
+    const tokenizeChunk = (start: number, end: number) => {
+      const slice = rawLines.slice(start, end).join("\n");
+      const parts = tokenizeLines(slice, fileLanguage);
+      setHighlightedLines((prev) => {
+        const next = prev.slice();
+        for (let i = 0; i < parts.length; i++) next[start + i] = parts[i]!;
+        return next;
+      });
+    };
+    const interaction = InteractionManager.runAfterInteractions(() => {
+      if (cancelled) return;
+      tokenizeChunk(0, Math.min(40, rawLines.length));
+      let next = 40;
+      const step = () => {
+        if (cancelled || next >= rawLines.length) return;
+        tokenizeChunk(next, Math.min(next + 50, rawLines.length));
+        next += 50;
+        schedule(step, 16);
+      };
+      if (next < rawLines.length) schedule(step, 32);
+    });
+    return () => {
+      cancelled = true;
+      interaction.cancel();
+      highlightTimers.current.forEach(clearTimeout);
+      highlightTimers.current = [];
+    };
+  }, [fileContent, fileLanguage, isMarkdownFile, rawLines]);
 
   const handleSelectFile = useCallback((absolutePath: string, fileSize?: number) => {
     setSelectedFile({ path: absolutePath, size: fileSize });
@@ -208,7 +248,7 @@ export function FilesScreen() {
                 <View style={{ flexDirection: "row", padding: 16, minWidth: "100%" }}>
                   {/* Gutter - not selectable, not copied */}
                   <View style={{ width: 32, marginRight: 8, alignItems: "flex-end" }}>
-                    {tokenizedLines.map((_, i) => (
+                    {rawLines.map((_, i) => (
                       <Text
                         key={`ln-${i}`}
                         className="text-[10px] leading-4 font-mono text-right pr-2 text-foreground-secondary/40"
@@ -237,12 +277,21 @@ export function FilesScreen() {
                         fontFamily: "monospace",
                       }}
                     >
-                      {tokenizedLines.map((segments, i) => (
-                        <Text key={`lc-${i}`} style={{ lineHeight: 16 }}>
-                          <CodeLine segments={segments} />
-                          {i < tokenizedLines.length - 1 ? "\n" : ""}
-                        </Text>
-                      ))}
+                      {rawLines.map((line, i) => {
+                        const segments = highlightedLines[i];
+                        return (
+                          <Text key={`lc-${i}`} style={{ lineHeight: 16 }}>
+                            {segments ? (
+                              <CodeLine segments={segments} />
+                            ) : (
+                              <Text style={{ lineHeight: 16, color: theme.colors.text.primary }}>
+                                {line || " "}
+                              </Text>
+                            )}
+                            {i < rawLines.length - 1 ? "\n" : ""}
+                          </Text>
+                        );
+                      })}
                     </Text>
                   </ScrollView>
                 </View>

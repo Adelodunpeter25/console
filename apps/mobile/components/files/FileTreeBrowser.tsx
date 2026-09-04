@@ -86,6 +86,14 @@ export function FileTreeBrowser(props: FileTreeBrowserProps) {
 
   const handleSelectFile = useCallback(
     (entry: FsTreeEntry) => {
+      // Prefetch content so open overlaps fetch instead of waiting on it.
+      void queryClient
+        .prefetchQuery({
+          queryKey: ["fs", "file", entry.path],
+          queryFn: () => fsService.readFile(entry.path),
+          staleTime: 15_000,
+        })
+        .catch(() => {});
       if (pendingSelectionTimeoutRef.current !== null) {
         clearTimeout(pendingSelectionTimeoutRef.current);
       }
@@ -99,7 +107,7 @@ export function FileTreeBrowser(props: FileTreeBrowserProps) {
       }, OPTIMISTIC_SELECTION_TIMEOUT_MS);
       props.onSelectFile(entry.path, entry.size);
     },
-    [props.onSelectFile],
+    [props.onSelectFile, queryClient],
   );
 
   const rootRelative = useCallback(
