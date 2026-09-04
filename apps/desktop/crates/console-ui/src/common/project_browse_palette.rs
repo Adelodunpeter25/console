@@ -57,6 +57,7 @@ impl ProjectBrowsePalette {
     pub fn open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let this = cx.entity().downgrade();
         self.modal.update(cx, |modal, cx| {
+            modal.reset_state(window, cx);
             modal.set_placeholder("Filter folders…", cx);
             // Local filter against the listing; query does not re-fetch.
             modal.set_filterable(true, cx);
@@ -180,8 +181,8 @@ fn select_folder_entry(
 /// Rows for a directory listing:
 /// 1. "Use this folder" — Enter/click registers `current_path` as a project
 /// 2. ".." parent (when available) — Enter/click drills up
-/// 3. Subfolders — Enter/click **selects** that folder as the project;
-///    trailing ▶ chevron drills into it
+/// 3. Subfolders — clicking or Enter navigates into that folder;
+///    Enter on a subfolder row also navigates (only "Use this folder" selects)
 ///
 /// Files are omitted: this picker is for choosing a project root, not opening files.
 fn entries_from_browse(
@@ -212,7 +213,8 @@ fn entries_from_browse(
         );
     }
 
-    // Subfolders: Enter/click selects; ▶ drills in.
+    // Subfolders: clicking or Enter navigates into the folder.
+    // "Use this folder" (row 1) is the only way to add the project.
     // Cap the listing so huge home directories stay snappy in the palette.
     const MAX_DIRS: usize = 200;
     let mut dirs: Vec<FsEntry> = entries.into_iter().filter(|e| e.is_dir).collect();
@@ -223,16 +225,11 @@ fn entries_from_browse(
     });
     dirs.truncate(MAX_DIRS);
     for entry in dirs {
-        let path = entry.path.clone();
+        // id = path → browse_callback receives the path to navigate into.
         out.push(
-            select_folder_entry(
-                entry.path,
-                entry.name,
-                IconName::Folder,
-                modal,
-                on_select_project,
-            )
-            .drill_into(path),
+            PaletteEntry::new(entry.path, entry.name, |_window, _cx| {})
+                .icon(IconName::Folder)
+                .keep_open(true),
         );
     }
 

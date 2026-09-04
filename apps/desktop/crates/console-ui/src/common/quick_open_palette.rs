@@ -62,6 +62,7 @@ impl QuickOpenPalette {
         self.last_dispatched_query = None;
         let this = cx.entity().downgrade();
         self.modal.update(cx, |modal, cx| {
+            modal.reset_state(window, cx);
             modal.set_placeholder("Search files…", cx);
             // Server-side search already answers the query; local filtering
             // would hide rows whose labels don't substring-match the query.
