@@ -4,6 +4,9 @@ use gpui::{
     App, Context, FocusHandle, Focusable, IntoElement, KeyDownEvent, ParentElement, Render,
     SharedString, Styled, Window, div, prelude::*, px,
 };
+use termy_core::{
+    TerminalKeyEventKind, TerminalKeyboardMode, TermyKeystroke, TermyModifiers, keystroke_to_input,
+};
 use std::sync::Arc;
 
 use super::theme::TerminalTheme;
@@ -152,87 +155,24 @@ impl TerminalView {
     }
 
     fn key_to_bytes(event: &KeyDownEvent) -> Option<String> {
-        let key = event.keystroke.key.as_str();
-        let mods = event.keystroke.modifiers;
-
-        if mods.control {
-            if let Some(ch) = key.chars().next() {
-                let lower = ch.to_ascii_lowercase();
-                if ('a'..='z').contains(&lower) {
-                    let code = (lower as u8 - b'a' + 1) as char;
-                    return Some(code.to_string());
-                }
-                return match key {
-                    "space" => Some("\x00".into()),
-                    "[" => Some("\x1b".into()),
-                    "\\" => Some("\x1c".into()),
-                    "]" => Some("\x1d".into()),
-                    "^" => Some("\x1e".into()),
-                    "_" => Some("\x1f".into()),
-                    "backspace" => Some("\x17".into()),
-                    "delete" => Some("\x1b[3;5~".into()),
-                    "up" => Some("\x1b[1;5A".into()),
-                    "down" => Some("\x1b[1;5B".into()),
-                    "right" => Some("\x1b[1;5C".into()),
-                    "left" => Some("\x1b[1;5D".into()),
-                    _ => None,
-                };
-            }
-        }
-
-        if mods.alt {
-            match key {
-                "backspace" => return Some("\x1b\x7f".into()),
-                "up" => return Some("\x1b[1;3A".into()),
-                "down" => return Some("\x1b[1;3B".into()),
-                "right" => return Some("\x1b[1;3C".into()),
-                "left" => return Some("\x1b[1;3D".into()),
-                _ if key.len() == 1 => return Some(format!("\x1b{key}")),
-                _ => {}
-            }
-        }
-
-        if mods.shift {
-            match key {
-                "up" => return Some("\x1b[1;2A".into()),
-                "down" => return Some("\x1b[1;2B".into()),
-                "right" => return Some("\x1b[1;2C".into()),
-                "left" => return Some("\x1b[1;2D".into()),
-                "tab" => return Some("\x1b[Z".into()),
-                _ => {}
-            }
-        }
-
-        match key {
-            "enter" => Some("\r".into()),
-            "space" => Some(" ".into()),
-            "backspace" => Some("\x7f".into()),
-            "delete" => Some("\x1b[3~".into()),
-            "tab" => Some("\t".into()),
-            "escape" => Some("\x1b".into()),
-            "up" => Some("\x1b[A".into()),
-            "down" => Some("\x1b[B".into()),
-            "right" => Some("\x1b[C".into()),
-            "left" => Some("\x1b[D".into()),
-            "home" => Some("\x1b[H".into()),
-            "end" => Some("\x1b[F".into()),
-            "pageup" => Some("\x1b[5~".into()),
-            "pagedown" => Some("\x1b[6~".into()),
-            "f1" => Some("\x1bOP".into()),
-            "f2" => Some("\x1bOQ".into()),
-            "f3" => Some("\x1bOR".into()),
-            "f4" => Some("\x1bOS".into()),
-            "f5" => Some("\x1b[15~".into()),
-            "f6" => Some("\x1b[17~".into()),
-            "f7" => Some("\x1b[18~".into()),
-            "f8" => Some("\x1b[19~".into()),
-            "f9" => Some("\x1b[20~".into()),
-            "f10" => Some("\x1b[21~".into()),
-            "f11" => Some("\x1b[23~".into()),
-            "f12" => Some("\x1b[24~".into()),
-            _ if key.chars().count() == 1 => Some(key.to_string()),
-            _ => None,
-        }
+        let mods = TermyModifiers {
+            control: event.keystroke.modifiers.control,
+            alt: event.keystroke.modifiers.alt,
+            shift: event.keystroke.modifiers.shift,
+            platform: event.keystroke.modifiers.platform,
+            function: event.keystroke.modifiers.function,
+        };
+        let ks = TermyKeystroke {
+            key: event.keystroke.key.clone(),
+            key_char: event.keystroke.key_char.clone(),
+            modifiers: mods,
+        };
+        // Use termy_core's full keyboard encoder — carries Caps (via key_char),
+        // kitty/disambiguate, and bracketed paste handling.
+        let mode = TerminalKeyboardMode::default();
+        let bytes = keystroke_to_input(&ks, TerminalKeyEventKind::Press, mode, true)?;
+        // bytes may contain control codes (0x01 etc.) — lossy as String is fine for PTY
+        Some(String::from_utf8_lossy(&bytes).into_owned())
     }
 }
 
