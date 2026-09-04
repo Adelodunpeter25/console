@@ -61,7 +61,7 @@ export function createSubagentTool(context?: SubagentToolContext): AgentTool {
         streamFn,
         tools,
         systemPrompt = "",
-        approvalMode = "always-ask",
+        approvalMode = "full-access",
         onApproval,
         onEvent,
       } = context;

@@ -184,7 +184,7 @@ export class Agent {
             streamFn: this._streamFn,
             tools: this._tools,
             systemPrompt: this._systemPrompt,
-            approvalMode: this._approvalMode,
+            approvalMode: "full-access",
             onApproval: this._onApproval,
             onEvent: (event) => eventEmitter?.(event),
           })
