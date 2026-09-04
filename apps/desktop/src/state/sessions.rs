@@ -117,6 +117,7 @@ impl ConsoleDesktopApp {
                     UpdateSessionDto {
                         title: Some(title),
                         cwd: None,
+                        project_id: None,
                         model_id: None,
                         provider: None,
                         approval_mode: None,
@@ -248,6 +249,8 @@ impl ConsoleDesktopApp {
             .iter_mut()
             .find(|session| session.id == header.id)
         {
+            session.cwd = header.cwd.clone();
+            session.project_id = header.project_id.clone();
             session.model_id = header.model_id.clone();
             session.provider = header.provider.clone();
             session.approval_mode = header.approval_mode.clone();

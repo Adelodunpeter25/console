@@ -88,9 +88,7 @@ export function changeProject(sessionId: string, project: ProjectInfo): void {
   const current = getSession(sessionId);
   sessionsView$[sessionId].set({ ...current, sessionCwd: project.path });
   sessionService
-    // projectId deliberately omitted: the server PATCH contract has no
-    // project field and would silently ignore it (see session.service.ts).
-    .updateSession(sessionId, { cwd: project.path })
+    .updateSession(sessionId, { cwd: project.path, projectId: project.id })
     .then(() => refreshSessionHeader(sessionId))
     .catch(() => {});
 }

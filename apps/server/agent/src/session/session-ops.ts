@@ -6,6 +6,7 @@ import type { AgentMessage, SessionHeader } from "@/agent/src/types/index.js";
 import { repairToolCallHistory } from "@/agent/src/utils/tool-history.js";
 import { replaceMessages } from "./session-messages.js";
 import {
+  ensureDir,
   findSessionDbPath,
   getProjectIdBySessionId,
   getScratchSessionDbPath,
@@ -424,25 +425,39 @@ export function updateModel(
   return info.changes > 0;
 }
 
-export function updateCwd(state: StorageState, sessionId: string, cwd: string): boolean {
+export function updateCwd(
+  state: StorageState,
+  sessionId: string,
+  cwd: string,
+  newProjectId?: string | null,
+): boolean {
   const { globalDb, storageDir } = state;
-  const projectId = getProjectIdBySessionId(globalDb, sessionId);
+  const oldProjectId = getProjectIdBySessionId(globalDb, sessionId) ?? null;
+  const targetProjectId =
+    newProjectId !== undefined
+      ? newProjectId === "scratch"
+        ? null
+        : (newProjectId ?? null)
+      : oldProjectId;
   const now = Date.now();
   const trimmed = cwd.trim();
 
   {
-    const dbPath = projectId == null ? getScratchSessionDbPath(storageDir, sessionId) : getSessionDbPath(storageDir, projectId, sessionId);
-    if (state.sessionDbs.has(sessionId) || fs.existsSync(dbPath)) {
-      const sessionDb = getSessionDb(state, sessionId, projectId);
+    const dbPath =
+      oldProjectId == null
+        ? getScratchSessionDbPath(storageDir, sessionId)
+        : getSessionDbPath(storageDir, oldProjectId, sessionId);
+    if (state.sessionDbs.has(sessionId) || (storageDir !== ":memory:" && fs.existsSync(dbPath))) {
+      const sessionDb = getSessionDb(state, sessionId, oldProjectId);
       sessionDb
-        .prepare(`UPDATE session_meta SET cwd = ?, updated_at = ? WHERE id = 1`)
-        .run(trimmed, now);
+        .prepare(`UPDATE session_meta SET cwd = ?, project_id = ?, updated_at = ? WHERE id = 1`)
+        .run(trimmed, targetProjectId, now);
     }
   }
 
   const info = globalDb
-    .prepare(`UPDATE sessions SET cwd = ?, updated_at = ? WHERE id = ?`)
-    .run(trimmed, now, sessionId);
+    .prepare(`UPDATE sessions SET cwd = ?, project_id = ?, updated_at = ? WHERE id = ?`)
+    .run(trimmed, targetProjectId, now, sessionId);
   return info.changes > 0;
 }
 

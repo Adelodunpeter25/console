@@ -164,8 +164,8 @@ export class SqliteSessionStorage {
     return Sessions.updateModel(this.state, sessionId, modelId, provider);
   }
 
-  updateCwd(sessionId: string, cwd: string): boolean {
-    return Sessions.updateCwd(this.state, sessionId, cwd);
+  updateCwd(sessionId: string, cwd: string, projectId?: string | null): boolean {
+    return Sessions.updateCwd(this.state, sessionId, cwd, projectId);
   }
 
   updateApprovalMode(sessionId: string, approvalMode: string): boolean {

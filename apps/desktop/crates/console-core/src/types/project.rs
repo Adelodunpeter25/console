@@ -16,6 +16,6 @@ impl ProjectInfo {
     }
 
     pub fn matches_session_parts(&self, project_id: Option<&str>, cwd: &str) -> bool {
-        project_id == Some(self.id.as_str()) || (!cwd.is_empty() && cwd == self.path)
+        (!cwd.is_empty() && cwd == self.path) || project_id == Some(self.id.as_str())
     }
 }

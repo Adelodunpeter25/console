@@ -426,6 +426,7 @@ impl ConsoleDesktopApp {
                                         UpdateSessionDto {
                                             title: None,
                                             cwd: None,
+                                            project_id: None,
                                             model_id: Some(m_id.clone()),
                                             provider: Some(prov.clone()),
                                             approval_mode: None,
@@ -519,6 +520,7 @@ impl ConsoleDesktopApp {
                                     UpdateSessionDto {
                                         title: None,
                                         cwd: None,
+                                        project_id: None,
                                         model_id: None,
                                         provider: None,
                                         approval_mode: Some(mode.value().to_string()),

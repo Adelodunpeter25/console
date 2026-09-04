@@ -16,18 +16,21 @@ const service = new SessionService(storage);
 // 1. Create a session.
 const header = service.createSession({
   cwd: "/projects/alpha",
+  projectId: "proj-alpha",
   modelId: "claude-opus-4-6-thinking",
   provider: "antigravity",
   title: "Cwd Lock Test",
 });
 assert.ok(header.id);
 assert.equal(header.cwd, "/projects/alpha");
+assert.equal(header.projectId, "proj-alpha");
 console.log("  ✅ Session created with /projects/alpha");
 
-// 2. Before any messages: cwd change is allowed.
-const beforeMsg = service.updateSession(header.id, { cwd: "/projects/beta" });
+// 2. Before any messages: cwd and projectId change is allowed.
+const beforeMsg = service.updateSession(header.id, { cwd: "/projects/beta", projectId: "proj-beta" });
 assert.equal(beforeMsg?.cwd, "/projects/beta");
-console.log("  ✅ cwd change allowed before messages (/projects/beta)");
+assert.equal(beforeMsg?.projectId, "proj-beta");
+console.log("  ✅ cwd and projectId change allowed before messages (/projects/beta)");
 
 // 3. Add a user message — simulates a chat that has started.
 const userMsg: AgentMessage = { role: "user", content: "hello" };

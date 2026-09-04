@@ -57,6 +57,7 @@ impl ConsoleDesktopApp {
         let entity = cx.entity().downgrade();
         let session_id = self.active_session_for_pane(&pane_id);
         let pane_id_for_result = pane_id.clone();
+        let project_id_for_dto = project.id.clone();
         cx.spawn(async move |_entity, cx| {
             if let Some(session_id) = session_id {
                 if let Err(error) = client
@@ -66,6 +67,7 @@ impl ConsoleDesktopApp {
                         UpdateSessionDto {
                             title: None,
                             cwd: Some(path.clone()),
+                            project_id: Some(project_id_for_dto),
                             model_id: None,
                             provider: None,
                             approval_mode: None,
@@ -160,6 +162,7 @@ impl ConsoleDesktopApp {
                     UpdateSessionDto {
                         title: None,
                         cwd: Some(fallback_cwd),
+                        project_id: None,
                         model_id: None,
                         provider: None,
                         approval_mode: None,

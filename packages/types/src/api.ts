@@ -20,6 +20,7 @@ export interface CreateSessionDto {
 export interface UpdateSessionDto {
   title?: string;
   cwd?: string;
+  projectId?: string | null;
   modelId?: string;
   provider?: ProviderId;
   approvalMode?: "always-ask" | "accept-edits" | "plan-mode" | "full-access";

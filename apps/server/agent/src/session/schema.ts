@@ -4,7 +4,11 @@
 import type { Database } from "bun:sqlite";
 
 export function initGlobalDatabase(db: Database): void {
-  db.exec("PRAGMA journal_mode = WAL");
+  try {
+    if (db.filename && db.filename !== "" && db.filename !== ":memory:") {
+      db.exec("PRAGMA journal_mode = WAL");
+    }
+  } catch {}
   db.exec("PRAGMA foreign_keys = ON");
 
   db.exec(`
@@ -65,7 +69,11 @@ export function initGlobalDatabase(db: Database): void {
  * One row in `session_meta` holds the header; `messages` holds history.
  */
 export function initSessionDatabase(db: Database): void {
-  db.exec("PRAGMA journal_mode = WAL");
+  try {
+    if (db.filename && db.filename !== "" && db.filename !== ":memory:") {
+      db.exec("PRAGMA journal_mode = WAL");
+    }
+  } catch {}
   db.exec("PRAGMA foreign_keys = ON");
 
   db.exec(`

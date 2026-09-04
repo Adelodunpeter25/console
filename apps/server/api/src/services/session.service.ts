@@ -84,7 +84,7 @@ export class SessionService {
     if (dto.title) {
       this.storage.updateTitle(sessionId, dto.title);
     }
-    if (dto.cwd) {
+    if (dto.cwd !== undefined || dto.projectId !== undefined) {
       // Lock the project/cwd once a chat has messages. Each run reloads
       // header.cwd and uses it for prompt-ref expansion, system/project
       // context, and all tool paths (run.service.ts), so changing it
@@ -96,7 +96,13 @@ export class SessionService {
       // reconciles the session list back to the real cwd.
       const existing = this.storage.loadSession(sessionId);
       if (existing && existing.messages.length === 0) {
-        this.storage.updateCwd(sessionId, dto.cwd);
+        const cwd = dto.cwd ?? existing.header.cwd;
+        let projectId = dto.projectId;
+        if (projectId === undefined && cwd) {
+          const project = this.storage.getProjectByDir(cwd);
+          projectId = project ? project.id : null;
+        }
+        this.storage.updateCwd(sessionId, cwd, projectId);
       }
     }
     if (dto.modelId) {
