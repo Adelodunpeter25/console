@@ -82,7 +82,9 @@ impl TerminalService {
 }
 
 pub mod alacritty;
+pub mod termy;
 pub use alacritty::AlacrittyBackend;
+pub use termy::TermyBackend;
 
 /// Handle for a live PTY session. Drop-in ready: holds the VT backend,
 /// WS sender, and shared status. The UI owns this and calls `send_input` /
@@ -92,7 +94,7 @@ pub struct TerminalHandle {
     pub id: Arc<RwLock<Option<TerminalId>>>,
     pub status: Arc<RwLock<TerminalStatus>>,
     pub error: Arc<RwLock<Option<String>>>,
-    pub backend: Arc<tokio::sync::Mutex<AlacrittyBackend>>,
+    pub backend: Arc<tokio::sync::Mutex<TermyBackend>>,
     pub notify: Arc<tokio::sync::Notify>,
     sender: mpsc::UnboundedSender<TerminalClientMessage>,
     _task: tokio::task::JoinHandle<()>,
@@ -167,7 +169,7 @@ impl TerminalService {
         let url = self.ws_url(&params).await;
         let (tx, mut rx) = mpsc::unbounded_channel::<TerminalClientMessage>();
 
-        let backend = Arc::new(tokio::sync::Mutex::new(AlacrittyBackend::new(initial_size)));
+        let backend = Arc::new(tokio::sync::Mutex::new(TermyBackend::new(initial_size)));
         let id: Arc<RwLock<Option<TerminalId>>> = Arc::new(RwLock::new(None));
         let status: Arc<RwLock<TerminalStatus>> = Arc::new(RwLock::new(TerminalStatus::Spawning));
         let error: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
