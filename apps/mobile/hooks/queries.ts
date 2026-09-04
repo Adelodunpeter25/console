@@ -46,11 +46,16 @@ export function useInfiniteSession(id: string, limit = 100) {
   });
 }
 
-export function prefetchSession(queryClient: ReturnType<typeof useQueryClient>, id: string) {
+export function prefetchSession(queryClient: ReturnType<typeof useQueryClient>, id: string, limit = 100) {
   if (!id) return;
-  void queryClient.prefetchQuery({
-    queryKey: sessionKeys.detail(id),
-    queryFn: () => sessionService.getSession(id, { limit: 100 }),
+  void queryClient.prefetchInfiniteQuery({
+    queryKey: [...sessionKeys.detail(id), "infinite", limit],
+    queryFn: ({ pageParam }) =>
+      sessionService.getSession(id, {
+        limit,
+        before: pageParam as number | undefined,
+      }),
+    initialPageParam: undefined as number | undefined,
     staleTime: 60_000,
   });
 }
@@ -165,6 +170,17 @@ export function useSearchFiles(root: string | null, query: string, enabled = tru
     enabled: enabled && Boolean(root) && query.trim().length > 0,
     staleTime: 30_000,
     placeholderData: (prev) => prev,
+  });
+}
+
+export function useSessionChanges(id: string) {
+  return useQuery({
+    queryKey: [...sessionKeys.detail(id), "changes"],
+    queryFn: () => sessionService.getChanges(id),
+    enabled: Boolean(id),
+    staleTime: 5000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 

@@ -15,7 +15,7 @@ import { useValue } from "@legendapp/state/react";
 import { useProjectBranches } from "./useProjectBranches";
 import { folderName } from "@/utils";
 import { draftPreview, isDraftSession } from "@/stores/chat/draft";
-import { setActiveTab, setSelectedSessionId } from "@/stores/useAppStore";
+import { openChatSession, setActiveTab, setSelectedSessionId } from "@/stores/useAppStore";
 
 type DraftSummaries = Record<string, { preview: string; draftUpdatedAt?: number }>;
 
@@ -219,8 +219,7 @@ export function useHomeSessions() {
   }, [filteredSessions, projects, draftSummaries, draftSection]);
 
   const openSession = (sessionId: string) => {
-    setSelectedSessionId(sessionId);
-    setActiveTab("chat");
+    openChatSession(sessionId);
   };
 
   const composeSession = async (targetProjectId?: string | null) => {
@@ -233,8 +232,7 @@ export function useHomeSessions() {
           projectId: null,
           title: "New Chat",
         });
-        setSelectedSessionId(session.id);
-        setActiveTab("chat");
+        openChatSession(session.id);
       } catch (error) {
         console.error("Failed to create session:", error);
         throw error;
@@ -252,8 +250,7 @@ export function useHomeSessions() {
         ...(project ? { projectId: project.id } : targetProjectId ? { projectId: targetProjectId } : {}),
         title: "New Chat",
       });
-      setSelectedSessionId(session.id);
-      setActiveTab("chat");
+      openChatSession(session.id);
     } catch (error) {
       console.error("Failed to create session:", error);
       throw error;

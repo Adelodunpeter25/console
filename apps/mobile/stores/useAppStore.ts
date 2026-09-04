@@ -36,6 +36,17 @@ export function setSelectedSessionId(id: string | null): void {
   app$.selectedSessionId.set(id);
 }
 
+export function openChatSession(sessionId: string): void {
+  batch(() => {
+    const currentTab = app$.activeTab.peek();
+    if (currentTab !== "chat") {
+      app$.previousTab.set(currentTab);
+      app$.activeTab.set("chat");
+    }
+    app$.selectedSessionId.set(sessionId);
+  });
+}
+
 export function setSelectedSubagentId(id: string | null): void {
   app$.selectedSubagentId.set(id);
 }

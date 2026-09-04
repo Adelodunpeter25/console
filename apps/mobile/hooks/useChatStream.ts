@@ -174,8 +174,15 @@ export function useChatStream() {
     ? getSession(selectedSessionId)
     : null;
 
+  const effectiveMessages = useMemo(() => {
+    if (snapshot?.messages && snapshot.messages.length > 0) {
+      return snapshot.messages;
+    }
+    return allMessages ?? [];
+  }, [snapshot?.messages, allMessages]);
+
   return {
-    messages: snapshot?.messages ?? [],
+    messages: effectiveMessages,
     streamingText: snapshot?.streamingText ?? "",
     streamingThinking: snapshot?.streamingThinking ?? "",
     activeToolCalls: snapshot?.activeToolCalls ?? [],
@@ -196,7 +203,7 @@ export function useChatStream() {
     hasEarlierMessages: Boolean(sessionQuery.hasNextPage),
     isFetchingEarlierMessages: sessionQuery.isFetchingNextPage,
     fetchEarlierMessages,
-    isLoadingMessages: sessionQuery.isLoading,
+    isLoadingMessages: sessionQuery.isLoading && effectiveMessages.length === 0,
     // Title from the shared TanStack Query cache — no separate fetch.
     chatTitle: latestHeader?.title ?? "Console",
     // Extra runtime surfaces (desktop parity).

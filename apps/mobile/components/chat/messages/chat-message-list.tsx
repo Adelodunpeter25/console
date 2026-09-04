@@ -121,6 +121,7 @@ export const ChatMessageList = forwardRef<LegendListRef, ChatMessageListProps>(
         ref={ref}
         style={{ flex: 1 }}
         recycleItems={false}
+        estimatedItemSize={100}
         data={displayMessages}
         extraData={runsFingerprint}
         keyExtractor={(item, i) => (item as any).id ?? `${(item as any).createdAt ?? i}-${i}`}
