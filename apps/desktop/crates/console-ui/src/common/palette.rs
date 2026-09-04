@@ -182,7 +182,6 @@ pub struct CommandPaletteModal {
     entries: Rc<Vec<PaletteEntry>>,
     open: bool,
     placeholder: SharedString,
-    current_query: String,
     /// Whether the query locally filters the item list. Set to `false` when an
     /// external source already answers the query (e.g. server-side file search).
     filterable: bool,
@@ -204,7 +203,6 @@ impl CommandPaletteModal {
             entries: Rc::new(Vec::new()),
             open: false,
             placeholder: "Type a command or search…".into(),
-            current_query: String::new(),
             filterable: true,
             query_handler: None,
             browse_callback: None,
@@ -215,7 +213,6 @@ impl CommandPaletteModal {
     /// Reset query and command state to a fresh empty input.
     pub fn reset_state(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.state = cx.new(|cx| CommandState::new(window, cx));
-        self.current_query.clear();
         self.search_generation = 0;
         cx.notify();
     }
@@ -350,12 +347,10 @@ impl Render for CommandPaletteModal {
                 move |query, window, cx| {
                     if let Some(palette) = palette_handle.upgrade() {
                         palette.update(cx, |palette, cx| {
-                            palette.current_query = query.to_string();
                             let handler = palette.query_handler.clone();
                             if let Some(handler) = handler {
                                 handler(query, window, cx);
                             }
-                            cx.notify();
                         });
                     }
                 }
@@ -378,50 +373,6 @@ impl Render for CommandPaletteModal {
                 }
             });
 
-        let clear_button = if !self.current_query.is_empty() {
-            let palette_handle = cx.entity().downgrade();
-            let theme = Theme::current(cx);
-            Some(
-                div()
-                    .id("palette-clear-search")
-                    .absolute()
-                    .top_0()
-                    .bottom_0()
-                    .right(px(8.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .w(px(28.0))
-                    .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
-                        cx.stop_propagation();
-                        if let Some(palette) = palette_handle.upgrade() {
-                            palette.update(cx, |palette, cx| {
-                                palette.reset_state(window, cx);
-                                palette.state.update(cx, |state, cx| state.focus(window, cx));
-                                let handler = palette.query_handler.clone();
-                                if let Some(handler) = handler {
-                                    handler("", window, cx);
-                                }
-                                cx.notify();
-                            });
-                        }
-                    })
-                    .child(
-                        div()
-                            .size(px(20.0))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .rounded(px(4.0))
-                            .cursor_pointer()
-                            .hover(|s| s.bg(theme.raised))
-                            .child(app_icon(IconName::X, 13.0, theme.text_secondary)),
-                    ),
-            )
-        } else {
-            None
-        };
-
         // Modal overlay: dimmed backdrop, palette centered near the top like ⌘K menus.
         // Painted last inside app-root, so no explicit z-index is needed.
         div()
@@ -443,14 +394,12 @@ impl Render for CommandPaletteModal {
             .child(
                 div()
                     .occlude()
-                    .relative()
                     .w(px(560.0))
                     .max_h(px(480.0))
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
                         cx.stop_propagation();
                     })
-                    .child(command)
-                    .children(clear_button),
+                    .child(command),
             )
             .into_any_element()
     }
