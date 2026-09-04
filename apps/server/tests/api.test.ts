@@ -54,13 +54,6 @@ const app = createApiApp();
   assert.equal(browseJson.success, true);
   assert.ok(Array.isArray(browseJson.data.entries));
 
-  // Directory Tree
-  const treeRes = await app.request(`/api/fs/tree?path=${encodeURIComponent(process.cwd())}`);
-  assert.equal(treeRes.status, 200);
-  const treeJson = await treeRes.json();
-  assert.equal(treeJson.success, true);
-  assert.ok(treeJson.data.treeFormatted);
-
   // File write, read, delete
   const testFilePath = path.join(process.cwd(), "scratch", "api-test-file.txt");
   const writeRes = await app.request("/api/fs/file", {
@@ -93,6 +86,42 @@ const app = createApiApp();
     method: "DELETE",
   });
   assert.equal(delDirRes.status, 200);
+
+  // Directory tree (explicit path + validated depth)
+  const treeRes = await app.request(
+    `/api/fs/tree?path=${encodeURIComponent(process.cwd())}&depth=2`,
+  );
+  assert.equal(treeRes.status, 200);
+  const treeJson = await treeRes.json();
+  assert.equal(treeJson.success, true);
+  assert.ok(treeJson.data.treeFormatted);
+
+  // Invalid depth is rejected instead of passing NaN through
+  const badDepthRes = await app.request(
+    `/api/fs/tree?path=${encodeURIComponent(process.cwd())}&depth=abc`,
+  );
+  assert.equal(badDepthRes.status, 400);
+
+  // Entries listing (explicit path + validated depth)
+  const entriesRes = await app.request(
+    `/api/fs/entries?path=${encodeURIComponent(process.cwd())}&depth=2`,
+  );
+  assert.equal(entriesRes.status, 200);
+  const entriesJson = await entriesRes.json();
+  assert.equal(entriesJson.success, true);
+  assert.ok(Array.isArray(entriesJson.data));
+
+  // Invalid entries depth is rejected
+  const badEntriesRes = await app.request(
+    `/api/fs/entries?path=${encodeURIComponent(process.cwd())}&depth=999`,
+  );
+  assert.equal(badEntriesRes.status, 400);
+
+  // Line-range validation: non-numeric ranges are rejected
+  const badRangeRes = await app.request(
+    `/api/fs/file?path=${encodeURIComponent(testFilePath)}&startLine=abc`,
+  );
+  assert.equal(badRangeRes.status, 400);
   console.log("  ✅ File Browser & File Operations (/api/fs/*)");
 }
 

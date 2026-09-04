@@ -3,6 +3,15 @@
  */
 import type { AgentMessage } from "@/agent/src/types/index.js";
 
+/**
+ * Upper bound on open per-session SQLite handles kept in `StorageState`.
+ * Each handle holds an FD (plus -wal/-shm while checkpointing), so an
+ * unbounded `sessionDbs` map leaks FDs across a long-lived server process.
+ * The limit only affects the cache: evicted sessions reopen their DB file
+ * on next access via `getSessionDb`.
+ */
+export const MAX_CACHED_SESSION_DBS = 50;
+
 const MAX_PERSIST_CHARS = 500_000;
 const TRUNCATION_NOTICE = "\n\n[Session persistence truncated large content]";
 

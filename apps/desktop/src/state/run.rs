@@ -441,9 +441,7 @@ impl ConsoleDesktopApp {
                         t.append_tool_results(results, cx);
                     });
                 }
-                if self.right_sidebar_visible {
-                    self.refresh_inspector(cx);
-                }
+                self.maybe_refresh_inspector(cx);
             }
             AgentSessionEvent::TodoUpdate { items, .. } => {
                 self.set_todo_items_for_session(run_session_id, items);
@@ -564,9 +562,7 @@ impl ConsoleDesktopApp {
                 self.set_pending_permission_for_session(run_session_id, None);
                 self.set_pending_question_for_session(run_session_id, None);
                 self.clear_question_selected_for_session(run_session_id);
-                if self.right_sidebar_visible {
-                    self.refresh_inspector(cx);
-                }
+                self.maybe_refresh_inspector(cx);
             }
             AgentSessionEvent::SessionEnd => {
                 self.set_session_running(run_session_id, None);
@@ -579,9 +575,7 @@ impl ConsoleDesktopApp {
                         t.finish_streaming(cx);
                     });
                 }
-                if self.right_sidebar_visible {
-                    self.refresh_inspector(cx);
-                }
+                self.maybe_refresh_inspector(cx);
             }
             AgentSessionEvent::SessionStart => {
                 self.set_agent_notice_for_session(run_session_id, None);

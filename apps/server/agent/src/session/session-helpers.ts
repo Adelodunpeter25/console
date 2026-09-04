@@ -2,7 +2,7 @@ import { Database as DatabaseConstructor, type Database as DatabaseType } from "
 import fs from "node:fs";
 import path from "node:path";
 import { initSessionDatabase } from "./schema.js";
-import type { StorageState } from "./utils.js";
+import { MAX_CACHED_SESSION_DBS, type StorageState } from "./utils.js";
 
 export function getProjectStorageDir(storageDir: string, projectId: string): string {
   return path.join(storageDir, "projects", projectId);
@@ -87,22 +87,50 @@ export function getSessionDb(
   sessionId: string,
   projectId: string | null,
 ): DatabaseType {
-  let db = state.sessionDbs.get(sessionId);
-  if (!db) {
-    if (state.storageDir === ":memory:") {
-      db = new DatabaseConstructor(":memory:");
-    } else {
-      const isScratch = projectId == null || projectId === "" || projectId === "scratch";
-      const dbPath = isScratch
-        ? getScratchSessionDbPath(state.storageDir, sessionId)
-        : getSessionDbPath(state.storageDir, projectId, sessionId);
-      ensureDir(dbPath);
-      db = new DatabaseConstructor(dbPath);
+  const cached = state.sessionDbs.get(sessionId);
+  if (cached) {
+    // Refresh LRU order on hit: delete + re-set moves the entry to the end.
+    state.sessionDbs.delete(sessionId);
+    state.sessionDbs.set(sessionId, cached);
+    return cached;
+  }
+  let db: DatabaseType;
+  if (state.storageDir === ":memory:") {
+    db = new DatabaseConstructor(":memory:");
+  } else {
+    const isScratch = projectId == null || projectId === "" || projectId === "scratch";
+    const dbPath = isScratch
+      ? getScratchSessionDbPath(state.storageDir, sessionId)
+      : getSessionDbPath(state.storageDir, projectId, sessionId);
+    ensureDir(dbPath);
+    db = new DatabaseConstructor(dbPath);
+  }
+  initSessionDatabase(db);
+  state.sessionDbs.set(sessionId, db);
+  // Evict the least-recently-used session DB so a long-lived server never
+  // accumulates an unbounded set of open SQLite handles.
+  if (state.sessionDbs.size > MAX_CACHED_SESSION_DBS) {
+    const oldest = state.sessionDbs.keys().next().value as string | undefined;
+    if (oldest !== undefined && oldest !== sessionId) {
+      evictSessionDb(state, oldest);
     }
-    initSessionDatabase(db);
-    state.sessionDbs.set(sessionId, db);
   }
   return db;
+}
+
+/**
+ * Close and drop one cached per-session DB handle.
+ * Safe to call for sessions with no cached handle (no-op).
+ */
+export function evictSessionDb(state: StorageState, sessionId: string): void {
+  const db = state.sessionDbs.get(sessionId);
+  if (!db) return;
+  state.sessionDbs.delete(sessionId);
+  try {
+    db.close();
+  } catch {
+    // Ignored — eviction is best-effort; the file stays on disk.
+  }
 }
 
 export function bumpSessionUpdated(

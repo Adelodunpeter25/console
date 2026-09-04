@@ -282,9 +282,7 @@ impl ConsoleDesktopApp {
                 transcript.set_session_cwd(cwd);
             });
 
-        if self.right_sidebar_visible {
-            self.refresh_inspector(cx);
-        }
+        self.maybe_refresh_inspector(cx);
     }
 
     /// Point a pane's project picker at the project a loaded session belongs

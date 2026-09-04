@@ -9,9 +9,7 @@ impl ConsoleDesktopApp {
     pub fn toggle_right_sidebar(&mut self, cx: &mut Context<Self>) {
         self.right_sidebar_visible = !self.right_sidebar_visible;
         self.persist_layout();
-        if self.right_sidebar_visible {
-            self.refresh_inspector(cx);
-        }
+        self.maybe_refresh_inspector(cx);
         cx.notify();
     }
 
@@ -22,9 +20,7 @@ impl ConsoleDesktopApp {
         }
         self.right_sidebar_visible = visible;
         self.persist_layout();
-        if visible {
-            self.refresh_inspector(cx);
-        }
+        self.maybe_refresh_inspector(cx);
         cx.notify();
     }
 
@@ -110,6 +106,16 @@ impl ConsoleDesktopApp {
     pub fn select_inspector_file(&mut self, path: String, cx: &mut Context<Self>) {
         self.inspector_selected_path = Some(path);
         cx.notify();
+    }
+
+    /// Refresh the inspector (fs tree, git changes, session changes,
+    /// subagents) when the right sidebar is visible. A single call site for
+    /// the `right_sidebar_visible` guard that was previously copy-pasted
+    /// across every tab-select/close path in `view/mod.rs`.
+    pub fn maybe_refresh_inspector(&mut self, cx: &mut Context<Self>) {
+        if self.right_sidebar_visible {
+            self.refresh_inspector(cx);
+        }
     }
 
     pub fn refresh_inspector(&mut self, cx: &mut Context<Self>) {

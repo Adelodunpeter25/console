@@ -8,7 +8,10 @@ const gitService = new GitService();
  * GET /api/git/status — Get repository git status summary.
  */
 gitRoutes.get("/status", async (c) => {
-  const repoPath = c.req.query("path") || process.cwd();
+  const repoPath = c.req.query("path");
+  if (!repoPath) {
+    return c.json({ success: false, error: "Query parameter 'path' is required." }, 400);
+  }
   try {
     const summary = await gitService.getGitStatus(repoPath);
     return c.json({ success: true, data: summary });
@@ -22,10 +25,16 @@ gitRoutes.get("/status", async (c) => {
  * GET /api/git/diff — Get unified diff for the repo or a specific file.
  */
 gitRoutes.get("/diff", async (c) => {
-  const repoPath = c.req.query("repoPath") || c.req.query("cwd") || process.cwd();
+  const repoPath = c.req.query("repoPath") || c.req.query("cwd");
   const filePath = c.req.query("path") || undefined;
+  if (!repoPath && !filePath) {
+    return c.json(
+      { success: false, error: "Query parameter 'repoPath' (or 'path') is required." },
+      400,
+    );
+  }
   try {
-    const diff = await gitService.getDiff(repoPath, filePath);
+    const diff = await gitService.getDiff(repoPath ?? filePath!, filePath);
     return c.json({ success: true, data: { path: filePath, diff } });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -37,7 +46,10 @@ gitRoutes.get("/diff", async (c) => {
  * GET /api/git/branches — List local branches with the checked-out one marked.
  */
 gitRoutes.get("/branches", async (c) => {
-  const repoPath = c.req.query("path") || process.cwd();
+  const repoPath = c.req.query("path");
+  if (!repoPath) {
+    return c.json({ success: false, error: "Query parameter 'path' is required." }, 400);
+  }
   try {
     const branches = await gitService.listBranches(repoPath);
     return c.json({ success: true, data: branches });
@@ -55,7 +67,10 @@ gitRoutes.post("/checkout", async (c) => {
   if (!body.branch) {
     return c.json({ success: false, error: "Field 'branch' is required." }, 400);
   }
-  const repoPath = body.path || process.cwd();
+  if (!body.path) {
+    return c.json({ success: false, error: "Field 'path' is required." }, 400);
+  }
+  const repoPath = body.path;
   try {
     await gitService.checkoutBranch(repoPath, body.branch);
     return c.json({ success: true, data: { branch: body.branch } });

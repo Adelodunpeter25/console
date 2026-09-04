@@ -205,6 +205,10 @@ pub struct ConsoleDesktopApp {
     /// debounce. While a drag continuously changes bounds this holds the
     /// newest frame and a single trailing timer writes it.
     pub(crate) pending_window_state: Option<persistence::window::PersistedWindowState>,
+    /// Last render-loop window-bounds poll. Keeps the per-frame
+    /// `maybe_persist_window_state` check to an `Instant` comparison so idle
+    /// renders skip the `window.window_bounds()` OS call.
+    pub(crate) last_window_poll: Option<std::time::Instant>,
     /// ⌘K-style command palette (New Chat, New Terminal, …).
     pub command_palette: Entity<CommandPalette>,
     /// ⌘P quick file open palette, scoped to the active pane's project root.
@@ -547,6 +551,7 @@ impl ConsoleDesktopApp {
             split_resize: None,
             saved_window_state: persistence::store::load_window(),
             pending_window_state: None,
+            last_window_poll: None,
             command_palette: cx.new(|cx| CommandPalette::new(window, cx)),
             quick_open_palette: cx
                 .new(|cx| QuickOpenPalette::new(client_for_palettes.clone(), window, cx)),

@@ -15,7 +15,7 @@ use crate::state::ConsoleDesktopApp;
 
 impl Render for ConsoleDesktopApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.persist_window_state(window, cx);
+        self.maybe_persist_window_state(window, cx);
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
         let client = self.client.clone();
@@ -67,9 +67,7 @@ impl Render for ConsoleDesktopApp {
                                     .and_then(|state| state.loaded_session_id.as_deref())
                                     == Some(sid);
                                 if already_loaded || prev_sid.as_deref() == Some(sid) {
-                                    if this.right_sidebar_visible {
-                                        this.refresh_inspector(cx);
-                                    }
+                                    this.maybe_refresh_inspector(cx);
                                     cx.notify();
                                     return;
                                 }
@@ -94,9 +92,7 @@ impl Render for ConsoleDesktopApp {
                             } else {
                                 this.selected_session_id = None;
                             }
-                            if this.right_sidebar_visible {
-                                this.refresh_inspector(cx);
-                            }
+                            this.maybe_refresh_inspector(cx);
                             cx.notify();
                         });
                     }
@@ -124,9 +120,7 @@ impl Render for ConsoleDesktopApp {
                             if new_active_session == prev_active_session
                                 && new_active_session.is_some()
                             {
-                                if this.right_sidebar_visible {
-                                    this.refresh_inspector(cx);
-                                }
+                                this.maybe_refresh_inspector(cx);
                                 cx.notify();
                                 return;
                             }
@@ -139,9 +133,7 @@ impl Render for ConsoleDesktopApp {
                                     .and_then(|state| state.loaded_session_id.as_deref())
                                     == Some(&sid);
                                 if already_loaded {
-                                    if this.right_sidebar_visible {
-                                        this.refresh_inspector(cx);
-                                    }
+                                    this.maybe_refresh_inspector(cx);
                                     cx.notify();
                                     return;
                                 }
@@ -170,9 +162,7 @@ impl Render for ConsoleDesktopApp {
                                 });
                                 transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
                             }
-                            if this.right_sidebar_visible {
-                                this.refresh_inspector(cx);
-                            }
+                            this.maybe_refresh_inspector(cx);
                             cx.notify();
                         });
                     }
@@ -614,9 +604,7 @@ impl Render for ConsoleDesktopApp {
                                                 );
                                             }
                                         }
-                                        if this.right_sidebar_visible {
-                                            this.refresh_inspector(cx);
-                                        }
+                                        this.maybe_refresh_inspector(cx);
                                         cx.notify();
 
                                         cx.spawn(async move |entity, cx| {

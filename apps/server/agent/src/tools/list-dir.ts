@@ -4,6 +4,8 @@ import { z } from "zod";
 import type { AgentTool } from "@/agent/src/types/index.js";
 import { pathString } from "@/agent/src/service/tool-input.js";
 import { isPathIgnored } from "@/api/src/utils/ignored.js";
+import { formatBytes } from "@console/types";
+import { isHiddenName, safeFileSize, sortDirsFirst } from "./fs-common.js";
 
 const inputSchema = z.object({
   path: pathString('Required filesystem directory path to list. Use "." for the current project directory.'),
@@ -67,15 +69,15 @@ async function buildTree(
     throw new Error(`Cannot read directory "${dirPath}": ${error.message}`);
   }
 
-  let filtered = showHidden ? entries : entries.filter((e) => !e.name.startsWith("."));
+  let filtered = showHidden ? entries : entries.filter((e) => !isHiddenName(e.name));
   // Skip massive ignored trees when recursing (node_modules, .git, dist, etc.)
   if (recursive) {
     filtered = filtered.filter((e) => !isPathIgnored(e.name));
   }
   filtered.sort((a, b) => {
-    if (a.isDirectory() !== b.isDirectory()) {
-      return a.isDirectory() ? -1 : 1;
-    }
+    const aDir = a.isDirectory();
+    const bDir = b.isDirectory();
+    if (aDir !== bDir) return aDir ? -1 : 1;
     return a.name.localeCompare(b.name);
   });
 
@@ -114,15 +116,8 @@ async function buildTree(
           return { name: entry.name, isDir: true, children };
         }
         if (entry.isFile() || entry.isSymbolicLink()) {
-          let size: number | undefined;
-          try {
-            // lstat avoids following symlink loops; for regular files it's same as stat
-            const stat = await fs.lstat(path.join(dirPath, entry.name));
-            // Only use size for regular files; for symlink dirs we already handled
-            if (stat.isFile() || stat.isSymbolicLink()) size = stat.size;
-          } catch {
-            // ignore stat errors
-          }
+          // lstat avoids following symlink loops; for regular files it's same as stat.
+          const size = await safeFileSize(path.join(dirPath, entry.name), false);
           if (counter) counter.count++;
           return { name: entry.name, isDir: false, size };
         }
@@ -135,13 +130,6 @@ async function buildTree(
   }
 
   return result;
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes}B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}GB`;
 }
 
 function renderTree(entries: TreeEntry[], prefix = "", _isLast = false): string[] {
@@ -161,7 +149,7 @@ function renderTree(entries: TreeEntry[], prefix = "", _isLast = false): string[
         lines.push(`${prefix}${childPrefix}(empty)`);
       }
     } else {
-      const sizeStr = entry.size !== undefined ? `  [${formatSize(entry.size)}]` : "";
+      const sizeStr = entry.size !== undefined ? `  [${formatBytes(entry.size)}]` : "";
       lines.push(`${prefix}${connector}${entry.name}${sizeStr}`);
     }
   }

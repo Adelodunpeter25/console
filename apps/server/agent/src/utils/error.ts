@@ -58,3 +58,29 @@ export function extractErrorMessage(err: unknown): string {
 
   return String(err);
 }
+
+function errorText(error: unknown): string {
+  const message = extractErrorMessage(error);
+  if (error instanceof Error) {
+    const stderr =
+      "stderr" in error && typeof (error as { stderr?: unknown }).stderr === "string"
+        ? (error as { stderr: string }).stderr
+        : "";
+    return `${message}\n${stderr}`.toLowerCase();
+  }
+  return message.toLowerCase();
+}
+
+/**
+ * Whether a git failure just means "not a git repository".
+ * Centralized here so `GitService` (and future callers) share one predicate
+ * instead of each matching on stderr text.
+ */
+export function isNotGitRepositoryError(error: unknown): boolean {
+  const message = errorText(error);
+  return (
+    message.includes("not a git repository") ||
+    message.includes("not a repository") ||
+    message.includes("no git repository")
+  );
+}
