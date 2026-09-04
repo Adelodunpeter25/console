@@ -270,7 +270,9 @@ export function useHomeSessions() {
   };
 
   const getBranchForSession = (session: SessionHeader) => {
-    return branches[session.projectId ?? ""];
+    const project = getProjectForSession(session);
+    const key = project?.id ?? session.projectId ?? "";
+    return branches[key];
   };
 
   const onRefresh = useCallback(async () => {
