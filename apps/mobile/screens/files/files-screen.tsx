@@ -35,6 +35,7 @@ export function FilesScreen() {
   }, [previousTab, setActiveTab]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
+  const [expandedPaths, setExpandedPaths] = useState<ReadonlySet<string>>(() => new Set());
   const selectedFilePath = selectedFile?.path ?? null;
 
   const isMarkdownFile = useMemo(() => isMarkdownPath(selectedFilePath ?? undefined), [selectedFilePath]);
@@ -264,6 +265,8 @@ export function FilesScreen() {
           }
           isSearching={isFetchingSearch && isSearching}
           selectedPath={selectedFilePath}
+          expandedPaths={expandedPaths}
+          setExpandedPaths={setExpandedPaths}
           onRefresh={() => refetchEntries()}
           onSelectFile={handleSelectFile}
         />

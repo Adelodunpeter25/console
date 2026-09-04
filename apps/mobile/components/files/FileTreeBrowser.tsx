@@ -32,6 +32,9 @@ export interface FileTreeBrowserProps {
   readonly onRefresh: () => void;
   /** Second arg is the file's stat size (bytes) when known, for pre-fetch gating. */
   readonly onSelectFile: (absolutePath: string, fileSize?: number) => void;
+  /** Lifted expanded state so it survives preview unmount (see FilesScreen). */
+  readonly expandedPaths: ReadonlySet<string>;
+  readonly setExpandedPaths: (updater: (prev: ReadonlySet<string>) => ReadonlySet<string>) => void;
 }
 
 /**
@@ -44,7 +47,8 @@ export interface FileTreeBrowserProps {
  */
 export function FileTreeBrowser(props: FileTreeBrowserProps) {
   const queryClient = useQueryClient();
-  const [expandedPaths, setExpandedPaths] = useState<ReadonlySet<string>>(() => new Set());
+  const expandedPaths = props.expandedPaths;
+  const setExpandedPaths = props.setExpandedPaths;
   const [pendingSelection, setPendingSelection] = useState<{
     readonly path: string;
     readonly selectedPathAtPress: string | null;
@@ -82,7 +86,7 @@ export function FileTreeBrowser(props: FileTreeBrowserProps) {
       else next.add(path);
       return next;
     });
-  }, []);
+  }, [setExpandedPaths]);
 
   const handleSelectFile = useCallback(
     (entry: FsTreeEntry) => {
