@@ -4,6 +4,7 @@ import type { CreateSessionDto, UpdateSessionDto } from "@console/types";
 
 export const sessionKeys = {
   all: ["sessions"] as const,
+  changes: (id: string) => [...sessionKeys.all, "changes", id] as const,
   lists: (params?: { cwd?: string; projectId?: string; onlyDeleted?: boolean }) =>
     [...sessionKeys.all, "list", params] as const,
   detail: (id: string) => [...sessionKeys.all, "detail", id] as const,
@@ -83,6 +84,17 @@ export function usePermanentlyDeleteSession() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: sessionKeys.all });
     },
+  });
+}
+
+export function useSessionChanges(id: string) {
+  return useQuery({
+    queryKey: sessionKeys.changes(id),
+    queryFn: () => sessionService.getChanges(id),
+    enabled: Boolean(id),
+    staleTime: 5000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 

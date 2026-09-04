@@ -4,6 +4,7 @@ import type {
   SessionDetailResponse,
   CreateSessionDto,
   UpdateSessionDto,
+  SessionFileChange,
 } from "@console/types";
 
 /**
@@ -71,5 +72,10 @@ export const sessionService = {
   async getSubagents(id: string): Promise<import("@console/types").SubagentInfo[]> {
     const res = await getConsoleApiClient().get(`/api/sessions/${id}/subagents`);
     return unwrapData(res.data, "get session subagents");
+  },
+
+  async getChanges(id: string): Promise<import("@console/types").SessionFileChange[]> {
+    const res = await getConsoleApiClient().get(`/api/sessions/${id}/changes`);
+    return unwrapData(res.data, "get session changes");
   },
 };
