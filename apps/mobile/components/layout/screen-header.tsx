@@ -17,6 +17,7 @@ interface ScreenHeaderProps {
 
 export function ScreenHeader({
   title,
+  subtitle,
   onBack,
   showSettings,
   onSettingsPress,
@@ -43,12 +44,22 @@ export function ScreenHeader({
             <ChevronLeft size={20} color="#ffffff" />
           </Pressable>
         ) : null}
-        <Text
-          className="text-[22px] font-bold text-foreground tracking-tight flex-shrink"
-          numberOfLines={1}
-        >
-          {title}
-        </Text>
+        <View className="flex-1 min-w-0 flex-shrink">
+          <Text
+            className="text-[22px] font-bold text-foreground tracking-tight"
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text
+              className="text-xs text-foreground-secondary mt-0.5"
+              numberOfLines={1}
+            >
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
       </View>
 
       {rightAction ? (
