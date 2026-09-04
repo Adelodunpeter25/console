@@ -47,6 +47,20 @@ mkdir -p "$PREFIX"
 curl -fSL "${BASE_URL}/console-${SUFFIX}" -o "${PREFIX}/console"
 chmod +x "${PREFIX}/console"
 
+# fff native sidecar (libfff_c): bun --compile embeds JS but not the .so/.dylib
+# that @ff-labs/fff-node dlopens. The server resolves it via FFF_LIB_PATH or
+# the binary's own directory (see scripts/patch-fff-binary.mjs).
+if [ "$os" = "linux" ]; then
+  LIB_ASSET="libfff_c-${SUFFIX}.so"
+  LIB_FILE="libfff_c.so"
+else
+  LIB_ASSET="libfff_c-${SUFFIX}.dylib"
+  LIB_FILE="libfff_c.dylib"
+fi
+
+curl -fSL "${BASE_URL}/${LIB_ASSET}" -o "${PREFIX}/${LIB_FILE}"
+chmod 644 "${PREFIX}/${LIB_FILE}"
+
 case ":$PATH:" in
   *":${PREFIX}:"*) ;;
   *)

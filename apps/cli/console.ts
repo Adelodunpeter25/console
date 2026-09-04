@@ -8,6 +8,8 @@
  * `console start` re-executes this same binary detached with CONSOLE_SERVE=1
  * so a single installed file can both manage and BE the daemon.
  */
+await import("../server/agent/src/tools/fff-bootstrap.js");
+
 if (process.env.CONSOLE_SERVE === "1") {
   await import("../server/index.js");
 } else {

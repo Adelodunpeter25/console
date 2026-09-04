@@ -2,7 +2,8 @@
 # executable) for every platform on each push to main, then uploads them to a
 # rolling GitHub Release tagged `console-server` (latest always wins).
 #
-# Assets: console-linux-x64, console-macos-x64, console-macos-arm64
+# Assets: console-<suffix> + libfff_c-<suffix>.{so,dylib} sidecar (fff native lib,
+# missing from `bun build --compile` output — see docs/notes/fff-native-library-fix.md).
 name: Build console
 
 on:
@@ -22,14 +23,23 @@ jobs:
             bun-target: bun-linux-x64
             install-os: linux
             install-cpu: x64
+            lib-asset: libfff_c-linux-x64.so
+            bin-package: fff-bin-linux-x64-gnu
+            lib-file: libfff_c.so
           - os-suffix: macos-x64
             bun-target: bun-darwin-x64
             install-os: darwin
             install-cpu: x64
+            lib-asset: libfff_c-macos-x64.dylib
+            bin-package: fff-bin-darwin-x64
+            lib-file: libfff_c.dylib
           - os-suffix: macos-arm64
             bun-target: bun-darwin-aarch64
             install-os: darwin
             install-cpu: arm64
+            lib-asset: libfff_c-macos-arm64.dylib
+            bin-package: fff-bin-darwin-arm64
+            lib-file: libfff_c.dylib
     steps:
       - uses: actions/checkout@v4
 
@@ -42,6 +52,16 @@ jobs:
       # this override a cross-compiled binary would miss its addon and crash.
       - name: Install dependencies (for target platform)
         run: bun install --frozen-lockfile --os=${{ matrix.install-os }} --cpu=${{ matrix.install-cpu }}
+
+      # Patch fff-node's findBinary() so the bundled build checks FFF_LIB_PATH
+      # and the binary's own directory before the npm-package lookup.
+      - name: Patch fff-node sidecar lookup
+        run: bun scripts/patch-fff-binary.mjs
+
+      # Copy the target platform's libfff_c out of its optional bin package as
+      # a release sidecar (bun --compile embeds JS, not the .so/.dylib).
+      - name: Stage fff native sidecar
+        run: cp "node_modules/@ff-labs/${{ matrix.bin-package }}/${{ matrix.lib-file }}" "${{ matrix.lib-asset }}"
 
       # Flags: --minify shrinks bundled JS; --sourcemap (zstd-compressed) keeps
       # stacktraces pointing at TS source in production crashes.
@@ -59,4 +79,6 @@ jobs:
           name: console-server (latest)
           prerelease: false
           make_latest: true
-          files: console-${{ matrix.os-suffix }}
+          files: |
+            console-${{ matrix.os-suffix }}
+            ${{ matrix.lib-asset }}

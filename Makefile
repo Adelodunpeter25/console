@@ -34,7 +34,7 @@ build-desktop:
 ## build-server: Compile the multi-call `console` binary (CLI + agent server)
 ## (bun runtime embedded, minified JS, zstd sourcemap for readable stacktraces)
 build-server:
-	bun build --compile --minify --sourcemap apps/cli/console.ts --outfile console
+	bun scripts/patch-fff-binary.mjs && bun build --compile --minify --sourcemap apps/cli/console.ts --outfile console
 
 ## build-preview
 build-preview:

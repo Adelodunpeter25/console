@@ -3,6 +3,7 @@
  * Terminal WebSocket upgrades ride the same server natively.
  * Supports daemon mode with logging and graceful shutdown.
  */
+import "./agent/src/tools/fff-bootstrap.js";
 import { createApiApp } from "./api/src/app.js";
 import {
   isTerminalUpgradeRequest,
