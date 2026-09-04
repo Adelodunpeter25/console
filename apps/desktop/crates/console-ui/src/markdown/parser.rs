@@ -631,7 +631,10 @@ fn linkify_bare_urls(pieces: Vec<InlinePiece>) -> Vec<InlinePiece> {
     let mut linked = Vec::with_capacity(pieces.len());
     for piece in pieces {
         match piece {
-            InlinePiece::Run(run) if !run.style.code && run.style.link.is_none() => {
+            // Code spans keep their code styling but still linkify: `style.code`
+            // is preserved on the split runs so `https://` inside backticks
+            // stays brownish yet becomes clickable.
+            InlinePiece::Run(run) if run.style.link.is_none() => {
                 push_linkified_run(run, &mut linked);
             }
             piece => linked.push(piece),
@@ -681,6 +684,8 @@ fn push_file_linkified_segment(text: &str, style: &InlineStyle, pieces: &mut Vec
         let url = &text[candidate.start()..end];
         let mut link_style = style.clone();
         link_style.link = Some(url.to_owned());
+        // File URLs render as code (brownish wash) like backticked URLs.
+        link_style.code = true;
         pieces.push(InlinePiece::Run(InlineRun {
             text: url.to_owned(),
             style: link_style,
@@ -709,6 +714,9 @@ fn push_file_path_segment(text: &str, style: &InlineStyle, pieces: &mut Vec<Inli
         }
         let mut link_style = style.clone();
         link_style.link = Some(matched.to_owned());
+        // Bare paths render as code (brownish wash + mono) — same look as
+        // backticked URLs — instead of accent blue.
+        link_style.code = true;
         pieces.push(InlinePiece::Run(InlineRun {
             text: matched.to_owned(),
             style: link_style,
