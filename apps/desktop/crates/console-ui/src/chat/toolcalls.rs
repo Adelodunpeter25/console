@@ -25,7 +25,10 @@ use crate::markdown::render::{
 use crate::markdown::{highlight, render as markdown_render};
 use crate::primitives::{IconName, activity_icon, app_icon, file_type_icon, icon};
 use crate::theme::Theme;
-use crate::utils::time::normalize_unix_timestamp;
+use crate::utils::time::{format_working_elapsed, normalize_unix_timestamp};
+// `format_elapsed` was unified into `format_working_elapsed` (C); kept
+// re-exported so older imports keep resolving.
+pub use crate::utils::time::format_working_elapsed as format_elapsed;
 
 /// Persistent disclosure state owned by a transcript entity.
 #[derive(Clone, Default)]
@@ -721,7 +724,7 @@ impl RenderOnce for ToolCalls {
         drop(state);
         let action_id = run_id.clone();
         let on_action = self.on_action.clone();
-        let elapsed = format_elapsed(self.elapsed_seconds);
+        let elapsed = format_working_elapsed(self.elapsed_seconds);
         let summary = if self.working {
             None
         } else {
@@ -1016,14 +1019,6 @@ fn truncate(value: &str, max_chars: usize) -> String {
         format!("{truncated}…")
     } else {
         truncated
-    }
-}
-
-pub fn format_elapsed(seconds: u64) -> String {
-    match seconds {
-        0..=59 => format!("{seconds}s"),
-        60..=3_599 => format!("{}m {:02}s", seconds / 60, seconds % 60),
-        _ => format!("{}h {:02}m", seconds / 3_600, (seconds % 3_600) / 60),
     }
 }
 
