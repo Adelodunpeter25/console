@@ -5,7 +5,27 @@ import { Search, RefreshCw, File as FileIcon } from "lucide-react-native";
 import { TextInput } from "react-native";
 import { useDirectoryChildren, useReadFile, useSearchFiles } from "@/hooks/queries";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { getLanguageFromPath, renderHighlightedLine } from "@/components/common/syntax-highlighter";
+import { getLanguageFromPath, tokenizeLines, type HighlightSegment } from "@/components/common/syntax-highlighter";
+
+const CodeLine = React.memo(function CodeLine({ segments }: { segments: HighlightSegment[] }) {
+  if (segments.length === 0) return <Text style={{ lineHeight: 16 }}> </Text>;
+  return (
+    <Text style={{ lineHeight: 16 }}>
+      {segments.map((seg, j) => (
+        <Text
+          key={`s-${j}`}
+          style={{
+            color: seg.color,
+            fontStyle: seg.fontStyle ?? "normal",
+            fontWeight: seg.fontWeight ?? "normal",
+          }}
+        >
+          {seg.text}
+        </Text>
+      ))}
+    </Text>
+  );
+});
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { FileTreeBrowser } from "@/components/files/FileTreeBrowser";
 import { MarkdownFilePreview, isMarkdownPath } from "@/components/files/markdown-file-preview";
@@ -75,6 +95,18 @@ export function FilesScreen() {
     isLoading: isLoadingFile,
     error: fileError,
   } = useReadFile(selectedFilePath ?? "", { enabled: !previewBlock });
+
+  // Tokenize once per file (single Prism pass), not per line per render.
+  // Language resolved once; lines memoized so re-renders reuse segments.
+  const fileContent = fileData?.content ?? "";
+  const fileLanguage = useMemo(
+    () => getLanguageFromPath(selectedFilePath ?? undefined),
+    [selectedFilePath],
+  );
+  const tokenizedLines = useMemo(
+    () => (isMarkdownFile || !fileContent ? [] : tokenizeLines(fileContent, fileLanguage)),
+    [isMarkdownFile, fileContent, fileLanguage],
+  );
 
   const handleSelectFile = useCallback((absolutePath: string, fileSize?: number) => {
     setSelectedFile({ path: absolutePath, size: fileSize });
@@ -176,7 +208,7 @@ export function FilesScreen() {
                 <View style={{ flexDirection: "row", padding: 16, minWidth: "100%" }}>
                   {/* Gutter - not selectable, not copied */}
                   <View style={{ width: 32, marginRight: 8, alignItems: "flex-end" }}>
-                    {(fileData?.content ?? "").split("\n").map((_, i) => (
+                    {tokenizedLines.map((_, i) => (
                       <Text
                         key={`ln-${i}`}
                         className="text-[10px] leading-4 font-mono text-right pr-2 text-foreground-secondary/40"
@@ -205,10 +237,10 @@ export function FilesScreen() {
                         fontFamily: "monospace",
                       }}
                     >
-                      {(fileData?.content ?? "").split("\n").map((line, i, arr) => (
+                      {tokenizedLines.map((segments, i) => (
                         <Text key={`lc-${i}`} style={{ lineHeight: 16 }}>
-                          {renderHighlightedLine(line, getLanguageFromPath(selectedFilePath ?? undefined), String(i)) || " "}
-                          {i < arr.length - 1 ? "\n" : ""}
+                          <CodeLine segments={segments} />
+                          {i < tokenizedLines.length - 1 ? "\n" : ""}
                         </Text>
                       ))}
                     </Text>

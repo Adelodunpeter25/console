@@ -192,6 +192,63 @@ function renderPrismTokens(
   });
 }
 
+export interface HighlightSegment {
+  text: string;
+  color: string;
+  fontStyle?: "italic" | "normal";
+  fontWeight?: "bold" | "normal" | "600";
+}
+
+/**
+ * Tokenize once for a whole file, then split styled segments by newline.
+ * Replaces N per-line Prism.tokenize calls with a single pass. Multiline
+ * tokens keep their style across lines. Returns one segment list per line.
+ */
+export function tokenizeLines(code: string, language = ""): HighlightSegment[][] {
+  const lines = code.split("\n");
+  if (!code) return [[]];
+  const normalizedLang = language.trim().toLowerCase();
+  const canonicalLang = LANGUAGE_ALIASES[normalizedLang] || normalizedLang;
+  const grammar = getOrLoadGrammar(canonicalLang);
+  if (!grammar) {
+    return lines.map((line) => (line ? [{ text: line, color: "#e4e4e7" }] : []));
+  }
+  let tokens: Array<string | Prism.Token>;
+  try {
+    tokens = Prism.tokenize(code, grammar);
+  } catch {
+    return lines.map((line) => (line ? [{ text: line, color: "#e4e4e7" }] : []));
+  }
+  const flat: HighlightSegment[] = [];
+  const collect = (items: Array<string | Prism.Token>, style: TokenStyle) => {
+    for (const token of items) {
+      if (typeof token === "string") {
+        if (token) flat.push({ text: token, color: style.color, fontStyle: style.fontStyle, fontWeight: style.fontWeight });
+      } else {
+        const tokenStyle = TOKEN_STYLES[token.type] ?? style;
+        if (typeof token.content === "string") {
+          if (token.content) flat.push({ text: token.content, color: tokenStyle.color, fontStyle: tokenStyle.fontStyle, fontWeight: tokenStyle.fontWeight });
+        } else if (Array.isArray(token.content)) {
+          collect(token.content as Array<string | Prism.Token>, tokenStyle);
+        } else if (token.content != null) {
+          flat.push({ text: String(token.content), color: tokenStyle.color, fontStyle: tokenStyle.fontStyle, fontWeight: tokenStyle.fontWeight });
+        }
+      }
+    }
+  };
+  collect(tokens, { color: "#e4e4e7" });
+  const out: HighlightSegment[][] = [[]];
+  for (const seg of flat) {
+    const parts = seg.text.split("\n");
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]!;
+      if (part) out[out.length - 1]!.push({ text: part, color: seg.color, fontStyle: seg.fontStyle, fontWeight: seg.fontWeight });
+      if (i < parts.length - 1) out.push([]);
+    }
+  }
+  return out;
+}
+
 export const SyntaxHighlighter = memo(function SyntaxHighlighter({
   code,
   language = "",
