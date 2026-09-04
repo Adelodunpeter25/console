@@ -48,9 +48,29 @@ if [[ "$WATCH_MODE" == true ]] && command -v cargo-watch >/dev/null 2>&1; then
     echo "==> Starting Console Dev in watch mode (auto-reload on save)..."
     export CONSOLE_ENV=dev
     cd "$DESKTOP_DIR"
-    # Launch initial instance via reload.sh
+
+    # Trap to kill app when user hits Ctrl+C in terminal
+    cleanup() {
+        echo ""
+        echo "==> Stopping Console Dev..."
+        if [[ -f "$DESKTOP_DIR/dist/.dev_console.pid" ]]; then
+            PID=$(cat "$DESKTOP_DIR/dist/.dev_console.pid" 2>/dev/null || true)
+            if [[ -n "$PID" ]]; then
+                kill "$PID" 2>/dev/null || true
+            fi
+            rm -f "$DESKTOP_DIR/dist/.dev_console.pid"
+        fi
+        pkill -f "$APP_EXEC" 2>/dev/null || true
+        exit 0
+    }
+    trap cleanup SIGINT SIGTERM
+
+    # Launch initial app
     "$SCRIPT_DIR/reload.sh"
-    exec cargo watch \
+
+    # cargo watch with --postpone so it waits for file changes instead of immediately rebuilding
+    cargo watch \
+        --postpone \
         -w "$DESKTOP_DIR/src" \
         -w "$DESKTOP_DIR/crates" \
         -x "build -p console-app" \
