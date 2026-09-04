@@ -117,6 +117,12 @@ export const terminalWebsocketHandlers = {
       ws: import("bun").ServerWebSocket<TerminalSocketData>,
       data: string | Uint8Array,
     ): void {
+      // Reject oversized frames (cheap DoS/CPU guard)
+      const size = typeof data === "string" ? Buffer.byteLength(data) : (data as Uint8Array).byteLength;
+      if (size > 1024 * 1024) {
+        ws.send(JSON.stringify({ type: "error", message: "Frame too large." }));
+        return;
+      }
       const session = ws.data.sessionId;
       if (!session) return;
 
@@ -158,16 +164,26 @@ export const terminalWebsocketHandlers = {
 };
 
 function parseSpawnParams(url: URL): TerminalSpawnParams {
-  const num = (v: string | null, fallback: number) => {
+  const num = (v: string | null, fallback: number, max: number) => {
     if (!v) return fallback;
     const n = Number.parseInt(v, 10);
-    return Number.isFinite(n) && n > 0 ? n : fallback;
+    if (!Number.isFinite(n) || n <= 0) return fallback;
+    return Math.min(n, max);
   };
+  const rawCwd = url.searchParams.get("cwd") ?? process.cwd();
+  if (rawCwd.length > 4096) throw new Error("cwd too long");
+  // Prevent empty or null-byte cwd
+  if (!rawCwd || rawCwd.includes("\0")) throw new Error("Invalid cwd");
+  const rawShell = url.searchParams.get("shell") ?? undefined;
+  if (rawShell && rawShell.length > 1024) throw new Error("shell path too long");
+  if (rawShell && rawShell.includes("\0")) throw new Error("Invalid shell");
+  const rawLabel = url.searchParams.get("label") ?? undefined;
+  if (rawLabel && rawLabel.length > 256) throw new Error("label too long");
   return {
-    cwd: url.searchParams.get("cwd") ?? process.cwd(),
-    shell: url.searchParams.get("shell") ?? undefined,
-    cols: num(url.searchParams.get("cols"), 80),
-    rows: num(url.searchParams.get("rows"), 24),
-    label: url.searchParams.get("label") ?? undefined,
+    cwd: rawCwd,
+    shell: rawShell,
+    cols: num(url.searchParams.get("cols"), 80, 500),
+    rows: num(url.searchParams.get("rows"), 24, 200),
+    label: rawLabel,
   };
 }

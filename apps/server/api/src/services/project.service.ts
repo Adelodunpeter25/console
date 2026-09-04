@@ -5,10 +5,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ProjectInfo } from "@/api/src/types/index.js";
-import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
+import { getSharedSessionStorage, SqliteSessionStorage } from "@/agent/src/session/storage.js";
 
 export class ProjectService {
-  private storage = new SqliteSessionStorage();
+  private storage: SqliteSessionStorage = getSharedSessionStorage();
 
   /**
    * List all recent and selected project directories on the server.

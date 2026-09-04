@@ -1,28 +1,12 @@
 import path from "node:path";
 import { execShell as execAsync } from "@/api/src/utils/exec.js";
+import { isNotGitRepositoryError } from "@/agent/src/utils/error.js";
 import type {
   GitBranchInfo,
   GitBranchesResponse,
   GitFileStatus,
   GitStatusSummary,
 } from "@console/types";
-
-function errorText(error: unknown): string {
-  if (error instanceof Error) {
-    const stderr = "stderr" in error && typeof error.stderr === "string" ? error.stderr : "";
-    return `${error.message}\n${stderr}`.toLowerCase();
-  }
-  return String(error).toLowerCase();
-}
-
-function isNotGitRepositoryError(error: unknown): boolean {
-  const message = errorText(error);
-  return (
-    message.includes("not a git repository") ||
-    message.includes("not a repository") ||
-    message.includes("no git repository")
-  );
-}
 
 export class GitService {
   private parseNumstat(output: string, map: Map<string, { additions: number; deletions: number }>): void {

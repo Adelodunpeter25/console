@@ -20,7 +20,8 @@ import type { AgentMessage, ModelFavorite, SessionHeader, ProjectInfo, ToolResul
 import type { SessionFileChange, TodoItem } from "@console/types";
 import { initGlobalDatabase } from "./schema.js";
 import { getGlobalDbPath, getConsoleStorageDir } from "./apppaths.js";
-import { type StorageState } from "./utils.js";
+import { MAX_CACHED_SESSION_DBS, type StorageState } from "./utils.js";
+import { evictSessionDb } from "./session-helpers.js";
 import * as Projects from "./projects.js";
 import * as Sessions from "./sessions.js";
 import type { CreateSessionOptions } from "./session-ops.js";
@@ -225,6 +226,24 @@ export class SqliteSessionStorage {
 
   // MARK: - Lifecycle
 
+  /**
+   * Drop one cached per-session handle so idle sessions don't pin FDs.
+   * The DB file stays on disk; the next access reopens it via `getSessionDb`.
+   */
+  releaseSession(sessionId: string): void {
+    evictSessionDb(this.state, sessionId);
+  }
+
+  /** Number of open per-session handles (test hook for the LRU bound). */
+  cachedSessionCount(): number {
+    return this.state.sessionDbs.size;
+  }
+
+  /** Exposed for tests: the cap enforced by `getSessionDb`. */
+  static maxCachedSessionDbs(): number {
+    return MAX_CACHED_SESSION_DBS;
+  }
+
   clearAll(): void {
     Sessions.clearAll(this.state);
   }
@@ -239,5 +258,25 @@ export class SqliteSessionStorage {
       }
     }
     this.state.sessionDbs.clear();
+  }
+}
+
+let sharedInstance: SqliteSessionStorage | null = null;
+
+/** Process-wide singleton for production routes/services (prevents N sqlite handles + N LRU maps). Tests should `new SqliteSessionStorage({ dbPath: ":memory:" })` for isolation. */
+export function getSharedSessionStorage(): SqliteSessionStorage {
+  if (!sharedInstance) sharedInstance = new SqliteSessionStorage();
+  return sharedInstance;
+}
+
+/** Test helper — close and discard the shared instance. */
+export function __resetSharedSessionStorageForTests(): void {
+  if (sharedInstance) {
+    try {
+      sharedInstance.close();
+    } catch {
+      // best-effort
+    }
+    sharedInstance = null;
   }
 }

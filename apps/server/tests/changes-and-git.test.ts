@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
+import { MAX_CACHED_SESSION_DBS } from "@/agent/src/session/utils.js";
 import { createApiApp } from "@/api/src/app.js";
 import { GitService } from "@/api/src/services/git.service.js";
 import * as fs from "node:fs";
@@ -121,5 +122,54 @@ describe("Session File Changes & Git Endpoints", () => {
     const diffBody = (await diffRes.json()) as any;
     expect(diffBody.success).toBe(true);
     expect(typeof diffBody.data.diff).toBe("string");
+
+    // Missing git path params are rejected instead of leaking server cwd
+    const noPathStatus = await app.request("/api/git/status");
+    expect(noPathStatus.status).toBe(400);
+    const noPathBranches = await app.request("/api/git/branches");
+    expect(noPathBranches.status).toBe(400);
+    const noPathDiff = await app.request("/api/git/diff");
+    expect(noPathDiff.status).toBe(400);
+    const noPathCheckout = await app.request("/api/git/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ branch: "main" }),
+    });
+    expect(noPathCheckout.status).toBe(400);
+  });
+
+  it("bounds cached session DB handles with LRU eviction", () => {
+    const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "console-test-storage-"));
+    const storage = new SqliteSessionStorage({ storageDir });
+    try {
+      const ids: string[] = [];
+      for (let i = 0; i < MAX_CACHED_SESSION_DBS + 5; i++) {
+        const session = storage.createSession({
+          title: `Session ${i}`,
+          cwd: process.cwd(),
+          modelId: "claude-opus-4-6-thinking",
+          provider: "antigravity",
+        });
+        ids.push(session.id);
+        storage.appendMessage(session.id, {
+          role: "user",
+          content: `hello ${i}`,
+          createdAt: Date.now(),
+        } as never);
+      }
+      expect(storage.cachedSessionCount()).toBeLessThanOrEqual(MAX_CACHED_SESSION_DBS);
+
+      // Evicted sessions still load from disk (handle reopens on demand).
+      const first = storage.loadSession(ids[0]!);
+      expect(first?.messages.length).toBe(1);
+
+      // Explicit release drops one cached handle without deleting data.
+      storage.releaseSession(ids[1]!);
+      const second = storage.loadSession(ids[1]!);
+      expect(second?.messages.length).toBe(1);
+    } finally {
+      storage.close();
+      fs.rmSync(storageDir, { recursive: true, force: true });
+    }
   });
 });

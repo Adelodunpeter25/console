@@ -4,7 +4,7 @@
  */
 import { Agent } from "@/agent/src/service/agent.js";
 import { type TodoItem } from "@/agent/src/tools/todo.js";
-import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
+import { getSharedSessionStorage } from "@/agent/src/session/storage.js";
 import { buildSystemPrompt } from "@/agent/src/systemprompt/builder.js";
 import {
   DEFAULT_FALLBACK_MODEL,
@@ -35,7 +35,7 @@ import { assembleAgentTools, buildRunModel } from "./run/run-tools.js";
 import { extractAndRecordFileChange } from "./run/run-file-changes.js";
 
 export class RunService {
-  private sessionStorage = new SqliteSessionStorage();
+  private sessionStorage = getSharedSessionStorage();
   private static activeRuns = new Map<string, AbortController>();
   private todoLists = new Map<string, TodoItem[]>();
   private hubs = new Map<string, RunEventHub>();
@@ -328,7 +328,9 @@ export class RunService {
 
     controller.abort();
     this.decisions.rejectAllForSession(sessionId, "Run aborted");
-    RunService.activeRuns.delete(sessionId);
+    // Do NOT delete activeRuns here — the run's `finally` owns that
+    // lifecycle. Deleting immediately would let a second `runAgentStream`
+    // start before the first settles (shared hub/session race).
     return true;
   }
 }

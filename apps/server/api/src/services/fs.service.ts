@@ -14,6 +14,7 @@ import {
 import type { FilePreviewBlockedCode } from "@console/types";
 import type { FsTreeEntry } from "@console/types";
 import { isPathIgnored } from "@/api/src/utils/ignored.js";
+import { isHiddenName, safeFileSize, toSortedEntries } from "@/agent/src/tools/fs-common.js";
 
 /**
  * Raised when a file may not be returned as a text preview (lockfile, binary,
@@ -55,40 +56,7 @@ export class FsService {
       path.dirname(resolvedPath) !== resolvedPath ? path.dirname(resolvedPath) : null;
 
     const dirEntries = await fs.readdir(resolvedPath, { withFileTypes: true });
-    const entries: FsTreeEntry[] = [];
-
-    for (const entry of dirEntries) {
-      // Ignore hidden files and directories (starting with '.') by default
-      if (entry.name.startsWith(".")) {
-        continue;
-      }
-
-      const entryPath = path.join(resolvedPath, entry.name);
-      let size: number | undefined;
-
-      if (!entry.isDirectory()) {
-        try {
-          const stat = await fs.stat(entryPath);
-          size = stat.size;
-        } catch {
-          // Ignored if stat fails
-        }
-      }
-
-      entries.push({
-        name: entry.name,
-        path: entryPath,
-        isDir: entry.isDirectory(),
-        size,
-      });
-    }
-
-    // Sort directories first, then files alphabetically
-    entries.sort((a, b) => {
-      if (a.isDir && !b.isDir) return -1;
-      if (!a.isDir && b.isDir) return 1;
-      return a.name.localeCompare(b.name);
-    });
+    const entries = await toSortedEntries(resolvedPath, dirEntries);
 
     return {
       currentPath: resolvedPath,
@@ -100,12 +68,13 @@ export class FsService {
   /**
    * Get formatted directory tree for a project path.
    */
-  async getDirectoryTree(targetPath: string, maxDepth = 3): Promise<string> {
+  async getDirectoryTree(targetPath: string, maxDepth = 3, showHidden = false): Promise<string> {
     const result = (await listDirTool.execute(
       listDirTool.inputSchema.parse({
         path: targetPath,
         maxDepth,
         recursive: true,
+        showHidden,
       }),
     )) as { content: Array<{ text: string }> };
 
@@ -133,14 +102,14 @@ export class FsService {
       } catch {
         return;
       }
+      const visible = dirEntries.filter((e) => showHidden || !isHiddenName(e.name));
       // Directories first, then files, alphabetically (numeric-aware).
-      dirEntries.sort((a, b) => {
+      visible.sort((a, b) => {
         if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
         return a.name.localeCompare(b.name, undefined, { numeric: true });
       });
 
-      for (const entry of dirEntries) {
-        if (!showHidden && entry.name.startsWith(".")) continue;
+      for (const entry of visible) {
         if (!showHidden && isPathIgnored(entry.name)) {
           const dirPath = path.join(currentPath, entry.name);
           result.push({
@@ -153,16 +122,7 @@ export class FsService {
 
         const entryPath = path.join(currentPath, entry.name);
         const isDir = entry.isDirectory();
-
-        let size: number | undefined;
-        if (!isDir) {
-          try {
-            const stat = await fs.stat(entryPath);
-            size = stat.size;
-          } catch {
-            // ignore
-          }
-        }
+        const size = await safeFileSize(entryPath, isDir);
 
         result.push({
           name: entry.name,

@@ -10,10 +10,16 @@ use gpui::{Context, Window};
 use super::{ConsoleDesktopApp, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH};
 use crate::persistence;
 
-/// Minimum spacing between window-bounds writes. `persist_window_state` runs
-/// every render; the in-memory snapshot short-circuits unchanged frames and
-/// this debounce coalesces a continuous drag into one write per interval.
+/// Minimum spacing between window-bounds writes. `maybe_persist_window_state`
+/// runs every render but returns early unless the poll interval has elapsed;
+/// the in-memory snapshot then short-circuits unchanged frames and this
+/// debounce coalesces a continuous drag into one write per interval.
 const WINDOW_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
+/// Minimum spacing between render-loop window-bounds polls. The render path
+/// has no OS move/resize callback in this gpui version, so each frame would
+/// otherwise call `window.window_bounds()`; this keeps the poll to ~4Hz while
+/// a drag still coalesces through [`WINDOW_SAVE_DEBOUNCE`].
+const WINDOW_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 impl ConsoleDesktopApp {
     pub(crate) fn persist_layout(&self) {
@@ -114,10 +120,11 @@ impl ConsoleDesktopApp {
         self.split_resize.take().is_some()
     }
 
-    /// Track the window frame for persistence. Called every render: an
-    /// unchanged frame costs one `Copy` struct comparison and no I/O; a
-    /// changed frame is written at most once per [`WINDOW_SAVE_DEBOUNCE`],
-    /// with the trailing timer always flushing the newest captured bounds.
+    /// Track the window frame for persistence. Called every render via
+    /// [`Self::maybe_persist_window_state`]: an unchanged frame costs one
+    /// `Copy` struct comparison and no I/O; a changed frame is written at most
+    /// once per [`WINDOW_SAVE_DEBOUNCE`], with the trailing timer always
+    /// flushing the newest captured bounds.
     pub fn persist_window_state(&mut self, window: &Window, cx: &mut Context<Self>) {
         let Some(state) = persistence::window::capture(window) else {
             return;
@@ -143,6 +150,22 @@ impl ConsoleDesktopApp {
             });
         })
         .detach();
+    }
+
+    /// Render-loop entry point for window persistence. Throttles the
+    /// `window.window_bounds()` poll to [`WINDOW_POLL_INTERVAL`] so idle
+    /// frames skip the OS call entirely; bounds checks themselves stay in
+    /// [`Self::persist_window_state`].
+    pub fn maybe_persist_window_state(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let now = std::time::Instant::now();
+        let too_soon = self
+            .last_window_poll
+            .is_some_and(|last| now.duration_since(last) < WINDOW_POLL_INTERVAL);
+        if too_soon {
+            return;
+        }
+        self.last_window_poll = Some(now);
+        self.persist_window_state(window, cx);
     }
 
     fn flush_pending_window_state(&mut self) {

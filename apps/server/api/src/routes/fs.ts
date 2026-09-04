@@ -55,7 +55,14 @@ fsRoutes.get("/entries", async (c) => {
   if (!dirPath) {
     return c.json({ success: false, error: "Query parameter 'path' is required." }, 400);
   }
-  const maxDepth = Number.parseInt(c.req.query("depth") || "25", 10);
+  const rawDepth = c.req.query("depth") ?? "25";
+  const maxDepth = Number.parseInt(rawDepth, 10);
+  if (!Number.isSafeInteger(maxDepth) || maxDepth < 1 || maxDepth > 25) {
+    return c.json(
+      { success: false, error: "Query parameter 'depth' must be an integer between 1 and 25." },
+      400,
+    );
+  }
   const showHidden = c.req.query("hidden") === "true";
 
   try {
@@ -71,11 +78,22 @@ fsRoutes.get("/entries", async (c) => {
  * GET /api/fs/tree — Return structured directory tree summary.
  */
 fsRoutes.get("/tree", async (c) => {
-  const dirPath = c.req.query("path") || process.cwd();
-  const maxDepth = Number.parseInt(c.req.query("depth") || "3", 10);
+  const dirPath = c.req.query("path");
+  if (!dirPath) {
+    return c.json({ success: false, error: "Query parameter 'path' is required." }, 400);
+  }
+  const rawDepth = c.req.query("depth") ?? "3";
+  const maxDepth = Number.parseInt(rawDepth, 10);
+  if (!Number.isSafeInteger(maxDepth) || maxDepth < 1 || maxDepth > 10) {
+    return c.json(
+      { success: false, error: "Query parameter 'depth' must be an integer between 1 and 10." },
+      400,
+    );
+  }
+  const showHidden = c.req.query("hidden") === "true";
 
   try {
-    const treeFormatted = await fsService.getDirectoryTree(dirPath, maxDepth);
+    const treeFormatted = await fsService.getDirectoryTree(dirPath, maxDepth, showHidden);
     return c.json({
       success: true,
       data: { path: dirPath, treeFormatted },
@@ -95,10 +113,19 @@ fsRoutes.get("/file", async (c) => {
     return c.json({ success: false, error: "Query parameter 'path' is required." }, 400);
   }
 
-  const startLine = c.req.query("startLine")
-    ? Number.parseInt(c.req.query("startLine")!, 10)
-    : undefined;
-  const endLine = c.req.query("endLine") ? Number.parseInt(c.req.query("endLine")!, 10) : undefined;
+  const startLineRaw = c.req.query("startLine");
+  const endLineRaw = c.req.query("endLine");
+  const startLine = startLineRaw === undefined ? undefined : Number.parseInt(startLineRaw, 10);
+  const endLine = endLineRaw === undefined ? undefined : Number.parseInt(endLineRaw, 10);
+  if (
+    (startLine !== undefined && (!Number.isSafeInteger(startLine) || startLine < 1)) ||
+    (endLine !== undefined && (!Number.isSafeInteger(endLine) || endLine < 1))
+  ) {
+    return c.json(
+      { success: false, error: "Query parameters 'startLine' and 'endLine' must be positive integers." },
+      400,
+    );
+  }
 
   try {
     const content = await fsService.readFileContent(filePath, startLine, endLine);
