@@ -5,31 +5,58 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESKTOP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 RUN_APP=true
+WATCH_MODE=true
 EXTRA_ARGS=()
 
 for arg in "$@"; do
     if [[ "$arg" == "--no-run" ]]; then
         RUN_APP=false
+    elif [[ "$arg" == "--no-watch" ]]; then
+        WATCH_MODE=false
     else
         EXTRA_ARGS+=("$arg")
     fi
 done
 
-if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
-    "$SCRIPT_DIR/build.sh" \
-        --mode dev \
-        --bundle-id com.console.desktop.dev \
-        --app-name "Console Dev" \
-        "${EXTRA_ARGS[@]}"
-else
-    "$SCRIPT_DIR/build.sh" \
-        --mode dev \
-        --bundle-id com.console.desktop.dev \
-        --app-name "Console Dev"
+build_dev_bundle() {
+    if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
+        "$SCRIPT_DIR/build.sh" \
+            --mode dev \
+            --bundle-id com.console.desktop.dev \
+            --app-name "Console Dev" \
+            "${EXTRA_ARGS[@]}"
+    else
+        "$SCRIPT_DIR/build.sh" \
+            --mode dev \
+            --bundle-id com.console.desktop.dev \
+            --app-name "Console Dev"
+    fi
+}
+
+APP_PATH="$DESKTOP_DIR/dist/Console Dev.app"
+APP_EXEC="$APP_PATH/Contents/MacOS/console"
+
+if [[ "$RUN_APP" == false ]]; then
+    build_dev_bundle
+    exit 0
 fi
 
-if [[ "$RUN_APP" == true ]]; then
-    APP_PATH="$DESKTOP_DIR/dist/Console Dev.app"
+# Initial build
+build_dev_bundle
+
+if [[ "$WATCH_MODE" == true ]] && command -v cargo-watch >/dev/null 2>&1; then
+    echo "==> Starting Console Dev in watch mode (auto-reload on save)..."
+    export CONSOLE_ENV=dev
+    cd "$DESKTOP_DIR"
+    exec cargo watch \
+        -w "$DESKTOP_DIR/src" \
+        -w "$DESKTOP_DIR/crates" \
+        -x "build -p console-app" \
+        -s "cp -f target/debug/console '$APP_EXEC' && codesign --force --deep --sign - '$APP_PATH' >/dev/null 2>&1" \
+        -s "pkill -f '$APP_EXEC' 2>/dev/null || true" \
+        -s "'$APP_EXEC' &"
+else
     echo "==> Launching Console Dev ($APP_PATH)..."
-    exec "$APP_PATH/Contents/MacOS/console"
+    export CONSOLE_ENV=dev
+    exec "$APP_EXEC"
 fi
