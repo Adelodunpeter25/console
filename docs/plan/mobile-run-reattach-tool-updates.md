@@ -46,10 +46,11 @@ This plan is Android-only. iOS, web, and fallback stream implementations are int
 
 ## Diagnosis to Verify
 
-There are two likely failure points that should be instrumented and tested separately:
+There are three likely failure points that should be instrumented and tested separately:
 
 1. **Attach is skipped after cold start.** The session status store may not yet contain `working` when `useChatStream()` runs. The chat screen then loads persisted data but never calls `attachServerRun()`. Returning to the session list causes another fetch cycle, which accidentally makes the status available.
 2. **Tool replay is applied to an incomplete local run.** The replay resets text buffers but not `activeToolCalls` or the current run timeline. Tool events are applied through `updateLatestRun()`, which assumes the last local run is the server run. Persisted messages and replayed events can therefore land in different run states.
+3. **The completed run remains locally marked as working.** `RunActivity` displays `Working for ...` when either the session `running` flag is true or the activity status is still `working`. If the Android stream misses `done`/`aborted`, closes after `sessionEnd`, or finalizes through a path that updates only the server, the latest local run can remain `working` and its elapsed timer can continue indefinitely. Returning to the session list masks this by reconstructing the run from persisted messages.
 
 Add temporary diagnostic logging or test hooks before changing behavior. Capture session ID, server status, local `running`, controller presence, attach decision, replay sequence numbers, replay event types, current run ID, and event counts.
 
@@ -154,7 +155,26 @@ When the app is backgrounded or the process is killed:
 
 No iOS/Web fallback changes are required or desired.
 
-### 7. Reconcile persisted data after completion
+### 7. Make completion state authoritative
+
+The Android UI must stop showing `Working for ...` as soon as the run has finished. A stale local `working` state must not continue incrementing after completion.
+
+Every terminal path must finalize the local session and latest run exactly once:
+
+- `done`.
+- `aborted`.
+- `sessionEnd`.
+- A confirmed `409` during reattach.
+- A normal native stream end after the server has confirmed that no run remains active.
+- A terminal reconnect failure followed by a persisted session refresh.
+
+Finalization must set `running: false`, clear `activeToolCalls` and transient streaming buffers, and set the run status to `completed`, `failed`, or `aborted` as appropriate. It must calculate and store `elapsedMs` once using the run's completion time; the UI must not continue deriving elapsed time from `Date.now()` after the run is complete.
+
+`sessionEnd` must finalize local live state rather than changing only the run status. The controller's `finish()` path must be idempotent so receiving both `sessionEnd` and `done` cannot create conflicting state or restart the timer.
+
+As a defensive rendering rule, `RunActivity` should treat a run as active only when the session is still running and the run status is `working`. This protects the UI from displaying a stale timer, but it does not replace proper state finalization.
+
+### 8. Reconcile persisted data after completion
 
 The server persists model turns and tool results while the run executes. After receiving `done` or `409`:
 
@@ -167,15 +187,17 @@ Do not use a Home-screen round trip as the reconciliation mechanism.
 
 ## Implementation Steps
 
-1. Add Android-only diagnostics around cold-start attach decisions and replay events.
+1. Add Android-only diagnostics around cold-start attach decisions, replay events, and terminal-state transitions.
 2. Add focused tests for `RunEventHub` replay ordering and tool-call frames.
 3. Refactor mobile session hydration so status seeding, message hydration, and attach decision happen in one deterministic path.
 4. Trigger the hydration/reattach flow on chat entry and Android foreground resume.
 5. Update `streamReset` handling to clear transient tool state without deleting persisted history.
 6. Introduce stable run identity, or a controller-owned replay run association, and route tool events through it.
-7. Verify Android native SSE sequence handling and old-controller cleanup.
-8. Reconcile persisted messages/status after terminal frames and `409` responses.
-9. Update comments in `run-hub.ts`, the run controller, and the mobile hydration code so the ownership and replay contract are explicit.
+7. Make `sessionEnd`, `done`, `aborted`, `409`, and confirmed stream completion converge on one idempotent local finalization path.
+8. Ensure completed runs store a fixed `elapsedMs` and never render an indefinitely increasing `Working for ...` timer.
+9. Verify Android native SSE sequence handling and old-controller cleanup.
+10. Reconcile persisted messages/status after terminal frames and `409` responses.
+11. Update comments in `run-hub.ts`, the run controller, and the mobile hydration code so the ownership and replay contract are explicit.
 
 ## Verification
 
@@ -189,6 +211,9 @@ Do not use a Home-screen round trip as the reconciliation mechanism.
 - Tool results match the correct tool call after replay.
 - A stale controller cannot update state after a new controller attaches.
 - A `409` causes a persisted-data refresh and exactly one local finalization.
+- `sessionEnd` finalizes local running state even if no synthetic `done` frame is received.
+- `done`, `aborted`, `sessionEnd`, native stream end, and `409` are idempotent and cannot leave the latest run marked `working`.
+- A completed run displays a fixed duration and never continues incrementing a `Working for ...` header.
 
 ### Android manual checks
 
@@ -204,6 +229,8 @@ Do not use a Home-screen round trip as the reconciliation mechanism.
 10. Background and foreground the app during streaming; confirm only one stream is active and no duplicate tool events appear.
 11. Force a network interruption and confirm Android reconnects using the last sequence.
 12. Confirm the run remains correctly marked completed, failed, aborted, or needs attention.
+13. Let a run finish normally and verify the header changes from `Working for ...` to a fixed completed-duration label.
+14. Receive `sessionEnd` without a `done` frame and verify the local timer stops and the run is finalized.
 
 ## Success Criteria
 
