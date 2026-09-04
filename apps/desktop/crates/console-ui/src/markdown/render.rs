@@ -26,7 +26,7 @@ use gpui::{
     AnyElement, BorderStyle, Bounds, ClipboardItem, CursorStyle, DispatchPhase, Font, FontStyle,
     FontWeight, Hsla, InteractiveText, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent,
     MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point, SharedString, StrikethroughStyle,
-    StyledText, TextLayout, TextRun, UnderlineStyle, Window, canvas, div, font, img, point,
+    StyledText, TextLayout, TextRun, Window, canvas, div, font, img, point,
     prelude::*, px, quad, relative, size,
 };
 
@@ -256,22 +256,23 @@ pub fn flatten(
             }
         }
 
+        // Links (web + file paths) render in accent with no underline —
+        // affordance is color + pointer cursor, not decoration.
+        let is_link = run.style.link.is_some();
         out.push(TextRun {
             len: run.text.len(),
             font: run_font,
             color: if run.style.code {
                 palette.code_text
+            } else if is_link {
+                palette.accent
             } else {
                 base_color
             },
             // Inline code's wash is painted as *rounded* quads by the canvas
             // underlay; a run background could only ever be a square box.
             background_color: None,
-            underline: run.style.link.is_some().then_some(UnderlineStyle {
-                color: Some(palette.tertiary),
-                thickness: px(1.0),
-                wavy: false,
-            }),
+            underline: None,
             strikethrough: run.style.strikethrough.then_some(StrikethroughStyle {
                 thickness: px(1.0),
                 color: Some(palette.tertiary),

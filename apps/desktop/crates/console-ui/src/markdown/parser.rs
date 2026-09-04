@@ -29,12 +29,13 @@ static BARE_FILE_URL: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// Bare file paths (`apps/server/index.ts`, `./src/foo.rs:12:3`,
-/// `/abs/path/file.md`, `~/proj/file.ts`). Requires a file extension and —
-/// to avoid matching prose like `v1.2` — a `/` somewhere in the match, or a
-/// leading `~/`, `/`, `./`, `../` prefix. An optional `:line` / `:line:col`
-/// suffix is included so the text stays intact; opening strips it for now.
+/// `/abs/path/file.md`, `~/proj/My Shot.png`). Absolute paths may contain
+/// spaces (macOS screenshots, `~/Desktop/...`) so they match greedily up to
+/// the last extension; relatives stay space-free to avoid matching prose like
+/// `v1.2`. An optional `:line` / `:line:col` suffix is included so the text
+/// stays intact; opening strips it for now.
 static BARE_FILE_PATH: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"\b(?:~/|/|\./|\.\./)?(?:[\w\-.]+/)*[\w\-.]*[\w]\.[A-Za-z0-9]{1,10}(?::\d+(?::\d+)?)?"#)
+    Regex::new(r#"(?:(?:~/|/)[^<>"`\\\n]*\.[A-Za-z0-9]{1,10}(?::\d+(?::\d+)?)?|(?:\./|\.\./)(?:[\w\-.]+/)*[\w\-.]*[\w]\.[A-Za-z0-9]{1,10}(?::\d+(?::\d+)?)?|\b(?:[\w\-.]+/)+[\w\-.]*[\w]\.[A-Za-z0-9]{1,10}(?::\d+(?::\d+)?)?)"#)
         .expect("bare file path regex should compile")
 });
 
