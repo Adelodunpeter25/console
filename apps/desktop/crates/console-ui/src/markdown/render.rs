@@ -72,9 +72,11 @@ pub struct Metrics {
 
 impl Metrics {
     /// Assistant response scale, matching the transcript's body text.
+    /// Body is 12.5pt so inline file paths / links (which inherit body size)
+    /// sit a touch smaller; fenced code blocks stay on `code_text_size`.
     pub const BODY: Self = Self {
-        text_size: 13.5,
-        line_height: 21.0,
+        text_size: 12.5,
+        line_height: 20.0,
         code_text_size: 12.5,
         code_line_height: 18.5,
         block_gap: 10.0,
@@ -640,6 +642,12 @@ fn text_element_with_selection(
         let id = SharedString::from(format!("{}-t{}", key.row, key.index));
         InteractiveText::new(id, styled)
             .on_click(ranges, move |clicked, window, cx| {
+                // Cmd-click (Ctrl on non-Mac) to open — plain click only
+                // moves the cursor / adjusts selection.
+                let mods = window.modifiers();
+                if !(mods.platform || mods.control) {
+                    return;
+                }
                 if let Some(url) = urls.get(clicked) {
                     if let Some(handler) = &link_handler {
                         handler(url, window, cx);
