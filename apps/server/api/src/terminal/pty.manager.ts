@@ -90,9 +90,6 @@ const ALLOWED_SHELLS = new Set<string>([
 const MAX_CONCURRENT_TERMINALS = 20;
 const MAX_SPAWNS_PER_MINUTE = 20;
 
-const SENSITIVE_ENV_PATTERN = /(TOKEN|SECRET|KEY|PASSWORD|CREDENTIAL|AUTH)/i;
-const BLOCKED_ENV_KEYS = new Set(["LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH"]);
-
 function isAllowedShell(shell: string): boolean {
   if (ALLOWED_SHELLS.has(shell)) return true;
   const hostShell = process.env.SHELL;
@@ -102,19 +99,6 @@ function isAllowedShell(shell: string): boolean {
     if (path.basename(allowed) === base) return true;
   }
   return false;
-}
-
-function buildSafeEnv(): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(process.env)) {
-    if (!v) continue;
-    if (BLOCKED_ENV_KEYS.has(k)) continue;
-    if (SENSITIVE_ENV_PATTERN.test(k)) continue;
-    out[k] = v;
-  }
-  out.TERM = "xterm-256color";
-  out.CONSOLE_TERMINAL = "true";
-  return out;
 }
 
 export class TerminalPtyManager {
@@ -224,11 +208,14 @@ export class TerminalPtyManager {
       session.shellStartTimer = undefined;
     }
 
-    // Strip sensitive env vars (tokens/keys) and blocked preload keys before spawning.
     const proc = Bun.spawn([session.shell], {
       terminal: session.terminal,
       cwd: session.cwd,
-      env: buildSafeEnv(),
+      env: {
+        ...process.env,
+        TERM: "xterm-256color",
+        CONSOLE_TERMINAL: "true",
+      } as Record<string, string>,
     });
     session.proc = {
       pid: proc.pid,

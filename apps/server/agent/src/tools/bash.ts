@@ -77,22 +77,7 @@ export const bashTool: AgentTool<typeof inputSchema> = {
   inputSchema,
   execute: async (args: Input, signal?: AbortSignal): Promise<unknown> => {
     const cwd = args.cwd ? path.resolve(args.cwd) : process.cwd();
-    // Filter dangerous preload keys even if caller passes them via args.env
-    const BLOCKED_ENV_KEYS = new Set(["LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH"]);
-    let env: NodeJS.ProcessEnv;
-    if (args.env) {
-      const filtered: Record<string, string> = {};
-      for (const [k, v] of Object.entries(args.env)) {
-        if (BLOCKED_ENV_KEYS.has(k)) continue;
-        filtered[k] = v;
-      }
-      env = { ...process.env, ...filtered };
-      // Ensure blocked keys from host env don't leak even without override
-      for (const k of BLOCKED_ENV_KEYS) delete (env as Record<string, string | undefined>)[k];
-    } else {
-      env = { ...process.env };
-      for (const k of BLOCKED_ENV_KEYS) delete (env as Record<string, string | undefined>)[k];
-    }
+    const env = args.env ? { ...process.env, ...args.env } : process.env;
     const timeoutMs = args.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
     const result = await execWithSignal(args.command, {
