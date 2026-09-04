@@ -167,11 +167,10 @@ impl TerminalView {
             key_char: event.keystroke.key_char.clone(),
             modifiers: mods,
         };
-        // Use termy_core's full keyboard encoder — carries Caps (via key_char),
-        // kitty/disambiguate, and bracketed paste handling.
+        // Use termy_core's full keyboard encoder — key_char already carries
+        // Caps-correct case from GPUI (and IME for CJK), kitty/disambiguate handled.
         let mode = TerminalKeyboardMode::default();
         let bytes = keystroke_to_input(&ks, TerminalKeyEventKind::Press, mode, true)?;
-        // bytes may contain control codes (0x01 etc.) — lossy as String is fine for PTY
         Some(String::from_utf8_lossy(&bytes).into_owned())
     }
 }
