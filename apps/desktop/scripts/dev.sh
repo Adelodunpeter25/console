@@ -48,13 +48,13 @@ if [[ "$WATCH_MODE" == true ]] && command -v cargo-watch >/dev/null 2>&1; then
     echo "==> Starting Console Dev in watch mode (auto-reload on save)..."
     export CONSOLE_ENV=dev
     cd "$DESKTOP_DIR"
+    # Launch initial instance via reload.sh
+    "$SCRIPT_DIR/reload.sh"
     exec cargo watch \
         -w "$DESKTOP_DIR/src" \
         -w "$DESKTOP_DIR/crates" \
         -x "build -p console-app" \
-        -s "cp -f target/debug/console '$APP_EXEC' && codesign --force --deep --sign - '$APP_PATH' >/dev/null 2>&1" \
-        -s "pkill -f '$APP_EXEC' 2>/dev/null || true" \
-        -s "'$APP_EXEC' &"
+        -s "$SCRIPT_DIR/reload.sh"
 else
     echo "==> Launching Console Dev ($APP_PATH)..."
     export CONSOLE_ENV=dev
