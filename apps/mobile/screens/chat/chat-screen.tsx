@@ -172,6 +172,7 @@ export function ChatScreen() {
         <ChatEmptyState />
       ) : (
         <ChatMessageList
+          key={selectedSessionId ?? undefined}
           ref={listRef}
           stream={stream}
           onScrollBottomVisibilityChange={setShowScrollBottom}

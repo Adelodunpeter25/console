@@ -17,6 +17,9 @@ export function useSessionTodos(sessionId: string | null | undefined) {
   // Initial hydration from backend on session mount/change
   useEffect(() => {
     if (!sessionId) return;
+    const current = getChatSession(sessionId);
+    if (current.todoItems && current.todoItems.length > 0) return;
+
     let cancelled = false;
 
     sessionService
@@ -24,9 +27,8 @@ export function useSessionTodos(sessionId: string | null | undefined) {
       .then((serverTodos) => {
         if (cancelled) return;
         if (Array.isArray(serverTodos)) {
-          const current = getChatSession(sessionId);
-          // Only hydrate if we don't already have live items or if current is empty
-          if (!current.todoItems || current.todoItems.length === 0) {
+          const fresh = getChatSession(sessionId);
+          if (!fresh.todoItems || fresh.todoItems.length === 0) {
             setTodoItems(sessionId, serverTodos);
           }
         }

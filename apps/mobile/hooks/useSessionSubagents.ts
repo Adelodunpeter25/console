@@ -18,6 +18,9 @@ export function useSessionSubagents(sessionId: string | null | undefined) {
   // Initial hydration from backend on session mount/change
   useEffect(() => {
     if (!sessionId) return;
+    const current = getChatSession(sessionId);
+    if (current.subagents && current.subagents.length > 0) return;
+
     let cancelled = false;
 
     sessionService
@@ -25,9 +28,8 @@ export function useSessionSubagents(sessionId: string | null | undefined) {
       .then((serverSubagents) => {
         if (cancelled) return;
         if (Array.isArray(serverSubagents)) {
-          const current = getChatSession(sessionId);
-          // Only hydrate if we don't already have live items or if current is empty
-          if (!current.subagents || current.subagents.length === 0) {
+          const fresh = getChatSession(sessionId);
+          if (!fresh.subagents || fresh.subagents.length === 0) {
             setSubagents(sessionId, serverSubagents);
           }
         }
