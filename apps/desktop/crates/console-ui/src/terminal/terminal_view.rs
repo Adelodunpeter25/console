@@ -1,16 +1,25 @@
 use console_core::ConsoleClient;
 use console_core::types::terminal::{TerminalSize, TerminalSpawnParams, TerminalStatus};
 use gpui::{
-    App, Context, FocusHandle, Focusable, IntoElement, KeyDownEvent, ParentElement, Render,
-    SharedString, Styled, Window, div, prelude::*, px,
+    App, Bounds, Context, ElementInputHandler, EntityInputHandler, FocusHandle, Focusable,
+    IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    ParentElement, Pixels, Render, SharedString, Styled, UTF16Selection, Window, div,
+    prelude::*, px,
 };
 use termy_core::{
     TerminalKeyEventKind, TerminalKeyboardMode, TermyKeystroke, TermyModifiers, keystroke_to_input,
 };
+use std::ops::Range;
 use std::sync::Arc;
 
 use super::theme::TerminalTheme;
 use crate::theme::Theme;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TerminalCellPos {
+    pub col: u16,
+    pub row: u16,
+}
 
 /// Drop-in terminal pane. Owns its `AlacrittyBackend` + WS `TerminalHandle`,
 /// feeds server output → grid → snapshot, and forwards keyboard → `input`.
@@ -28,6 +37,9 @@ pub struct TerminalView {
     status: TerminalStatus,
     error: Option<String>,
     size: TerminalSize,
+    selection_anchor: Option<TerminalCellPos>,
+    selection_head: Option<TerminalCellPos>,
+    selection_dragging: bool,
 }
 
 impl TerminalView {
@@ -48,6 +60,9 @@ impl TerminalView {
             status: TerminalStatus::Spawning,
             error: None,
             size,
+            selection_anchor: None,
+            selection_head: None,
+            selection_dragging: false,
         };
 
         this.spawn(params, client, cx);
@@ -153,6 +168,57 @@ impl TerminalView {
     fn theme(&self, cx: &App) -> TerminalTheme {
         TerminalTheme::from_app_theme(&Theme::current(cx))
     }
+    pub fn selected_text(&self) -> Option<String> {
+        let (start, end) = self.selection_range()?;
+        let snapshot = self.snapshot.as_ref()?;
+        let mut lines = Vec::new();
+
+        for row_idx in start.row..=end.row {
+            let Some(row) = snapshot.rows.get(row_idx as usize) else {
+                continue;
+            };
+            let start_c = if row_idx == start.row { start.col } else { 0 };
+            let end_c = if row_idx == end.row {
+                end.col
+            } else {
+                (row.len() as u16).saturating_sub(1)
+            };
+
+            let mut line_str = String::new();
+            for col_idx in start_c..=end_c {
+                if let Some(cell) = row.get(col_idx as usize) {
+                    if !cell.flags.wide_char_spacer {
+                        line_str.push(cell.c);
+                    }
+                }
+            }
+            lines.push(line_str.trim_end().to_string());
+        }
+
+        if lines.is_empty() {
+            None
+        } else {
+            Some(lines.join("\n"))
+        }
+    }
+
+    pub fn selection_range(&self) -> Option<(TerminalCellPos, TerminalCellPos)> {
+        let anchor = self.selection_anchor?;
+        let head = self.selection_head?;
+        if (head.row, head.col) < (anchor.row, anchor.col) {
+            Some((head, anchor))
+        } else {
+            Some((anchor, head))
+        }
+    }
+
+    pub fn clear_selection(&mut self) -> bool {
+        let had = self.selection_anchor.is_some() || self.selection_head.is_some();
+        self.selection_anchor = None;
+        self.selection_head = None;
+        self.selection_dragging = false;
+        had
+    }
 
     fn key_to_bytes(event: &KeyDownEvent, mode: TerminalKeyboardMode) -> Option<String> {
         let mods = TermyModifiers {
@@ -167,8 +233,6 @@ impl TerminalView {
             key_char: event.keystroke.key_char.clone(),
             modifiers: mods,
         };
-        // Use termy_core's full keyboard encoder — key_char already carries
-        // Caps-correct case from GPUI (and IME for CJK), kitty/disambiguate handled.
         let bytes = keystroke_to_input(&ks, TerminalKeyEventKind::Press, mode, true)?;
         Some(String::from_utf8_lossy(&bytes).into_owned())
     }
@@ -177,6 +241,83 @@ impl TerminalView {
 impl Focusable for TerminalView {
     fn focus_handle(&self, _cx: &App) -> FocusHandle {
         self.focus.clone()
+    }
+}
+
+impl EntityInputHandler for TerminalView {
+    fn text_for_range(
+        &mut self,
+        _range_utf16: Range<usize>,
+        _adjusted_range: &mut Option<Range<usize>>,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<String> {
+        None
+    }
+
+    fn selected_text_range(
+        &mut self,
+        _ignore_disabled_input: bool,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<UTF16Selection> {
+        Some(UTF16Selection {
+            range: 0..0,
+            reversed: false,
+        })
+    }
+
+    fn marked_text_range(
+        &self,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<Range<usize>> {
+        None
+    }
+
+    fn unmark_text(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {}
+
+    fn replace_text_in_range(
+        &mut self,
+        _range: Option<Range<usize>>,
+        text: &str,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !text.is_empty() {
+            self.send_input(text.to_string());
+            let _ = self.clear_selection();
+            cx.notify();
+        }
+    }
+
+    fn replace_and_mark_text_in_range(
+        &mut self,
+        _range: Option<Range<usize>>,
+        _new_text: &str,
+        _new_selected_range: Option<Range<usize>>,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) {
+    }
+
+    fn bounds_for_range(
+        &mut self,
+        _range_utf16: Range<usize>,
+        element_bounds: Bounds<Pixels>,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<Bounds<Pixels>> {
+        Some(element_bounds)
+    }
+
+    fn character_index_for_point(
+        &mut self,
+        _point: gpui::Point<Pixels>,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<usize> {
+        None
     }
 }
 
@@ -196,6 +337,7 @@ impl Render for TerminalView {
 
         let snapshot = self.snapshot.clone();
         let view_handle = cx.entity().clone();
+        let view_for_key = view_handle.clone();
         let handle_for_key = self.handle.clone();
         let handle_for_scroll = self.handle.clone();
         let focus_for_key = self.focus.clone();
@@ -207,6 +349,7 @@ impl Render for TerminalView {
             .as_ref()
             .map(|s| s.bracketed_paste)
             .unwrap_or(false);
+        let selection_range = self.selection_range();
 
         div()
             .id("terminal-view")
@@ -223,6 +366,22 @@ impl Render for TerminalView {
                     if !focus_for_key.is_focused(window) {
                         window.focus(&focus_for_key, cx);
                     }
+
+                    // Copy shortcut: Cmd+C (macOS) / Ctrl+Shift+C
+                    let is_copy = (event.keystroke.modifiers.platform
+                        && event.keystroke.key == "c")
+                        || (event.keystroke.modifiers.control
+                            && event.keystroke.modifiers.shift
+                            && event.keystroke.key == "c");
+                    if is_copy {
+                        let text = view_for_key.read(cx).selected_text();
+                        if let Some(text) = text {
+                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+                            cx.stop_propagation();
+                            return;
+                        }
+                    }
+
                     let is_paste = (event.keystroke.modifiers.platform
                         && event.keystroke.key == "v")
                         || (event.keystroke.modifiers.control
@@ -243,10 +402,32 @@ impl Render for TerminalView {
                         cx.stop_propagation();
                         return;
                     }
+
+                    // Printable characters without Ctrl/Alt/Platform are delegated to IME / InputHandler
+                    let key = event.keystroke.key.as_str();
+                    let is_plain_printable = event.keystroke.key_char.is_some()
+                        && !event.keystroke.modifiers.control
+                        && !event.keystroke.modifiers.alt
+                        && !event.keystroke.modifiers.platform
+                        && !event.keystroke.modifiers.function
+                        && !matches!(
+                            key,
+                            "enter" | "tab" | "space" | "backspace" | "escape" | "delete"
+                        );
+                    if is_plain_printable {
+                        // Let the event propagate to EntityInputHandler::replace_text_in_range
+                        return;
+                    }
+
                     if let Some(bytes) = TerminalView::key_to_bytes(event, keyboard_mode) {
                         if let Some(h) = &handle_for_key {
                             h.send_input(bytes);
                         }
+                        view_for_key.update(cx, |view, cx| {
+                            if view.clear_selection() {
+                                cx.notify();
+                            }
+                        });
                         cx.stop_propagation();
                     }
                 },
@@ -276,62 +457,121 @@ impl Render for TerminalView {
                 )
             })
             .child(
-                div().flex_1().min_h_0().w_full().overflow_hidden().child(
-                    gpui::canvas(
-                        move |bounds, window, _cx| {
-                            let pad_x = px(8.0);
-                            let pad_y = px(8.0);
-                            let avail_w = (bounds.size.width - pad_x * 2.0).max(px(0.0));
-                            let avail_h = (bounds.size.height - pad_y * 2.0).max(px(0.0));
-
-                            let run = gpui::TextRun {
-                                len: 10,
-                                font: gpui::font(crate::markdown::render::MONO_FAMILY),
-                                color: gpui::white(),
-                                ..Default::default()
-                            };
-                            let sample = window.text_system().shape_line(
-                                SharedString::from("0123456789"),
-                                px(12.0),
-                                &[run],
-                                None,
-                            );
-                            let cell_w = (sample.width / 10.0).max(px(1.0));
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .overflow_hidden()
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, event: &MouseDownEvent, _window, cx| {
+                            let cell_w = px(7.2);
                             let cell_h = px(16.0);
-
-                            let cols = ((avail_w / cell_w).floor() as u16).max(20);
-                            let rows = ((avail_h / cell_h).floor() as u16).max(5);
-
-                            (cols, rows, cell_w, cell_h)
-                        },
-                        {
-                            let snapshot = snapshot.clone();
-                            move |bounds, (cols, rows, cell_w, cell_h), window, cx| {
-                                view_handle.update(cx, |view, _| {
-                                    if view.size.cols != cols || view.size.rows != rows {
-                                        view.size = TerminalSize { cols, rows };
-                                        if let Some(h) = &view.handle {
-                                            h.resize(view.size);
-                                        }
-                                    }
-                                });
-
-                                render_canvas_grid(
-                                    bounds,
-                                    cols,
-                                    rows,
-                                    cell_w,
-                                    cell_h,
-                                    snapshot.as_ref(),
-                                    ttheme,
-                                    window,
-                                    cx,
-                                );
-                            }
-                        },
+                            let col = ((event.position.x - px(8.0)).max(px(0.0)) / cell_w).floor() as u16;
+                            let row = ((event.position.y - px(8.0)).max(px(0.0)) / cell_h).floor() as u16;
+                            let pos = TerminalCellPos {
+                                col: col.min(this.size.cols.saturating_sub(1)),
+                                row: row.min(this.size.rows.saturating_sub(1)),
+                            };
+                            this.selection_anchor = Some(pos);
+                            this.selection_head = Some(pos);
+                            this.selection_dragging = true;
+                            cx.notify();
+                        }),
                     )
-                    .size_full(),
-                ),
+                    .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _window, cx| {
+                        if this.selection_dragging {
+                            let cell_w = px(7.2);
+                            let cell_h = px(16.0);
+                            let col = ((event.position.x - px(8.0)).max(px(0.0)) / cell_w).floor() as u16;
+                            let row = ((event.position.y - px(8.0)).max(px(0.0)) / cell_h).floor() as u16;
+                            let pos = TerminalCellPos {
+                                col: col.min(this.size.cols.saturating_sub(1)),
+                                row: row.min(this.size.rows.saturating_sub(1)),
+                            };
+                            if this.selection_head != Some(pos) {
+                                this.selection_head = Some(pos);
+                                cx.notify();
+                            }
+                        }
+                    }))
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(move |this, _event: &MouseUpEvent, _window, cx| {
+                            if this.selection_dragging {
+                                this.selection_dragging = false;
+                                if this.selection_anchor == this.selection_head {
+                                    this.clear_selection();
+                                }
+                                cx.notify();
+                            }
+                        }),
+                    )
+                    .child(
+                        gpui::canvas(
+                            move |bounds, window, _cx| {
+                                let pad_x = px(8.0);
+                                let pad_y = px(8.0);
+                                let avail_w = (bounds.size.width - pad_x * 2.0).max(px(0.0));
+                                let avail_h = (bounds.size.height - pad_y * 2.0).max(px(0.0));
+
+                                let run = gpui::TextRun {
+                                    len: 10,
+                                    font: gpui::font(crate::markdown::render::MONO_FAMILY),
+                                    color: gpui::white(),
+                                    ..Default::default()
+                                };
+                                let sample = window.text_system().shape_line(
+                                    SharedString::from("0123456789"),
+                                    px(12.0),
+                                    &[run],
+                                    None,
+                                );
+                                let cell_w = (sample.width / 10.0).max(px(1.0));
+                                let cell_h = px(16.0);
+
+                                let cols = ((avail_w / cell_w).floor() as u16).max(20);
+                                let rows = ((avail_h / cell_h).floor() as u16).max(5);
+
+                                (cols, rows, cell_w, cell_h)
+                            },
+                            {
+                                let snapshot = snapshot.clone();
+                                let view_for_canvas = view_handle.clone();
+                                let focus_for_canvas = self.focus.clone();
+                                move |bounds, (cols, rows, cell_w, cell_h), window, cx| {
+                                    window.handle_input(
+                                        &focus_for_canvas,
+                                        ElementInputHandler::new(bounds, view_for_canvas.clone()),
+                                        cx,
+                                    );
+
+                                    view_for_canvas.update(cx, |view, _| {
+                                        if view.size.cols != cols || view.size.rows != rows {
+                                            view.size = TerminalSize { cols, rows };
+                                            if let Some(h) = &view.handle {
+                                                h.resize(view.size);
+                                            }
+                                        }
+                                    });
+
+                                    render_canvas_grid(
+                                        bounds,
+                                        cols,
+                                        rows,
+                                        cell_w,
+                                        cell_h,
+                                        snapshot.as_ref(),
+                                        selection_range,
+                                        ttheme,
+                                        window,
+                                        cx,
+                                    );
+                                }
+                            },
+                        )
+                        .size_full(),
+                    ),
             )
     }
 }
@@ -350,6 +590,7 @@ fn render_canvas_grid(
     cell_w: gpui::Pixels,
     cell_h: gpui::Pixels,
     snapshot: Option<&console_core::types::terminal::TerminalGridSnapshot>,
+    selection_range: Option<(TerminalCellPos, TerminalCellPos)>,
     theme: TerminalTheme,
     window: &mut Window,
     cx: &mut App,
@@ -392,6 +633,28 @@ fn render_canvas_grid(
 
             let mut fg = cell.fg.map(color_to_hsla).unwrap_or(theme.foreground);
             let mut bg = cell.bg.map(color_to_hsla).unwrap_or(theme.background);
+
+            let is_selected = if let Some((start, end)) = selection_range {
+                let r = row_idx as u16;
+                let c = col_idx as u16;
+                if r > start.row && r < end.row {
+                    true
+                } else if r == start.row && r == end.row {
+                    c >= start.col && c <= end.col
+                } else if r == start.row {
+                    c >= start.col
+                } else if r == end.row {
+                    c <= end.col
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            if is_selected {
+                bg = theme.selection;
+            }
 
             if cell.flags.inverse {
                 std::mem::swap(&mut fg, &mut bg);
