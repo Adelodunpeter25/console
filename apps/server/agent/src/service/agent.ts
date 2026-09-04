@@ -80,7 +80,7 @@ export class Agent {
     } else {
       this._compaction = {
         enabled: true,
-        maxThresholdRatio: 0.8,
+        maxThresholdRatio: 0.85,
         keepRecentTokens: 20_000,
         maxToolResultChars: 8_000,
         summaryStrategy: "structural",

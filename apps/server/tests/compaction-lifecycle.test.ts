@@ -25,7 +25,7 @@ const testModel: Model = {
   // Verify internal compaction config exists and defaults match
   assert.equal((agentDefault as any)._compaction?.enabled, true);
   assert.equal((agentDefault as any)._compaction?.keepRecentTokens, 20_000);
-  assert.equal((agentDefault as any)._compaction?.maxThresholdRatio, 0.8);
+  assert.equal((agentDefault as any)._compaction?.maxThresholdRatio, 0.85);
   assert.equal((agentDefault as any)._compaction?.maxToolResultChars, 8_000);
 
   // When explicitly passed false, compaction is disabled

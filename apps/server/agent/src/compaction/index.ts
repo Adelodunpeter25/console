@@ -19,7 +19,7 @@ export * from "./structural-summary.js";
 export interface CompactionOptions {
   /** Enable automatic context window compaction. Default: true */
   enabled?: boolean;
-  /** Maximum ratio of contextWindow before auto-compaction triggers. Default: 0.8 (80%) */
+  /** Maximum ratio of contextWindow before auto-compaction triggers. Default: 0.85 (85%) */
   maxThresholdRatio?: number;
   /** Keep the most recent N tokens uncompacted. Default: 20_000 (or 20% of context window) */
   keepRecentTokens?: number;
@@ -51,7 +51,7 @@ export function shouldCompact(
     return false;
   }
 
-  const { maxThresholdRatio = 0.8, tokenThreshold } = options;
+  const { maxThresholdRatio = 0.85, tokenThreshold } = options;
   const tokens = estimateMessageTokens(messages);
   const limit = tokenThreshold ?? Math.floor(model.contextWindow * maxThresholdRatio);
 
