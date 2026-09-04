@@ -72,27 +72,12 @@ impl ConsoleDesktopApp {
         let project_menu = ContextMenuHandle::new(cx);
         let branch_menu = ContextMenuHandle::new(cx);
         transcript_view.update(cx, |transcript, _| {
-            transcript.set_on_preview_image({
-                let entity = entity.clone();
-                move |image, _window, cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.preview_image_data(image, cx);
-                        });
-                    }
-                }
-            });
-            transcript.set_on_open_file({
-                let entity = entity.clone();
-                let pane_id = pane_id_owned.clone();
-                move |link, _window, cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.open_file_link(link, &pane_id, cx);
-                        });
-                    }
-                }
-            });
+            super::transcript_wiring::wire_preview_image(transcript, entity.clone());
+            super::transcript_wiring::wire_open_file_for_pane(
+                transcript,
+                entity.clone(),
+                pane_id_owned.clone(),
+            );
         });
         let submit_pane_id = pane_id.to_string();
         let edit_pane_id = pane_id.to_string();

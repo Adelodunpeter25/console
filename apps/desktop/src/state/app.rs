@@ -286,40 +286,9 @@ impl ConsoleDesktopApp {
         {
             let entity = entity.clone();
             transcript_view.update(cx, |transcript, _| {
-                {
-                    let entity = entity.clone();
-                    transcript.set_on_preview_image(move |image, _window, cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.preview_image_data(image, cx);
-                            });
-                        }
-                    });
-                }
-                {
-                    let entity = entity.clone();
-                    transcript.set_on_view_subagent(move |call_id, _window, cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.view_subagent_in_panel(&call_id, cx);
-                            });
-                        }
-                    });
-                }
-                {
-                    let entity = entity.clone();
-                    transcript.set_on_open_file(move |link, _window, cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                let pane_id = this
-                                    .active_pane_id
-                                    .clone()
-                                    .unwrap_or_else(|| "pane-main".to_string());
-                                this.open_file_link(link, &pane_id, cx);
-                            });
-                        }
-                    });
-                }
+                super::transcript_wiring::wire_preview_image(transcript, entity.clone());
+                super::transcript_wiring::wire_view_subagent(transcript, entity.clone());
+                super::transcript_wiring::wire_open_file_for_active_pane(transcript, entity.clone());
             });
         }
         let model_menu = ContextMenuHandle::new(cx).on_toggle({
