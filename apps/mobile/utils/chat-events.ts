@@ -230,10 +230,10 @@ export function applyChatEvent(
       };
     case "todoUpdate":
       return { ...session, todoItems: event.items };
-    case "sessionEnd":
-      // Finalize the latest run: mark as completed if still working, and
-      // add error results for any tool calls that never received a result.
-      return updateLatestRun(session, (run) => {
+    case "sessionEnd": {
+      // Finalize local live state, not just run status — otherwise the UI
+      // can stay running with streaming buffers if done/aborted is missed.
+      const finalized = updateLatestRun(session, (run) => {
         if (run.status !== "working") return run;
         return {
           ...run,
@@ -242,6 +242,14 @@ export function applyChatEvent(
           elapsedMs: run.startedAt ? Date.now() - run.startedAt : run.elapsedMs,
         };
       });
+      return {
+        ...finalized,
+        running: false,
+        streamingText: "",
+        streamingThinking: "",
+        activeToolCalls: [],
+      };
+    }
     case "subagentStart": {
       const subagents = session.subagents ? [...session.subagents] : [];
       const existingIdx = subagents.findIndex((s) => s.subagentId === event.subagentId);
@@ -324,12 +332,14 @@ export function applyChatEvent(
       };
     }
     case "streamReset":
-      // Re-attach replay is about to arrive — clear streaming buffers so the
+      // Re-attach replay is about to arrive — clear transient buffers so the
       // replayed coalesced snapshots don't duplicate already-seen text.
+      // Active tool calls are also cleared; replay resends toolExecutionStart.
       return {
         ...session,
         streamingText: "",
         streamingThinking: "",
+        activeToolCalls: [],
       };
     case "error":
       if (event.error?.message.toLowerCase().includes("aborted")) {

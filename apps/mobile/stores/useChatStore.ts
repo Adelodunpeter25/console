@@ -361,6 +361,23 @@ export function reset(sessionId: string): void {
   setSessions((sessions) => updateSession(sessions, sessionId, () => createChatSessionState()));
 }
 
+/** Synchronously flush buffered text/thinking (RAF stalls in background). */
+export function flushStreamBuffer(sessionId: string): void {
+  const pending = _streamBuf[sessionId];
+  if (!pending) return;
+  if (_streamRaf[sessionId] != null) cancelAnimationFrame(_streamRaf[sessionId]!);
+  delete _streamBuf[sessionId];
+  delete _streamRaf[sessionId];
+  if (!pending.text && !pending.thinking) return;
+  setSessions((sessions) =>
+    updateSession(sessions, sessionId, (s) => ({
+      ...s,
+      streamingText: s.streamingText + pending.text,
+      streamingThinking: s.streamingThinking + pending.thinking,
+    })),
+  );
+}
+
 export function handleEvent(sessionId: string, event: AgentSessionEvent): void {
   if (event.type === 'modelStreamPart') {
     // Accumulate into buffer

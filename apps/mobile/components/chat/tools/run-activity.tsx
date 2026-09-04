@@ -103,7 +103,9 @@ export const RunActivity = memo(function RunActivity({
   const hasToolCalls = activity.events.some((e) => e.type === "toolCall");
   if (!hasToolCalls && !running) return null;
 
-  const isWorking = running || activity.status === "working";
+  // Active only when the session is still running AND the run is working.
+  // Prevents a stale working run from showing an indefinite Working timer.
+  const isWorking = running && activity.status === "working";
   const elapsed = isWorking && activity.startedAt ? now - activity.startedAt : activity.elapsedMs;
 
   const summaryLabel = isWorking

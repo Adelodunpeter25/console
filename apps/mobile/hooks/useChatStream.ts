@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo } from "react";
+import { AppState } from "react-native";
 import type { ImageAttachment } from "@console/types";
 import { useInfiniteSession } from "./queries";
 import {
@@ -14,6 +15,8 @@ import { getSession, sessionsView$ } from "@/stores/useSessionStore";
 import { sessionStatuses$ } from "@/stores/useSessionStatusStore";
 import {
   attachServerRun,
+  flushStreamBuffer,
+  getChatSession,
 } from "@/stores/useChatStore";
 import { getController } from "@/stores/chat/run-stream-controller";
 import { app$, setSelectedProjectId } from "@/stores/useAppStore";
@@ -121,6 +124,24 @@ export function useChatStream() {
       }
     }
   }, [selectedSessionId, messagesFingerprint, latestHeader, loadSessionMessages, allMessages]);
+
+  // Foreground resume: RAF stalls in background so buffered text never
+  // flushes, and a stalled native socket emits no onError to trigger the
+  // controller reconnect. On active, flush buffers and resume from lastSeq.
+  useEffect(() => {
+    if (!selectedSessionId) return;
+    const sub = AppState.addEventListener("change", (status) => {
+      if (status !== "active") return;
+      const id = selectedSessionId;
+      flushStreamBuffer(id);
+      const running = getChatSession(id).running;
+      const controller = getController(id);
+      if (running && controller?.isActive) {
+        controller.attach(controller.lastSeqValue);
+      }
+    });
+    return () => sub.remove();
+  }, [selectedSessionId]);
 
   const handleSend = useCallback(
     async (attachments?: ImageAttachment[]) => {

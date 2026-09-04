@@ -60,6 +60,11 @@ export class RunStreamController {
     return !this.finished && !this.userCancelled;
   }
 
+  /** Last SSE seq received — used for foreground resume without full replay. */
+  get lastSeqValue(): number | undefined {
+    return this.lastSeq;
+  }
+
   /** Start a fresh agent run (POST /api/sessions/:id/run). */
   startRun(body: Partial<RunPromptDto> & Record<string, unknown>): void {
     const baseUrl = this.deps.baseUrl();

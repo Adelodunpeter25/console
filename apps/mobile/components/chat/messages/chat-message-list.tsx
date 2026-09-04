@@ -57,6 +57,14 @@ export const ChatMessageList = forwardRef<LegendListRef, ChatMessageListProps>(
       [displayMessages],
     );
 
+    // Runs update without adding visible messages (tool turns are filtered
+    // from displayMessages), so LegendList would not re-render the attached
+    // RunActivity row. Fingerprint forces re-render on run timeline changes.
+    const runsFingerprint = useMemo(() => {
+      const latest = effectiveRuns[effectiveRuns.length - 1];
+      return `${stream.running}:${effectiveRuns.length}:${latest?.events.length ?? 0}:${latest?.status ?? "none"}:${stream.streamingText.length}:${stream.streamingThinking.length}:${stream.activeToolCalls.length}`;
+    }, [stream.running, effectiveRuns, stream.streamingText.length, stream.streamingThinking.length, stream.activeToolCalls.length]);
+
     const isAtEndRef = useRef(true);
     const followRef = useRef(true);
 
@@ -114,6 +122,7 @@ export const ChatMessageList = forwardRef<LegendListRef, ChatMessageListProps>(
         style={{ flex: 1 }}
         recycleItems={false}
         data={displayMessages}
+        extraData={runsFingerprint}
         keyExtractor={(item, i) => (item as any).id ?? `${(item as any).createdAt ?? i}-${i}`}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16 }}
         keyboardShouldPersistTaps="handled"
