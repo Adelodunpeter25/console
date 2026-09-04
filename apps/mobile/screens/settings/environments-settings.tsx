@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, Pressable, ScrollView, BackHandler } from "react-native";
 import { ChevronRight, Plus, Unplug, X } from "lucide-react-native";
 import { ScreenHeader } from "@/components/layout/screen-header";
 import { GlassSurface } from "@/components/layout/glass-surface";
@@ -25,6 +25,18 @@ export function EnvironmentsSettings({ onBack }: { onBack?: () => void }) {
 
   // undefined = list view; null = create; string = edit that env.
   const [editing, setEditing] = useState<string | null | undefined>(undefined);
+
+  // Android system back from add/edit must return to the environment list,
+  // not the Settings landing screen. Registered after the parent Settings
+  // handler so it runs first and consumes the press.
+  useEffect(() => {
+    if (editing === undefined) return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      setEditing(undefined);
+      return true;
+    });
+    return () => sub.remove();
+  }, [editing]);
 
   if (editing !== undefined) {
     return (
