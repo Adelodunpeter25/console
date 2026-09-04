@@ -1,6 +1,6 @@
 import { batch, observable } from "@legendapp/state";
 
-export type MobileTab = "home" | "chat" | "settings" | "terminal" | "files" | "subagents" | "subagent-details";
+export type MobileTab = "home" | "chat" | "settings" | "terminal" | "files" | "changes" | "subagents" | "subagent-details";
 
 /**
  * Global app UI state (active tab, selected project/session, backend URL) as

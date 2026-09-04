@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { View, Keyboard, BackHandler, Pressable } from "react-native";
-import { SquareTerminal, Folder } from "lucide-react-native";
+import { SquareTerminal, Folder, GitBranch } from "lucide-react-native";
 import type { LegendListRef } from "@legendapp/list/react-native";
 import { useChatStream, useAbort, useSessionTodos, useSessionSubagents } from "@/hooks";
 import { sessionsView$ } from "@/stores/useSessionStore";
@@ -49,6 +49,12 @@ export function ChatScreen() {
     setActiveTab("files");
   }, [sessionCwd, findProjectForCwd, setSelectedProjectId, setActiveTab]);
 
+  const openChanges = useCallback(() => {
+    const match = findProjectForCwd(sessionCwd);
+    if (match) setSelectedProjectId(match.id);
+    setActiveTab("changes");
+  }, [sessionCwd, findProjectForCwd, setSelectedProjectId, setActiveTab]);
+
   const headerRightActions = useMemo(
     () => (
       <View className="flex-row items-center gap-2">
@@ -61,6 +67,16 @@ export function ChatScreen() {
           onPress={openFiles}
         >
           <Folder size={18} color="#ffffff" />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open changes"
+          hitSlop={8}
+          className="w-10 h-10 rounded-full bg-card border border-border items-center justify-center"
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          onPress={openChanges}
+        >
+          <GitBranch size={18} color="#ffffff" />
         </Pressable>
         <Pressable
           accessibilityRole="button"
