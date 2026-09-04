@@ -121,7 +121,9 @@ impl TerminalBackend for TermyBackend {
     fn is_alt_screen(&self) -> bool {
         self.term.alternate_screen_mode()
     }
+}
 
+impl TermyBackend {
     pub fn keyboard_mode(&self) -> termy_core::TerminalKeyboardMode {
         self.term.keyboard_mode()
     }
