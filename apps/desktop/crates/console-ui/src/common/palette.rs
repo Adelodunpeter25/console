@@ -385,15 +385,13 @@ impl Render for CommandPaletteModal {
                 div()
                     .id("palette-clear-search")
                     .absolute()
-                    .top(px(14.0))
-                    .right(px(14.0))
-                    .size(px(20.0))
+                    .top_0()
+                    .bottom_0()
+                    .right(px(8.0))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded(px(4.0))
-                    .cursor_pointer()
-                    .hover(|s| s.bg(theme.raised))
+                    .w(px(28.0))
                     .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
                         cx.stop_propagation();
                         if let Some(palette) = palette_handle.upgrade() {
@@ -408,7 +406,17 @@ impl Render for CommandPaletteModal {
                             });
                         }
                     })
-                    .child(app_icon(IconName::X, 13.0, theme.text_secondary)),
+                    .child(
+                        div()
+                            .size(px(20.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(4.0))
+                            .cursor_pointer()
+                            .hover(|s| s.bg(theme.raised))
+                            .child(app_icon(IconName::X, 13.0, theme.text_secondary)),
+                    ),
             )
         } else {
             None
