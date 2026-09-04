@@ -17,5 +17,4 @@ log = { workspace = true }
 urlencoding = { workspace = true }
 eventsource-stream = { workspace = true }
 similar = { workspace = true }
-alacritty_terminal = "0.26"
 termy_core = { git = "https://github.com/lassejlv/termy" }

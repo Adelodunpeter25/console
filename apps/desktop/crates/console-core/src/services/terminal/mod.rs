@@ -9,7 +9,7 @@ use tokio::sync::{RwLock, mpsc};
 
 /// Client-side terminal service — manages WS lifecycle against `GET /api/terminals`
 /// and owns the set of live `TerminalRecord`s. The VT grid itself lives in a
-/// `TerminalBackend` (alacritty) per session; the service only routes wire
+/// `TerminalBackend` (termy_core) per session; the service only routes wire
 /// frames → backend.
 ///
 /// This module is intentionally **not wired into `ConsoleDesktopApp` yet**;
@@ -81,9 +81,7 @@ impl TerminalService {
     }
 }
 
-pub mod alacritty;
 pub mod termy;
-pub use alacritty::AlacrittyBackend;
 pub use termy::TermyBackend;
 
 /// Handle for a live PTY session. Drop-in ready: holds the VT backend,
@@ -156,8 +154,8 @@ impl TerminalHandle {
 }
 
 impl TerminalService {
-    /// Spawn a new PTY on the server and return a `TerminalHandle` driving an
-    /// `AlacrittyBackend`. The handle is immediately usable: `send_input` /
+    /// Spawn a new PTY on the server and return a `TerminalHandle` driving a
+    /// `TermyBackend`. The handle is immediately usable: `send_input` /
     /// `resize` queue until the WS is ready. The handle's `notify` is triggered
     /// on every server frame that changes grid/status — the UI should await it
     /// and then call `snapshot().await` + `cx.notify()`.
