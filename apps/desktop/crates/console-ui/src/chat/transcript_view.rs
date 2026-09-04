@@ -15,7 +15,8 @@ use crate::chat::{
     ActivityEvent, AssistantMessageBubble, ToolCallEntry, ToolCalls, ToolCallsAction,
     ToolCallsState, UserMessageBubble, WorkingIndicator,
 };
-use crate::markdown::render::{self, MarkdownView, TranscriptSelection};
+use crate::markdown::file_links::{is_file_link, is_http_url};
+use crate::markdown::render::{self, LinkHandler, MarkdownView, TranscriptSelection};
 use crate::primitives::scrollbar::{self, ScrollbarState};
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
@@ -78,6 +79,7 @@ pub struct TranscriptView {
     /// clicks an image inside a message bubble.
     on_preview_image: Option<Rc<dyn Fn(Arc<gpui::Image>, &mut Window, &mut App) + 'static>>,
     on_view_subagent: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    link_handler: Option<LinkHandler>,
 }
 
 impl TranscriptView {
@@ -110,6 +112,7 @@ impl TranscriptView {
             on_load_older: None,
             on_preview_image: None,
             on_view_subagent: None,
+            link_handler: None,
         }
     }
 
@@ -127,6 +130,30 @@ impl TranscriptView {
         handler: impl Fn(String, &mut Window, &mut App) + 'static,
     ) {
         self.on_view_subagent = Some(Rc::new(handler));
+    }
+
+    /// Wire file-path link clicks (the app opens a workspace tab). Same shape
+    /// as `on_preview_image`: the transcript stays unaware of projects and
+    /// panes, the shell owns resolution + opening. `http(s)` keeps opening in
+    /// the browser; file-like destinations forward their raw link text.
+    pub fn set_on_open_file(
+        &mut self,
+        handler: impl Fn(String, &mut Window, &mut App) + 'static,
+    ) {
+        let open_file = Rc::new(handler);
+        self.link_handler = Some(Rc::new(move |url: &str, window: &mut Window, cx: &mut App| {
+            if is_http_url(url) {
+                cx.open_url(url);
+            } else if is_file_link(url) {
+                open_file(url.to_owned(), window, cx);
+            } else {
+                cx.open_url(url);
+            }
+        }));
+    }
+
+    pub fn session_cwd(&self) -> Option<String> {
+        self.session_cwd.clone()
     }
 
     /// Record the active session's working directory so tool-call rows can
@@ -1017,6 +1044,7 @@ fn transcript_row(
     }
 
     let preview_handler = view_ref.on_preview_image.clone();
+    let link_handler = view_ref.link_handler.clone();
     let row = match message {
         AgentMessage::User {
             content,
@@ -1054,6 +1082,7 @@ fn transcript_row(
                         )
                         .cwd(view_ref.session_cwd.clone())
                         .selection(view_ref.selection.clone())
+                        .link_handler(link_handler.clone())
                         .on_action(move |action, window, cx| {
                             if let Some(view) = activity_entity.upgrade() {
                                 view.update(cx, |view, cx| {
@@ -1089,6 +1118,7 @@ fn transcript_row(
             let thinking_entity = entity.clone();
             AssistantMessageBubble::new(presentation.content_parts)
                 .copy_content(presentation.copy_content)
+                .link_handler(link_handler.clone())
                 .thinking_expanded(thinking_state)
                 .on_thinking_toggle(move |thinking_id, expanded, _window, cx| {
                     if let Some(view) = thinking_entity.upgrade() {

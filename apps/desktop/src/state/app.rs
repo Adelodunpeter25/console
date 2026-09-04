@@ -306,6 +306,20 @@ impl ConsoleDesktopApp {
                         }
                     });
                 }
+                {
+                    let entity = entity.clone();
+                    transcript.set_on_open_file(move |link, _window, cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                let pane_id = this
+                                    .active_pane_id
+                                    .clone()
+                                    .unwrap_or_else(|| "pane-main".to_string());
+                                this.open_file_link(link, &pane_id, cx);
+                            });
+                        }
+                    });
+                }
             });
         }
         let model_menu = ContextMenuHandle::new(cx).on_toggle({

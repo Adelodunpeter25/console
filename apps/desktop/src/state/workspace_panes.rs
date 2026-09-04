@@ -72,12 +72,25 @@ impl ConsoleDesktopApp {
         let project_menu = ContextMenuHandle::new(cx);
         let branch_menu = ContextMenuHandle::new(cx);
         transcript_view.update(cx, |transcript, _| {
-            let entity = entity.clone();
-            transcript.set_on_preview_image(move |image, _window, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.preview_image_data(image, cx);
-                    });
+            transcript.set_on_preview_image({
+                let entity = entity.clone();
+                move |image, _window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.preview_image_data(image, cx);
+                        });
+                    }
+                }
+            });
+            transcript.set_on_open_file({
+                let entity = entity.clone();
+                let pane_id = pane_id_owned.clone();
+                move |link, _window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.open_file_link(link, &pane_id, cx);
+                        });
+                    }
                 }
             });
         });
@@ -468,6 +481,22 @@ impl ConsoleDesktopApp {
         workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
         self.active_pane_id = Some(pane_id.to_string());
         cx.notify();
+    }
+
+    /// Resolve a clicked transcript file link against the session cwd with a
+    /// pane project-path fallback, then open it as a workspace tab. Phase 1
+    /// opens the file only; `:line:col` suffixes are stripped by the resolver.
+    pub fn open_file_link(&mut self, link: String, pane_id: &str, cx: &mut Context<Self>) {
+        let cwd = self.transcript_for_pane(pane_id).read(cx).session_cwd();
+        let project_path = self
+            .selected_project_for_pane(pane_id)
+            .map(|project| project.path.clone());
+        let resolved = console_ui::markdown::file_links::resolve_file_link(
+            &link,
+            cwd.as_deref(),
+            project_path.as_deref(),
+        );
+        self.open_file_tab_in_pane(pane_id, resolved, cx);
     }
 
     pub fn open_file_tab(&mut self, path: String, cx: &mut Context<Self>) {

@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use crate::common::{attachment_image, copy_button};
 use crate::markdown::render::{
-    self as markdown, Ctx as MarkdownCtx, MarkdownView, Metrics, Palette, TranscriptSelection,
+    self as markdown, Ctx as MarkdownCtx, LinkHandler, MarkdownView, Metrics, Palette,
+    TranscriptSelection,
 };
 use crate::theme::Theme;
 use crate::utils::format_message_time;
@@ -211,6 +212,7 @@ pub struct AssistantMessageBubble {
     on_preview_image: Option<PreviewImageHandler>,
     thinking_expanded: Option<Rc<RefCell<HashSet<String>>>>,
     on_thinking_toggle: Option<Rc<dyn Fn(String, bool, &mut Window, &mut App) + 'static>>,
+    link_handler: Option<LinkHandler>,
 }
 
 impl AssistantMessageBubble {
@@ -226,6 +228,7 @@ impl AssistantMessageBubble {
             on_preview_image: None,
             thinking_expanded: None,
             on_thinking_toggle: None,
+            link_handler: None,
         }
     }
 
@@ -275,6 +278,11 @@ impl AssistantMessageBubble {
         self.on_thinking_toggle = Some(Rc::new(handler));
         self
     }
+
+    pub fn link_handler(mut self, handler: Option<LinkHandler>) -> Self {
+        self.link_handler = handler;
+        self
+    }
 }
 
 impl RenderOnce for AssistantMessageBubble {
@@ -304,6 +312,7 @@ impl RenderOnce for AssistantMessageBubble {
         let preview_handler = self.on_preview_image.clone();
         let thinking_expanded = self.thinking_expanded.clone();
         let on_thinking_toggle = self.on_thinking_toggle.clone();
+        let link_handler = self.link_handler.clone();
 
         div()
             .w_full()
@@ -332,6 +341,7 @@ impl RenderOnce for AssistantMessageBubble {
                                 .markdown_view(markdown_view)
                                 .selection(selection.clone())
                                 .streaming(is_streaming)
+                                .link_handler(link_handler.clone())
                                 .on_toggle(move |expanded, window, cx| {
                                     if let Some(on_toggle) = &on_toggle {
                                         on_toggle(action_id.clone(), expanded, window, cx);
@@ -340,12 +350,15 @@ impl RenderOnce for AssistantMessageBubble {
                                 .into_any_element()
                         }
                         AssistantContentPart::Text { text, .. } => {
-                            let markdown_ctx = MarkdownCtx::new(
+                            let mut markdown_ctx = MarkdownCtx::new(
                                 selection_row_for_part(&self.selection_row, index),
                                 &palette,
                                 Metrics::BODY,
                                 selection.clone(),
                             );
+                            if let Some(handler) = link_handler.clone() {
+                                markdown_ctx = markdown_ctx.with_link_handler(handler);
+                            }
                             render_selectable_markdown(
                                 text,
                                 markdown_views.get(index).and_then(Option::as_ref),

@@ -20,7 +20,8 @@ use gpui::{
 use crate::chat::message_bubble::render_selectable_markdown;
 use crate::chat::{DiffView, ThinkingBlock, WorkingIndicator};
 use crate::markdown::render::{
-    Ctx as MarkdownCtx, MarkdownView, Metrics, Palette, TranscriptSelection, plain_text,
+    Ctx as MarkdownCtx, LinkHandler, MarkdownView, Metrics, Palette, TranscriptSelection,
+    plain_text,
 };
 use crate::markdown::{highlight, render as markdown_render};
 use crate::primitives::{IconName, activity_icon, app_icon, file_type_icon, icon};
@@ -104,6 +105,7 @@ pub struct ToolCalls {
     /// results join the same selection state as the surrounding messages.
     selection: TranscriptSelection,
     on_action: Option<Rc<dyn Fn(ToolCallsAction, &mut Window, &mut App) + 'static>>,
+    link_handler: Option<LinkHandler>,
 }
 
 impl ToolCalls {
@@ -125,6 +127,7 @@ impl ToolCalls {
             state,
             selection: TranscriptSelection::default(),
             on_action: None,
+            link_handler: None,
         }
     }
 
@@ -144,6 +147,11 @@ impl ToolCalls {
         handler: impl Fn(ToolCallsAction, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_action = Some(Rc::new(handler));
+        self
+    }
+
+    pub fn link_handler(mut self, handler: Option<LinkHandler>) -> Self {
+        self.link_handler = handler;
         self
     }
 
@@ -587,6 +595,7 @@ impl ToolCalls {
         let open = self.state.borrow().thinking_expanded.contains(id);
         let view = self.markdown_view_for(id);
         let on_action = self.on_action.clone();
+        let link_handler = self.link_handler.clone();
         let id = id.to_owned();
         div()
             .px(px(10.0))
@@ -596,6 +605,7 @@ impl ToolCalls {
                     .markdown_view(view)
                     .selection(self.selection.clone())
                     .streaming(is_streaming)
+                    .link_handler(link_handler)
                     .on_toggle(move |expanded, window, cx| {
                         if let Some(on_action) = &on_action {
                             on_action(
@@ -615,12 +625,15 @@ impl ToolCalls {
     fn text_row(&self, id: &str, text: &str, theme: Theme, is_streaming: bool) -> AnyElement {
         let view = self.markdown_view_for(id);
         let palette = Palette::from_theme(&theme);
-        let ctx = MarkdownCtx::new(
+        let mut ctx = MarkdownCtx::new(
             id.to_owned(),
             &palette,
             Metrics::BODY,
             self.selection.clone(),
         );
+        if let Some(handler) = self.link_handler.clone() {
+            ctx = ctx.with_link_handler(handler);
+        }
         div()
             .px(px(10.0))
             .py(px(6.0))

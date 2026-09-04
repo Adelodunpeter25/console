@@ -2,7 +2,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::markdown::render::{
-    self as markdown, Ctx as MarkdownCtx, MarkdownView, Metrics, Palette, TranscriptSelection,
+    self as markdown, Ctx as MarkdownCtx, LinkHandler, MarkdownView, Metrics, Palette,
+    TranscriptSelection,
 };
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
@@ -44,6 +45,7 @@ pub struct ThinkingBlock {
     selection: TranscriptSelection,
     is_streaming: bool,
     on_toggle: Option<Rc<dyn Fn(bool, &mut Window, &mut App) + 'static>>,
+    link_handler: Option<LinkHandler>,
 }
 
 impl ThinkingBlock {
@@ -56,6 +58,7 @@ impl ThinkingBlock {
             selection: TranscriptSelection::default(),
             is_streaming: false,
             on_toggle: None,
+            link_handler: None,
         }
     }
 
@@ -78,6 +81,11 @@ impl ThinkingBlock {
         self.on_toggle = Some(Rc::new(handler));
         self
     }
+
+    pub fn link_handler(mut self, handler: Option<LinkHandler>) -> Self {
+        self.link_handler = handler;
+        self
+    }
 }
 
 impl RenderOnce for ThinkingBlock {
@@ -87,8 +95,11 @@ impl RenderOnce for ThinkingBlock {
         // assistant's answer text.
         let mut palette = Palette::from_theme(&theme);
         palette.text = theme.text_secondary;
-        let markdown_ctx =
+        let mut markdown_ctx =
             MarkdownCtx::new(self.id.clone(), &palette, Metrics::BODY, self.selection);
+        if let Some(handler) = self.link_handler {
+            markdown_ctx = markdown_ctx.with_link_handler(handler);
+        }
         let collapsed = self.collapsed;
         let on_toggle = self.on_toggle;
         let id = self.id;

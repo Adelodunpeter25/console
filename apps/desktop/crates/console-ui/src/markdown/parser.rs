@@ -22,6 +22,22 @@ static BARE_WEB_URL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?i)\bhttps?://[^\s<>"`\\]+"#).expect("bare web URL regex should compile")
 });
 
+/// Bare `file://` URLs. Resolved by the app-owned `LinkHandler` into a
+/// workspace tab instead of a browser navigation.
+static BARE_FILE_URL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?i)\bfile://[^\s<>"`\\]+"#).expect("bare file URL regex should compile")
+});
+
+/// Bare file paths (`apps/server/index.ts`, `./src/foo.rs:12:3`,
+/// `/abs/path/file.md`, `~/proj/file.ts`). Requires a file extension and —
+/// to avoid matching prose like `v1.2` — a `/` somewhere in the match, or a
+/// leading `~/`, `/`, `./`, `../` prefix. An optional `:line` / `:line:col`
+/// suffix is included so the text stays intact; opening strips it for now.
+static BARE_FILE_PATH: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"\b(?:~/|/|\./|\.\./)?(?:[\w\-.]+/)*[\w\-.]*[\w]\.[A-Za-z0-9]{1,10}(?::\d+(?::\d+)?)?"#)
+        .expect("bare file path regex should compile")
+});
+
 // ── Tree model ─────────────────────────────────────────────────────────────
 
 /// Inline styling threaded through nested emphasis and links.
@@ -631,10 +647,7 @@ fn push_linkified_run(run: InlineRun, pieces: &mut Vec<InlinePiece>) {
             continue;
         }
         if cursor < candidate.start() {
-            pieces.push(InlinePiece::Run(InlineRun {
-                text: run.text[cursor..candidate.start()].to_owned(),
-                style: run.style.clone(),
-            }));
+            push_file_linkified_segment(&run.text[cursor..candidate.start()], &run.style, pieces);
         }
 
         let url = &run.text[candidate.start()..end];
@@ -648,11 +661,76 @@ fn push_linkified_run(run: InlineRun, pieces: &mut Vec<InlinePiece>) {
     }
 
     if cursor < run.text.len() {
+        push_file_linkified_segment(&run.text[cursor..], &run.style, pieces);
+    }
+}
+
+/// Linkify `file://` URLs and bare file paths inside a plain-text segment.
+/// Web URLs were split out first, so this only sees the gaps between them.
+fn push_file_linkified_segment(text: &str, style: &InlineStyle, pieces: &mut Vec<InlinePiece>) {
+    let mut cursor = 0;
+    for candidate in BARE_FILE_URL.find_iter(text) {
+        let end = trimmed_bare_url_end(text, candidate.start(), candidate.end());
+        if end <= candidate.start() {
+            continue;
+        }
+        if cursor < candidate.start() {
+            push_file_path_segment(&text[cursor..candidate.start()], style, pieces);
+        }
+        let url = &text[candidate.start()..end];
+        let mut link_style = style.clone();
+        link_style.link = Some(url.to_owned());
         pieces.push(InlinePiece::Run(InlineRun {
-            text: run.text[cursor..].to_owned(),
-            style: run.style,
+            text: url.to_owned(),
+            style: link_style,
+        }));
+        cursor = end;
+    }
+    if cursor < text.len() {
+        push_file_path_segment(&text[cursor..], style, pieces);
+    }
+}
+
+fn push_file_path_segment(text: &str, style: &InlineStyle, pieces: &mut Vec<InlinePiece>) {
+    let mut cursor = 0;
+    for candidate in BARE_FILE_PATH.find_iter(text) {
+        let matched = candidate.as_str();
+        if !is_bare_file_path_match(matched) {
+            continue;
+        }
+        let start = candidate.start();
+        let end = candidate.end();
+        if cursor < start {
+            pieces.push(InlinePiece::Run(InlineRun {
+                text: text[cursor..start].to_owned(),
+                style: style.clone(),
+            }));
+        }
+        let mut link_style = style.clone();
+        link_style.link = Some(matched.to_owned());
+        pieces.push(InlinePiece::Run(InlineRun {
+            text: matched.to_owned(),
+            style: link_style,
+        }));
+        cursor = end;
+    }
+    if cursor < text.len() {
+        pieces.push(InlinePiece::Run(InlineRun {
+            text: text[cursor..].to_owned(),
+            style: style.clone(),
         }));
     }
+}
+
+/// Guard against prose like `v1.2`: a bare match only counts when it looks
+/// like a path — a `/` somewhere, or an explicit `~/`, `/`, `./`, `../`
+/// prefix that the regex already captured.
+fn is_bare_file_path_match(matched: &str) -> bool {
+    matched.starts_with("~/")
+        || matched.starts_with('/')
+        || matched.starts_with("./")
+        || matched.starts_with("../")
+        || matched.contains('/')
 }
 
 /// Coalesce neighbouring runs that share a style, so shaping sees the fewest
