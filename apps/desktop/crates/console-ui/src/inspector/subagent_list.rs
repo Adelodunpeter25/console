@@ -286,7 +286,8 @@ impl RenderOnce for SubagentListView {
                                                         let act_running = act.status == "running";
                                                         let act_completed = act.status == "completed";
 
-                                                        let args_summary = act.args.as_ref().and_then(|v| {
+                                                        let args_summary = act.summary.clone().or_else(|| {
+                                                            let v = act.args.as_ref()?;
                                                             let raw_str = if let Some(obj) = v.as_object() {
                                                                 if let Some(cmd) = obj.get("command").or_else(|| obj.get("CommandLine")).and_then(|c| c.as_str()) {
                                                                     Some(cmd.to_string())

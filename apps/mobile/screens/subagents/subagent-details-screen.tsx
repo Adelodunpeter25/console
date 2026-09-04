@@ -18,6 +18,14 @@ export function SubagentDetailsScreen() {
   const selectedSessionId = useValue(app$.selectedSessionId);
   const selectedSubagentId = useValue(app$.selectedSubagentId);
   const { subagents } = useSessionSubagents(selectedSessionId);
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    // Defer heavy markdown rendering until screen mount & transition completes
+    const timer = requestAnimationFrame(() => setIsReady(true));
+    return () => cancelAnimationFrame(timer);
+  }, []);
+
   const [copied, setCopied] = useState(false);
 
   const subagent = useMemo(
@@ -137,10 +145,9 @@ export function SubagentDetailsScreen() {
                     const actRunning = act.status === "running";
                     const actDone = act.status === "completed";
 
-                    const argsSummary = (() => {
+                    const argsSummary = act.summary ?? (() => {
                       const a = act.args as Record<string, unknown> | undefined;
                       if (!a) return null;
-                      // Ordered by priority — first match wins
                       const val =
                         a.command ??
                         a.CommandLine ??
@@ -161,13 +168,11 @@ export function SubagentDetailsScreen() {
                         a.prompt ??
                         a.filePath ??
                         a.targetFile ??
-                        a.absolutePath ??
-                        a.content;
+                        a.absolutePath;
                       if (val != null) {
                         const s = String(val);
                         return s.length > 60 ? s.slice(0, 57) + "…" : s;
                       }
-                      // Fallback: show first key=value pair
                       const firstKey = Object.keys(a)[0];
                       if (firstKey) {
                         const fv = String(a[firstKey]).slice(0, 40);
@@ -242,7 +247,11 @@ export function SubagentDetailsScreen() {
 
               <View className="p-3.5 rounded-xl bg-[#141417] border border-[#27272a] min-h-[70px]">
                 {subagent.summary ? (
-                  <MarkdownRenderer content={subagent.summary} />
+                  isReady ? (
+                    <MarkdownRenderer content={subagent.summary} />
+                  ) : (
+                    <Text className="text-xs text-[#71717a]">Loading summary...</Text>
+                  )
                 ) : isRunning ? (
                   <Text className="text-xs text-[#71717a] italic">
                     (Awaiting subagent completion...)

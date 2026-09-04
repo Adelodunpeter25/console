@@ -53,6 +53,7 @@ export interface SubagentActivityItem {
   turnIndex: number;
   toolCallId: string;
   toolName: string;
+  summary?: string;
   args?: Record<string, unknown>;
   status: "running" | "completed" | "error";
   error?: string;

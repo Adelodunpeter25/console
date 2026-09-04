@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use console_ui::InspectorTab;
@@ -278,6 +279,21 @@ impl ConsoleDesktopApp {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
+                                for sub in &subagents {
+                                    if let Some(ref sum) = sub.summary {
+                                        let view = this
+                                            .subagent_markdown_views
+                                            .borrow_mut()
+                                            .entry(sub.subagent_id.clone())
+                                            .or_insert_with(|| {
+                                                Rc::new(RefCell::new(
+                                                    console_ui::markdown::render::MarkdownView::new(),
+                                                ))
+                                            })
+                                            .clone();
+                                        view.borrow_mut().set_text(sum, false);
+                                    }
+                                }
                                 this.session_subagents
                                     .insert(session_id, Rc::new(subagents));
                                 cx.notify();

@@ -65,6 +65,57 @@ export function upsertSubagentStart(
   );
 }
 
+function computeActivitySummary(args: Record<string, unknown> | undefined): string | undefined {
+  if (!args || typeof args !== "object") return undefined;
+  const val =
+    args.command ??
+    args.CommandLine ??
+    args.path ??
+    args.AbsolutePath ??
+    args.SearchDirectory ??
+    args.TargetFile ??
+    args.pattern ??
+    args.Pattern ??
+    args.Query ??
+    args.query ??
+    args.url ??
+    args.Url ??
+    args.question ??
+    args.directory ??
+    args.SearchPath ??
+    args.Prompt ??
+    args.prompt ??
+    args.filePath ??
+    args.targetFile ??
+    args.absolutePath;
+
+  if (val != null) {
+    const s = String(val).trim().replace(/\s+/g, " ");
+    return s.length > 70 ? s.slice(0, 67) + "…" : s;
+  }
+
+  const firstKey = Object.keys(args)[0];
+  if (firstKey) {
+    const fv = String(args[firstKey]).trim().replace(/\s+/g, " ");
+    const preview = fv.length > 50 ? fv.slice(0, 47) + "…" : fv;
+    return `${firstKey}: ${preview}`;
+  }
+  return undefined;
+}
+
+function compactArgs(args: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!args || typeof args !== "object") return undefined;
+  const compacted: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(args)) {
+    if (typeof v === "string") {
+      compacted[k] = v.length > 200 ? v.slice(0, 197) + "…" : v;
+    } else {
+      compacted[k] = v;
+    }
+  }
+  return compacted;
+}
+
 export function appendSubagentActivity(
   state: StorageState,
   sessionId: string,
@@ -95,11 +146,15 @@ export function appendSubagentActivity(
   const existingIdx = activities.findIndex((a) => a.toolCallId === event.toolCallId);
   const existing = existingIdx >= 0 ? activities[existingIdx] : undefined;
 
+  const mergedArgs = event.args ?? existing?.args;
+  const summary = computeActivitySummary(mergedArgs) ?? existing?.summary;
+
   const activityItem: SubagentActivityItem = {
     turnIndex: event.turnIndex,
     toolCallId: event.toolCallId,
     toolName: event.toolName || existing?.toolName || "",
-    args: event.args ?? existing?.args,
+    summary,
+    args: compactArgs(mergedArgs),
     status: event.status,
     error: event.error ?? existing?.error,
   };

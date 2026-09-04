@@ -512,6 +512,7 @@ impl ConsoleDesktopApp {
                                     turn_index,
                                     tool_call_id,
                                     tool_name,
+                                    summary: None,
                                     args,
                                     status,
                                     error,

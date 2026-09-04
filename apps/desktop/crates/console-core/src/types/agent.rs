@@ -130,6 +130,8 @@ pub struct SubagentActivityItem {
     pub tool_call_id: String,
     pub tool_name: String,
     #[serde(default)]
+    pub summary: Option<String>,
+    #[serde(default)]
     pub args: Option<serde_json::Value>,
     pub status: String, // "running", "completed", "error"
     #[serde(default)]
