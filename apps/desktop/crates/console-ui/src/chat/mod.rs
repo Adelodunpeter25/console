@@ -1,5 +1,6 @@
 pub mod diff_view;
 pub mod interaction_card;
+pub mod markdown_helpers;
 pub mod message_bubble;
 pub mod thinking_block;
 pub mod toolcalls;

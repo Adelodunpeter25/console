@@ -17,11 +17,10 @@ use gpui::{
     div, prelude::*, px, transparent_black,
 };
 
-use crate::chat::message_bubble::render_selectable_markdown;
+use crate::chat::markdown_helpers::{assistant_ctx, render_selectable_markdown};
 use crate::chat::{DiffView, ThinkingBlock, WorkingIndicator};
 use crate::markdown::render::{
-    Ctx as MarkdownCtx, LinkHandler, MarkdownView, Metrics, Palette, TranscriptSelection,
-    plain_text,
+    LinkHandler, MarkdownView, Palette, TranscriptSelection, plain_text,
 };
 use crate::markdown::{highlight, render as markdown_render};
 use crate::primitives::{IconName, activity_icon, app_icon, file_type_icon, icon};
@@ -625,15 +624,12 @@ impl ToolCalls {
     fn text_row(&self, id: &str, text: &str, theme: Theme, is_streaming: bool) -> AnyElement {
         let view = self.markdown_view_for(id);
         let palette = Palette::from_theme(&theme);
-        let mut ctx = MarkdownCtx::new(
+        let ctx = assistant_ctx(
             id.to_owned(),
             &palette,
-            Metrics::BODY,
             self.selection.clone(),
+            self.link_handler.clone(),
         );
-        if let Some(handler) = self.link_handler.clone() {
-            ctx = ctx.with_link_handler(handler);
-        }
         div()
             .px(px(10.0))
             .py(px(6.0))
@@ -828,11 +824,11 @@ impl ToolCalls {
         };
 
         let palette = Palette::from_theme(&theme);
-        let ctx = MarkdownCtx::new(
+        let ctx = crate::chat::markdown_helpers::compact_ctx(
             format!("tool-{call_id}-result"),
             &palette,
-            Metrics::COMPACT,
             self.selection.clone(),
+            None,
         );
         div()
             .flex()
@@ -882,7 +878,12 @@ impl ToolCalls {
     ) -> impl IntoElement {
         let row = format!("tool-{call_id}-{label}");
         let palette = Palette::from_theme(&theme);
-        let ctx = MarkdownCtx::new(row, &palette, Metrics::COMPACT, self.selection.clone());
+        let ctx = crate::chat::markdown_helpers::compact_ctx(
+            row,
+            &palette,
+            self.selection.clone(),
+            None,
+        );
         div()
             .flex()
             .flex_col()

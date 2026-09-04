@@ -1,35 +1,20 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::markdown::render::{
-    self as markdown, Ctx as MarkdownCtx, LinkHandler, MarkdownView, Metrics, Palette,
-    TranscriptSelection,
-};
+use super::markdown_helpers::{assistant_ctx, render_selectable_markdown};
+use crate::markdown::render::{LinkHandler, MarkdownView, Palette, TranscriptSelection};
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 use gpui::{
-    AnyElement, App, ElementId, FontWeight, IntoElement, ParentElement, RenderOnce, Styled, Window,
-    div, prelude::*, px,
+    App, ElementId, FontWeight, IntoElement, ParentElement, RenderOnce, Styled, Window, div,
+    prelude::*, px,
 };
 
 fn thinking_word_count(text: &str) -> usize {
     text.split_whitespace().count()
 }
 
-fn render_markdown(
-    text: &str,
-    view: Option<&Rc<RefCell<MarkdownView>>>,
-    ctx: &MarkdownCtx<'_>,
-    mend: bool,
-) -> AnyElement {
-    let Some(view) = view else {
-        return div().child(text.to_owned()).into_any_element();
-    };
-    let mut view = view.borrow_mut();
-    view.set_text(text, mend);
-    markdown::markdown(&view, ctx)
-        .unwrap_or_else(|| div().child(text.to_owned()).into_any_element())
-}
+// `render_selectable_markdown` + `assistant_ctx` live in `markdown_helpers` (A+B).
 
 /// A collapsible assistant reasoning section.
 ///
@@ -95,11 +80,12 @@ impl RenderOnce for ThinkingBlock {
         // assistant's answer text.
         let mut palette = Palette::from_theme(&theme);
         palette.text = theme.text_secondary;
-        let mut markdown_ctx =
-            MarkdownCtx::new(self.id.clone(), &palette, Metrics::BODY, self.selection);
-        if let Some(handler) = self.link_handler {
-            markdown_ctx = markdown_ctx.with_link_handler(handler);
-        }
+        let markdown_ctx = assistant_ctx(
+            self.id.clone(),
+            &palette,
+            self.selection,
+            self.link_handler,
+        );
         let collapsed = self.collapsed;
         let on_toggle = self.on_toggle;
         let id = self.id;
@@ -176,7 +162,7 @@ impl RenderOnce for ThinkingBlock {
             .gap(px(4.0))
             .child(header)
             .when(!collapsed, |element| {
-                element.child(render_markdown(
+                element.child(render_selectable_markdown(
                     &text,
                     markdown_view.as_ref(),
                     &markdown_ctx,

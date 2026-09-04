@@ -4,10 +4,12 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::common::{attachment_image, copy_button};
+use super::markdown_helpers::assistant_ctx;
 use crate::markdown::render::{
     self as markdown, Ctx as MarkdownCtx, LinkHandler, MarkdownView, Metrics, Palette,
     TranscriptSelection,
 };
+pub(crate) use super::markdown_helpers::render_selectable_markdown;
 use crate::theme::Theme;
 use crate::utils::format_message_time;
 
@@ -15,8 +17,8 @@ use super::ThinkingBlock;
 use base64::Engine as _;
 use console_core::{AssistantContentPart, ImageAttachment};
 use gpui::{
-    AnyElement, App, ElementId, FontWeight, IntoElement, ParentElement, RenderOnce, Styled, Window,
-    div, img, prelude::*, px,
+    App, ElementId, FontWeight, IntoElement, ParentElement, RenderOnce, Styled, Window, div, img,
+    prelude::*, px,
 };
 
 /// Invoked with the decoded image when the user clicks an image in a message,
@@ -27,20 +29,8 @@ fn selection_row_for_part(row: &str, part_index: usize) -> String {
     format!("{row}-part-{part_index}")
 }
 
-pub(crate) fn render_selectable_markdown(
-    text: &str,
-    view: Option<&Rc<RefCell<MarkdownView>>>,
-    ctx: &MarkdownCtx<'_>,
-    mend: bool,
-) -> AnyElement {
-    let Some(view) = view else {
-        return div().child(text.to_owned()).into_any_element();
-    };
-    let mut view = view.borrow_mut();
-    view.set_text(text, mend);
-    markdown::markdown(&view, ctx)
-        .unwrap_or_else(|| div().child(text.to_owned()).into_any_element())
-}
+// `render_selectable_markdown` lives in `markdown_helpers` (A+B); kept
+// re-exported here so existing `crate::chat::message_bubble::…` imports keep working.
 
 // ─── User message ─────────────────────────────────────────────────────────────
 
@@ -350,15 +340,12 @@ impl RenderOnce for AssistantMessageBubble {
                                 .into_any_element()
                         }
                         AssistantContentPart::Text { text, .. } => {
-                            let mut markdown_ctx = MarkdownCtx::new(
+                            let markdown_ctx = assistant_ctx(
                                 selection_row_for_part(&self.selection_row, index),
                                 &palette,
-                                Metrics::BODY,
                                 selection.clone(),
+                                link_handler.clone(),
                             );
-                            if let Some(handler) = link_handler.clone() {
-                                markdown_ctx = markdown_ctx.with_link_handler(handler);
-                            }
                             render_selectable_markdown(
                                 text,
                                 markdown_views.get(index).and_then(Option::as_ref),

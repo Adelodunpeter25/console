@@ -10,10 +10,8 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
-use crate::chat::message_bubble::render_selectable_markdown;
-use crate::markdown::render::{
-    Ctx as MarkdownCtx, MarkdownView, Metrics, Palette, TranscriptSelection,
-};
+use crate::chat::markdown_helpers::{compact_ctx, render_selectable_markdown};
+use crate::markdown::render::{MarkdownView, Palette, TranscriptSelection};
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 
@@ -460,11 +458,11 @@ impl RenderOnce for SubagentListView {
                                                             .clone()
                                                     })
                                                 };
-                                                let sum_ctx = MarkdownCtx::new(
+                                                let sum_ctx = compact_ctx(
                                                     format!("subagent-summary-{}", subagent.subagent_id),
                                                     &palette,
-                                                    Metrics::COMPACT,
                                                     self.selection.clone(),
+                                                    None,
                                                 );
 
                                                 div()
