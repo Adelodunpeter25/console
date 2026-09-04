@@ -311,8 +311,7 @@ impl Render for ConsoleDesktopApp {
             Rc::new(move |_w, cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.set_sidebar_visible(!this.sidebar_visible);
-                        cx.notify();
+                        this.toggle_left_sidebar(cx);
                     });
                 }
             })

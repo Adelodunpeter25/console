@@ -46,12 +46,10 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    pub fn set_sidebar_visible(&mut self, visible: bool) {
-        if self.sidebar_visible == visible {
-            return;
-        }
-        self.sidebar_visible = visible;
+    pub fn toggle_left_sidebar(&mut self, cx: &mut Context<Self>) {
+        self.sidebar_visible = !self.sidebar_visible;
         self.persist_layout();
+        cx.notify();
     }
 
     pub fn begin_sidebar_resize(&mut self, start_x: f32) {

@@ -4,7 +4,7 @@
 //! GPUI does not provide the macOS application menu automatically, so the
 //! desktop app registers its top-level menus during startup.
 
-use crate::keybindings::{AddProject, OpenSettings, QuickOpenFile};
+use crate::keybindings::{AddProject, OpenSettings, QuickOpenFile, ToggleLeftSidebar, ToggleRightSidebar};
 use gpui::{App, Menu, MenuItem, actions};
 
 actions!(console_app, [Quit]);
@@ -25,7 +25,12 @@ pub fn init(cx: &mut App) {
             MenuItem::action("Quick Open File…", QuickOpenFile),
         ]),
         Menu::new("Edit"),
-        Menu::new("View"),
+        // View menu owns ⌘B / ⌘⇧B key equivalents so AppKit routes them
+        // to our actions (same pattern as File for ⌘O / ⌘P).
+        Menu::new("View").items([
+            MenuItem::action("Toggle Left Sidebar", ToggleLeftSidebar),
+            MenuItem::action("Toggle Right Sidebar", ToggleRightSidebar),
+        ]),
         Menu::new("Window"),
         Menu::new("Help"),
     ]);

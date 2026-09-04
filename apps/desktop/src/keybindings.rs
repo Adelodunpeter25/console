@@ -31,6 +31,8 @@ actions!(
         FocusComposer,
         /// Open settings window.
         OpenSettings,
+        /// Toggle the left sidebar.
+        ToggleLeftSidebar,
         /// Toggle the right workspace inspector panel.
         ToggleRightSidebar,
     ]
@@ -51,6 +53,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-k", ToggleCommandPalette, None),
         KeyBinding::new("secondary-l", FocusComposer, None),
         KeyBinding::new("secondary-,", OpenSettings, None),
+        KeyBinding::new("secondary-b", ToggleLeftSidebar, None),
         KeyBinding::new("secondary-shift-b", ToggleRightSidebar, None),
     ]);
 }
@@ -144,6 +147,12 @@ pub fn init_handlers(app: Entity<ConsoleDesktopApp>, window: AnyWindowHandle, cx
                     })
                     .ok();
             });
+        }
+    });
+    cx.on_action({
+        let app = app.clone();
+        move |_: &ToggleLeftSidebar, cx| {
+            app.update(cx, |this, cx| this.toggle_left_sidebar(cx));
         }
     });
     cx.on_action({
