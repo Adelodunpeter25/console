@@ -462,7 +462,7 @@ impl RenderOnce for SubagentListView {
                                                 let sum_ctx = MarkdownCtx::new(
                                                     format!("subagent-summary-{}", subagent.subagent_id),
                                                     &palette,
-                                                    Metrics::BODY,
+                                                    Metrics::COMPACT,
                                                     self.selection.clone(),
                                                 );
 
