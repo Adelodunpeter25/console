@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import type { ModelFavorite } from "@console/types";
 import { getProvider } from "@/agent/src/commands/provider-registry.js";
-import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
+import { getSharedSessionStorage } from "@/agent/src/session/storage.js";
 
 export const modelFavoriteRoutes = new Hono();
-const storage = new SqliteSessionStorage();
+const storage = getSharedSessionStorage();
 
 function parseFavorite(value: unknown): ModelFavorite | null {
   if (!value || typeof value !== "object") return null;

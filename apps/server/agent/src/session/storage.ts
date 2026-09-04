@@ -260,3 +260,23 @@ export class SqliteSessionStorage {
     this.state.sessionDbs.clear();
   }
 }
+
+let sharedInstance: SqliteSessionStorage | null = null;
+
+/** Process-wide singleton for production routes/services (prevents N sqlite handles + N LRU maps). Tests should `new SqliteSessionStorage({ dbPath: ":memory:" })` for isolation. */
+export function getSharedSessionStorage(): SqliteSessionStorage {
+  if (!sharedInstance) sharedInstance = new SqliteSessionStorage();
+  return sharedInstance;
+}
+
+/** Test helper — close and discard the shared instance. */
+export function __resetSharedSessionStorageForTests(): void {
+  if (sharedInstance) {
+    try {
+      sharedInstance.close();
+    } catch {
+      // best-effort
+    }
+    sharedInstance = null;
+  }
+}

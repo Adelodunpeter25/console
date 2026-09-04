@@ -3,7 +3,7 @@
  */
 import crypto from "node:crypto";
 import fs from "node:fs";
-import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
+import { getSharedSessionStorage, SqliteSessionStorage } from "@/agent/src/session/storage.js";
 import { DEFAULT_FALLBACK_MODEL } from "@/agent/src/commands/provider-registry.js";
 import { getSessionScratchDir } from "@/agent/src/session/apppaths.js";
 import type { SessionHeader } from "@console/types";
@@ -14,7 +14,7 @@ export class SessionService {
   private storage: SqliteSessionStorage;
 
   constructor(storage?: SqliteSessionStorage) {
-    this.storage = storage ?? new SqliteSessionStorage();
+    this.storage = storage ?? getSharedSessionStorage();
   }
 
   listSessions(cwd?: string, projectId?: string, onlyDeleted?: boolean): SessionHeader[] {

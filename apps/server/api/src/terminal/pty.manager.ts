@@ -10,7 +10,7 @@
  * lingering shells deterministically instead of leaking processes.
  */
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type {
@@ -70,8 +70,56 @@ interface PtySession {
     artifacts in scrollback. */
 const SHELL_START_FALLBACK_MS = 500;
 
+// --- Hardening: PTY spawn allowlist + rate limits ---
+
+const ALLOWED_SHELLS = new Set<string>([
+  "/bin/bash",
+  "/bin/zsh",
+  "/bin/sh",
+  "/usr/bin/bash",
+  "/usr/bin/zsh",
+  "/usr/local/bin/bash",
+  "/usr/local/bin/zsh",
+  "/bin/fish",
+  "/usr/bin/fish",
+  "powershell.exe",
+  "pwsh.exe",
+  "cmd.exe",
+]);
+
+const MAX_CONCURRENT_TERMINALS = 20;
+const MAX_SPAWNS_PER_MINUTE = 20;
+
+const SENSITIVE_ENV_PATTERN = /(TOKEN|SECRET|KEY|PASSWORD|CREDENTIAL|AUTH)/i;
+const BLOCKED_ENV_KEYS = new Set(["LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH"]);
+
+function isAllowedShell(shell: string): boolean {
+  if (ALLOWED_SHELLS.has(shell)) return true;
+  const hostShell = process.env.SHELL;
+  if (hostShell && shell === hostShell) return true;
+  const base = path.basename(shell);
+  for (const allowed of ALLOWED_SHELLS) {
+    if (path.basename(allowed) === base) return true;
+  }
+  return false;
+}
+
+function buildSafeEnv(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (!v) continue;
+    if (BLOCKED_ENV_KEYS.has(k)) continue;
+    if (SENSITIVE_ENV_PATTERN.test(k)) continue;
+    out[k] = v;
+  }
+  out.TERM = "xterm-256color";
+  out.CONSOLE_TERMINAL = "true";
+  return out;
+}
+
 export class TerminalPtyManager {
   private sessions = new Map<TerminalId, PtySession>();
+  private spawnTimestamps: number[] = [];
 
   /**
    * Spawn a new shell PTY in the given working directory.
@@ -85,12 +133,36 @@ export class TerminalPtyManager {
     id: TerminalId;
     ready: Promise<TerminalSpawnedEvent>;
   } {
+    // Rate-limit + concurrency guard before allocating any FD.
+    const now = Date.now();
+    this.spawnTimestamps = this.spawnTimestamps.filter((t) => now - t < 60_000);
+    if (this.spawnTimestamps.length >= MAX_SPAWNS_PER_MINUTE) {
+      throw new Error("Too many terminal spawns — rate limited. Try again later.");
+    }
+    if (this.sessions.size >= MAX_CONCURRENT_TERMINALS) {
+      throw new Error("Too many concurrent terminals.");
+    }
+
     const cwd = path.resolve(params.cwd);
     if (!existsSync(cwd)) {
       throw new Error(`Cannot spawn terminal: working directory does not exist: ${cwd}`);
     }
+    try {
+      const st = statSync(cwd);
+      if (!st.isDirectory()) throw new Error(`Not a directory: ${cwd}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.startsWith("Not a directory")) throw e;
+      throw new Error(`Cannot spawn terminal: working directory is not a directory: ${cwd}`);
+    }
 
-    const shell = params.shell || process.env.SHELL || this.defaultShell();
+    const rawShell = params.shell || process.env.SHELL || this.defaultShell();
+    const shellForCheck = rawShell.includes("/") ? path.resolve(rawShell) : rawShell;
+    const candidate = rawShell.includes("/") ? shellForCheck : rawShell;
+    if (!isAllowedShell(candidate) && !isAllowedShell(path.basename(candidate))) {
+      throw new Error(`Shell not allowed: ${rawShell}`);
+    }
+    const shell = candidate;
     const cols = params.cols ?? 80;
     const rows = params.rows ?? 24;
 
@@ -116,6 +188,7 @@ export class TerminalPtyManager {
       pendingInput: [],
     };
     this.sessions.set(id, session);
+    this.spawnTimestamps.push(Date.now());
 
     session.terminal = new Bun.Terminal({
       name: "xterm-256color",
@@ -151,14 +224,11 @@ export class TerminalPtyManager {
       session.shellStartTimer = undefined;
     }
 
+    // Strip sensitive env vars (tokens/keys) and blocked preload keys before spawning.
     const proc = Bun.spawn([session.shell], {
       terminal: session.terminal,
       cwd: session.cwd,
-      env: {
-        ...process.env,
-        TERM: "xterm-256color",
-        CONSOLE_TERMINAL: "true",
-      } as Record<string, string>,
+      env: buildSafeEnv(),
     });
     session.proc = {
       pid: proc.pid,
@@ -239,6 +309,7 @@ export class TerminalPtyManager {
 
   /** Write raw bytes into the PTY (keystrokes, pasted text). */
   write(id: TerminalId, data: string): boolean {
+    if (data.length > 256 * 1024) return false;
     const session = this.sessions.get(id);
     if (!session || session.killed) return false;
     // Shell not started yet (waiting for first resize): hold keystrokes.
@@ -256,6 +327,7 @@ export class TerminalPtyManager {
 
   /** Resize the PTY's viewport. */
   resize(id: TerminalId, cols: number, rows: number): boolean {
+    if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols < 1 || cols > 500 || rows < 1 || rows > 200) return false;
     const session = this.sessions.get(id);
     if (!session || session.killed) return false;
     try {

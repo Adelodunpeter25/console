@@ -22,6 +22,8 @@ export class DecisionManager {
     }
   >();
 
+  private decisionTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
   createAskHandler(sessionId: string, hub: RunEventHub) {
     return (request: AskQuestionRequest): Promise<string | string[]> => {
       return new Promise<string | string[]>((resolve, reject) => {
@@ -45,6 +47,7 @@ export class DecisionManager {
     const pending = this.pendingQuestions.get(requestId);
     if (!pending || pending.sessionId !== sessionId) return false;
     this.pendingQuestions.delete(requestId);
+    this.clearDecisionTimer(`question:${requestId}`);
     pending.resolve(answer);
     return true;
   }
@@ -53,6 +56,7 @@ export class DecisionManager {
     const pending = this.pendingApprovals.get(requestId);
     if (!pending || pending.sessionId !== sessionId) return false;
     this.pendingApprovals.delete(requestId);
+    this.clearDecisionTimer(`permission:${requestId}`);
     pending.resolve(allow);
     return true;
   }
@@ -61,12 +65,22 @@ export class DecisionManager {
     for (const [requestId, pending] of this.pendingQuestions) {
       if (pending.sessionId !== sessionId) continue;
       this.pendingQuestions.delete(requestId);
+      this.clearDecisionTimer(`question:${requestId}`);
       pending.reject(new Error(reason));
     }
     for (const [requestId, pending] of this.pendingApprovals) {
       if (pending.sessionId !== sessionId) continue;
       this.pendingApprovals.delete(requestId);
+      this.clearDecisionTimer(`permission:${requestId}`);
       pending.reject(new Error(reason));
+    }
+  }
+
+  private clearDecisionTimer(key: string): void {
+    const timer = this.decisionTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      this.decisionTimers.delete(key);
     }
   }
 
@@ -76,6 +90,7 @@ export class DecisionManager {
     kind: "question" | "permission",
   ): void {
     const timer = setTimeout(() => {
+      this.decisionTimers.delete(`${kind}:${requestId}`);
       const pending =
         kind === "question"
           ? this.pendingQuestions.get(requestId)
@@ -93,5 +108,6 @@ export class DecisionManager {
       );
     }, DecisionManager.DECISION_TIMEOUT_MS);
     if (typeof timer === "object") timer.unref?.();
+    this.decisionTimers.set(`${kind}:${requestId}`, timer);
   }
 }

@@ -6,12 +6,12 @@
  */
 import { Hono, type Context } from "hono";
 import { discoverSkills } from "@/agent/src/systemprompt/discover-skills.js";
-import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
+import { getSharedSessionStorage } from "@/agent/src/session/storage.js";
 import { searchFiles } from "@/api/src/services/assist.service.js";
 import type { SlashCommandInfo } from "@console/types";
 
 export const assistRoutes = new Hono();
-const sessionStorage = new SqliteSessionStorage();
+const sessionStorage = getSharedSessionStorage();
 
 async function handleCommands(c: Context) {
   const sessionId = c.req.param("sessionId") ?? c.req.query("sessionId") ?? "";

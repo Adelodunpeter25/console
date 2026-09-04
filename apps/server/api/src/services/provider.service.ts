@@ -6,11 +6,11 @@ import {
   listProviders,
   type ProviderCatalogEntry,
 } from "@/agent/src/commands/provider-registry.js";
-import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
+import { getSharedSessionStorage, SqliteSessionStorage } from "@/agent/src/session/storage.js";
 import type { Model, ProviderId } from "@console/types";
 
 export class ProviderService {
-  constructor(private storage: SqliteSessionStorage = new SqliteSessionStorage()) {}
+  constructor(private storage: SqliteSessionStorage = getSharedSessionStorage()) {}
 
   getProviders(): ProviderCatalogEntry[] {
     const providers = listProviders();
