@@ -242,10 +242,6 @@ export class RunService {
           pendingToolCalls.clear();
         }
 
-        if (event.type === "compaction" && event.compactedMessages) {
-          this.sessionStorage.replaceMessages(sessionId, event.compactedMessages);
-        }
-
         if (event.type === "subagentStart") {
           this.sessionStorage.upsertSubagentStart(sessionId, event);
         } else if (event.type === "subagentActivity") {
@@ -264,7 +260,10 @@ export class RunService {
           notificationService.push(doneNotification(sessionId));
         }
 
-        hub.broadcast(event);
+        // Compaction is internal LLM context memory management; do not broadcast to user UI
+        if (event.type !== "compaction") {
+          hub.broadcast(event);
+        }
 
         if (event.type === "error") {
           runError = event.error?.message ?? "Unknown agent error";
