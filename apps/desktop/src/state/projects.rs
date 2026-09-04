@@ -53,6 +53,11 @@ impl ConsoleDesktopApp {
         }
 
         let path = project.path.clone();
+        self.transcript_for_pane(&pane_id).update(cx, |transcript, _| {
+            transcript.set_session_cwd(Some(path.clone()));
+        });
+        self.maybe_refresh_inspector(cx);
+
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
         let session_id = self.active_session_for_pane(&pane_id);
@@ -151,6 +156,11 @@ impl ConsoleDesktopApp {
             session.project_id = None;
             session.cwd = fallback_cwd.clone();
         }
+
+        self.transcript_for_pane(&pane_id).update(cx, |transcript, _| {
+            transcript.set_session_cwd(Some(fallback_cwd.clone()));
+        });
+        self.maybe_refresh_inspector(cx);
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
@@ -254,6 +264,7 @@ impl ConsoleDesktopApp {
                                     state.branch_loaded = true;
                                     state.branch_is_git_repository = branches.is_git_repository;
                                 }
+                                this.maybe_refresh_inspector(cx);
                             }
                             Err(error) => {
                                 this.set_error(format!("Unable to switch branch: {error}"), cx)

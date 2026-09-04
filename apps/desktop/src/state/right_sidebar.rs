@@ -52,13 +52,35 @@ impl ConsoleDesktopApp {
         }
     }
 
+    pub fn active_inspector_target(&self) -> (Option<String>, Option<String>) {
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".to_string());
+        let session_id = self
+            .active_session_for_pane(&pane_id)
+            .or_else(|| self.selected_session_id.clone());
+        let session = session_id
+            .as_deref()
+            .and_then(|sid| self.sessions.iter().find(|s| s.id == sid));
+        let cwd = session
+            .and_then(|s| (!s.cwd.is_empty()).then(|| s.cwd.clone()))
+            .or_else(|| self.selected_project_for_pane(&pane_id).map(|p| p.path.clone()));
+        (session_id, cwd)
+    }
+
     pub fn set_inspector_tab(&mut self, tab: InspectorTab, cx: &mut Context<Self>) {
         if self.inspector_active_tab == tab {
             return;
         }
         self.inspector_active_tab = tab;
-        if tab == InspectorTab::Subagents {
-            self.fetch_inspector_subagents(cx);
+        match tab {
+            InspectorTab::AllFiles => self.fetch_inspector_fs_tree(cx),
+            InspectorTab::Changes => {
+                self.fetch_inspector_git_changes(cx);
+                self.fetch_inspector_session_changes(cx);
+            }
+            InspectorTab::Subagents => self.fetch_inspector_subagents(cx),
         }
         cx.notify();
     }
@@ -120,13 +142,9 @@ impl ConsoleDesktopApp {
     }
 
     pub fn refresh_inspector(&mut self, cx: &mut Context<Self>) {
-        let has_session = self
-            .selected_session_id
-            .as_deref()
-            .and_then(|id| self.sessions.iter().find(|s| s.id == id))
-            .is_some();
+        let (session_id, cwd) = self.active_inspector_target();
 
-        if !has_session {
+        if cwd.is_none() && session_id.is_none() {
             self.inspector_tree = Rc::new(Vec::new());
             self.inspector_working_changes = Rc::new(Vec::new());
             self.inspector_session_changes = Rc::new(Vec::new());
@@ -143,14 +161,10 @@ impl ConsoleDesktopApp {
     }
 
     pub fn ensure_inspector_fs_watcher(&mut self, cx: &mut Context<Self>) {
-        let Some(session) = self
-            .selected_session_id
-            .as_deref()
-            .and_then(|id| self.sessions.iter().find(|s| s.id == id))
-        else {
+        let (_, cwd) = self.active_inspector_target();
+        let Some(cwd) = cwd else {
             return;
         };
-        let cwd = session.cwd.clone();
 
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
@@ -174,16 +188,12 @@ impl ConsoleDesktopApp {
     }
 
     pub fn fetch_inspector_fs_tree(&mut self, cx: &mut Context<Self>) {
-        let Some(session) = self
-            .selected_session_id
-            .as_deref()
-            .and_then(|id| self.sessions.iter().find(|s| s.id == id))
-        else {
+        let (_, cwd) = self.active_inspector_target();
+        let Some(cwd) = cwd else {
             self.inspector_tree = Rc::new(Vec::new());
             cx.notify();
             return;
         };
-        let cwd = session.cwd.clone();
 
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
@@ -208,16 +218,12 @@ impl ConsoleDesktopApp {
     }
 
     pub fn fetch_inspector_git_changes(&mut self, cx: &mut Context<Self>) {
-        let Some(session) = self
-            .selected_session_id
-            .as_deref()
-            .and_then(|id| self.sessions.iter().find(|s| s.id == id))
-        else {
+        let (_, cwd) = self.active_inspector_target();
+        let Some(cwd) = cwd else {
             self.inspector_working_changes = Rc::new(Vec::new());
             cx.notify();
             return;
         };
-        let cwd = session.cwd.clone();
 
         let client = self.client.clone();
         cx.spawn(
@@ -241,8 +247,10 @@ impl ConsoleDesktopApp {
     }
 
     pub fn fetch_inspector_session_changes(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.selected_session_id.clone() else {
+        let (session_id, _) = self.active_inspector_target();
+        let Some(session_id) = session_id else {
             self.inspector_session_changes = Rc::new(Vec::new());
+            cx.notify();
             return;
         };
 
@@ -268,7 +276,8 @@ impl ConsoleDesktopApp {
     }
 
     pub fn fetch_inspector_subagents(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.selected_session_id.clone() else {
+        let (session_id, _) = self.active_inspector_target();
+        let Some(session_id) = session_id else {
             return;
         };
 
