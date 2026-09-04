@@ -94,29 +94,12 @@ pub fn resolve_file_link(link: &str, cwd: Option<&str>, project_path: Option<&st
     // Strip ./ prefix for clean joins.
     let relative = path.strip_prefix("./").unwrap_or(&path);
     if let Some(cwd) = cwd.filter(|c| !c.is_empty()) {
-        return join_path(cwd, relative);
+        return crate::utils::join_path_lexical(cwd, relative);
     }
     if let Some(root) = project_path.filter(|p| !p.is_empty()) {
-        return join_path(root, relative);
+        return crate::utils::join_path_lexical(root, relative);
     }
     relative.to_owned()
-}
-
-fn join_path(base: &str, relative: &str) -> String {
-    let base = base.trim_end_matches('/');
-    let relative = relative.trim_start_matches('/');
-    // Resolve ../ segments lexically without touching the filesystem.
-    let mut parts: Vec<&str> = base.split('/').collect();
-    for seg in relative.split('/') {
-        match seg {
-            "" | "." => {}
-            ".." => {
-                parts.pop();
-            }
-            s => parts.push(s),
-        }
-    }
-    parts.join("/")
 }
 
 fn percent_decode(s: &str) -> String {
