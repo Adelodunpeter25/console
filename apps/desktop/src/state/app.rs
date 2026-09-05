@@ -248,7 +248,11 @@ pub struct ConsoleDesktopApp {
 }
 
 impl ConsoleDesktopApp {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        window: &mut Window,
+        target: crate::window::WindowLaunchTarget,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let client = ConsoleClient::new(None);
         let ws_doc = persistence::load_workspaces();
         let mut project_workspace_roots = std::collections::HashMap::new();
@@ -284,18 +288,28 @@ impl ConsoleDesktopApp {
                 RIGHT_SIDEBAR_DEFAULT_WIDTH
             };
 
-        let initial_selected_project_id = ws_state.active_workspace_id.as_ref().and_then(|wid| {
-            if wid == "__default__" {
-                None
-            } else {
-                Some(wid.clone())
+        let (initial_selected_project_id, initial_root) = match &target {
+            crate::window::WindowLaunchTarget::RestorePersisted => {
+                let initial_selected_project_id =
+                    ws_state.active_workspace_id.as_ref().and_then(|wid| {
+                        if wid == "__default__" {
+                            None
+                        } else {
+                            Some(wid.clone())
+                        }
+                    });
+                let initial_root = initial_selected_project_id
+                    .as_ref()
+                    .and_then(|pid| project_workspace_roots.get(&Some(pid.clone())).cloned())
+                    .or_else(|| project_workspace_roots.get(&None).cloned())
+                    .unwrap_or_else(|| WorkspaceNode::leaf("pane-main"));
+                (initial_selected_project_id, initial_root)
             }
-        });
-        let initial_root = initial_selected_project_id
-            .as_ref()
-            .and_then(|pid| project_workspace_roots.get(&Some(pid.clone())).cloned())
-            .or_else(|| project_workspace_roots.get(&None).cloned())
-            .unwrap_or_else(|| WorkspaceNode::leaf("pane-main"));
+            crate::window::WindowLaunchTarget::Fresh
+            | crate::window::WindowLaunchTarget::Session(_) => {
+                (None, WorkspaceNode::leaf("pane-main"))
+            }
+        };
         let initial_active_pane_id = initial_root
             .first_leaf()
             .map(|l| l.id.clone())
@@ -677,6 +691,7 @@ impl ConsoleDesktopApp {
         // the workspace pane starts tab-less and shows its empty state until
         // the user picks a session from the sidebar or starts a new chat.
         let client_clone = app.client.clone();
+        let target_for_bootstrap = target.clone();
         cx.spawn(async move |entity, cx| {
             // 1. Fetch the session list for the sidebar.
             match client_clone.sessions.list(None, None).await {
@@ -685,23 +700,33 @@ impl ConsoleDesktopApp {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
                                 this.sessions = Rc::new(sessions);
-                                let mut to_load = Vec::new();
-                                for leaf in this.workspace_root.leaves() {
-                                    if let Some(session_id) = this.active_session_for_pane(&leaf.id) {
-                                        to_load.push((leaf.id.clone(), session_id));
+                                match target_for_bootstrap {
+                                    crate::window::WindowLaunchTarget::RestorePersisted => {
+                                        let mut to_load = Vec::new();
+                                        for leaf in this.workspace_root.leaves() {
+                                            if let Some(session_id) =
+                                                this.active_session_for_pane(&leaf.id)
+                                            {
+                                                to_load.push((leaf.id.clone(), session_id));
+                                            }
+                                        }
+                                        for (pane_id, session_id) in to_load {
+                                            if this.active_pane_id.as_deref() == Some(&pane_id)
+                                                || this.selected_session_id.is_none()
+                                            {
+                                                this.selected_session_id = Some(session_id.clone());
+                                            }
+                                            this.load_session_messages_for_pane(
+                                                pane_id, session_id, cx,
+                                            );
+                                        }
                                     }
-                                }
-                                for (pane_id, session_id) in to_load {
-                                    if this.active_pane_id.as_deref() == Some(&pane_id)
-                                        || this.selected_session_id.is_none()
-                                    {
-                                        this.selected_session_id = Some(session_id.clone());
+                                    crate::window::WindowLaunchTarget::Fresh => {
+                                        // Blank independent canvas, no session opened by default.
                                     }
-                                    this.load_session_messages_for_pane(
-                                        pane_id,
-                                        session_id,
-                                        cx,
-                                    );
+                                    crate::window::WindowLaunchTarget::Session(session_id) => {
+                                        this.select_and_open_session(session_id, cx);
+                                    }
                                 }
                                 cx.notify();
                             });

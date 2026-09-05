@@ -51,6 +51,7 @@ pub struct SidebarSessionItem {
     is_renaming: bool,
     rename_input: Option<Entity<ComposerInput>>,
     on_click: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_open_in_new_window: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_commit_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_cancel_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -67,6 +68,7 @@ impl SidebarSessionItem {
         is_renaming: bool,
         rename_input: Option<Entity<ComposerInput>>,
         on_click: impl Fn(&mut Window, &mut App) + 'static,
+        on_open_in_new_window: impl Fn(&mut Window, &mut App) + 'static,
         on_rename: impl Fn(&mut Window, &mut App) + 'static,
         on_commit_rename: impl Fn(&mut Window, &mut App) + 'static,
         on_cancel_rename: impl Fn(&mut Window, &mut App) + 'static,
@@ -81,6 +83,7 @@ impl SidebarSessionItem {
             is_renaming,
             rename_input,
             on_click: Rc::new(on_click),
+            on_open_in_new_window: Rc::new(on_open_in_new_window),
             on_rename: Rc::new(on_rename),
             on_commit_rename: Rc::new(on_commit_rename),
             on_cancel_rename: Rc::new(on_cancel_rename),
@@ -95,6 +98,7 @@ impl RenderOnce for SidebarSessionItem {
         let session = &self.session;
         let is_active = self.is_active;
         let on_click = self.on_click;
+        let on_open_in_new_window = self.on_open_in_new_window;
         let on_rename = self.on_rename;
         let on_commit_rename = self.on_commit_rename;
         let on_cancel_rename = self.on_cancel_rename;
@@ -324,6 +328,7 @@ impl RenderOnce for SidebarSessionItem {
         } else {
             session_context_menu(
                 row,
+                move |window, cx| (on_open_in_new_window)(window, cx),
                 move |window, cx| (on_rename)(window, cx),
                 move |window, cx| (on_delete)(window, cx),
             )
@@ -340,6 +345,7 @@ pub fn render_sidebar_session_item(
     is_waiting: bool,
     has_draft: bool,
     on_select: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_open_in_new_window: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_rename: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_commit_rename: &Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_cancel_rename: &Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -367,6 +373,11 @@ pub fn render_sidebar_session_item(
             let session_id = session_id.clone();
             let on_select = on_select.clone();
             move |window, cx| (on_select)(session_id.clone(), window, cx)
+        },
+        {
+            let session_id = session_id.clone();
+            let on_open = on_open_in_new_window.clone();
+            move |window, cx| (on_open)(session_id.clone(), window, cx)
         },
         {
             let session_id = session_id.clone();

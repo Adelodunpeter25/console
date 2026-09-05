@@ -65,6 +65,7 @@ pub struct SidebarView {
     /// renders caused by scrolling, status ticks, and transcript updates.
     pub sidebar_list_state: ListState,
     on_select_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_open_in_new_window: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_chat: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_search: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_add_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -102,6 +103,7 @@ impl SidebarView {
         environments: Vec<EnvironmentRow>,
         server_menu: ContextMenuHandle,
         on_select_session: impl Fn(String, &mut Window, &mut App) + 'static,
+        on_open_in_new_window: impl Fn(String, &mut Window, &mut App) + 'static,
         on_new_chat: impl Fn(&mut Window, &mut App) + 'static,
         on_search: impl Fn(&mut Window, &mut App) + 'static,
         on_add_project: impl Fn(&mut Window, &mut App) + 'static,
@@ -132,6 +134,7 @@ impl SidebarView {
             drafts_collapsed,
             sidebar_list_state,
             on_select_session: Rc::new(on_select_session),
+            on_open_in_new_window: Rc::new(on_open_in_new_window),
             on_new_chat: Rc::new(on_new_chat),
             on_search: Rc::new(on_search),
             on_add_project: Rc::new(on_add_project),
@@ -177,6 +180,7 @@ impl RenderOnce for SidebarView {
         let on_add = self.on_add_project;
         let on_toggle_group = self.on_toggle_group;
         let on_sel = self.on_select_session;
+        let on_open_in_new_window = self.on_open_in_new_window;
         let on_rename = self.on_rename_session;
         let on_commit_rename = self.on_commit_rename;
         let on_cancel_rename = self.on_cancel_rename;
@@ -290,6 +294,7 @@ impl RenderOnce for SidebarView {
         let list_draft_summaries = draft_summaries;
         let list_on_new = on_new.clone();
         let list_on_sel = on_sel;
+        let list_on_open_in_new_window = on_open_in_new_window;
         let list_on_rename = on_rename;
         let list_on_commit_rename = on_commit_rename;
         let list_on_cancel_rename = on_cancel_rename;
@@ -336,6 +341,7 @@ impl RenderOnce for SidebarView {
                         is_waiting,
                         has_draft,
                         &list_on_sel,
+                        &list_on_open_in_new_window,
                         &list_on_rename,
                         &list_on_commit_rename,
                         &list_on_cancel_rename,

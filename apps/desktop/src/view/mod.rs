@@ -489,6 +489,14 @@ impl Render for ConsoleDesktopApp {
                             }
                         },
                         {
+                            move |id: String, _w, cx: &mut App| {
+                                crate::window::open_workspace_window(
+                                    cx,
+                                    crate::window::WindowLaunchTarget::Session(id),
+                                );
+                            }
+                        },
+                        {
                             let on_new = on_new_chat.clone();
                             move |window: &mut Window, cx: &mut App| (on_new)(window, cx)
                         },
