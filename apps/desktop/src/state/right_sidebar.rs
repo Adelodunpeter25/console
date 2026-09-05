@@ -386,6 +386,7 @@ impl ConsoleDesktopApp {
         self.fetch_inspector_session_changes(cx);
         self.fetch_inspector_subagents(cx);
         self.ensure_inspector_fs_watcher(cx);
+        self.ensure_inspector_git_watcher(cx);
     }
 
     pub fn ensure_inspector_fs_watcher(&mut self, cx: &mut Context<Self>) {
@@ -402,14 +403,51 @@ impl ConsoleDesktopApp {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
+                                // Git working changes arrive on their own
+                                // watch stream now; fs events only refresh the tree.
                                 if this.right_sidebar_visible {
                                     this.fetch_inspector_fs_tree(cx);
-                                    this.fetch_inspector_git_changes(cx);
                                 }
                             });
                         }
                     });
                 }
+            }
+        })
+        .detach();
+    }
+
+    /// Live git working changes via GET /api/git/status/watch SSE.
+    /// One-shot fetch_inspector_git_changes stays as the initial snapshot
+    /// (and fallback for servers without the watch route); the stream
+    /// pushes every recomputed summary after that.
+    pub fn ensure_inspector_git_watcher(&mut self, cx: &mut Context<Self>) {
+        let (_, cwd) = self.active_inspector_target();
+        let Some(cwd) = cwd else {
+            return;
+        };
+
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            use futures_util::StreamExt;
+            let mut stream = match client.git.watch_status(&cwd).await {
+                Ok(stream) => stream,
+                Err(err) => {
+                    log::warn!("Failed to connect to git status watch: {}", err);
+                    return;
+                }
+            };
+            while let Some(Ok(status)) = stream.next().await {
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if this.right_sidebar_visible {
+                                this.inspector_working_changes = Rc::new(status.files);
+                                cx.notify();
+                            }
+                        });
+                    }
+                });
             }
         })
         .detach();

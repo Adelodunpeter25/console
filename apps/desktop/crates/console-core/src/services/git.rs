@@ -42,6 +42,43 @@ impl GitService {
         }
     }
 
+    /// Live git status via GET /api/git/status/watch SSE.
+    /// Mirrors FsService::watch_events: same transport/headers/eventsource
+    /// standard, filtering `gitStatus` frames into GitStatusSummary.
+    /// Falls back to one-shot get_status when the server lacks the route.
+    pub async fn watch_status(
+        &self,
+        path: &str,
+    ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<GitStatusSummary>> + Send>>> {
+        use eventsource_stream::Eventsource;
+        use futures_util::StreamExt;
+
+        let url = format!(
+            "{}/api/git/status/watch?path={}",
+            self.transport.url("").await,
+            urlencoding::encode(path)
+        );
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to connect to git status watch SSE stream")?;
+
+        let stream = resp.bytes_stream().eventsource().filter_map(|item| async {
+            match item {
+                Ok(event) if event.event == "gitStatus" => {
+                    serde_json::from_str::<GitStatusSummary>(&event.data).ok().map(Ok)
+                }
+                _ => None,
+            }
+        });
+
+        Ok(Box::pin(stream))
+    }
+
     pub async fn get_diff(
         &self,
         repo_path: Option<&str>,
