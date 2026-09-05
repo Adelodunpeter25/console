@@ -87,9 +87,15 @@ impl ConsoleDesktopApp {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        if index < self.right_sidebar_terminals.len() {
-            self.right_sidebar_active_terminal_idx = index;
-            cx.notify();
+        let (_, cwd) = self.active_inspector_target();
+        let Some(cwd) = cwd else {
+            return;
+        };
+        if let Some(state) = self.right_sidebar_terminals_by_cwd.get_mut(&cwd) {
+            if index < state.terminals.len() {
+                state.active_idx = index;
+                cx.notify();
+            }
         }
     }
 
@@ -103,13 +109,22 @@ impl ConsoleDesktopApp {
             return;
         };
 
-        // Max 3 terminal tabs
-        if self.right_sidebar_terminals.len() >= 3 {
+        let state = self
+            .right_sidebar_terminals_by_cwd
+            .entry(cwd.clone())
+            .or_insert_with(|| super::app::WorkspaceTerminalState {
+                terminals: Vec::new(),
+                active_idx: 0,
+                next_id: 1,
+            });
+
+        // Max 3 terminal tabs per workspace
+        if state.terminals.len() >= 3 {
             return;
         }
 
-        let id = self.right_sidebar_next_terminal_id;
-        self.right_sidebar_next_terminal_id += 1;
+        let id = state.next_id;
+        state.next_id += 1;
 
         let client = self.client.clone();
         let terminal = cx.new(|cx| {
@@ -120,8 +135,8 @@ impl ConsoleDesktopApp {
             console_ui::terminal::TerminalView::new(params, client, window, cx)
         });
 
-        self.right_sidebar_terminals.push((id, terminal));
-        self.right_sidebar_active_terminal_idx = self.right_sidebar_terminals.len().saturating_sub(1);
+        state.terminals.push((id, terminal));
+        state.active_idx = state.terminals.len().saturating_sub(1);
         cx.notify();
     }
 
@@ -130,13 +145,19 @@ impl ConsoleDesktopApp {
         index: usize,
         cx: &mut Context<Self>,
     ) {
-        if index < self.right_sidebar_terminals.len() {
-            self.right_sidebar_terminals.remove(index);
-            if self.right_sidebar_active_terminal_idx >= self.right_sidebar_terminals.len() {
-                self.right_sidebar_active_terminal_idx =
-                    self.right_sidebar_terminals.len().saturating_sub(1);
+        let (_, cwd) = self.active_inspector_target();
+        let Some(cwd) = cwd else {
+            return;
+        };
+
+        if let Some(state) = self.right_sidebar_terminals_by_cwd.get_mut(&cwd) {
+            if index < state.terminals.len() {
+                state.terminals.remove(index);
+                if state.active_idx >= state.terminals.len() {
+                    state.active_idx = state.terminals.len().saturating_sub(1);
+                }
+                cx.notify();
             }
-            cx.notify();
         }
     }
 
@@ -239,23 +260,23 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         let (_, cwd) = self.active_inspector_target();
-        // If cwd is None, clear terminals so empty state is displayed
         let Some(cwd) = cwd else {
-            if !self.right_sidebar_terminals.is_empty() || self.right_sidebar_terminal_cwd.is_some() {
-                self.right_sidebar_terminals.clear();
-                self.right_sidebar_active_terminal_idx = 0;
-                self.right_sidebar_terminal_cwd = None;
-            }
             return;
         };
 
-        // If cwd changed or no terminals exist, reset and spawn the initial Terminal 1
-        if self.right_sidebar_terminals.is_empty() || self.right_sidebar_terminal_cwd.as_deref() != Some(&cwd) {
-            self.right_sidebar_terminal_cwd = Some(cwd.clone());
-            self.right_sidebar_terminals.clear();
-            self.right_sidebar_next_terminal_id = 1;
-            let id = self.right_sidebar_next_terminal_id;
-            self.right_sidebar_next_terminal_id += 1;
+        let state = self
+            .right_sidebar_terminals_by_cwd
+            .entry(cwd.clone())
+            .or_insert_with(|| super::app::WorkspaceTerminalState {
+                terminals: Vec::new(),
+                active_idx: 0,
+                next_id: 1,
+            });
+
+        // If no terminals exist for this workspace, spawn the initial Terminal 1
+        if state.terminals.is_empty() {
+            let id = state.next_id;
+            state.next_id += 1;
 
             let client = self.client.clone();
             let terminal = cx.new(|cx| {
@@ -265,8 +286,8 @@ impl ConsoleDesktopApp {
                 };
                 console_ui::terminal::TerminalView::new(params, client, window, cx)
             });
-            self.right_sidebar_terminals.push((id, terminal));
-            self.right_sidebar_active_terminal_idx = 0;
+            state.terminals.push((id, terminal));
+            state.active_idx = 0;
         }
     }
 

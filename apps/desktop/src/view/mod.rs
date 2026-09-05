@@ -854,25 +854,34 @@ impl Render for ConsoleDesktopApp {
 
                         self.ensure_right_sidebar_terminal(window, cx);
 
-                        let tabs: Vec<TerminalTabInfo> = self
-                            .right_sidebar_terminals
-                            .iter()
-                            .enumerate()
-                            .map(|(idx, _)| TerminalTabInfo {
-                                id: idx,
-                                title: format!("Terminal {}", idx + 1),
-                            })
-                            .collect();
+                        let (_, active_cwd) = self.active_inspector_target();
+                        let active_term_state = active_cwd
+                            .as_ref()
+                            .and_then(|cwd| self.right_sidebar_terminals_by_cwd.get(cwd));
 
-                        let terminal_element = self
-                            .right_sidebar_terminals
-                            .get(self.right_sidebar_active_terminal_idx)
+                        let tabs: Vec<TerminalTabInfo> = active_term_state
+                            .map(|state| {
+                                state
+                                    .terminals
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(idx, _)| TerminalTabInfo {
+                                        id: idx,
+                                        title: format!("Terminal {}", idx + 1),
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+
+                        let active_idx = active_term_state.map(|s| s.active_idx).unwrap_or(0);
+                        let terminal_element = active_term_state
+                            .and_then(|state| state.terminals.get(active_idx))
                             .map(|(_, term)| term.clone().into_any_element());
 
                         let bottom_split = RightSidebarBottomSplit::new(
                             self.right_sidebar_bottom_height,
                             tabs,
-                            self.right_sidebar_active_terminal_idx,
+                            active_idx,
                             terminal_element,
                             on_select_right_sidebar_bottom_tab,
                             on_begin_right_sidebar_bottom_resize,

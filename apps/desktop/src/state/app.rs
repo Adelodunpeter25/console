@@ -48,6 +48,13 @@ pub(crate) const RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT: f32 = 180.0;
 pub(crate) const RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT: f32 = 100.0;
 pub(crate) const RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT: f32 = 450.0;
 
+#[derive(Clone)]
+pub struct WorkspaceTerminalState {
+    pub terminals: Vec<(usize, Entity<TerminalView>)>,
+    pub active_idx: usize,
+    pub next_id: usize,
+}
+
 pub struct ConsoleDesktopApp {
     pub client: ConsoleClient,
     /// Shared session history for the sidebar/titlebar. `Rc` so per-frame
@@ -154,10 +161,8 @@ pub struct ConsoleDesktopApp {
     pub(crate) right_sidebar_resize_start: Option<(f32, f32)>,
     pub right_sidebar_bottom_height: f32,
     pub(crate) right_sidebar_bottom_resize_start: Option<(f32, f32)>,
-    pub right_sidebar_terminals: Vec<(usize, Entity<TerminalView>)>,
-    pub right_sidebar_active_terminal_idx: usize,
-    pub right_sidebar_next_terminal_id: usize,
-    pub right_sidebar_terminal_cwd: Option<String>,
+    pub right_sidebar_terminals_by_cwd:
+        std::collections::HashMap<String, WorkspaceTerminalState>,
     pub inspector_active_tab: console_ui::InspectorTab,
     pub inspector_search_query: String,
     pub inspector_tree: Rc<Vec<console_ui::FileTreeNode>>,
@@ -710,10 +715,7 @@ impl ConsoleDesktopApp {
             right_sidebar_resize_start: None,
             right_sidebar_bottom_height,
             right_sidebar_bottom_resize_start: None,
-            right_sidebar_terminals: Vec::new(),
-            right_sidebar_active_terminal_idx: 0,
-            right_sidebar_next_terminal_id: 1,
-            right_sidebar_terminal_cwd: None,
+            right_sidebar_terminals_by_cwd: std::collections::HashMap::new(),
             inspector_active_tab: console_ui::InspectorTab::AllFiles,
             inspector_search_query: String::new(),
             inspector_tree: Rc::new(Vec::new()),
