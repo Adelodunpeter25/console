@@ -1,5 +1,12 @@
 # Cross-Platform Notifications (macOS Desktop & Mobile Push) — Architecture & Plan
 
+## 0. Status
+
+- [x] Backend event bus (`notificationService.push` on done/attention) + SSE `GET /api/notifications/stream`
+- [x] Mobile local notifications from SSE (`expo-notifications`, `useLocalNotifications`, tap opens session, suppressed when viewing it) — works foreground/backgrounded, not killed-app
+- [ ] Remote push for killed-app (device tokens, `device_tokens` table, Expo push dispatcher, APNs/FCM, EAS creds)
+- [ ] Desktop native banner + focus (see §3)
+
 ## 1. Overview & Objective
 
 When an agent runs a long-running task, users frequently switch away from the desktop app or lock their mobile device. Notifications must be **always enabled by default** (no settings toggles required) to ensure immediate feedback whenever:
@@ -89,6 +96,10 @@ Mobile notifications alert the user even when the mobile app is completely close
 ```
 
 ### Mobile Implementation Points
+
+Done (local, no infra): `useLocalNotifications` subscribes to SSE, shows on-device banner via `expo-notifications`, tap opens session, suppressed when viewing it.
+
+Todo (remote push):
 1. **Device Token Registration**:
    - Mobile app (`apps/mobile`) requests notification permissions on first launch using `expo-notifications`.
    - Sends the Expo Push Token (`ExponentPushToken[...]`) to the server:
