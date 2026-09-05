@@ -82,16 +82,62 @@ impl ConsoleDesktopApp {
         }
     }
 
-    pub fn set_right_sidebar_bottom_tab(
+    pub fn select_right_sidebar_terminal_tab(
         &mut self,
-        tab: console_ui::RightSidebarBottomTab,
+        index: usize,
         cx: &mut Context<Self>,
     ) {
-        if self.right_sidebar_bottom_tab == tab {
+        if index < self.right_sidebar_terminals.len() {
+            self.right_sidebar_active_terminal_idx = index;
+            cx.notify();
+        }
+    }
+
+    pub fn add_right_sidebar_terminal(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (_, cwd) = self.active_inspector_target();
+        let Some(cwd) = cwd else {
+            return;
+        };
+
+        // Max 3 terminal tabs
+        if self.right_sidebar_terminals.len() >= 3 {
             return;
         }
-        self.right_sidebar_bottom_tab = tab;
+
+        let id = self.right_sidebar_next_terminal_id;
+        self.right_sidebar_next_terminal_id += 1;
+
+        let client = self.client.clone();
+        let terminal = cx.new(|cx| {
+            let params = console_core::types::terminal::TerminalSpawnParams {
+                cwd,
+                ..Default::default()
+            };
+            console_ui::terminal::TerminalView::new(params, client, window, cx)
+        });
+
+        self.right_sidebar_terminals.push((id, terminal));
+        self.right_sidebar_active_terminal_idx = self.right_sidebar_terminals.len().saturating_sub(1);
         cx.notify();
+    }
+
+    pub fn close_right_sidebar_terminal(
+        &mut self,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        if index < self.right_sidebar_terminals.len() {
+            self.right_sidebar_terminals.remove(index);
+            if self.right_sidebar_active_terminal_idx >= self.right_sidebar_terminals.len() {
+                self.right_sidebar_active_terminal_idx =
+                    self.right_sidebar_terminals.len().saturating_sub(1);
+            }
+            cx.notify();
+        }
     }
 
     pub fn active_inspector_target(&self) -> (Option<String>, Option<String>) {
@@ -193,38 +239,35 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         let (_, cwd) = self.active_inspector_target();
-        // If cwd changed or no terminal exists, spawn a new TerminalView
-        if self.right_sidebar_terminal.is_none() || self.right_sidebar_terminal_cwd != cwd {
-            self.right_sidebar_terminal_cwd = cwd.clone();
+        // If cwd is None, clear terminals so empty state is displayed
+        let Some(cwd) = cwd else {
+            if !self.right_sidebar_terminals.is_empty() || self.right_sidebar_terminal_cwd.is_some() {
+                self.right_sidebar_terminals.clear();
+                self.right_sidebar_active_terminal_idx = 0;
+                self.right_sidebar_terminal_cwd = None;
+            }
+            return;
+        };
+
+        // If cwd changed or no terminals exist, reset and spawn the initial Terminal 1
+        if self.right_sidebar_terminals.is_empty() || self.right_sidebar_terminal_cwd.as_deref() != Some(&cwd) {
+            self.right_sidebar_terminal_cwd = Some(cwd.clone());
+            self.right_sidebar_terminals.clear();
+            self.right_sidebar_next_terminal_id = 1;
+            let id = self.right_sidebar_next_terminal_id;
+            self.right_sidebar_next_terminal_id += 1;
+
             let client = self.client.clone();
             let terminal = cx.new(|cx| {
                 let params = console_core::types::terminal::TerminalSpawnParams {
-                    cwd: cwd.unwrap_or_default(),
+                    cwd,
                     ..Default::default()
                 };
                 console_ui::terminal::TerminalView::new(params, client, window, cx)
             });
-            self.right_sidebar_terminal = Some(terminal);
+            self.right_sidebar_terminals.push((id, terminal));
+            self.right_sidebar_active_terminal_idx = 0;
         }
-    }
-
-    pub fn reset_right_sidebar_terminal(
-        &mut self,
-        window: &mut gpui::Window,
-        cx: &mut Context<Self>,
-    ) {
-        let (_, cwd) = self.active_inspector_target();
-        self.right_sidebar_terminal_cwd = cwd.clone();
-        let client = self.client.clone();
-        let terminal = cx.new(|cx| {
-            let params = console_core::types::terminal::TerminalSpawnParams {
-                cwd: cwd.unwrap_or_default(),
-                ..Default::default()
-            };
-            console_ui::terminal::TerminalView::new(params, client, window, cx)
-        });
-        self.right_sidebar_terminal = Some(terminal);
-        cx.notify();
     }
 
     pub fn toggle_inspector_folder(&mut self, path: String, cx: &mut Context<Self>) {

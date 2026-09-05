@@ -48,6 +48,8 @@ impl RenderOnce for ChangesListView {
             .id("changes-list-container")
             .flex_1()
             .w_full()
+            .h_full()
+            .min_h_0()
             .overflow_y_scroll()
             .p(px(6.0))
             .child(if !has_changes {

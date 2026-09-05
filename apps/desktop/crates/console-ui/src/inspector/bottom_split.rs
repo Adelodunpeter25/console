@@ -9,18 +9,20 @@ use std::rc::Rc;
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum RightSidebarBottomTab {
-    #[default]
-    Terminal,
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TerminalTabInfo {
+    pub id: usize,
+    pub title: String,
 }
 
 #[derive(IntoElement)]
 pub struct RightSidebarBottomSplit {
     height: f32,
-    active_tab: RightSidebarBottomTab,
+    tabs: Vec<TerminalTabInfo>,
+    active_tab_index: usize,
     terminal_element: Option<gpui::AnyElement>,
-    on_select_tab: Rc<dyn Fn(RightSidebarBottomTab, &mut Window, &mut App) + 'static>,
+    on_select_tab: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
+    on_close_tab: Option<Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>>,
     on_begin_resize: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static>,
     on_new_terminal: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
 }
@@ -28,19 +30,30 @@ pub struct RightSidebarBottomSplit {
 impl RightSidebarBottomSplit {
     pub fn new(
         height: f32,
-        active_tab: RightSidebarBottomTab,
+        tabs: Vec<TerminalTabInfo>,
+        active_tab_index: usize,
         terminal_element: Option<gpui::AnyElement>,
-        on_select_tab: Rc<dyn Fn(RightSidebarBottomTab, &mut Window, &mut App) + 'static>,
+        on_select_tab: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
         on_begin_resize: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static>,
     ) -> Self {
         Self {
             height,
-            active_tab,
+            tabs,
+            active_tab_index,
             terminal_element,
             on_select_tab,
+            on_close_tab: None,
             on_begin_resize,
             on_new_terminal: None,
         }
+    }
+
+    pub fn with_close_tab(
+        mut self,
+        callback: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
+    ) -> Self {
+        self.on_close_tab = Some(callback);
+        self
     }
 
     pub fn with_new_terminal(
@@ -87,7 +100,7 @@ impl RenderOnce for RightSidebarBottomSplit {
                         },
                     ),
             )
-            // Bottom Bar Header: Tabs ([Terminal] [+])
+            // Bottom Bar Header: Tabs ([Terminal 1] [Terminal 2] [+])
             .child(
                 div()
                     .h(px(32.0))
@@ -105,11 +118,15 @@ impl RenderOnce for RightSidebarBottomSplit {
                             .flex()
                             .items_center()
                             .gap(px(4.0))
-                            .child({
-                                let is_active = self.active_tab == RightSidebarBottomTab::Terminal;
+                            .overflow_x_hidden()
+                            .children(self.tabs.into_iter().enumerate().map(|(idx, tab_info)| {
+                                let is_active = idx == self.active_tab_index;
                                 let on_tab = on_tab.clone();
+                                let on_close = self.on_close_tab.clone();
+                                let tab_id = format!("bottom-tab-{}", tab_info.id);
+
                                 div()
-                                    .id("bottom-tab-terminal")
+                                    .id(gpui::ElementId::from(tab_id))
                                     .flex()
                                     .items_center()
                                     .gap(px(4.0))
@@ -135,7 +152,7 @@ impl RenderOnce for RightSidebarBottomSplit {
                                     })
                                     .hover(|s| s.bg(theme.overlay))
                                     .on_click(move |_, window, cx| {
-                                        (on_tab)(RightSidebarBottomTab::Terminal, window, cx);
+                                        (on_tab)(idx, window, cx);
                                     })
                                     .child(app_icon(
                                         IconName::Terminal,
@@ -146,8 +163,33 @@ impl RenderOnce for RightSidebarBottomSplit {
                                             theme.text_tertiary
                                         },
                                     ))
-                                    .child("Terminal")
-                            }),
+                                    .child(tab_info.title)
+                                    .when_some(on_close, |el, on_close| {
+                                        el.child(
+                                            div()
+                                                .id(gpui::ElementId::from(format!(
+                                                    "close-terminal-{}",
+                                                    tab_info.id
+                                                )))
+                                                .size(px(14.0))
+                                                .rounded(px(2.0))
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .cursor_pointer()
+                                                .hover(|s| s.bg(theme.overlay_strong))
+                                                .on_click(move |_event, window, cx| {
+                                                    cx.stop_propagation();
+                                                    (on_close)(idx, window, cx);
+                                                })
+                                                .child(app_icon(
+                                                    IconName::Close,
+                                                    9.0,
+                                                    theme.text_tertiary,
+                                                )),
+                                        )
+                                    })
+                            })),
                     )
                     .when_some(self.on_new_terminal, |el, on_new| {
                         el.child(

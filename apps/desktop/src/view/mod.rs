@@ -6,7 +6,8 @@ use console_ui::workspace::{
     ContentRenderer, WorkspaceDrag, WorkspaceDropAction, WorkspacePane, cancel_workspace_drags,
 };
 use console_ui::{
-    ImageViewerModal, RightSidebar, RightSidebarBottomSplit, SidebarView, Theme, TitleBar,
+    ImageViewerModal, RightSidebar, RightSidebarBottomSplit, SidebarView, TerminalTabInfo, Theme,
+    TitleBar,
 };
 use gpui::{
     App, Context, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent,
@@ -427,13 +428,25 @@ impl Render for ConsoleDesktopApp {
             })
         };
         let on_select_right_sidebar_bottom_tab: Rc<
-            dyn Fn(console_ui::RightSidebarBottomTab, &mut Window, &mut App) + 'static,
+            dyn Fn(usize, &mut Window, &mut App) + 'static,
         > = {
             let entity = entity.clone();
-            Rc::new(move |tab, _w, cx| {
+            Rc::new(move |tab_idx, _w, cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.set_right_sidebar_bottom_tab(tab, cx);
+                        this.select_right_sidebar_terminal_tab(tab_idx, cx);
+                    });
+                }
+            })
+        };
+        let on_close_right_sidebar_bottom_tab: Rc<
+            dyn Fn(usize, &mut Window, &mut App) + 'static,
+        > = {
+            let entity = entity.clone();
+            Rc::new(move |tab_idx, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.close_right_sidebar_terminal(tab_idx, cx);
                     });
                 }
             })
@@ -443,7 +456,7 @@ impl Render for ConsoleDesktopApp {
             Rc::new(move |window, cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.reset_right_sidebar_terminal(window, cx);
+                        this.add_right_sidebar_terminal(window, cx);
                     });
                 }
             })
@@ -840,18 +853,31 @@ impl Render for ConsoleDesktopApp {
                             .unwrap_or_else(|| Rc::new(Vec::new()));
 
                         self.ensure_right_sidebar_terminal(window, cx);
+
+                        let tabs: Vec<TerminalTabInfo> = self
+                            .right_sidebar_terminals
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, _)| TerminalTabInfo {
+                                id: idx,
+                                title: format!("Terminal {}", idx + 1),
+                            })
+                            .collect();
+
                         let terminal_element = self
-                            .right_sidebar_terminal
-                            .as_ref()
-                            .map(|term| term.clone().into_any_element());
+                            .right_sidebar_terminals
+                            .get(self.right_sidebar_active_terminal_idx)
+                            .map(|(_, term)| term.clone().into_any_element());
 
                         let bottom_split = RightSidebarBottomSplit::new(
                             self.right_sidebar_bottom_height,
-                            self.right_sidebar_bottom_tab,
+                            tabs,
+                            self.right_sidebar_active_terminal_idx,
                             terminal_element,
                             on_select_right_sidebar_bottom_tab,
                             on_begin_right_sidebar_bottom_resize,
                         )
+                        .with_close_tab(on_close_right_sidebar_bottom_tab)
                         .with_new_terminal(on_new_right_sidebar_terminal);
 
                         el.child(

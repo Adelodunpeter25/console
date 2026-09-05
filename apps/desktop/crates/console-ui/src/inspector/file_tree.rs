@@ -255,6 +255,8 @@ impl RenderOnce for FileTreeView {
             .id("file-tree-container")
             .flex_1()
             .w_full()
+            .h_full()
+            .min_h_0()
             .overflow_y_scroll()
             .p(px(6.0))
             .child(if children.is_empty() {

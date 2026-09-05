@@ -67,6 +67,8 @@ impl RenderOnce for SubagentListView {
             .id("subagent-list-container")
             .flex_1()
             .w_full()
+            .h_full()
+            .min_h_0()
             .overflow_y_scroll()
             .p(px(8.0))
             .child(if self.subagents.is_empty() {
