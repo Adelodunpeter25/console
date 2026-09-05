@@ -395,10 +395,21 @@ impl ConsoleDesktopApp {
             return;
         };
 
+        // One stream per target: reuse the live watcher unless the inspector
+        // target changed. Dropping the previous task cancels its SSE loop, so
+        // repeated refreshes never accumulate duplicate streams.
+        if let Some((watched_cwd, _)) = &self.inspector_fs_watch {
+            if watched_cwd == &cwd {
+                return;
+            }
+        }
+        self.inspector_fs_watch = None;
+
         let client = self.client.clone();
-        cx.spawn(async move |entity, cx| {
+        let watch_cwd = cwd.clone();
+        let task = cx.spawn(async move |entity, cx| {
             use futures_util::StreamExt;
-            if let Ok(mut stream) = client.fs.watch_events(&cwd).await {
+            if let Ok(mut stream) = client.fs.watch_events(&watch_cwd).await {
                 while let Some(Ok(_event)) = stream.next().await {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
@@ -406,15 +417,15 @@ impl ConsoleDesktopApp {
                                 // Git working changes arrive on their own
                                 // watch stream now; fs events only refresh the tree.
                                 if this.right_sidebar_visible {
-                                    this.fetch_inspector_fs_tree(cx);
+                                    this.schedule_inspector_fs_tree_fetch(cx);
                                 }
                             });
                         }
                     });
                 }
             }
-        })
-        .detach();
+        });
+        self.inspector_fs_watch = Some((cwd, task));
     }
 
     /// Live git working changes via GET /api/git/status/watch SSE.
@@ -427,10 +438,20 @@ impl ConsoleDesktopApp {
             return;
         };
 
+        // One stream per target: reuse the live watcher unless the inspector
+        // target changed (dropping the previous task cancels its SSE loop).
+        if let Some((watched_cwd, _)) = &self.inspector_git_watch {
+            if watched_cwd == &cwd {
+                return;
+            }
+        }
+        self.inspector_git_watch = None;
+
         let client = self.client.clone();
-        cx.spawn(async move |entity, cx| {
+        let watch_cwd = cwd.clone();
+        let task = cx.spawn(async move |entity, cx| {
             use futures_util::StreamExt;
-            let mut stream = match client.git.watch_status(&cwd).await {
+            let mut stream = match client.git.watch_status(&watch_cwd).await {
                 Ok(stream) => stream,
                 Err(err) => {
                     log::warn!("Failed to connect to git status watch: {}", err);
@@ -449,6 +470,33 @@ impl ConsoleDesktopApp {
                     }
                 });
             }
+        });
+        self.inspector_git_watch = Some((cwd, task));
+    }
+
+    /// Trailing debounce for inspector tree refreshes: fs events arrive in
+    /// bursts (builds, checkouts, git operations), and each one previously
+    /// triggered a full depth-25 directory listing. Coalesce each burst into
+    /// a single fetch ~300ms after the last event.
+    pub fn schedule_inspector_fs_tree_fetch(&mut self, cx: &mut Context<Self>) {
+        if self.fs_tree_fetch_pending {
+            return;
+        }
+        self.fs_tree_fetch_pending = true;
+        cx.spawn(async move |entity, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(300))
+                .await;
+            let _ = cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.fs_tree_fetch_pending = false;
+                        if this.right_sidebar_visible {
+                            this.fetch_inspector_fs_tree(cx);
+                        }
+                    });
+                }
+            });
         })
         .detach();
     }

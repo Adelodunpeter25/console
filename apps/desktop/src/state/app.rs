@@ -170,6 +170,14 @@ pub struct ConsoleDesktopApp {
     pub inspector_search_query: String,
     pub inspector_tree: Rc<Vec<console_ui::FileTreeNode>>,
     pub inspector_working_changes: Rc<Vec<console_core::types::GitFileEntry>>,
+    /// One live fs-watch SSE stream per inspector target: the cwd it watches
+    /// plus its task. Dropping the task cancels the stream, so replacing this
+    /// on target change is what prevents duplicate stream accumulation.
+    pub(crate) inspector_fs_watch: Option<(String, gpui::Task<()>)>,
+    /// Same as `inspector_fs_watch` for the git-status watch stream.
+    pub(crate) inspector_git_watch: Option<(String, gpui::Task<()>)>,
+    /// Trailing-debounce latch so bursts of fs events fetch the tree once.
+    pub(crate) fs_tree_fetch_pending: bool,
     pub inspector_session_changes: Rc<Vec<console_core::types::SessionFileChange>>,
     pub inspector_expanded_folders: Rc<std::collections::HashSet<String>>,
     pub inspector_selected_path: Option<String>,
@@ -740,6 +748,9 @@ impl ConsoleDesktopApp {
             inspector_search_query: String::new(),
             inspector_tree: Rc::new(Vec::new()),
             inspector_working_changes: Rc::new(Vec::new()),
+            inspector_fs_watch: None,
+            inspector_git_watch: None,
+            fs_tree_fetch_pending: false,
             inspector_session_changes: Rc::new(Vec::new()),
             inspector_expanded_folders: Rc::new(std::collections::HashSet::new()),
             inspector_selected_path: None,

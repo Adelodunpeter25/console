@@ -105,9 +105,24 @@ impl TerminalView {
             };
 
             let handle_for_watch = handle.clone();
-            let initial_snapshot = handle.snapshot().await;
-            let initial_status = handle.status().await;
-            let initial_error = handle.error.read().await.clone();
+            // Termy's internal state is guarded by a *blocking* mutex that the
+            // WS reader task holds while parsing output. Locking it on the main
+            // thread would stall the UI behind the parser during output bursts
+            // (e.g. `git push` progress), so run the whole lock-and-snapshot on
+            // the background executor and only hop back to the main thread to
+            // apply the result.
+            let (initial_snapshot, initial_status, initial_error) = cx
+                .background_executor()
+                .spawn({
+                    let handle = handle.clone();
+                    async move {
+                        let snapshot = handle.snapshot().await;
+                        let status = handle.status().await;
+                        let error = handle.error.read().await.clone();
+                        (snapshot, status, error)
+                    }
+                })
+                .await;
 
             let _ = this.update(cx, |view, cx| {
                 view.handle = Some(handle);
@@ -126,9 +141,19 @@ impl TerminalView {
                     cx.background_executor()
                         .timer(std::time::Duration::from_millis(8))
                         .await;
-                    let snapshot = handle_for_watch.snapshot().await;
-                    let status = handle_for_watch.status().await;
-                    let error = handle_for_watch.error.read().await.clone();
+                    // Snapshot on the background executor (see the initial
+                    // snapshot above): termy's blocking mutex must never be
+                    // awaited on the main thread.
+                    let handle_for_snapshot = handle_for_watch.clone();
+                    let (snapshot, status, error) = cx
+                        .background_executor()
+                        .spawn(async move {
+                            let snapshot = handle_for_snapshot.snapshot().await;
+                            let status = handle_for_snapshot.status().await;
+                            let error = handle_for_snapshot.error.read().await.clone();
+                            (snapshot, status, error)
+                        })
+                        .await;
                     let _ = this_watch.update(cx, |view, cx| {
                         view.snapshot = Some(snapshot);
                         view.status = status;
@@ -613,6 +638,15 @@ fn render_canvas_grid(
         }
         let y = origin.y + cell_h * row_idx as f32;
 
+        // Collect the links overlapping this row once per row instead of
+        // scanning the full link list for every cell (O(cells × links) →
+        // O(cells × row_links)).
+        let row_links: Vec<&console_core::types::terminal::TerminalLink> = snap
+            .links
+            .iter()
+            .filter(|l| row_idx as u16 >= l.start_row && row_idx as u16 <= l.end_row)
+            .collect();
+
         struct CellRun {
             start_col: usize,
             count: usize,
@@ -680,18 +714,14 @@ fn render_canvas_grid(
             };
 
             let mut is_link = false;
-            if let Some(links) = snapshot.map(|s| &s.links) {
+            for l in &row_links {
                 let r = row_idx as u16;
                 let c = col_idx as u16;
-                for l in links {
-                    if r >= l.start_row && r <= l.end_row {
-                        let in_start = r > l.start_row || c >= l.start_col;
-                        let in_end = r < l.end_row || c <= l.end_col;
-                        if in_start && in_end {
-                            is_link = true;
-                            break;
-                        }
-                    }
+                let in_start = r > l.start_row || c >= l.start_col;
+                let in_end = r < l.end_row || c <= l.end_col;
+                if in_start && in_end {
+                    is_link = true;
+                    break;
                 }
             }
 
