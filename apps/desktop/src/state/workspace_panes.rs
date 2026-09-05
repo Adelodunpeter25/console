@@ -242,6 +242,7 @@ impl ConsoleDesktopApp {
         self.workspace_pane_states
             .get(pane_id)
             .and_then(|state| state.selected_project_id.clone())
+            .or_else(|| self.selected_project_id.clone())
     }
 
     pub(crate) fn pane_branches(&self, pane_id: &str) -> Rc<Vec<GitBranchInfo>> {

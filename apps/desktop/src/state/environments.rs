@@ -237,6 +237,7 @@ impl ConsoleDesktopApp {
 
                         // Close all tabs and collapse splits back to clean main pane
                         this.workspace_root = console_core::WorkspaceNode::leaf("pane-main");
+                        this.project_workspace_roots.clear();
                         this.active_pane_id = Some("pane-main".to_string());
                         this.workspace_pane_states.clear();
                         this.terminals.clear();

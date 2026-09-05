@@ -303,6 +303,11 @@ impl Render for ConsoleDesktopApp {
                         } else {
                             format!("{} — {}", session.title, folder)
                         }
+                    })
+                    .or_else(|| {
+                        self.selected_project_id.as_ref().and_then(|pid| {
+                            self.projects.iter().find(|p| &p.id == pid).map(|p| p.name.clone())
+                        })
                     }),
             }
         };
@@ -571,6 +576,12 @@ impl Render for ConsoleDesktopApp {
                                         this.close_matching_workspace_tabs(|t| {
                                             t.id() == format!("chat:{}", id)
                                         });
+                                        for root in this.project_workspace_roots.values_mut() {
+                                            console_ui::workspace::ops::close_matching_tabs(
+                                                root,
+                                                |t| t.id() == format!("chat:{}", id),
+                                            );
+                                        }
                                         // Drop all run-derived state for the deleted
                                         // session, now keyed by session id.
                                         this.running_sessions.remove(&id);
@@ -727,6 +738,16 @@ impl Render for ConsoleDesktopApp {
                                     on_close_pane,
                                     on_focus_pane,
                                 )
+                                .with_new_tab({
+                                    let entity = entity.clone();
+                                    move |_pane_id, _window, cx| {
+                                        if let Some(app) = entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.create_new_chat(cx);
+                                            });
+                                        }
+                                    }
+                                })
                                 .with_resize_split(
                                     move |split_id, direction, start_pos, window, cx| {
                                         if let Some(app) = entity_for_split.upgrade() {

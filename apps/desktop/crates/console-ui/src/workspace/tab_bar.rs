@@ -23,6 +23,7 @@ pub struct WorkspaceTabBar {
     on_close: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     can_close_pane: bool,
     on_close_pane: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_new_tab: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
 }
 
 impl WorkspaceTabBar {
@@ -39,7 +40,16 @@ impl WorkspaceTabBar {
             on_close: Rc::new(on_close),
             can_close_pane,
             on_close_pane: Rc::new(on_close_pane),
+            on_new_tab: None,
         }
+    }
+
+    pub fn with_new_tab(
+        mut self,
+        on_new_tab: impl Fn(String, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_new_tab = Some(Rc::new(on_new_tab));
+        self
     }
 }
 
@@ -52,6 +62,7 @@ impl RenderOnce for WorkspaceTabBar {
         let on_cls = self.on_close;
         let can_close_pane = self.can_close_pane;
         let on_close_pane = self.on_close_pane;
+        let on_new_tab = self.on_new_tab;
 
         div()
             .id("workspace-tab-bar")
@@ -181,7 +192,29 @@ impl RenderOnce for WorkspaceTabBar {
                                     })
                                     .child(app_icon(IconName::X, 12.0, theme.text_ghost)),
                             )
-                    })),
+                    }))
+                    .when_some(on_new_tab, |scroll, on_new| {
+                        let pane_id = pane_id.clone();
+                        scroll.child(
+                            div()
+                                .id(ElementId::Name(
+                                    format!("workspace-new-tab-{}", pane_id).into(),
+                                ))
+                                .flex_shrink(0.0)
+                                .size(px(22.0))
+                                .rounded(px(4.0))
+                                .cursor_default()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .hover(|s| s.bg(theme.overlay))
+                                .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                                    cx.stop_propagation();
+                                    (on_new)(pane_id.clone(), window, cx);
+                                })
+                                .child(app_icon(IconName::Plus, 12.0, theme.text_ghost)),
+                        )
+                    }),
             )
             .when(can_close_pane, |bar| {
                 let pane_id = pane_id.clone();

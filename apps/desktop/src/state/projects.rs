@@ -34,6 +34,7 @@ impl ConsoleDesktopApp {
             state.branch_loaded = false;
             state.branch_is_git_repository = false;
         }
+        self.selected_project_id = Some(project_id.clone());
         cx.notify();
 
         let Some(project) = self.selected_project_for_pane(&pane_id).cloned() else {
@@ -300,6 +301,7 @@ impl ConsoleDesktopApp {
         if self.selected_project_id.as_deref() == Some(&project_id) {
             self.selected_project_id = None;
         }
+        self.project_workspace_roots.remove(&Some(project_id.clone()));
         for state in self.workspace_pane_states.values_mut() {
             if state.selected_project_id.as_deref() == Some(&project_id) {
                 state.selected_project_id = None;

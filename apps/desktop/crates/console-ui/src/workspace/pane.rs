@@ -38,6 +38,7 @@ pub struct WorkspacePane {
         Rc<dyn Fn(String, WorkspaceDrag, WorkspaceDropAction, &mut Window, &mut App) + 'static>,
     on_close_pane: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_focus_pane: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_new_tab: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     on_resize_split: Option<
         Rc<
             dyn Fn(
@@ -73,8 +74,17 @@ impl WorkspacePane {
             on_drop_tab,
             on_close_pane,
             on_focus_pane,
+            on_new_tab: None,
             on_resize_split: None,
         }
+    }
+
+    pub fn with_new_tab(
+        mut self,
+        on_new_tab: impl Fn(String, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_new_tab = Some(Rc::new(on_new_tab));
+        self
     }
 
     pub fn with_resize_split(
@@ -153,6 +163,7 @@ fn render_leaf(
     >,
     on_close_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_focus_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_new_tab: &Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     can_close_pane: bool,
     window: &mut Window,
     cx: &mut App,
@@ -167,13 +178,16 @@ fn render_leaf(
     let on_drop = on_drop_tab.clone();
     let on_close_pane = on_close_pane.clone();
     let on_focus_pane = on_focus_pane.clone();
-    let bar = WorkspaceTabBar::new(
+    let mut bar = WorkspaceTabBar::new(
         leaf.clone(),
         move |pane_id, tab_id, window, cx| (on_sel)(pane_id, tab_id, window, cx),
         move |pane_id, tab_id, window, cx| (on_cls)(pane_id, tab_id, window, cx),
         can_close_pane,
         move |pane_id, window, cx| (on_close_pane)(pane_id, window, cx),
     );
+    if let Some(on_new) = on_new_tab.clone() {
+        bar = bar.with_new_tab(move |pane_id, window, cx| (on_new)(pane_id, window, cx));
+    }
 
     div()
         .id(ElementId::Name(
@@ -248,6 +262,7 @@ fn render_node(
     >,
     on_close_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_focus_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_new_tab: &Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     on_resize_split: &Option<
         Rc<
             dyn Fn(
@@ -273,6 +288,7 @@ fn render_node(
             on_drop_tab,
             on_close_pane,
             on_focus_pane,
+            on_new_tab,
             can_close_pane,
             window,
             cx,
@@ -314,6 +330,7 @@ fn render_node(
                             on_drop_tab,
                             on_close_pane,
                             on_focus_pane,
+                            on_new_tab,
                             on_resize_split,
                             can_close_pane,
                             window,
@@ -377,6 +394,7 @@ fn render_node(
                             on_drop_tab,
                             on_close_pane,
                             on_focus_pane,
+                            on_new_tab,
                             on_resize_split,
                             can_close_pane,
                             window,
@@ -400,6 +418,7 @@ impl RenderOnce for WorkspacePane {
             &self.on_drop_tab,
             &self.on_close_pane,
             &self.on_focus_pane,
+            &self.on_new_tab,
             &self.on_resize_split,
             can_close_pane,
             window,

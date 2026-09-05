@@ -107,6 +107,16 @@ impl ConsoleDesktopApp {
             },
             title.clone(),
         );
+        for root in self.project_workspace_roots.values_mut() {
+            console_ui::workspace::ops::rename_tabs(
+                root,
+                |tab| {
+                    matches!(tab, console_core::WorkspaceTabConfig::Chat { session_id: tab_session_id, .. }
+                        if tab_session_id == &session_id)
+                },
+                title.clone(),
+            );
+        }
         cx.notify();
 
         let client = self.client.clone();
@@ -270,6 +280,16 @@ impl ConsoleDesktopApp {
                     },
                     header.title.clone(),
                 );
+                for root in self.project_workspace_roots.values_mut() {
+                    console_ui::workspace::ops::rename_tabs(
+                        root,
+                        |tab| {
+                            matches!(tab, console_core::WorkspaceTabConfig::Chat { session_id, .. }
+                                if session_id == &header.id)
+                        },
+                        header.title.clone(),
+                    );
+                }
                 cx.notify();
             }
         }
@@ -313,11 +333,12 @@ impl ConsoleDesktopApp {
             return;
         }
         if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
-            state.selected_project_id = target_id;
+            state.selected_project_id = target_id.clone();
             Rc::make_mut(&mut state.branches).clear();
             state.branch_loaded = resolved.is_none();
             state.branch_is_git_repository = false;
         }
+        self.selected_project_id = target_id;
         let Some(project) = resolved.cloned() else {
             cx.notify();
             return;
@@ -368,16 +389,107 @@ impl ConsoleDesktopApp {
             .map(|s| s.to_string());
 
         self.save_transcript_scroll_position(cx);
+
+        let target_session = self.sessions.iter().find(|s| s.id == id).cloned();
+        let target_project = target_session.as_ref().and_then(|session| {
+            if let Some(pid) = &session.project_id {
+                if let Some(p) = self.projects.iter().find(|p| &p.id == pid) {
+                    return Some(p.clone());
+                }
+            }
+            self.projects
+                .iter()
+                .find(|p| !session.cwd.is_empty() && p.path == session.cwd)
+                .cloned()
+        });
+        let target_project_id = target_project.as_ref().map(|p| p.id.clone());
+
+        // A workspace switch occurs if target_project_id differs from current project,
+        // or if switching from an unassociated workspace into a project when tabs are already open.
+        let is_different_project = match (&self.selected_project_id, &target_project_id) {
+            (Some(current), Some(target)) => current != target,
+            (Some(_), None) => true,
+            (None, Some(_)) => {
+                self.workspace_root
+                    .leaves()
+                    .iter()
+                    .any(|l| !l.tabs.is_empty())
+            }
+            (None, None) => false,
+        };
+
+        if is_different_project {
+            // Save current project's workspace tabs
+            self.project_workspace_roots
+                .insert(self.selected_project_id.clone(), self.workspace_root.clone());
+
+            // Switch active project
+            self.selected_project_id = target_project_id.clone();
+            if let Some(state) = self.workspace_pane_states.get_mut(&active_pane_id) {
+                state.selected_project_id = target_project_id.clone();
+                Rc::make_mut(&mut state.branches).clear();
+                state.branch_loaded = target_project.is_none();
+                state.branch_is_git_repository = false;
+            }
+
+            // Restore previously opened tabs for this project, or start a clean leaf
+            if let Some(saved_root) = self.project_workspace_roots.get(&target_project_id).cloned() {
+                self.workspace_root = saved_root;
+            } else {
+                self.workspace_root = console_core::WorkspaceNode::leaf(&active_pane_id);
+            }
+
+            // Refresh git branch info for the new project
+            if let Some(project) = &target_project {
+                let client = self.client.clone();
+                let entity = cx.entity().downgrade();
+                let pane_id = active_pane_id.clone();
+                let path = project.path.clone();
+                cx.spawn(async move |_entity, cx| {
+                    match client.git.list_branches(Some(&path)).await {
+                        Ok(branches) => cx.update(|cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
+                                        state.branches = Rc::new(branches.branches);
+                                        state.branch_loaded = true;
+                                        state.branch_is_git_repository = branches.is_git_repository;
+                                    }
+                                    cx.notify();
+                                });
+                            }
+                        }),
+                        Err(_) => cx.update(|cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
+                                        Rc::make_mut(&mut state.branches).clear();
+                                        state.branch_loaded = true;
+                                        state.branch_is_git_repository = false;
+                                    }
+                                    cx.notify();
+                                });
+                            }
+                        }),
+                    }
+                })
+                .detach();
+            }
+        } else if self.selected_project_id.is_none() && target_project_id.is_some() {
+            self.selected_project_id = target_project_id.clone();
+            if let Some(state) = self.workspace_pane_states.get_mut(&active_pane_id) {
+                state.selected_project_id = target_project_id.clone();
+            }
+        }
+
         self.selected_session_id = Some(id.clone());
-        let title = self
-            .sessions
-            .iter()
-            .find(|s| s.id == id)
+        let title = target_session
+            .as_ref()
             .map(|s| s.display_title().to_string())
             .unwrap_or_else(|| "Chat".to_string());
         self.open_chat_tab(id.clone(), title);
 
-        if prev_sid.as_deref() == Some(&id) {
+        if !is_different_project && prev_sid.as_deref() == Some(&id) {
             cx.notify();
             return;
         }

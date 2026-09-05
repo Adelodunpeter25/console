@@ -70,10 +70,20 @@ impl ConsoleDesktopApp {
             .unwrap_or_else(|| "pane-main".to_string());
         let approval_mode = self.pane_approval_mode(&pane_id);
         let selected_model = self.pane_selected_model(&pane_id);
-        let session_project_id = self.pane_project_id(&pane_id);
+        let session_project_id = self
+            .pane_project_id(&pane_id)
+            .or_else(|| self.selected_project_id.clone());
         let session_cwd = self
             .selected_project_for_pane(&pane_id)
-            .map(|project| project.path.clone());
+            .map(|project| project.path.clone())
+            .or_else(|| {
+                session_project_id.as_ref().and_then(|pid| {
+                    self.projects
+                        .iter()
+                        .find(|p| &p.id == pid)
+                        .map(|p| p.path.clone())
+                })
+            });
         cx.spawn(async move |entity, cx| {
             match client
                 .sessions

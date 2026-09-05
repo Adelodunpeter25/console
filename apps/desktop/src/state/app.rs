@@ -57,6 +57,9 @@ pub struct ConsoleDesktopApp {
     pub(crate) session_rename_input: Entity<ComposerInput>,
     /// The workspace pane tree (tabs, splits). Starts as a single leaf.
     pub workspace_root: WorkspaceNode,
+    /// Cached workspace pane trees per project (keyed by Some(project_id) or None for no-project chats).
+    pub(crate) project_workspace_roots:
+        std::collections::HashMap<Option<String>, WorkspaceNode>,
     /// The pane currently holding focus.
     pub active_pane_id: Option<String>,
     /// Shared with every pane's model picker; cloned per frame as a refcount
@@ -467,6 +470,7 @@ impl ConsoleDesktopApp {
             session_rename_id: None,
             session_rename_input,
             workspace_root: WorkspaceNode::leaf("pane-main"),
+            project_workspace_roots: std::collections::HashMap::new(),
             active_pane_id: Some("pane-main".into()),
             providers: Rc::new(Vec::new()),
             models_by_provider: Rc::new(std::collections::HashMap::new()),
@@ -765,7 +769,14 @@ impl ConsoleDesktopApp {
                                         .find(|session| {
                                             Some(&session.id) == this.selected_session_id.as_ref()
                                         })
-                                        .and_then(|session| session.project_id.clone());
+                                        .and_then(|session| {
+                                            session.project_id.clone().or_else(|| {
+                                                this.projects
+                                                    .iter()
+                                                    .find(|p| !session.cwd.is_empty() && p.path == session.cwd)
+                                                    .map(|p| p.id.clone())
+                                            })
+                                        });
                                 }
                                 if let Some(state) = this.workspace_pane_states.get_mut("pane-main")
                                 {
