@@ -8,6 +8,7 @@
  *   console status  - Check daemon status
  *   console logs    - Tail daemon logs
  *   console restart - Restart the daemon
+ *   console upgrade  - Re-download the latest binary and restart
  */
 import { Command } from "commander";
 import { startDaemon } from "./commands/start.js";
@@ -15,6 +16,7 @@ import { stopDaemon } from "./commands/stop.js";
 import { statusDaemon } from "./commands/status.js";
 import { logsDaemon } from "./commands/logs.js";
 import { restartDaemon } from "./commands/restart.js";
+import { upgradeDaemon } from "./commands/upgrade.js";
 
 const program = new Command();
 
@@ -42,6 +44,11 @@ program
   .option("-f, --follow", "Follow log output (tail -f)")
   .option("-n, --lines <number>", "Number of lines to show", "50")
   .action(logsDaemon);
+
+program
+  .command("upgrade")
+  .description("Re-download the latest console binary and restart the daemon")
+  .action(upgradeDaemon);
 
 program
   .command("restart")
