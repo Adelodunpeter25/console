@@ -216,7 +216,8 @@ impl ConsoleDesktopApp {
     }
 
     /// ⌘P — open the quick file search palette scoped to the active pane's
-    /// project root (falling back to the current directory).
+    /// project root. `None` when no project is selected so the palette shows
+    /// an empty state instead of falling back to the app's cwd.
     pub fn open_quick_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let pane_id = self
             .active_pane_id
@@ -224,12 +225,7 @@ impl ConsoleDesktopApp {
             .unwrap_or_else(|| "pane-main".to_string());
         let root = self
             .selected_project_for_pane(&pane_id)
-            .map(|project| project.path.clone())
-            .or_else(|| {
-                std::env::current_dir()
-                    .map(|p| p.to_string_lossy().to_string())
-                    .ok()
-            });
+            .map(|project| project.path.clone());
         self.quick_open_palette
             .update(cx, |palette, cx| palette.open(root, window, cx));
         cx.notify();

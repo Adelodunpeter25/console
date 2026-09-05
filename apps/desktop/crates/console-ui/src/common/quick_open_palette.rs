@@ -56,10 +56,35 @@ impl QuickOpenPalette {
     }
 
     /// Open the palette scoped to `root` and immediately list its top files.
+    /// `None` shows an empty state instead of searching the app's cwd.
     pub fn open(&mut self, root: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
-        self.root = root;
+        self.root = root.clone();
         self.search_generation = 0;
         self.last_dispatched_query = None;
+        if root.is_none() {
+            let this = cx.entity().downgrade();
+            self.modal.update(cx, |modal, cx| {
+                modal.reset_state(window, cx);
+                modal.set_placeholder("No project selected — press ⌘O to add one", cx);
+                modal.set_filterable(false, cx);
+                modal.set_query_handler(
+                    {
+                        let this = this.clone();
+                        move |query, _window, cx| {
+                            if let Some(this) = this.upgrade() {
+                                this.update(cx, |this, cx| {
+                                    this.schedule_search(query, /*immediate*/ false, cx)
+                                });
+                            }
+                        }
+                    },
+                    cx,
+                );
+                modal.set_entries(Vec::new(), cx);
+                modal.show(window, cx);
+            });
+            return;
+        }
         let this = cx.entity().downgrade();
         self.modal.update(cx, |modal, cx| {
             modal.reset_state(window, cx);
