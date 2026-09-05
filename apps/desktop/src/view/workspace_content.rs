@@ -2,13 +2,15 @@ use console_core::{
     ApprovalMode, ApproveToolPermissionDto, ModelFavorite, SelectedModel, UpdateSessionDto,
 };
 use console_ui::workspace::EmptyChatState;
+use console_ui::terminal::TerminalView;
 use console_ui::{
     ApprovalModeDropdown, ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
     QuestionInteractionCard, Theme, WorkspaceFooter, centered_stripe, error_banner, notice_banner,
     todo_card,
 };
 use gpui::{
-    App, Context, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder, px,
+    App, AppContext, Context, IntoElement, ParentElement, Styled, Window, div,
+    prelude::FluentBuilder, px,
 };
 use std::rc::Rc;
 
@@ -31,6 +33,19 @@ impl ConsoleDesktopApp {
 
         // Terminal tab: render the live terminal surface for its id.
         if let Some(console_core::WorkspaceTabConfig::Terminal { terminal_id, .. }) = active_tab {
+            if !self.terminals.contains_key(terminal_id) {
+                let cwd = self
+                    .selected_project_for_pane(pane_id)
+                    .map(|project| project.path.clone())
+                    .or_else(|| {
+                        std::env::current_dir()
+                            .map(|p| p.to_string_lossy().to_string())
+                            .ok()
+                    })
+                    .unwrap_or_else(|| ".".to_string());
+                let view = cx.new(|cx| TerminalView::with_cwd(cwd, self.client.clone(), window, cx));
+                self.terminals.insert(terminal_id.clone(), view);
+            }
             let theme = Theme::current(cx);
             return match self.terminals.get(terminal_id) {
                 Some(view) => div().size_full().child(view.clone()).into_any_element(),
@@ -48,6 +63,24 @@ impl ConsoleDesktopApp {
 
         // File tab: render full-page MarkdownViewer if markdown, or FileViewer
         if let Some(console_core::WorkspaceTabConfig::File { path, .. }) = active_tab {
+            if !self.open_file_contents.contains_key(path) {
+                let client = self.client.clone();
+                let file_path = path.clone();
+                cx.spawn(async move |entity, cx| {
+                    if let Ok(resp) = client.fs.read_file(&file_path).await {
+                        cx.update(|cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.open_file_contents.insert(file_path, resp.content);
+                                    cx.notify();
+                                });
+                            }
+                        });
+                    }
+                })
+                .detach();
+            }
+
             let content = self
                 .open_file_contents
                 .get(path)
@@ -89,6 +122,43 @@ impl ConsoleDesktopApp {
 
         // Diff tab: render full-page DiffViewer
         if let Some(console_core::WorkspaceTabConfig::Diff { path, .. }) = active_tab {
+            if !self.open_diff_contents.contains_key(path) {
+                let client = self.client.clone();
+                let file_path = path.clone();
+                let cwd = self
+                    .selected_session_id
+                    .as_deref()
+                    .and_then(|id| self.sessions.iter().find(|s| s.id == id))
+                    .map(|s| s.cwd.clone())
+                    .or_else(|| {
+                        self.selected_project_id
+                            .as_deref()
+                            .and_then(|id| self.projects.iter().find(|p| p.id == id))
+                            .map(|p| p.path.clone())
+                    });
+                cx.spawn(async move |entity, cx| {
+                    let mut diff_raw = String::new();
+                    if let Ok(resp) = client.git.get_diff(cwd.as_deref(), Some(&file_path)).await {
+                        diff_raw = resp.diff;
+                    }
+                    let diff_result = if !diff_raw.trim().is_empty() {
+                        console_core::utils::diff::parse_unified_diff(&diff_raw)
+                    } else {
+                        console_core::DiffResult::default()
+                    };
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.open_diff_contents
+                                    .insert(file_path, (diff_result, diff_raw));
+                                cx.notify();
+                            });
+                        }
+                    });
+                })
+                .detach();
+            }
+
             let (diff_result, raw_diff) = self
                 .open_diff_contents
                 .get(path)
