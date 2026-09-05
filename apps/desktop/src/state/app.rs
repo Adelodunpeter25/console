@@ -250,21 +250,56 @@ pub struct ConsoleDesktopApp {
 impl ConsoleDesktopApp {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let client = ConsoleClient::new(None);
+        let ws_doc = persistence::load_workspaces();
+        let mut project_workspace_roots = std::collections::HashMap::new();
+        for ws in ws_doc.workspaces {
+            project_workspace_roots.insert(ws.project_id, ws.root);
+        }
+        let ws_state = persistence::load_workspace_state();
         let layout = persistence::layout::load();
-        let sidebar_width = if layout.sidebar_width.is_finite() {
+
+        let sidebar_visible = ws_state.sidebar_visible;
+        let sidebar_width = if ws_state.sidebar_width.is_finite() && ws_state.sidebar_width > 0.0 {
+            ws_state
+                .sidebar_width
+                .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+        } else if layout.sidebar_width.is_finite() {
             layout
                 .sidebar_width
                 .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
         } else {
             SIDEBAR_DEFAULT_WIDTH
         };
-        let right_sidebar_width = if layout.right_sidebar_width.is_finite() {
-            layout
-                .right_sidebar_width
-                .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
-        } else {
-            RIGHT_SIDEBAR_DEFAULT_WIDTH
-        };
+        let right_sidebar_visible = ws_state.right_sidebar_visible;
+        let right_sidebar_width =
+            if ws_state.right_sidebar_width.is_finite() && ws_state.right_sidebar_width > 0.0 {
+                ws_state
+                    .right_sidebar_width
+                    .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
+            } else if layout.right_sidebar_width.is_finite() {
+                layout
+                    .right_sidebar_width
+                    .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
+            } else {
+                RIGHT_SIDEBAR_DEFAULT_WIDTH
+            };
+
+        let initial_selected_project_id = ws_state.active_workspace_id.as_ref().and_then(|wid| {
+            if wid == "__default__" {
+                None
+            } else {
+                Some(wid.clone())
+            }
+        });
+        let initial_root = initial_selected_project_id
+            .as_ref()
+            .and_then(|pid| project_workspace_roots.get(&Some(pid.clone())).cloned())
+            .or_else(|| project_workspace_roots.get(&None).cloned())
+            .unwrap_or_else(|| WorkspaceNode::leaf("pane-main"));
+        let initial_active_pane_id = initial_root
+            .first_leaf()
+            .map(|l| l.id.clone())
+            .or_else(|| Some("pane-main".into()));
         let transcript_view = cx.new(|cx| TranscriptView::new(cx));
         let composer_input = cx.new(|cx| ComposerInput::new(window, cx));
         let question_input = cx.new(|cx| {
@@ -469,9 +504,9 @@ impl ConsoleDesktopApp {
             selected_session_id: None,
             session_rename_id: None,
             session_rename_input,
-            workspace_root: WorkspaceNode::leaf("pane-main"),
-            project_workspace_roots: std::collections::HashMap::new(),
-            active_pane_id: Some("pane-main".into()),
+            workspace_root: initial_root,
+            project_workspace_roots,
+            active_pane_id: initial_active_pane_id,
             providers: Rc::new(Vec::new()),
             models_by_provider: Rc::new(std::collections::HashMap::new()),
             loading_models: std::collections::HashSet::new(),
@@ -482,7 +517,7 @@ impl ConsoleDesktopApp {
             model_menu,
             approval_menu,
             projects: Rc::new(Vec::new()),
-            selected_project_id: None,
+            selected_project_id: initial_selected_project_id,
             branches: Rc::new(Vec::new()),
             branch_loaded: false,
             branch_is_git_repository: false,
@@ -512,9 +547,9 @@ impl ConsoleDesktopApp {
             running_sessions: std::collections::HashMap::new(),
             session_run_tokens: std::collections::HashMap::new(),
             stream_render_pending: std::collections::HashMap::new(),
-            sidebar_visible: layout.sidebar_visible,
+            sidebar_visible,
             sidebar_width,
-            right_sidebar_visible: layout.right_sidebar_visible,
+            right_sidebar_visible,
             right_sidebar_width,
             right_sidebar_resize_start: None,
             inspector_active_tab: console_ui::InspectorTab::AllFiles,
@@ -650,6 +685,24 @@ impl ConsoleDesktopApp {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
                                 this.sessions = Rc::new(sessions);
+                                let mut to_load = Vec::new();
+                                for leaf in this.workspace_root.leaves() {
+                                    if let Some(session_id) = this.active_session_for_pane(&leaf.id) {
+                                        to_load.push((leaf.id.clone(), session_id));
+                                    }
+                                }
+                                for (pane_id, session_id) in to_load {
+                                    if this.active_pane_id.as_deref() == Some(&pane_id)
+                                        || this.selected_session_id.is_none()
+                                    {
+                                        this.selected_session_id = Some(session_id.clone());
+                                    }
+                                    this.load_session_messages_for_pane(
+                                        pane_id,
+                                        session_id,
+                                        cx,
+                                    );
+                                }
                                 cx.notify();
                             });
                         }
@@ -778,7 +831,11 @@ impl ConsoleDesktopApp {
                                             })
                                         });
                                 }
-                                if let Some(state) = this.workspace_pane_states.get_mut("pane-main")
+                                let active_id = this
+                                    .active_pane_id
+                                    .clone()
+                                    .unwrap_or_else(|| "pane-main".into());
+                                if let Some(state) = this.workspace_pane_states.get_mut(&active_id)
                                 {
                                     if state.selected_project_id.is_none() {
                                         state.selected_project_id =
@@ -786,16 +843,16 @@ impl ConsoleDesktopApp {
                                     }
                                 }
                                 let path = this
-                                    .selected_project_for_pane("pane-main")
+                                    .selected_project_for_pane(&active_id)
                                     .map(|project| project.path.clone());
                                 cx.notify();
-                                path
+                                path.map(|p| (active_id, p))
                             })
                         } else {
                             None
                         }
                     });
-                    if let Some(path) = project_path {
+                    if let Some((active_id, path)) = project_path {
                         let client = client_clone.clone();
                         let entity = entity.clone();
                         cx.spawn(async move |cx| {
@@ -808,7 +865,7 @@ impl ConsoleDesktopApp {
                                             this.branch_is_git_repository =
                                                 branches.is_git_repository;
                                             if let Some(state) =
-                                                this.workspace_pane_states.get_mut("pane-main")
+                                                this.workspace_pane_states.get_mut(&active_id)
                                             {
                                                 state.branches = Rc::new(branches.branches);
                                                 state.branch_loaded = true;

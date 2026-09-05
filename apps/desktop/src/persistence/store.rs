@@ -71,9 +71,9 @@ fn app_folder_name() -> &'static str {
     }
 }
 
-fn storage_path() -> PathBuf {
+pub(crate) fn storage_directory() -> PathBuf {
     if let Ok(path) = std::env::var("CONSOLE_STATE_DIR") {
-        return PathBuf::from(path).join("state.json");
+        return PathBuf::from(path);
     }
 
     let folder = app_folder_name();
@@ -83,21 +83,18 @@ fn storage_path() -> PathBuf {
         return PathBuf::from(home)
             .join("Library")
             .join("Application Support")
-            .join(folder)
-            .join("state.json");
+            .join(folder);
     }
 
     #[cfg(target_os = "windows")]
     if let Ok(app_data) = std::env::var("APPDATA") {
-        return PathBuf::from(app_data).join(folder).join("state.json");
+        return PathBuf::from(app_data).join(folder);
     }
 
     let unix_folder = folder.to_lowercase().replace(' ', "-");
 
     if let Ok(config_home) = std::env::var("XDG_CONFIG_HOME") {
-        return PathBuf::from(config_home)
-            .join(&unix_folder)
-            .join("state.json");
+        return PathBuf::from(config_home).join(&unix_folder);
     }
 
     std::env::var("HOME")
@@ -105,7 +102,10 @@ fn storage_path() -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from("."))
         .join(".config")
         .join(&unix_folder)
-        .join("state.json")
+}
+
+fn storage_path() -> PathBuf {
+    storage_directory().join("state.json")
 }
 
 fn read_document() -> StorageDocument {

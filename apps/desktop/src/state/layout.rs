@@ -34,6 +34,86 @@ impl ConsoleDesktopApp {
                 .map(|group| group.index())
                 .collect(),
         });
+        let cur_wid = self
+            .selected_project_id
+            .clone()
+            .unwrap_or_else(|| "__default__".to_string());
+        let doc = persistence::WorkspaceStateDocument {
+            version: 1,
+            active_workspace_id: Some(cur_wid),
+            sidebar_visible: self.sidebar_visible,
+            sidebar_width: self.sidebar_width,
+            right_sidebar_visible: self.right_sidebar_visible,
+            right_sidebar_width: self.right_sidebar_width,
+            windows: self
+                .saved_window_state
+                .map(|b| vec![persistence::PersistedWindowDescriptor { bounds: b }])
+                .unwrap_or_default(),
+        };
+        persistence::save_workspace_state(&doc);
+    }
+
+    pub fn persist_workspaces(&self) {
+        let mut workspaces_map = std::collections::HashMap::new();
+
+        for (proj_id_opt, root) in &self.project_workspace_roots {
+            let wid = proj_id_opt
+                .clone()
+                .unwrap_or_else(|| "__default__".to_string());
+            let active_tab_id = root.leaves().first().and_then(|l| l.active_tab_id.clone());
+            let proj_info = proj_id_opt
+                .as_ref()
+                .and_then(|pid| self.projects.iter().find(|p| &p.id == pid));
+            workspaces_map.insert(
+                wid.clone(),
+                persistence::PersistedWorkspace {
+                    id: wid,
+                    project_id: proj_id_opt.clone(),
+                    cwd: proj_info.map(|p| p.path.clone()),
+                    name: proj_info.map(|p| p.name.clone()),
+                    root: root.clone(),
+                    active_tab_id,
+                },
+            );
+        }
+
+        let cur_wid = self
+            .selected_project_id
+            .clone()
+            .unwrap_or_else(|| "__default__".to_string());
+        let cur_active_tab = self
+            .active_pane_id
+            .as_deref()
+            .and_then(|pid| self.workspace_root.leaves().into_iter().find(|l| l.id == pid))
+            .and_then(|l| l.active_tab_id.clone())
+            .or_else(|| {
+                self.workspace_root
+                    .leaves()
+                    .first()
+                    .and_then(|l| l.active_tab_id.clone())
+            });
+        let cur_proj = self
+            .selected_project_id
+            .as_ref()
+            .and_then(|pid| self.projects.iter().find(|p| &p.id == pid));
+        workspaces_map.insert(
+            cur_wid.clone(),
+            persistence::PersistedWorkspace {
+                id: cur_wid.clone(),
+                project_id: self.selected_project_id.clone(),
+                cwd: cur_proj.map(|p| p.path.clone()),
+                name: cur_proj.map(|p| p.name.clone()),
+                root: self.workspace_root.clone(),
+                active_tab_id: cur_active_tab,
+            },
+        );
+
+        let doc = persistence::WorkspacesDocument {
+            version: 1,
+            active_workspace_id: Some(cur_wid),
+            workspaces: workspaces_map.into_values().collect(),
+        };
+        persistence::save_workspaces(&doc);
     }
 
     /// Collapse or expand a sidebar date group.
@@ -170,6 +250,20 @@ impl ConsoleDesktopApp {
         if let Some(state) = self.pending_window_state.take() {
             persistence::window::save(state);
             self.saved_window_state = Some(state);
+            let cur_wid = self
+                .selected_project_id
+                .clone()
+                .unwrap_or_else(|| "__default__".to_string());
+            let doc = persistence::WorkspaceStateDocument {
+                version: 1,
+                active_workspace_id: Some(cur_wid),
+                sidebar_visible: self.sidebar_visible,
+                sidebar_width: self.sidebar_width,
+                right_sidebar_visible: self.right_sidebar_visible,
+                right_sidebar_width: self.right_sidebar_width,
+                windows: vec![persistence::PersistedWindowDescriptor { bounds: state }],
+            };
+            persistence::save_workspace_state(&doc);
         }
     }
 }

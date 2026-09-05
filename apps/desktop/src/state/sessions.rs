@@ -475,11 +475,15 @@ impl ConsoleDesktopApp {
                 })
                 .detach();
             }
+            self.persist_layout();
+            self.persist_workspaces();
         } else if self.selected_project_id.is_none() && target_project_id.is_some() {
             self.selected_project_id = target_project_id.clone();
             if let Some(state) = self.workspace_pane_states.get_mut(&active_pane_id) {
                 state.selected_project_id = target_project_id.clone();
             }
+            self.persist_layout();
+            self.persist_workspaces();
         }
 
         self.selected_session_id = Some(id.clone());

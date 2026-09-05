@@ -396,11 +396,30 @@ impl ConsoleDesktopApp {
     }
 
     /// Open (or activate) a chat tab for a session in the active pane.
+    /// If the chat is already open in any split, focuses that split instead of creating a duplicate.
     pub fn open_chat_tab(
         &mut self,
         session_id: impl Into<String>,
         title: impl Into<String>,
     ) -> String {
+        let session_id = session_id.into();
+        let tab_id = format!("chat:{session_id}");
+
+        // If this chat is already open in ANY pane in the workspace tree,
+        // switch to that pane and select its tab instead of duplicating it into another split.
+        if let Some(existing_pane_id) = self.workspace_root.leaves().iter().find_map(|leaf| {
+            if leaf.tabs.iter().any(|t| t.id() == tab_id) {
+                Some(leaf.id.clone())
+            } else {
+                None
+            }
+        }) {
+            workspace_ops::select_tab(&mut self.workspace_root, &existing_pane_id, &tab_id);
+            self.active_pane_id = Some(existing_pane_id);
+            self.persist_workspaces();
+            return tab_id;
+        }
+
         let pane_id = self
             .active_pane_id
             .clone()
@@ -415,6 +434,17 @@ impl ConsoleDesktopApp {
         title: impl Into<String>,
     ) -> String {
         let session_id = session_id.into();
+        let tab_id = format!("chat:{session_id}");
+
+        if let Some(leaf) = self.workspace_root.leaves().iter().find(|l| l.id == pane_id) {
+            if leaf.tabs.iter().any(|t| t.id() == tab_id) {
+                workspace_ops::select_tab(&mut self.workspace_root, pane_id, &tab_id);
+                self.active_pane_id = Some(pane_id.to_string());
+                self.persist_workspaces();
+                return tab_id;
+            }
+        }
+
         let tab = WorkspaceTabConfig::Chat {
             session_id: session_id.clone(),
             title: title.into(),
@@ -422,6 +452,7 @@ impl ConsoleDesktopApp {
         };
         workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
         self.active_pane_id = Some(pane_id.to_string());
+        self.persist_workspaces();
         format!("chat:{session_id}")
     }
 
@@ -466,6 +497,7 @@ impl ConsoleDesktopApp {
         };
         workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
         self.active_pane_id = Some(pane_id.to_string());
+        self.persist_workspaces();
         cx.notify();
     }
 
@@ -531,6 +563,7 @@ impl ConsoleDesktopApp {
         self.preview_tab = Some((new_tab_id, created_at));
         self.active_pane_id = Some(pane_id.to_string());
         self.inspector_selected_path = Some(path.clone());
+        self.persist_workspaces();
 
         // Fetch file content if not cached
         let client = self.client.clone();
@@ -605,6 +638,7 @@ impl ConsoleDesktopApp {
         self.preview_tab = Some((new_tab_id, created_at));
         self.active_pane_id = Some(pane_id.to_string());
         self.inspector_selected_path = Some(path.clone());
+        self.persist_workspaces();
 
         let client = self.client.clone();
         let file_path = path.clone();
@@ -649,7 +683,9 @@ impl ConsoleDesktopApp {
 
     /// Close a tab in a pane. Returns the newly active tab id, if any.
     pub fn close_workspace_tab(&mut self, pane_id: &str, tab_id: &str) -> Option<String> {
-        workspace_ops::close_tab(&mut self.workspace_root, pane_id, tab_id)
+        let res = workspace_ops::close_tab(&mut self.workspace_root, pane_id, tab_id);
+        self.persist_workspaces();
+        res
     }
 
     /// Close every tab matching `predicate` across all panes.
@@ -658,12 +694,14 @@ impl ConsoleDesktopApp {
         predicate: impl Fn(&WorkspaceTabConfig) -> bool,
     ) {
         workspace_ops::close_matching_tabs(&mut self.workspace_root, predicate);
+        self.persist_workspaces();
     }
 
     /// Activate a tab in a pane.
     pub fn select_workspace_tab(&mut self, pane_id: &str, tab_id: &str) {
         workspace_ops::select_tab(&mut self.workspace_root, pane_id, tab_id);
         self.active_pane_id = Some(pane_id.to_string());
+        self.persist_workspaces();
     }
 
     pub fn focus_workspace_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
@@ -706,6 +744,7 @@ impl ConsoleDesktopApp {
                 }
             }
         }
+        self.persist_workspaces();
         cx.notify();
     }
 
@@ -765,6 +804,7 @@ impl ConsoleDesktopApp {
                 });
             self.load_session_messages_for_pane(target_pane_id, session_id, cx);
         }
+        self.persist_workspaces();
         cx.notify();
     }
 
@@ -832,6 +872,7 @@ impl ConsoleDesktopApp {
                 });
             self.load_session_messages_for_pane(new_pane_id, session_id, cx);
         }
+        self.persist_workspaces();
         cx.notify();
     }
 }
