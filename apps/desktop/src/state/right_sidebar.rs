@@ -82,6 +82,12 @@ impl ConsoleDesktopApp {
         }
     }
 
+    pub fn toggle_right_sidebar_bottom_collapsed(&mut self, cx: &mut Context<Self>) {
+        self.right_sidebar_bottom_collapsed = !self.right_sidebar_bottom_collapsed;
+        self.persist_layout();
+        cx.notify();
+    }
+
     pub fn select_right_sidebar_terminal_tab(
         &mut self,
         index: usize,
@@ -91,6 +97,10 @@ impl ConsoleDesktopApp {
         let Some(cwd) = cwd else {
             return;
         };
+        if self.right_sidebar_bottom_collapsed {
+            self.right_sidebar_bottom_collapsed = false;
+            self.persist_layout();
+        }
         if let Some(state) = self.right_sidebar_terminals_by_cwd.get_mut(&cwd) {
             if index < state.terminals.len() {
                 state.active_idx = index;
@@ -109,6 +119,11 @@ impl ConsoleDesktopApp {
         let Some(cwd) = cwd else {
             return;
         };
+
+        if self.right_sidebar_bottom_collapsed {
+            self.right_sidebar_bottom_collapsed = false;
+            self.persist_layout();
+        }
 
         let state = self
             .right_sidebar_terminals_by_cwd

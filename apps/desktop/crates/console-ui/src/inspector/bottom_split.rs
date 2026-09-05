@@ -18,6 +18,7 @@ pub struct TerminalTabInfo {
 #[derive(IntoElement)]
 pub struct RightSidebarBottomSplit {
     height: f32,
+    collapsed: bool,
     tabs: Vec<TerminalTabInfo>,
     active_tab_index: usize,
     terminal_element: Option<gpui::AnyElement>,
@@ -25,11 +26,13 @@ pub struct RightSidebarBottomSplit {
     on_close_tab: Option<Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>>,
     on_begin_resize: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static>,
     on_new_terminal: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+    on_toggle_collapsed: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
 }
 
 impl RightSidebarBottomSplit {
     pub fn new(
         height: f32,
+        collapsed: bool,
         tabs: Vec<TerminalTabInfo>,
         active_tab_index: usize,
         terminal_element: Option<gpui::AnyElement>,
@@ -38,6 +41,7 @@ impl RightSidebarBottomSplit {
     ) -> Self {
         Self {
             height,
+            collapsed,
             tabs,
             active_tab_index,
             terminal_element,
@@ -45,6 +49,7 @@ impl RightSidebarBottomSplit {
             on_close_tab: None,
             on_begin_resize,
             on_new_terminal: None,
+            on_toggle_collapsed: None,
         }
     }
 
@@ -63,6 +68,14 @@ impl RightSidebarBottomSplit {
         self.on_new_terminal = Some(callback);
         self
     }
+
+    pub fn with_toggle_collapsed(
+        mut self,
+        callback: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    ) -> Self {
+        self.on_toggle_collapsed = Some(callback);
+        self
+    }
 }
 
 impl RenderOnce for RightSidebarBottomSplit {
@@ -70,11 +83,14 @@ impl RenderOnce for RightSidebarBottomSplit {
         let theme = Theme::current(cx);
         let on_resize = self.on_begin_resize;
         let on_tab = self.on_select_tab;
+        let on_toggle_collapsed = self.on_toggle_collapsed.clone();
+        let is_collapsed = self.collapsed;
 
         div()
             .id("right-sidebar-bottom-split")
             .w_full()
-            .h(px(self.height))
+            .when(!is_collapsed, |s| s.h(px(self.height)))
+            .when(is_collapsed, |s| s.h(px(32.0)))
             .flex_none()
             .flex()
             .flex_col()
@@ -82,25 +98,27 @@ impl RenderOnce for RightSidebarBottomSplit {
             .border_t_1()
             .border_color(theme.sidebar_border)
             .relative()
-            // Top horizontal drag handle for resizing height
-            .child(
-                div()
-                    .id("right-sidebar-bottom-resize-handle")
-                    .absolute()
-                    .top(px(-3.0))
-                    .left_0()
-                    .right_0()
-                    .h(px(6.0))
-                    .cursor_row_resize()
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        move |event: &MouseDownEvent, window, cx| {
-                            cx.stop_propagation();
-                            (on_resize)(f32::from(event.position.y), window, cx);
-                        },
-                    ),
-            )
-            // Bottom Bar Header: Tabs ([Terminal 1] [Terminal 2] [+])
+            // Top horizontal drag handle for resizing height (only when expanded)
+            .when(!is_collapsed, |el| {
+                el.child(
+                    div()
+                        .id("right-sidebar-bottom-resize-handle")
+                        .absolute()
+                        .top(px(-3.0))
+                        .left_0()
+                        .right_0()
+                        .h(px(6.0))
+                        .cursor_row_resize()
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            move |event: &MouseDownEvent, window, cx| {
+                                cx.stop_propagation();
+                                (on_resize)(f32::from(event.position.y), window, cx);
+                            },
+                        ),
+                )
+            })
+            // Bottom Bar Header: Chevron ([v] / [^]) + Tabs ([Terminal 1] [Terminal 2] [+])
             .child(
                 div()
                     .h(px(32.0))
@@ -109,7 +127,7 @@ impl RenderOnce for RightSidebarBottomSplit {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .px(px(8.0))
+                    .px(px(6.0))
                     .bg(theme.sidebar)
                     .border_b_1()
                     .border_color(theme.sidebar_border)
@@ -119,25 +137,56 @@ impl RenderOnce for RightSidebarBottomSplit {
                             .items_center()
                             .gap(px(4.0))
                             .overflow_x_hidden()
+                            // Chevron collapse/expand button
+                            .when_some(on_toggle_collapsed, |el, on_toggle| {
+                                el.child(
+                                    div()
+                                        .id("bottom-collapse-btn")
+                                        .size(px(20.0))
+                                        .rounded(px(4.0))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .cursor_pointer()
+                                        .hover(|s| s.bg(theme.overlay))
+                                        .on_click(move |_, window, cx| {
+                                            (on_toggle)(window, cx);
+                                        })
+                                        .child(app_icon(
+                                            if is_collapsed {
+                                                IconName::ChevronUp
+                                            } else {
+                                                IconName::ChevronDown
+                                            },
+                                            12.0,
+                                            theme.text_tertiary,
+                                        )),
+                                )
+                            })
                             .children(self.tabs.into_iter().enumerate().map(|(idx, tab_info)| {
                                 let is_active = idx == self.active_tab_index;
                                 let on_tab = on_tab.clone();
                                 let on_close = self.on_close_tab.clone();
                                 let tab_id = format!("bottom-tab-{}", tab_info.id);
+                                let group_name = format!("bottom-tab-group-{}", tab_info.id);
 
                                 div()
                                     .id(gpui::ElementId::from(tab_id))
+                                    .h(px(31.0))
                                     .flex()
                                     .items_center()
-                                    .gap(px(4.0))
-                                    .px(px(6.0))
-                                    .py(px(2.0))
-                                    .rounded(px(4.0))
+                                    .gap(px(5.0))
+                                    .px(px(8.0))
                                     .cursor_pointer()
-                                    .bg(if is_active {
-                                        theme.surface
-                                    } else {
-                                        gpui::transparent_black()
+                                    .group(group_name.clone())
+                                    .when(is_active, |s| {
+                                        s.border_b_2()
+                                            .border_color(theme.accent)
+                                            .text_color(theme.text)
+                                    })
+                                    .when(!is_active, |s| {
+                                        s.text_color(theme.text_tertiary)
+                                            .hover(|h| h.bg(theme.raised).text_color(theme.text))
                                     })
                                     .text_size(px(11.0))
                                     .font_weight(if is_active {
@@ -145,25 +194,11 @@ impl RenderOnce for RightSidebarBottomSplit {
                                     } else {
                                         gpui::FontWeight::NORMAL
                                     })
-                                    .text_color(if is_active {
-                                        theme.text
-                                    } else {
-                                        theme.text_tertiary
-                                    })
-                                    .hover(|s| s.bg(theme.overlay))
                                     .on_click(move |_, window, cx| {
                                         (on_tab)(idx, window, cx);
                                     })
-                                    .child(app_icon(
-                                        IconName::Terminal,
-                                        12.0,
-                                        if is_active {
-                                            theme.text
-                                        } else {
-                                            theme.text_tertiary
-                                        },
-                                    ))
                                     .child(tab_info.title)
+                                    // Close Tab Button: hidden until the tab is hovered
                                     .when_some(on_close, |el, on_close| {
                                         el.child(
                                             div()
@@ -177,57 +212,64 @@ impl RenderOnce for RightSidebarBottomSplit {
                                                 .items_center()
                                                 .justify_center()
                                                 .cursor_pointer()
+                                                .invisible()
+                                                .group_hover(group_name.clone(), |el| el.visible())
                                                 .hover(|s| s.bg(theme.overlay_strong))
-                                                .on_click(move |_event, window, cx| {
-                                                    cx.stop_propagation();
-                                                    (on_close)(idx, window, cx);
-                                                })
+                                                .on_mouse_down(
+                                                    MouseButton::Left,
+                                                    move |_, window, cx| {
+                                                        cx.stop_propagation();
+                                                        (on_close)(idx, window, cx);
+                                                    },
+                                                )
                                                 .child(app_icon(
-                                                    IconName::Close,
-                                                    9.0,
+                                                    IconName::X,
+                                                    10.0,
                                                     theme.text_tertiary,
                                                 )),
                                         )
                                     })
-                            })),
-                    )
-                    .when_some(self.on_new_terminal, |el, on_new| {
-                        el.child(
-                            div()
-                                .id("bottom-new-terminal-btn")
-                                .size(px(20.0))
-                                .rounded(px(4.0))
+                            }))
+                            .when_some(self.on_new_terminal, |el, on_new| {
+                                el.child(
+                                    div()
+                                        .id("bottom-new-terminal-btn")
+                                        .size(px(20.0))
+                                        .rounded(px(4.0))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .cursor_pointer()
+                                        .hover(|s| s.bg(theme.overlay))
+                                        .on_click(move |_, window, cx| {
+                                            (on_new)(window, cx);
+                                        })
+                                        .child(app_icon(IconName::Plus, 11.0, theme.text_tertiary)),
+                                )
+                            }),
+                    ),
+            )
+            // Bottom Content Body (only shown when expanded)
+            .when(!is_collapsed, |el| {
+                el.child(
+                    div()
+                        .flex_1()
+                        .w_full()
+                        .min_h_0()
+                        .overflow_hidden()
+                        .child(match self.terminal_element {
+                            Some(term) => term,
+                            None => div()
+                                .size_full()
                                 .flex()
                                 .items_center()
                                 .justify_center()
-                                .cursor_pointer()
-                                .hover(|s| s.bg(theme.overlay))
-                                .on_click(move |_, window, cx| {
-                                    (on_new)(window, cx);
-                                })
-                                .child(app_icon(IconName::Plus, 11.0, theme.text_tertiary)),
-                        )
-                    }),
-            )
-            // Bottom Content Body
-            .child(
-                div()
-                    .flex_1()
-                    .w_full()
-                    .min_h_0()
-                    .overflow_hidden()
-                    .child(match self.terminal_element {
-                        Some(term) => term,
-                        None => div()
-                            .size_full()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_size(px(11.0))
-                            .text_color(theme.text_ghost)
-                            .child("No terminal active")
-                            .into_any_element(),
-                    }),
-            )
+                                .text_size(px(11.0))
+                                .text_color(theme.text_ghost)
+                                .child("No terminal active")
+                                .into_any_element(),
+                        }),
+                )
+            })
     }
 }

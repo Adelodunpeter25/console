@@ -161,6 +161,7 @@ pub struct ConsoleDesktopApp {
     pub(crate) right_sidebar_resize_start: Option<(f32, f32)>,
     pub right_sidebar_bottom_height: f32,
     pub(crate) right_sidebar_bottom_resize_start: Option<(f32, f32)>,
+    pub right_sidebar_bottom_collapsed: bool,
     pub right_sidebar_terminals_by_cwd:
         std::collections::HashMap<String, WorkspaceTerminalState>,
     pub(crate) persisted_bottom_terminals:
@@ -294,6 +295,7 @@ impl ConsoleDesktopApp {
             right_sidebar_visible,
             right_sidebar_width,
             right_sidebar_bottom_height,
+            right_sidebar_bottom_collapsed,
             initial_selected_project_id,
             initial_root,
             initial_saved_window_state,
@@ -340,6 +342,7 @@ impl ConsoleDesktopApp {
                 } else {
                     RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT
                 };
+                let rsb_bottom_collapsed = desc.right_sidebar_bottom_collapsed;
                 (
                     wid,
                     sb_visible,
@@ -347,6 +350,7 @@ impl ConsoleDesktopApp {
                     rsb_visible,
                     rsb_width,
                     rsb_bottom_height,
+                    rsb_bottom_collapsed,
                     proj_id,
                     root,
                     Some(desc.bounds),
@@ -398,6 +402,7 @@ impl ConsoleDesktopApp {
                 } else {
                     RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT
                 };
+                let rsb_bottom_collapsed = ws_state.right_sidebar_bottom_collapsed;
                 let proj_id = ws_state.active_workspace_id.as_ref().and_then(|wid| {
                     if wid == "__default__" {
                         None
@@ -417,6 +422,7 @@ impl ConsoleDesktopApp {
                     rsb_visible,
                     rsb_width,
                     rsb_bottom_height,
+                    rsb_bottom_collapsed,
                     proj_id,
                     root,
                     persistence::store::load_window(),
@@ -454,6 +460,7 @@ impl ConsoleDesktopApp {
                 } else {
                     RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT
                 };
+                let rsb_bottom_collapsed = ws_state.right_sidebar_bottom_collapsed;
                 (
                     wid,
                     sb_visible,
@@ -461,6 +468,7 @@ impl ConsoleDesktopApp {
                     rsb_visible,
                     rsb_width,
                     rsb_bottom_height,
+                    rsb_bottom_collapsed,
                     None,
                     WorkspaceNode::leaf("pane-main"),
                     None,
@@ -725,6 +733,7 @@ impl ConsoleDesktopApp {
             right_sidebar_resize_start: None,
             right_sidebar_bottom_height,
             right_sidebar_bottom_resize_start: None,
+            right_sidebar_bottom_collapsed,
             right_sidebar_terminals_by_cwd: std::collections::HashMap::new(),
             persisted_bottom_terminals,
             inspector_active_tab: console_ui::InspectorTab::AllFiles,

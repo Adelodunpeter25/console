@@ -461,6 +461,18 @@ impl Render for ConsoleDesktopApp {
                 }
             })
         };
+        let on_toggle_right_sidebar_bottom_collapsed: Rc<
+            dyn Fn(&mut Window, &mut App) + 'static,
+        > = {
+            let entity = entity.clone();
+            Rc::new(move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.toggle_right_sidebar_bottom_collapsed(cx);
+                    });
+                }
+            })
+        };
 
         div()
             .id("app-root")
@@ -880,6 +892,7 @@ impl Render for ConsoleDesktopApp {
 
                         let bottom_split = RightSidebarBottomSplit::new(
                             self.right_sidebar_bottom_height,
+                            self.right_sidebar_bottom_collapsed,
                             tabs,
                             active_idx,
                             terminal_element,
@@ -887,7 +900,8 @@ impl Render for ConsoleDesktopApp {
                             on_begin_right_sidebar_bottom_resize,
                         )
                         .with_close_tab(on_close_right_sidebar_bottom_tab)
-                        .with_new_terminal(on_new_right_sidebar_terminal);
+                        .with_new_terminal(on_new_right_sidebar_terminal)
+                        .with_toggle_collapsed(on_toggle_right_sidebar_bottom_collapsed);
 
                         el.child(
                             RightSidebar::new(

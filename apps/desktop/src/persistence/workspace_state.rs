@@ -25,6 +25,8 @@ pub struct PersistedWindowDescriptor {
     pub right_sidebar_width: f32,
     #[serde(default = "default_right_sidebar_bottom_height")]
     pub right_sidebar_bottom_height: f32,
+    #[serde(default)]
+    pub right_sidebar_bottom_collapsed: bool,
 }
 
 fn default_sidebar_visible() -> bool {
@@ -59,6 +61,8 @@ pub struct WorkspaceStateDocument {
     pub right_sidebar_width: f32,
     #[serde(default = "default_right_sidebar_bottom_height")]
     pub right_sidebar_bottom_height: f32,
+    #[serde(default)]
+    pub right_sidebar_bottom_collapsed: bool,
     #[serde(default)]
     pub windows: Vec<PersistedWindowDescriptor>,
 }
