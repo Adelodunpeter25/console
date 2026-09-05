@@ -99,15 +99,23 @@ impl ConsoleDesktopApp {
             let proj_info = proj_id_opt
                 .as_ref()
                 .and_then(|pid| self.projects.iter().find(|p| &p.id == pid));
+            let cwd = proj_info.map(|p| p.path.clone());
+            let (term_count, term_active_idx) = cwd
+                .as_ref()
+                .and_then(|c| self.right_sidebar_terminals_by_cwd.get(c))
+                .map(|t| (Some(t.terminals.len()), Some(t.active_idx)))
+                .unwrap_or((None, None));
             workspaces_map.insert(
                 wid.clone(),
                 persistence::PersistedWorkspace {
                     id: wid,
                     project_id: proj_id_opt.clone(),
-                    cwd: proj_info.map(|p| p.path.clone()),
+                    cwd,
                     name: proj_info.map(|p| p.name.clone()),
                     root: clean_root,
                     active_tab_id,
+                    bottom_terminal_tab_count: term_count,
+                    bottom_terminal_active_idx: term_active_idx,
                 },
             );
         }
@@ -132,15 +140,26 @@ impl ConsoleDesktopApp {
             .selected_project_id
             .as_ref()
             .and_then(|pid| self.projects.iter().find(|p| &p.id == pid));
+        let cur_cwd = cur_proj.map(|p| p.path.clone()).or_else(|| {
+            let (_, cwd) = self.active_inspector_target();
+            cwd
+        });
+        let (cur_term_count, cur_term_active_idx) = cur_cwd
+            .as_ref()
+            .and_then(|c| self.right_sidebar_terminals_by_cwd.get(c))
+            .map(|t| (Some(t.terminals.len()), Some(t.active_idx)))
+            .unwrap_or((None, None));
         workspaces_map.insert(
             cur_wid.clone(),
             persistence::PersistedWorkspace {
                 id: cur_wid.clone(),
                 project_id: self.selected_project_id.clone(),
-                cwd: cur_proj.map(|p| p.path.clone()),
+                cwd: cur_cwd,
                 name: cur_proj.map(|p| p.name.clone()),
                 root: clean_cur_root,
                 active_tab_id: cur_active_tab,
+                bottom_terminal_tab_count: cur_term_count,
+                bottom_terminal_active_idx: cur_term_active_idx,
             },
         );
 

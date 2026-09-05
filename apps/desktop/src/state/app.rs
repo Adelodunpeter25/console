@@ -163,6 +163,8 @@ pub struct ConsoleDesktopApp {
     pub(crate) right_sidebar_bottom_resize_start: Option<(f32, f32)>,
     pub right_sidebar_terminals_by_cwd:
         std::collections::HashMap<String, WorkspaceTerminalState>,
+    pub(crate) persisted_bottom_terminals:
+        std::collections::HashMap<String, (usize, usize)>,
     pub inspector_active_tab: console_ui::InspectorTab,
     pub inspector_search_query: String,
     pub inspector_tree: Rc<Vec<console_ui::FileTreeNode>>,
@@ -271,8 +273,16 @@ impl ConsoleDesktopApp {
         let client = ConsoleClient::new(None);
         let ws_doc = persistence::load_workspaces();
         let mut project_workspace_roots = std::collections::HashMap::new();
+        let mut persisted_bottom_terminals = std::collections::HashMap::new();
         for ws in ws_doc.workspaces {
             project_workspace_roots.insert(ws.project_id, ws.root);
+            if let Some(cwd) = ws.cwd {
+                if let (Some(count), Some(active_idx)) =
+                    (ws.bottom_terminal_tab_count, ws.bottom_terminal_active_idx)
+                {
+                    persisted_bottom_terminals.insert(cwd, (count, active_idx));
+                }
+            }
         }
         let ws_state = persistence::load_workspace_state();
         let layout = persistence::layout::load();
@@ -716,6 +726,7 @@ impl ConsoleDesktopApp {
             right_sidebar_bottom_height,
             right_sidebar_bottom_resize_start: None,
             right_sidebar_terminals_by_cwd: std::collections::HashMap::new(),
+            persisted_bottom_terminals,
             inspector_active_tab: console_ui::InspectorTab::AllFiles,
             inspector_search_query: String::new(),
             inspector_tree: Rc::new(Vec::new()),

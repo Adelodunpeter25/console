@@ -94,6 +94,7 @@ impl ConsoleDesktopApp {
         if let Some(state) = self.right_sidebar_terminals_by_cwd.get_mut(&cwd) {
             if index < state.terminals.len() {
                 state.active_idx = index;
+                self.persist_workspaces();
                 cx.notify();
             }
         }
@@ -137,6 +138,7 @@ impl ConsoleDesktopApp {
 
         state.terminals.push((id, terminal));
         state.active_idx = state.terminals.len().saturating_sub(1);
+        self.persist_workspaces();
         cx.notify();
     }
 
@@ -156,6 +158,7 @@ impl ConsoleDesktopApp {
                 if state.active_idx >= state.terminals.len() {
                     state.active_idx = state.terminals.len().saturating_sub(1);
                 }
+                self.persist_workspaces();
                 cx.notify();
             }
         }
@@ -273,21 +276,31 @@ impl ConsoleDesktopApp {
                 next_id: 1,
             });
 
-        // If no terminals exist for this workspace, spawn the initial Terminal 1
+        // If no terminals exist for this workspace, restore persisted tab count (max 3) or spawn initial Terminal 1
         if state.terminals.is_empty() {
-            let id = state.next_id;
-            state.next_id += 1;
+            let (target_count, target_active_idx) = self
+                .persisted_bottom_terminals
+                .get(&cwd)
+                .cloned()
+                .unwrap_or((1, 0));
+            let target_count = target_count.clamp(1, 3);
 
             let client = self.client.clone();
-            let terminal = cx.new(|cx| {
-                let params = console_core::types::terminal::TerminalSpawnParams {
-                    cwd,
-                    ..Default::default()
-                };
-                console_ui::terminal::TerminalView::new(params, client, window, cx)
-            });
-            state.terminals.push((id, terminal));
-            state.active_idx = 0;
+            for _ in 0..target_count {
+                let id = state.next_id;
+                state.next_id += 1;
+                let client = client.clone();
+                let cwd_clone = cwd.clone();
+                let terminal = cx.new(|cx| {
+                    let params = console_core::types::terminal::TerminalSpawnParams {
+                        cwd: cwd_clone,
+                        ..Default::default()
+                    };
+                    console_ui::terminal::TerminalView::new(params, client, window, cx)
+                });
+                state.terminals.push((id, terminal));
+            }
+            state.active_idx = target_active_idx.min(state.terminals.len().saturating_sub(1));
         }
     }
 
