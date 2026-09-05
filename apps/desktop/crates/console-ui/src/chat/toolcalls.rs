@@ -23,7 +23,7 @@ use crate::markdown::render::{
     LinkHandler, MarkdownView, Palette, TranscriptSelection, plain_text,
 };
 use crate::markdown::{highlight, render as markdown_render};
-use crate::primitives::{IconName, activity_icon, app_icon, file_type_icon, icon};
+use crate::primitives::{IconName, activity_icon, app_icon, file_type_icon, icon, motion};
 use crate::theme::Theme;
 use crate::utils::time::{format_working_elapsed, normalize_unix_timestamp};
 // `format_elapsed` was unified into `format_working_elapsed` (C); kept
@@ -261,6 +261,18 @@ impl ToolCalls {
         }
     }
 
+    /// Status glyph for a tool row. The pending loader rides the shared pulse
+    /// clock (slow stride — the transcript is expensive to rebuild) so a
+    /// running call reads as live, not stuck. Done/error stay static icons.
+    fn status_element(icon: IconName, color: gpui::Hsla, pending: bool) -> AnyElement {
+        let svg = app_icon(icon, 13.0, color);
+        if pending {
+            motion::spin_slow(svg)
+        } else {
+            svg.into_any_element()
+        }
+    }
+
     fn group_failed(group: &ToolGroup) -> bool {
         group.entries.iter().any(|entry| {
             entry
@@ -446,7 +458,11 @@ impl ToolCalls {
                             .flex()
                             .items_center()
                             .gap(px(6.0))
-                            .child(app_icon(status_icon, 13.0, status_color))
+                            .child(Self::status_element(
+                                status_icon,
+                                status_color,
+                                entry.result.is_none(),
+                            ))
                             // Reserve the chevron's width so this row's status
                             // icon aligns with group rows that show a chevron
                             // after the status icon.
@@ -566,7 +582,7 @@ impl ToolCalls {
                             .flex()
                             .items_center()
                             .gap(px(6.0))
-                            .child(app_icon(status.0, 13.0, status.1))
+                            .child(Self::status_element(status.0, status.1, !complete && !failed))
                             .child(app_icon(
                                 if open {
                                     IconName::ChevronUp
