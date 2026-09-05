@@ -25,11 +25,13 @@ const opencodeResponses = createOpenAI({
   headers: {
     "User-Agent": OPENCODE_USER_AGENT,
   },
-  fetch: (url, options) => {
+  // Cast needed: Bun's `typeof fetch` includes a `preconnect` property that a
+  // plain wrapper function can't satisfy; the AI SDK only ever calls it.
+  fetch: ((url, options) => {
     const headers = new Headers(options?.headers);
     headers.delete("authorization");
     return fetch(url, { ...options, headers });
-  },
+  }) as typeof fetch,
 });
 
 /**

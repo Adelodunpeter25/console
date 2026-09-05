@@ -386,7 +386,7 @@ export function updateTitle(state: StorageState, sessionId: string, title: strin
   {
     const dbPath = projectId == null ? getScratchSessionDbPath(storageDir, sessionId) : getSessionDbPath(storageDir, projectId, sessionId);
     if (state.sessionDbs.has(sessionId) || fs.existsSync(dbPath)) {
-      const sessionDb = getSessionDb(state, sessionId, projectId);
+      const sessionDb = getSessionDb(state, sessionId, projectId ?? null);
       sessionDb
         .prepare(`UPDATE session_meta SET title = ?, updated_at = ? WHERE id = 1`)
         .run(trimmed, now);
@@ -412,7 +412,7 @@ export function updateModel(
   {
     const dbPath = projectId == null ? getScratchSessionDbPath(storageDir, sessionId) : getSessionDbPath(storageDir, projectId, sessionId);
     if (state.sessionDbs.has(sessionId) || fs.existsSync(dbPath)) {
-      const sessionDb = getSessionDb(state, sessionId, projectId);
+      const sessionDb = getSessionDb(state, sessionId, projectId ?? null);
       sessionDb
         .prepare(`UPDATE session_meta SET model_id = ?, provider = ?, updated_at = ? WHERE id = 1`)
         .run(modelId, provider, now);
@@ -473,7 +473,7 @@ export function updateApprovalMode(
   {
     const dbPath = projectId == null ? getScratchSessionDbPath(storageDir, sessionId) : getSessionDbPath(storageDir, projectId, sessionId);
     if (state.sessionDbs.has(sessionId) || fs.existsSync(dbPath)) {
-      const sessionDb = getSessionDb(state, sessionId, projectId);
+      const sessionDb = getSessionDb(state, sessionId, projectId ?? null);
       sessionDb
         .prepare(`UPDATE session_meta SET approval_mode = ?, updated_at = ? WHERE id = 1`)
         .run(approvalMode, now);
