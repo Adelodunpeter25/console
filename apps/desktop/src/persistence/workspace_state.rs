@@ -98,6 +98,66 @@ pub fn load_workspace_state() -> WorkspaceStateDocument {
     }
 }
 
+/// Remove one window's descriptor (called when its window closes) so
+/// closed windows stop accumulating in `workspace-state.json`.
+pub fn remove_window_descriptor(id: &str) {
+    let mut doc = load_workspace_state();
+    let before = doc.windows.len();
+    doc.windows.retain(|w| w.id != id);
+    if doc.windows.len() != before {
+        save_workspace_state(&doc);
+    }
+}
+
+fn window_id_timestamp(id: &str) -> (u128, u64) {
+    let mut parts = id.split('-');
+    let _prefix = parts.next();
+    let millis = parts.next().and_then(|s| s.parse::<u128>().ok()).unwrap_or(0);
+    let count = parts.next().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+    (millis, count)
+}
+
+/// One-time startup cleanup for pre-fix ghosts: descriptors sharing a
+/// workspace whose origins are within a few px are the same visible window
+/// saved twice (legit cascade offsets by 30px, ghosts differ by ~1px).
+/// Keeps the newest per cluster. No-op for genuinely separate windows.
+pub fn dedupe_ghost_windows() {
+    let mut doc = load_workspace_state();
+    if doc.windows.len() < 2 {
+        return;
+    }
+    const GHOST_PX: f32 = 8.0;
+    let mut keep = vec![true; doc.windows.len()];
+    // Newest first so the first of each cluster wins.
+    let mut order: Vec<usize> = (0..doc.windows.len()).collect();
+    order.sort_by_key(|&i| std::cmp::Reverse(window_id_timestamp(&doc.windows[i].id)));
+    let mut kept: Vec<usize> = Vec::new();
+    for i in order {
+        let candidate = &doc.windows[i];
+        let is_ghost = kept.iter().any(|&j| {
+            let other = &doc.windows[j];
+            candidate.active_workspace_id == other.active_workspace_id
+                && (candidate.bounds.x - other.bounds.x).abs() <= GHOST_PX
+                && (candidate.bounds.y - other.bounds.y).abs() <= GHOST_PX
+        });
+        if is_ghost {
+            keep[i] = false;
+        } else {
+            kept.push(i);
+        }
+    }
+    if keep.iter().any(|&k| !k) {
+        let mut windows = Vec::with_capacity(kept.len());
+        for (i, w) in doc.windows.into_iter().enumerate() {
+            if keep[i] {
+                windows.push(w);
+            }
+        }
+        doc.windows = windows;
+        save_workspace_state(&doc);
+    }
+}
+
 pub fn save_workspace_state(doc: &WorkspaceStateDocument) {
     let path = workspace_state_file_path();
     let directory = path.parent().unwrap_or_else(|| Path::new("."));

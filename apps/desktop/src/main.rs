@@ -42,6 +42,9 @@ fn main() {
         console_ui::init_session_rename_keybindings(cx);
         console_ui::primitives::menu::init(cx);
 
+        // One-time cleanup for pre-fix ghosts (same workspace, ~1px apart).
+        // Legit cascaded windows sit 30px apart so they survive.
+        persistence::dedupe_ghost_windows();
         let ws_state = persistence::load_workspace_state();
         if ws_state.windows.is_empty() {
             window::open_workspace_window(cx, window::WindowLaunchTarget::RestorePersisted);

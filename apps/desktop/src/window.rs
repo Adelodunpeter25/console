@@ -135,6 +135,13 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
         let target_clone = target.clone();
         let result = cx.open_window(options, move |window, cx| {
             let app_view = cx.new(|cx| ConsoleDesktopApp::new(window, target_clone, cx));
+            // Prune this window's descriptor when it closes so
+            // `workspace-state.json:windows` stops accumulating ghosts.
+            let window_id = app_view.read(cx).window_id.clone();
+            window.on_window_should_close(cx, move |_, _| {
+                crate::persistence::remove_window_descriptor(&window_id);
+                true
+            });
             let handle = window.window_handle();
             register_window(handle, app_view.downgrade());
             cx.new(|cx| gpui_component::Root::new(app_view, window, cx))
