@@ -104,7 +104,8 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
         ..Default::default()
     };
 
-    cx.defer(move |cx| {
+    let is_persisted = matches!(target, WindowLaunchTarget::RestorePersisted);
+    let open = move |cx: &mut App| {
         let target_clone = target.clone();
         let result = cx.open_window(options, move |window, cx| {
             let app_view = cx.new(|cx| ConsoleDesktopApp::new(window, target_clone, cx));
@@ -125,5 +126,11 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
                 log::error!("Failed to open workspace window: {err:?}");
             }
         }
-    });
+    };
+
+    if is_persisted {
+        open(cx);
+    } else {
+        cx.defer(open);
+    }
 }
