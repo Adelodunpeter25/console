@@ -415,11 +415,17 @@ impl Render for ConsoleDesktopApp {
             .flex_col()
             .overflow_hidden()
             .on_action(cx.listener(Self::copy_selection_action))
-            // Invalidate a workspace drag on Escape so a drop queued just after
-            // cancellation cannot mutate the pane tree.
-            .on_key_down(|event: &KeyDownEvent, _, _| {
+            .on_key_down(|event: &KeyDownEvent, _, cx| {
                 if event.keystroke.key == "escape" {
                     cancel_workspace_drags();
+                } else if event.keystroke.modifiers.platform
+                    && event.keystroke.modifiers.shift
+                    && event.keystroke.key.eq_ignore_ascii_case("n")
+                {
+                    crate::window::open_workspace_window(
+                        cx,
+                        crate::window::WindowLaunchTarget::Fresh,
+                    );
                 }
             })
             .on_mouse_move({

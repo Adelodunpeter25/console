@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use gpui::{
-    AnyWindowHandle, App, AppContext, Bounds, TitlebarOptions, WeakEntity, WindowBounds,
+    AnyWindowHandle, App, AppContext, Bounds, Pixels, TitlebarOptions, WeakEntity, WindowBounds,
     WindowOptions, point, px,
 };
 
@@ -15,8 +15,15 @@ pub enum WindowLaunchTarget {
 }
 
 thread_local! {
+    static LAST_WINDOW_BOUNDS: RefCell<Option<Bounds<Pixels>>> = RefCell::new(None);
     static WORKSPACE_WINDOWS: RefCell<Vec<(AnyWindowHandle, WeakEntity<ConsoleDesktopApp>)>> =
         RefCell::new(Vec::new());
+}
+
+pub fn update_active_window_bounds(bounds: Bounds<Pixels>) {
+    LAST_WINDOW_BOUNDS.with(|b| {
+        b.replace(Some(bounds));
+    });
 }
 
 pub fn register_window(handle: AnyWindowHandle, app: WeakEntity<ConsoleDesktopApp>) {
@@ -30,22 +37,22 @@ pub fn get_active_window(
 ) -> Option<(AnyWindowHandle, gpui::Entity<ConsoleDesktopApp>)> {
     WORKSPACE_WINDOWS.with(|windows| {
         let mut list = windows.borrow_mut();
+        let live_handles = cx.windows();
         list.retain(|(handle, app)| {
-            app.upgrade().is_some() && handle.update(cx, |_, _, _| ()).is_ok()
+            app.upgrade().is_some() && live_handles.contains(handle)
         });
 
-        for (handle, app) in list.iter().rev() {
-            let is_active = handle
-                .update(cx, |_, window, _| window.is_window_active())
-                .unwrap_or(false);
-            if is_active {
+        // 1. Ask GPUI's platform layer which window is currently focused.
+        if let Some(active_handle) = cx.active_window() {
+            if let Some((_, app)) = list.iter().find(|(h, _)| *h == active_handle) {
                 if let Some(upgraded) = app.upgrade() {
-                    return Some((*handle, upgraded));
+                    return Some((active_handle, upgraded));
                 }
             }
         }
 
-        if let Some((handle, app)) = list.last() {
+        // 2. Fallback to the most recent known window in our list.
+        for (handle, app) in list.iter().rev() {
             if let Some(upgraded) = app.upgrade() {
                 return Some((*handle, upgraded));
             }
@@ -56,39 +63,34 @@ pub fn get_active_window(
 }
 
 pub fn compute_new_window_bounds(cx: &mut App) -> WindowBounds {
-    let active_bounds = WORKSPACE_WINDOWS.with(|windows| {
-        let list = windows.borrow();
-        for (handle, _) in list.iter().rev() {
-            let bounds = handle
-                .update(cx, |_, window, _| match window.window_bounds() {
-                    WindowBounds::Windowed(b) => Some(b),
-                    WindowBounds::Maximized(b) => Some(b),
-                    WindowBounds::Fullscreen(_) => None,
-                })
-                .ok()
-                .flatten();
-            if let Some(b) = bounds {
-                return Some(b);
-            }
-        }
-        None
-    });
+    let current_bounds = LAST_WINDOW_BOUNDS
+        .with(|b| *b.borrow())
+        .unwrap_or_else(|| match persistence::window::load_window_bounds(cx) {
+            WindowBounds::Windowed(b) | WindowBounds::Maximized(b) => b,
+            WindowBounds::Fullscreen(b) => b,
+        });
 
-    if let Some(bounds) = active_bounds {
-        let offset = px(30.0);
-        let cascaded = Bounds::new(
-            point(bounds.origin.x + offset, bounds.origin.y + offset),
-            bounds.size,
-        );
-        WindowBounds::Windowed(cascaded)
-    } else {
-        persistence::window::load_window_bounds(cx)
-    }
+    let offset = px(30.0);
+    let cascaded = Bounds::new(
+        point(current_bounds.origin.x + offset, current_bounds.origin.y + offset),
+        current_bounds.size,
+    );
+
+    update_active_window_bounds(cascaded);
+    WindowBounds::Windowed(cascaded)
 }
 
 pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
     let window_bounds = match &target {
-        WindowLaunchTarget::RestorePersisted => persistence::window::load_window_bounds(cx),
+        WindowLaunchTarget::RestorePersisted => {
+            let b = persistence::window::load_window_bounds(cx);
+            let bounds = match b {
+                WindowBounds::Windowed(bounds) | WindowBounds::Maximized(bounds) => bounds,
+                WindowBounds::Fullscreen(bounds) => bounds,
+            };
+            update_active_window_bounds(bounds);
+            b
+        }
         WindowLaunchTarget::Fresh | WindowLaunchTarget::Session(_) => compute_new_window_bounds(cx),
     };
 
@@ -111,12 +113,17 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
             cx.new(|cx| gpui_component::Root::new(app_view, window, cx))
         });
 
-        if let Ok(handle) = result {
-            handle
-                .update(cx, |_, window, _| {
-                    window.activate_window();
-                })
-                .ok();
+        match result {
+            Ok(handle) => {
+                handle
+                    .update(cx, |_, window, _| {
+                        window.activate_window();
+                    })
+                    .ok();
+            }
+            Err(err) => {
+                log::error!("Failed to open workspace window: {err:?}");
+            }
         }
     });
 }

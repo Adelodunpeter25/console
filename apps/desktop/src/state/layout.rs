@@ -222,6 +222,7 @@ impl ConsoleDesktopApp {
         let Some(state) = persistence::window::capture(window) else {
             return;
         };
+        crate::window::update_active_window_bounds(state.bounds());
         if self.saved_window_state == Some(state) {
             return;
         }
