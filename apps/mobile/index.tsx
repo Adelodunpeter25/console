@@ -23,7 +23,7 @@ import { MainContent } from "./components/layout/main-content";
 import { ConfirmDialog } from "./components/common/confirm-dialog";
 import { RenameSessionDialog } from "./components/common/rename-session-dialog";
 import { ErrorBoundary } from "./components/common/error-boundary";
-import { useServerConnection, useOAuthDeepLink } from "./hooks";
+import { useServerConnection, useOAuthDeepLink, useLocalNotifications } from "./hooks";
 import { queryClient } from "./query-client";
 import { theme } from "./styles/theme";
 
@@ -119,6 +119,7 @@ function OnboardingScreen() {
 function AppRoot() {
   const { backendUrl, loading } = useServerConnection();
   useOAuthDeepLink();
+  useLocalNotifications();
 
   const [fontsLoaded] = useFonts({
     JetBrainsMono: JetBrainsMono_400Regular,

@@ -35,6 +35,7 @@
     "expo-font": "~14.0.12",
     "expo-image-picker": "~17.0.11",
     "expo-linking": "~8.0.11",
+    "expo-notifications": "~0.32.17",
     "expo-status-bar": "~3.0.9",
     "lucide-react-native": "^0.474.0",
     "prismjs": "^1.29.0",

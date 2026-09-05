@@ -9,6 +9,7 @@ export * from "./useProviders";
 export * from "./useSlashCommands";
 export * from "./useFileSearch";
 export * from "./useNotificationStream";
+export * from "./useLocalNotifications";
 export * from "./useProjectFsWatcher";
 export * from "./useTerminal";
 export * from "./useGit";
