@@ -238,6 +238,7 @@ pub struct ConsoleDesktopApp {
     pub settings_window_handle: Option<gpui::AnyWindowHandle>,
     pub settings_window_view: Option<gpui::WeakEntity<crate::settings_window::SettingsWindow>>,
     pub main_window_handle: Option<gpui::AnyWindowHandle>,
+    pub window_id: String,
     pub drafts: std::collections::HashMap<String, crate::persistence::store::PersistedDraft>,
     /// Session IDs whose draft is confirmed for sidebar display.
     /// Only updated when a tab closes (or submit). Typing never touches this —
@@ -262,52 +263,143 @@ impl ConsoleDesktopApp {
         let ws_state = persistence::load_workspace_state();
         let layout = persistence::layout::load();
 
-        let sidebar_visible = ws_state.sidebar_visible;
-        let sidebar_width = if ws_state.sidebar_width.is_finite() && ws_state.sidebar_width > 0.0 {
-            ws_state
-                .sidebar_width
-                .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
-        } else if layout.sidebar_width.is_finite() {
-            layout
-                .sidebar_width
-                .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
-        } else {
-            SIDEBAR_DEFAULT_WIDTH
-        };
-        let right_sidebar_visible = ws_state.right_sidebar_visible;
-        let right_sidebar_width =
-            if ws_state.right_sidebar_width.is_finite() && ws_state.right_sidebar_width > 0.0 {
-                ws_state
-                    .right_sidebar_width
-                    .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
-            } else if layout.right_sidebar_width.is_finite() {
-                layout
-                    .right_sidebar_width
-                    .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
-            } else {
-                RIGHT_SIDEBAR_DEFAULT_WIDTH
-            };
-
-        let (initial_selected_project_id, initial_root) = match &target {
-            crate::window::WindowLaunchTarget::RestorePersisted => {
-                let initial_selected_project_id =
-                    ws_state.active_workspace_id.as_ref().and_then(|wid| {
-                        if wid == "__default__" {
-                            None
-                        } else {
-                            Some(wid.clone())
-                        }
-                    });
-                let initial_root = initial_selected_project_id
+        let (
+            window_id,
+            sidebar_visible,
+            sidebar_width,
+            right_sidebar_visible,
+            right_sidebar_width,
+            initial_selected_project_id,
+            initial_root,
+            initial_saved_window_state,
+        ) = match &target {
+            crate::window::WindowLaunchTarget::RestoreDescriptor(desc) => {
+                let wid = if desc.id.is_empty() {
+                    crate::window::generate_window_id()
+                } else {
+                    desc.id.clone()
+                };
+                let sb_visible = desc.sidebar_visible;
+                let sb_width = if desc.sidebar_width.is_finite() && desc.sidebar_width > 0.0 {
+                    desc.sidebar_width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+                } else {
+                    SIDEBAR_DEFAULT_WIDTH
+                };
+                let rsb_visible = desc.right_sidebar_visible;
+                let rsb_width = if desc.right_sidebar_width.is_finite() && desc.right_sidebar_width > 0.0
+                {
+                    desc.right_sidebar_width
+                        .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
+                } else {
+                    RIGHT_SIDEBAR_DEFAULT_WIDTH
+                };
+                let proj_id = desc.active_workspace_id.as_ref().and_then(|wid| {
+                    if wid == "__default__" {
+                        None
+                    } else {
+                        Some(wid.clone())
+                    }
+                });
+                let root = proj_id
                     .as_ref()
                     .and_then(|pid| project_workspace_roots.get(&Some(pid.clone())).cloned())
                     .or_else(|| project_workspace_roots.get(&None).cloned())
                     .unwrap_or_else(|| WorkspaceNode::leaf("pane-main"));
-                (initial_selected_project_id, initial_root)
+                (
+                    wid,
+                    sb_visible,
+                    sb_width,
+                    rsb_visible,
+                    rsb_width,
+                    proj_id,
+                    root,
+                    Some(desc.bounds),
+                )
+            }
+            crate::window::WindowLaunchTarget::RestorePersisted => {
+                let wid = crate::window::generate_window_id();
+                let sb_visible = ws_state.sidebar_visible;
+                let sb_width =
+                    if ws_state.sidebar_width.is_finite() && ws_state.sidebar_width > 0.0 {
+                        ws_state
+                            .sidebar_width
+                            .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+                    } else if layout.sidebar_width.is_finite() {
+                        layout
+                            .sidebar_width
+                            .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+                    } else {
+                        SIDEBAR_DEFAULT_WIDTH
+                    };
+                let rsb_visible = ws_state.right_sidebar_visible;
+                let rsb_width = if ws_state.right_sidebar_width.is_finite()
+                    && ws_state.right_sidebar_width > 0.0
+                {
+                    ws_state
+                        .right_sidebar_width
+                        .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
+                } else if layout.right_sidebar_width.is_finite() {
+                    layout
+                        .right_sidebar_width
+                        .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
+                } else {
+                    RIGHT_SIDEBAR_DEFAULT_WIDTH
+                };
+                let proj_id = ws_state.active_workspace_id.as_ref().and_then(|wid| {
+                    if wid == "__default__" {
+                        None
+                    } else {
+                        Some(wid.clone())
+                    }
+                });
+                let root = proj_id
+                    .as_ref()
+                    .and_then(|pid| project_workspace_roots.get(&Some(pid.clone())).cloned())
+                    .or_else(|| project_workspace_roots.get(&None).cloned())
+                    .unwrap_or_else(|| WorkspaceNode::leaf("pane-main"));
+                (
+                    wid,
+                    sb_visible,
+                    sb_width,
+                    rsb_visible,
+                    rsb_width,
+                    proj_id,
+                    root,
+                    persistence::store::load_window(),
+                )
             }
             crate::window::WindowLaunchTarget::Fresh
             | crate::window::WindowLaunchTarget::Session(_) => {
-                (None, WorkspaceNode::leaf("pane-main"))
+                let wid = crate::window::generate_window_id();
+                let sb_visible = ws_state.sidebar_visible;
+                let sb_width =
+                    if ws_state.sidebar_width.is_finite() && ws_state.sidebar_width > 0.0 {
+                        ws_state
+                            .sidebar_width
+                            .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+                    } else {
+                        SIDEBAR_DEFAULT_WIDTH
+                    };
+                let rsb_visible = ws_state.right_sidebar_visible;
+                let rsb_width = if ws_state.right_sidebar_width.is_finite()
+                    && ws_state.right_sidebar_width > 0.0
+                {
+                    ws_state
+                        .right_sidebar_width
+                        .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
+                } else {
+                    RIGHT_SIDEBAR_DEFAULT_WIDTH
+                };
+                (
+                    wid,
+                    sb_visible,
+                    sb_width,
+                    rsb_visible,
+                    rsb_width,
+                    None,
+                    WorkspaceNode::leaf("pane-main"),
+                    None,
+                )
             }
         };
         let initial_active_pane_id = initial_root
@@ -589,7 +681,7 @@ impl ConsoleDesktopApp {
             sidebar_list_state: ListState::new(0, ListAlignment::Top, px(55.0)),
             sidebar_resize_start: None,
             split_resize: None,
-            saved_window_state: persistence::store::load_window(),
+            saved_window_state: initial_saved_window_state,
             pending_window_state: None,
             last_window_poll: None,
             command_palette: cx.new(|cx| CommandPalette::new(window, cx)),
@@ -611,6 +703,7 @@ impl ConsoleDesktopApp {
             settings_window_handle: None,
             settings_window_view: None,
             main_window_handle: Some(window.window_handle().into()),
+            window_id,
             drafts,
             sidebar_draft_ids,
             drafts_collapsed: false,
@@ -701,7 +794,8 @@ impl ConsoleDesktopApp {
                             app.update(cx, |this, cx| {
                                 this.sessions = Rc::new(sessions);
                                 match target_for_bootstrap {
-                                    crate::window::WindowLaunchTarget::RestorePersisted => {
+                                    crate::window::WindowLaunchTarget::RestoreDescriptor(_)
+                                    | crate::window::WindowLaunchTarget::RestorePersisted => {
                                         let mut to_load = Vec::new();
                                         for leaf in this.workspace_root.leaves() {
                                             if let Some(session_id) =

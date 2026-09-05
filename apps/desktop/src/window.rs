@@ -1,4 +1,6 @@
 use std::cell::RefCell;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::SystemTime;
 use gpui::{
     AnyWindowHandle, App, AppContext, Bounds, Pixels, TitlebarOptions, WeakEntity, WindowBounds,
     WindowOptions, point, px,
@@ -7,9 +9,21 @@ use gpui::{
 use crate::persistence;
 use crate::state::ConsoleDesktopApp;
 
+static WINDOW_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+pub fn generate_window_id() -> String {
+    let ts = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let count = WINDOW_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("win-{ts}-{count}")
+}
+
 #[derive(Clone, Debug)]
 pub enum WindowLaunchTarget {
     RestorePersisted,
+    RestoreDescriptor(persistence::PersistedWindowDescriptor),
     Fresh,
     Session(String),
 }
@@ -82,6 +96,15 @@ pub fn compute_new_window_bounds(cx: &mut App) -> WindowBounds {
 
 pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
     let window_bounds = match &target {
+        WindowLaunchTarget::RestoreDescriptor(desc) => {
+            let bounds = desc.bounds.bounds();
+            update_active_window_bounds(bounds);
+            if desc.bounds.maximized {
+                WindowBounds::Maximized(bounds)
+            } else {
+                WindowBounds::Windowed(bounds)
+            }
+        }
         WindowLaunchTarget::RestorePersisted => {
             let b = persistence::window::load_window_bounds(cx);
             let bounds = match b {
@@ -104,7 +127,10 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
         ..Default::default()
     };
 
-    let is_persisted = matches!(target, WindowLaunchTarget::RestorePersisted);
+    let is_persisted = matches!(
+        target,
+        WindowLaunchTarget::RestorePersisted | WindowLaunchTarget::RestoreDescriptor(_)
+    );
     let open = move |cx: &mut App| {
         let target_clone = target.clone();
         let result = cx.open_window(options, move |window, cx| {

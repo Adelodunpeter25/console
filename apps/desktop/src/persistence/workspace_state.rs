@@ -7,10 +7,34 @@ use super::window::PersistedWindowState;
 
 const WORKSPACE_STATE_VERSION: u32 = 1;
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersistedWindowDescriptor {
+    #[serde(default)]
+    pub id: String,
     pub bounds: PersistedWindowState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_workspace_id: Option<String>,
+    #[serde(default = "default_sidebar_visible")]
+    pub sidebar_visible: bool,
+    #[serde(default = "default_sidebar_width")]
+    pub sidebar_width: f32,
+    #[serde(default)]
+    pub right_sidebar_visible: bool,
+    #[serde(default = "default_right_sidebar_width")]
+    pub right_sidebar_width: f32,
+}
+
+fn default_sidebar_visible() -> bool {
+    true
+}
+
+fn default_sidebar_width() -> f32 {
+    260.0
+}
+
+fn default_right_sidebar_width() -> f32 {
+    280.0
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

@@ -445,10 +445,24 @@ impl ConsoleDesktopApp {
             }
         }
 
+        let session_project_id = self
+            .sessions
+            .iter()
+            .find(|s| s.id == session_id)
+            .and_then(|s| s.project_id.clone());
+        let project_id = session_project_id
+            .clone()
+            .or_else(|| self.pane_project_id(pane_id));
+        if session_project_id.is_some() {
+            if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
+                state.selected_project_id = session_project_id;
+            }
+        }
+
         let tab = WorkspaceTabConfig::Chat {
             session_id: session_id.clone(),
             title: title.into(),
-            project_id: self.pane_project_id(pane_id),
+            project_id,
         };
         workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
         self.active_pane_id = Some(pane_id.to_string());
@@ -715,6 +729,16 @@ impl ConsoleDesktopApp {
         }
         self.active_pane_id = Some(pane_id.to_string());
         self.selected_session_id = self.active_session_for_pane(pane_id);
+        if let Some(session_id) = &self.selected_session_id {
+            if let Some(session) = self.sessions.iter().find(|s| &s.id == session_id) {
+                if let Some(pid) = &session.project_id {
+                    if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
+                        state.selected_project_id = Some(pid.clone());
+                    }
+                }
+            }
+        }
+        self.maybe_refresh_inspector(cx);
         cx.notify();
     }
 

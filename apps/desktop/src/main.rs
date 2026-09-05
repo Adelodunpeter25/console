@@ -42,7 +42,17 @@ fn main() {
         console_ui::init_session_rename_keybindings(cx);
         console_ui::primitives::menu::init(cx);
 
-        window::open_workspace_window(cx, window::WindowLaunchTarget::RestorePersisted);
+        let ws_state = persistence::load_workspace_state();
+        if ws_state.windows.is_empty() {
+            window::open_workspace_window(cx, window::WindowLaunchTarget::RestorePersisted);
+        } else {
+            for descriptor in ws_state.windows {
+                window::open_workspace_window(
+                    cx,
+                    window::WindowLaunchTarget::RestoreDescriptor(descriptor),
+                );
+            }
+        }
         cx.activate(true);
     });
 }

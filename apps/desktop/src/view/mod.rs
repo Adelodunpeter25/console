@@ -61,6 +61,13 @@ impl Render for ConsoleDesktopApp {
                             this.select_workspace_tab(&pane_id, &tab_id);
                             if let Some(sid) = tab_id.strip_prefix("chat:") {
                                 this.selected_session_id = Some(sid.to_string());
+                                if let Some(session) = this.sessions.iter().find(|s| s.id == sid) {
+                                    if let Some(pid) = &session.project_id {
+                                        if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
+                                            state.selected_project_id = Some(pid.clone());
+                                        }
+                                    }
+                                }
                                 let already_loaded = this
                                     .workspace_pane_states
                                     .get(&pane_id)

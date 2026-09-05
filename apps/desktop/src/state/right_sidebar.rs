@@ -64,7 +64,18 @@ impl ConsoleDesktopApp {
             .as_deref()
             .and_then(|sid| self.sessions.iter().find(|s| s.id == sid));
         let cwd = session
-            .and_then(|s| (!s.cwd.is_empty()).then(|| s.cwd.clone()))
+            .and_then(|s| {
+                if !s.cwd.is_empty() {
+                    Some(s.cwd.clone())
+                } else if let Some(pid) = &s.project_id {
+                    self.projects
+                        .iter()
+                        .find(|p| &p.id == pid)
+                        .map(|p| p.path.clone())
+                } else {
+                    None
+                }
+            })
             .or_else(|| self.selected_project_for_pane(&pane_id).map(|p| p.path.clone()));
         (session_id, cwd)
     }
