@@ -33,6 +33,6 @@ mod app;
 pub use app::ConsoleDesktopApp;
 // Shared by the sibling handler modules (`layout`, `sessions`, `run`).
 pub(crate) use app::{
-    RIGHT_SIDEBAR_MAX_WIDTH, RIGHT_SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
-    user_prompt_history,
+    RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT, RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT, RIGHT_SIDEBAR_MAX_WIDTH,
+    RIGHT_SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, user_prompt_history,
 };

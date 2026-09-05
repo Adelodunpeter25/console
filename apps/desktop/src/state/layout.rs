@@ -41,6 +41,7 @@ impl ConsoleDesktopApp {
             sidebar_width: self.sidebar_width,
             right_sidebar_visible: self.right_sidebar_visible,
             right_sidebar_width: self.right_sidebar_width,
+            right_sidebar_bottom_height: self.right_sidebar_bottom_height,
             collapsed_groups: self
                 .collapsed_groups
                 .iter()
@@ -57,6 +58,7 @@ impl ConsoleDesktopApp {
         doc.sidebar_width = self.sidebar_width;
         doc.right_sidebar_visible = self.right_sidebar_visible;
         doc.right_sidebar_width = self.right_sidebar_width;
+        doc.right_sidebar_bottom_height = self.right_sidebar_bottom_height;
 
         let bounds = self.saved_window_state.unwrap_or(persistence::window::PersistedWindowState {
             x: 100.0,
@@ -74,6 +76,7 @@ impl ConsoleDesktopApp {
             sidebar_width: self.sidebar_width,
             right_sidebar_visible: self.right_sidebar_visible,
             right_sidebar_width: self.right_sidebar_width,
+            right_sidebar_bottom_height: self.right_sidebar_bottom_height,
         };
 
         if let Some(existing) = doc.windows.iter_mut().find(|w| w.id == self.window_id) {
@@ -303,6 +306,7 @@ impl ConsoleDesktopApp {
                 sidebar_width: self.sidebar_width,
                 right_sidebar_visible: self.right_sidebar_visible,
                 right_sidebar_width: self.right_sidebar_width,
+                right_sidebar_bottom_height: self.right_sidebar_bottom_height,
             };
 
             if let Some(existing) = doc.windows.iter_mut().find(|w| w.id == self.window_id) {

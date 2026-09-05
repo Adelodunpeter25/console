@@ -2,9 +2,12 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use console_ui::InspectorTab;
-use gpui::Context;
+use gpui::{AppContext, Context};
 
-use super::{ConsoleDesktopApp, RIGHT_SIDEBAR_MAX_WIDTH, RIGHT_SIDEBAR_MIN_WIDTH};
+use super::{
+    ConsoleDesktopApp, RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT, RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT,
+    RIGHT_SIDEBAR_MAX_WIDTH, RIGHT_SIDEBAR_MIN_WIDTH,
+};
 
 impl ConsoleDesktopApp {
     pub fn toggle_right_sidebar(&mut self, cx: &mut Context<Self>) {
@@ -50,6 +53,45 @@ impl ConsoleDesktopApp {
         } else {
             false
         }
+    }
+
+    pub fn begin_right_sidebar_bottom_resize(&mut self, start_y: f32) {
+        self.right_sidebar_bottom_resize_start = Some((start_y, self.right_sidebar_bottom_height));
+    }
+
+    pub fn resize_right_sidebar_bottom(&mut self, current_y: f32) -> bool {
+        let Some((start_y, start_height)) = self.right_sidebar_bottom_resize_start else {
+            return false;
+        };
+        // Bottom split expands when dragged up (decreasing y)
+        let height = (start_height + (start_y - current_y))
+            .clamp(RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT, RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT);
+        if (self.right_sidebar_bottom_height - height).abs() < 0.5 {
+            return false;
+        }
+        self.right_sidebar_bottom_height = height;
+        true
+    }
+
+    pub fn finish_right_sidebar_bottom_resize(&mut self) -> bool {
+        if self.right_sidebar_bottom_resize_start.take().is_some() {
+            self.persist_layout();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn set_right_sidebar_bottom_tab(
+        &mut self,
+        tab: console_ui::RightSidebarBottomTab,
+        cx: &mut Context<Self>,
+    ) {
+        if self.right_sidebar_bottom_tab == tab {
+            return;
+        }
+        self.right_sidebar_bottom_tab = tab;
+        cx.notify();
     }
 
     pub fn active_inspector_target(&self) -> (Option<String>, Option<String>) {
@@ -142,6 +184,46 @@ impl ConsoleDesktopApp {
     #[allow(dead_code)]
     pub fn set_inspector_search_query(&mut self, query: String, cx: &mut Context<Self>) {
         self.inspector_search_query = query;
+        cx.notify();
+    }
+
+    pub fn ensure_right_sidebar_terminal(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (_, cwd) = self.active_inspector_target();
+        // If cwd changed or no terminal exists, spawn a new TerminalView
+        if self.right_sidebar_terminal.is_none() || self.right_sidebar_terminal_cwd != cwd {
+            self.right_sidebar_terminal_cwd = cwd.clone();
+            let client = self.client.clone();
+            let terminal = cx.new(|cx| {
+                let params = console_core::types::terminal::TerminalSpawnParams {
+                    cwd: cwd.unwrap_or_default(),
+                    ..Default::default()
+                };
+                console_ui::terminal::TerminalView::new(params, client, window, cx)
+            });
+            self.right_sidebar_terminal = Some(terminal);
+        }
+    }
+
+    pub fn reset_right_sidebar_terminal(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (_, cwd) = self.active_inspector_target();
+        self.right_sidebar_terminal_cwd = cwd.clone();
+        let client = self.client.clone();
+        let terminal = cx.new(|cx| {
+            let params = console_core::types::terminal::TerminalSpawnParams {
+                cwd: cwd.unwrap_or_default(),
+                ..Default::default()
+            };
+            console_ui::terminal::TerminalView::new(params, client, window, cx)
+        });
+        self.right_sidebar_terminal = Some(terminal);
         cx.notify();
     }
 

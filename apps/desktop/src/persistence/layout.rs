@@ -12,6 +12,8 @@ pub struct PersistedLayoutState {
     pub right_sidebar_visible: bool,
     #[serde(default = "default_right_sidebar_width")]
     pub right_sidebar_width: f32,
+    #[serde(default = "default_right_sidebar_bottom_height")]
+    pub right_sidebar_bottom_height: f32,
     /// Indices into `SessionDateGroup::ALL` of collapsed sidebar groups.
     #[serde(default)]
     pub collapsed_groups: Vec<usize>,
@@ -33,6 +35,10 @@ fn default_right_sidebar_width() -> f32 {
     280.0
 }
 
+fn default_right_sidebar_bottom_height() -> f32 {
+    180.0
+}
+
 impl Default for PersistedLayoutState {
     fn default() -> Self {
         Self {
@@ -40,6 +46,7 @@ impl Default for PersistedLayoutState {
             sidebar_width: default_sidebar_width(),
             right_sidebar_visible: default_right_sidebar_visible(),
             right_sidebar_width: default_right_sidebar_width(),
+            right_sidebar_bottom_height: default_right_sidebar_bottom_height(),
             collapsed_groups: Vec::new(),
         }
     }

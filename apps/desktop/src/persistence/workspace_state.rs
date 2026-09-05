@@ -23,6 +23,8 @@ pub struct PersistedWindowDescriptor {
     pub right_sidebar_visible: bool,
     #[serde(default = "default_right_sidebar_width")]
     pub right_sidebar_width: f32,
+    #[serde(default = "default_right_sidebar_bottom_height")]
+    pub right_sidebar_bottom_height: f32,
 }
 
 fn default_sidebar_visible() -> bool {
@@ -35,6 +37,10 @@ fn default_sidebar_width() -> f32 {
 
 fn default_right_sidebar_width() -> f32 {
     280.0
+}
+
+fn default_right_sidebar_bottom_height() -> f32 {
+    180.0
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -51,6 +57,8 @@ pub struct WorkspaceStateDocument {
     pub right_sidebar_visible: bool,
     #[serde(default)]
     pub right_sidebar_width: f32,
+    #[serde(default = "default_right_sidebar_bottom_height")]
+    pub right_sidebar_bottom_height: f32,
     #[serde(default)]
     pub windows: Vec<PersistedWindowDescriptor>,
 }
@@ -67,6 +75,7 @@ pub fn load_workspace_state() -> WorkspaceStateDocument {
             sidebar_width: 260.0,
             right_sidebar_visible: false,
             right_sidebar_width: 280.0,
+            right_sidebar_bottom_height: 180.0,
             ..Default::default()
         };
     };
@@ -79,6 +88,7 @@ pub fn load_workspace_state() -> WorkspaceStateDocument {
             sidebar_width: 260.0,
             right_sidebar_visible: false,
             right_sidebar_width: 280.0,
+            right_sidebar_bottom_height: 180.0,
             ..Default::default()
         },
     }

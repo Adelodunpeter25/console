@@ -10,6 +10,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
+use crate::inspector::bottom_split::RightSidebarBottomSplit;
 use crate::inspector::changes_list::ChangesListView;
 use crate::inspector::file_tree::{FileTreeNode, FileTreeView};
 use crate::inspector::subagent_list::SubagentListView;
@@ -37,6 +38,7 @@ pub struct RightSidebar {
     expanded_folders: HashSet<String>,
     expanded_subagents: HashSet<String>,
     selected_path: Option<String>,
+    bottom_split: Option<RightSidebarBottomSplit>,
     subagent_markdown_views: Option<Rc<RefCell<HashMap<String, Rc<RefCell<MarkdownView>>>>>>,
     on_select_tab: Rc<dyn Fn(InspectorTab, &mut Window, &mut App) + 'static>,
     on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -79,6 +81,7 @@ impl RightSidebar {
             expanded_folders,
             expanded_subagents,
             selected_path,
+            bottom_split: None,
             subagent_markdown_views: None,
             on_select_tab,
             on_toggle_folder,
@@ -88,6 +91,11 @@ impl RightSidebar {
             on_refresh,
             on_begin_resize,
         }
+    }
+
+    pub fn with_bottom_split(mut self, bottom_split: Option<RightSidebarBottomSplit>) -> Self {
+        self.bottom_split = bottom_split;
+        self
     }
 
     pub fn subagent_markdown_views(
@@ -303,36 +311,44 @@ impl RenderOnce for RightSidebar {
                             .child(app_icon(IconName::RotateCw, 12.0, theme.text_tertiary)),
                     ),
             )
-            // Content Body
-            .child(match self.active_tab {
-                InspectorTab::AllFiles => FileTreeView::new(
-                    self.tree,
-                    self.expanded_folders,
-                    self.selected_path,
-                    self.search_query,
-                    self.on_toggle_folder,
-                    self.on_select_file,
-                )
-                .into_any_element(),
-                InspectorTab::Changes => ChangesListView::new(
-                    self.working_changes,
-                    self.session_changes,
-                    self.selected_path,
-                    self.on_select_file,
-                )
-                .into_any_element(),
-                InspectorTab::Subagents => {
-                    let mut list = SubagentListView::new(
-                        self.subagents,
-                        self.expanded_subagents,
-                        self.on_toggle_subagent,
-                        self.on_copy_summary,
-                    );
-                    if let Some(views) = self.subagent_markdown_views {
-                        list = list.markdown_views(views);
-                    }
-                    list.into_any_element()
-                }
-            })
+            // Content Body (Top Section)
+            .child(
+                div()
+                    .flex_1()
+                    .w_full()
+                    .min_h_0()
+                    .overflow_hidden()
+                    .child(match self.active_tab {
+                        InspectorTab::AllFiles => FileTreeView::new(
+                            self.tree,
+                            self.expanded_folders,
+                            self.selected_path,
+                            self.search_query,
+                            self.on_toggle_folder,
+                            self.on_select_file,
+                        )
+                        .into_any_element(),
+                        InspectorTab::Changes => ChangesListView::new(
+                            self.working_changes,
+                            self.session_changes,
+                            self.selected_path,
+                            self.on_select_file,
+                        )
+                        .into_any_element(),
+                        InspectorTab::Subagents => {
+                            let mut list = SubagentListView::new(
+                                self.subagents,
+                                self.expanded_subagents,
+                                self.on_toggle_subagent,
+                                self.on_copy_summary,
+                            );
+                            if let Some(views) = self.subagent_markdown_views {
+                                list = list.markdown_views(views);
+                            }
+                            list.into_any_element()
+                        }
+                    }),
+            )
+            .when_some(self.bottom_split, |el, bottom| el.child(bottom))
     }
 }

@@ -5,7 +5,9 @@ use std::rc::Rc;
 use console_ui::workspace::{
     ContentRenderer, WorkspaceDrag, WorkspaceDropAction, WorkspacePane, cancel_workspace_drags,
 };
-use console_ui::{ImageViewerModal, RightSidebar, SidebarView, Theme, TitleBar};
+use console_ui::{
+    ImageViewerModal, RightSidebar, RightSidebarBottomSplit, SidebarView, Theme, TitleBar,
+};
 use gpui::{
     App, Context, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent,
     MouseUpEvent, ParentElement, Render, Styled, Window, div, prelude::FluentBuilder,
@@ -413,6 +415,39 @@ impl Render for ConsoleDesktopApp {
                 }
             })
         };
+        let on_begin_right_sidebar_bottom_resize: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |start_y, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.begin_right_sidebar_bottom_resize(start_y);
+                        cx.notify();
+                    });
+                }
+            })
+        };
+        let on_select_right_sidebar_bottom_tab: Rc<
+            dyn Fn(console_ui::RightSidebarBottomTab, &mut Window, &mut App) + 'static,
+        > = {
+            let entity = entity.clone();
+            Rc::new(move |tab, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.set_right_sidebar_bottom_tab(tab, cx);
+                    });
+                }
+            })
+        };
+        let on_new_right_sidebar_terminal: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.reset_right_sidebar_terminal(window, cx);
+                    });
+                }
+            })
+        };
 
         div()
             .id("app-root")
@@ -444,8 +479,14 @@ impl Render for ConsoleDesktopApp {
                             let sidebar_changed = this.resize_sidebar(f32::from(event.position.x));
                             let right_sidebar_changed =
                                 this.resize_right_sidebar(f32::from(event.position.x));
+                            let right_sidebar_bottom_changed =
+                                this.resize_right_sidebar_bottom(f32::from(event.position.y));
                             let split_changed = this.resize_split_drag(event.position);
-                            if sidebar_changed || right_sidebar_changed || split_changed {
+                            if sidebar_changed
+                                || right_sidebar_changed
+                                || right_sidebar_bottom_changed
+                                || split_changed
+                            {
                                 cx.notify();
                             }
                         });
@@ -459,8 +500,14 @@ impl Render for ConsoleDesktopApp {
                         app.update(cx, |this, cx| {
                             let sidebar_changed = this.finish_sidebar_resize();
                             let right_sidebar_changed = this.finish_right_sidebar_resize();
+                            let right_sidebar_bottom_changed =
+                                this.finish_right_sidebar_bottom_resize();
                             let split_changed = this.finish_split_resize();
-                            if sidebar_changed || right_sidebar_changed || split_changed {
+                            if sidebar_changed
+                                || right_sidebar_changed
+                                || right_sidebar_bottom_changed
+                                || split_changed
+                            {
                                 cx.notify();
                             }
                         });
@@ -784,13 +831,28 @@ impl Render for ConsoleDesktopApp {
                                 )
                             }),
                     )
-                    // Conductor-style Right Sidebar Inspector (All files & Changes & Subagents)
+                    // Conductor-style Right Sidebar Inspector (All files & Changes & Subagents + Terminal bottom split)
                     .when(self.right_sidebar_visible, |el| {
                         let subagents = self
                             .selected_session_id
                             .as_deref()
                             .and_then(|id| self.session_subagents.get(id).cloned())
                             .unwrap_or_else(|| Rc::new(Vec::new()));
+
+                        self.ensure_right_sidebar_terminal(window, cx);
+                        let terminal_element = self
+                            .right_sidebar_terminal
+                            .as_ref()
+                            .map(|term| term.clone().into_any_element());
+
+                        let bottom_split = RightSidebarBottomSplit::new(
+                            self.right_sidebar_bottom_height,
+                            self.right_sidebar_bottom_tab,
+                            terminal_element,
+                            on_select_right_sidebar_bottom_tab,
+                            on_begin_right_sidebar_bottom_resize,
+                        )
+                        .with_new_terminal(on_new_right_sidebar_terminal);
 
                         el.child(
                             RightSidebar::new(
@@ -812,6 +874,7 @@ impl Render for ConsoleDesktopApp {
                                 on_refresh_inspector,
                                 on_begin_right_sidebar_resize,
                             )
+                            .with_bottom_split(Some(bottom_split))
                             .subagent_markdown_views(self.subagent_markdown_views.clone()),
                         )
                     }),

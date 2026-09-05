@@ -44,6 +44,9 @@ pub(crate) const SIDEBAR_MAX_WIDTH: f32 = 520.0;
 pub(crate) const RIGHT_SIDEBAR_DEFAULT_WIDTH: f32 = 280.0;
 pub(crate) const RIGHT_SIDEBAR_MIN_WIDTH: f32 = 220.0;
 pub(crate) const RIGHT_SIDEBAR_MAX_WIDTH: f32 = 550.0;
+pub(crate) const RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT: f32 = 180.0;
+pub(crate) const RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT: f32 = 100.0;
+pub(crate) const RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT: f32 = 450.0;
 
 pub struct ConsoleDesktopApp {
     pub client: ConsoleClient,
@@ -149,6 +152,11 @@ pub struct ConsoleDesktopApp {
     pub right_sidebar_visible: bool,
     pub right_sidebar_width: f32,
     pub(crate) right_sidebar_resize_start: Option<(f32, f32)>,
+    pub right_sidebar_bottom_height: f32,
+    pub(crate) right_sidebar_bottom_resize_start: Option<(f32, f32)>,
+    pub right_sidebar_bottom_tab: console_ui::RightSidebarBottomTab,
+    pub right_sidebar_terminal: Option<Entity<TerminalView>>,
+    pub right_sidebar_terminal_cwd: Option<String>,
     pub inspector_active_tab: console_ui::InspectorTab,
     pub inspector_search_query: String,
     pub inspector_tree: Rc<Vec<console_ui::FileTreeNode>>,
@@ -269,6 +277,7 @@ impl ConsoleDesktopApp {
             sidebar_width,
             right_sidebar_visible,
             right_sidebar_width,
+            right_sidebar_bottom_height,
             initial_selected_project_id,
             initial_root,
             initial_saved_window_state,
@@ -305,12 +314,23 @@ impl ConsoleDesktopApp {
                     .and_then(|pid| project_workspace_roots.get(&Some(pid.clone())).cloned())
                     .or_else(|| project_workspace_roots.get(&None).cloned())
                     .unwrap_or_else(|| WorkspaceNode::leaf("pane-main"));
+                let rsb_bottom_height = if desc.right_sidebar_bottom_height.is_finite()
+                    && desc.right_sidebar_bottom_height > 0.0
+                {
+                    desc.right_sidebar_bottom_height.clamp(
+                        RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT,
+                        RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT,
+                    )
+                } else {
+                    RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT
+                };
                 (
                     wid,
                     sb_visible,
                     sb_width,
                     rsb_visible,
                     rsb_width,
+                    rsb_bottom_height,
                     proj_id,
                     root,
                     Some(desc.bounds),
@@ -345,6 +365,23 @@ impl ConsoleDesktopApp {
                 } else {
                     RIGHT_SIDEBAR_DEFAULT_WIDTH
                 };
+                let rsb_bottom_height = if ws_state.right_sidebar_bottom_height.is_finite()
+                    && ws_state.right_sidebar_bottom_height > 0.0
+                {
+                    ws_state.right_sidebar_bottom_height.clamp(
+                        RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT,
+                        RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT,
+                    )
+                } else if layout.right_sidebar_bottom_height.is_finite()
+                    && layout.right_sidebar_bottom_height > 0.0
+                {
+                    layout.right_sidebar_bottom_height.clamp(
+                        RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT,
+                        RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT,
+                    )
+                } else {
+                    RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT
+                };
                 let proj_id = ws_state.active_workspace_id.as_ref().and_then(|wid| {
                     if wid == "__default__" {
                         None
@@ -363,6 +400,7 @@ impl ConsoleDesktopApp {
                     sb_width,
                     rsb_visible,
                     rsb_width,
+                    rsb_bottom_height,
                     proj_id,
                     root,
                     persistence::store::load_window(),
@@ -390,12 +428,23 @@ impl ConsoleDesktopApp {
                 } else {
                     RIGHT_SIDEBAR_DEFAULT_WIDTH
                 };
+                let rsb_bottom_height = if ws_state.right_sidebar_bottom_height.is_finite()
+                    && ws_state.right_sidebar_bottom_height > 0.0
+                {
+                    ws_state.right_sidebar_bottom_height.clamp(
+                        RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT,
+                        RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT,
+                    )
+                } else {
+                    RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT
+                };
                 (
                     wid,
                     sb_visible,
                     sb_width,
                     rsb_visible,
                     rsb_width,
+                    rsb_bottom_height,
                     None,
                     WorkspaceNode::leaf("pane-main"),
                     None,
@@ -658,6 +707,11 @@ impl ConsoleDesktopApp {
             right_sidebar_visible,
             right_sidebar_width,
             right_sidebar_resize_start: None,
+            right_sidebar_bottom_height,
+            right_sidebar_bottom_resize_start: None,
+            right_sidebar_bottom_tab: console_ui::RightSidebarBottomTab::Terminal,
+            right_sidebar_terminal: None,
+            right_sidebar_terminal_cwd: None,
             inspector_active_tab: console_ui::InspectorTab::AllFiles,
             inspector_search_query: String::new(),
             inspector_tree: Rc::new(Vec::new()),
