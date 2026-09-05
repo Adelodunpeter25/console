@@ -55,29 +55,72 @@ impl ConsoleDesktopApp {
     pub fn active_inspector_target(&self) -> (Option<String>, Option<String>) {
         let pane_id = self
             .active_pane_id
-            .clone()
-            .unwrap_or_else(|| "pane-main".to_string());
-        let session_id = self
-            .active_session_for_pane(&pane_id)
-            .or_else(|| self.selected_session_id.clone());
-        let session = session_id
             .as_deref()
-            .and_then(|sid| self.sessions.iter().find(|s| s.id == sid));
-        let cwd = session
-            .and_then(|s| {
-                if !s.cwd.is_empty() {
-                    Some(s.cwd.clone())
-                } else if let Some(pid) = &s.project_id {
-                    self.projects
-                        .iter()
-                        .find(|p| &p.id == pid)
-                        .map(|p| p.path.clone())
-                } else {
-                    None
-                }
-            })
-            .or_else(|| self.selected_project_for_pane(&pane_id).map(|p| p.path.clone()));
-        (session_id, cwd)
+            .unwrap_or("pane-main");
+
+        let leaf = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|l| l.id == pane_id);
+
+        let active_tab = leaf.as_ref().and_then(|l| {
+            l.active_tab_id
+                .as_deref()
+                .and_then(|tab_id| l.tabs.iter().find(|t| t.id() == tab_id))
+        });
+
+        match active_tab {
+            Some(console_core::WorkspaceTabConfig::Chat {
+                session_id,
+                project_id,
+                ..
+            }) => {
+                let session = self.sessions.iter().find(|s| &s.id == session_id);
+                let cwd = session
+                    .and_then(|s| {
+                        if !s.cwd.is_empty() {
+                            Some(s.cwd.clone())
+                        } else if let Some(pid) = &s.project_id {
+                            self.projects
+                                .iter()
+                                .find(|p| &p.id == pid)
+                                .map(|p| p.path.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .or_else(|| {
+                        project_id
+                            .as_ref()
+                            .and_then(|pid| {
+                                self.projects
+                                    .iter()
+                                    .find(|p| &p.id == pid)
+                                    .map(|p| p.path.clone())
+                            })
+                    })
+                    .or_else(|| {
+                        self.selected_project_for_pane(pane_id).map(|p| p.path.clone())
+                    });
+                (Some(session_id.clone()), cwd)
+            }
+            Some(console_core::WorkspaceTabConfig::File { project_id, .. })
+            | Some(console_core::WorkspaceTabConfig::Diff { project_id, .. })
+            | Some(console_core::WorkspaceTabConfig::Terminal { project_id, .. }) => {
+                let cwd = project_id
+                    .as_ref()
+                    .and_then(|pid| {
+                        self.projects
+                            .iter()
+                            .find(|p| &p.id == pid)
+                            .map(|p| p.path.clone())
+                    })
+                    .or_else(|| self.selected_project_for_pane(pane_id).map(|p| p.path.clone()));
+                (None, cwd)
+            }
+            None => (None, None),
+        }
     }
 
     pub fn set_inspector_tab(&mut self, tab: InspectorTab, cx: &mut Context<Self>) {

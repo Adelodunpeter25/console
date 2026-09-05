@@ -292,30 +292,31 @@ impl Render for ConsoleDesktopApp {
                         _ => Some(title.clone()),
                     }
                 }
-                _ => self
-                    .selected_session_id
-                    .as_deref()
-                    .and_then(|sid| self.sessions.iter().find(|s| s.id == sid))
-                    .map(|session| {
-                        let folder = self
-                            .projects
+                Some(console_core::WorkspaceTabConfig::Chat {
+                    session_id,
+                    title,
+                    ..
+                }) => {
+                    let session = self.sessions.iter().find(|s| &s.id == session_id);
+                    let folder = session.and_then(|s| {
+                        self.projects
                             .iter()
-                            .find(|project| project.matches_session(session))
-                            .map(|project| project.name.clone())
-                            .unwrap_or_else(|| {
-                                console_ui::utils::format_folder_display_name(&session.cwd)
-                            });
-                        if folder.is_empty() {
-                            session.display_title().to_string()
-                        } else {
-                            format!("{} — {}", session.title, folder)
-                        }
-                    })
-                    .or_else(|| {
-                        self.selected_project_id.as_ref().and_then(|pid| {
-                            self.projects.iter().find(|p| &p.id == pid).map(|p| p.name.clone())
-                        })
-                    }),
+                            .find(|p| p.matches_session(s))
+                            .map(|p| p.name.clone())
+                            .or_else(|| {
+                                if s.cwd.is_empty() {
+                                    None
+                                } else {
+                                    Some(console_ui::utils::format_folder_display_name(&s.cwd))
+                                }
+                            })
+                    });
+                    match folder {
+                        Some(f) if !f.is_empty() => Some(format!("{} — {}", title, f)),
+                        _ => Some(title.clone()),
+                    }
+                }
+                None => None,
             }
         };
         let on_toggle_sidebar: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
