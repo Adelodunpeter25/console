@@ -21,6 +21,19 @@ const WINDOW_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
 /// a drag still coalesces through [`WINDOW_SAVE_DEBOUNCE`].
 const WINDOW_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
+fn strip_diff_tabs(mut root: console_core::WorkspaceNode) -> console_core::WorkspaceNode {
+    for leaf in root.leaves_mut() {
+        leaf.tabs
+            .retain(|tab| !matches!(tab, console_core::WorkspaceTabConfig::Diff { .. }));
+        if let Some(active) = &leaf.active_tab_id {
+            if active.starts_with("diff:") {
+                leaf.active_tab_id = leaf.tabs.last().map(|t| t.id());
+            }
+        }
+    }
+    root
+}
+
 impl ConsoleDesktopApp {
     pub(crate) fn persist_layout(&self) {
         persistence::layout::save(persistence::PersistedLayoutState {
@@ -60,7 +73,8 @@ impl ConsoleDesktopApp {
             let wid = proj_id_opt
                 .clone()
                 .unwrap_or_else(|| "__default__".to_string());
-            let active_tab_id = root.leaves().first().and_then(|l| l.active_tab_id.clone());
+            let clean_root = strip_diff_tabs(root.clone());
+            let active_tab_id = clean_root.leaves().first().and_then(|l| l.active_tab_id.clone());
             let proj_info = proj_id_opt
                 .as_ref()
                 .and_then(|pid| self.projects.iter().find(|p| &p.id == pid));
@@ -71,7 +85,7 @@ impl ConsoleDesktopApp {
                     project_id: proj_id_opt.clone(),
                     cwd: proj_info.map(|p| p.path.clone()),
                     name: proj_info.map(|p| p.name.clone()),
-                    root: root.clone(),
+                    root: clean_root,
                     active_tab_id,
                 },
             );
@@ -81,13 +95,14 @@ impl ConsoleDesktopApp {
             .selected_project_id
             .clone()
             .unwrap_or_else(|| "__default__".to_string());
+        let clean_cur_root = strip_diff_tabs(self.workspace_root.clone());
         let cur_active_tab = self
             .active_pane_id
             .as_deref()
-            .and_then(|pid| self.workspace_root.leaves().into_iter().find(|l| l.id == pid))
+            .and_then(|pid| clean_cur_root.leaves().into_iter().find(|l| l.id == pid))
             .and_then(|l| l.active_tab_id.clone())
             .or_else(|| {
-                self.workspace_root
+                clean_cur_root
                     .leaves()
                     .first()
                     .and_then(|l| l.active_tab_id.clone())
@@ -103,7 +118,7 @@ impl ConsoleDesktopApp {
                 project_id: self.selected_project_id.clone(),
                 cwd: cur_proj.map(|p| p.path.clone()),
                 name: cur_proj.map(|p| p.name.clone()),
-                root: self.workspace_root.clone(),
+                root: clean_cur_root,
                 active_tab_id: cur_active_tab,
             },
         );

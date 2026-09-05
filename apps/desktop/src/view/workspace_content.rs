@@ -122,43 +122,6 @@ impl ConsoleDesktopApp {
 
         // Diff tab: render full-page DiffViewer
         if let Some(console_core::WorkspaceTabConfig::Diff { path, .. }) = active_tab {
-            if !self.open_diff_contents.contains_key(path) {
-                let client = self.client.clone();
-                let file_path = path.clone();
-                let cwd = self
-                    .selected_session_id
-                    .as_deref()
-                    .and_then(|id| self.sessions.iter().find(|s| s.id == id))
-                    .map(|s| s.cwd.clone())
-                    .or_else(|| {
-                        self.selected_project_id
-                            .as_deref()
-                            .and_then(|id| self.projects.iter().find(|p| p.id == id))
-                            .map(|p| p.path.clone())
-                    });
-                cx.spawn(async move |entity, cx| {
-                    let mut diff_raw = String::new();
-                    if let Ok(resp) = client.git.get_diff(cwd.as_deref(), Some(&file_path)).await {
-                        diff_raw = resp.diff;
-                    }
-                    let diff_result = if !diff_raw.trim().is_empty() {
-                        console_core::utils::diff::parse_unified_diff(&diff_raw)
-                    } else {
-                        console_core::DiffResult::default()
-                    };
-                    cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.open_diff_contents
-                                    .insert(file_path, (diff_result, diff_raw));
-                                cx.notify();
-                            });
-                        }
-                    });
-                })
-                .detach();
-            }
-
             let (diff_result, raw_diff) = self
                 .open_diff_contents
                 .get(path)
