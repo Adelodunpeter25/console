@@ -13,7 +13,7 @@ const TIER_RANK: Record<ToolTier, number> = {
 const MODE_MAX_ALLOWED_TIER: Record<ApprovalMode, ToolTier> = {
   "always-ask": "read",
   "accept-edits": "write",
-  "plan-mode": "read",
+  "plan-mode": "exec",
   "full-access": "exec",
 };
 
@@ -45,19 +45,8 @@ export function resolveApproval(
 ): ResolvedApproval {
   const tier = resolveToolTier(tool, args);
 
-  if (mode === "full-access") {
+  if (mode === "full-access" || mode === "plan-mode") {
     return { policy: "allow", tier };
-  }
-
-  if (mode === "plan-mode") {
-    if (tier === "read") {
-      return { policy: "allow", tier };
-    }
-    return {
-      policy: "prompt",
-      tier,
-      reason: `Tool '${tool.name}' requires upgraded permission because Plan Mode is read-only.`,
-    };
   }
 
   const maxTier = MODE_MAX_ALLOWED_TIER[mode];

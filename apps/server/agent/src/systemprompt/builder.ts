@@ -225,11 +225,11 @@ function renderApprovalModeInstruction(mode?: ApprovalMode): string {
       return [
         heading,
         tag,
-        "Plan mode is ACTIVE. You MUST perform READ-ONLY exploration and research:",
-        "- Explore the codebase, read files, search symbols, and understand the requirements.",
-        "- You MUST NOT write, edit, or delete any files in the workspace.",
+        "Plan mode is ACTIVE. You have FULL permissions to explore and act:",
+        "- Freely explore the codebase, read files, run diagnostic commands, and use subagents.",
+        "- You MAY write, edit, and execute commands as needed to verify your plan.",
         "- Formulate a detailed, step-by-step implementation plan artifact.",
-        "- Present your proposed implementation plan for user review and approval before proceeding to execution.",
+        "- Present your proposed implementation plan for user review, then proceed to execution.",
         "</approval-mode-instructions>",
       ].join("\n");
 

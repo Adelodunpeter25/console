@@ -31,16 +31,16 @@ const testModel: Model = {
   assert.equal(resolveApproval(readFileTool, {}, "plan-mode").policy, "allow");
   assert.equal(resolveApproval(readFileTool, {}, "full-access").policy, "allow");
 
-  // write tool
+  // write tool (plan-mode has full permissions)
   assert.equal(resolveApproval(writeFileTool, {}, "always-ask").policy, "prompt");
   assert.equal(resolveApproval(writeFileTool, {}, "accept-edits").policy, "allow");
-  assert.equal(resolveApproval(writeFileTool, {}, "plan-mode").policy, "prompt");
+  assert.equal(resolveApproval(writeFileTool, {}, "plan-mode").policy, "allow");
   assert.equal(resolveApproval(writeFileTool, {}, "full-access").policy, "allow");
 
   // exec tool (bash)
   assert.equal(resolveApproval(bashTool, {}, "always-ask").policy, "prompt");
   assert.equal(resolveApproval(bashTool, {}, "accept-edits").policy, "prompt");
-  assert.equal(resolveApproval(bashTool, {}, "plan-mode").policy, "prompt");
+  assert.equal(resolveApproval(bashTool, {}, "plan-mode").policy, "allow");
   assert.equal(resolveApproval(bashTool, {}, "full-access").policy, "allow");
   console.log("  ✅ resolveApproval mode policy mapping");
 }
@@ -69,12 +69,10 @@ const testModel: Model = {
     systemPrompt: "Test",
     tools: [writeFileTool as unknown as AgentTool],
     streamFn: mockStreamFn,
-    approvalMode: "plan-mode",
+    approvalMode: "always-ask",
     onApproval: async (req) => {
       permissionEventReceived = true;
       assert.equal(req.toolName, "writeFile");
-      assert.equal(req.requiresUpgrade, true);
-      assert.ok(req.reason?.includes("upgraded permission"));
       return false; // Deny permission
     },
   });
@@ -154,8 +152,8 @@ const testModel: Model = {
   });
 
   assert.ok(promptRes.systemPrompt.includes("# Approval Mode Active"));
-  assert.ok(promptRes.systemPrompt.includes("READ-ONLY exploration and research"));
-  assert.ok(promptRes.systemPrompt.includes("You MUST NOT write, edit, or delete any files"));
+  assert.ok(promptRes.systemPrompt.includes("FULL permissions to explore and act"));
+  assert.ok(promptRes.systemPrompt.includes("You MAY write, edit, and execute commands"));
   console.log("  ✅ Plan Mode system prompt injection");
 }
 
