@@ -718,6 +718,29 @@ impl ConsoleDesktopApp {
         self.persist_workspaces();
     }
 
+    /// Activate the nth tab (0-based) of the active workspace pane, regardless
+    /// of tab type (chat, terminal, file, diff). Backs the Option+1–9
+    /// shortcuts; a no-op when no pane is active or it has fewer tabs.
+    pub fn select_workspace_tab_by_index(&mut self, index: usize, cx: &mut Context<Self>) {
+        let Some(pane_id) = self.active_pane_id.clone() else {
+            return;
+        };
+        let Some(leaf) = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|leaf| leaf.id == pane_id)
+        else {
+            return;
+        };
+        let Some(tab) = leaf.tabs.get(index) else {
+            return;
+        };
+        let tab_id = tab.id();
+        self.select_workspace_tab(&pane_id, &tab_id);
+        cx.notify();
+    }
+
     pub fn focus_workspace_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
         if self
             .workspace_root

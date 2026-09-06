@@ -43,6 +43,17 @@ actions!(
         SwitchSession7,
         SwitchSession8,
         SwitchSession9,
+        /// Jump to the nth tab of the active workspace pane, any tab type
+        /// (Option+1–9 / Alt+1–9).
+        SwitchWorkspaceTab1,
+        SwitchWorkspaceTab2,
+        SwitchWorkspaceTab3,
+        SwitchWorkspaceTab4,
+        SwitchWorkspaceTab5,
+        SwitchWorkspaceTab6,
+        SwitchWorkspaceTab7,
+        SwitchWorkspaceTab8,
+        SwitchWorkspaceTab9,
     ]
 );
 
@@ -78,6 +89,20 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-7", SwitchSession7, None),
         KeyBinding::new("secondary-8", SwitchSession8, None),
         KeyBinding::new("secondary-9", SwitchSession9, None),
+        // Option+1–9 (Alt elsewhere): switch tabs within the active workspace
+        // pane. `alt` is the Option modifier in GPUI keystroke strings. These
+        // intentionally shadow the focused terminal's own key handling —
+        // GPUI dispatches action bindings before element key listeners —
+        // so tab switching works from anywhere, terminals included.
+        KeyBinding::new("alt-1", SwitchWorkspaceTab1, None),
+        KeyBinding::new("alt-2", SwitchWorkspaceTab2, None),
+        KeyBinding::new("alt-3", SwitchWorkspaceTab3, None),
+        KeyBinding::new("alt-4", SwitchWorkspaceTab4, None),
+        KeyBinding::new("alt-5", SwitchWorkspaceTab5, None),
+        KeyBinding::new("alt-6", SwitchWorkspaceTab6, None),
+        KeyBinding::new("alt-7", SwitchWorkspaceTab7, None),
+        KeyBinding::new("alt-8", SwitchWorkspaceTab8, None),
+        KeyBinding::new("alt-9", SwitchWorkspaceTab9, None),
     ]);
 }
 
@@ -225,6 +250,60 @@ pub fn init_handlers(cx: &mut App) {
     cx.on_action(|_: &SwitchSession9, cx| {
         if let Some((_, app)) = crate::window::get_active_window(cx) {
             app.update(cx, |this, cx| this.select_session_by_visible_index(8, cx));
+        }
+    });
+
+    cx.on_action(|_: &SwitchWorkspaceTab1, cx| {
+        if let Some((_, app)) = crate::window::get_active_window(cx) {
+            app.update(cx, |this, cx| this.select_workspace_tab_by_index(0, cx));
+        }
+    });
+
+    cx.on_action(|_: &SwitchWorkspaceTab2, cx| {
+        if let Some((_, app)) = crate::window::get_active_window(cx) {
+            app.update(cx, |this, cx| this.select_workspace_tab_by_index(1, cx));
+        }
+    });
+
+    cx.on_action(|_: &SwitchWorkspaceTab3, cx| {
+        if let Some((_, app)) = crate::window::get_active_window(cx) {
+            app.update(cx, |this, cx| this.select_workspace_tab_by_index(2, cx));
+        }
+    });
+
+    cx.on_action(|_: &SwitchWorkspaceTab4, cx| {
+        if let Some((_, app)) = crate::window::get_active_window(cx) {
+            app.update(cx, |this, cx| this.select_workspace_tab_by_index(3, cx));
+        }
+    });
+
+    cx.on_action(|_: &SwitchWorkspaceTab5, cx| {
+        if let Some((_, app)) = crate::window::get_active_window(cx) {
+            app.update(cx, |this, cx| this.select_workspace_tab_by_index(4, cx));
+        }
+    });
+
+    cx.on_action(|_: &SwitchWorkspaceTab6, cx| {
+        if let Some((_, app)) = crate::window::get_active_window(cx) {
+            app.update(cx, |this, cx| this.select_workspace_tab_by_index(5, cx));
+        }
+    });
+
+    cx.on_action(|_: &SwitchWorkspaceTab7, cx| {
+        if let Some((_, app)) = crate::window::get_active_window(cx) {
+            app.update(cx, |this, cx| this.select_workspace_tab_by_index(6, cx));
+        }
+    });
+
+    cx.on_action(|_: &SwitchWorkspaceTab8, cx| {
+        if let Some((_, app)) = crate::window::get_active_window(cx) {
+            app.update(cx, |this, cx| this.select_workspace_tab_by_index(7, cx));
+        }
+    });
+
+    cx.on_action(|_: &SwitchWorkspaceTab9, cx| {
+        if let Some((_, app)) = crate::window::get_active_window(cx) {
+            app.update(cx, |this, cx| this.select_workspace_tab_by_index(8, cx));
         }
     });
 }
