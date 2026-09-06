@@ -93,7 +93,19 @@ impl TerminalBackend for TermyBackend {
             let mut c = 0;
             while c < cols {
                 if let Some(link) = self.term.link_at(r, c) {
-                    let end_col = link.end_col.min(cols.saturating_sub(1));
+                    // `end_col` is relative to the link's FINAL row: a link
+                    // whose text soft-wraps onto later rows reports the end
+                    // column of its last row (termy clips the range to the
+                    // viewport, not to this row). On this row the link runs
+                    // to the line end. Never let the cursor rewind — a
+                    // rewind spins this loop forever, wedges the backend
+                    // mutex, and kills the terminal (see the wrapped-OSC-8
+                    // regression test).
+                    let end_col = if link.end_row > r {
+                        cols.saturating_sub(1)
+                    } else {
+                        link.end_col.min(cols.saturating_sub(1))
+                    };
                     detected_links.push(crate::types::terminal::TerminalLink {
                         start_row: link.start_row as u16,
                         start_col: link.start_col as u16,
@@ -101,7 +113,7 @@ impl TerminalBackend for TermyBackend {
                         end_col: end_col as u16,
                         target: link.target,
                     });
-                    c = end_col + 1;
+                    c = c.max(end_col) + 1;
                 } else {
                     c += 1;
                 }
