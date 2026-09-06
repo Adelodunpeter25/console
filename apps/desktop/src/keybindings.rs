@@ -63,12 +63,12 @@ actions!(
 pub fn init(cx: &mut App) {
     cx.bind_keys([
         // `secondary` is cmd on macOS and ctrl on Linux/Windows.
+        // Two spellings cover NewWindow: GPUI matches the key letter
+        // case-sensitively, and macOS reports an uppercase "N" while
+        // Shift is held. (No separate cmd-* bindings — "cmd" parses to
+        // the same platform modifier as "secondary".)
         KeyBinding::new("secondary-shift-n", NewWindow, None),
         KeyBinding::new("secondary-shift-N", NewWindow, None),
-        KeyBinding::new("cmd-shift-n", NewWindow, None),
-        KeyBinding::new("cmd-shift-N", NewWindow, None),
-        KeyBinding::new("shift-cmd-n", NewWindow, None),
-        KeyBinding::new("shift-cmd-N", NewWindow, None),
         KeyBinding::new("secondary-w", CloseTab, None),
         KeyBinding::new("secondary-n", NewChat, None),
         // cmd-o / cmd-p — same as Zed; our File menu owns the key equivalents
