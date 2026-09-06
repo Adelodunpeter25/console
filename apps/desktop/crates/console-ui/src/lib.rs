@@ -1,6 +1,5 @@
 pub mod chat;
 pub mod common;
-pub mod input;
 pub mod inspector;
 pub mod layout;
 pub mod markdown;
@@ -14,7 +13,6 @@ pub mod workspace;
 
 pub use chat::*;
 pub use common::*;
-pub use input::*;
 pub use inspector::*;
 pub use layout::*;
 pub use markdown::*;
