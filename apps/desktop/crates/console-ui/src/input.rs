@@ -893,10 +893,10 @@ impl ComposerInput {
     }
 
     /// Insert an accepted file mention chip into the composer.
-    /// Inserts `@<path> ` into the underlying text buffer and tracks the `@<path>` range as a chip.
+    /// Inserts `<path> ` into the underlying text buffer and tracks the `<path>` range as a chip.
     pub fn insert_file_mention(&mut self, range: Range<usize>, path: &str, cx: &mut Context<Self>) {
-        let insert_text = format!("@{} ", path);
-        let mention_len = 1 + path.len();
+        let insert_text = format!("{} ", path);
+        let mention_len = path.len();
         let start = range.start.min(self.content.len());
         self.replace_range(range, &insert_text, cx);
         let mention_range = start..(start + mention_len);
@@ -944,8 +944,7 @@ impl ComposerInput {
             if !content.is_char_boundary(m.range.start) || !content.is_char_boundary(m.range.end) {
                 return false;
             }
-            let expected = format!("@{}", m.path);
-            content.get(m.range.clone()) == Some(expected.as_str())
+            content.get(m.range.clone()) == Some(m.path.as_str())
         });
         self.mentions.sort_by_key(|m| m.range.start);
         self.mentions.dedup_by(|a, b| a.range == b.range);

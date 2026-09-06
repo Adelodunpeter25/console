@@ -87,7 +87,7 @@ impl AutocompleteItem {
                 } else {
                     &file.relative_path
                 };
-                format!("@{} ", path)
+                format!("{} ", path)
             }
         }
     }
