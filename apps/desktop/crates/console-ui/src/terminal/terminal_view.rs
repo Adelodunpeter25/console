@@ -25,7 +25,8 @@ pub struct TerminalCellPos {
 /// feeds server output → grid → snapshot, and forwards keyboard → `input`.
 ///
 /// **Usage (not yet wired into `ConsoleDesktopApp`):**
-/// ```rust
+///
+/// ```ignore
 /// let params = TerminalSpawnParams { cwd: project.path.clone(), ..Default::default() };
 /// let view = cx.new(|cx| TerminalView::new(params, client.clone(), window, cx));
 /// div().child(view)
@@ -237,6 +238,22 @@ impl TerminalView {
         }
     }
 
+    /// The URL link under a grid cell, if any. Only URL targets exist in
+    /// snapshots (see `detect_url_links` in console-core).
+    pub fn link_target_at(&self, pos: TerminalCellPos) -> Option<String> {
+        let snapshot = self.snapshot.as_ref()?;
+        snapshot
+            .links
+            .iter()
+            .find(|l| {
+                pos.row >= l.start_row
+                    && pos.row <= l.end_row
+                    && (pos.row > l.start_row || pos.col >= l.start_col)
+                    && (pos.row < l.end_row || pos.col <= l.end_col)
+            })
+            .map(|l| l.target.clone())
+    }
+
     pub fn clear_selection(&mut self) -> bool {
         let had = self.selection_anchor.is_some() || self.selection_head.is_some();
         self.selection_anchor = None;
@@ -261,6 +278,25 @@ impl TerminalView {
         let bytes = keystroke_to_input(&ks, TerminalKeyEventKind::Press, mode, true)?;
         Some(String::from_utf8_lossy(&bytes).into_owned())
     }
+}
+
+/// Open a URL in the user's default browser. Fire-and-forget: a failure to
+/// spawn the opener is logged, never surfaced into the terminal UI.
+fn open_url_in_browser(url: &str) {
+    #[cfg(target_os = "macos")]
+    let result = std::process::Command::new("open").arg(url).spawn();
+    #[cfg(target_os = "linux")]
+    let result = std::process::Command::new("xdg-open").arg(url).spawn();
+    #[cfg(target_os = "windows")]
+    let result = std::process::Command::new("cmd")
+        .args(["/C", "start", "", url])
+        .spawn();
+    #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+    if let Err(err) = result {
+        log::warn!("Failed to open URL '{url}' in browser: {err}");
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    let _ = url;
 }
 
 impl Focusable for TerminalView {
@@ -498,6 +534,18 @@ impl Render for TerminalView {
                                 col: col.min(this.size.cols.saturating_sub(1)),
                                 row: row.min(this.size.rows.saturating_sub(1)),
                             };
+
+                            // Cmd+Click (Ctrl+Click elsewhere) on a URL opens
+                            // it in the default browser instead of selecting.
+                            if event.modifiers.platform || event.modifiers.control {
+                                if let Some(url) = this.link_target_at(pos) {
+                                    this.clear_selection();
+                                    cx.notify();
+                                    open_url_in_browser(&url);
+                                    return;
+                                }
+                            }
+
                             this.selection_anchor = Some(pos);
                             this.selection_head = Some(pos);
                             this.selection_dragging = true;

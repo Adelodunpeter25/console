@@ -1,6 +1,6 @@
 use crate::types::terminal::{
     CursorPosition, TerminalBackend, TerminalCell, TerminalCellFlags, TerminalColor,
-    TerminalGridSnapshot, TerminalSize,
+    TerminalGridSnapshot, TerminalLink, TerminalSize,
 };
 use termy_core::{Terminal, TerminalSize as TermySize};
 
@@ -88,36 +88,16 @@ impl TerminalBackend for TermyBackend {
             out_rows.push(row);
         }
 
+        // URL-only link detection, computed straight from the rendered grid
+        // text. We deliberately do NOT call termy's `link_at` here: it walks
+        // OSC 8 hyperlink metadata and runs file-path heuristics (including
+        // filesystem canonicalization) per cell, which is dead weight for the
+        // common case and has pathological behavior for links that soft-wrap
+        // across rows. Only http/https/www URLs are surfaced — file paths and
+        // OSC 8 targets are ignored on purpose.
         let mut detected_links = Vec::new();
-        for r in 0..rows {
-            let mut c = 0;
-            while c < cols {
-                if let Some(link) = self.term.link_at(r, c) {
-                    // `end_col` is relative to the link's FINAL row: a link
-                    // whose text soft-wraps onto later rows reports the end
-                    // column of its last row (termy clips the range to the
-                    // viewport, not to this row). On this row the link runs
-                    // to the line end. Never let the cursor rewind — a
-                    // rewind spins this loop forever, wedges the backend
-                    // mutex, and kills the terminal (see the wrapped-OSC-8
-                    // regression test).
-                    let end_col = if link.end_row > r {
-                        cols.saturating_sub(1)
-                    } else {
-                        link.end_col.min(cols.saturating_sub(1))
-                    };
-                    detected_links.push(crate::types::terminal::TerminalLink {
-                        start_row: link.start_row as u16,
-                        start_col: link.start_col as u16,
-                        end_row: link.end_row as u16,
-                        end_col: end_col as u16,
-                        target: link.target,
-                    });
-                    c = c.max(end_col) + 1;
-                } else {
-                    c += 1;
-                }
-            }
+        for (r, row) in out_rows.iter().enumerate() {
+            detect_url_links(row, r, &mut detected_links);
         }
 
         let cursor = frame.cursor;
@@ -167,8 +147,71 @@ impl TermyBackend {
     pub fn bracketed_paste(&self) -> bool {
         self.term.bracketed_paste_mode()
     }
+}
 
-    pub fn link_at(&self, row: usize, col: usize) -> Option<termy_core::DetectedViewportLink> {
-        self.term.link_at(row, col)
+/// Case-insensitive prefix check for the ASCII URL schemes we detect.
+fn starts_with_ignore_case(chars: &[char], prefix: &str) -> bool {
+    chars.len() >= prefix.len()
+        && chars[..prefix.len()]
+            .iter()
+            .zip(prefix.chars())
+            .all(|(a, b)| a.to_ascii_lowercase() == b)
+}
+
+/// Scan one rendered grid row for URL tokens and append links for each.
+///
+/// Only `http://`, `https://`, and `www.` tokens count as links; file paths,
+/// bare domains, and OSC 8 hyperlinks are deliberately ignored. Detection is
+/// per-row: a URL soft-wrapped across the terminal edge is not linked (the
+/// same tradeoff termy's own heuristics make).
+fn detect_url_links(row: &[TerminalCell], row_idx: usize, links: &mut Vec<TerminalLink>) {
+    const PREFIXES: [(&str, usize); 3] = [("https://", 8), ("http://", 7), ("www.", 4)];
+
+    let chars: Vec<char> = row.iter().map(|cell| cell.c).collect();
+    let mut c = 0usize;
+    while c < chars.len() {
+        let scheme_len = PREFIXES
+            .iter()
+            .find(|(prefix, _)| starts_with_ignore_case(&chars[c..], prefix))
+            .map(|(_, len)| *len);
+        let Some(scheme_len) = scheme_len else {
+            c += 1;
+            continue;
+        };
+
+        // Token ends at whitespace, quotes, or brackets.
+        let mut end = c + scheme_len;
+        while end < chars.len() {
+            let ch = chars[end];
+            if ch.is_whitespace() || matches!(ch, '"' | '\'' | '<' | '>' | '[' | ']' | '(' | ')') {
+                break;
+            }
+            end += 1;
+        }
+        // Trim punctuation commonly glued to URLs in prose/shell output.
+        while end > c + scheme_len
+            && matches!(chars[end - 1], '.' | ',' | ';' | ':' | '!' | '?')
+        {
+            end -= 1;
+        }
+
+        // A lone "www." or "http://" is not a link.
+        if end < c + scheme_len + 4 {
+            c += 1;
+            continue;
+        }
+
+        let mut target: String = chars[c..end].iter().collect();
+        if target.len() >= 4 && target[..4].eq_ignore_ascii_case("www.") {
+            target = format!("https://{target}");
+        }
+        links.push(TerminalLink {
+            start_row: row_idx as u16,
+            start_col: c as u16,
+            end_row: row_idx as u16,
+            end_col: (end - 1) as u16,
+            target,
+        });
+        c = end;
     }
 }

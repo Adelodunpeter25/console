@@ -1,14 +1,14 @@
 //! Regression tests for the snapshot link scan in `TermyBackend`.
 //!
-//! `snapshot()` walks the grid and asks `link_at(r, c)` for the link under
-//! each cell, then jumps the scan cursor to `end_col + 1`. For a link that
-//! soft-wraps onto later rows, `end_col` is relative to the link's *final*
-//! row — so the cursor can rewind and the scan spins forever. Real-world
-//! trigger: `git init` prints a long absolute path that wraps at the
-//! terminal width, and termy's heuristics classify file paths as links.
+//! Links are URL-only (http/https/www), detected from the rendered grid text.
+//! termy's per-cell `link_at` scan is deliberately not used anymore: it walked
+//! OSC 8 metadata and file-path heuristics (with filesystem canonicalization)
+//! per cell, and a link that soft-wrapped across rows could rewind its scan
+//! cursor and hang the snapshot forever — wedging that terminal (seen in the
+//! wild after `git init`, which prints a long wrapping absolute path).
 //!
 //! These tests run `snapshot()` on a worker thread with a watchdog so a
-//! regression fails the test instead of hanging CI.
+//! regression fails loudly (SIGABRT) instead of hanging the suite forever.
 
 use console_core::services::terminal::TermyBackend;
 use console_core::types::terminal::{TerminalBackend, TerminalSize};
@@ -36,7 +36,7 @@ fn snapshot_bounded(backend: &TermyBackend) -> console_core::types::terminal::Te
             Err(_) => {
                 eprintln!(
                     "snapshot() did not finish within {SNAPSHOT_TIMEOUT:?} — \
-                     the grid link scan is stuck (likely a wrapped-link cursor rewind)"
+                     the grid link scan is stuck"
                 );
                 std::process::abort();
             }
@@ -45,47 +45,49 @@ fn snapshot_bounded(backend: &TermyBackend) -> console_core::types::terminal::Te
 }
 
 #[test]
-fn snapshot_completes_after_git_init_style_wrapped_path() {
+fn snapshot_links_http_and_https_urls() {
     let mut backend = TermyBackend::new(TerminalSize::new(80, 24));
-
-    // Exactly what a shell prints for `git init` in a deeply nested project:
-    // the absolute path soft-wraps at 80 columns, and termy's heuristics
-    // classify file paths as file:// links spanning the wrapped rows.
-    backend.advance("Initialized empty Git repository in /Users/someone/Developer/Projects/console/.git/\r\n");
-    let _ = snapshot_bounded(&backend);
-
-    // The redrawn prompt after the repo exists: git-aware prompts add a git
-    // segment and often wrap OSC 8 hyperlinks around the cwd.
-    backend.advance("\x1b[32m➜\x1b[0m \x1b]8;;file:///Users/someone/Developer/Projects/console\x1b\\console\x1b]8;;\x1b\\ \x1b[33mgit:(\x1b[31mmaster\x1b[33m)\x1b[0m \r\n");
+    backend.advance("See https://example.com/docs and http://a.co, plus www.zed.dev.\r\n");
     let snapshot = snapshot_bounded(&backend);
 
-    // The path link must be detected and must span the wrapped rows.
+    let targets: Vec<&str> = snapshot.links.iter().map(|l| l.target.as_str()).collect();
+    assert!(targets.contains(&"https://example.com/docs"), "got {targets:?}");
+    assert!(targets.contains(&"http://a.co"), "trailing comma must be trimmed, got {targets:?}");
+    assert!(targets.contains(&"https://www.zed.dev"), "got {targets:?}");
+}
+
+#[test]
+fn snapshot_ignores_file_paths_from_git_init_output() {
+    // Exactly what a shell prints for `git init` in a deeply nested project:
+    // the absolute path soft-wraps at 80 columns. It must NOT become a link,
+    // and the snapshot must complete (this output used to hang the scan).
+    let mut backend = TermyBackend::new(TerminalSize::new(80, 24));
+    backend.advance("Initialized empty Git repository in /Users/someone/Developer/Projects/console/.git/\r\n");
+    backend.advance("\x1b[32m➜\x1b[0m \x1b[36mconsole\x1b[0m \x1b[33mgit:(\x1b[31mmaster\x1b[33m)\x1b[0m \r\n");
+    let snapshot = snapshot_bounded(&backend);
+
     assert!(
-        !snapshot.links.is_empty(),
-        "expected the wrapped file path to be detected as a link"
+        snapshot.links.is_empty(),
+        "file paths must not be links, got {:?}",
+        snapshot.links
     );
 }
 
 #[test]
-fn snapshot_scan_never_rewinds_on_multi_row_links() {
-    // An OSC 8 hyperlink whose *text* soft-wraps across row boundaries:
-    // grid hyperlink metadata spans rows, so link_at() reports an end_col
-    // that belongs to the link's final row. The scan cursor must never
-    // rewind to it.
+fn snapshot_ignores_osc8_hyperlinks_even_when_wrapped() {
+    // An OSC 8 hyperlink whose text soft-wraps across rows: OSC 8 metadata is
+    // ignored entirely (URLs only), and the old per-cell scan hung forever on
+    // this exact input.
     let mut backend = TermyBackend::new(TerminalSize::new(80, 24));
     let long_target = "file:///Users/someone/Developer/Projects/console/repo";
     let link_text = "/Users/someone/Developer/Projects/console/repo/very/deeply/nested/directory/structure/that/well/past/one/line";
     for _ in 0..6 {
-        backend.advance(&format!(
-            "\x1b]8;;{long_target}\x1b\\{link_text}\x1b]8;;\x1b\\\r\n"
-        ));
+        backend.advance(&format!("\x1b]8;;{long_target}\x1b\\{link_text}\x1b]8;;\x1b\\\r\n"));
     }
     let snapshot = snapshot_bounded(&backend);
-    assert!(!snapshot.links.is_empty());
-
-    // Every detected link must still be a sane viewport range.
-    for link in &snapshot.links {
-        assert!(link.start_row <= link.end_row);
-        assert!(link.end_row < 24);
-    }
+    assert!(
+        snapshot.links.is_empty(),
+        "OSC 8 targets must not be links, got {:?}",
+        snapshot.links
+    );
 }
