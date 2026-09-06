@@ -276,12 +276,27 @@ impl ConsoleDesktopApp {
         let Some(trigger) = trigger else {
             return;
         };
-        let insert = item.insert_text();
         composer.update(cx, |input, cx| {
             // Clamp to current content so a stale range from an earlier frame can't panic.
             let range = trigger.range.start.min(input.content().len())
                 ..trigger.range.end.min(input.content().len());
-            input.replace_range(range, &insert, cx);
+            match &item {
+                AutocompleteItem::File(file) => {
+                    let path = if file.relative_path.is_empty() {
+                        file.absolute_path
+                            .rsplit('/')
+                            .next()
+                            .unwrap_or(&file.absolute_path)
+                    } else {
+                        &file.relative_path
+                    };
+                    input.insert_file_mention(range, path, cx);
+                }
+                _ => {
+                    let insert = item.insert_text();
+                    input.replace_range(range, &insert, cx);
+                }
+            }
         });
         if let Some(state) = self.autocomplete_states.get_mut(pane_id) {
             state.trigger = None;

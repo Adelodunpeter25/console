@@ -12,6 +12,7 @@ use gpui::{
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point,
     ScrollHandle, SharedString, StyledText, Subscription, Task, TextLayout, TextRun,
     UTF16Selection, UnderlineStyle, Window, actions, div, fill, point, prelude::*, px, size,
+    BorderStyle, quad,
 };
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -654,8 +655,15 @@ pub struct ComposerInput {
     prompt_history: PromptHistory,
     external_context_menu_focus_holds: usize,
     context_menu: ContextMenuHandle,
+    mentions: Vec<ComposerMention>,
     blink_cursor: Entity<BlinkCursor>,
     _subscriptions: Vec<Subscription>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ComposerMention {
+    pub range: Range<usize>,
+    pub path: String,
 }
 
 #[derive(Clone, Copy)]
@@ -733,6 +741,7 @@ impl ComposerInput {
                     });
                 })
             },
+            mentions: Vec::new(),
             blink_cursor,
             _subscriptions,
         }
@@ -879,6 +888,69 @@ impl ComposerInput {
         self.cursor_offset()
     }
 
+    pub fn mentions(&self) -> &[ComposerMention] {
+        &self.mentions
+    }
+
+    /// Insert an accepted file mention chip into the composer.
+    /// Inserts `@<path> ` into the underlying text buffer and tracks the `@<path>` range as a chip.
+    pub fn insert_file_mention(&mut self, range: Range<usize>, path: &str, cx: &mut Context<Self>) {
+        let insert_text = format!("@{} ", path);
+        let mention_len = 1 + path.len();
+        let start = range.start.min(self.content.len());
+        self.replace_range(range, &insert_text, cx);
+        let mention_range = start..(start + mention_len);
+        self.mentions.retain(|m| m.range.end <= start || m.range.start >= start + insert_text.len());
+        self.mentions.push(ComposerMention {
+            range: mention_range,
+            path: path.to_string(),
+        });
+        self.reconcile_mentions();
+        cx.notify();
+    }
+
+    pub fn add_mention(&mut self, range: Range<usize>, path: impl Into<String>) {
+        self.mentions.push(ComposerMention {
+            range,
+            path: path.into(),
+        });
+        self.reconcile_mentions();
+    }
+
+    fn adjust_mentions(&mut self, edit_range: &Range<usize>, new_text_len: usize) {
+        let old_len = edit_range.len();
+        let delta = (new_text_len as isize) - (old_len as isize);
+        let mut kept = Vec::with_capacity(self.mentions.len());
+
+        for mut mention in self.mentions.drain(..) {
+            if edit_range.end <= mention.range.start {
+                let start = ((mention.range.start as isize) + delta).max(0) as usize;
+                let end = ((mention.range.end as isize) + delta).max(0) as usize;
+                mention.range = start..end;
+                kept.push(mention);
+            } else if edit_range.start >= mention.range.end {
+                kept.push(mention);
+            }
+        }
+        self.mentions = kept;
+    }
+
+    fn reconcile_mentions(&mut self) {
+        let content = &self.content;
+        self.mentions.retain(|m| {
+            if m.range.end > content.len() || m.range.start >= m.range.end {
+                return false;
+            }
+            if !content.is_char_boundary(m.range.start) || !content.is_char_boundary(m.range.end) {
+                return false;
+            }
+            let expected = format!("@{}", m.path);
+            content.get(m.range.clone()) == Some(expected.as_str())
+        });
+        self.mentions.sort_by_key(|m| m.range.start);
+        self.mentions.dedup_by(|a, b| a.range == b.range);
+    }
+
     /// Splice `text` over `range` and put the caret after it. This is the
     /// autocompletion insert: unlike [`EntityInputHandler::replace_text_in_range`]
     /// it takes byte offsets and no window, so an action handler can call it.
@@ -900,6 +972,7 @@ impl ComposerInput {
         // must not coalesce with the typing around it.
         self.history.seal();
         self.record_edit_history(&range, text, false);
+        self.adjust_mentions(&range, text.len());
         self.content =
             (self.content[..range.start].to_owned() + text + &self.content[range.end..]).into();
         let offset = range.start + text.len();
@@ -909,6 +982,7 @@ impl ComposerInput {
         self.vertical_navigation = None;
         self.history.seal();
         self.refresh_highlight();
+        self.reconcile_mentions();
         self.pause_blink_cursor(cx);
         cx.emit(ComposerEvent::Edited);
         cx.notify();
@@ -998,6 +1072,7 @@ impl ComposerInput {
         self.marked_range = None;
         self.vertical_navigation = None;
         self.highlight.clear();
+        self.mentions.clear();
         // A programmatic clear is a new baseline, not an edit to step back
         // over — a submitted prompt should not resurface via the undo shortcut.
         if changed {
@@ -1020,6 +1095,7 @@ impl ComposerInput {
         self.selection_reversed = false;
         self.marked_range = None;
         self.vertical_navigation = None;
+        self.mentions.clear();
         // A load or reload from disk is a new baseline: undoing into text
         // from before an external change would silently revert that change.
         // An unchanged reload keeps the history alive.
@@ -1315,6 +1391,14 @@ impl ComposerInput {
             cx.emit(ComposerEvent::BackspaceOnEmpty);
             return;
         }
+        if matches!(self.mode, FieldMode::Composer) && self.selected_range.is_empty() {
+            let cursor = self.cursor_offset();
+            if let Some(mention) = self.mentions.iter().find(|m| m.range.end == cursor).cloned() {
+                self.selected_range = mention.range;
+                self.replace_text_in_range(None, "", window, cx);
+                return;
+            }
+        }
         if self.selected_range.is_empty() {
             self.select_to(self.previous_boundary(self.cursor_offset()), cx);
         }
@@ -1322,6 +1406,14 @@ impl ComposerInput {
     }
 
     fn delete(&mut self, _: &Delete, window: &mut Window, cx: &mut Context<Self>) {
+        if matches!(self.mode, FieldMode::Composer) && self.selected_range.is_empty() {
+            let cursor = self.cursor_offset();
+            if let Some(mention) = self.mentions.iter().find(|m| m.range.start == cursor).cloned() {
+                self.selected_range = mention.range;
+                self.replace_text_in_range(None, "", window, cx);
+                return;
+            }
+        }
         if self.selected_range.is_empty() {
             self.select_to(self.next_boundary(self.cursor_offset()), cx);
         }
@@ -1528,6 +1620,7 @@ impl ComposerInput {
         self.marked_range = None;
         self.vertical_navigation = None;
         self.refresh_highlight();
+        self.reconcile_mentions();
         self.pause_blink_cursor(cx);
         cx.emit(ComposerEvent::Edited);
         cx.notify();
@@ -2166,6 +2259,9 @@ fn input_text_runs(
     highlight: &[(Range<usize>, TokenClass)],
     token_color: impl Fn(TokenClass) -> Hsla,
     search: SearchPaint,
+    mentions: &[ComposerMention],
+    mention_color: Hsla,
+    mention_bg_color: Hsla,
 ) -> Vec<TextRun> {
     let mut boundaries = vec![0, display_len];
     for range in [selected_range, marked_range].into_iter().flatten() {
@@ -2179,6 +2275,10 @@ fn input_text_runs(
     for range in search.matches {
         boundaries.push(range.start.min(display_len));
         boundaries.push(range.end.min(display_len));
+    }
+    for mention in mentions {
+        boundaries.push(mention.range.start.min(display_len));
+        boundaries.push(mention.range.end.min(display_len));
     }
     boundaries.sort_unstable();
     boundaries.dedup();
@@ -2194,6 +2294,12 @@ fn input_text_runs(
             .get(index)
             .is_some_and(|range| range.start <= start && range.end >= end)
     };
+    let covering_mention = |start: usize, end: usize| -> bool {
+        let index = mentions.partition_point(|m| m.range.end <= start);
+        mentions
+            .get(index)
+            .is_some_and(|m| m.range.start <= start && m.range.end >= end)
+    };
 
     boundaries
         .windows(2)
@@ -2201,10 +2307,17 @@ fn input_text_runs(
             let start = boundary[0];
             let end = boundary[1];
             let token_index = highlight.partition_point(|(range, _)| range.end <= start);
-            let color = highlight
-                .get(token_index)
-                .filter(|(range, _)| range.start <= start && range.end >= end)
-                .map_or(base_run.color, |(_, class)| token_color(*class));
+            let is_in_mention = covering_mention(start, end);
+            let color = if is_in_mention
+                && selected_range.is_none_or(|range| range.start >= end || range.end <= start)
+            {
+                mention_color
+            } else {
+                highlight
+                    .get(token_index)
+                    .filter(|(range, _)| range.start <= start && range.end >= end)
+                    .map_or(base_run.color, |(_, class)| token_color(*class))
+            };
             let background_color = if search
                 .active
                 .is_some_and(|range| range.start <= start && range.end >= end)
@@ -2214,6 +2327,8 @@ fn input_text_runs(
                 Some(selection_color)
             } else if covering_match(start, end) {
                 Some(search.match_color)
+            } else if is_in_mention {
+                Some(mention_bg_color)
             } else {
                 None
             };
@@ -2310,6 +2425,13 @@ impl Element for InputElement {
             },
             |class| palette.token(class),
             search,
+            if content_is_empty || input.mode != FieldMode::Composer {
+                &[]
+            } else {
+                &input.mentions
+            },
+            theme.accent,
+            theme.accent.opacity(0.12),
         );
         let mut text = StyledText::new(display_text).with_runs(runs);
         let (layout_id, text_layout_state) = text.request_layout(id, inspector_id, window, cx);
@@ -2431,6 +2553,24 @@ impl Element for InputElement {
                 }
             }
         });
+        if input.mode == FieldMode::Composer && !input.mentions.is_empty() {
+            let theme = Theme::current(cx);
+            let layout = layout_state.text.layout();
+            for mention in &input.mentions {
+                if mention.range.end <= input.content.len() {
+                    for rect in crate::markdown::render::range_rects(layout, &mention.range, 3.0, 1.0) {
+                        window.paint_quad(quad(
+                            rect,
+                            px(4.0),
+                            theme.accent.opacity(0.10),
+                            px(1.0),
+                            theme.accent.opacity(0.28),
+                            BorderStyle::default(),
+                        ));
+                    }
+                }
+            }
+        }
         layout_state.text.paint(
             None,
             None,
