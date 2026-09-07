@@ -119,6 +119,9 @@
     "packages/types": {
       "name": "@console/types",
       "version": "1.0.0",
+      "dependencies": {
+        "zod": "^3.23.8",
+      },
       "devDependencies": {
         "typescript": "~5.9.2",
       },
