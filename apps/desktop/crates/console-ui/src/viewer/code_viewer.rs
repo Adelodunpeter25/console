@@ -17,8 +17,17 @@ use crate::markdown::render::{MONO_FAMILY, Palette};
 use crate::primitives::scrollbar::{self, ScrollbarState};
 use crate::theme::Theme;
 
+/// Single source of truth for code-row typography. All metrics that affect
+/// both rendered geometry and hit-testing (column, line) derive from this so
+/// the visible glyph under a click stays correct when the size changes.
+const CODE_TEXT_SIZE: f32 = 11.0;
+/// Approximate width of one ASCII glyph at [`CODE_TEXT_SIZE`] in the monospace
+/// font. Used for both `content_width = max_cols * CHAR_WIDTH` (layout) and
+/// `col = rel_x / CHAR_WIDTH` (hit-testing).
+pub const CHAR_WIDTH: f32 = CODE_TEXT_SIZE * 0.6;
+/// Height of one code row. Used for both row layout and hit-testing vertical
+/// position (`line = rel_y / CODE_LINE_HEIGHT`).
 pub const CODE_LINE_HEIGHT: f32 = 18.0;
-pub const CHAR_WIDTH: f32 = 6.6;
 
 actions!(code_viewer, [CopySelection, SelectAll]);
 
@@ -294,15 +303,17 @@ impl RenderOnce for CodeViewer {
                 .items_center()
                 .justify_center()
                 .bg(theme.canvas)
-                .text_size(px(11.0))
+                .text_size(px(CODE_TEXT_SIZE))
                 .text_color(theme.text_tertiary)
                 .child(self.empty_message.unwrap_or_else(|| "Empty".to_string()))
                 .into_any_element();
         }
 
-        // Determine max line number for gutter sizing (O(1) from line count)
+        // Determine max line number for gutter sizing (O(1) from line count).
+        // Digit width is the same monospace ratio as the code text, so the
+        // gutter measures identically to the body it labels.
         let max_line = self.lines.len().max(1);
-        let line_num_width = format!("{max_line}").len() * 7 + 18;
+        let line_num_width = (format!("{max_line}").len() as f32 * CHAR_WIDTH + 18.0) as usize;
 
         let has_dual_line_numbers = self
             .lines
@@ -604,7 +615,7 @@ impl RenderOnce for CodeViewer {
                                         div()
                                             .flex_none()
                                             .font_family(MONO_FAMILY)
-                                            .text_size(px(11.0))
+                                            .text_size(px(CODE_TEXT_SIZE))
                                             .line_height(px(CODE_LINE_HEIGHT))
                                             .whitespace_nowrap()
                                             .child(
