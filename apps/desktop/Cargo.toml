@@ -44,3 +44,9 @@ regex = "1"
 base64 = "0.22"
 similar = { version = "2", features = ["text"] }
 rust-embed = { version = "8.7.2", features = ["interpolate-folder-path", "include-exclude"] }
+# Native macOS notifications (UNUserNotificationCenter) — macOS-only, see
+# apps/desktop/src/state/macos_notifications.rs. Replaces the old osascript path.
+objc2 = { version = "0.6" }
+objc2-foundation = { version = "0.3" }
+objc2-user-notifications = { version = "0.3" }
+block2 = { version = "0.6" }

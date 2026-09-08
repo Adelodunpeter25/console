@@ -15,6 +15,7 @@ mod errors;
 mod execution;
 mod global_actions;
 mod layout;
+mod macos_notifications;
 mod notifications;
 mod pagination;
 mod projects;

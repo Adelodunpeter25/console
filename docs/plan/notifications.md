@@ -5,7 +5,7 @@
 - [x] Backend event bus (`notificationService.push` on done/attention) + SSE `GET /api/notifications/stream`
 - [x] Mobile local notifications from SSE (`expo-notifications`, `useLocalNotifications`, tap opens session, suppressed when viewing it) — works foreground/backgrounded, not killed-app
 - [ ] Remote push for killed-app (device tokens, `device_tokens` table, Expo push dispatcher, APNs/FCM, EAS creds)
-- [ ] Desktop native banner + focus (see §3)
+- [x] Desktop native banner + focus via objc2 `UNUserNotificationCenter` (see §3) — replaces osascript; click opens session, repeat replaces, viewing suppresses
 
 ## 1. Overview & Objective
 
@@ -61,9 +61,9 @@ GET /api/notifications/stream    ──► apps/server/api/src/routes/notificati
 
 ### Desktop Implementation Points
 1. **Always Enabled**: No setting toggle needed. Notifications always fire when the window is in the background or viewing another session.
-2. **Native Dispatcher (`notify-rust`)**:
-   - Deliver notifications through macOS Notification Center using `notify-rust = "4"`.
-   - Native sound alerts enabled (`sound_name("Default")`).
+2. **Native Dispatcher (objc2 `UNUserNotificationCenter`, macOS-only)**:
+   - `apps/desktop/src/state/macos_notifications.rs` posts via `UNMutableNotificationContent` + `UNNotificationRequest` with per-session identifiers (`console-session-<id>`) so repeats replace instead of stacking; default sound + `console-sessions` thread grouping.
+   - Skipped `notify-rust`: no click-to-session or banner clearing; objc2 gives both directly.
 3. **Click-to-Focus Interaction**:
    - Clicking a banner focuses the Console window and executes `this.select_and_open_session(session_id, cx)`.
 
