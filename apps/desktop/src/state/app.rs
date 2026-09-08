@@ -263,7 +263,9 @@ pub struct ConsoleDesktopApp {
     pub settings_window_handle: Option<gpui::AnyWindowHandle>,
     pub settings_window_view: Option<gpui::WeakEntity<crate::settings_window::SettingsWindow>>,
     pub main_window_handle: Option<gpui::AnyWindowHandle>,
-    pub window_id: String,
+    /// True only for windows launched as the persisted main window.
+    /// Secondary "New Window" windows never persist layout or bounds.
+    pub is_main_window: bool,
     pub drafts: std::collections::HashMap<String, crate::persistence::store::PersistedDraft>,
     /// Session IDs whose draft is confirmed for sidebar display.
     /// Only updated when a tab closes (or submit). Typing never touches this —
@@ -297,7 +299,6 @@ impl ConsoleDesktopApp {
         let layout = persistence::layout::load();
 
         let (
-            window_id,
             sidebar_visible,
             sidebar_width,
             right_sidebar_visible,
@@ -308,64 +309,7 @@ impl ConsoleDesktopApp {
             initial_root,
             initial_saved_window_state,
         ) = match &target {
-            crate::window::WindowLaunchTarget::RestoreDescriptor(desc) => {
-                let wid = if desc.id.is_empty() {
-                    crate::window::generate_window_id()
-                } else {
-                    desc.id.clone()
-                };
-                let sb_visible = desc.sidebar_visible;
-                let sb_width = if desc.sidebar_width.is_finite() && desc.sidebar_width > 0.0 {
-                    desc.sidebar_width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
-                } else {
-                    SIDEBAR_DEFAULT_WIDTH
-                };
-                let rsb_visible = desc.right_sidebar_visible;
-                let rsb_width = if desc.right_sidebar_width.is_finite() && desc.right_sidebar_width > 0.0
-                {
-                    desc.right_sidebar_width
-                        .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
-                } else {
-                    RIGHT_SIDEBAR_DEFAULT_WIDTH
-                };
-                let proj_id = desc.active_workspace_id.as_ref().and_then(|wid| {
-                    if wid == "__default__" {
-                        None
-                    } else {
-                        Some(wid.clone())
-                    }
-                });
-                let root = proj_id
-                    .as_ref()
-                    .and_then(|pid| project_workspace_roots.get(&Some(pid.clone())).cloned())
-                    .or_else(|| project_workspace_roots.get(&None).cloned())
-                    .unwrap_or_else(|| WorkspaceNode::leaf("pane-main"));
-                let rsb_bottom_height = if desc.right_sidebar_bottom_height.is_finite()
-                    && desc.right_sidebar_bottom_height > 0.0
-                {
-                    desc.right_sidebar_bottom_height.clamp(
-                        RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT,
-                        RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT,
-                    )
-                } else {
-                    RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT
-                };
-                let rsb_bottom_collapsed = desc.right_sidebar_bottom_collapsed;
-                (
-                    wid,
-                    sb_visible,
-                    sb_width,
-                    rsb_visible,
-                    rsb_width,
-                    rsb_bottom_height,
-                    rsb_bottom_collapsed,
-                    proj_id,
-                    root,
-                    Some(desc.bounds),
-                )
-            }
             crate::window::WindowLaunchTarget::RestorePersisted => {
-                let wid = crate::window::generate_window_id();
                 let sb_visible = ws_state.sidebar_visible;
                 let sb_width =
                     if ws_state.sidebar_width.is_finite() && ws_state.sidebar_width > 0.0 {
@@ -424,7 +368,6 @@ impl ConsoleDesktopApp {
                     .or_else(|| project_workspace_roots.get(&None).cloned())
                     .unwrap_or_else(|| WorkspaceNode::leaf("pane-main"));
                 (
-                    wid,
                     sb_visible,
                     sb_width,
                     rsb_visible,
@@ -438,7 +381,6 @@ impl ConsoleDesktopApp {
             }
             crate::window::WindowLaunchTarget::Fresh
             | crate::window::WindowLaunchTarget::Session(_) => {
-                let wid = crate::window::generate_window_id();
                 let sb_visible = ws_state.sidebar_visible;
                 let sb_width =
                     if ws_state.sidebar_width.is_finite() && ws_state.sidebar_width > 0.0 {
@@ -470,7 +412,6 @@ impl ConsoleDesktopApp {
                 };
                 let rsb_bottom_collapsed = ws_state.right_sidebar_bottom_collapsed;
                 (
-                    wid,
                     sb_visible,
                     sb_width,
                     rsb_visible,
@@ -792,7 +733,10 @@ impl ConsoleDesktopApp {
             settings_window_handle: None,
             settings_window_view: None,
             main_window_handle: Some(window.window_handle().into()),
-            window_id,
+            is_main_window: matches!(
+                &target,
+                crate::window::WindowLaunchTarget::RestorePersisted
+            ),
             drafts,
             sidebar_draft_ids,
             drafts_collapsed: false,
@@ -882,34 +826,37 @@ impl ConsoleDesktopApp {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
                                 this.sessions = Rc::new(sessions);
-                                match target_for_bootstrap {
-                                    crate::window::WindowLaunchTarget::RestoreDescriptor(_)
-                                    | crate::window::WindowLaunchTarget::RestorePersisted => {
-                                        let mut to_load = Vec::new();
-                                        for leaf in this.workspace_root.leaves() {
-                                            if let Some(session_id) =
-                                                this.active_session_for_pane(&leaf.id)
-                                            {
-                                                to_load.push((leaf.id.clone(), session_id));
-                                            }
-                                        }
-                                        for (pane_id, session_id) in to_load {
-                                            if this.active_pane_id.as_deref() == Some(&pane_id)
-                                                || this.selected_session_id.is_none()
-                                            {
-                                                this.selected_session_id = Some(session_id.clone());
-                                            }
-                                            this.load_session_messages_for_pane(
-                                                pane_id, session_id, cx,
-                                            );
+                                if matches!(
+                                    target_for_bootstrap,
+                                    crate::window::WindowLaunchTarget::RestorePersisted
+                                ) {
+                                    let mut to_load = Vec::new();
+                                    for leaf in this.workspace_root.leaves() {
+                                        if let Some(session_id) =
+                                            this.active_session_for_pane(&leaf.id)
+                                        {
+                                            to_load.push((leaf.id.clone(), session_id));
                                         }
                                     }
+                                    for (pane_id, session_id) in to_load {
+                                        if this.active_pane_id.as_deref() == Some(&pane_id)
+                                            || this.selected_session_id.is_none()
+                                        {
+                                            this.selected_session_id = Some(session_id.clone());
+                                        }
+                                        this.load_session_messages_for_pane(
+                                            pane_id, session_id, cx,
+                                        );
+                                    }
+                                }
+                                match target_for_bootstrap {
                                     crate::window::WindowLaunchTarget::Fresh => {
                                         // Blank independent canvas, no session opened by default.
                                     }
                                     crate::window::WindowLaunchTarget::Session(session_id) => {
                                         this.select_and_open_session(session_id, cx);
                                     }
+                                    _ => {}
                                 }
                                 cx.notify();
                             });

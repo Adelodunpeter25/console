@@ -22,8 +22,8 @@ pub fn generate_window_id() -> String {
 
 #[derive(Clone, Debug)]
 pub enum WindowLaunchTarget {
+    /// Startup restore of the single persisted main window.
     RestorePersisted,
-    RestoreDescriptor(persistence::PersistedWindowDescriptor),
     Fresh,
     Session(String),
 }
@@ -96,15 +96,6 @@ pub fn compute_new_window_bounds(cx: &mut App) -> WindowBounds {
 
 pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
     let window_bounds = match &target {
-        WindowLaunchTarget::RestoreDescriptor(desc) => {
-            let bounds = desc.bounds.bounds();
-            update_active_window_bounds(bounds);
-            if desc.bounds.maximized {
-                WindowBounds::Maximized(bounds)
-            } else {
-                WindowBounds::Windowed(bounds)
-            }
-        }
         WindowLaunchTarget::RestorePersisted => {
             let b = persistence::window::load_window_bounds(cx);
             let bounds = match b {
@@ -127,21 +118,11 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
         ..Default::default()
     };
 
-    let is_persisted = matches!(
-        target,
-        WindowLaunchTarget::RestorePersisted | WindowLaunchTarget::RestoreDescriptor(_)
-    );
+    let is_persisted = matches!(target, WindowLaunchTarget::RestorePersisted);
     let open = move |cx: &mut App| {
         let target_clone = target.clone();
         let result = cx.open_window(options, move |window, cx| {
             let app_view = cx.new(|cx| ConsoleDesktopApp::new(window, target_clone, cx));
-            // Prune this window's descriptor when it closes so
-            // `workspace-state.json:windows` stops accumulating ghosts.
-            let window_id = app_view.read(cx).window_id.clone();
-            window.on_window_should_close(cx, move |_, _| {
-                crate::persistence::remove_window_descriptor(&window_id);
-                true
-            });
             let handle = window.window_handle();
             register_window(handle, app_view.downgrade());
             cx.new(|cx| gpui_component::Root::new(app_view, window, cx))

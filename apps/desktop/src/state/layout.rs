@@ -36,6 +36,11 @@ fn strip_diff_tabs(mut root: console_core::WorkspaceNode) -> console_core::Works
 
 impl ConsoleDesktopApp {
     pub(crate) fn persist_layout(&self) {
+        if !self.is_main_window {
+            // Secondary "New Window" windows never persist layout; only the
+            // main window's state survives restarts.
+            return;
+        }
         persistence::layout::save(persistence::PersistedLayoutState {
             sidebar_visible: self.sidebar_visible,
             sidebar_width: self.sidebar_width,
@@ -60,32 +65,6 @@ impl ConsoleDesktopApp {
         doc.right_sidebar_width = self.right_sidebar_width;
         doc.right_sidebar_bottom_height = self.right_sidebar_bottom_height;
         doc.right_sidebar_bottom_collapsed = self.right_sidebar_bottom_collapsed;
-
-        let bounds = self.saved_window_state.unwrap_or(persistence::window::PersistedWindowState {
-            x: 100.0,
-            y: 100.0,
-            width: persistence::window::DEFAULT_WIDTH,
-            height: persistence::window::DEFAULT_HEIGHT,
-            maximized: false,
-        });
-
-        let descriptor = persistence::PersistedWindowDescriptor {
-            id: self.window_id.clone(),
-            bounds,
-            active_workspace_id: Some(cur_wid),
-            sidebar_visible: self.sidebar_visible,
-            sidebar_width: self.sidebar_width,
-            right_sidebar_visible: self.right_sidebar_visible,
-            right_sidebar_width: self.right_sidebar_width,
-            right_sidebar_bottom_height: self.right_sidebar_bottom_height,
-            right_sidebar_bottom_collapsed: self.right_sidebar_bottom_collapsed,
-        };
-
-        if let Some(existing) = doc.windows.iter_mut().find(|w| w.id == self.window_id) {
-            *existing = descriptor;
-        } else {
-            doc.windows.push(descriptor);
-        }
         persistence::save_workspace_state(&doc);
     }
 
@@ -265,6 +244,11 @@ impl ConsoleDesktopApp {
             return;
         };
         crate::window::update_active_window_bounds(state.bounds());
+        if !self.is_main_window {
+            // Secondary windows track bounds for cascade offsets only; they
+            // never overwrite the persisted main-window frame.
+            return;
+        }
         if self.saved_window_state == Some(state) {
             return;
         }
@@ -318,24 +302,6 @@ impl ConsoleDesktopApp {
             doc.sidebar_width = self.sidebar_width;
             doc.right_sidebar_visible = self.right_sidebar_visible;
             doc.right_sidebar_width = self.right_sidebar_width;
-
-            let descriptor = persistence::PersistedWindowDescriptor {
-                id: self.window_id.clone(),
-                bounds: state,
-                active_workspace_id: Some(cur_wid),
-                sidebar_visible: self.sidebar_visible,
-                sidebar_width: self.sidebar_width,
-                right_sidebar_visible: self.right_sidebar_visible,
-                right_sidebar_width: self.right_sidebar_width,
-                right_sidebar_bottom_height: self.right_sidebar_bottom_height,
-                right_sidebar_bottom_collapsed: self.right_sidebar_bottom_collapsed,
-            };
-
-            if let Some(existing) = doc.windows.iter_mut().find(|w| w.id == self.window_id) {
-                *existing = descriptor;
-            } else {
-                doc.windows.push(descriptor);
-            }
             persistence::save_workspace_state(&doc);
         }
     }
