@@ -83,6 +83,9 @@ pub struct Theme {
     pub user_bubble_border: Hsla,
     pub danger: Hsla,
     pub danger_soft: Hsla,
+    /// Tinted backgrounds for diff `+` and `-` lines.
+    pub diff_added_bg: Hsla,
+    pub diff_removed_bg: Hsla,
 }
 
 impl Theme {
@@ -141,6 +144,8 @@ impl Theme {
             user_bubble_border: hsla(37.0 / 360.0, 1.0, 0.657, 0.15),
             danger: rgb(0xE2726A).into(),
             danger_soft: hsla(4.0 / 360.0, 0.55, 0.63, 0.10),
+            diff_added_bg: hsla(145.0 / 360.0, 0.50, 0.66, 0.08),
+            diff_removed_bg: hsla(4.0 / 360.0, 0.55, 0.63, 0.08),
         }
     }
 
@@ -191,6 +196,8 @@ impl Theme {
             user_bubble_border: hsla(30.0 / 360.0, 0.70, 0.40, 0.20),
             danger: rgb(0xC64A42).into(),
             danger_soft: hsla(4.0 / 360.0, 0.55, 0.52, 0.10),
+            diff_added_bg: hsla(145.0 / 360.0, 0.50, 0.50, 0.08),
+            diff_removed_bg: hsla(4.0 / 360.0, 0.55, 0.50, 0.08),
         }
     }
 }

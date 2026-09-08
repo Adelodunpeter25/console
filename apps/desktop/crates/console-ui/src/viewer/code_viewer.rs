@@ -209,12 +209,12 @@ pub fn build_diff_lines(
                 console_core::DiffLineKind::Added => (
                     "+",
                     theme.success,
-                    Some(gpui::hsla(145.0 / 360.0, 0.50, 0.66, 0.08)),
+                    Some(theme.diff_added_bg),
                 ),
                 console_core::DiffLineKind::Removed => (
                     "-",
                     theme.danger,
-                    Some(gpui::hsla(4.0 / 360.0, 0.55, 0.63, 0.08)),
+                    Some(theme.diff_removed_bg),
                 ),
                 console_core::DiffLineKind::Context => (" ", theme.text_tertiary, None),
             };
@@ -259,8 +259,14 @@ fn copy_selection_to_clipboard(lines: &[CodeViewerLine], selection: CodeSelectio
         };
 
         if s_col <= e_col && s_col <= line_len {
-            let slice = &line_text[s_col..min(e_col, line_len)];
-            result.push_str(slice);
+            // Floor to a UTF-8 char boundary — selections land on byte indices
+            // computed from display columns, which may not be char boundaries
+            // for any line containing multi-byte characters.
+            let start = line_text.floor_char_boundary(s_col.min(line_len));
+            let end = line_text.floor_char_boundary(e_col.min(line_len));
+            if start < end {
+                result.push_str(&line_text[start..end]);
+            }
         }
 
         if line_idx < end.line {
