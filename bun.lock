@@ -55,6 +55,7 @@
         "expo-font": "~57.0.3",
         "expo-image-picker": "~57.0.16",
         "expo-linking": "~57.0.9",
+        "expo-modules-core": "~57.0.16",
         "expo-notifications": "~57.0.17",
         "expo-status-bar": "~57.0.1",
         "lucide-react-native": "^0.474.0",
@@ -88,6 +89,7 @@
       "dependencies": {
         "@ai-sdk/openai": "^4.0.57",
         "@ai-sdk/openai-compatible": "^3.0.25",
+        "@ai-sdk/provider-utils": "^5.0.36",
         "@console/types": "*",
         "@console/utils": "*",
         "@ff-labs/fff-node": "^0.10.0",
