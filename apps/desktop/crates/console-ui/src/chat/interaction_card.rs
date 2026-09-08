@@ -249,15 +249,21 @@ impl RenderOnce for QuestionInteractionCard {
             .flex()
             .flex_col()
             .gap(px(10.0))
-            // Question header
+            // Question header. The text container gets `min_w_0` + `flex_1`
+            // so long questions wrap instead of bleeding past the card edge;
+            // the icon is shrink-proof so the row layout stays intact.
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap(px(8.0))
-                    .child(app_icon(IconName::Bot, 14.0, theme.accent))
+                    .min_w_0()
+                    .overflow_hidden()
+                    .child(app_icon(IconName::Bot, 14.0, theme.accent).flex_shrink_0())
                     .child(
                         div()
+                            .flex_1()
+                            .min_w_0()
                             .text_size(px(13.5))
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(theme.text)
