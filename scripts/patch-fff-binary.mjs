@@ -11,16 +11,75 @@
  * Run locally and in CI before `bun build --compile` so the bundled code
  * already contains the lookup. Safe to re-run (marker-guarded).
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MARKER = "CONSOLE_FFF_SIDECAR";
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const target = join(repoRoot, "node_modules", "@ff-labs", "fff-node", "dist", "src", "binary.js");
 
-if (!existsSync(target)) {
-  console.error(`patch-fff-binary: not found: ${target} (run bun install first)`);
+function findBinaryJs(pkgDir) {
+  // Preferred pinned layout first, then recursive search for version drift
+  // (e.g. lockfile 0.10.6 vs local 0.10.1 moving dist/ layout).
+  const preferred = join(pkgDir, "dist", "src", "binary.js");
+  if (existsSync(preferred)) return preferred;
+  const stack = [pkgDir];
+  while (stack.length > 0) {
+    const dir = stack.pop();
+    let entries;
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (e === "node_modules") continue;
+      const p = join(dir, e);
+      let st;
+      try {
+        st = statSync(p);
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) stack.push(p);
+      else if (e === "binary.js" && p.includes("/dist/")) {
+        // accept any binary.js under dist/; anchor check below confirms it
+        try {
+          if (readFileSync(p, "utf-8").includes("export function findBinary()")) return p;
+        } catch {
+          continue;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+const pkgCandidates = [
+  join(repoRoot, "node_modules", "@ff-labs", "fff-node"),
+  join(repoRoot, "apps", "server", "node_modules", "@ff-labs", "fff-node"),
+];
+
+let target = null;
+let pkgDirFound = null;
+for (const pkgDir of pkgCandidates) {
+  if (!existsSync(pkgDir)) continue;
+  pkgDirFound = pkgDir;
+  target = findBinaryJs(pkgDir);
+  if (target) break;
+}
+
+if (!target) {
+  for (const pkgDir of pkgCandidates) {
+    try {
+      console.error(`patch-fff-binary: listing ${dirname(pkgDir)}:`);
+      console.error(readdirSync(dirname(pkgDir)).join(" "));
+    } catch {
+      console.error(`patch-fff-binary: missing ${dirname(pkgDir)}`);
+    }
+  }
+  if (pkgDirFound) console.error(`patch-fff-binary: found ${pkgDirFound} but no binary.js inside`);
+  console.error(`patch-fff-binary: not found: fff-node/dist/**/binary.js (run bun install first)`);
   process.exit(1);
 }
 

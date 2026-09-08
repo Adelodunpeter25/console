@@ -61,7 +61,19 @@ jobs:
       # Copy the target platform's libfff_c out of its optional bin package as
       # a release sidecar (bun --compile embeds JS, not the .so/.dylib).
       - name: Stage fff native sidecar
-        run: cp "node_modules/@ff-labs/${{ matrix.bin-package }}/${{ matrix.lib-file }}" "${{ matrix.lib-asset }}"
+        run: |
+          for base in node_modules apps/server/node_modules; do
+            src="$base/@ff-labs/${{ matrix.bin-package }}/${{ matrix.lib-file }}"
+            if [ -f "$src" ]; then
+              cp "$src" "${{ matrix.lib-asset }}"
+              echo "staged $src"
+              exit 0
+            fi
+          done
+          echo "missing lib: @ff-labs/${{ matrix.bin-package }}/${{ matrix.lib-file }}"
+          ls node_modules/@ff-labs/ || true
+          ls apps/server/node_modules/@ff-labs/ || true
+          exit 1
 
       # Flags: --minify shrinks bundled JS; --sourcemap (zstd-compressed) keeps
       # stacktraces pointing at TS source in production crashes.
