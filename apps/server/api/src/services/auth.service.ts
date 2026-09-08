@@ -18,6 +18,13 @@ import {
   generateCodexPkce,
   loadCodexCredential,
   saveCodexCredential,
+  createDevinAuthorizationUrl,
+  devinCredentialExists,
+  exchangeDevinCode,
+  generateDevinPkce,
+  saveDevinCredential,
+  DEVIN_CALLBACK_PATH,
+  DEVIN_CALLBACK_PORT,
 } from "@/providers/src/index.js";
 import * as crypto from "node:crypto";
 import type { AuthStatusResponse } from "@/api/src/types/index.js";
@@ -40,6 +47,8 @@ export class AuthService {
   private readonly codexPending = new Map<string, { verifier: string; expiresAt: number }>();
   /** Pending state tokens for antigravity loopback OAuth flows. */
   private readonly oauthPending = new Map<string, { provider: OAuthProviderId; expiresAt: number }>();
+  /** Pending state tokens for Devin PKCE OAuth flows. */
+  private readonly devinPending = new Map<string, { verifier: string; expiresAt: number }>();
 
   async getAuthStatus(): Promise<AuthStatusResponse> {
     const antigravityCred = await tryLoadCredential("antigravity");
@@ -50,6 +59,7 @@ export class AuthService {
         return null;
       }
     })();
+    const devinLoggedIn = await devinCredentialExists();
 
     const antigravityConfigured = await getConfiguredProjectId("antigravity");
 
@@ -63,6 +73,9 @@ export class AuthService {
       codex: {
         loggedIn: Boolean(codexCred?.accessToken) || (await codexCredentialExists()),
         email: codexCred?.email,
+      },
+      devin: {
+        loggedIn: devinLoggedIn,
       },
     };
   }
@@ -78,6 +91,14 @@ export class AuthService {
       const { verifier, challenge } = generateCodexPkce();
       const result = createCodexAuthorizationUrl({ state, verifierChallenge: challenge });
       this.codexPending.set(state, { verifier, expiresAt: Date.now() + 10 * 60_000 });
+      return { provider, authUrl: result.authUrl, state, redirectUri: result.redirectUri };
+    }
+
+    if (provider === "devin") {
+      const state = crypto.randomBytes(24).toString("hex");
+      const { verifier, challenge } = generateDevinPkce();
+      const result = createDevinAuthorizationUrl({ state, verifierChallenge: challenge });
+      this.devinPending.set(state, { verifier, expiresAt: Date.now() + 10 * 60_000 });
       return { provider, authUrl: result.authUrl, state, redirectUri: result.redirectUri };
     }
 
@@ -116,6 +137,17 @@ export class AuthService {
       const credential = await exchangeCodexCode(code, pending.verifier, "http://localhost:1455/auth/callback");
       await saveCodexCredential(credential);
       return { provider, userEmail: credential.email };
+    }
+
+    if (provider === "devin") {
+      if (!state) throw new Error("Devin OAuth callback is missing state.");
+      const pending = this.devinPending.get(state);
+      this.devinPending.delete(state);
+      if (!pending || pending.expiresAt < Date.now()) throw new Error("Devin OAuth state is invalid or expired.");
+      const redirectUri = `http://127.0.0.1:${DEVIN_CALLBACK_PORT}${DEVIN_CALLBACK_PATH}`;
+      const credential = await exchangeDevinCode(code, pending.verifier, redirectUri);
+      await saveDevinCredential(credential);
+      return { provider };
     }
 
     // Validate the state token for antigravity.

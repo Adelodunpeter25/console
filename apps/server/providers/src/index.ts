@@ -36,6 +36,23 @@ export {
 } from "./cline/index.js";
 export type { ClineCredential } from "./cline/index.js";
 
+/** Devin (Codeium/Windsurf) provider — PKCE OAuth + Connect/gRPC streaming */
+export {
+  createDevinAuthorizationUrl,
+  decodeJwtPayload,
+  devinCredentialExists,
+  exchangeDevinCode,
+  generateDevinPkce,
+  getTokenExpiry,
+  loadDevinCredential,
+  parseDevinCredential,
+  refreshDevinIfNeeded,
+  saveDevinCredential,
+  DEVIN_API_BASE,
+} from "./devin/index.js";
+export type { DevinOAuthCredential, ParsedDevinCredential } from "./devin/oauth.js";
+export { DEVIN_CALLBACK_PATH, DEVIN_CALLBACK_PORT } from "./devin/index.js";
+
 /** Model discovery */
 export { fetchAvailableModels } from "./discovery/fetch-models.js";
 export type { FetchAvailableModelsOptions, DiscoveredApiModel } from "./discovery/fetch-models.js";
