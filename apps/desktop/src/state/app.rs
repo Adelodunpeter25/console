@@ -192,7 +192,7 @@ pub struct ConsoleDesktopApp {
     pub viewer_list_states: std::collections::HashMap<String, ListState>,
     pub viewer_selection_states: std::collections::HashMap<
         String,
-        std::rc::Rc<std::cell::RefCell<console_ui::SelectionState>>,
+        gpui::Entity<console_ui::SelectionState>,
     >,
     pub viewer_scrollbar_states:
         std::collections::HashMap<String, std::rc::Rc<console_ui::ScrollbarState>>,
@@ -1148,14 +1148,11 @@ impl ConsoleDesktopApp {
     pub fn viewer_selection_state(
         &mut self,
         id: &str,
-    ) -> std::rc::Rc<std::cell::RefCell<console_ui::SelectionState>> {
+        cx: &mut gpui::Context<Self>,
+    ) -> gpui::Entity<console_ui::SelectionState> {
         self.viewer_selection_states
             .entry(id.to_string())
-            .or_insert_with(|| {
-                std::rc::Rc::new(std::cell::RefCell::new(
-                    console_ui::SelectionState::default(),
-                ))
-            })
+            .or_insert_with(|| cx.new(|_| console_ui::SelectionState::default()))
             .clone()
     }
 

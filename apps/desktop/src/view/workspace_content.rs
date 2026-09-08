@@ -111,7 +111,7 @@ impl ConsoleDesktopApp {
                 line_count,
                 console_ui::CODE_LINE_HEIGHT,
             );
-            let selection_state = self.viewer_selection_state(&format!("file:{}", path));
+            let selection_state = self.viewer_selection_state(&format!("file:{}", path), cx);
             let scrollbar_state = self.viewer_scrollbar_state(&format!("file:{}", path));
             return console_ui::FileViewer::new(path.clone(), content, list_state)
                 .rc_lines(lines)
@@ -135,7 +135,7 @@ impl ConsoleDesktopApp {
                 line_count,
                 console_ui::CODE_LINE_HEIGHT,
             );
-            let selection_state = self.viewer_selection_state(&format!("diff:{}", path));
+            let selection_state = self.viewer_selection_state(&format!("diff:{}", path), cx);
             let scrollbar_state = self.viewer_scrollbar_state(&format!("diff:{}", path));
             return console_ui::DiffViewer::new(path.clone(), diff_result, raw_diff, list_state)
                 .rc_lines(lines)

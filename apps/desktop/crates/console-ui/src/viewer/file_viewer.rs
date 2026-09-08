@@ -1,7 +1,6 @@
-use std::cell::RefCell;
 use std::rc::Rc;
 
-use gpui::{App, IntoElement, ListState, RenderOnce, Window};
+use gpui::{App, Entity, IntoElement, ListState, RenderOnce, Window};
 
 use super::code_viewer::{CodeViewer, CodeViewerLine, SelectionState, build_file_lines};
 use crate::primitives::scrollbar::ScrollbarState;
@@ -11,7 +10,7 @@ pub struct FileViewer {
     path: String,
     content: String,
     list_state: ListState,
-    selection_state: Option<Rc<RefCell<SelectionState>>>,
+    selection_state: Option<Entity<SelectionState>>,
     scrollbar_state: Option<Rc<ScrollbarState>>,
     rc_lines: Option<Rc<Vec<CodeViewerLine>>>,
 }
@@ -33,7 +32,7 @@ impl FileViewer {
         self
     }
 
-    pub fn selection_state(mut self, state: Rc<RefCell<SelectionState>>) -> Self {
+    pub fn selection_state(mut self, state: Entity<SelectionState>) -> Self {
         self.selection_state = Some(state);
         self
     }

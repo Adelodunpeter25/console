@@ -1,12 +1,11 @@
 //! High-performance virtualized Code & Diff Viewer with single-pass TextRun
 //! GPU text shaping, syntax highlighting, text selection, and virtualized list scrolling.
 
-use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::Rc;
 
 use gpui::{
-    App, ClipboardItem, DispatchPhase, ElementId, FocusHandle, Font, FontWeight, Hsla,
+    App, ClipboardItem, DispatchPhase, ElementId, Entity, FocusHandle, Font, FontWeight, Hsla,
     InteractiveElement, IntoElement, ListState, MouseButton, MouseMoveEvent, MouseUpEvent,
     ParentElement, RenderOnce, StatefulInteractiveElement, Styled, StyledText, TextRun, Window,
     actions, canvas, div, list, prelude::*, px,
@@ -112,7 +111,7 @@ pub struct CodeViewer {
     id: String,
     lines: Rc<Vec<CodeViewerLine>>,
     list_state: ListState,
-    selection_state: Rc<RefCell<SelectionState>>,
+    selection_state: Option<Entity<SelectionState>>,
     scrollbar_state: Option<Rc<ScrollbarState>>,
     empty_message: Option<String>,
     focus_handle: Option<FocusHandle>,
@@ -124,7 +123,7 @@ impl CodeViewer {
             id: id.into(),
             lines: Rc::new(Vec::new()),
             list_state,
-            selection_state: Rc::new(RefCell::new(SelectionState::default())),
+            selection_state: None,
             scrollbar_state: None,
             empty_message: None,
             focus_handle: None,
@@ -141,8 +140,8 @@ impl CodeViewer {
         self
     }
 
-    pub fn selection_state(mut self, selection_state: Rc<RefCell<SelectionState>>) -> Self {
-        self.selection_state = selection_state;
+    pub fn selection_state(mut self, selection_state: Entity<SelectionState>) -> Self {
+        self.selection_state = Some(selection_state);
         self
     }
 
@@ -344,11 +343,15 @@ impl RenderOnce for CodeViewer {
         let selection_for_copy = self.selection_state.clone();
         let lines_for_copy = self.lines.clone();
         let selection_for_mouse_up = self.selection_state.clone();
+        // `selection_rc` is `Option<Entity<_>>`, so handlers do nothing when no
+        // entity is attached (e.g. a viewer rendered without selection).
 
         let selection_bg = theme.selection;
 
         // Window-level mouse tracking runs during the paint phase via canvas, satisfying
         // GPUI's requirement that window.on_mouse_event may only be called during paint.
+        // This is the sole drag handler — per-row handlers were removed because they
+        // duplicate this arithmetic with a smaller scope.
         let mouse_tracker = {
             let selection_state = self.selection_state.clone();
             let list_state = self.list_state.clone();
@@ -360,54 +363,63 @@ impl RenderOnce for CodeViewer {
                     window.on_mouse_event({
                         let selection_state = selection_state.clone();
                         let list_state = list_state.clone();
-                        move |event: &MouseMoveEvent, phase, window, _cx| {
-                            if phase == DispatchPhase::Bubble {
-                                let mut state = selection_state.borrow_mut();
-                                if state.is_dragging {
-                                    if let Some(mut sel) = state.selection {
-                                        let viewport = list_state.viewport_bounds();
-                                        let scroll_offset =
-                                            -list_state.scroll_px_offset_for_scrollbar().y;
-                                        let rel_y =
-                                            event.position.y - viewport.origin.y + scroll_offset;
-                                        let line_idx = if rel_y > px(0.0) {
-                                            ((rel_y / px(CODE_LINE_HEIGHT)).floor() as usize)
-                                                .min(lines_len.saturating_sub(1))
-                                        } else {
-                                            0
-                                        };
-                                        let rel_x = f32::from(event.position.x - viewport.origin.x)
-                                            - gutter_offset;
-                                        let col = if rel_x > 0.0 {
-                                            (rel_x / CHAR_WIDTH).round() as usize
-                                        } else {
-                                            0
-                                        };
-                                        let target_pos = CodePosition {
-                                            line: line_idx,
-                                            col,
-                                        };
-                                        if sel.head != target_pos {
-                                            sel.head = target_pos;
-                                            state.selection = Some(sel);
-                                            window.refresh();
-                                        }
-                                    }
-                                }
+                        move |event: &MouseMoveEvent, phase, window, cx| {
+                            if phase != DispatchPhase::Bubble {
+                                return;
                             }
+                            let Some(state) = selection_state.as_ref() else {
+                                return;
+                            };
+                            state.update(cx, |s, _| {
+                                if !s.is_dragging {
+                                    return;
+                                }
+                                let Some(mut sel) = s.selection else {
+                                    return;
+                                };
+                                let viewport = list_state.viewport_bounds();
+                                let scroll_offset =
+                                    -list_state.scroll_px_offset_for_scrollbar().y;
+                                let rel_y =
+                                    event.position.y - viewport.origin.y + scroll_offset;
+                                let line_idx = if rel_y > px(0.0) {
+                                    ((rel_y / px(CODE_LINE_HEIGHT)).floor() as usize)
+                                        .min(lines_len.saturating_sub(1))
+                                } else {
+                                    0
+                                };
+                                let rel_x = f32::from(event.position.x - viewport.origin.x)
+                                    - gutter_offset;
+                                let col = if rel_x > 0.0 {
+                                    (rel_x / CHAR_WIDTH).round() as usize
+                                } else {
+                                    0
+                                };
+                                let target_pos = CodePosition { line: line_idx, col };
+                                if sel.head != target_pos {
+                                    sel.head = target_pos;
+                                    s.selection = Some(sel);
+                                    window.refresh();
+                                }
+                            });
                         }
                     });
 
                     window.on_mouse_event({
                         let selection_state = selection_state.clone();
-                        move |_: &MouseUpEvent, phase, window, _cx| {
-                            if phase == DispatchPhase::Bubble {
-                                let mut state = selection_state.borrow_mut();
-                                if state.is_dragging {
-                                    state.is_dragging = false;
+                        move |_: &MouseUpEvent, phase, window, cx| {
+                            if phase != DispatchPhase::Bubble {
+                                return;
+                            }
+                            let Some(state) = selection_state.as_ref() else {
+                                return;
+                            };
+                            state.update(cx, |s, _| {
+                                if s.is_dragging {
+                                    s.is_dragging = false;
                                     window.refresh();
                                 }
-                            }
+                            });
                         }
                     });
                 },
@@ -426,16 +438,23 @@ impl RenderOnce for CodeViewer {
             .min_w_0()
             .overflow_x_scroll()
             .bg(theme.canvas)
-            .on_mouse_up(MouseButton::Left, move |_, window, _cx| {
-                let mut state = selection_for_mouse_up.borrow_mut();
-                if state.is_dragging {
-                    state.is_dragging = false;
-                    window.refresh();
-                }
+            .on_mouse_up(MouseButton::Left, move |_, window, cx| {
+                let Some(state) = selection_for_mouse_up.as_ref() else {
+                    return;
+                };
+                state.update(cx, |s, _| {
+                    if s.is_dragging {
+                        s.is_dragging = false;
+                        window.refresh();
+                    }
+                });
             })
             .on_action(move |_: &CopySelection, _window, cx| {
-                let state = selection_for_copy.borrow();
-                if let Some(sel) = state.selection {
+                let Some(state) = selection_for_copy.as_ref() else {
+                    return;
+                };
+                let sel = state.read(cx).selection;
+                if let Some(sel) = sel {
                     copy_selection_to_clipboard(&lines_for_copy, sel, cx);
                 }
             });
@@ -543,9 +562,13 @@ impl RenderOnce for CodeViewer {
                                 };
 
                                 let line_sel_range = selection_rc
-                                    .borrow()
-                                    .selection
-                                    .and_then(|sel| sel.line_col_range(index, line.text.len()));
+                                    .as_ref()
+                                    .and_then(|state| {
+                                        let selection = state.read(_cx).selection;
+                                        selection.and_then(|sel| {
+                                            sel.line_col_range(index, line.text.len())
+                                        })
+                                    });
 
                                 let runs = code_runs_for_tokens(
                                     display_str,
@@ -558,9 +581,7 @@ impl RenderOnce for CodeViewer {
                                 );
 
                                 let sel_mouse_down = selection_rc.clone();
-                                let sel_mouse_move = selection_rc.clone();
                                 let ls_down = list_state_for_items.clone();
-                                let ls_move = list_state_for_items.clone();
                                 let line_len = line.text.len();
 
                                 div()
@@ -573,7 +594,10 @@ impl RenderOnce for CodeViewer {
                                     .px(px(6.0))
                                     .bg(bg)
                                     .cursor_text()
-                                    .on_mouse_down(MouseButton::Left, move |event, window, _cx| {
+                                    .on_mouse_down(MouseButton::Left, move |event, window, cx| {
+                                        let Some(state) = sel_mouse_down.as_ref() else {
+                                            return;
+                                        };
                                         let x = f32::from(
                                             event.position.x - ls_down.viewport_bounds().origin.x,
                                         ) - gutter_offset;
@@ -582,33 +606,12 @@ impl RenderOnce for CodeViewer {
                                         } else {
                                             0
                                         };
-                                        let mut state = sel_mouse_down.borrow_mut();
                                         let pos = CodePosition { line: index, col };
-                                        state.selection = Some(CodeSelection::new(pos, pos));
-                                        state.is_dragging = true;
-                                        window.refresh();
-                                    })
-                                    .on_mouse_move(move |event, window, _cx| {
-                                        let mut state = sel_mouse_move.borrow_mut();
-                                        if state.is_dragging {
-                                            if let Some(mut sel) = state.selection {
-                                                let x = f32::from(
-                                                    event.position.x
-                                                        - ls_move.viewport_bounds().origin.x,
-                                                ) - gutter_offset;
-                                                let col = if x > 0.0 {
-                                                    min((x / CHAR_WIDTH).round() as usize, line_len)
-                                                } else {
-                                                    0
-                                                };
-                                                let target_pos = CodePosition { line: index, col };
-                                                if sel.head != target_pos {
-                                                    sel.head = target_pos;
-                                                    state.selection = Some(sel);
-                                                    window.refresh();
-                                                }
-                                            }
-                                        }
+                                        state.update(cx, |s, _| {
+                                            s.selection = Some(CodeSelection::new(pos, pos));
+                                            s.is_dragging = true;
+                                            window.refresh();
+                                        });
                                     })
                                     .child(gutter_view)
                                     .child(
