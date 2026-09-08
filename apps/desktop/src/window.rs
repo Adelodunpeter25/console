@@ -1,6 +1,4 @@
 use std::cell::RefCell;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::SystemTime;
 use gpui::{
     AnyWindowHandle, App, AppContext, Bounds, Pixels, TitlebarOptions, WeakEntity, WindowBounds,
     WindowOptions, point, px,
@@ -8,17 +6,6 @@ use gpui::{
 
 use crate::persistence;
 use crate::state::ConsoleDesktopApp;
-
-static WINDOW_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
-
-pub fn generate_window_id() -> String {
-    let ts = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    let count = WINDOW_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-    format!("win-{ts}-{count}")
-}
 
 #[derive(Clone, Debug)]
 pub enum WindowLaunchTarget {

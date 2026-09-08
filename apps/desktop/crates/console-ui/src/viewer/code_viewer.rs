@@ -496,8 +496,6 @@ impl RenderOnce for CodeViewer {
                 window.refresh();
             });
 
-        let focus_handle_for_click = self.focus_handle.clone();
-
         if let Some(ref focus_handle) = self.focus_handle {
             container = container.track_focus(focus_handle);
         }
