@@ -24,9 +24,9 @@ program.name("console").description("Console Agent - AI coding agent daemon").ve
 
 program
   .command("start")
-  .description("Start the console agent daemon")
-  .option("-p, --port <number>", "Port to run the server on", "3000")
-  .option("-h, --host <string>", "Host to bind to", "0.0.0.0")
+  .description("Start the console agent daemon (reuses saved port/host from ~/.console/config.json when flags are omitted)")
+  .option("-p, --port <number>", "Port to run the server on (saves to config; omit to reuse saved port)")
+  .option("-h, --host <string>", "Host to bind to (saves to config; omit to reuse saved host)")
   .option("-d, --daemon", "Run as background daemon", true)
   .option("--no-daemon", "Run in foreground")
   .action(startDaemon);
@@ -52,9 +52,9 @@ program
 
 program
   .command("restart")
-  .description("Restart the console agent daemon")
-  .option("-p, --port <number>", "Port to run the server on", "3000")
-  .option("-h, --host <string>", "Host to bind to", "0.0.0.0")
+  .description("Restart the console agent daemon (reuses saved port/host when flags are omitted)")
+  .option("-p, --port <number>", "Port to run the server on (omit to reuse saved port)")
+  .option("-h, --host <string>", "Host to bind to (omit to reuse saved host)")
   .action(restartDaemon);
 
 program.parse();

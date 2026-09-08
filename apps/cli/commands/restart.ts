@@ -3,8 +3,9 @@
  */
 import { stopDaemon } from "./stop.js";
 import { startDaemon } from "./start.js";
+import type { RestartOptions } from "../types.js";
 
-export async function restartDaemon(options: { port: string; host: string }): Promise<void> {
+export async function restartDaemon(options: RestartOptions): Promise<void> {
   console.log("Restarting daemon...");
 
   // Stop if running

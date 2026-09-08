@@ -17,9 +17,14 @@ export interface DaemonConfig {
 }
 
 export interface StartOptions {
-  port: string;
-  host: string;
+  port?: string;
+  host?: string;
   daemon: boolean;
+}
+
+export interface RestartOptions {
+  port?: string;
+  host?: string;
 }
 
 export interface LogsOptions {

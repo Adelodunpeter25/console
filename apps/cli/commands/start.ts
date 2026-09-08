@@ -3,7 +3,7 @@
  */
 import { spawn } from "node:child_process";
 import * as path from "node:path";
-import { ensureConsoleDir, writePidFile, saveConfig, getDaemonStatus } from "../daemon-manager.js";
+import { ensureConsoleDir, writePidFile, saveConfig, loadConfig, resolvePortHost, getDaemonStatus } from "../daemon-manager.js";
 import type { StartOptions } from "../types.js";
 
 interface ServerLaunch {
@@ -43,14 +43,19 @@ export async function startDaemon(options: StartOptions): Promise<void> {
     process.exit(1);
   }
 
-  // Save config
-  const config = {
-    port: options.port,
-    host: options.host,
-    logLevel: "info",
-  };
+  // Resolve effective port/host: CLI flag > env > saved config > default.
+  // Running `console start --port 9090` saves 9090; a later bare
+  // `console start` reuses it instead of silently resetting to 3000.
+  const saved = await loadConfig();
+  const { port, host } = resolvePortHost({ port: options.port, host: options.host }, saved);
+  const reusedPort = !options.port && !process.env.PORT;
+  const reusedHost = !options.host && !process.env.HOST;
+  const config = { port, host, logLevel: "info" };
   await saveConfig(config);
   await ensureConsoleDir();
+  if (reusedPort || reusedHost) {
+    console.log(`Using saved config from ~/.console/config.json (port ${port}, host ${host}).`);
+  }
 
   // Resolve how to launch the server (binary install or dev source tree)
   const launch = resolveServerLaunch();
@@ -58,13 +63,13 @@ export async function startDaemon(options: StartOptions): Promise<void> {
   if (options.daemon) {
     // Start as background daemon
     console.log(`Starting console agent daemon...`);
-    console.log(`Port: ${options.port}`);
-    console.log(`Host: ${options.host}`);
+    console.log(`Port: ${port}`);
+    console.log(`Host: ${host}`);
 
     const env = {
       ...process.env,
-      PORT: options.port,
-      HOST: options.host,
+      PORT: port,
+      HOST: host,
       CONSOLE_DAEMON: "true",
     };
 
@@ -82,7 +87,7 @@ export async function startDaemon(options: StartOptions): Promise<void> {
     if (child.pid && child.exitCode === null) {
       await writePidFile(child.pid);
       console.log(`Daemon started successfully (PID: ${child.pid})`);
-      console.log(`Server: http://${options.host}:${options.port}`);
+      console.log(`Server: http://${host}:${port}`);
       console.log(`Logs: ~/.console/logs/daemon.log`);
       console.log(`Run 'console logs' to view logs`);
       console.log(`Run 'console stop' to stop the daemon`);
@@ -93,14 +98,14 @@ export async function startDaemon(options: StartOptions): Promise<void> {
   } else {
     // Run in foreground
     console.log(`Starting console agent in foreground...`);
-    console.log(`Port: ${options.port}`);
-    console.log(`Host: ${options.host}`);
+    console.log(`Port: ${port}`);
+    console.log(`Host: ${host}`);
     console.log(`Press Ctrl+C to stop`);
 
     const env = {
       ...process.env,
-      PORT: options.port,
-      HOST: options.host,
+      PORT: port,
+      HOST: host,
       CONSOLE_DAEMON: "true",
     };
 

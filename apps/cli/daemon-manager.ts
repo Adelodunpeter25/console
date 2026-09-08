@@ -44,6 +44,21 @@ export function getDefaultConfig(): DaemonConfig {
 }
 
 /**
+ * Resolve effective port/host: CLI flag > env (PORT/HOST) > saved config > default.
+ * Pure (no I/O) so it can be unit-tested. `saved` is the result of loadConfig().
+ */
+export function resolvePortHost(
+  overrides: { port?: string; host?: string },
+  saved: DaemonConfig,
+  env: NodeJS.ProcessEnv = process.env,
+): { port: string; host: string } {
+  return {
+    port: overrides.port ?? env.PORT ?? saved.port ?? "3000",
+    host: overrides.host ?? env.HOST ?? saved.host ?? "0.0.0.0",
+  };
+}
+
+/**
  * Save daemon config
  */
 export async function saveConfig(config: Partial<DaemonConfig>): Promise<void> {
