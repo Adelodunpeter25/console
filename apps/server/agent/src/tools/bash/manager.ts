@@ -122,19 +122,42 @@ export class BashJobManager {
     return { snapshot: this.snapshot(rec), stdout: out, stderr: stderrTail, nextCursor, truncated };
   }
 
-  async wait(jobId: string, waitMs: number, ownerSessionId?: string): Promise<BashJobSnapshot> {
+  async wait(
+    jobId: string,
+    waitMs: number,
+    ownerSessionId?: string,
+    signal?: AbortSignal,
+  ): Promise<BashJobSnapshot> {
     const rec = this.getOwned(jobId, ownerSessionId);
     if (rec.status !== "running") return this.snapshot(rec);
     const capped = Math.min(Math.max(waitMs, 1), MAX_WAIT_MS);
-    await new Promise<void>((resolve) => {
-      const t = setTimeout(() => {
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const cleanup = () => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
         rec.waiters = rec.waiters.filter((w) => w !== done);
-        resolve();
-      }, capped);
+      };
       const done = () => {
-        clearTimeout(t);
+        cleanup();
         resolve();
       };
+      const onAbort = () => {
+        cleanup();
+        // Product rule for stop: killing the wait is not enough — the job is
+        // killed too, so a stopped run never leaves an orphaned process the
+        // agent can no longer manage. The rejection maps to "cancelled by
+        // user abort" in tool-executor, ending the run instead of looping.
+        this.kill(rec.jobId, ownerSessionId);
+        const err = new Error("This operation was aborted.");
+        err.name = "AbortError";
+        reject(err);
+      };
+      timer = setTimeout(done, capped);
+      signal?.addEventListener("abort", onAbort, { once: true });
       rec.waiters.push(done);
     });
     return this.snapshot(rec);

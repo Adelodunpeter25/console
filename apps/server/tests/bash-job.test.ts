@@ -289,6 +289,48 @@ try {
     console.log("  ✅ wait action snapshot header not duplicated");
   }
 
+  // 17. Stop (abort) during wait: resolves immediately, rejects as AbortError,
+  // and kills the job (regression for the "stop looks dead for waitMs" bug).
+  {
+    bashJobManager.resetForTests();
+    const res = (await bashTool.execute(
+      bashTool.inputSchema.parse({ command: "sleep 30", background: true }),
+    )) as ToolOut;
+    const id = extractJobId(res);
+
+    const controller = new AbortController();
+    const waitPromise = bashJobManager.wait(id, 60_000, undefined, controller.signal);
+    await sleep(150);
+    const t0 = Date.now();
+    controller.abort();
+    await assert.rejects(() => waitPromise, /aborted/i);
+    const dt = Date.now() - t0;
+    assert.ok(dt < 1000, `abort must break the wait immediately (took ${dt}ms)`);
+    assert.equal(bashJobManager.status(id).status, "killed", "abort must kill the job");
+    console.log("  ✅ abort during wait ends immediately and kills the job");
+  }
+
+  // 18. bashJobTool wait must NOT swallow the abort — the harness maps the
+  // rejection to "cancelled by user abort" and stops the run.
+  {
+    bashJobManager.resetForTests();
+    const res = (await bashTool.execute(
+      bashTool.inputSchema.parse({ command: "sleep 30", background: true }),
+    )) as ToolOut;
+    const id = extractJobId(res);
+
+    const controller = new AbortController();
+    const toolPromise = bashJobTool.execute(
+      bashJobTool.inputSchema.parse({ action: "wait", jobId: id, waitMs: 60_000 }),
+      controller.signal,
+    );
+    await sleep(150);
+    controller.abort();
+    await assert.rejects(() => toolPromise, /aborted/i);
+    assert.equal(bashJobManager.status(id).status, "killed");
+    console.log("  ✅ bashJob wait tool rejects on abort instead of returning");
+  }
+
   console.log("BashJob background execution tests passed!\n");
 } finally {
   bashJobManager.resetForTests();

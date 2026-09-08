@@ -57,7 +57,7 @@ export const bashJobTool: AgentTool<typeof inputSchema> = {
   description:
     "Manage background bash jobs. action: status|output|wait|kill|list. output is cursor-paginated (nextCursor, truncated).",
   inputSchema,
-  execute: async (args: Input): Promise<unknown> => {
+  execute: async (args: Input, signal?: AbortSignal): Promise<unknown> => {
     try {
       switch (args.action) {
         case "list": {
@@ -76,7 +76,10 @@ export const bashJobTool: AgentTool<typeof inputSchema> = {
         }
         case "wait": {
           if (!args.jobId) return ok('Missing jobId for action="wait".', true);
-          const s = await bashJobManager.wait(args.jobId, args.waitMs ?? 10_000);
+          // Signal-aware: on user abort the wait resolves early and the job is
+          // killed; the AbortError rejection is what tool-executor maps to
+          // "cancelled by user abort" so the run stops instead of polling on.
+          const s = await bashJobManager.wait(args.jobId, args.waitMs ?? 10_000, undefined, signal);
           const body = renderOutputBody(args.jobId, args.cursor, args.limit);
           const suffix =
             s.status === "running" ? `\n\nStill running after wait. Poll again or wait longer (max ${MAX_WAIT_MS}ms).` : "";
@@ -92,6 +95,9 @@ export const bashJobTool: AgentTool<typeof inputSchema> = {
         }
       }
     } catch (err) {
+      // Never swallow an abort: the harness relies on the rejection to mark
+      // the tool call as cancelled by the user.
+      if (signal?.aborted || (err instanceof Error && err.name === "AbortError")) throw err;
       return ok(err instanceof Error ? err.message : String(err), true);
     }
   },
