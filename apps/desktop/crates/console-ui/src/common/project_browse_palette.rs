@@ -65,9 +65,9 @@ impl ProjectBrowsePalette {
             modal.set_browse_callback(
                 {
                     let this = this.clone();
-                    move |path, _window, cx| {
+                    move |path, window, cx| {
                         if let Some(this) = this.upgrade() {
-                            this.update(cx, |this, cx| this.browse(Some(path), cx));
+                            this.update(cx, |this, cx| this.browse(Some(path), window, cx));
                         }
                     }
                 },
@@ -76,7 +76,7 @@ impl ProjectBrowsePalette {
             modal.set_entries(Vec::new(), cx);
             modal.show(window, cx);
         });
-        self.browse(None, cx);
+        self.browse(None, window, cx);
     }
 
     pub fn hide(&mut self, cx: &mut Context<Self>) {
@@ -88,15 +88,19 @@ impl ProjectBrowsePalette {
     }
 
     /// List `path` (home when `None`) and replace the palette's rows.
-    fn browse(&mut self, path: Option<&str>, cx: &mut Context<Self>) {
+    /// Clears the previous filter query synchronously so the new folder
+    /// starts unfiltered — stale terms would otherwise hide its rows.
+    fn browse(&mut self, path: Option<&str>, window: &mut Window, cx: &mut Context<Self>) {
         self.current_path = path.map(str::to_string);
         let modal = self.modal.clone();
         let client = self.client.clone();
         let path = path.map(str::to_string);
         let on_select_project = self.on_select_project.clone();
 
-        // Clear the list while loading so the previous folder doesn't linger.
+        // Clear the list + stale filter while loading so the previous folder
+        // doesn't linger and its query doesn't filter the new one.
         modal.update(cx, |m, cx| m.set_entries(Vec::new(), cx));
+        modal.update(cx, |m, cx| m.clear_query(window, cx));
 
         cx.spawn(async move |this, cx| {
             let resp = match path.as_deref() {

@@ -217,6 +217,15 @@ impl CommandPaletteModal {
         cx.notify();
     }
 
+    /// Clear the search query without recreating state, so navigation keeps
+    /// focus. Re-filters and resets selection via `CommandState::set_query`.
+    pub fn clear_query(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.state.update(cx, |state, cx| {
+            state.set_query("", window, cx);
+        });
+        cx.notify();
+    }
+
     /// Replace the entry list. Safe to call from async contexts — notifies so
     /// the modal re-renders with the fresh rows.
     pub fn set_entries(&mut self, entries: Vec<PaletteEntry>, cx: &mut Context<Self>) {
