@@ -7,7 +7,11 @@ import { streamText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { StreamFn } from "@/agent/src/service/agent-loop.js";
-import { OPENCODE_BASE_URL, OPENCODE_USER_AGENT } from "./constants.js";
+import {
+  OPENCODE_BASE_URL,
+  OPENCODE_SESSION_ID,
+  OPENCODE_USER_AGENT,
+} from "./constants.js";
 import { convertOpencodeMessages } from "./convert-messages.js";
 import { convertOpencodeTools } from "./convert-tools.js";
 
@@ -16,6 +20,7 @@ const opencodeChat = createOpenAICompatible({
   baseURL: OPENCODE_BASE_URL,
   headers: {
     "User-Agent": OPENCODE_USER_AGENT,
+    "x-opencode-session": OPENCODE_SESSION_ID,
   },
 });
 
@@ -24,6 +29,7 @@ const opencodeResponses = createOpenAI({
   apiKey: "dummy",
   headers: {
     "User-Agent": OPENCODE_USER_AGENT,
+    "x-opencode-session": OPENCODE_SESSION_ID,
   },
   // Cast needed: Bun's `typeof fetch` includes a `preconnect` property that a
   // plain wrapper function can't satisfy; the AI SDK only ever calls it.

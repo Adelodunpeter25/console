@@ -4,9 +4,18 @@
  * Free-tier models require no API key. Base URL is hardcoded.
  * Endpoint: https://opencode.ai/zen/v1/chat/completions
  * Model discovery: https://opencode.ai/zen/v1/models (filtered to free ids)
+ *
+ * The free tier gates requests behind the `x-opencode-session` header — a
+ * stable per-session identifier. Without it, Zen returns `MissingSessionID`
+ * with HTTP 400 (see https://github.com/earendil-works/pi/issues/9326).
+ * `OPENCODE_SESSION_ID` is read from the env so multiple server processes can
+ * share cache affinity; otherwise it's a UUID generated once per process
+ * start. Any stable string works.
  */
 export const OPENCODE_BASE_URL = "https://opencode.ai/zen/v1";
 export const OPENCODE_USER_AGENT = "opencode/1.18.27";
+export const OPENCODE_SESSION_ID =
+  process.env.OPENCODE_SESSION_ID ?? crypto.randomUUID();
 
 /** Models confirmed free on the OpenCode Zen tier. Most free models use the
  *  `-free` id suffix and are auto-discovered by `isOpencodeFreeModelId`.

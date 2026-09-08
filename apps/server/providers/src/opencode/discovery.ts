@@ -8,6 +8,7 @@ import {
   OPENCODE_BASE_URL,
   OPENCODE_CONTEXT_WINDOW,
   OPENCODE_FREE_MODEL_IDS,
+  OPENCODE_SESSION_ID,
   OPENCODE_USER_AGENT,
 } from "./constants.js";
 
@@ -35,6 +36,7 @@ export async function fetchOpencodeFreeModels(
       headers: {
         Accept: "application/json",
         "User-Agent": OPENCODE_USER_AGENT,
+        "x-opencode-session": OPENCODE_SESSION_ID,
       },
       signal,
     });
