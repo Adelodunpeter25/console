@@ -1,5 +1,5 @@
 export * from "./ask.js";
-export * from "./bash.js";
+export * from "./bash/index.js";
 export * from "./batch-write.js";
 export * from "./edit-file.js";
 export * from "./fetch.js";
@@ -14,7 +14,7 @@ export * from "./web-search.js";
 export * from "./write-file.js";
 
 import { askManyTool, askTool } from "./ask.js";
-import { bashTool } from "./bash.js";
+import { bashTool, bashJobTool } from "./bash/index.js";
 import { batchWriteTool } from "./batch-write.js";
 import { editFileTool } from "./edit-file.js";
 import { fetchTool } from "./fetch.js";
@@ -45,6 +45,7 @@ export const allTools = [
   batchWriteTool,
   // Execution
   bashTool,
+  bashJobTool,
   // Network
   webSearchTool,
   fetchTool,

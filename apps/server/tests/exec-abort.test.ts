@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnCapture } from "@/api/src/utils/exec.js";
-import { bashTool } from "@/agent/src/tools/bash.js";
+import { bashTool } from "@/agent/src/tools/bash/index.js";
 
 console.log("Running Subprocess & Bash Tool Abort tests...");
 
