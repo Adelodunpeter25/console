@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cronet (the HTTP engine behind Expo 57's Nitro Fetch / expo/fetch) enforces
+  the network security config and ignores android:usesCleartextTraffic. This
+  config allows the plain-HTTP connections to the Console server (typically a
+  dev box on the LAN, added by URL without TLS) that the app relies on.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
