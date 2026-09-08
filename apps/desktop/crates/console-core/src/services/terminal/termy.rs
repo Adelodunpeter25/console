@@ -2,11 +2,32 @@ use crate::types::terminal::{
     CursorPosition, TerminalBackend, TerminalCell, TerminalCellFlags, TerminalColor,
     TerminalGridSnapshot, TerminalLink, TerminalSize,
 };
-use termy_core::{Terminal, TerminalSize as TermySize};
+use termy_core::{
+    Terminal, TerminalClipboardTarget, TerminalReplyHost, TerminalSize as TermySize,
+};
 
 pub struct TermyBackend {
     term: Terminal,
     size: TerminalSize,
+}
+
+/// Collects the bytes the terminal wants to write back to the PTY. When the
+/// shell asks the terminal a question (cursor-position report, DA1, kitty
+/// keyboard query, ...), the answer surfaces here instead of a real PTY
+/// transport — the caller must send it to the server as terminal input or
+/// the shell blocks waiting for the reply (tab completion hangs).
+struct ReplyCollector {
+    replies: Vec<u8>,
+}
+
+impl TerminalReplyHost for ReplyCollector {
+    fn load_clipboard(&mut self, _target: TerminalClipboardTarget) -> Option<String> {
+        None
+    }
+
+    fn protocol_reply(&mut self, bytes: &[u8]) {
+        self.replies.extend_from_slice(bytes);
+    }
 }
 
 fn to_termysize(size: TerminalSize) -> TermySize {
@@ -146,6 +167,17 @@ impl TermyBackend {
 
     pub fn bracketed_paste(&self) -> bool {
         self.term.bracketed_paste_mode()
+    }
+
+    /// Feed PTY output and drain the terminal's event queue, returning the
+    /// reply bytes the shell expects written back to the PTY. Must be called
+    /// after every `advance` (device queries arrive inside PTY output; the
+    /// answers are only generated while draining).
+    pub fn advance_and_collect_replies(&mut self, data: &str) -> Vec<u8> {
+        self.term.feed_output(data.as_bytes());
+        let mut collector = ReplyCollector { replies: Vec::new() };
+        let _ = self.term.drain_events(&mut collector);
+        collector.replies
     }
 }
 

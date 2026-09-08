@@ -178,6 +178,10 @@ impl TerminalService {
         let status_clone = status.clone();
         let error_clone = error.clone();
         let notify_clone = notify.clone();
+        // Replies to shell device queries (cursor-position reports, DA1,
+        // kitty keyboard queries, ...) must be written back to the PTY;
+        // over the wire they travel as regular Input messages.
+        let reply_sender = tx.clone();
 
         let task = tokio::spawn(async move {
             let ws_stream = match tokio_tungstenite::connect_async(&url).await {
@@ -226,8 +230,13 @@ impl TerminalService {
                             }
                             Ok(TerminalServerMessage::Output { data }) => {
                                 let mut b = backend_clone.lock().await;
-                                b.advance(&data);
+                                let replies = b.advance_and_collect_replies(&data);
                                 drop(b);
+                                if !replies.is_empty() {
+                                    let _ = reply_sender.send(TerminalClientMessage::Input {
+                                        data: String::from_utf8_lossy(&replies).into_owned(),
+                                    });
+                                }
                                 notify_clone.notify_one();
                             }
                             Ok(TerminalServerMessage::Exit { code }) => {
