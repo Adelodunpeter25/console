@@ -8,95 +8,79 @@
  * findBinary(): FFF_LIB_PATH env override, then the directory containing the
  * running binary (install.sh places libfff_c.{dylib,so} next to `console`).
  *
+ * Supports both layouts:
+ * - 0.10.1: dist/src/binary.js with `export function findBinary() {` (ESM)
+ * - 0.10.6+: dist/index.js (ESM) + dist/index.cjs (CJS) with `function findBinary() {`
+ *
  * Run locally and in CI before `bun build --compile` so the bundled code
  * already contains the lookup. Safe to re-run (marker-guarded).
  */
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MARKER = "CONSOLE_FFF_SIDECAR";
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-function findBinaryJs(pkgDir) {
-  // Preferred pinned layout first, then recursive search for version drift
-  // (e.g. lockfile 0.10.6 vs local 0.10.1 moving dist/ layout).
-  const preferred = join(pkgDir, "dist", "src", "binary.js");
-  if (existsSync(preferred)) return preferred;
-  const stack = [pkgDir];
-  while (stack.length > 0) {
-    const dir = stack.pop();
-    let entries;
-    try {
-      entries = readdirSync(dir);
-    } catch {
-      continue;
-    }
-    for (const e of entries) {
-      if (e === "node_modules") continue;
-      const p = join(dir, e);
-      let st;
-      try {
-        st = statSync(p);
-      } catch {
-        continue;
-      }
-      if (st.isDirectory()) stack.push(p);
-      else if (e === "binary.js" && p.includes("/dist/")) {
-        // accept any binary.js under dist/; anchor check below confirms it
-        try {
-          if (readFileSync(p, "utf-8").includes("export function findBinary()")) return p;
-        } catch {
-          continue;
-        }
-      }
-    }
-  }
-  return null;
-}
-
 const pkgCandidates = [
   join(repoRoot, "node_modules", "@ff-labs", "fff-node"),
   join(repoRoot, "apps", "server", "node_modules", "@ff-labs", "fff-node"),
 ];
 
-let target = null;
-let pkgDirFound = null;
-for (const pkgDir of pkgCandidates) {
-  if (!existsSync(pkgDir)) continue;
-  pkgDirFound = pkgDir;
-  target = findBinaryJs(pkgDir);
-  if (target) break;
+let pkgDir = null;
+for (const c of pkgCandidates) {
+  if (existsSync(c)) {
+    pkgDir = c;
+    break;
+  }
 }
 
-if (!target) {
-  for (const pkgDir of pkgCandidates) {
+if (!pkgDir) {
+  for (const c of pkgCandidates) {
     try {
-      console.error(`patch-fff-binary: listing ${dirname(pkgDir)}:`);
-      console.error(readdirSync(dirname(pkgDir)).join(" "));
+      console.error(`patch-fff-binary: listing ${dirname(c)}:`);
+      console.error(readdirSync(dirname(c)).join(" "));
     } catch {
-      console.error(`patch-fff-binary: missing ${dirname(pkgDir)}`);
+      console.error(`patch-fff-binary: missing ${dirname(c)}`);
     }
   }
-  if (pkgDirFound) console.error(`patch-fff-binary: found ${pkgDirFound} but no binary.js inside`);
-  console.error(`patch-fff-binary: not found: fff-node/dist/**/binary.js (run bun install first)`);
+  console.error(`patch-fff-binary: fff-node package not found (run bun install first)`);
   process.exit(1);
 }
 
-const src = readFileSync(target, "utf-8");
-if (src.includes(MARKER)) {
-  console.log("patch-fff-binary: already patched, skipping");
-  process.exit(0);
-}
+// Candidate files across known layouts (old + new). Order: new bundle first.
+const fileCandidates = [
+  join(pkgDir, "dist", "index.js"),
+  join(pkgDir, "dist", "index.cjs"),
+  join(pkgDir, "dist", "src", "binary.js"),
+];
 
-const anchor = "export function findBinary() {";
-if (!src.includes(anchor)) {
-  console.error("patch-fff-binary: anchor not found — upstream fff-node changed its binary.js layout");
+const targets = fileCandidates.filter((f) => {
+  if (!existsSync(f)) return false;
+  try {
+    return readFileSync(f, "utf-8").includes("function findBinary()");
+  } catch {
+    return false;
+  }
+});
+
+if (targets.length === 0) {
+  console.error(`patch-fff-binary: found ${pkgDir} but no file containing findBinary()`);
+  try {
+    console.error(`patch-fff-binary: dist listing: ${readdirSync(join(pkgDir, "dist")).join(" ")}`);
+  } catch {
+    console.error(`patch-fff-binary: no dist/ directory in ${pkgDir}`);
+  }
+  try {
+    const pkgJson = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf-8"));
+    console.error(`patch-fff-binary: installed version: ${pkgJson.version}`);
+  } catch {}
   process.exit(1);
 }
 
-const patch = `${anchor}
-    // ${MARKER}: sidecar next to the compiled \`console\` binary (set by install.sh).
+function esmPatch(anchor) {
+  return `${anchor}
+    // ${MARKER}: sidecar next to the compiled \`console\` binary.
     // Checked before the npm-package/dev-build lookups below so the single-file
     // build resolves without node_modules. See scripts/patch-fff-binary.mjs.
     try {
@@ -123,6 +107,59 @@ const patch = `${anchor}
         }
     }
     catch { }`;
+}
 
-writeFileSync(target, src.replace(anchor, patch));
-console.log("patch-fff-binary: patched findBinary() with sidecar lookup");
+function cjsPatch(anchor) {
+  return `${anchor}
+    // ${MARKER}: sidecar next to the compiled \`console\` binary (CJS bundle).
+    try {
+        const envPath = typeof process !== "undefined" ? process.env.FFF_LIB_PATH : undefined;
+        if (envPath && (0, import_node_fs.existsSync)(envPath))
+            return envPath;
+    }
+    catch { }
+    try {
+        const exeDir = (0, import_node_path.dirname)(process.execPath);
+        const candidates = [(0, import_node_path.join)(exeDir, getLibFilename())];
+        if (process.platform === "darwin")
+            candidates.push((0, import_node_path.join)(exeDir, "libfff_c.dylib"));
+        else if (process.platform === "win32")
+            candidates.push((0, import_node_path.join)(exeDir, "fff_c.dll"), (0, import_node_path.join)(exeDir, "libfff_c.dll"));
+        else
+            candidates.push((0, import_node_path.join)(exeDir, "libfff_c.so"));
+        for (const p of candidates) {
+            try {
+                if ((0, import_node_fs.existsSync)(p))
+                    return p;
+            }
+            catch { }
+        }
+    }
+    catch { }`;
+}
+
+let patched = 0;
+let skipped = 0;
+for (const target of targets) {
+  const src = readFileSync(target, "utf-8");
+  if (src.includes(MARKER)) {
+    console.log(`patch-fff-binary: already patched, skipping ${target}`);
+    skipped++;
+    continue;
+  }
+  const isCjs = target.endsWith(".cjs") || src.includes("import_node_fs");
+  // Old layout uses `export function`, new bundle uses plain `function`.
+  const anchor = src.includes("export function findBinary() {")
+    ? "export function findBinary() {"
+    : "function findBinary() {";
+  if (!src.includes(anchor)) {
+    console.error(`patch-fff-binary: anchor not found in ${target} — upstream changed layout again`);
+    process.exit(1);
+  }
+  const patch = isCjs ? cjsPatch(anchor) : esmPatch(anchor);
+  writeFileSync(target, src.replace(anchor, patch));
+  console.log(`patch-fff-binary: patched ${target}`);
+  patched++;
+}
+
+console.log(`patch-fff-binary: done (patched ${patched}, skipped ${skipped})`);
