@@ -32,17 +32,26 @@ impl ConsoleDesktopApp {
         }
 
         // Terminal tab: render the live terminal surface for its id.
+        // No cwd fallback: rehydrated tabs without a selected project must
+        // not respawn with the process cwd or "." (it may not exist on the
+        // current server). Surface a placeholder instead.
         if let Some(console_core::WorkspaceTabConfig::Terminal { terminal_id, .. }) = active_tab {
             if !self.terminals.contains_key(terminal_id) {
-                let cwd = self
+                let Some(cwd) = self
                     .selected_project_for_pane(pane_id)
                     .map(|project| project.path.clone())
-                    .or_else(|| {
-                        std::env::current_dir()
-                            .map(|p| p.to_string_lossy().to_string())
-                            .ok()
-                    })
-                    .unwrap_or_else(|| ".".to_string());
+                else {
+                    let theme = Theme::current(cx);
+                    return div()
+                        .size_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_color(theme.text_ghost)
+                        .text_size(px(12.0))
+                        .child("Select a project to open a terminal")
+                        .into_any_element();
+                };
                 let view = cx.new(|cx| TerminalView::with_cwd(cwd, self.client.clone(), window, cx));
                 self.terminals.insert(terminal_id.clone(), view);
             }

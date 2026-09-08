@@ -471,21 +471,21 @@ impl ConsoleDesktopApp {
     }
 
     /// Open a new Terminal tab in the active pane. The PTY cwd is the pane's
-    /// selected project path, falling back to the process working directory.
+    /// selected project path. No fallback: without an explicit project
+    /// selection there is no safe cwd to send to the server (process cwd or
+    /// "." may not exist there, especially after switching servers).
     pub fn open_terminal_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let pane_id = self
             .active_pane_id
             .clone()
             .unwrap_or_else(|| "pane-main".into());
-        let cwd = self
+        let Some(cwd) = self
             .selected_project_for_pane(&pane_id)
             .map(|project| project.path.clone())
-            .or_else(|| {
-                std::env::current_dir()
-                    .map(|p| p.to_string_lossy().to_string())
-                    .ok()
-            })
-            .unwrap_or_else(|| ".".to_string());
+        else {
+            self.set_error("Select a project before opening a terminal.", cx);
+            return;
+        };
         self.open_terminal_tab_in_pane(&pane_id, cwd, window, cx);
     }
 
