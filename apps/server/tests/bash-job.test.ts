@@ -34,8 +34,9 @@ try {
     const dt = Date.now() - t0;
     assert.ok(dt < 1000, `background start must return promptly (took ${dt}ms)`);
     const txt = textOf(res);
-    assert.ok(txt.includes("Status: running"), "start must say running");
+    assert.ok(txt.includes("Started: "), "start must announce the job");
     assert.ok(!txt.includes("Exit code"), "start must NOT claim an exit result");
+    assert.ok(txt.includes("is not an exit result"), "start must warn this isn't an exit result");
     quickJob = extractJobId(res);
     assert.equal(bashJobManager.status(quickJob).status, "running");
     console.log("  ✅ background start returns promptly with jobId");

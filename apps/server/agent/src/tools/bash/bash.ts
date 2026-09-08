@@ -3,7 +3,7 @@ import { z } from "zod";
 import { spawnCapture } from "@/api/src/utils/exec.js";
 import type { AgentTool } from "@/agent/src/types/index.js";
 import { bashJobManager } from "./manager.js";
-import { BG_DEFAULT_TIMEOUT_MS } from "./types.js";
+import { BG_DEFAULT_TIMEOUT_MS, MAX_WAIT_MS } from "./types.js";
 
 const MAX_OUTPUT_BYTES = 50 * 1024;
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -57,15 +57,12 @@ export const bashTool: AgentTool<typeof inputSchema> = {
             {
               type: "text",
               text: [
-                `Started background bash job ${rec.jobId}.`,
-                `Status: running (NOT a success result — poll for the exit code).`,
-                `Command: ${args.command}`,
-                `Working directory: ${cwd}`,
+                `Started: ${rec.jobId}`,
                 `Max lifetime: ${timeoutMs}ms`,
+                `Default wait: ${MAX_WAIT_MS}ms`,
                 "",
-                `Next: bashJob action="output" jobId="${rec.jobId}" for output,`,
-                `bashJob action="wait" jobId="${rec.jobId}" to block until done,`,
-                `bashJob action="kill" jobId="${rec.jobId}" to terminate.`,
+                `Use bashJob action="output|wait|kill" with jobId="${rec.jobId}".`,
+                `This response is not an exit result — poll for status before assuming success.`,
               ].join("\n"),
             },
           ],

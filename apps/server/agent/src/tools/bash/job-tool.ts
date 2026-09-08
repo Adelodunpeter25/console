@@ -4,17 +4,11 @@ import { bashJobManager } from "./manager.js";
 import { BG_MAX_TIMEOUT_MS, MAX_WAIT_MS, type BashJobSnapshot } from "./types.js";
 
 const inputSchema = z.object({
-  action: z.enum(["status", "output", "wait", "kill", "list"]).describe("Job action: status, output, wait, kill, or list."),
-  jobId: z.string().optional().describe("Background job id (job_...) — required for all actions except list."),
-  cursor: z.number().int().min(0).optional().describe("Stdout cursor from a previous output call."),
-  limit: z.number().int().min(1).max(50_000).optional().describe("Max chars per stream (default 20000, max 50000)."),
-  waitMs: z
-    .number()
-    .int()
-    .min(1)
-    .max(MAX_WAIT_MS)
-    .optional()
-    .describe("How long to wait when action=wait (default 10000, max 120000)."),
+  action: z.enum(["status", "output", "wait", "kill", "list"]).describe("status|output|wait|kill|list"),
+  jobId: z.string().optional().describe("background job id (job_...) — required except for list"),
+  cursor: z.number().int().min(0).optional().describe("stdout offset from previous output call"),
+  limit: z.number().int().min(1).max(50_000).optional().describe("max chars per stream (default 20000, max 50000)"),
+  waitMs: z.number().int().min(1).max(MAX_WAIT_MS).optional().describe("max wait for wait action (default 10000, max 120000)"),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -61,7 +55,7 @@ export const bashJobTool: AgentTool<typeof inputSchema> = {
   name: "bashJob",
   tier: "exec",
   description:
-    "Manage background shell jobs started with bash background=true. Actions: status (running/exited/failed/killed/expired + exit code), output (poll stdout/stderr with cursor, returns nextCursor + truncated flag), wait (block up to waitMs for completion without killing), kill (terminate process tree), list (all jobs). Starting a job only confirms the process started — poll status/output to learn the exit result.",
+    "Manage background bash jobs. action: status|output|wait|kill|list. output is cursor-paginated (nextCursor, truncated).",
   inputSchema,
   execute: async (args: Input): Promise<unknown> => {
     try {
