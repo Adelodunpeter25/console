@@ -217,6 +217,45 @@ try {
     console.log("  ✅ bashJob tool round-trip");
   }
 
+  // 15. Kill reaches grandchildren (regression for detached: true).
+  // Without `detached: true`, process.kill(-pid, signal) silently no-ops;
+  // the pkill -P fallback only catches direct children, leaving the
+  // grandchild sleep running after kill.
+  {
+    bashJobManager.resetForTests();
+    const marker = `bg-grandchild-${process.pid}-${Date.now()}`;
+    // "( sleep 30 ; echo X ) & sleep 30" — bash spawns a subshell that runs
+    // sleep in the background, then runs another sleep in the foreground.
+    // The background sleep is a grandchild of the top bash process.
+    const res = (await bashTool.execute(
+      bashTool.inputSchema.parse({
+        command: `( sleep 30 ; echo ${marker} ) & sleep 30`,
+        background: true,
+      }),
+    )) as ToolOut;
+    const id = extractJobId(res);
+    await sleep(400);
+
+    const { execSync } = await import("node:child_process");
+    // Both sleeps and the wrapping bash all have MARKER in their argv, so
+    // pgrep -f matches them. The grandchild sleep survives without the fix.
+    const countMatching = () =>
+      execSync(`pgrep -f ${JSON.stringify(marker)} || true`, { encoding: "utf8" })
+        .trim()
+        .split("\n")
+        .filter(Boolean).length;
+
+    const before = countMatching();
+    assert.ok(before >= 2, `expected >= 2 matching processes before kill, got ${before}`);
+
+    bashJobManager.kill(id);
+    await sleep(800); // SIGKILL escalation (300ms) + grace.
+
+    const after = countMatching();
+    assert.equal(after, 0, `expected 0 matching processes after kill, got ${after}`);
+    console.log("  ✅ kill reaches grandchildren via process group");
+  }
+
   console.log("BashJob background execution tests passed!\n");
 } finally {
   bashJobManager.resetForTests();

@@ -43,12 +43,19 @@ export class BashJobManager {
 
     let proc: Bun.Subprocess<any, any, any>;
     try {
+      // `detached: true` puts the shell in its own process group, which is
+      // what `process.kill(-pid, signal)` needs in proc.ts to reach the whole
+      // shell pipeline (e.g. `sleep 30 | grep foo`, or a subshell-spawned
+      // background sleep) — not just direct children. The pkill -P fallback
+      // catches direct children but misses grandchildren without this. stdio
+      // is still piped so the existing drain logic is unaffected.
       proc = Bun.spawn(buildShellArgv(options.command), {
         cwd: options.cwd,
         env: options.env as Record<string, string | undefined>,
         stdin: "ignore",
         stdout: "pipe",
         stderr: "pipe",
+        detached: true,
       });
     } catch (error) {
       throw new Error(
