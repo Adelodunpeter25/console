@@ -588,19 +588,23 @@ function fetchMockWithAuth(chatResponder: (url: string) => Response | Promise<Re
   }
 }
 
-// 22. Provider catalog advertises Devin
+// 22. Provider catalog advertises Devin (no static model seed — discovery-driven)
 {
-  const { PROVIDER_CATALOG, listProviders } = await import("@/agent/src/commands/provider-registry.js");
+  const { PROVIDER_CATALOG, listProviders, DEFAULT_DEVIN_MODELS } = await import(
+    "@/agent/src/commands/provider-registry.js"
+  );
+  assert.deepEqual(DEFAULT_DEVIN_MODELS, [], "Devin has no static model seed");
+
   const devinEntry = PROVIDER_CATALOG.devin;
   assert.ok(devinEntry, "devin should be in PROVIDER_CATALOG");
   assert.equal(devinEntry!.name, "devin");
   assert.equal(devinEntry!.authMethod, "oauth");
   assert.ok(typeof devinEntry!.getStreamFn === "function");
-  assert.ok(devinEntry!.models.length > 0);
+  assert.deepEqual(devinEntry!.models, [], "Devin catalog starts empty until discovery runs");
 
   const listed = listProviders().find((p) => p.name === "devin");
   assert.ok(listed, "devin should be returned by listProviders()");
-  console.log("  ✅ PROVIDER_CATALOG and listProviders include devin");
+  console.log("  ✅ PROVIDER_CATALOG and listProviders include devin (no static seed)");
 }
 
 console.log("Devin provider tests passed!\n");

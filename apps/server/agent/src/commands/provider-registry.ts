@@ -76,16 +76,10 @@ export const DEFAULT_CLINE_MODELS: Model[] = [...CLINE_FREE_MODEL_IDS]
   }))
   .sort((a, b) => a.id.localeCompare(b.id));
 
-/**
- * Devin's native catalog is server-driven via `GetCliModelConfigs`. The
- * static seed below is what the picker shows before login; on first auth
- * it's overwritten by the discovered list.
- */
-export const DEFAULT_DEVIN_MODELS: Model[] = [
-  { id: "devin", provider: "devin", contextWindow: 200_000 },
-  { id: "claude-3-7-sonnet", provider: "devin", contextWindow: 200_000, supportsImages: true },
-  { id: "gpt-5", provider: "devin", contextWindow: 200_000, supportsImages: true },
-];
+// Devin's model catalog is fully server-driven via `GetCliModelConfigs` and is
+// only available after the user logs in. There is no offline seed — before
+// auth the picker shows zero Devin models, on first auth it gets the full list.
+export const DEFAULT_DEVIN_MODELS: Model[] = [];
 
 /** Providers that are temporarily disabled (kept in code but hidden from catalog). */
 const DISABLED_PROVIDERS = new Set<ProviderId>(["cline"]);
@@ -231,6 +225,8 @@ export async function fetchModelsForProvider(
   }
 
   // If dynamic fetch failed or yielded no models, return static/cached models
+  // (Devin has no static fallback — its catalog is server-driven and the picker
+  // stays empty until discovery succeeds against `GetCliModelConfigs`).
   const staticFallback =
     providerName === "opencode"
       ? DEFAULT_OPENCODE_MODELS
@@ -238,9 +234,7 @@ export async function fetchModelsForProvider(
         ? DEFAULT_CODEX_MODELS
         : providerName === "cline"
           ? DEFAULT_CLINE_MODELS
-          : providerName === "devin"
-            ? DEFAULT_DEVIN_MODELS
-            : DEFAULT_ANTIGRAVITY_MODELS;
+          : DEFAULT_ANTIGRAVITY_MODELS;
   if (!provider.models || provider.models.length === 0) {
     provider.models = staticFallback;
   }
