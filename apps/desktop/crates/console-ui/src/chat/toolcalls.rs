@@ -214,7 +214,10 @@ impl ToolCalls {
                 } else {
                     value.to_owned()
                 };
-                return Some(truncate(&value, 72));
+                // Multi-line values (heredoc scripts, multi-line queries) must
+                // collapse to one line: a literal `\n` renders as a hard line
+                // break that no CSS-style truncate() can suppress.
+                return Some(truncate(&single_line(&value), 72));
             }
         }
         if let Some(paths) = object.get("paths").and_then(|value| value.as_array()) {
@@ -1044,6 +1047,13 @@ fn truncate(value: &str, max_chars: usize) -> String {
     } else {
         truncated
     }
+}
+
+/// Collapse every whitespace run (newlines, tabs, spaces) to single spaces so
+/// a summary always fits on one line. Newlines in particular render as hard
+/// breaks inside a text element, defeating `.truncate()`.
+fn single_line(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 pub fn elapsed_seconds(started_at: Option<i64>, ended_at: Option<i64>) -> u64 {
