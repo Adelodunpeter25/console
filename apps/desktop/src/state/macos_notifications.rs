@@ -19,6 +19,9 @@ mod imp {
         UNNotificationSound, UNAuthorizationOptions, UNUserNotificationCenter,
         UNUserNotificationCenterDelegate,
     };
+    use console_core::types::notification::{
+        NOTIFICATION_THREAD_ID, notification_ident, parse_session_id_from_ident,
+    };
     use std::sync::OnceLock;
     use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -73,17 +76,11 @@ mod imp {
     static DELEGATE: OnceLock<objc2::rc::Retained<ClickDelegate>> = OnceLock::new();
     static CLICK_TX: OnceLock<UnboundedSender<String>> = OnceLock::new();
 
-    pub(crate) fn notification_ident(session_id: &str) -> String {
-        format!("console-session-{session_id}")
-    }
-
     fn session_id_from_response(response: &UNNotificationResponse) -> Option<String> {
         // Primary: identifier encodes the session (`console-session-<id>`).
         let ident = response.notification().request().identifier().to_string();
-        if let Some(sid) = ident.strip_prefix("console-session-") {
-            if !sid.is_empty() {
-                return Some(sid.to_string());
-            }
+        if let Some(sid) = parse_session_id_from_ident(&ident) {
+            return Some(sid);
         }
         // Fallback: userInfo.sessionId.
         let info = response.notification().request().content().userInfo();
@@ -134,7 +131,7 @@ mod imp {
         content.setTitle(&NSString::from_str(title));
         content.setBody(&NSString::from_str(body));
         content.setSound(Some(&UNNotificationSound::defaultSound()));
-        content.setThreadIdentifier(&NSString::from_str("console-sessions"));
+        content.setThreadIdentifier(&NSString::from_str(NOTIFICATION_THREAD_ID));
         let key = NSString::from_str("sessionId");
         let val = NSString::from_str(session_id);
         let info: objc2::rc::Retained<NSDictionary<NSString, NSString>> =

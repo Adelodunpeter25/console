@@ -1,6 +1,10 @@
 use futures_util::StreamExt;
 use gpui::Context;
 
+use console_core::types::notification::{
+    NotificationDecision, decide_notification, normalize_notification_title,
+};
+
 use super::ConsoleDesktopApp;
 use super::macos_notifications;
 
@@ -36,35 +40,26 @@ impl ConsoleDesktopApp {
                         while let Some(event_res) = stream.next().await {
                             if let Ok(event) = event_res {
                                 let session_id = event.session_id.clone();
-                                let title = if event.title.is_empty() {
-                                    "Console".to_string()
-                                } else {
-                                    event.title.clone()
-                                };
+                                let title = normalize_notification_title(&event.title);
                                 let body = event.body.clone();
                                 let _ = cx.update(|cx| {
                                     if let Some(app) = entity.upgrade() {
                                         app.update(cx, |this, cx| {
                                             // Suppress the banner when the user is already
                                             // viewing this session — silent in-app update,
-                                            // matching mobile. Clear any stale delivered
-                                            // banner for it.
-                                            let viewing = this
-                                                .active_pane_id
-                                                .as_deref()
-                                                .and_then(|pane| this.active_session_for_pane(pane))
-                                                .as_deref()
-                                                == Some(session_id.as_str());
-                                            if viewing {
-                                                macos_notifications::clear_for_session(&session_id);
-                                            } else if !session_id.is_empty() {
-                                                // Same identifier replaces the previous banner
-                                                // for this session instead of stacking.
-                                                macos_notifications::notify_session(
-                                                    &session_id,
-                                                    &title,
-                                                    &body,
-                                                );
+                                            // matching mobile. Same identifier replaces the
+                                            // previous banner instead of stacking.
+                                            let viewing = this.active_pane_id.as_deref().and_then(|pane| {
+                                                this.active_session_for_pane(pane)
+                                            });
+                                            match decide_notification(viewing.as_deref(), &session_id) {
+                                                NotificationDecision::SuppressViewing => {
+                                                    macos_notifications::clear_for_session(&session_id);
+                                                }
+                                                NotificationDecision::Notify => {
+                                                    macos_notifications::notify_session(&session_id, &title, &body);
+                                                }
+                                                NotificationDecision::SkipEmpty => {}
                                             }
                                             cx.notify();
                                         });
