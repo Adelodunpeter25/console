@@ -490,6 +490,19 @@ impl ComposerInput {
         mentions::reconcile_mentions(&mut self.mentions, &self.content);
     }
 
+    /// Apply a text splice with mention bookkeeping. Every edit — typing,
+    /// backspace, completion inserts, IME commits — must go through here so
+    /// pill records can never drift from the text: `adjust_mentions` shifts
+    /// or drops mentions touched by the edit, and `reconcile_mentions` is the
+    /// final net that drops any mention whose text no longer matches.
+    fn apply_text_splice(&mut self, range: &Range<usize>, text: &str) {
+        self.adjust_mentions(range, text.len());
+        self.content =
+            (self.content[..range.start].to_owned() + text + &self.content[range.end..]).into();
+        self.reconcile_mentions();
+        self.refresh_highlight();
+    }
+
     /// Splice `text` over `range` and put the caret after it. This is the
     /// autocompletion insert: unlike [`EntityInputHandler::replace_text_in_range`]
     /// it takes byte offsets and no window, so an action handler can call it.
@@ -511,17 +524,13 @@ impl ComposerInput {
         // must not coalesce with the typing around it.
         self.history.seal();
         self.record_edit_history(&range, text, false);
-        self.adjust_mentions(&range, text.len());
-        self.content =
-            (self.content[..range.start].to_owned() + text + &self.content[range.end..]).into();
+        self.apply_text_splice(&range, text);
         let offset = range.start + text.len();
         self.selected_range = offset..offset;
         self.selection_reversed = false;
         self.marked_range = None;
         self.vertical_navigation = None;
         self.history.seal();
-        self.refresh_highlight();
-        self.reconcile_mentions();
         self.pause_blink_cursor(cx);
         cx.emit(ComposerEvent::Edited);
         cx.notify();

@@ -64,8 +64,7 @@ impl EntityInputHandler for ComposerInput {
         });
         self.record_edit_history(&range, new_text, composing);
         let previous = self.content.clone();
-        self.content =
-            (self.content[..range.start].to_owned() + new_text + &self.content[range.end..]).into();
+        self.apply_text_splice(&range, new_text);
         let offset = range.start + new_text.len();
         self.selected_range = offset..offset;
         self.marked_range = None;
@@ -108,8 +107,7 @@ impl EntityInputHandler for ComposerInput {
         };
         self.record_edit_history(&range, new_text, true);
         let previous = self.content.clone();
-        self.content =
-            (self.content[..range.start].to_owned() + new_text + &self.content[range.end..]).into();
+        self.apply_text_splice(&range, new_text);
         self.marked_range =
             (!new_text.is_empty()).then_some(range.start..range.start + new_text.len());
         // Empty composition text is a cancel; close its undo step so a

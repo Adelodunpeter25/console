@@ -1,4 +1,5 @@
 use console_ui::ComposerMention;
+use console_ui::{adjust_mentions as real_adjust_mentions, reconcile_mentions as real_reconcile};
 use std::ops::Range;
 
 fn adjust_mentions(
@@ -150,4 +151,56 @@ fn test_mention_invalidation_on_interior_edit() {
 
     assert_eq!(content, "fxx.rs ");
     assert_eq!(mentions.len(), 0);
+}
+
+/// Regression test for the stale-pill bug: a file chip was inserted, deleted,
+/// and new text typed in its place — the leftover mention record must be gone
+/// after the deletion edit, so the new prompt can neither inherit the pill
+/// color nor be wiped whole by the "delete chip at caret" backspace rule.
+///
+/// These assertions call the REAL `adjust_mentions`/`reconcile_mentions` that
+/// the composer's centralized splice (`ComposerInput::apply_text_splice`) runs
+/// on every edit — typing, backspace, and IME commits included. If a future
+/// edit path skips mention bookkeeping again, the invariant documented here
+/// is what breaks in the UI.
+#[test]
+fn test_deleted_chip_leaves_no_stale_mention_for_typed_text() {
+    // Pill inserted at the caret: content holds "<path> " and the chip is
+    // tracked as start..start + path.len().
+    let path = "/Users/someone/Developer/Projects/console/apps/desktop/src/main.rs";
+    let mut content = format!("{path} ");
+    let mut mentions = vec![ComposerMention {
+        range: 0..path.len(),
+        path: path.to_string(),
+    }];
+
+    // The user deletes the pill (backspace with the caret at the chip end
+    // selects the whole chip range and replaces it with nothing).
+    let delete_range = 0..path.len();
+    real_adjust_mentions(&mut mentions, &delete_range, 0);
+    content.replace_range(delete_range.clone(), "");
+    real_reconcile(&mut mentions, &content);
+
+    // The chip record must be gone: nothing is left for the renderer to
+    // highlight and nothing for the backspace fast-path to target.
+    assert!(
+        mentions.is_empty(),
+        "deleting a chip must drop its mention record, got {mentions:?}"
+    );
+
+    // Typing the new prompt afterwards must not resurrect or shift anything.
+    let prompt = "proceed just so you know this is my first ios app";
+    for (idx, ch) in prompt.char_indices() {
+        let caret = idx + ch.len_utf8();
+        let edit_range = caret - ch.len_utf8()..caret - ch.len_utf8();
+        real_adjust_mentions(&mut mentions, &edit_range, ch.len_utf8());
+        content.insert(idx, ch);
+        real_reconcile(&mut mentions, &content);
+    }
+
+    assert!(
+        mentions.is_empty(),
+        "typed text must never be covered by a stale chip, got {mentions:?}"
+    );
+    assert_eq!(content, format!("{prompt} "));
 }
