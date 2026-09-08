@@ -9,6 +9,7 @@ import {
   fetchAvailableModels,
   fetchOpencodeFreeModels,
   fetchClineFreeModels,
+  fetchDevinModels,
   loadCredential,
   opencodeStreamFn,
   refreshIfNeeded,
@@ -21,6 +22,7 @@ import {
   CLINE_FREE_MODEL_IDS,
   getClineContextWindow,
   getClineSupportsImages,
+  devinStreamFn,
 } from "@/providers/src/index.js";
 import { codexModelsUrl } from "@/providers/src/codex/constants.js";
 import type { StreamFn } from "@/agent/src/service/agent-loop.js";
@@ -74,6 +76,17 @@ export const DEFAULT_CLINE_MODELS: Model[] = [...CLINE_FREE_MODEL_IDS]
   }))
   .sort((a, b) => a.id.localeCompare(b.id));
 
+/**
+ * Devin's native catalog is server-driven via `GetCliModelConfigs`. The
+ * static seed below is what the picker shows before login; on first auth
+ * it's overwritten by the discovered list.
+ */
+export const DEFAULT_DEVIN_MODELS: Model[] = [
+  { id: "devin", provider: "devin", contextWindow: 200_000 },
+  { id: "claude-3-7-sonnet", provider: "devin", contextWindow: 200_000, supportsImages: true },
+  { id: "gpt-5", provider: "devin", contextWindow: 200_000, supportsImages: true },
+];
+
 /** Providers that are temporarily disabled (kept in code but hidden from catalog). */
 const DISABLED_PROVIDERS = new Set<ProviderId>(["cline"]);
 
@@ -109,6 +122,14 @@ export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
     authMethod: "api-key",
     models: DEFAULT_CLINE_MODELS,
     getStreamFn: () => clineStreamFn,
+  },
+  devin: {
+    name: "devin",
+    displayName: "Devin",
+    description: "Codeium/Windsurf Cascade with PKCE OAuth + Connect/protobuf streaming",
+    authMethod: "oauth",
+    models: DEFAULT_DEVIN_MODELS,
+    getStreamFn: () => devinStreamFn,
   },
 };
 
@@ -151,6 +172,16 @@ export async function fetchModelsForProvider(
 
     if (providerName === "opencode") {
       discovered = await fetchOpencodeFreeModels(signal);
+    } else if (providerName === "devin") {
+      const discoveredDevin = await fetchDevinModels(fetch, signal);
+      if (discoveredDevin) {
+        discovered = discoveredDevin.map((m) => ({
+          id: m.id,
+          provider: "devin" as const,
+          contextWindow: m.contextWindow ?? 200_000,
+          ...(m.supportsImages ? { supportsImages: true } : {}),
+        }));
+      }
     } else if (providerName === "codex") {
       if (!(await codexCredentialExists())) throw new Error("Codex is not logged in");
       const cred = await refreshCodexIfNeeded(await loadCodexCredential());
@@ -207,7 +238,9 @@ export async function fetchModelsForProvider(
         ? DEFAULT_CODEX_MODELS
         : providerName === "cline"
           ? DEFAULT_CLINE_MODELS
-          : DEFAULT_ANTIGRAVITY_MODELS;
+          : providerName === "devin"
+            ? DEFAULT_DEVIN_MODELS
+            : DEFAULT_ANTIGRAVITY_MODELS;
   if (!provider.models || provider.models.length === 0) {
     provider.models = staticFallback;
   }

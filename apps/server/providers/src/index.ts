@@ -49,6 +49,15 @@ export {
   refreshDevinIfNeeded,
   saveDevinCredential,
   DEVIN_API_BASE,
+  devinStreamFn,
+  fetchDevinModels,
+  type DevinDiscoveredModel,
+  fetchDevinAuthMetadata,
+  type DevinAuthMetadata,
+  DEVIN_STREAMING_BASE_URL,
+  devinCliMetadata,
+  devinDiscoveryMetadata,
+  normalizeDevinSessionToken,
 } from "./devin/index.js";
 export type { DevinOAuthCredential, ParsedDevinCredential } from "./devin/oauth.js";
 export { DEVIN_CALLBACK_PATH, DEVIN_CALLBACK_PORT } from "./devin/index.js";
