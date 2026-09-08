@@ -38,10 +38,9 @@ function ok(text: string, isError = false) {
   return { content: [{ type: "text", text }], isError };
 }
 
-function renderOutput(jobId: string, cursor?: number, limit?: number) {
+function renderOutputBody(jobId: string, cursor?: number, limit?: number) {
   const r = bashJobManager.output(jobId, { cursor, limit });
   const sections = [
-    formatJobSnapshot(r.snapshot),
     `cursor: ${cursor ?? 0} -> nextCursor: ${r.nextCursor}`,
     `truncated: ${r.truncated}`,
     "",
@@ -51,6 +50,11 @@ function renderOutput(jobId: string, cursor?: number, limit?: number) {
   if (r.stderr.trim()) sections.push("", "stderr:", r.stderr);
   sections.push("", "Poll again with cursor=" + r.nextCursor + " for new output.");
   return sections.join("\n");
+}
+
+function renderOutput(jobId: string, cursor?: number, limit?: number) {
+  const r = bashJobManager.output(jobId, { cursor, limit });
+  return formatJobSnapshot(r.snapshot) + "\n" + renderOutputBody(jobId, cursor, limit);
 }
 
 export const bashJobTool: AgentTool<typeof inputSchema> = {
@@ -79,10 +83,13 @@ export const bashJobTool: AgentTool<typeof inputSchema> = {
         case "wait": {
           if (!args.jobId) return ok('Missing jobId for action="wait".', true);
           const s = await bashJobManager.wait(args.jobId, args.waitMs ?? 10_000);
-          const text = renderOutput(args.jobId, args.cursor, args.limit);
+          const body = renderOutputBody(args.jobId, args.cursor, args.limit);
           const suffix =
             s.status === "running" ? `\n\nStill running after wait. Poll again or wait longer (max ${MAX_WAIT_MS}ms).` : "";
-          return ok(formatJobSnapshot(s) + "\n" + text.split("\n").slice(5).join("\n") + suffix, s.status === "failed" || s.status === "expired");
+          return ok(
+            formatJobSnapshot(s) + "\n" + body + suffix,
+            s.status === "failed" || s.status === "expired",
+          );
         }
         case "kill": {
           if (!args.jobId) return ok('Missing jobId for action="kill".', true);

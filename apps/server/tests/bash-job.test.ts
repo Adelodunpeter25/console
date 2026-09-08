@@ -218,9 +218,6 @@ try {
   }
 
   // 15. Kill reaches grandchildren (regression for detached: true).
-  // Without `detached: true`, process.kill(-pid, signal) silently no-ops;
-  // the pkill -P fallback only catches direct children, leaving the
-  // grandchild sleep running after kill.
   {
     bashJobManager.resetForTests();
     const marker = `bg-grandchild-${process.pid}-${Date.now()}`;
@@ -254,6 +251,41 @@ try {
     const after = countMatching();
     assert.equal(after, 0, `expected 0 matching processes after kill, got ${after}`);
     console.log("  ✅ kill reaches grandchildren via process group");
+  }
+
+  // 16. wait action's snapshot header doesn't duplicate (regression for the
+  // slice(5) bug). Previously, renderOutput included a snapshot header that
+  // the wait handler tried to strip via `text.split("\n").slice(5)`. That
+  // assumed the snapshot was always exactly 5 lines; with `finishedAt` and
+  // `exitCode` present (finished jobs), it's 7, so the header reappeared
+  // twice in the body.
+  {
+    bashJobManager.resetForTests();
+    const res = (await bashTool.execute(
+      bashTool.inputSchema.parse({ command: "echo wait-snapshot-test", background: true }),
+    )) as ToolOut;
+    const id = extractJobId(res);
+    const w = (await bashJobTool.execute(
+      bashJobTool.inputSchema.parse({ action: "wait", jobId: id, waitMs: 5000 }),
+    )) as ToolOut;
+    const txt = textOf(w);
+    // The buggy `slice(5)` left lines 6+ (Finished/Exit code) in the body,
+    // duplicating them after the freshly-prepended snapshot header.
+    const exitCodeMatches = txt.match(/^Exit code: /gm) ?? [];
+    assert.equal(
+      exitCodeMatches.length,
+      1,
+      `Exit code line must appear exactly once, got ${exitCodeMatches.length}:\n${txt}`,
+    );
+    const finishedMatches = txt.match(/^Finished: /gm) ?? [];
+    assert.equal(
+      finishedMatches.length,
+      1,
+      `Finished line must appear exactly once, got ${finishedMatches.length}:\n${txt}`,
+    );
+    assert.ok(txt.includes("Finished:"));
+    assert.ok(txt.includes("Exit code: 0"));
+    console.log("  ✅ wait action snapshot header not duplicated");
   }
 
   console.log("BashJob background execution tests passed!\n");
