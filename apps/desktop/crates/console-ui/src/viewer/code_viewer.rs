@@ -688,18 +688,15 @@ fn code_runs_for_tokens(
         push(&mut runs, text.len() - cursor, default_color);
     }
 
-    // Strict validator: ensure total run length exactly matches text.len()
-    let total_len: usize = runs.iter().map(|r| r.len).sum();
-    if total_len != text.len() {
-        runs = vec![TextRun {
-            len: text.len(),
-            font: code_font.clone(),
-            color: default_color,
-            background_color: None,
-            underline: None,
-            strikethrough: None,
-        }];
-    }
+    // Total run length must tile the text exactly, otherwise GPUI's text
+    // shaper either drops characters or asserts. The highlighter is supposed
+    // to guarantee this — if it ever doesn't, panic loudly so the regression
+    // surfaces in dev/test instead of silently rendering unhighlighted code.
+    debug_assert_eq!(
+        runs.iter().map(|r| r.len).sum::<usize>(),
+        text.len(),
+        "code_viewer run lengths don't tile the line — highlighter bug",
+    );
 
     // Apply selection highlighting if this line overlaps active selection
     if let Some((sel_start, sel_end)) = selection_range {
