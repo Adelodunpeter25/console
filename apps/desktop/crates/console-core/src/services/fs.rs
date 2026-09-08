@@ -12,11 +12,18 @@ impl FsService {
         Self { transport }
     }
 
+    /// Browse directories for the ⌘O project palette. Always includes hidden
+    /// (dotfile) folders — project roots like `.config/nvim` or `.dotfiles`
+    /// must be navigable, and there is intentionally no visibility toggle.
     pub async fn browse(&self, path: Option<&str>) -> Result<BrowseDirectoryResponse> {
         let mut url = self.transport.url("/api/fs/browse").await;
+        // Always show hidden: the palette filters locally and must reach dotfolders.
+        let mut params = vec!["hidden=true".to_string()];
         if let Some(p) = path {
-            url.push_str(&format!("?path={}", urlencoding::encode(p)));
+            params.push(format!("path={}", urlencoding::encode(p)));
         }
+        url.push('?');
+        url.push_str(&params.join("&"));
 
         let resp = self
             .transport

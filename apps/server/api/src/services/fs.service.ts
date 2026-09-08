@@ -49,6 +49,7 @@ export class FsService {
    */
   async browseDirectory(
     targetPath?: string,
+    showHidden = false,
   ): Promise<{ currentPath: string; parentPath: string | null; entries: FsTreeEntry[] }> {
     const home = os.homedir();
     const resolvedPath = targetPath ? path.resolve(targetPath) : home;
@@ -56,7 +57,7 @@ export class FsService {
       path.dirname(resolvedPath) !== resolvedPath ? path.dirname(resolvedPath) : null;
 
     const dirEntries = await fs.readdir(resolvedPath, { withFileTypes: true });
-    const entries = await toSortedEntries(resolvedPath, dirEntries);
+    const entries = await toSortedEntries(resolvedPath, dirEntries, { showHidden });
 
     return {
       currentPath: resolvedPath,

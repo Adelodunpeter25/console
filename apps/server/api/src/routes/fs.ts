@@ -16,8 +16,9 @@ const fsService = new FsService();
  */
 fsRoutes.get("/browse", async (c) => {
   const dirPath = c.req.query("path");
+  const showHidden = c.req.query("hidden") === "true";
   try {
-    const result = await fsService.browseDirectory(dirPath);
+    const result = await fsService.browseDirectory(dirPath, showHidden);
     return c.json({ success: true, data: result });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
