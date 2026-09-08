@@ -457,6 +457,7 @@ export function ToolResultContent({ toolName, result, callFilePath, callArgs }: 
     case "readFile":
       return <ReadFileResult text={text} filePath={callFilePath} />;
     case "bash":
+    case "bashJob":
       return <BashResult text={text} />;
     case "listDir":
       return <ListDirResult text={text} />;

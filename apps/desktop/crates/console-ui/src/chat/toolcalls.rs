@@ -181,6 +181,7 @@ impl ToolCalls {
             "batchWrite" | "batch_write" => "Batch Write".into(),
             "editFile" | "edit_file" | "str_replace" => "Edit File".into(),
             "bash" | "shell" | "command" => "Run Command".into(),
+            "bashJob" | "bash_job" => "Bash Job".into(),
             "grep" | "search_files" => "Search Code".into(),
             "glob" | "list_files" => "Find Files".into(),
             "listDir" | "list_dir" | "ls" => "List Directory".into(),
@@ -198,6 +199,13 @@ impl ToolCalls {
         let cwd = self.cwd.as_deref();
         if let Some(path) = argument_path(call) {
             return Some(truncate(&to_relative_path(path, cwd), 72));
+        }
+        if call.name == "bashJob" || call.name == "bash_job" {
+            let action = object.get("action").and_then(|v| v.as_str()).unwrap_or("status");
+            if let Some(job_id) = object.get("jobId").and_then(|v| v.as_str()) {
+                return Some(truncate(&format!("{action} {job_id}"), 72));
+            }
+            return Some(truncate(action, 72));
         }
         for key in ["command", "pattern", "query", "url", "directory"] {
             if let Some(value) = object.get(key).and_then(|value| value.as_str()) {

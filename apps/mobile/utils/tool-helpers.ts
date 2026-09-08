@@ -66,6 +66,7 @@ export const TOOL_META: Record<string, { label: string }> = {
   batchWrite: { label: "Batch Write" },
   editFile: { label: "Edit File" },
   bash: { label: "Run Command" },
+  bashJob: { label: "Bash Job" },
   grep: { label: "Search Code" },
   glob: { label: "Find Files" },
   listDir: { label: "List Directory" },
@@ -121,6 +122,12 @@ export function argSummary(call: ToolCall, cwd?: string | null): string | null {
   if (!args || typeof args !== "object") return null;
   const obj = args as Record<string, unknown>;
   const baseCwd = cwd || (typeof obj.cwd === "string" ? obj.cwd : null);
+
+  // Background job manager (bashJob action/jobId) — same terminal icon family as bash
+  if (call.name === "bashJob" && typeof obj.action === "string") {
+    if (typeof obj.jobId === "string") return `${obj.action} ${obj.jobId}`;
+    return obj.action;
+  }
 
   // File write / edit / read tools (path, filePath, targetFile, absolutePath)
   if (typeof obj.path === "string") return toRelativePath(obj.path, baseCwd);

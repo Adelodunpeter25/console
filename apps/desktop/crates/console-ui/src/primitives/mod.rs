@@ -103,7 +103,7 @@ pub fn status_color(theme: &Theme, status: &SessionStatus) -> Hsla {
 pub fn activity_icon(tool_name: &str) -> &'static str {
     let icon = match tool_name {
         "reasoning" | "think" => IconName::Sparkle,
-        "bash" | "shell" | "command" => IconName::Terminal,
+        "bash" | "shell" | "command" | "bashJob" | "bash_job" => IconName::Terminal,
         "edit_file" | "write_file" | "str_replace" => IconName::Pencil,
         "read_file" => IconName::File,
         "list_files" | "ls" => IconName::Folder,
