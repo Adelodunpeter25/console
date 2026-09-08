@@ -496,8 +496,10 @@ impl RenderOnce for CodeViewer {
                 window.refresh();
             });
 
-        if let Some(focus_handle) = self.focus_handle {
-            container = container.track_focus(&focus_handle);
+        let focus_handle_for_click = self.focus_handle.clone();
+
+        if let Some(ref focus_handle) = self.focus_handle {
+            container = container.track_focus(focus_handle);
         }
 
         let scrollbar = self
@@ -619,6 +621,7 @@ impl RenderOnce for CodeViewer {
 
                                 let sel_mouse_down = selection_rc.clone();
                                 let ls_down = list_state_for_items.clone();
+                                let focus_handle_for_click = self.focus_handle.clone();
                                 let line_len = line.text.len();
 
                                 div()
@@ -632,6 +635,9 @@ impl RenderOnce for CodeViewer {
                                     .bg(bg)
                                     .cursor_text()
                                     .on_mouse_down(MouseButton::Left, move |event, window, cx| {
+                                        if let Some(handle) = focus_handle_for_click.as_ref() {
+                                            window.focus(handle, cx);
+                                        }
                                         let Some(state) = sel_mouse_down.as_ref() else {
                                             return;
                                         };
