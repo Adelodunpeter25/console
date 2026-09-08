@@ -7,13 +7,18 @@
 use crate::keybindings::{
     AddProject, NewWindow, OpenSettings, QuickOpenFile, ToggleLeftSidebar, ToggleRightSidebar,
 };
-use gpui::{App, Menu, MenuItem, actions};
+use gpui::{App, KeyBinding, Menu, MenuItem, actions};
 
 actions!(console_app, [Quit]);
 
 /// Register the native application menu bar and its application-level actions.
 pub fn init(cx: &mut App) {
     cx.on_action(|_: &Quit, cx| cx.quit());
+
+    // cmd-q — the standard macOS quit shortcut. Binding it here also gives
+    // the "Quit" menu item its ⌘Q key equivalent (GPUI menu items derive
+    // their displayed keystroke from the keymap).
+    cx.bind_keys([KeyBinding::new("secondary-q", Quit, None)]);
 
     cx.set_menus(vec![
         Menu::new("Console").items([
