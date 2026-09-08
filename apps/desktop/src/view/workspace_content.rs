@@ -112,11 +112,13 @@ impl ConsoleDesktopApp {
                 console_ui::CODE_LINE_HEIGHT,
             );
             let selection_state = self.viewer_selection_state(&format!("file:{}", path), cx);
+            let focus_handle = self.viewer_focus_handle(&format!("file:{}", path), cx);
             let scrollbar_state = self.viewer_scrollbar_state(&format!("file:{}", path));
             return console_ui::FileViewer::new(path.clone(), content, list_state)
                 .rc_lines(lines)
                 .selection_state(selection_state)
                 .scrollbar_state(scrollbar_state)
+                .focus_handle(focus_handle)
                 .into_any_element();
         }
 
@@ -136,11 +138,13 @@ impl ConsoleDesktopApp {
                 console_ui::CODE_LINE_HEIGHT,
             );
             let selection_state = self.viewer_selection_state(&format!("diff:{}", path), cx);
+            let focus_handle = self.viewer_focus_handle(&format!("diff:{}", path), cx);
             let scrollbar_state = self.viewer_scrollbar_state(&format!("diff:{}", path));
             return console_ui::DiffViewer::new(path.clone(), diff_result, raw_diff, list_state)
                 .rc_lines(lines)
                 .selection_state(selection_state)
                 .scrollbar_state(scrollbar_state)
+                .focus_handle(focus_handle)
                 .into_any_element();
         }
 

@@ -194,6 +194,7 @@ pub struct ConsoleDesktopApp {
         String,
         gpui::Entity<console_ui::SelectionState>,
     >,
+    pub viewer_focus_handles: std::collections::HashMap<String, gpui::FocusHandle>,
     pub viewer_scrollbar_states:
         std::collections::HashMap<String, std::rc::Rc<console_ui::ScrollbarState>>,
     pub viewer_cached_file_lines: std::collections::HashMap<
@@ -703,6 +704,7 @@ impl ConsoleDesktopApp {
             open_diff_contents: std::collections::HashMap::new(),
             viewer_list_states: std::collections::HashMap::new(),
             viewer_selection_states: std::collections::HashMap::new(),
+            viewer_focus_handles: std::collections::HashMap::new(),
             viewer_scrollbar_states: std::collections::HashMap::new(),
             viewer_cached_file_lines: std::collections::HashMap::new(),
             viewer_cached_diff_lines: std::collections::HashMap::new(),
@@ -1101,6 +1103,23 @@ impl ConsoleDesktopApp {
             .entry(id.to_string())
             .or_insert_with(|| cx.new(|_| console_ui::SelectionState::default()))
             .clone()
+    }
+
+    /// Focus handle for a code viewer tab. Cached per-id so a re-render of
+    /// the same tab keeps the same handle, preserving focus across state
+    /// updates.
+    pub fn viewer_focus_handle(
+        &mut self,
+        id: &str,
+        cx: &mut gpui::App,
+    ) -> gpui::FocusHandle {
+        if let Some(handle) = self.viewer_focus_handles.get(id) {
+            return handle.clone();
+        }
+        let handle = cx.focus_handle();
+        self.viewer_focus_handles
+            .insert(id.to_string(), handle.clone());
+        handle
     }
 
     pub fn viewer_scrollbar_state(&mut self, id: &str) -> std::rc::Rc<console_ui::ScrollbarState> {

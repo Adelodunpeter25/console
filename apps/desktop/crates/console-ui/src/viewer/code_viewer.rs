@@ -6,9 +6,9 @@ use std::rc::Rc;
 
 use gpui::{
     App, ClipboardItem, DispatchPhase, ElementId, Entity, FocusHandle, Font, FontWeight, Hsla,
-    InteractiveElement, IntoElement, ListState, MouseButton, MouseMoveEvent, MouseUpEvent,
-    ParentElement, RenderOnce, StatefulInteractiveElement, Styled, StyledText, TextRun, Window,
-    actions, canvas, div, list, prelude::*, px,
+    InteractiveElement, IntoElement, KeyBinding, ListState, MouseButton, MouseMoveEvent,
+    MouseUpEvent, ParentElement, RenderOnce, StatefulInteractiveElement, Styled, StyledText,
+    TextRun, Window, actions, canvas, div, list, prelude::*, px,
 };
 
 use crate::markdown::highlight::{self, Carry, lang_for_tag, lang_tag_for_path};
@@ -29,6 +29,20 @@ pub const CHAR_WIDTH: f32 = CODE_TEXT_SIZE * 0.6;
 pub const CODE_LINE_HEIGHT: f32 = 18.0;
 
 actions!(code_viewer, [CopySelection, SelectAll]);
+
+/// Key context active while a code viewer is focused. Cmd+C/Cmd+A bindings
+/// are scoped to it so they only fire for the viewer, not globally.
+pub const CODE_VIEWER_CONTEXT: &str = "CodeViewer";
+
+/// Bind Cmd+C and Cmd+A to the viewer's copy/select-all actions. Must run
+/// after `init_input_keybindings` so the more specific context wins over the
+/// composer's global fallback.
+pub fn init_code_viewer_keybindings(cx: &mut App) {
+    cx.bind_keys([
+        KeyBinding::new("secondary-c", CopySelection, Some(CODE_VIEWER_CONTEXT)),
+        KeyBinding::new("secondary-a", SelectAll, Some(CODE_VIEWER_CONTEXT)),
+    ]);
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CodePosition {
@@ -429,10 +443,14 @@ impl RenderOnce for CodeViewer {
             .h(px(0.0))
         };
 
+        let lines_for_select_all = self.lines.clone();
+        let selection_for_select_all = self.selection_state.clone();
+
         let mut container = div()
             .id(ElementId::Name(
                 format!("code-viewer-container-{}", self.id).into(),
             ))
+            .key_context(CODE_VIEWER_CONTEXT)
             .size_full()
             .min_h_0()
             .min_w_0()
@@ -457,6 +475,25 @@ impl RenderOnce for CodeViewer {
                 if let Some(sel) = sel {
                     copy_selection_to_clipboard(&lines_for_copy, sel, cx);
                 }
+            })
+            .on_action(move |_: &SelectAll, window, cx| {
+                let Some(state) = selection_for_select_all.as_ref() else {
+                    return;
+                };
+                let Some(last) = lines_for_select_all.last() else {
+                    return;
+                };
+                state.update(cx, |s, _| {
+                    s.selection = Some(CodeSelection::new(
+                        CodePosition { line: 0, col: 0 },
+                        CodePosition {
+                            line: lines_for_select_all.len().saturating_sub(1),
+                            col: last.text.len(),
+                        },
+                    ));
+                    s.is_dragging = false;
+                });
+                window.refresh();
             });
 
         if let Some(focus_handle) = self.focus_handle {

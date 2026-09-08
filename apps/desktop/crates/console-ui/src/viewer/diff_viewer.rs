@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use console_core::DiffResult;
-use gpui::{App, Entity, IntoElement, ListState, RenderOnce, Window};
+use gpui::{App, Entity, FocusHandle, IntoElement, ListState, RenderOnce, Window};
 
 use super::code_viewer::{CodeViewer, CodeViewerLine, SelectionState, build_diff_lines};
 use crate::primitives::scrollbar::ScrollbarState;
@@ -18,6 +18,7 @@ pub struct DiffViewer {
     list_state: ListState,
     selection_state: Option<Entity<SelectionState>>,
     scrollbar_state: Option<Rc<ScrollbarState>>,
+    focus_handle: Option<FocusHandle>,
     rc_lines: Option<Rc<Vec<CodeViewerLine>>>,
 }
 
@@ -35,6 +36,7 @@ impl DiffViewer {
             list_state,
             selection_state: None,
             scrollbar_state: None,
+            focus_handle: None,
             rc_lines: None,
         }
     }
@@ -51,6 +53,11 @@ impl DiffViewer {
 
     pub fn scrollbar_state(mut self, state: Rc<ScrollbarState>) -> Self {
         self.scrollbar_state = Some(state);
+        self
+    }
+
+    pub fn focus_handle(mut self, handle: FocusHandle) -> Self {
+        self.focus_handle = Some(handle);
         self
     }
 }
@@ -72,6 +79,10 @@ impl RenderOnce for DiffViewer {
 
         if let Some(scrollbar_state) = self.scrollbar_state {
             viewer = viewer.scrollbar_state(scrollbar_state);
+        }
+
+        if let Some(focus_handle) = self.focus_handle {
+            viewer = viewer.focus_handle(focus_handle);
         }
 
         viewer
