@@ -627,7 +627,6 @@ impl ToolCalls {
         let link_handler = self.link_handler.clone();
         let id = id.to_owned();
         div()
-            .px(px(10.0))
             .py(px(6.0))
             .child(
                 ThinkingBlock::new(id.clone(), text.to_owned(), !open)
@@ -661,7 +660,6 @@ impl ToolCalls {
             self.link_handler.clone(),
         );
         div()
-            .px(px(10.0))
             .py(px(6.0))
             .child(render_selectable_markdown(
                 text,

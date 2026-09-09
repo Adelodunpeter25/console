@@ -151,6 +151,7 @@ impl RenderOnce for ThinkingBlock {
 
         div()
             .id(ElementId::Name(block_id.into()))
+            .w_full()
             .px(px(12.0))
             .py(px(6.0))
             .rounded(px(9.0))
