@@ -78,10 +78,12 @@ export class RunService {
   /**
    * Stage (or replace) the prompt that runs automatically once the session's
    * active turn settles. Shared by both `POST /queue` (auto-pop) and
-   * `POST /steer` (abort now, drain sooner) — see `runAgentStream`'s finally
-   * block for the single place this map is read and cleared.
+   * `POST /steer` (abort now, drain sooner) — see the turn loop in
+   * `runAgentStream` for the single place staged prompts are taken and run.
+   * Returns null when the session does not exist (nothing is staged).
    */
-  queuePrompt(sessionId: string, dto: RunPromptDto): QueuedPrompt {
+  queuePrompt(sessionId: string, dto: RunPromptDto): QueuedPrompt | null {
+    if (this.sessionStorage.loadSession(sessionId) === null) return null;
     const queuedPrompt: QueuedPrompt = {
       id: randomUUID(),
       sessionId,
@@ -102,6 +104,27 @@ export class RunService {
     return this.sessionStorage.getQueuedPrompt(sessionId);
   }
 
+  /**
+   * Edit the staged prompt in place (keeps its id so clients can tell an edit
+   * apart from a delete+queue). Returns null when no prompt is staged.
+   */
+  editQueuedPrompt(sessionId: string, dto: RunPromptDto): QueuedPrompt | null {
+    const existing = this.sessionStorage.getQueuedPrompt(sessionId);
+    if (!existing) return null;
+    const updated: QueuedPrompt = {
+      ...existing,
+      prompt: dto.prompt,
+      attachments: dto.attachments,
+      modelId: dto.modelId,
+      provider: dto.provider,
+      approvalMode: dto.approvalMode,
+    };
+    RunService.pendingNextTurn.set(sessionId, dto);
+    this.sessionStorage.saveQueuedPrompt(sessionId, updated);
+    this.hubs.get(sessionId)?.broadcast({ type: "queueUpdated", queuedPrompt: updated });
+    return updated;
+  }
+
   /** Discards the queued prompt without affecting an in-flight run. */
   clearQueuedPrompt(sessionId: string): boolean {
     const had = RunService.pendingNextTurn.has(sessionId) || this.getQueuedPrompt(sessionId) !== null;
@@ -112,11 +135,35 @@ export class RunService {
   }
 
   /**
+   * Take the staged next-turn prompt, if any. Prefers the in-memory entry;
+   * falls back to the persisted row so a queue staged before a server restart
+   * still drains instead of lingering forever. Clears both stores.
+   */
+  private takeQueuedDto(sessionId: string): RunPromptDto | undefined {
+    const pending = RunService.pendingNextTurn.get(sessionId);
+    if (pending) {
+      RunService.pendingNextTurn.delete(sessionId);
+      this.sessionStorage.clearQueuedPrompt(sessionId);
+      return pending;
+    }
+    const stored = this.sessionStorage.getQueuedPrompt(sessionId);
+    if (!stored) return undefined;
+    this.sessionStorage.clearQueuedPrompt(sessionId);
+    return {
+      prompt: stored.prompt,
+      attachments: stored.attachments,
+      modelId: stored.modelId,
+      provider: stored.provider,
+      approvalMode: stored.approvalMode,
+    };
+  }
+
+  /**
    * Halt the active run and arrange for `dto` to start as the next turn as
    * soon as the aborted run settles. Does NOT call `runAgentStream` itself —
-   * the drain happens from the same `finally` block that auto-pops a queued
-   * prompt on normal completion, so a steer request can never race a natural
-   * settle into starting two turns.
+   * the drain happens in the same turn loop that auto-pops a queued prompt
+   * on normal completion, so a steer request can never race a natural settle
+   * into starting two turns.
    */
   steer(sessionId: string, dto: RunPromptDto): boolean {
     if (!RunService.activeRuns.has(sessionId)) return false;
@@ -134,9 +181,10 @@ export class RunService {
       throw new Error(`Session '${sessionId}' already has an active run.`);
     }
 
-    const abortController = new AbortController();
-    RunService.activeRuns.set(sessionId, abortController);
-
+    // One hub for the whole chain of turns: chained turns reuse it, so live
+    // SSE subscribers keep one connection with gap-free monotonic seq numbers
+    // instead of re-attaching to a fresh hub (whose restarted seq would
+    // silently drop the next turn's opening events).
     const hub = this.ensureHub(sessionId);
     const primarySubscriber: RunStreamSubscriber = {
       id: randomUUID(),
@@ -145,26 +193,39 @@ export class RunService {
     hub.subscribe(primarySubscriber);
 
     try {
-      await this.runAgentStreamInternal(sessionId, dto, hub, abortController);
-    } finally {
-      // Drain a queued/steered next turn from exactly this section — the same
-      // place `activeRuns` is cleaned up — so a steer request landing at the
-      // instant a run settles can never race a second run into starting.
-      // `RunService.activeRuns` itself is the lock; no separate mutex needed.
-      const nextDto = RunService.pendingNextTurn.get(sessionId);
-      RunService.activeRuns.delete(sessionId);
-      if (nextDto) {
-        RunService.pendingNextTurn.delete(sessionId);
-        this.sessionStorage.clearQueuedPrompt(sessionId);
-        hub.broadcast({ type: "queueUpdated", queuedPrompt: null });
+      let current: RunPromptDto | undefined = dto;
+      let abortController = new AbortController();
+      RunService.activeRuns.set(sessionId, abortController);
+      while (current) {
+        const turnDto = current;
+        current = undefined;
+        let turnError: unknown;
+        try {
+          await this.runAgentStreamInternal(sessionId, turnDto, hub, abortController);
+        } catch (err) {
+          turnError = err;
+        }
+        // Drain a staged next turn in exactly this section — the same place
+        // `activeRuns` is handed over — so a steer request landing at the
+        // instant a turn settles can never race a second run into starting,
+        // and `isRunActive` never flickers mid-chain (no 409 window for
+        // re-attaching clients). Everything here is synchronous. A failed
+        // turn holds (not auto-runs, not drops) any staged prompt so the user
+        // can steer, edit, or delete it.
+        const next = turnError === undefined ? this.takeQueuedDto(sessionId) : undefined;
+        if (next) {
+          hub.broadcast({ type: "queueUpdated", queuedPrompt: null });
+        }
+        abortController = new AbortController();
+        if (next) RunService.activeRuns.set(sessionId, abortController);
+        else RunService.activeRuns.delete(sessionId);
+        current = next;
+        if (turnError !== undefined) throw turnError;
       }
+    } finally {
+      hub.unsubscribe(primarySubscriber.id);
       await hub.destroy();
       this.hubs.delete(sessionId);
-      if (nextDto) {
-        // Fire-and-forget: reuse the same onEvent chain so SSE subscribers
-        // keep receiving frames for the next turn without reconnecting.
-        void this.runAgentStream(sessionId, nextDto, onEvent);
-      }
     }
   }
 
@@ -388,13 +449,21 @@ export class RunService {
     return this.decisions.approvePermission(sessionId, requestId, allow);
   }
 
-  abortRun(sessionId: string): boolean {
+  abortRun(sessionId: string, options?: { clearQueue?: boolean }): boolean {
     const controller = RunService.activeRuns.get(sessionId);
     if (!controller) return false;
 
     controller.abort();
     this.decisions.rejectAllForSession(sessionId, "Run aborted");
-    // Do NOT delete activeRuns here — the run's `finally` owns that
+    if (options?.clearQueue) {
+      // Plain Stop means stop everything: a staged next turn predicated on
+      // the aborted turn must not fire. (Steer calls abortRun without the
+      // flag, so the prompt it just staged is unaffected.)
+      RunService.pendingNextTurn.delete(sessionId);
+      this.sessionStorage.clearQueuedPrompt(sessionId);
+      this.hubs.get(sessionId)?.broadcast({ type: "queueUpdated", queuedPrompt: null });
+    }
+    // Do NOT delete activeRuns here — the run's turn loop owns that
     // lifecycle. Deleting immediately would let a second `runAgentStream`
     // start before the first settles (shared hub/session race).
     return true;

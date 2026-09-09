@@ -213,4 +213,101 @@ await withMockStream(
   },
 );
 
+// 7. PUT /queue edits the staged prompt in place (same id), 404s when empty.
+{
+  const sessionId = await createSession();
+  const queued = await post(`/api/sessions/${sessionId}/queue`, { prompt: "original" });
+  assert.equal(queued.status, 200);
+  const originalId = queued.json.data.id as string;
+
+  const putRes = await app.request(`/api/sessions/${sessionId}/queue`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt: "edited" }),
+  });
+  assert.equal(putRes.status, 200);
+  const putJson = (await putRes.json()) as any;
+  assert.equal(putJson.success, true);
+  assert.equal(putJson.data.prompt, "edited");
+  assert.equal(putJson.data.id, originalId, "edit must keep the queued prompt id");
+
+  const getRes = await app.request(`/api/sessions/${sessionId}/queue`);
+  const getJson = (await getRes.json()) as any;
+  assert.equal(getJson.data.prompt, "edited");
+  assert.equal(getJson.data.id, originalId);
+
+  const emptyEdit = await app.request(`/api/sessions/${sessionId}/queue`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt: "   " }),
+  });
+  assert.equal(emptyEdit.status, 400);
+
+  const freshId = await createSession();
+  const missing = await app.request(`/api/sessions/${freshId}/queue`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt: "nothing staged" }),
+  });
+  assert.equal(missing.status, 404);
+  console.log("  ✅ PUT /queue edits in place and 404s when nothing is staged");
+}
+
+// 8. POST /abort discards a staged prompt so Stop means stop everything.
+await withMockStream(
+  async function* () {
+    yield { type: "text", text: "long turn" };
+  },
+  async () => {
+    const sessionId = crypto.randomUUID();
+    const runService = new RunService();
+    const prompts: string[] = [];
+
+    const hangingStreamFn: StreamFn = async function* (params) {
+      if (!params.signal?.aborted) {
+        await new Promise<void>((resolve) => {
+          params.signal?.addEventListener("abort", () => resolve());
+        });
+      }
+      yield { type: "text", text: "unreachable" };
+    };
+    const original = PROVIDER_CATALOG.antigravity.getStreamFn;
+    PROVIDER_CATALOG.antigravity.getStreamFn = () => hangingStreamFn;
+
+    try {
+      const runPromise = runService.runAgentStream(
+        sessionId,
+        { prompt: "turn one prompt", provider: "antigravity", modelId: "gemini-3.1-pro-high" },
+        (event) => {
+          if (event.type === "turnStart") prompts.push(event.prompt);
+        },
+      );
+
+      for (let i = 0; i < 50 && !RunService.isRunActive(sessionId); i++) {
+        await new Promise((r) => setTimeout(r, 2));
+      }
+      assert.ok(RunService.isRunActive(sessionId));
+
+      runService.queuePrompt(sessionId, {
+        prompt: "queued follow-up",
+        provider: "antigravity",
+        modelId: "gemini-3.1-pro-high",
+      });
+
+      const abortRes = await post(`/api/sessions/${sessionId}/abort`, {});
+      assert.equal(abortRes.status, 200);
+
+      await runPromise;
+      // Give any wrongly-drained turn two a chance to start.
+      await new Promise((r) => setTimeout(r, 100));
+
+      assert.deepEqual(prompts, ["turn one prompt"], "aborted run must not auto-start the queued prompt");
+      assert.equal(runService.getQueuedPrompt(sessionId), null, "abort must clear the staged prompt");
+      console.log("  ✅ POST /abort discards the staged prompt");
+    } finally {
+      PROVIDER_CATALOG.antigravity.getStreamFn = original;
+    }
+  },
+);
+
 console.log("Prompt queueing & steering tests passed!\n");

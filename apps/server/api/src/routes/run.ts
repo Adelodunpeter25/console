@@ -154,11 +154,12 @@ runRoutes.get("/sessions/:id/run/stream", (c) => {
 });
 
 /**
- * POST /api/sessions/:id/abort — Abort an active run for a session.
+ * POST /api/sessions/:id/abort — Abort an active run for a session. Also
+ * discards any staged next-turn prompt: Stop means stop everything.
  */
 runRoutes.post("/sessions/:id/abort", (c) => {
   const sessionId = c.req.param("id");
-  const aborted = runService.abortRun(sessionId);
+  const aborted = runService.abortRun(sessionId, { clearQueue: true });
 
   if (!aborted) {
     return c.json(
@@ -187,7 +188,36 @@ runRoutes.post("/sessions/:id/queue", async (c) => {
   }
 
   const queuedPrompt = runService.queuePrompt(sessionId, body);
+  if (!queuedPrompt) {
+    return c.json(
+      { success: false, error: `No session found for id '${sessionId}'.` },
+      404,
+    );
+  }
   return c.json({ success: true, data: queuedPrompt });
+});
+
+/**
+ * PUT /api/sessions/:id/queue — Edit the staged prompt in place (keeps its
+ * id). 404s when no prompt is staged.
+ */
+runRoutes.put("/sessions/:id/queue", async (c) => {
+  const sessionId = c.req.param("id");
+  const body = await c.req.json<RunPromptDto>();
+  const prompt = body.prompt?.trim();
+
+  if (!prompt) {
+    return c.json({ success: false, error: "Field 'prompt' is required." }, 400);
+  }
+
+  const updated = runService.editQueuedPrompt(sessionId, body);
+  if (!updated) {
+    return c.json(
+      { success: false, error: `No queued prompt found for session '${sessionId}'.` },
+      404,
+    );
+  }
+  return c.json({ success: true, data: updated });
 });
 
 /**
