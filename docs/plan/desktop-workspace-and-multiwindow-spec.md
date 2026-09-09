@@ -43,9 +43,12 @@ Instead of generic arbitrary pane splits (tiling windows into fragmented sub-pan
     - **Same Project**: If the clicked chat belongs to the *same* `project_id`/`cwd` as the current window, it adds or activates a tab in the top tab bar.
     - **Different Project**: If the clicked chat belongs to a *different* project, it seamlessly switches the workspace context to that project (or opens it in a new window if requested).
 
-### C. Center Cockpit: Single Focused Chat + Project Tabs
-- Replaces generic left/right nested split panes.
-- Top tab bar displays open tasks/chats for the current project.
+### C. Center Cockpit: Project Tabs + Same-Workspace Splits
+- A workspace shows one project's tabs (chats, terminals, files) in a top tab bar.
+- Splits are intentionally kept: panes may be tiled side-by-side **as long as every
+  tab in the split tree belongs to the workspace's own project**. Cross-folder tabs
+  are never allowed in the tree (enforced on folder change, persist, restore, and
+  session open).
 - Center view is a focused, high-performance chat transcript and composer without visual clutter.
 
 ### D. Right Sidebar: Split Inspector & Execution Cockpit
@@ -90,18 +93,20 @@ Because the workspace context is cleanly bounded by Project:
 
 ## 4. Implementation Phasing
 
-### Phase 1: Project-Centric Tabbed Workspace (Immediate Next Step)
-- Connect sidebar chat selection to project context detection:
+### Phase 1: Project-Centric Tabbed Workspace — DONE
+- [x] Connect sidebar chat selection to project context detection:
   - If selected chat matches active project: add/select top tab.
   - If selected chat has a different project: switch project context and swap top tabs.
-- Streamline center layout: eliminate complex nested split panes in favor of top project tabs.
+- [x] Same-workspace splits kept by decision: panes may tile chats, terminals, and
+  files side-by-side, constrained to the workspace's own project. Cross-folder tabs
+  are rejected (folder change moves the tab, persist/restore/session-open filter).
+- Deliberately NOT done: eliminating split panes — splits stay.
 
-### Phase 2: Multi-Window Support
-- Update GPUI desktop entry point to support opening and tracking multiple `WorkspaceWindow` entities.
-- Implement window-level persistence in `persistence::window` (saving an array of open window states).
-- Map `⌘⇧N` (New Window) and proper window-closing semantics (`⌘W` closes focused window, `⌘Q` quits app).
+### Phase 2: Multi-Window Support — OUT OF SCOPE (not planned)
+- Basic New Window (`⌘⇧N`) exists; full multi-window persistence (array of window
+  states, restoring all project windows, `⌘W` closes window) is not being pursued.
 
-### Phase 3: Right Sidebar Bottom Split — Terminal & Run Scripts (Future Roadmap)
-- Implement bottom split container in the right sidebar with drag-resize handle.
-- Integrate terminal emulator tabs inside the bottom-right panel.
-- Add project script configuration (`console.json` or project settings) to surface one-click `Run` play buttons (e.g. dev server, build commands) alongside execution logs.
+### Phase 3: Right Sidebar Bottom Split — Terminal & Run Scripts (TO BE DONE)
+- [x] Implement bottom split container in the right sidebar with drag-resize handle.
+- [x] Integrate terminal emulator tabs inside the bottom-right panel.
+- [ ] Add project script configuration (`console.json` or project settings) to surface one-click `Run` play buttons (e.g. dev server, build commands) alongside execution logs.
