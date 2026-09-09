@@ -116,16 +116,12 @@ impl RenderOnce for WorkspaceTabBar {
                             .group(group_name.clone())
                             .when(is_active, |s| {
                                 s.bg(theme.surface)
-                                    .border_b_2()
-                                    // The focused pane's active tab reads orange;
-                                    // other panes' active tabs read gray so focus
-                                    // is visible across splits.
-                                    .border_color(if pane_focused {
-                                        theme.accent
-                                    } else {
-                                        theme.border_strong
-                                    })
                                     .text_color(theme.text)
+                                    // Only the focused pane shows the orange
+                                    // underline; other panes show none.
+                                    .when(pane_focused, |s| {
+                                        s.border_b_2().border_color(theme.accent)
+                                    })
                             })
                             .when(!is_active, |s| {
                                 s.text_color(theme.text_tertiary)
