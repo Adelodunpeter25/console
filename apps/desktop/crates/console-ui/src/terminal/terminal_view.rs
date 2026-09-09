@@ -99,6 +99,10 @@ pub struct TerminalView {
     /// Measured cell metrics from the last canvas paint. Mouse→cell mapping
     /// must use these (not constants) or clicks land on the wrong cells.
     cell_metrics: Option<(Pixels, Pixels)>,
+    /// Window-space origin of the painted grid (canvas bounds + padding) from
+    /// the last paint. Mouse events are window-relative; without subtracting
+    /// this, every click lands offset by wherever the pane sits on screen.
+    grid_origin: Option<gpui::Point<Pixels>>,
     /// Last mouse-down for double-click-to-open detection.
     last_click: Option<(std::time::Instant, TerminalCellPos)>,
     /// Button currently held while the PTY has mouse reporting enabled —
@@ -130,6 +134,7 @@ impl TerminalView {
             paint_cache: Rc::new(RefCell::new(HashMap::new())),
             cache_theme: None,
             cell_metrics: None,
+            grid_origin: None,
             last_click: None,
             mouse_down: None,
         };
@@ -396,8 +401,14 @@ impl TerminalView {
     /// put clicks/selections on the wrong cells.
     fn cell_at_point(&self, x: Pixels, y: Pixels) -> TerminalCellPos {
         let (cell_w, cell_h) = self.cell_metrics.unwrap_or((px(7.2), px(16.0)));
-        let col = ((x - px(8.0)).max(px(0.0)) / cell_w).floor() as u16;
-        let row = ((y - px(8.0)).max(px(0.0)) / cell_h).floor() as u16;
+        // Mouse events are window-relative; the grid is painted at the canvas
+        // bounds origin + padding. Subtract it or every click lands offset by
+        // wherever the pane sits in the window.
+        let origin = self
+            .grid_origin
+            .unwrap_or_else(|| gpui::point(px(0.0), px(0.0)));
+        let col = ((x - origin.x).max(px(0.0)) / cell_w).floor() as u16;
+        let row = ((y - origin.y).max(px(0.0)) / cell_h).floor() as u16;
         TerminalCellPos {
             col: col.min(self.size.cols.saturating_sub(1)),
             row: row.min(self.size.rows.saturating_sub(1)),
@@ -888,6 +899,10 @@ impl Render for TerminalView {
 
                                     view_for_canvas.update(cx, |view, _| {
                                         view.cell_metrics = Some((cell_w, cell_h));
+                                        // Window-space grid origin, used by
+                                        // cell_at_point to map mouse events.
+                                        view.grid_origin =
+                                            Some(bounds.origin + gpui::point(px(8.0), px(8.0)));
                                         if view.size.cols != cols || view.size.rows != rows {
                                             view.size = TerminalSize { cols, rows };
                                             if let Some(h) = &view.handle {

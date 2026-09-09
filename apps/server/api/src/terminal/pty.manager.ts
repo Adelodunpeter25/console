@@ -163,7 +163,7 @@ export class TerminalPtyManager {
     const id: TerminalId = randomUUID();
     const session: PtySession = {
       id,
-      // Assigned immediately after construction below.
+      // Assigned in startShell(); null until then.
       terminal: undefined as unknown as Bun.Terminal,
       // Assigned in startShell(); null until then.
       proc: null,
@@ -184,20 +184,6 @@ export class TerminalPtyManager {
     this.sessions.set(id, session);
     this.spawnTimestamps.push(Date.now());
 
-    session.terminal = new Bun.Terminal({
-      name: "xterm-256color",
-      cols,
-      rows,
-      // Buffer output that arrives before the WebSocket route has attached
-      // callbacks so the initial shell prompt is never dropped. Raw bytes —
-      // decoding is the client's (or the JSON-compat route's) job.
-      data: (_terminal, data) => {
-        if (data.length > 0) {
-          this.handleOutput(session, data);
-        }
-      },
-    });
-
     const ready = new Promise<TerminalSpawnedEvent>((resolve, reject) => {
       session.resolveStart = resolve;
       session.rejectStart = reject;
@@ -213,11 +199,28 @@ export class TerminalPtyManager {
     if (session.shellStarted || session.killed) return;
     session.shellStarted = true;
 
+    // IMPORTANT: use the INLINE terminal options form, not a pre-created
+    // `new Bun.Terminal()` object. With a pre-created Terminal, Bun.spawn
+    // skips setsid()/TIOCSCTTY — the child gets no controlling terminal, so
+    // /dev/tty fails ("device not configured") and TUIs like vx or amp hang
+    // or refuse to start. The inline form attaches the PTY as the controlling
+    // terminal like forkpty(3). See oven-sh/bun#33237.
     const proc = Bun.spawn([session.shell], {
-      terminal: session.terminal,
+      terminal: {
+        name: "xterm-256color",
+        cols: session.cols,
+        rows: session.rows,
+        // Route PTY output into the session's coalescing queue.
+        data: (_terminal, data) => {
+          if (data.length > 0) {
+            this.handleOutput(session, data);
+          }
+        },
+      },
       cwd: session.cwd,
       env: shellEnv(),
     });
+    session.terminal = proc.terminal;
     session.proc = {
       pid: proc.pid,
       exited: proc.exited,
