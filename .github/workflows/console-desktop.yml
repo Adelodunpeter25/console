@@ -1,0 +1,68 @@
+# Packages the GPUI desktop app (Console.app) for Intel + Apple Silicon macOS
+# on each push to main, then uploads them to a rolling GitHub Release tagged
+# `console-desktop` (latest always wins), mirroring console-server.yml.
+#
+# Assets: Console-macos-x64.zip + Console-macos-arm64.zip (ditto-packed .app
+# bundles, ad-hoc signed — see apps/desktop/scripts/build.sh).
+name: Build console-desktop
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    strategy:
+      matrix:
+        include:
+          - os-suffix: macos-x64
+            rust-target: x86_64-apple-darwin
+          - os-suffix: macos-arm64
+            rust-target: aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop
+          key: ${{ matrix.rust-target }}
+
+      # Intel cross-compiles from the Apple Silicon runner via the universal
+      # macOS SDK; icon generation (sips/iconutil) and ad-hoc codesign run
+      # natively on the runner.
+      - name: Package Console.app
+        run: >
+          bash apps/desktop/scripts/build.sh
+          --mode prod
+          --release
+          --bundle-id com.console.desktop
+          --app-name "Console"
+          --target ${{ matrix.rust-target }}
+          --out-dir "$RUNNER_TEMP/dist"
+
+      # ditto preserves codesigning and resource forks inside the zip.
+      - name: Zip app bundle
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$RUNNER_TEMP/dist/Console.app" \
+            "Console-${{ matrix.os-suffix }}.zip"
+
+      - name: Upload to rolling release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: console-desktop
+          name: console-desktop (latest)
+          prerelease: false
+          # console-server owns the repo's "latest" pointer; don't flap it.
+          make_latest: false
+          files: |
+            Console-${{ matrix.os-suffix }}.zip

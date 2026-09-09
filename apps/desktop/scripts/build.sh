@@ -10,6 +10,7 @@ IS_RELEASE=false
 BUNDLE_ID=""
 APP_NAME=""
 OUT_DIR="$DESKTOP_DIR/dist"
+TARGET_TRIPLE=""
 EXTRA_CARGO_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -38,6 +39,12 @@ while [[ $# -gt 0 ]]; do
             ;;
         --out-dir)
             OUT_DIR="$2"
+            shift 2
+            ;;
+        # Cross-compile triple (e.g. x86_64-apple-darwin on an arm64 host).
+        # The binary lands under target/<triple>/, handled in section 2.
+        --target)
+            TARGET_TRIPLE="$2"
             shift 2
             ;;
         *)
@@ -110,13 +117,20 @@ if [[ "$IS_RELEASE" == true || "$MODE" == "prod" ]]; then
 fi
 
 echo "==> Building binary with cargo..."
+if [[ -n "$TARGET_TRIPLE" ]]; then
+    BUILD_FLAGS+=("--target" "$TARGET_TRIPLE")
+fi
 if [[ ${#EXTRA_CARGO_ARGS[@]} -gt 0 ]]; then
     cargo build "${BUILD_FLAGS[@]}" "${EXTRA_CARGO_ARGS[@]}"
 else
     cargo build "${BUILD_FLAGS[@]}"
 fi
 
-BINARY_SRC="$DESKTOP_DIR/target/$TARGET_SUBDIR/console"
+if [[ -n "$TARGET_TRIPLE" ]]; then
+    BINARY_SRC="$DESKTOP_DIR/target/$TARGET_TRIPLE/$TARGET_SUBDIR/console"
+else
+    BINARY_SRC="$DESKTOP_DIR/target/$TARGET_SUBDIR/console"
+fi
 if [[ ! -f "$BINARY_SRC" ]]; then
     BINARY_SRC="$WORKSPACE_ROOT/target/$TARGET_SUBDIR/console"
 fi
