@@ -229,7 +229,7 @@ function renderApprovalModeInstruction(mode?: ApprovalMode): string {
         "- Freely explore the codebase, read files, run diagnostic commands, and use subagents.",
         "- You MAY write, edit, and execute commands as needed to verify your plan.",
         "- Formulate a detailed, step-by-step implementation plan artifact.",
-        "- Present your proposed implementation plan for user review, then proceed to execution.",
+        "- Present your proposed implementation plan for user review without implementing.",
         "</approval-mode-instructions>",
       ].join("\n");
 
