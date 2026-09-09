@@ -15,6 +15,11 @@ use console_ui::init_input_keybindings;
 use gpui::App;
 
 fn main() {
+    // Route log:: macros to stderr (see scripts/dev.sh: RUST_LOG controls the
+    // level, reload.sh captures output to dist/.dev_console.log). Without this
+    // every log:: call in the codebase is silently discarded.
+    env_logger::init();
+
     let tokio_runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()

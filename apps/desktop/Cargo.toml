@@ -35,6 +35,7 @@ tokio-stream = "0.1"
 tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
 anyhow = "1"
 log = "0.4"
+env_logger = "0.11"
 urlencoding = "2.1"
 eventsource-stream = "0.2"
 unicode-segmentation = "1.12"

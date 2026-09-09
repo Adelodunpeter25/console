@@ -47,6 +47,11 @@ build_dev_bundle
 if [[ "$WATCH_MODE" == true ]] && command -v cargo-watch >/dev/null 2>&1; then
     echo "==> Starting Console Dev in watch mode (auto-reload on save)..."
     export CONSOLE_ENV=dev
+    # Default log filter: our crates at debug (terminal key tracing etc.),
+    # everything else at warn. Override per-run, e.g. RUST_LOG=debug ./scripts/dev.sh
+    # Logs land in dist/.dev_console.log — tail it in another terminal:
+    #   tail -f "$DESKTOP_DIR/dist/.dev_console.log"
+    export RUST_LOG="${RUST_LOG:-warn,console_ui=debug,console_core=debug,console_app=debug}"
     cd "$DESKTOP_DIR"
 
     # Trap to kill app when user hits Ctrl+C in terminal
@@ -78,5 +83,6 @@ if [[ "$WATCH_MODE" == true ]] && command -v cargo-watch >/dev/null 2>&1; then
 else
     echo "==> Launching Console Dev ($APP_PATH)..."
     export CONSOLE_ENV=dev
+    export RUST_LOG="${RUST_LOG:-warn,console_ui=debug,console_core=debug,console_app=debug}"
     exec "$APP_EXEC"
 fi

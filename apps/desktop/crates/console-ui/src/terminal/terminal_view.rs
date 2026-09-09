@@ -9,7 +9,10 @@ use gpui::{
 use termy_core::{
     TerminalKeyEventKind, TerminalKeyboardMode, TermyKeystroke, TermyModifiers, keystroke_to_input,
 };
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ops::Range;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use super::theme::TerminalTheme;
@@ -22,6 +25,52 @@ pub struct TerminalCellPos {
 }
 
 /// Drop-in terminal pane. Owns its `AlacrittyBackend` + WS `TerminalHandle`,
+/// feeds server output → grid → snapshot, and forwards keyboard → `input`.
+///
+/// One terminal row, pre-shaped. Repainting it costs a few quads plus cached
+/// glyph paint instead of a full text-shaping pass — this is what keeps
+/// constantly-redrawing TUIs (btop, editors) cheap: unchanged rows never
+/// re-shape, no matter how often the frame repaints.
+struct CachedRowPaint {
+    hash: u64,
+    bg_runs: Vec<(usize, usize, gpui::Hsla)>,
+    text_runs: Vec<CachedTextRun>,
+}
+
+struct CachedTextRun {
+    start_col: usize,
+    shaped: gpui::ShapedLine,
+}
+
+fn hash_cell_runs(runs: &[CellRun]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for run in runs {
+        run.text.hash(&mut h);
+        run.count.hash(&mut h);
+        for f in [
+            run.fg.h, run.fg.s, run.fg.l, run.fg.a, run.bg.h, run.bg.s, run.bg.l,
+            run.bg.a,
+        ] {
+            f.to_bits().hash(&mut h);
+        }
+        run.bold.hash(&mut h);
+        run.italic.hash(&mut h);
+        run.underline.hash(&mut h);
+    }
+    h.finish()
+}
+
+struct CellRun {
+    start_col: usize,
+    count: usize,
+    fg: gpui::Hsla,
+    bg: gpui::Hsla,
+    bold: bool,
+    italic: bool,
+    underline: bool,
+    text: String,
+}
 /// feeds server output → grid → snapshot, and forwards keyboard → `input`.
 ///
 /// ```ignore
@@ -39,9 +88,11 @@ pub struct TerminalView {
     selection_anchor: Option<TerminalCellPos>,
     selection_head: Option<TerminalCellPos>,
     selection_dragging: bool,
-    /// Damage from the last snapshot: repaint only these rows. Termy's damage
-    /// tracking clears on read, so this always pairs with `snapshot` above.
-    damage: Option<termy_core::TerminalDamageSnapshot>,
+    /// Paint cache: row → pre-shaped runs. Shared with the paint closure so
+    /// frames repaint cached rows without shaping. Cleared on theme change
+    /// (resolved colors are baked into cached runs).
+    paint_cache: Rc<RefCell<HashMap<u16, CachedRowPaint>>>,
+    cache_theme: Option<(gpui::Hsla, gpui::Hsla)>,
     /// Measured cell metrics from the last canvas paint. Mouse→cell mapping
     /// must use these (not constants) or clicks land on the wrong cells.
     cell_metrics: Option<(Pixels, Pixels)>,
@@ -70,7 +121,8 @@ impl TerminalView {
             selection_anchor: None,
             selection_head: None,
             selection_dragging: false,
-            damage: None,
+            paint_cache: Rc::new(RefCell::new(HashMap::new())),
+            cache_theme: None,
             cell_metrics: None,
             last_click: None,
         };
@@ -121,7 +173,7 @@ impl TerminalView {
             // (e.g. `git push` progress), so run the whole lock-and-snapshot on
             // the background executor and only hop back to the main thread to
             // apply the result.
-            let (initial_snapshot, initial_status, initial_error, initial_damage) = cx
+            let (initial_snapshot, initial_status, initial_error) = cx
                 .background_executor()
                 .spawn({
                     let handle = handle.clone();
@@ -129,8 +181,7 @@ impl TerminalView {
                         let snapshot = handle.snapshot().await;
                         let status = handle.status().await;
                         let error = handle.error.read().await.clone();
-                        let damage = handle.damage_snapshot().await;
-                        (snapshot, status, error, damage)
+                        (snapshot, status, error)
                     }
                 })
                 .await;
@@ -140,7 +191,6 @@ impl TerminalView {
                 view.snapshot = Some(initial_snapshot);
                 view.status = initial_status;
                 view.error = initial_error;
-                view.damage = Some(initial_damage);
                 cx.notify();
             });
 
@@ -157,21 +207,19 @@ impl TerminalView {
                     // snapshot above): termy's blocking mutex must never be
                     // awaited on the main thread.
                     let handle_for_snapshot = handle_for_watch.clone();
-                    let (snapshot, status, error, damage) = cx
+                    let (snapshot, status, error) = cx
                         .background_executor()
                         .spawn(async move {
                             let snapshot = handle_for_snapshot.snapshot().await;
                             let status = handle_for_snapshot.status().await;
                             let error = handle_for_snapshot.error.read().await.clone();
-                            let damage = handle_for_snapshot.damage_snapshot().await;
-                            (snapshot, status, error, damage)
+                            (snapshot, status, error)
                         })
                         .await;
                     let _ = this_watch.update(cx, |view, cx| {
                         view.snapshot = Some(snapshot);
                         view.status = status;
                         view.error = error;
-                        view.damage = Some(damage);
                         cx.notify();
                     });
                 }
@@ -437,15 +485,13 @@ impl Render for TerminalView {
             .map(|s| s.bracketed_paste)
             .unwrap_or(false);
         let selection_range = self.selection_range();
-        // Damage → dirty row set, computed here (owned) so the paint closure
-        // stays 'static without cloning termy types. None = repaint all.
-        let repaint_rows: Option<std::collections::HashSet<u16>> = match &self.damage {
-            None => None,
-            Some(termy_core::TerminalDamageSnapshot::Full) => None,
-            Some(termy_core::TerminalDamageSnapshot::Partial(spans)) => {
-                Some(spans.iter().map(|s| s.row as u16).collect())
-            }
-        };
+        // Theme change invalidates every cached row (resolved colors are
+        // baked into cached runs).
+        if self.cache_theme != Some((ttheme.background, ttheme.foreground)) {
+            self.paint_cache.borrow_mut().clear();
+            self.cache_theme = Some((ttheme.background, ttheme.foreground));
+        }
+        let paint_cache = self.paint_cache.clone();
 
         div()
             .id("terminal-view")
@@ -679,6 +725,7 @@ impl Render for TerminalView {
                             },
                             {
                                 let snapshot = snapshot.clone();
+                                let paint_cache = paint_cache.clone();
                                 let view_for_canvas = view_handle.clone();
                                 let focus_for_canvas = self.focus.clone();
                                 move |bounds, (cols, rows, cell_w, cell_h), window, cx| {
@@ -706,7 +753,7 @@ impl Render for TerminalView {
                                         cell_h,
                                         snapshot.as_ref(),
                                         selection_range,
-                                        repaint_rows.as_ref(),
+                                        &paint_cache,
                                         ttheme,
                                         window,
                                         cx,
@@ -735,7 +782,7 @@ fn render_canvas_grid(
     cell_h: gpui::Pixels,
     snapshot: Option<&console_core::types::terminal::TerminalGridSnapshot>,
     selection_range: Option<(TerminalCellPos, TerminalCellPos)>,
-    repaint_rows: Option<&std::collections::HashSet<u16>>,
+    paint_cache: &Rc<RefCell<HashMap<u16, CachedRowPaint>>>,
     theme: TerminalTheme,
     window: &mut Window,
     cx: &mut App,
@@ -756,19 +803,6 @@ fn render_canvas_grid(
         if row_idx as u16 >= rows {
             break;
         }
-        // Damage repaint: skip rows the emulator reports clean. Cursor and
-        // selection rows always repaint — that state lives outside damage.
-        let row_u16 = row_idx as u16;
-        if let Some(dirty) = repaint_rows {
-            let cursor_here = cursor.visible && row_u16 == cursor.row;
-            let selection_here = match selection_range {
-                Some((start, end)) => row_u16 >= start.row && row_u16 <= end.row,
-                None => false,
-            };
-            if !dirty.contains(&row_u16) && !cursor_here && !selection_here {
-                continue;
-            }
-        }
         let y = origin.y + cell_h * row_idx as f32;
 
         // Collect the links overlapping this row once per row instead of
@@ -779,17 +813,6 @@ fn render_canvas_grid(
             .iter()
             .filter(|l| row_idx as u16 >= l.start_row && row_idx as u16 <= l.end_row)
             .collect();
-
-        struct CellRun {
-            start_col: usize,
-            count: usize,
-            fg: gpui::Hsla,
-            bg: gpui::Hsla,
-            bold: bool,
-            italic: bool,
-            underline: bool,
-            text: String,
-        }
 
         let mut runs: Vec<CellRun> = Vec::new();
 
@@ -892,6 +915,52 @@ fn render_canvas_grid(
             }
         }
 
+        // Shape cache: unchanged rows repaint stored quads + shaped lines
+        // without shaping. Cursor/selection rows bypass (that state isn't in
+        // the hash).
+        let row_u16 = row_idx as u16;
+        let cursor_here = cursor.visible && row_u16 == cursor.row;
+        let selection_here = match selection_range {
+            Some((start, end)) => row_u16 >= start.row && row_u16 <= end.row,
+            None => false,
+        };
+        let cacheable = !cursor_here && !selection_here;
+        let row_hash: Option<u64> = if cacheable { Some(hash_cell_runs(&runs)) } else { None };
+        if let Some(hash) = row_hash {
+            let hit = paint_cache
+                .borrow()
+                .get(&row_u16)
+                .map(|entry| entry.hash == hash)
+                .unwrap_or(false);
+            if hit {
+                if let Some(entry) = paint_cache.borrow().get(&row_u16) {
+                    for (start_col, count, bg) in &entry.bg_runs {
+                        if *bg != theme.background {
+                            let bg_quad = gpui::Bounds {
+                                origin: gpui::point(origin.x + cell_w * *start_col as f32, y),
+                                size: gpui::size(cell_w * *count as f32, cell_h),
+                            };
+                            window.paint_quad(gpui::fill(bg_quad, *bg));
+                        }
+                    }
+                    for text in &entry.text_runs {
+                        let _ = text.shaped.paint(
+                            gpui::point(origin.x + cell_w * text.start_col as f32, y),
+                            cell_h,
+                            gpui::TextAlign::Left,
+                            None,
+                            window,
+                            cx,
+                        );
+                    }
+                }
+                continue;
+            }
+        }
+
+        let mut cached_bg: Vec<(usize, usize, gpui::Hsla)> = Vec::new();
+        let mut cached_text: Vec<CachedTextRun> = Vec::new();
+
         for run in runs {
             let run_x = origin.x + cell_w * run.start_col as f32;
             let run_w = cell_w * run.count as f32;
@@ -902,6 +971,9 @@ fn render_canvas_grid(
                     size: gpui::size(run_w, cell_h),
                 };
                 window.paint_quad(gpui::fill(bg_quad, run.bg));
+                if cacheable {
+                    cached_bg.push((run.start_col, run.count, run.bg));
+                }
             }
 
             if !run.text.trim().is_empty() || run.underline {
@@ -945,6 +1017,12 @@ fn render_canvas_grid(
                     &[text_run],
                     None,
                 );
+                if cacheable {
+                    cached_text.push(CachedTextRun {
+                        start_col: run.start_col,
+                        shaped: shaped.clone(),
+                    });
+                }
                 let _ = shaped.paint(
                     gpui::point(run_x, y),
                     cell_h,
@@ -954,6 +1032,17 @@ fn render_canvas_grid(
                     cx,
                 );
             }
+        }
+
+        if cacheable {
+            paint_cache.borrow_mut().insert(
+                row_u16,
+                CachedRowPaint {
+                    hash: row_hash.unwrap_or(0),
+                    bg_runs: cached_bg,
+                    text_runs: cached_text,
+                },
+            );
         }
     }
 }

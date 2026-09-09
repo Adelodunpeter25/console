@@ -30,5 +30,8 @@ pkill -f "$APP_EXEC" 2>/dev/null || true
 
 # Launch new instance in background and store PID
 export CONSOLE_ENV=dev
-"$APP_EXEC" >/dev/null 2>&1 &
+# Keep stdout/stderr in a log file (was /dev/null, which swallowed every
+# log:: line). Tail it with: tail -f "$DESKTOP_DIR/dist/.dev_console.log"
+LOG_FILE="$DESKTOP_DIR/dist/.dev_console.log"
+"$APP_EXEC" >>"$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"
