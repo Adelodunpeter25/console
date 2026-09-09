@@ -46,6 +46,10 @@ export function isTerminalUpgradeRequest(req: Request): boolean {
 const HIGH_WATER = 1 << 20; // 1 MiB
 const LOW_WATER = HIGH_WATER / 2;
 
+/** Shared frame decoder: WS message frames are complete units, so one
+    stateless decoder serves every message without per-frame allocation. */
+const frameDecoder = new TextDecoder();
+
 export const terminalWebsocketHandlers = {
   websocket: {
     data: {} as TerminalSocketData,
@@ -127,7 +131,7 @@ export const terminalWebsocketHandlers = {
       let frame: TerminalClientMessage;
       try {
         frame = JSON.parse(
-          typeof data === "string" ? data : new TextDecoder().decode(data),
+          typeof data === "string" ? data : frameDecoder.decode(data),
         ) as TerminalClientMessage;
       } catch {
         ws.send(JSON.stringify({ type: "error", message: "Invalid terminal frame: expected JSON." }));

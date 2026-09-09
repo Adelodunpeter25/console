@@ -10,7 +10,7 @@
  * lingering shells deterministically instead of leaking processes.
  */
 import { randomUUID } from "node:crypto";
-import { existsSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type {
@@ -92,6 +92,14 @@ const ALLOWED_SHELLS = new Set<string>([
 const MAX_CONCURRENT_TERMINALS = 20;
 const MAX_SPAWNS_PER_MINUTE = 20;
 
+/** Process env snapshot: spawns are frequent enough that re-copying it per
+    spawn is pure GC pressure — the server env is static after boot. */
+let cachedBaseEnv: Record<string, string> | null = null;
+function shellEnv(): Record<string, string> {
+  cachedBaseEnv ??= { ...(process.env as Record<string, string>) };
+  return { ...cachedBaseEnv, TERM: "xterm-256color", CONSOLE_TERMINAL: "true" };
+}
+
 function isAllowedShell(shell: string): boolean {
   if (ALLOWED_SHELLS.has(shell)) return true;
   const hostShell = process.env.SHELL;
@@ -130,15 +138,16 @@ export class TerminalPtyManager {
     }
 
     const cwd = path.resolve(params.cwd);
-    if (!existsSync(cwd)) {
-      throw new Error(`Cannot spawn terminal: working directory does not exist: ${cwd}`);
-    }
     try {
       const st = statSync(cwd);
       if (!st.isDirectory()) throw new Error(`Not a directory: ${cwd}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.startsWith("Not a directory")) throw e;
+      const code = (e as NodeJS.ErrnoException)?.code;
+      if (code === "ENOENT" || msg.includes("ENOENT")) {
+        throw new Error(`Cannot spawn terminal: working directory does not exist: ${cwd}`);
+      }
       throw new Error(`Cannot spawn terminal: working directory is not a directory: ${cwd}`);
     }
 
@@ -210,11 +219,7 @@ export class TerminalPtyManager {
     const proc = Bun.spawn([session.shell], {
       terminal: session.terminal,
       cwd: session.cwd,
-      env: {
-        ...process.env,
-        TERM: "xterm-256color",
-        CONSOLE_TERMINAL: "true",
-      } as Record<string, string>,
+      env: shellEnv(),
     });
     session.proc = {
       pid: proc.pid,
