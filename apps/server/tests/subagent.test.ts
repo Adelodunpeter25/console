@@ -185,7 +185,7 @@ const dummySearchTool: AgentTool = {
   assert.equal(subagents[0].activities.length, 1);
   assert.equal(subagents[0].activities[0].status, "completed");
 
-  // Complete subagent
+  // Completed subagents are runtime-only and disappear immediately.
   storage.completeSubagent(session.id, {
     type: "subagentEnd",
     subagentId: "subagent_123",
@@ -195,10 +195,7 @@ const dummySearchTool: AgentTool = {
   });
 
   subagents = storage.getSessionSubagents(session.id);
-  assert.equal(subagents.length, 1);
-  assert.equal(subagents[0].status, "completed");
-  assert.equal(subagents[0].summary, "Schema design complete.");
-  assert.equal(subagents[0].currentTurn, 2);
+  assert.equal(subagents.length, 0);
 
-  console.log("  ✅ Subagent SQLite persistence and retrieval");
+  console.log("  ✅ Running subagent visibility and completed subagent cleanup");
 }
