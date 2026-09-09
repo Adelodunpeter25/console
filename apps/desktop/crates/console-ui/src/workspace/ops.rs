@@ -152,6 +152,64 @@ pub fn select_tab(root: &mut WorkspaceNode, pane_id: &str, tab_id: &str) {
     }
 }
 
+/// Update the stored project of every tab with `tab_id` across the tree.
+/// Keeps open tabs in step when a tab's folder is changed.
+pub fn set_tab_project(
+    root: &mut WorkspaceNode,
+    tab_id: &str,
+    project_id: Option<String>,
+) -> bool {
+    let mut updated = false;
+    for leaf in root.leaves_mut() {
+        for tab in &mut leaf.tabs {
+            if tab.id() == tab_id {
+                tab.set_project_id(project_id.clone());
+                updated = true;
+            }
+        }
+    }
+    updated
+}
+
+/// Remove the tab with `tab_id` from wherever it lives in the tree,
+/// fixing up active ids. Returns the removed tab, if any.
+pub fn take_tab(root: &mut WorkspaceNode, tab_id: &str) -> Option<WorkspaceTabConfig> {
+    let mut removed: Option<WorkspaceTabConfig> = None;
+    let mut to_close: Vec<(String, String)> = Vec::new();
+    for leaf in root.leaves() {
+        for tab in &leaf.tabs {
+            if tab.id() == tab_id && removed.is_none() {
+                removed = Some(tab.clone());
+                to_close.push((leaf.id.clone(), tab.id()));
+            } else if tab.id() == tab_id {
+                to_close.push((leaf.id.clone(), tab.id()));
+            }
+        }
+    }
+    for (pane_id, tid) in to_close {
+        let _ = close_tab(root, &pane_id, &tid);
+    }
+    removed
+}
+
+/// Drop every tab whose stored project differs from `project_id`.
+/// Enforces the invariant that a workspace only holds its own folder's tabs.
+/// Fixes up active ids to the last remaining tab per leaf.
+pub fn retain_project_tabs(root: &mut WorkspaceNode, project_id: &Option<String>) {
+    let mut to_close: Vec<(String, String)> = Vec::new();
+    for leaf in root.leaves() {
+        for tab in &leaf.tabs {
+            let tab_proj = tab.project_id().map(str::to_owned);
+            if tab_proj != *project_id {
+                to_close.push((leaf.id.clone(), tab.id()));
+            }
+        }
+    }
+    for (pane_id, tab_id) in to_close {
+        let _ = close_tab(root, &pane_id, &tab_id);
+    }
+}
+
 /// Rename every tab whose id matches `predicate` across the whole tree.
 /// Used to keep open chat tabs in step with the session's title.
 pub fn rename_tabs(

@@ -28,25 +28,108 @@ impl ConsoleDesktopApp {
         if self.session_has_messages(&pane_id) {
             return;
         }
-        if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
-            state.selected_project_id = Some(project_id.clone());
-            Rc::make_mut(&mut state.branches).clear();
-            state.branch_loaded = false;
-            state.branch_is_git_repository = false;
+        let old_workspace_id = self.selected_project_id.clone();
+        let new_workspace_id = Some(project_id.clone());
+        let session_id = self.active_session_for_pane(&pane_id);
+        let active_tab_id = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|leaf| leaf.id == pane_id)
+            .and_then(|leaf| leaf.active_tab_id.clone());
+
+        if old_workspace_id != new_workspace_id {
+            // Move the pane's active tab into the new folder's workspace so a
+            // workspace never holds tabs from another folder. Immediate switch
+            // to the new workspace keeps the moved chat visible.
+            let mut moved_tab =
+                active_tab_id.and_then(|tid| console_ui::workspace::ops::take_tab(
+                    &mut self.workspace_root,
+                    &tid,
+                ));
+            if let Some(tab) = moved_tab.as_mut() {
+                tab.set_project_id(new_workspace_id.clone());
+            }
+            // Stash the remaining (old-folder) tabs under the old workspace.
+            self.project_workspace_roots
+                .insert(old_workspace_id, self.workspace_root.clone());
+            // Load the target workspace, starting from a fresh leaf when unseen.
+            let mut target_root = self
+                .project_workspace_roots
+                .get(&new_workspace_id)
+                .cloned()
+                .unwrap_or_else(|| console_core::WorkspaceNode::leaf(pane_id.clone()));
+            // Drop any stale tabs from other folders (heals legacy mixed saves).
+            console_ui::workspace::ops::retain_project_tabs(&mut target_root, &new_workspace_id);
+            let target_pane_id = target_root
+                .leaves()
+                .iter()
+                .find(|leaf| leaf.id == pane_id)
+                .map(|leaf| leaf.id.clone())
+                .or_else(|| target_root.first_leaf().map(|leaf| leaf.id.clone()))
+                .unwrap_or_else(|| pane_id.clone());
+            if let Some(tab) = moved_tab {
+                console_ui::workspace::ops::open_tab(&mut target_root, &target_pane_id, tab);
+            }
+            // Remember the target root for future switches before swapping in.
+            self.project_workspace_roots
+                .insert(new_workspace_id.clone(), target_root.clone());
+            self.workspace_root = target_root;
+            self.active_pane_id = Some(target_pane_id.clone());
+            if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
+                state.selected_project_id = new_workspace_id.clone();
+                Rc::make_mut(&mut state.branches).clear();
+                state.branch_loaded = false;
+                state.branch_is_git_repository = false;
+            }
+            if let Some(state) = self.workspace_pane_states.get_mut(&target_pane_id) {
+                state.selected_project_id = new_workspace_id.clone();
+                Rc::make_mut(&mut state.branches).clear();
+                state.branch_loaded = false;
+                state.branch_is_git_repository = false;
+            }
+            self.selected_project_id = new_workspace_id.clone();
+            self.persist_layout();
+            self.persist_workspaces();
+        } else {
+            if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
+                state.selected_project_id = Some(project_id.clone());
+                Rc::make_mut(&mut state.branches).clear();
+                state.branch_loaded = false;
+                state.branch_is_git_repository = false;
+            }
+            self.selected_project_id = Some(project_id.clone());
+            // Same-folder change: keep the tab's stored project in step.
+            if let Some(tid) = active_tab_id {
+                console_ui::workspace::ops::set_tab_project(
+                    &mut self.workspace_root,
+                    &tid,
+                    new_workspace_id.clone(),
+                );
+            }
+            self.persist_workspaces();
         }
-        self.selected_project_id = Some(project_id.clone());
         cx.notify();
 
-        let Some(project) = self.selected_project_for_pane(&pane_id).cloned() else {
+        let effective_pane = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| pane_id.clone());
+        let Some(project) = self
+            .selected_project_for_pane(&effective_pane)
+            .cloned()
+        else {
             return;
         };
 
         // Point the active session at this project so the sidebar reflects the
         // change immediately; persist the cwd change on the backend.
-        if let Some(session_id) = self.active_session_for_pane(&pane_id) {
+        // Use the pre-move session id: after the workspace switch the old
+        // pane id may no longer exist in the active tree.
+        if let Some(sid) = session_id.clone() {
             if let Some(session) = Rc::make_mut(&mut self.sessions)
                 .iter_mut()
-                .find(|s| s.id == session_id)
+                .find(|s| s.id == sid)
             {
                 session.project_id = Some(project.id.clone());
                 session.cwd = project.path.clone();
@@ -54,15 +137,14 @@ impl ConsoleDesktopApp {
         }
 
         let path = project.path.clone();
-        self.transcript_for_pane(&pane_id).update(cx, |transcript, _| {
+        self.transcript_for_pane(&effective_pane).update(cx, |transcript, _| {
             transcript.set_session_cwd(Some(path.clone()));
         });
         self.maybe_refresh_inspector(cx);
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
-        let session_id = self.active_session_for_pane(&pane_id);
-        let pane_id_for_result = pane_id.clone();
+        let pane_id_for_result = effective_pane.clone();
         let project_id_for_dto = project.id.clone();
         cx.spawn(async move |_entity, cx| {
             if let Some(session_id) = session_id {
@@ -132,15 +214,85 @@ impl ConsoleDesktopApp {
         if self.session_has_messages(&pane_id) {
             return;
         }
-        if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
-            state.selected_project_id = None;
-            Rc::make_mut(&mut state.branches).clear();
-            state.branch_loaded = true;
-            state.branch_is_git_repository = false;
+        let old_workspace_id = self.selected_project_id.clone();
+        let new_workspace_id: Option<String> = None;
+        let pre_move_session = self.active_session_for_pane(&pane_id);
+        let active_tab_id = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|leaf| leaf.id == pane_id)
+            .and_then(|leaf| leaf.active_tab_id.clone());
+
+        if old_workspace_id != new_workspace_id {
+            let mut moved_tab =
+                active_tab_id.and_then(|tid| console_ui::workspace::ops::take_tab(
+                    &mut self.workspace_root,
+                    &tid,
+                ));
+            if let Some(tab) = moved_tab.as_mut() {
+                tab.set_project_id(None);
+            }
+            self.project_workspace_roots
+                .insert(old_workspace_id, self.workspace_root.clone());
+            let mut target_root = self
+                .project_workspace_roots
+                .get(&new_workspace_id)
+                .cloned()
+                .unwrap_or_else(|| console_core::WorkspaceNode::leaf(pane_id.clone()));
+            console_ui::workspace::ops::retain_project_tabs(&mut target_root, &new_workspace_id);
+            let target_pane_id = target_root
+                .leaves()
+                .iter()
+                .find(|leaf| leaf.id == pane_id)
+                .map(|leaf| leaf.id.clone())
+                .or_else(|| target_root.first_leaf().map(|leaf| leaf.id.clone()))
+                .unwrap_or_else(|| pane_id.clone());
+            if let Some(tab) = moved_tab {
+                console_ui::workspace::ops::open_tab(&mut target_root, &target_pane_id, tab);
+            }
+            self.project_workspace_roots
+                .insert(new_workspace_id.clone(), target_root.clone());
+            self.workspace_root = target_root;
+            self.active_pane_id = Some(target_pane_id.clone());
+            if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
+                state.selected_project_id = None;
+                Rc::make_mut(&mut state.branches).clear();
+                state.branch_loaded = true;
+                state.branch_is_git_repository = false;
+            }
+            if let Some(state) = self.workspace_pane_states.get_mut(&target_pane_id) {
+                state.selected_project_id = None;
+                Rc::make_mut(&mut state.branches).clear();
+                state.branch_loaded = true;
+                state.branch_is_git_repository = false;
+            }
+            self.selected_project_id = None;
+            self.persist_layout();
+            self.persist_workspaces();
+        } else {
+            if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
+                state.selected_project_id = None;
+                Rc::make_mut(&mut state.branches).clear();
+                state.branch_loaded = true;
+                state.branch_is_git_repository = false;
+            }
+            if let Some(tid) = active_tab_id {
+                console_ui::workspace::ops::set_tab_project(
+                    &mut self.workspace_root,
+                    &tid,
+                    None,
+                );
+            }
+            self.persist_workspaces();
         }
         cx.notify();
 
-        let Some(session_id) = self.active_session_for_pane(&pane_id) else {
+        let effective_pane = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| pane_id.clone());
+        let Some(session_id) = pre_move_session else {
             return;
         };
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
@@ -158,7 +310,7 @@ impl ConsoleDesktopApp {
             session.cwd = fallback_cwd.clone();
         }
 
-        self.transcript_for_pane(&pane_id).update(cx, |transcript, _| {
+        self.transcript_for_pane(&effective_pane).update(cx, |transcript, _| {
             transcript.set_session_cwd(Some(fallback_cwd.clone()));
         });
         self.maybe_refresh_inspector(cx);

@@ -287,7 +287,11 @@ impl ConsoleDesktopApp {
         let mut project_workspace_roots = std::collections::HashMap::new();
         let mut persisted_bottom_terminals = std::collections::HashMap::new();
         for ws in ws_doc.workspaces {
-            project_workspace_roots.insert(ws.project_id, ws.root);
+            let mut root = ws.root;
+            // Never restore a workspace containing another folder's tabs
+            // (heals saves written before folder-change partitioning).
+            console_ui::workspace::ops::retain_project_tabs(&mut root, &ws.project_id);
+            project_workspace_roots.insert(ws.project_id, root);
             if let Some(cwd) = ws.cwd {
                 if let (Some(count), Some(active_idx)) =
                     (ws.bottom_terminal_tab_count, ws.bottom_terminal_active_idx)

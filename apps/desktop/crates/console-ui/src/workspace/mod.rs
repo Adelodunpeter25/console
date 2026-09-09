@@ -12,7 +12,8 @@ pub use drag::{WorkspaceDrag, WorkspaceDragPreview, WorkspaceDropAction, cancel_
 pub use empty_state::EmptyChatState;
 pub use ops::{
     active_leaf, close_matching_tabs, close_pane, close_tab, find_split_sizes, move_tab_to_split,
-    open_tab, rename_tabs, resize_split, select_tab, split_pane,
+    open_tab, rename_tabs, resize_split, retain_project_tabs, select_tab, set_tab_project,
+    split_pane, take_tab,
 };
 pub use pane::{ContentRenderer, WorkspacePane};
 pub use tab_bar::WorkspaceTabBar;

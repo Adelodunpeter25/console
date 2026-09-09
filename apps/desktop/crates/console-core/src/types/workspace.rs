@@ -82,6 +82,15 @@ impl WorkspaceTabConfig {
             | Self::Diff { project_id, .. } => project_id.as_deref(),
         }
     }
+
+    pub fn set_project_id(&mut self, project_id: Option<String>) {
+        match self {
+            Self::Chat { project_id: p, .. }
+            | Self::Terminal { project_id: p, .. }
+            | Self::File { project_id: p, .. }
+            | Self::Diff { project_id: p, .. } => *p = project_id,
+        }
+    }
 }
 
 /// A leaf pane: a tab strip plus the currently active tab.

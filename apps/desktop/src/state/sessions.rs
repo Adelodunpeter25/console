@@ -418,7 +418,21 @@ impl ConsoleDesktopApp {
             (None, None) => false,
         };
 
+        let tab_id = format!("chat:{id}");
         if is_different_project {
+            // A chat lives in exactly one workspace: drop stale copies from
+            // the current tree before stashing so the old folder doesn't keep
+            // the moved tab, and from every other cached workspace.
+            console_ui::workspace::ops::close_matching_tabs(&mut self.workspace_root, |t| {
+                t.id() == tab_id
+            });
+            for (key, root) in self.project_workspace_roots.iter_mut() {
+                if key != &target_project_id {
+                    console_ui::workspace::ops::close_matching_tabs(root, |t| {
+                        t.id() == tab_id
+                    });
+                }
+            }
             // Save current project's workspace tabs
             self.project_workspace_roots
                 .insert(self.selected_project_id.clone(), self.workspace_root.clone());
@@ -438,6 +452,16 @@ impl ConsoleDesktopApp {
             } else {
                 self.workspace_root = console_core::WorkspaceNode::leaf(&active_pane_id);
             }
+            // Heal legacy mixed saves and keep any existing copy's folder in step.
+            console_ui::workspace::ops::retain_project_tabs(
+                &mut self.workspace_root,
+                &target_project_id,
+            );
+            console_ui::workspace::ops::set_tab_project(
+                &mut self.workspace_root,
+                &tab_id,
+                target_project_id.clone(),
+            );
 
             // Refresh git branch info for the new project
             if let Some(project) = &target_project {
@@ -484,6 +508,18 @@ impl ConsoleDesktopApp {
             }
             self.persist_layout();
             self.persist_workspaces();
+        } else {
+            // Same workspace: drop foreign tabs and keep the reopened tab's
+            // folder in step so close/reopen can't strand it in the wrong place.
+            console_ui::workspace::ops::retain_project_tabs(
+                &mut self.workspace_root,
+                &self.selected_project_id,
+            );
+            console_ui::workspace::ops::set_tab_project(
+                &mut self.workspace_root,
+                &tab_id,
+                target_project_id.clone(),
+            );
         }
 
         self.selected_session_id = Some(id.clone());

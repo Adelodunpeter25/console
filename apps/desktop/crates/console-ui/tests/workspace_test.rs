@@ -83,3 +83,82 @@ fn test_split_and_deduplication_across_panes() {
     assert_eq!(next_tab, None);
     assert!(root.leaves()[0].tabs.is_empty());
 }
+
+#[test]
+fn test_set_tab_project_updates_stored_folder() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Chat {
+            session_id: "chat-b".into(),
+            title: "B".into(),
+            project_id: Some("ndi".into()),
+        },
+    );
+    assert!(ops::set_tab_project(
+        &mut root,
+        "chat:chat-b",
+        Some("viewer".into())
+    ));
+    assert_eq!(
+        root.leaves()[0].tabs[0].project_id(),
+        Some("viewer")
+    );
+}
+
+#[test]
+fn test_take_tab_leaves_old_workspace() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    for (id, proj) in [("chat-a", "ndi"), ("chat-b", "ndi")] {
+        ops::open_tab(
+            &mut root,
+            "pane-main",
+            WorkspaceTabConfig::Chat {
+                session_id: id.into(),
+                title: id.into(),
+                project_id: Some(proj.into()),
+            },
+        );
+    }
+    let mut taken = ops::take_tab(&mut root, "chat:chat-b").expect("tab removed");
+    taken.set_project_id(Some("viewer".into()));
+    // Old workspace keeps only its own tab.
+    assert_eq!(root.leaves()[0].tabs.len(), 1);
+    assert_eq!(root.leaves()[0].tabs[0].id(), "chat:chat-a");
+    // Moved tab opens in the new workspace.
+    let mut viewer_root = WorkspaceNode::leaf("pane-main");
+    ops::open_tab(&mut viewer_root, "pane-main", taken);
+    ops::retain_project_tabs(&mut viewer_root, &Some("viewer".into()));
+    assert_eq!(viewer_root.leaves()[0].tabs.len(), 1);
+    assert_eq!(viewer_root.leaves()[0].tabs[0].id(), "chat:chat-b");
+}
+
+#[test]
+fn test_retain_project_tabs_drops_foreign_folder() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    for (kind, id, proj) in [
+        ("chat", "chat-a", "ndi"),
+        ("term", "term-a", "ndi"),
+        ("chat", "chat-b", "viewer"),
+    ] {
+        let tab = if kind == "chat" {
+            WorkspaceTabConfig::Chat {
+                session_id: id.into(),
+                title: id.into(),
+                project_id: Some(proj.into()),
+            }
+        } else {
+            WorkspaceTabConfig::Terminal {
+                terminal_id: id.into(),
+                title: id.into(),
+                project_id: Some(proj.into()),
+            }
+        };
+        ops::open_tab(&mut root, "pane-main", tab);
+    }
+    // Restoring the Viewer workspace must not bring Ndi tabs along.
+    ops::retain_project_tabs(&mut root, &Some("viewer".into()));
+    assert_eq!(root.leaves()[0].tabs.len(), 1);
+    assert_eq!(root.leaves()[0].tabs[0].id(), "chat:chat-b");
+}

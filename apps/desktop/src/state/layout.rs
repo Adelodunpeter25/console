@@ -34,6 +34,16 @@ fn strip_diff_tabs(mut root: console_core::WorkspaceNode) -> console_core::Works
     root
 }
 
+fn clean_root_for_workspace(
+    root: console_core::WorkspaceNode,
+    project_id: &Option<String>,
+) -> console_core::WorkspaceNode {
+    let mut clean = strip_diff_tabs(root);
+    // A workspace must never persist tabs pointing at another folder.
+    console_ui::workspace::ops::retain_project_tabs(&mut clean, project_id);
+    clean
+}
+
 impl ConsoleDesktopApp {
     pub(crate) fn persist_layout(&self) {
         if !self.is_main_window {
@@ -75,7 +85,7 @@ impl ConsoleDesktopApp {
             let wid = proj_id_opt
                 .clone()
                 .unwrap_or_else(|| "__default__".to_string());
-            let clean_root = strip_diff_tabs(root.clone());
+            let clean_root = clean_root_for_workspace(root.clone(), proj_id_opt);
             let active_tab_id = clean_root.leaves().first().and_then(|l| l.active_tab_id.clone());
             let proj_info = proj_id_opt
                 .as_ref()
@@ -105,7 +115,8 @@ impl ConsoleDesktopApp {
             .selected_project_id
             .clone()
             .unwrap_or_else(|| "__default__".to_string());
-        let clean_cur_root = strip_diff_tabs(self.workspace_root.clone());
+        let clean_cur_root =
+            clean_root_for_workspace(self.workspace_root.clone(), &self.selected_project_id);
         let cur_active_tab = self
             .active_pane_id
             .as_deref()
