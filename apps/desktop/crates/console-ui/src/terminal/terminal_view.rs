@@ -15,6 +15,7 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use super::actions::{TerminalShiftTab, TerminalTab};
 use super::theme::TerminalTheme;
 use crate::theme::Theme;
 
@@ -324,20 +325,64 @@ impl TerminalView {
     }
 
     fn key_to_bytes(event: &KeyDownEvent, mode: TerminalKeyboardMode) -> Option<String> {
+        Self::keystroke_to_bytes(
+            event.keystroke.key.as_str(),
+            event.keystroke.key_char.clone(),
+            &event.keystroke.modifiers,
+            mode,
+        )
+    }
+
+    /// Mapping core shared by the `on_key_down` path and the Tab actions
+    /// (which never see the original key event).
+    fn keystroke_to_bytes(
+        key: &str,
+        key_char: Option<String>,
+        modifiers: &gpui::Modifiers,
+        mode: TerminalKeyboardMode,
+    ) -> Option<String> {
         let mods = TermyModifiers {
-            control: event.keystroke.modifiers.control,
-            alt: event.keystroke.modifiers.alt,
-            shift: event.keystroke.modifiers.shift,
-            platform: event.keystroke.modifiers.platform,
-            function: event.keystroke.modifiers.function,
+            control: modifiers.control,
+            alt: modifiers.alt,
+            shift: modifiers.shift,
+            platform: modifiers.platform,
+            function: modifiers.function,
         };
         let ks = TermyKeystroke {
-            key: event.keystroke.key.clone(),
-            key_char: event.keystroke.key_char.clone(),
+            key: key.to_owned(),
+            key_char,
             modifiers: mods,
         };
         let bytes = keystroke_to_input(&ks, TerminalKeyEventKind::Press, mode, true)?;
         Some(String::from_utf8_lossy(&bytes).into_owned())
+    }
+
+    /// Send Tab / Shift-Tab from the keymap actions. The binding identity
+    /// carries the key; live modifiers are sampled synchronously during
+    /// dispatch, so this reconstructs exactly what `on_key_down` would see.
+    /// Stops propagation so the global focus-traversal binding never fires
+    /// while the terminal is focused.
+    fn send_tab(&mut self, shift: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let mut modifiers = window.modifiers();
+        modifiers.shift = shift;
+        let mode = self
+            .snapshot
+            .as_ref()
+            .map(|s| s.keyboard_mode)
+            .unwrap_or_default();
+        match Self::keystroke_to_bytes("tab", Some("\t".to_owned()), &modifiers, mode) {
+            Some(bytes) => {
+                log::debug!("terminal tab action -> {} bytes to pty", bytes.len());
+                self.send_input(bytes);
+                if self.clear_selection() {
+                    cx.notify();
+                }
+                cx.stop_propagation();
+            }
+            None => {
+                log::debug!("terminal tab action swallowed: no bytes produced");
+            }
+        }
     }
 
     /// Map a mouse position to a grid cell using the measured cell metrics
@@ -497,6 +542,12 @@ impl Render for TerminalView {
             .id("terminal-view")
             .key_context("Terminal")
             .track_focus(&focus_for_key)
+            .on_action(cx.listener(|this, _: &TerminalTab, window, cx| {
+                this.send_tab(false, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &TerminalShiftTab, window, cx| {
+                this.send_tab(true, window, cx);
+            }))
             .size_full()
             .flex()
             .flex_col()
