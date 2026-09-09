@@ -132,6 +132,18 @@ export function initSessionDatabase(db: Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_session_subagents_created_at ON session_subagents(created_at);
+
+    -- At most one queued prompt per session (single row, id fixed to 1).
+    CREATE TABLE IF NOT EXISTS session_queued_prompt (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      queue_id TEXT NOT NULL,
+      prompt TEXT NOT NULL,
+      attachments TEXT,
+      model_id TEXT,
+      provider TEXT,
+      approval_mode TEXT,
+      created_at INTEGER NOT NULL
+    );
   `);
 
   // Migration: add repair state to pre-existing per-session databases.

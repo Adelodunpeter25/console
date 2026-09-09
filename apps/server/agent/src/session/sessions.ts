@@ -7,3 +7,4 @@ export * from "./session-ops.js";
 export * from "./session-changes.js";
 export * from "./session-todos.js";
 export * from "./session-subagents.js";
+export * from "./session-queue.js";

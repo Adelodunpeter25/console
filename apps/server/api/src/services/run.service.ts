@@ -15,6 +15,7 @@ import type {
   AgentSessionEvent,
   ApprovalMode,
   ImagePart,
+  QueuedPrompt,
   UserMessage,
 } from "@console/types";
 import type { RunPromptDto } from "@/api/src/types/index.js";
@@ -37,6 +38,7 @@ import { extractAndRecordFileChange } from "./run/run-file-changes.js";
 export class RunService {
   private sessionStorage = getSharedSessionStorage();
   private static activeRuns = new Map<string, AbortController>();
+  private static pendingNextTurn = new Map<string, RunPromptDto>();
   private todoLists = new Map<string, TodoItem[]>();
   private hubs = new Map<string, RunEventHub>();
   private decisions = new DecisionManager();
@@ -73,6 +75,56 @@ export class RunService {
     return this.hubs.get(sessionId)?.settled ?? Promise.resolve();
   }
 
+  /**
+   * Stage (or replace) the prompt that runs automatically once the session's
+   * active turn settles. Shared by both `POST /queue` (auto-pop) and
+   * `POST /steer` (abort now, drain sooner) — see `runAgentStream`'s finally
+   * block for the single place this map is read and cleared.
+   */
+  queuePrompt(sessionId: string, dto: RunPromptDto): QueuedPrompt {
+    const queuedPrompt: QueuedPrompt = {
+      id: randomUUID(),
+      sessionId,
+      prompt: dto.prompt,
+      attachments: dto.attachments,
+      modelId: dto.modelId,
+      provider: dto.provider,
+      approvalMode: dto.approvalMode,
+      createdAt: new Date().toISOString(),
+    };
+    RunService.pendingNextTurn.set(sessionId, dto);
+    this.sessionStorage.saveQueuedPrompt(sessionId, queuedPrompt);
+    this.hubs.get(sessionId)?.broadcast({ type: "queueUpdated", queuedPrompt });
+    return queuedPrompt;
+  }
+
+  getQueuedPrompt(sessionId: string): QueuedPrompt | null {
+    return this.sessionStorage.getQueuedPrompt(sessionId);
+  }
+
+  /** Discards the queued prompt without affecting an in-flight run. */
+  clearQueuedPrompt(sessionId: string): boolean {
+    const had = RunService.pendingNextTurn.has(sessionId) || this.getQueuedPrompt(sessionId) !== null;
+    RunService.pendingNextTurn.delete(sessionId);
+    this.sessionStorage.clearQueuedPrompt(sessionId);
+    this.hubs.get(sessionId)?.broadcast({ type: "queueUpdated", queuedPrompt: null });
+    return had;
+  }
+
+  /**
+   * Halt the active run and arrange for `dto` to start as the next turn as
+   * soon as the aborted run settles. Does NOT call `runAgentStream` itself —
+   * the drain happens from the same `finally` block that auto-pops a queued
+   * prompt on normal completion, so a steer request can never race a natural
+   * settle into starting two turns.
+   */
+  steer(sessionId: string, dto: RunPromptDto): boolean {
+    if (!RunService.activeRuns.has(sessionId)) return false;
+    this.queuePrompt(sessionId, dto);
+    this.abortRun(sessionId);
+    return true;
+  }
+
   async runAgentStream(
     sessionId: string,
     dto: RunPromptDto,
@@ -95,9 +147,24 @@ export class RunService {
     try {
       await this.runAgentStreamInternal(sessionId, dto, hub, abortController);
     } finally {
+      // Drain a queued/steered next turn from exactly this section — the same
+      // place `activeRuns` is cleaned up — so a steer request landing at the
+      // instant a run settles can never race a second run into starting.
+      // `RunService.activeRuns` itself is the lock; no separate mutex needed.
+      const nextDto = RunService.pendingNextTurn.get(sessionId);
       RunService.activeRuns.delete(sessionId);
+      if (nextDto) {
+        RunService.pendingNextTurn.delete(sessionId);
+        this.sessionStorage.clearQueuedPrompt(sessionId);
+        hub.broadcast({ type: "queueUpdated", queuedPrompt: null });
+      }
       await hub.destroy();
       this.hubs.delete(sessionId);
+      if (nextDto) {
+        // Fire-and-forget: reuse the same onEvent chain so SSE subscribers
+        // keep receiving frames for the next turn without reconnecting.
+        void this.runAgentStream(sessionId, nextDto, onEvent);
+      }
     }
   }
 
