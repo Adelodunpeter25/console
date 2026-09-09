@@ -37,6 +37,13 @@ interface PtyProcess {
 /** Cap for output buffered while paused, so a flooding program can't balloon memory. */
 const PAUSED_BUFFER_LIMIT_BYTES = 8 * 1024 * 1024;
 
+/** Coalescing window: PTY data events inside one window ship as a single frame. */
+const OUTPUT_FLUSH_MS = 8;
+/** Flush early once the queued window reaches this size. */
+const OUTPUT_FLUSH_BYTES = 4 * 1024;
+/** Max bytes per WebSocket frame when flushing a large backlog. */
+const OUTPUT_FRAME_BYTES = 64 * 1024;
+
 interface PtySession {
   id: TerminalId;
   terminal: Bun.Terminal;
@@ -52,6 +59,10 @@ interface PtySession {
   paused: boolean;
   pausedBuffer: string[];
   pausedBufferBytes: number;
+  /** Output chunks waiting for the coalescing flush (see OUTPUT_FLUSH_MS). */
+  outputQueue: string[];
+  outputQueueBytes: number;
+  flushTimer?: ReturnType<typeof setTimeout>;
   decoder: TextDecoder;
   /** Whether the shell subprocess has been started. */
   shellStarted: boolean;
@@ -158,6 +169,8 @@ export class TerminalPtyManager {
       paused: false,
       pausedBuffer: [],
       pausedBufferBytes: 0,
+      outputQueue: [],
+      outputQueueBytes: 0,
       decoder,
       shellStarted: false,
       pendingInput: [],
@@ -218,14 +231,12 @@ export class TerminalPtyManager {
 
     // Flush any keystrokes that arrived before the shell existed.
     if (session.pendingInput.length > 0) {
-      const queued = [...session.pendingInput];
+      const queued = session.pendingInput.join("");
       session.pendingInput.length = 0;
-      for (const data of queued) {
-        try {
-          session.terminal.write(data);
-        } catch {
-          // Terminal closed mid-flush — nothing more to do.
-        }
+      try {
+        session.terminal.write(queued);
+      } catch {
+        // Terminal closed mid-flush — nothing more to do.
       }
     }
 
@@ -240,7 +251,7 @@ export class TerminalPtyManager {
     });
   }
 
-  /** Route PTY output to callbacks, honoring attach buffering and pause state. */
+  /** Route PTY output to callbacks, coalescing bursts into fewer frames. */
   private handleOutput(session: PtySession, data: string): void {
     if (session.killed) return;
     if (session.paused) {
@@ -254,15 +265,42 @@ export class TerminalPtyManager {
       }
       return;
     }
-    if (session.callbacks) {
-      session.callbacks.onData({ type: "output", data });
-    } else {
+    if (!session.callbacks) {
       session.pending.push(data);
       // Cap buffered early output to avoid unbounded growth if attach never happens
       if (session.pending.length > 100) {
         session.pending.shift();
       }
+      return;
     }
+    session.outputQueue.push(data);
+    session.outputQueueBytes += data.length;
+    if (session.outputQueueBytes >= OUTPUT_FLUSH_BYTES) {
+      this.flushOutput(session);
+    } else if (!session.flushTimer) {
+      session.flushTimer = setTimeout(() => this.flushOutput(session), OUTPUT_FLUSH_MS);
+    }
+  }
+
+  /** Ship the coalesced output window as a single frame. */
+  private flushOutput(session: PtySession): void {
+    if (session.flushTimer) {
+      clearTimeout(session.flushTimer);
+      session.flushTimer = undefined;
+    }
+    if (session.outputQueue.length === 0 || session.killed) return;
+    const queued = session.outputQueue;
+    session.outputQueue = [];
+    session.outputQueueBytes = 0;
+    if (session.paused || !session.callbacks) {
+      // Paused (or detached) mid-window: hold for resume/attach instead.
+      for (const chunk of queued) {
+        session.pausedBuffer.push(chunk);
+        session.pausedBufferBytes += chunk.length;
+      }
+      return;
+    }
+    session.callbacks.onData({ type: "output", data: queued.join("") });
   }
 
   /** Attach a WebSocket-backed callback set to an existing session. */
@@ -272,11 +310,9 @@ export class TerminalPtyManager {
     session.callbacks = callbacks;
     // Flush any output that arrived between spawn and attach (e.g. shell prompt)
     if (session.pending.length > 0) {
-      const queued = [...session.pending];
+      const queued = session.pending.join("");
       session.pending.length = 0;
-      for (const data of queued) {
-        callbacks.onData({ type: "output", data });
-      }
+      callbacks.onData({ type: "output", data: queued });
     }
   }
 
@@ -319,6 +355,10 @@ export class TerminalPtyManager {
     if (!session || session.killed) return;
     session.killed = true;
     this.sessions.delete(id);
+    if (session.flushTimer) {
+      clearTimeout(session.flushTimer);
+      session.flushTimer = undefined;
+    }
     if (!session.shellStarted) {
       session.rejectStart?.(new Error("Terminal killed before the shell started."));
     }
@@ -354,11 +394,13 @@ export class TerminalPtyManager {
     const session = this.sessions.get(id);
     if (session && !session.killed && session.paused) {
       session.paused = false;
-      const buffered = session.pausedBuffer;
+      if (session.pausedBuffer.length === 0) return;
+      const joined = session.pausedBuffer.join("");
       session.pausedBuffer = [];
       session.pausedBufferBytes = 0;
-      for (const data of buffered) {
-        this.handleOutput(session, data);
+      // Split huge backlogs so no single frame balloons memory downstream.
+      for (let i = 0; i < joined.length; i += OUTPUT_FRAME_BYTES) {
+        this.handleOutput(session, joined.slice(i, i + OUTPUT_FRAME_BYTES));
       }
     }
   }
