@@ -294,6 +294,16 @@ impl ConsoleDesktopApp {
             }
         }
 
+        // A confirmed pick retires the pending override so later headers flow
+        // through normally; anything still pending keeps protecting reopens.
+        if self
+            .pending_project_override
+            .get(&header.id)
+            .is_some_and(|ov| ov.as_deref() == header.project_id.as_deref())
+        {
+            self.pending_project_override.remove(&header.id);
+        }
+
         // Keep the footer's project picker in step with the loaded chat: the
         // session's project, resolved by cwd path first (the backend only
         // persists `cwd` when the workspace changes), then by project id.
@@ -318,6 +328,22 @@ impl ConsoleDesktopApp {
         header: &SessionHeader,
         cx: &mut Context<Self>,
     ) {
+        // A pending user pick beats a possibly stale server header (e.g. a
+        // just-cleared No project whose update hasn't landed): apply it and
+        // skip header resolution plus the branch fetch.
+        if let Some(override_project) = self.pending_project_override.get(&header.id).cloned() {
+            if override_project != self.pane_project_id(pane_id) {
+                if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
+                    state.selected_project_id = override_project.clone();
+                    Rc::make_mut(&mut state.branches).clear();
+                    state.branch_loaded = true;
+                    state.branch_is_git_repository = false;
+                }
+                self.selected_project_id = override_project;
+                cx.notify();
+            }
+            return;
+        }
         let resolved = self
             .projects
             .iter()
@@ -383,6 +409,19 @@ impl ConsoleDesktopApp {
     /// then a cwd path match. Shared by sidebar opens and sidebar drops so a
     /// foreign session always switches workspaces instead of mixing folders.
     pub(crate) fn target_project_for_session(&self, session_id: &str) -> Option<ProjectInfo> {
+        // A pending user pick beats a possibly stale server header. `None`
+        // (cleared to No project) resolves to no project immediately.
+        if let Some(override_project) = self.pending_project_override.get(session_id) {
+            match override_project {
+                None => return None,
+                Some(pid) => {
+                    if let Some(p) = self.projects.iter().find(|p| &p.id == pid) {
+                        return Some(p.clone());
+                    }
+                    // Project gone (deleted?): fall through to normal order.
+                }
+            }
+        }
         let target_session = self.sessions.iter().find(|s| s.id == session_id)?;
         if let Some(pid) = &target_session.project_id {
             if let Some(p) = self.projects.iter().find(|p| &p.id == pid) {
@@ -393,6 +432,29 @@ impl ConsoleDesktopApp {
             .iter()
             .find(|p| !target_session.cwd.is_empty() && p.path == target_session.cwd)
             .cloned()
+    }
+
+    /// Reconcile a folder-change confirmation from the server: adopt the
+    /// returned header as truth, and retire the pending override when the
+    /// header matches the user's pick (a newer pick keeps its own entry).
+    /// Only touches in-memory state on match — a stale response must never
+    /// regress a newer user intent.
+    pub(crate) fn confirm_project_override(&mut self, session_id: &str, header: &SessionHeader) {
+        let satisfied = self
+            .pending_project_override
+            .get(session_id)
+            .is_some_and(|ov| ov.as_deref() == header.project_id.as_deref());
+        if !satisfied {
+            return;
+        }
+        self.pending_project_override.remove(session_id);
+        if let Some(session) = Rc::make_mut(&mut self.sessions)
+            .iter_mut()
+            .find(|session| session.id == session_id)
+        {
+            session.project_id = header.project_id.clone();
+            session.cwd = header.cwd.clone();
+        }
     }
 
     /// Remember which pane holds focus for the current workspace, so splits
@@ -562,6 +624,28 @@ impl ConsoleDesktopApp {
                 &tab_id,
                 target_project_id.clone(),
             );
+            // A reopened No-project chat must not inherit a drifted pane
+            // project: pin pane + global to explicit None and persist.
+            if target_project_id.is_none() {
+                let mut changed = false;
+                if self.pane_project_id(&active_pane_id).is_some() {
+                    if let Some(state) = self.workspace_pane_states.get_mut(&active_pane_id) {
+                        state.selected_project_id = None;
+                        std::rc::Rc::make_mut(&mut state.branches).clear();
+                        state.branch_loaded = true;
+                        state.branch_is_git_repository = false;
+                    }
+                    changed = true;
+                }
+                if self.selected_project_id.is_some() {
+                    self.selected_project_id = None;
+                    changed = true;
+                }
+                if changed {
+                    self.persist_layout();
+                    self.persist_workspaces();
+                }
+            }
         }
 
         self.selected_session_id = Some(id.clone());

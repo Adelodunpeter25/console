@@ -80,6 +80,10 @@ pub struct ConsoleDesktopApp {
     pub(crate) persisted_workspaces_bytes: std::cell::RefCell<Option<Vec<u8>>>,
     /// Trailing timer latch for draft file saves (see `schedule_drafts_save`).
     pub(crate) drafts_save_pending: bool,
+    /// User-picked folder per session awaiting server confirmation
+    /// (`Some(pid)` = moved, `None` = cleared to No project). Reopens honor
+    /// this over a possibly stale server header (see `sync_project_...`).
+    pub(crate) pending_project_override: std::collections::HashMap<String, Option<String>>,
     /// The pane currently holding focus.
     pub active_pane_id: Option<String>,
     /// Shared with every pane's model picker; cloned per frame as a refcount
@@ -667,6 +671,7 @@ impl ConsoleDesktopApp {
             last_workspaces_persist: std::cell::Cell::new(None),
             persisted_workspaces_bytes: std::cell::RefCell::new(None),
             drafts_save_pending: false,
+            pending_project_override: std::collections::HashMap::new(),
             active_pane_id: initial_active_pane_id,
             providers: Rc::new(Vec::new()),
             models_by_provider: Rc::new(std::collections::HashMap::new()),

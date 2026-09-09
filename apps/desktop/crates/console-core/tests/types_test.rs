@@ -73,3 +73,33 @@ fn test_fs_tree_entry_deserialization() {
     assert!(tree.is_dir);
     assert_eq!(tree.children.as_ref().unwrap().len(), 1);
 }
+
+#[test]
+fn test_update_session_project_id_null_vs_omit() {
+    // Clearing to No project must send explicit null (server scratchpads it);
+    // omitting the key would let the server re-infer the old project.
+    let clear = UpdateSessionDto {
+        cwd: Some("/home/u/.console/scratch/abc".into()),
+        project_id: Some(None),
+        ..Default::default()
+    };
+    let v: serde_json::Value = serde_json::to_value(&clear).expect("serializes");
+    assert_eq!(v.get("projectId"), Some(&serde_json::Value::Null));
+
+    // Untouched fields stay omitted.
+    let rename = UpdateSessionDto {
+        title: Some("New title".into()),
+        ..Default::default()
+    };
+    let v: serde_json::Value = serde_json::to_value(&rename).expect("serializes");
+    assert!(v.get("projectId").is_none());
+    assert!(v.get("cwd").is_none());
+
+    // Linking a project sends the id verbatim.
+    let link = UpdateSessionDto {
+        project_id: Some(Some("proj-1".into())),
+        ..Default::default()
+    };
+    let v: serde_json::Value = serde_json::to_value(&link).expect("serializes");
+    assert_eq!(v.get("projectId"), Some(&serde_json::json!("proj-1")));
+}

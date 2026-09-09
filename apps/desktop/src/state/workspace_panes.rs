@@ -445,17 +445,20 @@ impl ConsoleDesktopApp {
             }
         }
 
-        let session_project_id = self
+        // A known session stamps its project verbatim — including explicit
+        // None (No project) — so reopening never inherits the pane's project.
+        // Only truly unknown sessions fall back to the pane.
+        let known_project_id = self
             .sessions
             .iter()
             .find(|s| s.id == session_id)
-            .and_then(|s| s.project_id.clone());
-        let project_id = session_project_id
+            .map(|s| s.project_id.clone());
+        let project_id = known_project_id
             .clone()
-            .or_else(|| self.pane_project_id(pane_id));
-        if session_project_id.is_some() {
+            .unwrap_or_else(|| self.pane_project_id(pane_id));
+        if known_project_id.is_some() {
             if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
-                state.selected_project_id = session_project_id;
+                state.selected_project_id = project_id.clone();
             }
         }
 
@@ -703,6 +706,11 @@ impl ConsoleDesktopApp {
             self.dispose_closed_tab(&tab);
         }
         let res = workspace_ops::close_tab(&mut self.workspace_root, pane_id, tab_id);
+        // Evict from stashed workspace caches too, or a closed tab outlives
+        // its close in memory while disk already dropped it.
+        for root in self.project_workspace_roots.values_mut() {
+            workspace_ops::close_matching_tabs(root, |tab| tab.id() == tab_id);
+        }
         self.trim_file_caches();
         self.persist_workspaces();
         res

@@ -73,8 +73,12 @@ pub struct UpdateSessionDto {
     pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cwd: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub project_id: Option<String>,
+    // Double option: None omits the key (server infers from cwd),
+    // Some(None) sends explicit null (server takes the scratchpad path),
+    // Some(Some(id)) links the project. `No project` must send null —
+    // omitting the key would let the server re-infer the old project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<Option<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

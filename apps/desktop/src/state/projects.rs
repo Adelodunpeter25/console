@@ -31,6 +31,12 @@ impl ConsoleDesktopApp {
         let old_workspace_id = self.selected_project_id.clone();
         let new_workspace_id = Some(project_id.clone());
         let session_id = self.active_session_for_pane(&pane_id);
+        // Remember the user's pick until the server confirms it, so a fast
+        // close + reopen can't resurrect the stale header project.
+        if let Some(ref sid) = session_id {
+            self.pending_project_override
+                .insert(sid.clone(), Some(project_id.clone()));
+        }
         let active_tab_id = self
             .workspace_root
             .leaves()
@@ -153,14 +159,14 @@ impl ConsoleDesktopApp {
         let project_id_for_dto = project.id.clone();
         cx.spawn(async move |_entity, cx| {
             if let Some(session_id) = session_id {
-                if let Err(error) = client
+                match client
                     .sessions
                     .update(
                         &session_id,
                         UpdateSessionDto {
                             title: None,
                             cwd: Some(path.clone()),
-                            project_id: Some(project_id_for_dto),
+                            project_id: Some(Some(project_id_for_dto)),
                             model_id: None,
                             provider: None,
                             approval_mode: None,
@@ -168,12 +174,27 @@ impl ConsoleDesktopApp {
                     )
                     .await
                 {
-                    let message = format!("Unable to update session workspace: {error}");
-                    cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| this.set_error(message, cx));
-                        }
-                    });
+                    Ok(header) => {
+                        let sid = session_id.clone();
+                        cx.update(|cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, _| {
+                                    this.confirm_project_override(&sid, &header)
+                                });
+                            }
+                        });
+                    }
+                    Err(error) => {
+                        let message = format!("Unable to update session workspace: {error}");
+                        cx.update(|cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.pending_project_override.remove(&session_id);
+                                    this.set_error(message, cx)
+                                });
+                            }
+                        });
+                    }
                 }
             }
 
@@ -305,6 +326,9 @@ impl ConsoleDesktopApp {
         let Some(session_id) = pre_move_session else {
             return;
         };
+        // Remember the clear until the server confirms, like select above.
+        self.pending_project_override
+            .insert(session_id.clone(), None);
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let is_dev = std::env::var("CONSOLE_ENV")
             .map(|v| v == "dev")
@@ -328,14 +352,16 @@ impl ConsoleDesktopApp {
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_entity, cx| {
-            if let Err(error) = client
+            match client
                 .sessions
                 .update(
                     &session_id,
                     UpdateSessionDto {
                         title: None,
                         cwd: Some(fallback_cwd),
-                        project_id: None,
+                        // Explicit null: omitting the key would let the server
+                        // re-infer a project from the cwd.
+                        project_id: Some(None),
                         model_id: None,
                         provider: None,
                         approval_mode: None,
@@ -343,12 +369,27 @@ impl ConsoleDesktopApp {
                 )
                 .await
             {
-                let message = format!("Unable to update session workspace: {error}");
-                cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| this.set_error(message, cx));
-                    }
-                });
+                Ok(header) => {
+                    let sid = session_id.clone();
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, _| {
+                                this.confirm_project_override(&sid, &header)
+                            });
+                        }
+                    });
+                }
+                Err(error) => {
+                    let message = format!("Unable to update session workspace: {error}");
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.pending_project_override.remove(&session_id);
+                                this.set_error(message, cx)
+                            });
+                        }
+                    });
+                }
             }
         })
         .detach();
