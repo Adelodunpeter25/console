@@ -74,7 +74,7 @@ impl Render for ConsoleDesktopApp {
                                 .active_session_for_pane(&pane_id)
                                 .map(|s| s.to_string());
                             this.save_transcript_scroll_position(cx);
-                            this.close_workspace_tab(&pane_id, &tab_id);
+                            this.close_workspace_tab(&pane_id, &tab_id, cx);
                             this.active_pane_id = Some(pane_id.clone());
                             let transcript = this.transcript_for_pane(&pane_id);
                             let composer = this.composer_for_pane(&pane_id);
@@ -622,9 +622,10 @@ impl Render for ConsoleDesktopApp {
                                     app.update(cx, |this, cx| {
                                         this.save_transcript_scroll_position(cx);
                                         Rc::make_mut(&mut this.sessions).retain(|s| s.id != id);
-                                        this.close_matching_workspace_tabs(|t| {
-                                            t.id() == format!("chat:{}", id)
-                                        });
+                                        this.close_matching_workspace_tabs(
+                                            |t| t.id() == format!("chat:{}", id),
+                                            cx,
+                                        );
                                         for root in this.project_workspace_roots.values_mut() {
                                             console_ui::workspace::ops::close_matching_tabs(
                                                 root,

@@ -132,6 +132,7 @@ await withMockStream(
       provider: "antigravity",
       modelId: "gemini-3.1-pro-high",
     });
+    assert.ok(queued, "queued prompt should be returned");
     assert.equal(queued.prompt, "turn two prompt");
 
     await runPromise;
