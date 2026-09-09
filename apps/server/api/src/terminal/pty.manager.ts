@@ -55,20 +55,11 @@ interface PtySession {
   decoder: TextDecoder;
   /** Whether the shell subprocess has been started. */
   shellStarted: boolean;
-  /** Fallback that starts the shell at the default size if no resize arrives. */
-  shellStartTimer?: ReturnType<typeof setTimeout>;
   /** Input received before the shell started, flushed on start. */
   pendingInput: string[];
   resolveStart?: (event: TerminalSpawnedEvent) => void;
   rejectStart?: (cause: unknown) => void;
 }
-
-/** How long to wait for the client's first resize before starting the shell
-    at the default size. Real clients resize within ~100-300ms of connecting;
-    waiting for it means zsh draws its first prompt at the true grid width and
-    its partial-line erase dance self-cleans instead of leaving standout `%`
-    artifacts in scrollback. */
-const SHELL_START_FALLBACK_MS = 500;
 
 // --- Hardening: PTY spawn allowlist + rate limits ---
 
@@ -109,9 +100,9 @@ export class TerminalPtyManager {
    * Spawn a new shell PTY in the given working directory.
    * Throws if `cwd` does not exist so clients get a clean error.
    *
-   * The PTY is created immediately at the default size, but the shell itself
-   * starts on the client's first resize (or after SHELL_START_FALLBACK_MS) so
-   * the first prompt is drawn at the client's true grid width.
+   * The shell starts immediately at the requested size — clients already send
+   * their true grid in the spawn params, so waiting for a first resize only
+   * adds latency to every open.
    */
   spawn(params: TerminalSpawnParams): {
     id: TerminalId;
@@ -192,9 +183,8 @@ export class TerminalPtyManager {
       session.resolveStart = resolve;
       session.rejectStart = reject;
     });
-    session.shellStartTimer = setTimeout(() => {
-      if (!session.shellStarted && !session.killed) this.startShell(session);
-    }, SHELL_START_FALLBACK_MS);
+    // Start the shell right away at the requested grid size.
+    this.startShell(session);
 
     return { id, ready };
   }
@@ -203,10 +193,6 @@ export class TerminalPtyManager {
   private startShell(session: PtySession): void {
     if (session.shellStarted || session.killed) return;
     session.shellStarted = true;
-    if (session.shellStartTimer) {
-      clearTimeout(session.shellStartTimer);
-      session.shellStartTimer = undefined;
-    }
 
     const proc = Bun.spawn([session.shell], {
       terminal: session.terminal,
@@ -321,9 +307,6 @@ export class TerminalPtyManager {
       session.terminal.resize(cols, rows);
       session.cols = cols;
       session.rows = rows;
-      // The first resize carries the client's true grid size: start the shell
-      // now so its first prompt is drawn at the correct width.
-      if (!session.shellStarted) this.startShell(session);
       return true;
     } catch {
       return false;
@@ -336,10 +319,6 @@ export class TerminalPtyManager {
     if (!session || session.killed) return;
     session.killed = true;
     this.sessions.delete(id);
-    if (session.shellStartTimer) {
-      clearTimeout(session.shellStartTimer);
-      session.shellStartTimer = undefined;
-    }
     if (!session.shellStarted) {
       session.rejectStart?.(new Error("Terminal killed before the shell started."));
     }

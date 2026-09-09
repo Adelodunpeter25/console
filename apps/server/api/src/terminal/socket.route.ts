@@ -82,11 +82,9 @@ export const terminalWebsocketHandlers = {
       // Validate cwd before spawning so the client gets a clean error frame.
       try {
         const params = parseSpawnParams(new URL(ws.data.url));
-        // spawn() creates the PTY synchronously (id is usable right away) but
-        // starts the shell on the first resize — or the fallback timer — so
-        // the first prompt is drawn at the client's true grid width. Do NOT
-        // await `ready` here: Bun holds WS messages until an async open
-        // resolves, which would deadlock the resize that starts the shell.
+        // spawn() creates the PTY and starts the shell synchronously (id is
+        // usable right away). Do NOT await `ready` here: Bun holds WS messages
+        // until an async open resolves, which would deadlock client input.
         const { id, ready } = terminalPtyManager.spawn(params);
         ws.data.sessionId = id;
         terminalPtyManager.attach(id, {
