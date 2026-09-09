@@ -58,52 +58,7 @@ impl Render for ConsoleDesktopApp {
                 move |pane_id: String, tab_id: String, _w: &mut Window, cx: &mut App| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            let prev_sid = this
-                                .active_session_for_pane(&pane_id)
-                                .map(|s| s.to_string());
-                            this.select_workspace_tab(&pane_id, &tab_id);
-                            if let Some(sid) = tab_id.strip_prefix("chat:") {
-                                this.selected_session_id = Some(sid.to_string());
-                                if let Some(session) = this.sessions.iter().find(|s| s.id == sid) {
-                                    if let Some(pid) = &session.project_id {
-                                        if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
-                                            state.selected_project_id = Some(pid.clone());
-                                        }
-                                    }
-                                }
-                                let already_loaded = this
-                                    .workspace_pane_states
-                                    .get(&pane_id)
-                                    .and_then(|state| state.loaded_session_id.as_deref())
-                                    == Some(sid);
-                                if already_loaded || prev_sid.as_deref() == Some(sid) {
-                                    this.maybe_refresh_inspector(cx);
-                                    cx.notify();
-                                    return;
-                                }
-                                let draft =
-                                    this.get_draft_for_session(Some(sid)).map(|s| s.to_string());
-                                this.composer_for_pane(&pane_id).update(cx, |input, cx| {
-                                    input.set_prompt_history(Vec::new(), cx);
-                                    if let Some(draft_text) = draft {
-                                        input.set_content(draft_text, cx);
-                                    } else {
-                                        input.clear(cx);
-                                    }
-                                });
-                                this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
-                                    t.set_messages(Vec::new(), cx);
-                                });
-                                this.load_session_messages_for_pane(
-                                    pane_id.clone(),
-                                    sid.to_string(),
-                                    cx,
-                                );
-                            } else {
-                                this.selected_session_id = None;
-                            }
-                            this.maybe_refresh_inspector(cx);
-                            cx.notify();
+                            this.activate_workspace_tab(&pane_id, &tab_id, cx);
                         });
                     }
                 },

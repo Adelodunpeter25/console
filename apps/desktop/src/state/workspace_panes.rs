@@ -827,6 +827,59 @@ impl ConsoleDesktopApp {
         self.persist_workspaces();
     }
 
+    /// Activate a tab and sync the pane's content to it: selected session,
+    /// project picker, transcript/composer, inspector. Shared by mouse clicks
+    /// and the Option+1–9 shortcuts so both switch content, not just the tab
+    /// highlight.
+    pub fn activate_workspace_tab(
+        &mut self,
+        pane_id: &str,
+        tab_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let prev_sid = self
+            .active_session_for_pane(pane_id)
+            .map(|s| s.to_string());
+        self.select_workspace_tab(pane_id, tab_id);
+        if let Some(sid) = tab_id.strip_prefix("chat:") {
+            self.selected_session_id = Some(sid.to_string());
+            if let Some(session) = self.sessions.iter().find(|s| s.id == sid) {
+                if let Some(pid) = &session.project_id {
+                    if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
+                        state.selected_project_id = Some(pid.clone());
+                    }
+                }
+            }
+            let already_loaded = self
+                .workspace_pane_states
+                .get(pane_id)
+                .and_then(|state| state.loaded_session_id.as_deref())
+                == Some(sid);
+            if already_loaded || prev_sid.as_deref() == Some(sid) {
+                self.maybe_refresh_inspector(cx);
+                cx.notify();
+                return;
+            }
+            let draft = self.get_draft_for_session(Some(sid)).map(|s| s.to_string());
+            self.composer_for_pane(pane_id).update(cx, |input, cx| {
+                input.set_prompt_history(Vec::new(), cx);
+                if let Some(draft_text) = draft {
+                    input.set_content(draft_text, cx);
+                } else {
+                    input.clear(cx);
+                }
+            });
+            self.transcript_for_pane(pane_id).update(cx, |t, cx| {
+                t.set_messages(Vec::new(), cx);
+            });
+            self.load_session_messages_for_pane(pane_id.to_string(), sid.to_string(), cx);
+        } else {
+            self.selected_session_id = None;
+        }
+        self.maybe_refresh_inspector(cx);
+        cx.notify();
+    }
+
     /// Activate the nth tab (0-based) of the active workspace pane, regardless
     /// of tab type (chat, terminal, file, diff). Backs the Option+1–9
     /// shortcuts; a no-op when no pane is active or it has fewer tabs.
@@ -846,8 +899,7 @@ impl ConsoleDesktopApp {
             return;
         };
         let tab_id = tab.id();
-        self.select_workspace_tab(&pane_id, &tab_id);
-        cx.notify();
+        self.activate_workspace_tab(&pane_id, &tab_id, cx);
     }
 
     pub fn focus_workspace_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
