@@ -15,14 +15,14 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type {
   TerminalId,
-  TerminalOutputEvent,
   TerminalSpawnParams,
   TerminalSpawnedEvent,
 } from "@console/types";
 
 /** Callback the route registers to receive pty events for a session. */
 export interface PtyCallbacks {
-  onData: (event: TerminalOutputEvent) => void;
+  /** Raw PTY output bytes (never decoded server-side). */
+  onData: (chunk: Uint8Array) => void;
   onExit: (code: number | null) => void;
   onError: (message: string) => void;
 }
@@ -54,20 +54,19 @@ interface PtySession {
   cols: number;
   rows: number;
   callbacks?: PtyCallbacks;
-  pending: string[];
+  pending: Uint8Array[];
   killed: boolean;
   paused: boolean;
-  pausedBuffer: string[];
+  pausedBuffer: Uint8Array[];
   pausedBufferBytes: number;
   /** Output chunks waiting for the coalescing flush (see OUTPUT_FLUSH_MS). */
-  outputQueue: string[];
+  outputQueue: Uint8Array[];
   outputQueueBytes: number;
   flushTimer?: ReturnType<typeof setTimeout>;
-  decoder: TextDecoder;
   /** Whether the shell subprocess has been started. */
   shellStarted: boolean;
   /** Input received before the shell started, flushed on start. */
-  pendingInput: string[];
+  pendingInput: Uint8Array[];
   resolveStart?: (event: TerminalSpawnedEvent) => void;
   rejectStart?: (cause: unknown) => void;
 }
@@ -162,7 +161,6 @@ export class TerminalPtyManager {
     const rows = params.rows ?? 24;
 
     const id: TerminalId = randomUUID();
-    const decoder = new TextDecoder("utf-8", { fatal: false });
     const session: PtySession = {
       id,
       // Assigned immediately after construction below.
@@ -180,7 +178,6 @@ export class TerminalPtyManager {
       pausedBufferBytes: 0,
       outputQueue: [],
       outputQueueBytes: 0,
-      decoder,
       shellStarted: false,
       pendingInput: [],
     };
@@ -192,11 +189,11 @@ export class TerminalPtyManager {
       cols,
       rows,
       // Buffer output that arrives before the WebSocket route has attached
-      // callbacks so the initial shell prompt is never dropped.
+      // callbacks so the initial shell prompt is never dropped. Raw bytes —
+      // decoding is the client's (or the JSON-compat route's) job.
       data: (_terminal, data) => {
-        const text = session.decoder.decode(data, { stream: true });
-        if (text.length > 0) {
-          this.handleOutput(session, text);
+        if (data.length > 0) {
+          this.handleOutput(session, data);
         }
       },
     });
@@ -236,7 +233,7 @@ export class TerminalPtyManager {
 
     // Flush any keystrokes that arrived before the shell existed.
     if (session.pendingInput.length > 0) {
-      const queued = session.pendingInput.join("");
+      const queued = Buffer.concat(session.pendingInput);
       session.pendingInput.length = 0;
       try {
         session.terminal.write(queued);
@@ -257,16 +254,16 @@ export class TerminalPtyManager {
   }
 
   /** Route PTY output to callbacks, coalescing bursts into fewer frames. */
-  private handleOutput(session: PtySession, data: string): void {
+  private handleOutput(session: PtySession, data: Uint8Array): void {
     if (session.killed) return;
     if (session.paused) {
       // Client send buffer saturated: hold output until resume().
       session.pausedBuffer.push(data);
-      session.pausedBufferBytes += data.length;
+      session.pausedBufferBytes += data.byteLength;
       if (session.pausedBufferBytes > PAUSED_BUFFER_LIMIT_BYTES) {
         // Drop oldest to stay bounded; the client is already behind anyway.
         const dropped = session.pausedBuffer.shift()!;
-        session.pausedBufferBytes -= dropped.length;
+        session.pausedBufferBytes -= dropped.byteLength;
       }
       return;
     }
@@ -279,7 +276,7 @@ export class TerminalPtyManager {
       return;
     }
     session.outputQueue.push(data);
-    session.outputQueueBytes += data.length;
+    session.outputQueueBytes += data.byteLength;
     if (session.outputQueueBytes >= OUTPUT_FLUSH_BYTES) {
       this.flushOutput(session);
     } else if (!session.flushTimer) {
@@ -287,7 +284,7 @@ export class TerminalPtyManager {
     }
   }
 
-  /** Ship the coalesced output window as a single frame. */
+  /** Ship the coalesced output window as one or more frames, capped at OUTPUT_FRAME_BYTES. */
   private flushOutput(session: PtySession): void {
     if (session.flushTimer) {
       clearTimeout(session.flushTimer);
@@ -301,11 +298,15 @@ export class TerminalPtyManager {
       // Paused (or detached) mid-window: hold for resume/attach instead.
       for (const chunk of queued) {
         session.pausedBuffer.push(chunk);
-        session.pausedBufferBytes += chunk.length;
+        session.pausedBufferBytes += chunk.byteLength;
       }
       return;
     }
-    session.callbacks.onData({ type: "output", data: queued.join("") });
+    const joined = queued.length === 1 ? queued[0] : Buffer.concat(queued);
+    // Cap each frame so no single send balloons memory downstream (mirrors resume()).
+    for (let i = 0; i < joined.byteLength; i += OUTPUT_FRAME_BYTES) {
+      session.callbacks.onData(joined.subarray(i, i + OUTPUT_FRAME_BYTES));
+    }
   }
 
   /** Attach a WebSocket-backed callback set to an existing session. */
@@ -315,20 +316,21 @@ export class TerminalPtyManager {
     session.callbacks = callbacks;
     // Flush any output that arrived between spawn and attach (e.g. shell prompt)
     if (session.pending.length > 0) {
-      const queued = session.pending.join("");
+      const queued = Buffer.concat(session.pending);
       session.pending.length = 0;
-      callbacks.onData({ type: "output", data: queued });
+      callbacks.onData(queued);
     }
   }
 
   /** Write raw bytes into the PTY (keystrokes, pasted text). */
-  write(id: TerminalId, data: string): boolean {
-    if (data.length > 256 * 1024) return false;
+  write(id: TerminalId, data: string | Uint8Array): boolean {
+    const len = typeof data === "string" ? data.length : data.byteLength;
+    if (len > 256 * 1024) return false;
     const session = this.sessions.get(id);
     if (!session || session.killed) return false;
     // Shell not started yet (waiting for first resize): hold keystrokes.
     if (!session.shellStarted) {
-      session.pendingInput.push(data);
+      session.pendingInput.push(typeof data === "string" ? Buffer.from(data, "utf-8") : data);
       return true;
     }
     try {
@@ -400,12 +402,12 @@ export class TerminalPtyManager {
     if (session && !session.killed && session.paused) {
       session.paused = false;
       if (session.pausedBuffer.length === 0) return;
-      const joined = session.pausedBuffer.join("");
+      const joined = Buffer.concat(session.pausedBuffer);
       session.pausedBuffer = [];
       session.pausedBufferBytes = 0;
       // Split huge backlogs so no single frame balloons memory downstream.
-      for (let i = 0; i < joined.length; i += OUTPUT_FRAME_BYTES) {
-        this.handleOutput(session, joined.slice(i, i + OUTPUT_FRAME_BYTES));
+      for (let i = 0; i < joined.byteLength; i += OUTPUT_FRAME_BYTES) {
+        this.handleOutput(session, joined.subarray(i, i + OUTPUT_FRAME_BYTES));
       }
     }
   }

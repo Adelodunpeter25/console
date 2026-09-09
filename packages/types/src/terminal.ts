@@ -1,10 +1,19 @@
 /**
  * Terminal protocol types shared across server, desktop (Rust relay), and mobile.
  *
- * The terminal runs **on the Node server** via node-pty. Clients never spawn
- * shells directly — the desktop/mobile app connects to the server over
- * WebSocket at `GET /api/terminals?cwd=...&cols=...&rows=...` (query params
- * are the spawn options; all subsequent traffic is JSON frames).
+ * The terminal runs **on the server**. Clients never spawn shells directly —
+ * they connect to the server over WebSocket at
+ * `GET /api/terminals?cwd=...&cols=...&rows=...` (query params are the spawn
+ * options).
+ *
+ * Framing:
+ * - Default (no `proto` param): all frames are JSON text, both directions.
+ * - `proto=binary`: the data hot path uses WS binary frames
+ *   `[tag, ...payload]` — server→client `output` uses tag 0x01 with raw PTY
+ *   bytes, client→server `input` uses tag 0x01 with raw keystroke bytes.
+ *   Control messages (`spawned`, `exit`, `error`, `resize`, `kill`) remain
+ *   JSON text frames in both modes, and JSON `input` is always accepted.
+ *   See docs/plan/terminal-binary-protocol-plan.md.
  */
 
 /** Unique id for a running PTY session on the server. */
@@ -22,6 +31,12 @@ export interface TerminalSpawnParams {
   rows?: number;
   /** Optional friendly label (e.g. the project name) for tooling/debugging. */
   label?: string;
+  /**
+   * Protocol opt-in. `"binary"` switches the output/input hot path to WS
+   * binary frames (tag 0x01 + raw bytes); everything else stays JSON text.
+   * Omitted = legacy JSON-only behavior.
+   */
+  proto?: "binary";
 }
 
 /** Confirmation sent from the server once the PTY has spawned. */

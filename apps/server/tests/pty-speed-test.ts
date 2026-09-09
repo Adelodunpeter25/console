@@ -34,10 +34,10 @@ async function timeEcho(mgr: TerminalPtyManager): Promise<number> {
   let resolveEcho!: () => void;
   const echoSeen = new Promise<void>((r) => (resolveEcho = r));
   mgr.attach(id, {
-    onData: (e) => {
+    onData: (chunk) => {
       // NOTE: the PTY echoes typed input, so the sentinel must NOT appear in
       // the command line itself — $((11*13)) evaluates to 143 only in output.
-      if (e.data.includes("OUT-143")) resolveEcho();
+      if (new TextDecoder().decode(chunk).includes("OUT-143")) resolveEcho();
     },
     onExit: () => {},
     onError: () => {},
@@ -62,10 +62,10 @@ async function flood(mgr: TerminalPtyManager): Promise<{ frames: number; bytes: 
   let resolveDone!: () => void;
   const done = new Promise<void>((r) => (resolveDone = r));
   mgr.attach(id, {
-    onData: (e) => {
+    onData: (chunk) => {
       frames++;
-      bytes += e.data.length;
-      if (e.data.includes("DONE-42")) resolveDone();
+      bytes += chunk.byteLength;
+      if (new TextDecoder().decode(chunk).includes("DONE-42")) resolveDone();
     },
     onExit: () => {},
     onError: () => {},

@@ -91,7 +91,7 @@ async function startServer(): Promise<void> {
     fetch(req, server) {
       if (isTerminalUpgradeRequest(req)) {
         // Hijack the socket; handlers take over once the upgrade completes.
-        const upgraded = server.upgrade(req, { data: { url: req.url, sessionId: null, paused: false } });
+        const upgraded = server.upgrade(req, { data: { url: req.url, sessionId: null, paused: false, binary: false } });
         if (upgraded) return undefined;
         return new Response("Terminal WebSocket upgrade failed", { status: 400 });
       }

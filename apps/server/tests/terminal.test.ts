@@ -24,7 +24,9 @@ async function main(): Promise<void> {
     hostname: "127.0.0.1",
     fetch(req, srv) {
       if (isTerminalUpgradeRequest(req)) {
-        const upgraded = srv.upgrade(req, { data: { url: req.url, sessionId: null, paused: false } });
+        const upgraded = srv.upgrade(req, {
+          data: { url: req.url, sessionId: null, paused: false, binary: false },
+        });
         if (upgraded) return undefined;
         return new Response("Terminal WebSocket upgrade failed", { status: 400 });
       }
@@ -33,6 +35,7 @@ async function main(): Promise<void> {
     websocket: terminalWebsocketHandlers.websocket,
   });
   const port = server.port;
+  if (typeof port !== "number") throw new Error("Server did not report a port");
 
   const cwd = "/tmp";
   const ws = new WebSocket(
@@ -109,9 +112,103 @@ async function main(): Promise<void> {
 
   await new Promise((r) => setTimeout(r, 200));
   ws.close();
+
+  await binaryProtocolTest(port);
   server.stop(true);
 
   console.log("\nTerminal WebSocket tests passed!");
+}
+
+/**
+ * Binary protocol pass: connect with ?proto=binary and assert —
+ *   - spawned/exit still arrive as JSON text frames,
+ *   - output arrives as binary frames [0x01, ...raw pty bytes],
+ *   - binary input frames [0x01, ...bytes] reach the PTY,
+ *   - JSON input frames keep working on the same connection.
+ */
+async function binaryProtocolTest(port: number): Promise<void> {
+  const OUTPUT_TAG = 0x01;
+  const INPUT_TAG = 0x01;
+  const cwd = "/tmp";
+  const ws = new WebSocket(
+    `ws://127.0.0.1:${port}/api/terminals?cwd=${encodeURIComponent(cwd)}&cols=80&rows=24&proto=binary`,
+  );
+  ws.binaryType = "arraybuffer";
+
+  const frames: (string | Uint8Array)[] = [];
+  const received = (
+    predicate: (frame: string | Uint8Array) => boolean,
+    timeoutMs = 8000,
+  ): Promise<string | Uint8Array> =>
+    new Promise((resolve, reject) => {
+      const deadline = setTimeout(() => reject(new Error("Timed out waiting for frame")), timeoutMs);
+      const check = (): void => {
+        for (let i = 0; i < frames.length; i++) {
+          if (predicate(frames[i]!)) {
+            clearTimeout(deadline);
+            resolve(frames[i]!);
+            return;
+          }
+        }
+      };
+      ws.addEventListener("message", (event) => {
+        if (typeof event.data === "string") {
+          frames.push(event.data);
+        } else {
+          // Bun may deliver binary frames as ArrayBuffer or Uint8Array.
+          frames.push(new Uint8Array(event.data as ArrayBuffer));
+        }
+        check();
+      });
+      check();
+    });
+
+  await new Promise<void>((resolve) => ws.addEventListener("open", () => resolve()));
+  console.log("  ✅ binary-mode terminal WS connected");
+
+  // spawned stays a JSON text frame.
+  const spawnedRaw = await received((f) => typeof f === "string" && f.includes("\"spawned\""));
+  const spawned = JSON.parse(spawnedRaw as string) as { type: string };
+  assert.equal(spawned.type, "spawned");
+  console.log("  ✅ spawned frame is still JSON text");
+
+  // Output arrives as a binary frame with tag 0x01 and raw PTY bytes.
+  const decoder = new TextDecoder();
+  const outputPromise = received((f) => {
+    if (typeof f !== "string" && f[0] === OUTPUT_TAG) {
+      return decoder.decode(f.subarray(1)).includes("binary-test-456");
+    }
+    return false;
+  });
+  ws.send(JSON.stringify({ type: "input", data: "echo binary-test-456\r" }));
+  const output = (await outputPromise) as Uint8Array;
+  assert.equal(output[0], OUTPUT_TAG);
+  assert.ok(decoder.decode(output.subarray(1)).includes("binary-test-456"));
+  console.log("  ✅ output arrives as tagged binary frame with raw PTY bytes");
+
+  // Binary input reaches the PTY too.
+  const binaryInput = new Uint8Array(1 + "echo binary-input-789\r".length);
+  binaryInput[0] = INPUT_TAG;
+  binaryInput.set(Buffer.from("echo binary-input-789\r"), 1);
+  const binaryOutputPromise = received((f) => {
+    if (typeof f !== "string" && f[0] === OUTPUT_TAG) {
+      return decoder.decode(f.subarray(1)).includes("binary-input-789");
+    }
+    return false;
+  });
+  ws.send(binaryInput);
+  await binaryOutputPromise;
+  console.log("  ✅ binary input frame reaches the PTY");
+
+  // exit stays a JSON text frame.
+  const exitPromise = received((f) => typeof f === "string" && f.includes("\"exit\""));
+  ws.send(JSON.stringify({ type: "kill" }));
+  const exit = JSON.parse((await exitPromise) as string) as { type: string };
+  assert.equal(exit.type, "exit");
+  console.log("  ✅ exit frame is still JSON text");
+
+  await new Promise((r) => setTimeout(r, 200));
+  ws.close();
 }
 
 main().catch((err) => {

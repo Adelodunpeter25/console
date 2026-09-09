@@ -20,12 +20,23 @@ import { terminalPtyManager } from "./pty.manager.js";
 
 const TERMINAL_PATH = "/api/terminals";
 
+/**
+ * Binary frame tags for `proto=binary` connections (see docs/plan/terminal-binary-protocol-plan.md).
+ * Binary frames are `[tag, ...payload]`; control messages stay JSON text frames.
+ */
+export const TERMINAL_OUTPUT_FRAME_TAG = 0x01;
+export const TERMINAL_INPUT_FRAME_TAG = 0x01;
+
 /** Per-socket state attached at upgrade time and mutated over the lifetime. */
 export interface TerminalSocketData {
   /** The original request URL carrying spawn params. */
   url: string;
   /** PTY session spawned for this socket; null until `open` succeeds. */
   sessionId: string | null;
+  /** True when the client negotiated the binary protocol via ?proto=binary. */
+  binary: boolean;
+  /** Stream decoder used only by JSON-compat clients (output bytes → text). */
+  compatDecoder?: TextDecoder;
   /** True while output is paused due to send-buffer backpressure. */
   paused: boolean;
   /** Interval polling the buffered amount while paused (resume trigger). */
@@ -46,16 +57,17 @@ export function isTerminalUpgradeRequest(req: Request): boolean {
 const HIGH_WATER = 1 << 20; // 1 MiB
 const LOW_WATER = HIGH_WATER / 2;
 
-/** Shared frame decoder: WS message frames are complete units, so one
-    stateless decoder serves every message without per-frame allocation. */
-const frameDecoder = new TextDecoder();
-
 export const terminalWebsocketHandlers = {
   websocket: {
     data: {} as TerminalSocketData,
     open(ws: import("bun").ServerWebSocket<TerminalSocketData>): void {
       ws.data.sessionId = null;
       ws.data.paused = false;
+
+      // Binary protocol opt-in: ?proto=binary on the upgrade URL. Clients that
+      // omit it get the legacy JSON-only behavior (output re-decoded here).
+      ws.data.binary =
+        parseSpawnParams(new URL(ws.data.url)).proto === "binary";
 
       const maybeResume = () => {
         if (!ws.data.sessionId || !ws.data.paused) return;
@@ -78,8 +90,27 @@ export const terminalWebsocketHandlers = {
           if (!ws.data.drainPoller) ws.data.drainPoller = setInterval(maybeResume, 25);
         }
       };
-      const send = (message: unknown) => {
+      const sendJson = (message: unknown) => {
         ws.send(JSON.stringify(message));
+        checkBackpressure();
+      };
+      const sendOutput = (chunk: Uint8Array) => {
+        if (ws.data.binary) {
+          // Bun sends a binary WS frame when given non-string data.
+          const frame = new Uint8Array(chunk.byteLength + 1);
+          frame[0] = TERMINAL_OUTPUT_FRAME_TAG;
+          frame.set(chunk, 1);
+          ws.send(frame);
+        } else {
+          // JSON compat: decode PTY bytes to text (stream-aware so multibyte
+          // sequences split across chunks survive) and ship the old shape.
+          const decoder = (ws.data.compatDecoder ??= new TextDecoder("utf-8", {
+            fatal: false,
+          }));
+          const text = decoder.decode(chunk, { stream: true });
+          if (text.length > 0) sendJson({ type: "output", data: text });
+          return;
+        }
         checkBackpressure();
       };
 
@@ -92,17 +123,17 @@ export const terminalWebsocketHandlers = {
         const { id, ready } = terminalPtyManager.spawn(params);
         ws.data.sessionId = id;
         terminalPtyManager.attach(id, {
-          onData: (event) => send(event),
-          onExit: (code) => send({ type: "exit", code }),
-          onError: (message) => send({ type: "error", message }),
+          onData: (chunk) => sendOutput(chunk),
+          onExit: (code) => sendJson({ type: "exit", code }),
+          onError: (message) => sendJson({ type: "error", message }),
         });
         void ready.then(
-          (spawned) => send(spawned),
+          (spawned) => sendJson(spawned),
           (err: unknown) => {
             // The close handler kills pre-start sessions, so by the time this
             // rejection lands the socket may already be gone — never rethrow.
             try {
-              send({ type: "error", message: err instanceof Error ? err.message : String(err) });
+              sendJson({ type: "error", message: err instanceof Error ? err.message : String(err) });
               ws.close(4000, "Spawn failed");
             } catch {
               // Socket already closed — nothing to report.
@@ -110,7 +141,7 @@ export const terminalWebsocketHandlers = {
           },
         );
       } catch (err) {
-        send({ type: "error", message: err instanceof Error ? err.message : String(err) });
+        sendJson({ type: "error", message: err instanceof Error ? err.message : String(err) });
         ws.close(4000, "Spawn failed");
       }
     },
@@ -128,11 +159,24 @@ export const terminalWebsocketHandlers = {
       const session = ws.data.sessionId;
       if (!session) return;
 
+      // Binary frames: [tag, ...payload]. Only input exists client→server.
+      if (typeof data !== "string") {
+        if (!ws.data.binary) {
+          ws.send(JSON.stringify({ type: "error", message: "Binary frames require ?proto=binary." }));
+          return;
+        }
+        if (data.byteLength === 0) return;
+        if (data[0] === TERMINAL_INPUT_FRAME_TAG) {
+          terminalPtyManager.write(session, data.subarray(1));
+          return;
+        }
+        ws.send(JSON.stringify({ type: "error", message: `Unknown binary frame tag: ${data[0]}` }));
+        return;
+      }
+
       let frame: TerminalClientMessage;
       try {
-        frame = JSON.parse(
-          typeof data === "string" ? data : frameDecoder.decode(data),
-        ) as TerminalClientMessage;
+        frame = JSON.parse(data) as TerminalClientMessage;
       } catch {
         ws.send(JSON.stringify({ type: "error", message: "Invalid terminal frame: expected JSON." }));
         return;
@@ -181,11 +225,15 @@ function parseSpawnParams(url: URL): TerminalSpawnParams {
   if (rawShell && rawShell.includes("\0")) throw new Error("Invalid shell");
   const rawLabel = url.searchParams.get("label") ?? undefined;
   if (rawLabel && rawLabel.length > 256) throw new Error("label too long");
+  // Binary protocol opt-in; anything else is rejected so typos fail loudly.
+  const rawProto = url.searchParams.get("proto");
+  if (rawProto && rawProto !== "binary") throw new Error(`Unsupported proto: ${rawProto}`);
   return {
     cwd: rawCwd,
     shell: rawShell,
     cols: num(url.searchParams.get("cols"), 80, 500),
     rows: num(url.searchParams.get("rows"), 24, 200),
     label: rawLabel,
+    proto: rawProto === "binary" ? "binary" : undefined,
   };
 }
