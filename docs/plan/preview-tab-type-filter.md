@@ -136,55 +136,6 @@ let new_tab_id = workspace_ops::replace_or_open_tab(
 
 - Export `ReplaceFilter` from the module
 
-### 4. `apps/desktop/crates/console-ui/tests/workspace_test.rs`
-
-- Update all `replace_or_open_tab` calls to pass `ReplaceFilter::Any` (preserving existing test behavior)
-- Add new tests for `SameKind`, `FileOnly`, `DiffOnly` filters
-
----
-
-## Test Plan
-
-### Existing Tests
-- All existing `replace_or_open_tab` calls get `ReplaceFilter::Any` to maintain current behavior
-
-### New Tests
-
-```rust
-#[test]
-fn same_kind_replaces_file_with_file() {
-    // Open a file preview, then open another file → first is replaced
-}
-
-#[test]
-fn same_kind_does_not_replace_diff_with_file() {
-    // Open a diff preview, then open a file → diff stays, file opens as new tab
-}
-
-#[test]
-fn same_kind_does_not_replace_file_with_diff() {
-    // Open a file preview, then open a diff → file stays, diff opens as new tab
-}
-
-#[test]
-fn file_only_only_replaces_file_tabs() {
-    // With FileOnly filter, diff tab is not replaced
-}
-
-#[test]
-fn diff_only_only_replaces_diff_tabs() {
-    // With DiffOnly filter, file tab is not replaced
-}
-```
-
----
-
-## Verification
-
-```bash
-cd apps/desktop && cargo test -p console-ui workspace_test
-```
-
 ---
 
 ## Summary
@@ -192,6 +143,6 @@ cd apps/desktop && cargo test -p console-ui workspace_test
 | Aspect | Detail |
 |--------|--------|
 | Approach | Add `ReplaceFilter` enum to `replace_or_open_tab` |
-| Files changed | 4 files (ops.rs, workspace_panes.rs, mod.rs, workspace_test.rs) |
+| Files changed | 3 files (ops.rs, workspace_panes.rs, mod.rs) |
 | Risk | Low — all existing callers pass `Any` initially |
 | Behavior change | File previews only replace file previews; diff previews only replace diff previews |
