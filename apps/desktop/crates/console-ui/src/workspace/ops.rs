@@ -38,6 +38,10 @@ pub fn open_tab(root: &mut WorkspaceNode, pane_id: &str, tab: console_core::Work
 }
 
 /// Open a tab, or replace an existing preview tab if found.
+/// Replacement stays within its kind: a file preview replaces only a file
+/// tab, a diff preview only a diff tab. The shared preview slot can otherwise
+/// point at the other kind and eat it (e.g. opening a file kills an open
+/// diff). A rejected replace falls through to opening a new tab.
 pub fn replace_or_open_tab(
     root: &mut WorkspaceNode,
     pane_id: &str,
@@ -49,9 +53,13 @@ pub fn replace_or_open_tab(
 
     if let Some(target_id) = replace_tab_id {
         if let Some(pos) = leaf.tabs.iter().position(|t| t.id() == target_id) {
-            leaf.tabs[pos] = new_tab;
-            leaf.active_tab_id = Some(new_tab_id.clone());
-            return new_tab_id;
+            let same_kind =
+                std::mem::discriminant(&leaf.tabs[pos]) == std::mem::discriminant(&new_tab);
+            if same_kind {
+                leaf.tabs[pos] = new_tab;
+                leaf.active_tab_id = Some(new_tab_id.clone());
+                return new_tab_id;
+            }
         }
     }
 

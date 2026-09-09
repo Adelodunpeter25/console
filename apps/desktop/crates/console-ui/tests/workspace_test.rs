@@ -214,3 +214,46 @@ fn test_open_file_paths_collects_only_file_tabs() {
     paths.sort();
     assert_eq!(paths, vec!["/a/b.rs".to_string(), "/a/c.rs".to_string()]);
 }
+
+#[test]
+fn test_preview_replace_stays_within_kind() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Diff {
+            path: "/a/b.rs".into(),
+            title: "Diff: b.rs".into(),
+            project_id: None,
+        },
+    );
+
+    // A file preview must not eat the diff tab: it opens alongside instead.
+    let file_id = ops::replace_or_open_tab(
+        &mut root,
+        "pane-main",
+        Some("diff:/a/b.rs"),
+        WorkspaceTabConfig::File {
+            path: "/a/c.rs".into(),
+            title: "c.rs".into(),
+            project_id: None,
+        },
+    );
+    assert_eq!(file_id, "file:/a/c.rs");
+    assert_eq!(root.leaves()[0].tabs.len(), 2);
+
+    // Same-kind preview still replaces.
+    let replaced = ops::replace_or_open_tab(
+        &mut root,
+        "pane-main",
+        Some("file:/a/c.rs"),
+        WorkspaceTabConfig::File {
+            path: "/a/d.rs".into(),
+            title: "d.rs".into(),
+            project_id: None,
+        },
+    );
+    assert_eq!(replaced, "file:/a/d.rs");
+    assert_eq!(root.leaves()[0].tabs.len(), 2);
+    assert!(root.leaves()[0].tabs.iter().any(|t| t.id() == "diff:/a/b.rs"));
+}
