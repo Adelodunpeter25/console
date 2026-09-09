@@ -177,7 +177,7 @@ impl ConsoleDesktopApp {
         }
 
         self.save_transcript_scroll_position(cx);
-        self.close_workspace_tab(&pane_id, &tab_id);
+        self.close_workspace_tab(&pane_id, &tab_id, cx);
         let transcript = self.transcript_for_pane(&pane_id);
         let composer = self.composer_for_pane(&pane_id);
         let new_active_session = self

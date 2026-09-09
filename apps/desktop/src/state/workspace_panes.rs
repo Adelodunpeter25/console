@@ -701,15 +701,21 @@ impl ConsoleDesktopApp {
     }
 
     /// Close a tab in a pane. Returns the newly active tab id, if any.
-    pub fn close_workspace_tab(&mut self, pane_id: &str, tab_id: &str) -> Option<String> {
-        if let Some(tab) = workspace_ops::find_tab(&self.workspace_root, tab_id) {
-            self.dispose_closed_tab(&tab);
-        }
+    pub fn close_workspace_tab(
+        &mut self,
+        pane_id: &str,
+        tab_id: &str,
+        cx: &mut Context<Self>,
+    ) -> Option<String> {
+        let closed_tab = workspace_ops::find_tab(&self.workspace_root, tab_id);
         let res = workspace_ops::close_tab(&mut self.workspace_root, pane_id, tab_id);
         // Evict from stashed workspace caches too, or a closed tab outlives
         // its close in memory while disk already dropped it.
         for root in self.project_workspace_roots.values_mut() {
             workspace_ops::close_matching_tabs(root, |tab| tab.id() == tab_id);
+        }
+        if let Some(tab) = closed_tab {
+            self.dispose_closed_tab(&tab, cx);
         }
         self.trim_file_caches();
         self.persist_workspaces();
@@ -720,6 +726,7 @@ impl ConsoleDesktopApp {
     pub fn close_matching_workspace_tabs(
         &mut self,
         predicate: impl Fn(&WorkspaceTabConfig) -> bool,
+        cx: &mut Context<Self>,
     ) {
         let closed: Vec<WorkspaceTabConfig> = self
             .workspace_root
@@ -729,10 +736,10 @@ impl ConsoleDesktopApp {
             .filter(|tab| predicate(tab))
             .cloned()
             .collect();
-        for tab in &closed {
-            self.dispose_closed_tab(tab);
-        }
         workspace_ops::close_matching_tabs(&mut self.workspace_root, predicate);
+        for tab in &closed {
+            self.dispose_closed_tab(tab, cx);
+        }
         self.trim_file_caches();
         self.persist_workspaces();
     }
@@ -742,10 +749,28 @@ impl ConsoleDesktopApp {
     /// otherwise closed terminals leak shell processes until restart) and
     /// cached file/viewer state for closed file tabs. Terminals in cached
     /// background workspaces are intentionally kept alive.
-    fn dispose_closed_tab(&mut self, tab: &WorkspaceTabConfig) {
+    fn dispose_closed_tab(&mut self, tab: &WorkspaceTabConfig, cx: &mut Context<Self>) {
         match tab {
             WorkspaceTabConfig::Terminal { terminal_id, .. } => {
-                self.terminals.remove(terminal_id);
+                let still_referenced = self
+                    .workspace_root
+                    .leaves()
+                    .iter()
+                    .flat_map(|leaf| leaf.tabs.iter())
+                    .any(|open_tab| {
+                        matches!(
+                            open_tab,
+                            WorkspaceTabConfig::Terminal {
+                                terminal_id: open_id,
+                                ..
+                            } if open_id == terminal_id
+                        )
+                    });
+                if !still_referenced {
+                    if let Some(view) = self.terminals.remove(terminal_id) {
+                        view.update(cx, |terminal, _| terminal.kill());
+                    }
+                }
             }
             WorkspaceTabConfig::File { path, .. } | WorkspaceTabConfig::Diff { path, .. } => {
                 self.evict_file_caches_for_path(path);
@@ -947,7 +972,7 @@ impl ConsoleDesktopApp {
             return;
         }
         for tab in &removed_tabs {
-            self.dispose_closed_tab(tab);
+            self.dispose_closed_tab(tab, cx);
         }
         self.trim_file_caches();
         self.workspace_pane_states.remove(pane_id);
