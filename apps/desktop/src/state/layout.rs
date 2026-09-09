@@ -86,7 +86,21 @@ impl ConsoleDesktopApp {
                 .clone()
                 .unwrap_or_else(|| "__default__".to_string());
             let clean_root = clean_root_for_workspace(root.clone(), proj_id_opt);
-            let active_tab_id = clean_root.leaves().first().and_then(|l| l.active_tab_id.clone());
+            // Remembered split focus when still present, else the first leaf.
+            // The top-level active tab follows that pane (not always the first).
+            let pane_id = self
+                .project_active_panes
+                .get(proj_id_opt)
+                .cloned()
+                .filter(|id| clean_root.leaves().iter().any(|leaf| &leaf.id == id))
+                .or_else(|| clean_root.first_leaf().map(|leaf| leaf.id.clone()));
+            let active_tab_id = pane_id.as_deref().and_then(|pid| {
+                clean_root
+                    .leaves()
+                    .into_iter()
+                    .find(|leaf| leaf.id == pid)
+                    .and_then(|leaf| leaf.active_tab_id.clone())
+            });
             let proj_info = proj_id_opt
                 .as_ref()
                 .and_then(|pid| self.projects.iter().find(|p| &p.id == pid));
@@ -105,6 +119,7 @@ impl ConsoleDesktopApp {
                     name: proj_info.map(|p| p.name.clone()),
                     root: clean_root,
                     active_tab_id,
+                    active_pane_id: pane_id,
                     bottom_terminal_tab_count: term_count,
                     bottom_terminal_active_idx: term_active_idx,
                 },
@@ -117,17 +132,22 @@ impl ConsoleDesktopApp {
             .unwrap_or_else(|| "__default__".to_string());
         let clean_cur_root =
             clean_root_for_workspace(self.workspace_root.clone(), &self.selected_project_id);
-        let cur_active_tab = self
+        let cur_pane_id = self
             .active_pane_id
-            .as_deref()
-            .and_then(|pid| clean_cur_root.leaves().into_iter().find(|l| l.id == pid))
-            .and_then(|l| l.active_tab_id.clone())
+            .clone()
+            .filter(|pid| clean_cur_root.leaves().iter().any(|l| &l.id == pid))
             .or_else(|| {
                 clean_cur_root
-                    .leaves()
-                    .first()
-                    .and_then(|l| l.active_tab_id.clone())
+                    .first_leaf()
+                    .map(|leaf| leaf.id.clone())
             });
+        let cur_active_tab = cur_pane_id.as_deref().and_then(|pid| {
+            clean_cur_root
+                .leaves()
+                .into_iter()
+                .find(|l| l.id == pid)
+                .and_then(|l| l.active_tab_id.clone())
+        });
         let cur_proj = self
             .selected_project_id
             .as_ref()
@@ -150,6 +170,7 @@ impl ConsoleDesktopApp {
                 name: cur_proj.map(|p| p.name.clone()),
                 root: clean_cur_root,
                 active_tab_id: cur_active_tab,
+                active_pane_id: cur_pane_id,
                 bottom_terminal_tab_count: cur_term_count,
                 bottom_terminal_active_idx: cur_term_active_idx,
             },

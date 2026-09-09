@@ -21,6 +21,8 @@ pub struct PersistedWorkspace {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_tab_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_pane_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bottom_terminal_tab_count: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bottom_terminal_active_idx: Option<usize>,

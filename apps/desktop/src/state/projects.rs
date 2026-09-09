@@ -50,6 +50,8 @@ impl ConsoleDesktopApp {
             if let Some(tab) = moved_tab.as_mut() {
                 tab.set_project_id(new_workspace_id.clone());
             }
+            // Remember this workspace's focused pane before leaving it.
+            self.remember_active_pane();
             // Stash the remaining (old-folder) tabs under the old workspace.
             self.project_workspace_roots
                 .insert(old_workspace_id, self.workspace_root.clone());
@@ -76,6 +78,9 @@ impl ConsoleDesktopApp {
                 .insert(new_workspace_id.clone(), target_root.clone());
             self.workspace_root = target_root;
             self.active_pane_id = Some(target_pane_id.clone());
+            // The moved tab is the visible focus of the new workspace.
+            self.project_active_panes
+                .insert(new_workspace_id.clone(), target_pane_id.clone());
             if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
                 state.selected_project_id = new_workspace_id.clone();
                 Rc::make_mut(&mut state.branches).clear();
@@ -233,6 +238,8 @@ impl ConsoleDesktopApp {
             if let Some(tab) = moved_tab.as_mut() {
                 tab.set_project_id(None);
             }
+            // Remember this workspace's focused pane before leaving it.
+            self.remember_active_pane();
             self.project_workspace_roots
                 .insert(old_workspace_id, self.workspace_root.clone());
             let mut target_root = self
@@ -255,6 +262,9 @@ impl ConsoleDesktopApp {
                 .insert(new_workspace_id.clone(), target_root.clone());
             self.workspace_root = target_root;
             self.active_pane_id = Some(target_pane_id.clone());
+            // The moved tab is the visible focus of the new workspace.
+            self.project_active_panes
+                .insert(new_workspace_id.clone(), target_pane_id.clone());
             if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
                 state.selected_project_id = None;
                 Rc::make_mut(&mut state.branches).clear();

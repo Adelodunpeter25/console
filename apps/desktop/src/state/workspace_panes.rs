@@ -830,6 +830,27 @@ impl ConsoleDesktopApp {
         true
     }
 
+    /// A sidebar drag names a session rather than moving a tab. When that
+    /// session belongs to another folder, switch workspaces (like clicking it)
+    /// instead of dropping a foreign tab into this workspace's split tree.
+    /// Returns true when the drop was diverted this way.
+    fn divert_foreign_sidebar_drag(&mut self, drag: &WorkspaceDrag, cx: &mut Context<Self>) -> bool {
+        if drag.source_pane_id.is_some() {
+            return false;
+        }
+        let WorkspaceTabConfig::Chat { session_id, .. } = &drag.tab else {
+            return false;
+        };
+        let target_project_id = self
+            .target_project_for_session(session_id)
+            .map(|p| p.id);
+        if target_project_id != self.selected_project_id {
+            self.select_and_open_session(session_id.clone(), cx);
+            return true;
+        }
+        false
+    }
+
     /// Move a dragged tab into the existing target pane as a new tab.
     pub fn move_workspace_tab_to_pane(
         &mut self,
@@ -838,6 +859,9 @@ impl ConsoleDesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.divert_foreign_sidebar_drag(&drag, cx) {
+            return;
+        }
         if self.focus_existing_chat_tab_from_drag(&drag, cx) {
             return;
         }
@@ -902,6 +926,9 @@ impl ConsoleDesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.divert_foreign_sidebar_drag(&drag, cx) {
+            return;
+        }
         if self.focus_existing_chat_tab_from_drag(&drag, cx) {
             return;
         }

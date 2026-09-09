@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use console_core::{ApprovalMode, SelectedModel, SessionHeader, UpdateSessionDto};
+use console_core::{ApprovalMode, ProjectInfo, SelectedModel, SessionHeader, UpdateSessionDto};
 use console_ui::utils::group_indices_by_date;
 use gpui::{Context, Window};
 
@@ -379,6 +379,54 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    /// Resolve the project a session belongs to: its stored project id first,
+    /// then a cwd path match. Shared by sidebar opens and sidebar drops so a
+    /// foreign session always switches workspaces instead of mixing folders.
+    pub(crate) fn target_project_for_session(&self, session_id: &str) -> Option<ProjectInfo> {
+        let target_session = self.sessions.iter().find(|s| s.id == session_id)?;
+        if let Some(pid) = &target_session.project_id {
+            if let Some(p) = self.projects.iter().find(|p| &p.id == pid) {
+                return Some(p.clone());
+            }
+        }
+        self.projects
+            .iter()
+            .find(|p| !target_session.cwd.is_empty() && p.path == target_session.cwd)
+            .cloned()
+    }
+
+    /// Remember which pane holds focus for the current workspace, so splits
+    /// keep their focus across workspace switches.
+    pub(crate) fn remember_active_pane(&mut self) {
+        if let Some(pane_id) = self.active_pane_id.clone() {
+            self.project_active_panes
+                .insert(self.selected_project_id.clone(), pane_id);
+        }
+    }
+
+    /// Pane to focus now that `workspace_root` holds `project_id`'s tree: that
+    /// workspace's remembered pane when still present, else the current pane
+    /// when present, else the first leaf.
+    pub(crate) fn restore_active_pane(&mut self, project_id: &Option<String>) {
+        let remembered = self.project_active_panes.get(project_id).cloned().filter(|id| {
+            self.workspace_root
+                .leaves()
+                .iter()
+                .any(|leaf| &leaf.id == id)
+        });
+        let current = self.active_pane_id.clone().filter(|id| {
+            self.workspace_root
+                .leaves()
+                .iter()
+                .any(|leaf| &leaf.id == id)
+        });
+        let first = self
+            .workspace_root
+            .first_leaf()
+            .map(|leaf| leaf.id.clone());
+        self.active_pane_id = remembered.or(current).or(first);
+    }
+
     pub fn select_and_open_session(&mut self, id: String, cx: &mut Context<Self>) {
         let active_pane_id = self
             .active_pane_id
@@ -391,17 +439,7 @@ impl ConsoleDesktopApp {
         self.save_transcript_scroll_position(cx);
 
         let target_session = self.sessions.iter().find(|s| s.id == id).cloned();
-        let target_project = target_session.as_ref().and_then(|session| {
-            if let Some(pid) = &session.project_id {
-                if let Some(p) = self.projects.iter().find(|p| &p.id == pid) {
-                    return Some(p.clone());
-                }
-            }
-            self.projects
-                .iter()
-                .find(|p| !session.cwd.is_empty() && p.path == session.cwd)
-                .cloned()
-        });
+        let target_project = self.target_project_for_session(&id);
         let target_project_id = target_project.as_ref().map(|p| p.id.clone());
 
         // A workspace switch occurs if target_project_id differs from current project,
@@ -433,6 +471,8 @@ impl ConsoleDesktopApp {
                     });
                 }
             }
+            // Remember this workspace's focused pane before leaving it.
+            self.remember_active_pane();
             // Save current project's workspace tabs
             self.project_workspace_roots
                 .insert(self.selected_project_id.clone(), self.workspace_root.clone());
@@ -452,6 +492,8 @@ impl ConsoleDesktopApp {
             } else {
                 self.workspace_root = console_core::WorkspaceNode::leaf(&active_pane_id);
             }
+            // Back on this workspace's remembered split focus before opening.
+            self.restore_active_pane(&target_project_id);
             // Heal legacy mixed saves and keep any existing copy's folder in step.
             console_ui::workspace::ops::retain_project_tabs(
                 &mut self.workspace_root,

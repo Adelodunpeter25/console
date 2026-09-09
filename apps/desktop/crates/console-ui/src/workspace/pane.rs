@@ -180,6 +180,7 @@ fn render_leaf(
     let on_focus_pane = on_focus_pane.clone();
     let mut bar = WorkspaceTabBar::new(
         leaf.clone(),
+        is_focused,
         move |pane_id, tab_id, window, cx| (on_sel)(pane_id, tab_id, window, cx),
         move |pane_id, tab_id, window, cx| (on_cls)(pane_id, tab_id, window, cx),
         can_close_pane,

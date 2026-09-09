@@ -19,6 +19,7 @@ use super::{WorkspaceDrag, WorkspaceDragPreview};
 #[derive(IntoElement)]
 pub struct WorkspaceTabBar {
     pub pane: LeafPaneNode,
+    pub is_focused: bool,
     on_select: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     on_close: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     can_close_pane: bool,
@@ -29,6 +30,7 @@ pub struct WorkspaceTabBar {
 impl WorkspaceTabBar {
     pub fn new(
         pane: LeafPaneNode,
+        is_focused: bool,
         on_select: impl Fn(String, String, &mut Window, &mut App) + 'static,
         on_close: impl Fn(String, String, &mut Window, &mut App) + 'static,
         can_close_pane: bool,
@@ -36,6 +38,7 @@ impl WorkspaceTabBar {
     ) -> Self {
         Self {
             pane,
+            is_focused,
             on_select: Rc::new(on_select),
             on_close: Rc::new(on_close),
             can_close_pane,
@@ -58,6 +61,7 @@ impl RenderOnce for WorkspaceTabBar {
         let theme = Theme::current(cx);
         let pane_id = self.pane.id.clone();
         let active_id = self.pane.active_tab_id.clone();
+        let pane_focused = self.is_focused;
         let on_sel = self.on_select;
         let on_cls = self.on_close;
         let can_close_pane = self.can_close_pane;
@@ -113,7 +117,14 @@ impl RenderOnce for WorkspaceTabBar {
                             .when(is_active, |s| {
                                 s.bg(theme.surface)
                                     .border_b_2()
-                                    .border_color(theme.accent)
+                                    // The focused pane's active tab reads orange;
+                                    // other panes' active tabs read gray so focus
+                                    // is visible across splits.
+                                    .border_color(if pane_focused {
+                                        theme.accent
+                                    } else {
+                                        theme.border_strong
+                                    })
                                     .text_color(theme.text)
                             })
                             .when(!is_active, |s| {

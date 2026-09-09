@@ -70,6 +70,9 @@ pub struct ConsoleDesktopApp {
     /// Cached workspace pane trees per project (keyed by Some(project_id) or None for no-project chats).
     pub(crate) project_workspace_roots:
         std::collections::HashMap<Option<String>, WorkspaceNode>,
+    /// Focused pane per workspace (keyed like `project_workspace_roots`), so
+    /// splits keep their focus across workspace switches and restarts.
+    pub(crate) project_active_panes: std::collections::HashMap<Option<String>, String>,
     /// The pane currently holding focus.
     pub active_pane_id: Option<String>,
     /// Shared with every pane's model picker; cloned per frame as a refcount
@@ -285,12 +288,18 @@ impl ConsoleDesktopApp {
         let client = ConsoleClient::new(None);
         let ws_doc = persistence::load_workspaces();
         let mut project_workspace_roots = std::collections::HashMap::new();
+        let mut project_active_panes = std::collections::HashMap::new();
         let mut persisted_bottom_terminals = std::collections::HashMap::new();
         for ws in ws_doc.workspaces {
             let mut root = ws.root;
             // Never restore a workspace containing another folder's tabs
             // (heals saves written before folder-change partitioning).
             console_ui::workspace::ops::retain_project_tabs(&mut root, &ws.project_id);
+            if let Some(pane_id) = ws.active_pane_id {
+                if root.leaves().iter().any(|leaf| leaf.id == pane_id) {
+                    project_active_panes.insert(ws.project_id.clone(), pane_id);
+                }
+            }
             project_workspace_roots.insert(ws.project_id, root);
             if let Some(cwd) = ws.cwd {
                 if let (Some(count), Some(active_idx)) =
@@ -429,9 +438,13 @@ impl ConsoleDesktopApp {
                 )
             }
         };
-        let initial_active_pane_id = initial_root
-            .first_leaf()
-            .map(|l| l.id.clone())
+        // Restore this workspace's remembered split focus when still present,
+        // else the first leaf.
+        let initial_active_pane_id = project_active_panes
+            .get(&initial_selected_project_id)
+            .cloned()
+            .filter(|id| initial_root.leaves().iter().any(|leaf| &leaf.id == id))
+            .or_else(|| initial_root.first_leaf().map(|l| l.id.clone()))
             .or_else(|| Some("pane-main".into()));
         let transcript_view = cx.new(|cx| TranscriptView::new(cx));
         let composer_input = cx.new(|cx| ComposerInput::new(window, cx));
@@ -639,6 +652,7 @@ impl ConsoleDesktopApp {
             session_rename_input,
             workspace_root: initial_root,
             project_workspace_roots,
+            project_active_panes,
             active_pane_id: initial_active_pane_id,
             providers: Rc::new(Vec::new()),
             models_by_provider: Rc::new(std::collections::HashMap::new()),
