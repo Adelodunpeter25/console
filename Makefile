@@ -31,6 +31,10 @@ package-desktop:
 build-desktop:
 	cargo build --release --manifest-path apps/desktop/Cargo.toml
 
+## desktop-check: Fast typecheck of the GPUI desktop app (locked deps)
+desktop-check:
+	cargo check --locked --manifest-path apps/desktop/Cargo.toml
+
 ## build-server: Compile the multi-call `console` binary (CLI + agent server)
 ## (bun runtime embedded, minified JS, zstd sourcemap for readable stacktraces)
 build-server:
@@ -65,6 +69,7 @@ help:
 	@echo "  make dev-desktop       - Start the GPUI desktop app in dev mode"
 	@echo "  make package-desktop   - Package the GPUI desktop app for production (.app bundle)"
 	@echo "  make build-desktop     - Build the GPUI desktop app for production"
+	@echo "  make desktop-check     - Fast typecheck of the GPUI desktop app"
 	@echo "  make build-server      - Compile the multi-call console binary (CLI + server)"
 	@echo "  make build-preview - Build the Android apk with eas"
 	@echo "  make typecheck         - Run TypeScript typechecking"

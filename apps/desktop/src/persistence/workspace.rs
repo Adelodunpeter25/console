@@ -59,7 +59,10 @@ pub fn load_workspaces() -> WorkspacesDocument {
     }
 }
 
-pub fn save_workspaces(doc: &WorkspacesDocument) {
+/// Atomically write pre-serialized workspace bytes (compact JSON: this
+/// file is rewritten on every tab action, pretty-printing is pure overhead,
+/// so callers serialize once and share the bytes with the dirty check).
+pub fn save_workspaces_bytes(bytes: &[u8]) {
     let path = workspace_file_path();
     let directory = path.parent().unwrap_or_else(|| Path::new("."));
     if let Err(e) = fs::create_dir_all(directory) {
@@ -68,11 +71,7 @@ pub fn save_workspaces(doc: &WorkspacesDocument) {
     }
 
     let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
-    let mut to_save = doc.clone();
-    to_save.version = WORKSPACES_VERSION;
-    if let Ok(bytes) = serde_json::to_vec_pretty(&to_save) {
-        if fs::write(&tmp, bytes).is_ok() {
-            let _ = fs::rename(tmp, path);
-        }
+    if fs::write(&tmp, bytes).is_ok() {
+        let _ = fs::rename(tmp, path);
     }
 }

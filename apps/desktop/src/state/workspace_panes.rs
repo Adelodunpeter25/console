@@ -94,7 +94,7 @@ impl ConsoleDesktopApp {
                     // Save raw text for crash safety; does NOT update sidebar_draft_ids.
                     let text = input.read(cx).content().to_string();
                     let session_id = this.active_session_for_pane(&edit_pane_id);
-                    this.save_draft_for_session(session_id.as_deref(), &text);
+                    this.save_draft_for_session(session_id.as_deref(), &text, cx);
                 }
                 _ => {}
             },
@@ -577,6 +577,7 @@ impl ConsoleDesktopApp {
         self.preview_tab = Some((new_tab_id, created_at));
         self.active_pane_id = Some(pane_id.to_string());
         self.inspector_selected_path = Some(path.clone());
+        self.trim_file_caches();
         self.persist_workspaces();
 
         // Fetch file content if not cached
@@ -652,6 +653,7 @@ impl ConsoleDesktopApp {
         self.preview_tab = Some((new_tab_id, created_at));
         self.active_pane_id = Some(pane_id.to_string());
         self.inspector_selected_path = Some(path.clone());
+        self.trim_file_caches();
         self.persist_workspaces();
 
         let client = self.client.clone();
@@ -697,7 +699,11 @@ impl ConsoleDesktopApp {
 
     /// Close a tab in a pane. Returns the newly active tab id, if any.
     pub fn close_workspace_tab(&mut self, pane_id: &str, tab_id: &str) -> Option<String> {
+        if let Some(tab) = workspace_ops::find_tab(&self.workspace_root, tab_id) {
+            self.dispose_closed_tab(&tab);
+        }
         let res = workspace_ops::close_tab(&mut self.workspace_root, pane_id, tab_id);
+        self.trim_file_caches();
         self.persist_workspaces();
         res
     }
@@ -707,8 +713,111 @@ impl ConsoleDesktopApp {
         &mut self,
         predicate: impl Fn(&WorkspaceTabConfig) -> bool,
     ) {
+        let closed: Vec<WorkspaceTabConfig> = self
+            .workspace_root
+            .leaves()
+            .iter()
+            .flat_map(|leaf| leaf.tabs.iter())
+            .filter(|tab| predicate(tab))
+            .cloned()
+            .collect();
+        for tab in &closed {
+            self.dispose_closed_tab(tab);
+        }
         workspace_ops::close_matching_tabs(&mut self.workspace_root, predicate);
+        self.trim_file_caches();
         self.persist_workspaces();
+    }
+
+    /// Release resources owned by a tab leaving the current tree: terminal
+    /// views (dropping the entity cancels its tasks and releases the PTY —
+    /// otherwise closed terminals leak shell processes until restart) and
+    /// cached file/viewer state for closed file tabs. Terminals in cached
+    /// background workspaces are intentionally kept alive.
+    fn dispose_closed_tab(&mut self, tab: &WorkspaceTabConfig) {
+        match tab {
+            WorkspaceTabConfig::Terminal { terminal_id, .. } => {
+                self.terminals.remove(terminal_id);
+            }
+            WorkspaceTabConfig::File { path, .. } | WorkspaceTabConfig::Diff { path, .. } => {
+                self.evict_file_caches_for_path(path);
+            }
+            WorkspaceTabConfig::Chat { .. } => {}
+        }
+    }
+
+    /// Maximum retained file/viewer cache entries per map. Bounds long-session
+    /// memory; evicted contents are re-fetched or re-rendered on reopen.
+    pub(crate) fn trim_file_caches(&mut self) {
+        const MAX_CACHED_FILES: usize = 30;
+        let over = self.open_file_contents.len() > MAX_CACHED_FILES
+            || self.open_diff_contents.len() > MAX_CACHED_FILES
+            || self.viewer_cached_file_lines.len() > MAX_CACHED_FILES
+            || self.viewer_cached_diff_lines.len() > MAX_CACHED_FILES
+            || self.viewer_cached_markdown_views.len() > MAX_CACHED_FILES;
+        if !over {
+            return;
+        }
+        let open = self.open_file_paths_everywhere();
+        self.open_file_contents.retain(|path, _| open.contains(path));
+        self.open_diff_contents.retain(|path, _| open.contains(path));
+        self.viewer_cached_file_lines
+            .retain(|path, _| open.contains(path));
+        self.viewer_cached_diff_lines
+            .retain(|path, _| open.contains(path));
+        self.viewer_cached_markdown_views
+            .retain(|path, _| open.contains(path));
+        self.viewer_list_states
+            .retain(|key, _| Self::viewer_key_is_open(key, &open));
+        self.viewer_selection_states
+            .retain(|key, _| Self::viewer_key_is_open(key, &open));
+        self.viewer_focus_handles
+            .retain(|key, _| Self::viewer_key_is_open(key, &open));
+        self.viewer_scrollbar_states
+            .retain(|key, _| Self::viewer_key_is_open(key, &open));
+        self.viewer_markdown_selections
+            .retain(|key, _| Self::viewer_key_is_open(key, &open));
+    }
+
+    /// File paths with a tab open in any workspace (current + cached).
+    fn open_file_paths_everywhere(&self) -> std::collections::HashSet<String> {
+        let mut open = std::collections::HashSet::new();
+        for path in workspace_ops::open_file_paths(&self.workspace_root) {
+            open.insert(path);
+        }
+        for root in self.project_workspace_roots.values() {
+            for path in workspace_ops::open_file_paths(root) {
+                open.insert(path);
+            }
+        }
+        open
+    }
+
+    /// Viewer state keys are raw paths or `file:`/`diff:`/`md:`-prefixed paths.
+    fn viewer_key_is_open(key: &str, open: &std::collections::HashSet<String>) -> bool {
+        if open.contains(key) {
+            return true;
+        }
+        ["file:", "diff:", "md:"]
+            .iter()
+            .find_map(|prefix| key.strip_prefix(prefix))
+            .is_some_and(|path| open.contains(path))
+    }
+
+    /// Drop cached contents + viewer state for one closed file path.
+    fn evict_file_caches_for_path(&mut self, path: &str) {
+        self.open_file_contents.remove(path);
+        self.open_diff_contents.remove(path);
+        self.viewer_cached_file_lines.remove(path);
+        self.viewer_cached_diff_lines.remove(path);
+        self.viewer_cached_markdown_views.remove(path);
+        for key in [format!("file:{path}"), format!("diff:{path}"), format!("md:{path}")] {
+            self.viewer_list_states.remove(&key);
+            self.viewer_selection_states.remove(&key);
+            self.viewer_focus_handles.remove(&key);
+            self.viewer_scrollbar_states.remove(&key);
+            self.viewer_markdown_selections.remove(&key);
+        }
     }
 
     /// Activate a tab in a pane.
@@ -767,9 +876,20 @@ impl ConsoleDesktopApp {
 
     /// Close a split pane and collapse its parent into the remaining sibling.
     pub fn close_workspace_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
+        let removed_tabs: Vec<WorkspaceTabConfig> = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|leaf| leaf.id == pane_id)
+            .map(|leaf| leaf.tabs.clone())
+            .unwrap_or_default();
         if !workspace_ops::close_pane(&mut self.workspace_root, pane_id) {
             return;
         }
+        for tab in &removed_tabs {
+            self.dispose_closed_tab(tab);
+        }
+        self.trim_file_caches();
         self.workspace_pane_states.remove(pane_id);
         self.todo_items.remove(pane_id);
         if self.active_pane_id.as_deref() == Some(pane_id) {

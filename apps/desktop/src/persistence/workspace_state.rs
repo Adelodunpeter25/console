@@ -75,7 +75,8 @@ pub fn save_workspace_state(doc: &WorkspaceStateDocument) {
     let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
     let mut to_save = doc.clone();
     to_save.version = WORKSPACE_STATE_VERSION;
-    if let Ok(bytes) = serde_json::to_vec_pretty(&to_save) {
+    // Compact: rewritten on layout/resize actions; see store.rs.
+    if let Ok(bytes) = serde_json::to_vec(&to_save) {
         if fs::write(&tmp, bytes).is_ok() {
             let _ = fs::rename(tmp, path);
         }

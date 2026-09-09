@@ -210,6 +210,35 @@ pub fn retain_project_tabs(root: &mut WorkspaceNode, project_id: &Option<String>
     }
 }
 
+/// Find a tab by id anywhere in the tree.
+pub fn find_tab(root: &WorkspaceNode, tab_id: &str) -> Option<WorkspaceTabConfig> {
+    for leaf in root.leaves() {
+        for tab in &leaf.tabs {
+            if tab.id() == tab_id {
+                return Some(tab.clone());
+            }
+        }
+    }
+    None
+}
+
+/// File paths backing every file/diff tab in the tree. Used to evict cached
+/// file contents and viewer state for tabs that are no longer open anywhere.
+pub fn open_file_paths(root: &WorkspaceNode) -> Vec<String> {
+    let mut out = Vec::new();
+    for leaf in root.leaves() {
+        for tab in &leaf.tabs {
+            match tab {
+                WorkspaceTabConfig::File { path, .. } | WorkspaceTabConfig::Diff { path, .. } => {
+                    out.push(path.clone())
+                }
+                WorkspaceTabConfig::Chat { .. } | WorkspaceTabConfig::Terminal { .. } => {}
+            }
+        }
+    }
+    out
+}
+
 /// Rename every tab whose id matches `predicate` across the whole tree.
 /// Used to keep open chat tabs in step with the session's title.
 pub fn rename_tabs(

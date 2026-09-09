@@ -162,3 +162,55 @@ fn test_retain_project_tabs_drops_foreign_folder() {
     assert_eq!(root.leaves()[0].tabs.len(), 1);
     assert_eq!(root.leaves()[0].tabs[0].id(), "chat:chat-b");
 }
+
+#[test]
+fn test_find_tab_returns_clone() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Terminal {
+            terminal_id: "term-1".into(),
+            title: "Terminal".into(),
+            project_id: None,
+        },
+    );
+    let found = ops::find_tab(&root, "term:term-1").expect("tab found");
+    assert_eq!(found.title(), "Terminal");
+    assert!(ops::find_tab(&root, "chat:missing").is_none());
+}
+
+#[test]
+fn test_open_file_paths_collects_only_file_tabs() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Chat {
+            session_id: "s".into(),
+            title: "Chat".into(),
+            project_id: None,
+        },
+    );
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::File {
+            path: "/a/b.rs".into(),
+            title: "b.rs".into(),
+            project_id: None,
+        },
+    );
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Diff {
+            path: "/a/c.rs".into(),
+            title: "Diff: c.rs".into(),
+            project_id: None,
+        },
+    );
+    let mut paths = ops::open_file_paths(&root);
+    paths.sort();
+    assert_eq!(paths, vec!["/a/b.rs".to_string(), "/a/c.rs".to_string()]);
+}

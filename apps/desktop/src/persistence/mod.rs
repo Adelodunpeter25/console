@@ -5,5 +5,7 @@ pub mod workspace;
 pub mod workspace_state;
 
 pub use layout::PersistedLayoutState;
-pub use workspace::{PersistedWorkspace, WorkspacesDocument, load_workspaces, save_workspaces};
-pub use workspace_state::{load_workspace_state, save_workspace_state};
+pub use workspace::{
+    PersistedWorkspace, WorkspacesDocument, load_workspaces, save_workspaces_bytes,
+};
+pub use workspace_state::{WorkspaceStateDocument, load_workspace_state, save_workspace_state};

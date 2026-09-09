@@ -124,8 +124,12 @@ impl ConsoleDesktopApp {
                                     }
                                 });
                                 if let Some(draft_text) = new_chat_draft {
-                                    this.save_draft_for_session(Some(&new_session.id), &draft_text);
-                                    this.clear_draft_for_session(None);
+                                    this.save_draft_for_session(
+                                        Some(&new_session.id),
+                                        &draft_text,
+                                        cx,
+                                    );
+                                    this.clear_draft_for_session(None, cx);
                                 }
                                 this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
                                     t.set_messages(Vec::new(), cx);
@@ -169,7 +173,7 @@ impl ConsoleDesktopApp {
                 .read(cx)
                 .content()
                 .to_string();
-            self.commit_draft_to_sidebar(sid, &text);
+            self.commit_draft_to_sidebar(sid, &text, cx);
         }
 
         self.save_transcript_scroll_position(cx);

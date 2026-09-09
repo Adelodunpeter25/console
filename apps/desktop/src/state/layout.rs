@@ -15,6 +15,10 @@ use crate::persistence;
 /// the in-memory snapshot then short-circuits unchanged frames and this
 /// debounce coalesces a continuous drag into one write per interval.
 const WINDOW_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
+/// Minimum spacing between workspace.json writes. Bursts (rapid tab
+/// switching) coalesce: the first write goes out immediately, the rest set a
+/// dirty flag flushed from the render loop (see `flush_workspaces_if_dirty`).
+const WORKSPACES_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
 /// Minimum spacing between render-loop window-bounds polls. The render path
 /// has no OS move/resize callback in this gpui version, so each frame would
 /// otherwise call `window.window_bounds()`; this keeps the poll to ~4Hz while
@@ -67,18 +71,77 @@ impl ConsoleDesktopApp {
             .selected_project_id
             .clone()
             .unwrap_or_else(|| "__default__".to_string());
-        let mut doc = persistence::load_workspace_state();
-        doc.active_workspace_id = Some(cur_wid.clone());
-        doc.sidebar_visible = self.sidebar_visible;
-        doc.sidebar_width = self.sidebar_width;
-        doc.right_sidebar_visible = self.right_sidebar_visible;
-        doc.right_sidebar_width = self.right_sidebar_width;
-        doc.right_sidebar_bottom_height = self.right_sidebar_bottom_height;
-        doc.right_sidebar_bottom_collapsed = self.right_sidebar_bottom_collapsed;
-        persistence::save_workspace_state(&doc);
+        // Build the document from memory: every field comes from live state,
+        // so no disk re-read is needed to preserve anything.
+        persistence::save_workspace_state(&persistence::WorkspaceStateDocument {
+            version: 1,
+            active_workspace_id: Some(cur_wid),
+            sidebar_visible: self.sidebar_visible,
+            sidebar_width: self.sidebar_width,
+            right_sidebar_visible: self.right_sidebar_visible,
+            right_sidebar_width: self.right_sidebar_width,
+            right_sidebar_bottom_height: self.right_sidebar_bottom_height,
+            right_sidebar_bottom_collapsed: self.right_sidebar_bottom_collapsed,
+        });
     }
 
     pub fn persist_workspaces(&self) {
+        // Only the main window's workspaces survive restarts (same rule as
+        // `persist_layout`); secondaries skipping the write also avoids them
+        // clobbering the main window's saved trees with their transient ones.
+        if !self.is_main_window {
+            return;
+        }
+        let Some(bytes) = self.serialized_workspaces() else {
+            return;
+        };
+        // Skip redundant writes: tab actions often persist without changes.
+        if self
+            .persisted_workspaces_bytes
+            .borrow()
+            .as_deref()
+            .is_some_and(|last| last == bytes.as_slice())
+        {
+            return;
+        }
+        // Coalesce bursts (rapid tab switching): at most one write per
+        // interval, with a trailing flush from the render loop.
+        let now = std::time::Instant::now();
+        let too_soon = self.last_workspaces_persist.get().is_some_and(|last| {
+            now.duration_since(last) < WORKSPACES_SAVE_DEBOUNCE
+        });
+        if too_soon {
+            self.workspaces_dirty.set(true);
+            return;
+        }
+        self.write_workspaces_bytes(bytes);
+    }
+
+    /// Render-loop trailing flush for throttled workspace saves. Called from
+    /// `maybe_persist_window_state`, so a dirty tree is written at most one
+    /// frame-batch after the burst ends.
+    pub(crate) fn flush_workspaces_if_dirty(&self) {
+        if !self.is_main_window || !self.workspaces_dirty.get() {
+            return;
+        }
+        self.workspaces_dirty.set(false);
+        let Some(bytes) = self.serialized_workspaces() else {
+            return;
+        };
+        if self
+            .persisted_workspaces_bytes
+            .borrow()
+            .as_deref()
+            .is_some_and(|last| last == bytes.as_slice())
+        {
+            return;
+        }
+        self.write_workspaces_bytes(bytes);
+    }
+
+    /// Serialize the persistable workspace document (compact JSON bytes), or
+    /// `None` when serialization fails (nothing is written then).
+    fn serialized_workspaces(&self) -> Option<Vec<u8>> {
         let mut workspaces_map = std::collections::HashMap::new();
 
         for (proj_id_opt, root) in &self.project_workspace_roots {
@@ -181,7 +244,15 @@ impl ConsoleDesktopApp {
             active_workspace_id: Some(cur_wid),
             workspaces: workspaces_map.into_values().collect(),
         };
-        persistence::save_workspaces(&doc);
+        serde_json::to_vec(&doc).ok()
+    }
+
+    /// Record + write already-serialized workspace bytes.
+    fn write_workspaces_bytes(&self, bytes: Vec<u8>) {
+        *self.persisted_workspaces_bytes.borrow_mut() = Some(bytes.clone());
+        self.last_workspaces_persist
+            .set(Some(std::time::Instant::now()));
+        persistence::save_workspaces_bytes(&bytes);
     }
 
     /// Collapse or expand a sidebar date group.
@@ -309,6 +380,9 @@ impl ConsoleDesktopApp {
     /// frames skip the OS call entirely; bounds checks themselves stay in
     /// [`Self::persist_window_state`].
     pub fn maybe_persist_window_state(&mut self, window: &Window, cx: &mut Context<Self>) {
+        // Trailing flush for throttled workspace saves; runs at the render
+        // loop's poll cadence so bursts settle without extra timers.
+        self.flush_workspaces_if_dirty();
         let now = std::time::Instant::now();
         let too_soon = self
             .last_window_poll
@@ -328,13 +402,18 @@ impl ConsoleDesktopApp {
                 .selected_project_id
                 .clone()
                 .unwrap_or_else(|| "__default__".to_string());
-            let mut doc = persistence::load_workspace_state();
-            doc.active_workspace_id = Some(cur_wid.clone());
-            doc.sidebar_visible = self.sidebar_visible;
-            doc.sidebar_width = self.sidebar_width;
-            doc.right_sidebar_visible = self.right_sidebar_visible;
-            doc.right_sidebar_width = self.right_sidebar_width;
-            persistence::save_workspace_state(&doc);
+            // Same no-re-read rule as `persist_layout`: every field comes
+            // from live state, including the bottom-split fields.
+            persistence::save_workspace_state(&persistence::WorkspaceStateDocument {
+                version: 1,
+                active_workspace_id: Some(cur_wid),
+                sidebar_visible: self.sidebar_visible,
+                sidebar_width: self.sidebar_width,
+                right_sidebar_visible: self.right_sidebar_visible,
+                right_sidebar_width: self.right_sidebar_width,
+                right_sidebar_bottom_height: self.right_sidebar_bottom_height,
+                right_sidebar_bottom_collapsed: self.right_sidebar_bottom_collapsed,
+            });
         }
     }
 }

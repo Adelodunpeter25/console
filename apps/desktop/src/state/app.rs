@@ -73,6 +73,13 @@ pub struct ConsoleDesktopApp {
     /// Focused pane per workspace (keyed like `project_workspace_roots`), so
     /// splits keep their focus across workspace switches and restarts.
     pub(crate) project_active_panes: std::collections::HashMap<Option<String>, String>,
+    /// Throttle state for workspace.json writes (see `persist_workspaces`).
+    /// Interior mutability keeps the `&self` call sites unchanged.
+    pub(crate) workspaces_dirty: std::cell::Cell<bool>,
+    pub(crate) last_workspaces_persist: std::cell::Cell<Option<std::time::Instant>>,
+    pub(crate) persisted_workspaces_bytes: std::cell::RefCell<Option<Vec<u8>>>,
+    /// Trailing timer latch for draft file saves (see `schedule_drafts_save`).
+    pub(crate) drafts_save_pending: bool,
     /// The pane currently holding focus.
     pub active_pane_id: Option<String>,
     /// Shared with every pane's model picker; cloned per frame as a refcount
@@ -577,7 +584,7 @@ impl ConsoleDesktopApp {
                         // Save raw text for crash safety; does NOT update sidebar_draft_ids.
                         let text = input.read(cx).content().to_string();
                         let session_id = this.active_session_for_pane("pane-main");
-                        this.save_draft_for_session(session_id.as_deref(), &text);
+                        this.save_draft_for_session(session_id.as_deref(), &text, cx);
                     }
                     ComposerEvent::Focus => cx.notify(),
                     // Backspace on an empty composer removes the last staged
@@ -653,6 +660,10 @@ impl ConsoleDesktopApp {
             workspace_root: initial_root,
             project_workspace_roots,
             project_active_panes,
+            workspaces_dirty: std::cell::Cell::new(false),
+            last_workspaces_persist: std::cell::Cell::new(None),
+            persisted_workspaces_bytes: std::cell::RefCell::new(None),
+            drafts_save_pending: false,
             active_pane_id: initial_active_pane_id,
             providers: Rc::new(Vec::new()),
             models_by_provider: Rc::new(std::collections::HashMap::new()),
@@ -893,94 +904,106 @@ impl ConsoleDesktopApp {
                 }
             }
 
-            // 2. Fetch providers and models.
-            match client_clone.providers.list().await {
-                Ok(providers) => {
-                    cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                let first_model = providers.first().and_then(|p| {
-                                    p.models.first().map(|m| SelectedModel {
-                                        provider: p.name.clone(),
-                                        model_id: m.id.clone(),
-                                    })
-                                });
-                                this.providers = Rc::new(providers);
-                                // Default to first provider instead of Favorites so the
-                                // popover only needs one live fetch. Favoriting
-                                // stays available via the star tab, but it no
-                                // longer forces N fetches on first open.
-                                if let Some(first) = this.providers.first() {
-                                    let first_name = first.name.clone();
-                                    let needs_init = match &this.active_picker_tab {
-                                        PickerTab::Favorites => true,
-                                        PickerTab::Provider(name) => {
-                                            !this.providers.iter().any(|p| &p.name == name)
-                                        }
-                                    };
-                                    if needs_init {
-                                        this.active_picker_tab =
-                                            PickerTab::Provider(first_name.clone());
-                                        if let Some(state) =
-                                            this.workspace_pane_states.get_mut("pane-main")
-                                        {
-                                            state.active_picker_tab =
-                                                PickerTab::Provider(first_name);
-                                        }
-                                    }
-                                }
-                                if this.selected_model.is_none() {
-                                    this.selected_model = first_model.clone();
-                                }
-                                if let Some(state) = this.workspace_pane_states.get_mut("pane-main")
-                                {
-                                    if state.selected_model.is_none() {
-                                        state.selected_model = first_model;
-                                    }
-                                }
-                                cx.notify();
-                            });
-                        }
-                    });
-                }
-                Err(error) => {
-                    let message = format!("Unable to load providers and models: {error}");
-                    cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| this.set_error(message, cx));
-                        }
-                    });
-                }
-            }
-
-            // 3. Load model favorites persisted by the backend.
-            match client_clone.model_favorites.list().await {
-                Ok(model_favorites) => {
-                    cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.favorites = Rc::new(
-                                    model_favorites
-                                        .into_iter()
-                                        .map(|favorite: ModelFavorite| {
-                                            format!("{}:{}", favorite.provider, favorite.model_id)
+            // 2. Fetch providers and models concurrently with the steps below:
+            // detached so the sidebar/projects path never waits for it.
+            let providers_client = client_clone.clone();
+            let providers_entity = entity.clone();
+            cx.spawn(async move |cx| {
+                match providers_client.providers.list().await {
+                    Ok(providers) => {
+                        cx.update(|cx| {
+                            if let Some(app) = providers_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    let first_model = providers.first().and_then(|p| {
+                                        p.models.first().map(|m| SelectedModel {
+                                            provider: p.name.clone(),
+                                            model_id: m.id.clone(),
                                         })
-                                        .collect(),
-                                );
-                                cx.notify();
-                            });
-                        }
-                    });
+                                    });
+                                    this.providers = Rc::new(providers);
+                                    // Default to first provider instead of Favorites so the
+                                    // popover only needs one live fetch. Favoriting
+                                    // stays available via the star tab, but it no
+                                    // longer forces N fetches on first open.
+                                    if let Some(first) = this.providers.first() {
+                                        let first_name = first.name.clone();
+                                        let needs_init = match &this.active_picker_tab {
+                                            PickerTab::Favorites => true,
+                                            PickerTab::Provider(name) => {
+                                                !this.providers.iter().any(|p| &p.name == name)
+                                            }
+                                        };
+                                        if needs_init {
+                                            this.active_picker_tab =
+                                                PickerTab::Provider(first_name.clone());
+                                            if let Some(state) =
+                                                this.workspace_pane_states.get_mut("pane-main")
+                                            {
+                                                state.active_picker_tab =
+                                                    PickerTab::Provider(first_name);
+                                            }
+                                        }
+                                    }
+                                    if this.selected_model.is_none() {
+                                        this.selected_model = first_model.clone();
+                                    }
+                                    if let Some(state) = this.workspace_pane_states.get_mut("pane-main")
+                                    {
+                                        if state.selected_model.is_none() {
+                                            state.selected_model = first_model;
+                                        }
+                                    }
+                                    cx.notify();
+                                });
+                            }
+                        });
+                    }
+                    Err(error) => {
+                        let message = format!("Unable to load providers and models: {error}");
+                        cx.update(|cx| {
+                            if let Some(app) = providers_entity.upgrade() {
+                                app.update(cx, |this, cx| this.set_error(message, cx));
+                            }
+                        });
+                    }
                 }
-                Err(error) => {
-                    let message = format!("Unable to load model favorites: {error}");
-                    cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| this.set_error(message, cx));
-                        }
-                    });
+            })
+            .detach();
+
+            // 3. Load model favorites persisted by the backend, concurrently
+            // like providers above.
+            let favorites_client = client_clone.clone();
+            let favorites_entity = entity.clone();
+            cx.spawn(async move |cx| {
+                match favorites_client.model_favorites.list().await {
+                    Ok(model_favorites) => {
+                        cx.update(|cx| {
+                            if let Some(app) = favorites_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.favorites = Rc::new(
+                                        model_favorites
+                                            .into_iter()
+                                            .map(|favorite: ModelFavorite| {
+                                                format!("{}:{}", favorite.provider, favorite.model_id)
+                                            })
+                                            .collect(),
+                                    );
+                                    cx.notify();
+                                });
+                            }
+                        });
+                    }
+                    Err(error) => {
+                        let message = format!("Unable to load model favorites: {error}");
+                        cx.update(|cx| {
+                            if let Some(app) = favorites_entity.upgrade() {
+                                app.update(cx, |this, cx| this.set_error(message, cx));
+                            }
+                        });
+                    }
                 }
-            }
+            })
+            .detach();
 
             // 4. Load projects; derive the selected project from the active
             // session, then fetch its Git branches for the branch chip.

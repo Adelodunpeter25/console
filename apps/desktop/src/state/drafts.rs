@@ -1,8 +1,15 @@
 use console_ui::DraftSummary;
+use gpui::Context;
 use std::collections::HashSet;
+use std::time::Duration;
 
 use crate::persistence;
 use crate::state::app::ConsoleDesktopApp;
+
+/// Trailing delay before composer text hits disk. Typing previously caused a
+/// full store read+parse+pretty-write per keystroke on the UI thread; now
+/// bursts coalesce into one write shortly after typing pauses.
+const DRAFTS_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
 
 impl ConsoleDesktopApp {
     #[allow(dead_code)]
@@ -79,11 +86,16 @@ impl ConsoleDesktopApp {
         self.drafts.get(key).map(|d| d.prompt.as_str())
     }
 
-    pub fn save_draft_for_session(&mut self, session_id: Option<&str>, text: &str) {
+    pub fn save_draft_for_session(
+        &mut self,
+        session_id: Option<&str>,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) {
         let key = session_id.unwrap_or("new_chat").to_string();
         if text.trim().is_empty() {
             if self.drafts.remove(&key).is_some() {
-                persistence::store::save_drafts(self.drafts.clone());
+                self.schedule_drafts_save(cx);
             }
         } else {
             let changed = match self.drafts.get(&key) {
@@ -98,23 +110,49 @@ impl ConsoleDesktopApp {
                         updated_at: chrono::Utc::now().timestamp(),
                     },
                 );
-                persistence::store::save_drafts(self.drafts.clone());
+                self.schedule_drafts_save(cx);
             }
         }
     }
 
-    pub fn clear_draft_for_session(&mut self, session_id: Option<&str>) {
+    pub fn clear_draft_for_session(&mut self, session_id: Option<&str>, cx: &mut Context<Self>) {
         let key = session_id.unwrap_or("new_chat");
         if self.drafts.remove(key).is_some() {
-            persistence::store::save_drafts(self.drafts.clone());
+            self.schedule_drafts_save(cx);
         }
+    }
+
+    /// Coalesce draft disk writes: memory updates immediately (crash-safe
+    /// text stays live in the composer), the file flush trails typing.
+    pub(crate) fn schedule_drafts_save(&mut self, cx: &mut Context<Self>) {
+        if self.drafts_save_pending {
+            return;
+        }
+        self.drafts_save_pending = true;
+        cx.spawn(async move |entity, cx| {
+            cx.background_executor().timer(DRAFTS_SAVE_DEBOUNCE).await;
+            let _ = cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this: &mut ConsoleDesktopApp, _| {
+                        this.drafts_save_pending = false;
+                        persistence::store::save_drafts(this.drafts.clone());
+                    });
+                }
+            });
+        })
+        .detach();
     }
 
     /// Called when a tab closes — commits the current draft state to the sidebar.
     /// If `text` is non-empty, the session appears in the draft sidebar.
     /// If empty, it is removed from the sidebar.
-    pub fn commit_draft_to_sidebar(&mut self, session_id: &str, text: &str) {
-        self.save_draft_for_session(Some(session_id), text);
+    pub fn commit_draft_to_sidebar(
+        &mut self,
+        session_id: &str,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) {
+        self.save_draft_for_session(Some(session_id), text, cx);
         if text.trim().is_empty() {
             self.sidebar_draft_ids.remove(session_id);
         } else {
@@ -129,10 +167,10 @@ impl ConsoleDesktopApp {
 
     /// Discard a draft via the sidebar context menu.
     /// `key` is the draft map key: a session id or `"new_chat"`.
-    pub fn discard_draft(&mut self, key: &str) {
+    pub fn discard_draft(&mut self, key: &str, cx: &mut Context<Self>) {
         let is_new_chat = key == "new_chat";
         let session_opt = if is_new_chat { None } else { Some(key) };
-        self.clear_draft_for_session(session_opt);
+        self.clear_draft_for_session(session_opt, cx);
         if !is_new_chat {
             self.sidebar_draft_ids.remove(key);
         }

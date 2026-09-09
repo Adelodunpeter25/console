@@ -131,7 +131,9 @@ fn write_document(document: &StorageDocument) -> std::io::Result<()> {
     fs::create_dir_all(directory)?;
 
     let temporary_path = path.with_extension(format!("json.{}.tmp", std::process::id()));
-    let contents = serde_json::to_vec_pretty(document).map_err(std::io::Error::other)?;
+    // Compact JSON: these files are never hand-read and are rewritten often
+    // (drafts save per keystroke burst); pretty-printing costs ~2-3x size+time.
+    let contents = serde_json::to_vec(document).map_err(std::io::Error::other)?;
     fs::write(&temporary_path, contents)?;
     fs::rename(temporary_path, path)
 }

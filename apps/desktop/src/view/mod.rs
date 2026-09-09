@@ -738,7 +738,7 @@ impl Render for ConsoleDesktopApp {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
                                         let is_new_chat = key == "new_chat";
-                                        this.discard_draft(&key);
+                                        this.discard_draft(&key, cx);
                                         // If the discarded draft is currently shown in the
                                         // active composer, clear the input so stale text
                                         // doesn't remain.

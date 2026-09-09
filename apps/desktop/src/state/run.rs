@@ -62,7 +62,7 @@ impl ConsoleDesktopApp {
         let active_session = self
             .active_session_for_pane(&run_pane_id)
             .map(|s| s.to_string());
-        self.clear_draft_for_session(active_session.as_deref());
+        self.clear_draft_for_session(active_session.as_deref(), cx);
         if let Some(ref sid) = active_session {
             self.revoke_sidebar_draft(sid);
         }
