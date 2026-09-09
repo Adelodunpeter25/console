@@ -46,7 +46,7 @@ const OUTPUT_FRAME_BYTES = 64 * 1024;
 
 interface PtySession {
   id: TerminalId;
-  terminal: Bun.Terminal;
+  terminal: Bun.Terminal | null;
   /** null until the shell subprocess actually starts (see startShell). */
   proc: PtyProcess | null;
   shell: string;
@@ -164,7 +164,7 @@ export class TerminalPtyManager {
     const session: PtySession = {
       id,
       // Assigned in startShell(); null until then.
-      terminal: undefined as unknown as Bun.Terminal,
+      terminal: null,
       // Assigned in startShell(); null until then.
       proc: null,
       shell,
@@ -220,7 +220,7 @@ export class TerminalPtyManager {
       cwd: session.cwd,
       env: shellEnv(),
     });
-    session.terminal = proc.terminal;
+    session.terminal = proc.terminal ?? null;
     session.proc = {
       pid: proc.pid,
       exited: proc.exited,
@@ -239,7 +239,7 @@ export class TerminalPtyManager {
       const queued = Buffer.concat(session.pendingInput);
       session.pendingInput.length = 0;
       try {
-        session.terminal.write(queued);
+        session.terminal?.write(queued);
       } catch {
         // Terminal closed mid-flush — nothing more to do.
       }
@@ -337,7 +337,7 @@ export class TerminalPtyManager {
       return true;
     }
     try {
-      session.terminal.write(data);
+      session.terminal?.write(data);
       return true;
     } catch {
       return false;
@@ -350,7 +350,7 @@ export class TerminalPtyManager {
     const session = this.sessions.get(id);
     if (!session || session.killed) return false;
     try {
-      session.terminal.resize(cols, rows);
+      session.terminal?.resize(cols, rows);
       session.cols = cols;
       session.rows = rows;
       return true;
@@ -379,7 +379,7 @@ export class TerminalPtyManager {
       // Already dead — fine.
     }
     try {
-      session.terminal.close();
+      session.terminal?.close();
     } catch {
       // Already closed — fine.
     }
