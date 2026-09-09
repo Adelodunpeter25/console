@@ -1,0 +1,5 @@
+[toolchain]
+# Pinned so CI builds with the exact toolchain local dev uses.
+# Keep in sync with the `toolchain` input in .github/workflows/console-desktop.yml.
+channel = "1.97.1"
+profile = "default"

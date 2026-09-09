@@ -29,6 +29,9 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
+          # Must match rust-toolchain.toml (source of truth); explicit here
+          # so the runner doesn't fetch latest stable first.
+          toolchain: 1.97.1
           targets: ${{ matrix.rust-target }}
 
       - uses: Swatinem/rust-cache@v2
@@ -38,7 +41,8 @@ jobs:
 
       # Intel cross-compiles from the Apple Silicon runner via the universal
       # macOS SDK; icon generation (sips/iconutil) and ad-hoc codesign run
-      # natively on the runner.
+      # natively on the runner. --locked fails loudly on dependency drift
+      # instead of silently floating to a broken graph.
       - name: Package Console.app
         run: >
           bash apps/desktop/scripts/build.sh
@@ -48,6 +52,7 @@ jobs:
           --app-name "Console"
           --target ${{ matrix.rust-target }}
           --out-dir "$RUNNER_TEMP/dist"
+          --locked
 
       # ditto preserves codesigning and resource forks inside the zip.
       - name: Zip app bundle
