@@ -188,7 +188,14 @@ impl TermyBackend {
     /// after every `advance` (device queries arrive inside PTY output; the
     /// answers are only generated while draining).
     pub fn advance_and_collect_replies(&mut self, data: &str) -> Vec<u8> {
-        self.term.feed_output(data.as_bytes());
+        self.advance_and_collect_replies_bytes(data.as_bytes())
+    }
+
+    /// Byte-slice variant of [`Self::advance_and_collect_replies`] — the
+    /// binary wire protocol delivers raw PTY bytes, and a UTF-8 sequence may
+    /// be split across frames, so no string round-trip is allowed here.
+    pub fn advance_and_collect_replies_bytes(&mut self, data: &[u8]) -> Vec<u8> {
+        self.term.feed_output(data);
         let mut collector = ReplyCollector { replies: Vec::new() };
         let _ = self.term.drain_events(&mut collector);
         collector.replies

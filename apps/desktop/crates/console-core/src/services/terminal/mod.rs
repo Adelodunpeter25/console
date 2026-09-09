@@ -7,6 +7,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
 
+/// Binary wire-frame tags for `proto=binary` connections (mirrors the server's
+/// `TERMINAL_OUTPUT_FRAME_TAG` / `TERMINAL_INPUT_FRAME_TAG`; see
+/// docs/plan/terminal-binary-protocol-plan.md). A binary WS frame is
+/// `[tag, ...payload]`; control messages remain JSON text frames.
+pub const TERMINAL_OUTPUT_FRAME_TAG: u8 = 0x01;
+pub const TERMINAL_INPUT_FRAME_TAG: u8 = 0x01;
+
 /// Client-side terminal service — manages WS lifecycle against `GET /api/terminals`
 /// and owns the set of live `TerminalRecord`s. The VT grid itself lives in a
 /// `TerminalBackend` (termy_core) per session; the service only routes wire
@@ -52,6 +59,9 @@ impl TerminalService {
         if let Some(label) = &params.label {
             url.push_str(&format!("&label={}", urlencoding::encode(label)));
         }
+        // Opt into the binary data frames (raw PTY bytes, tag 0x01); control
+        // messages stay JSON. See docs/plan/terminal-binary-protocol-plan.md.
+        url.push_str("&proto=binary");
         url
     }
 
@@ -212,19 +222,25 @@ impl TerminalService {
 
             let write_task = tokio::spawn(async move {
                 while let Some(msg) = rx.recv().await {
-                    let text = match serde_json::to_string(&msg) {
-                        Ok(t) => t,
-                        Err(e) => {
-                            log::warn!("Failed to serialize terminal msg: {e}");
-                            continue;
+                    // Binary protocol: input rides a binary frame
+                    // [0x01, ...bytes]; control messages stay JSON text.
+                    let wire = match &msg {
+                        TerminalClientMessage::Input { data } => {
+                            let mut frame =
+                                Vec::with_capacity(data.len() + 1);
+                            frame.push(TERMINAL_INPUT_FRAME_TAG);
+                            frame.extend_from_slice(data.as_bytes());
+                            tokio_tungstenite::tungstenite::Message::Binary(frame.into())
                         }
+                        other => match serde_json::to_string(other) {
+                            Ok(t) => tokio_tungstenite::tungstenite::Message::Text(t.into()),
+                            Err(e) => {
+                                log::warn!("Failed to serialize terminal msg: {e}");
+                                continue;
+                            }
+                        },
                     };
-                    if let Err(e) = futures_util::SinkExt::send(
-                        &mut write,
-                        tokio_tungstenite::tungstenite::Message::Text(text.into()),
-                    )
-                    .await
-                    {
+                    if let Err(e) = futures_util::SinkExt::send(&mut write, wire).await {
                         log::warn!("WS send failed: {e}");
                         break;
                     }
@@ -272,6 +288,28 @@ impl TerminalService {
                                 log::warn!("Invalid terminal frame: {e} — {text}");
                             }
                         }
+                    }
+                    Ok(tokio_tungstenite::tungstenite::Message::Binary(bytes)) => {
+                        // Binary protocol data frame: [tag, ...payload].
+                        // Output is raw PTY bytes — feed without a string
+                        // round-trip (UTF-8 can split across frames).
+                        if bytes.first() != Some(&TERMINAL_OUTPUT_FRAME_TAG) {
+                            log::warn!("Unknown terminal binary frame tag: {:?}", bytes.first());
+                            continue;
+                        }
+                        let payload = &bytes[1..];
+                        if payload.is_empty() {
+                            continue;
+                        }
+                        let mut b = backend_clone.lock().await;
+                        let replies = b.advance_and_collect_replies_bytes(payload);
+                        drop(b);
+                        if !replies.is_empty() {
+                            let _ = reply_sender.send(TerminalClientMessage::Input {
+                                data: String::from_utf8_lossy(&replies).into_owned(),
+                            });
+                        }
+                        notify_clone.notify_one();
                     }
                     Ok(tokio_tungstenite::tungstenite::Message::Close(_)) => {
                         *status_clone.write().await = TerminalStatus::Exited;
