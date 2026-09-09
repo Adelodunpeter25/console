@@ -9,7 +9,7 @@ mod types;
 mod view;
 mod window;
 
-use assets::{Assets, register_fonts};
+use assets::{Assets, register_core_fonts};
 
 use console_ui::init_input_keybindings;
 use gpui::App;
@@ -29,7 +29,10 @@ fn main() {
     let app = gpui_platform::application().with_assets(Assets);
 
     app.run(|cx: &mut App| {
-        if let Err(error) = register_fonts(cx) {
+        // Core weights only: the remaining 7 register after first paint
+        // (see ConsoleDesktopApp::new) so ~1.7MB of TTF parsing stays off
+        // the startup path.
+        if let Err(error) = register_core_fonts(cx) {
             log::warn!("Failed to register bundled fonts: {error}");
         }
         // gpui-component: theme/global state/popover plumbing. Required before

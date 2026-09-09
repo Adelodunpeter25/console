@@ -317,7 +317,10 @@ impl ConsoleDesktopApp {
             }
         }
         let ws_state = persistence::load_workspace_state();
-        let layout = persistence::layout::load();
+        // One read of state.json split in memory: window, layout, drafts and
+        // environments previously re-read + re-parsed the same file each.
+        let store_doc = persistence::read_document();
+        let layout = store_doc.layout.clone().unwrap_or_default();
 
         let (
             sidebar_visible,
@@ -397,7 +400,7 @@ impl ConsoleDesktopApp {
                     rsb_bottom_collapsed,
                     proj_id,
                     root,
-                    persistence::store::load_window(),
+                    store_doc.window.clone(),
                 )
             }
             crate::window::WindowLaunchTarget::Fresh
@@ -550,7 +553,7 @@ impl ConsoleDesktopApp {
             }
         });
 
-        let drafts = persistence::store::load_drafts();
+        let drafts = store_doc.drafts.map(|s| s.drafts).unwrap_or_default();
         // All persisted drafts (except new_chat) are already confirmed for sidebar display.
         let sidebar_draft_ids: std::collections::HashSet<String> = drafts
             .keys()
@@ -781,7 +784,14 @@ impl ConsoleDesktopApp {
             _subscriptions: subscriptions,
         };
 
-        app.init_environments(cx);
+        // Remaining font weights register after the first frame is presented,
+        // keeping ~1.7MB of TTF parsing off the startup path (once per
+        // process; secondary windows share the text system).
+        window.on_next_frame(move |_, cx| {
+            crate::assets::register_remaining_fonts_once(cx);
+        });
+
+        app.init_environments(store_doc.environments.clone(), cx);
         app.refresh_auth_status(cx);
         app.init_notifications(cx);
 

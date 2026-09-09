@@ -46,12 +46,34 @@ static FONT_JETBRAINS_MONO_SEMIBOLD: &[u8] =
     include_bytes!("../assets/fonts/JetBrainsMono-SemiBold.ttf");
 static FONT_JETBRAINS_MONO_BOLD: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Bold.ttf");
 
-/// Register embedded Geist & Geist Mono fonts with GPUI
-pub fn register_fonts(cx: &App) -> gpui::Result<()> {
+/// Register the core UI fonts synchronously at startup: regular, mono
+/// regular, and medium (the weights the first paint actually needs).
+pub fn register_core_fonts(cx: &App) -> gpui::Result<()> {
     cx.text_system().add_fonts(vec![
         Cow::Borrowed(FONT_GEIST),
         Cow::Borrowed(FONT_GEIST_MONO),
         Cow::Borrowed(FONT_GEIST_MEDIUM),
+    ])
+}
+
+static REMAINING_FONTS_REGISTERED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Register the remaining weights after first paint (see `register_core_fonts`).
+/// Once per process: secondary windows share the process-wide text system.
+pub fn register_remaining_fonts_once(cx: &App) {
+    if REMAINING_FONTS_REGISTERED
+        .compare_exchange(
+            false,
+            true,
+            std::sync::atomic::Ordering::AcqRel,
+            std::sync::atomic::Ordering::Relaxed,
+        )
+        .is_err()
+    {
+        return;
+    }
+    if let Err(error) = cx.text_system().add_fonts(vec![
         Cow::Borrowed(FONT_GEIST_SEMIBOLD),
         Cow::Borrowed(FONT_GEIST_BOLD),
         Cow::Borrowed(FONT_JETBRAINS_MONO_REGULAR),
@@ -59,5 +81,7 @@ pub fn register_fonts(cx: &App) -> gpui::Result<()> {
         Cow::Borrowed(FONT_JETBRAINS_MONO_MEDIUM),
         Cow::Borrowed(FONT_JETBRAINS_MONO_SEMIBOLD),
         Cow::Borrowed(FONT_JETBRAINS_MONO_BOLD),
-    ])
+    ]) {
+        log::warn!("Failed to register remaining fonts: {error}");
+    }
 }

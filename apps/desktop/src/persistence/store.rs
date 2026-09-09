@@ -34,13 +34,13 @@ pub struct PersistedDraftsState {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-struct StorageDocument {
-    version: u32,
-    window: Option<PersistedWindowState>,
-    settings_window: Option<PersistedWindowState>,
-    layout: Option<PersistedLayoutState>,
-    environments: Option<PersistedEnvironmentsState>,
-    drafts: Option<PersistedDraftsState>,
+pub(crate) struct StorageDocument {
+    pub(crate) version: u32,
+    pub(crate) window: Option<PersistedWindowState>,
+    pub(crate) settings_window: Option<PersistedWindowState>,
+    pub(crate) layout: Option<PersistedLayoutState>,
+    pub(crate) environments: Option<PersistedEnvironmentsState>,
+    pub(crate) drafts: Option<PersistedDraftsState>,
 }
 
 fn app_folder_name() -> &'static str {
@@ -108,7 +108,9 @@ fn storage_path() -> PathBuf {
     storage_directory().join("state.json")
 }
 
-fn read_document() -> StorageDocument {
+/// Read the whole state file once; startup splits it in memory instead of
+/// re-reading + re-parsing per section (window, layout, drafts, envs).
+pub(crate) fn read_document() -> StorageDocument {
     let Ok(contents) = fs::read_to_string(storage_path()) else {
         return StorageDocument {
             version: STORAGE_VERSION,
@@ -163,24 +165,12 @@ pub fn save_settings_window(state: PersistedWindowState) {
     update_document(|document| document.settings_window = Some(state));
 }
 
-pub fn load_layout() -> Option<PersistedLayoutState> {
-    read_document().layout
-}
-
 pub fn save_layout(state: PersistedLayoutState) {
     update_document(|document| document.layout = Some(state));
 }
 
-pub fn load_environments() -> Option<PersistedEnvironmentsState> {
-    read_document().environments
-}
-
 pub fn save_environments(state: PersistedEnvironmentsState) {
     update_document(|document| document.environments = Some(state));
-}
-
-pub fn load_drafts() -> std::collections::HashMap<String, PersistedDraft> {
-    read_document().drafts.map(|s| s.drafts).unwrap_or_default()
 }
 
 pub fn save_drafts(drafts: std::collections::HashMap<String, PersistedDraft>) {

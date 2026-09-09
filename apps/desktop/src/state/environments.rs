@@ -1,6 +1,6 @@
 use super::ConsoleDesktopApp;
 use crate::persistence::store::{
-    PersistedEnvironment, PersistedEnvironmentsState, load_environments, save_environments,
+    PersistedEnvironment, PersistedEnvironmentsState, save_environments,
 };
 use console_ui::settings::{EnvironmentRow, ProbeState};
 use gpui::Context;
@@ -27,11 +27,19 @@ impl Environment {
 }
 
 impl ConsoleDesktopApp {
-    pub fn init_environments(&mut self, cx: &mut Context<Self>) {
+    pub fn init_environments(
+        &mut self,
+        persisted: Option<PersistedEnvironmentsState>,
+        cx: &mut Context<Self>,
+    ) {
         let def = Environment::default_local();
-        if let Some(persisted) = load_environments() {
-            if !persisted.environments.is_empty() {
-                self.environments = persisted
+        // Only write back when something actually changed: this runs on every
+        // launch and a save is a full store read + rewrite.
+        let mut mutated = false;
+        if let Some(state) = persisted {
+            if !state.environments.is_empty() {
+                let mut fixed_legacy_url = false;
+                self.environments = state
                     .environments
                     .into_iter()
                     .map(|e| {
@@ -39,6 +47,7 @@ impl ConsoleDesktopApp {
                         let url = if e.url == "http://127.0.0.1:4040"
                             || e.url == "http://localhost:4040"
                         {
+                            fixed_legacy_url = true;
                             def.url.clone()
                         } else {
                             e.url
@@ -50,16 +59,20 @@ impl ConsoleDesktopApp {
                         }
                     })
                     .collect();
-                self.active_env_id = persisted
+                self.active_env_id = state
                     .active_id
                     .or_else(|| self.environments.first().map(|e| e.id.clone()));
+                mutated = fixed_legacy_url;
             }
         }
         if self.environments.is_empty() {
             self.active_env_id = Some(def.id.clone());
             self.environments = vec![def];
+            mutated = true;
         }
-        self.save_persisted_environments();
+        if mutated {
+            self.save_persisted_environments();
+        }
 
         let active_url = self.active_environment_url();
         let client = self.client.clone();

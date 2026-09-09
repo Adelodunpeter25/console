@@ -52,10 +52,6 @@ impl Default for PersistedLayoutState {
     }
 }
 
-pub fn load() -> PersistedLayoutState {
-    store::load_layout().unwrap_or_default()
-}
-
 pub fn save(state: PersistedLayoutState) {
     store::save_layout(state);
 }
