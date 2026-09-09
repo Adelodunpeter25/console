@@ -4,6 +4,9 @@
 **Applies to**: Desktop (`apps/desktop`), Mobile (`apps/mobile`), Server API (`apps/server`)  
 **Target Capabilities**: Real-Time Agent Collaboration, Turn Orchestration, Mid-Flight Steering
 
+> [!IMPORTANT]
+> **Addendum (2026-09-09)**: A pre-implementation review against the current codebase found several places where this spec's data flow does not match how `RunService`, `AgentSessionEvent`, and `ComposerRunState` actually work today. Section 9 records the concrete resolutions; treat it as normative alongside sections 3–4 wherever they conflict.
+
 ---
 
 ## 1. Overview & Problem Statement
@@ -237,3 +240,42 @@ export type AgentSessionEvent =
 - [ ] **Mobile (`apps/mobile`)**:
   - Build `QueuedPromptBanner` with Reanimated animations.
   - Connect to queue/steer REST endpoints and SSE stream handler.
+
+---
+
+## 9. Addendum: Codebase Reconciliation
+
+This section resolves conflicts found between sections 2–8 above and the current implementation of `apps/server`, `packages/types`, and `apps/desktop`. Implementers should follow this section where it overrides earlier text.
+
+### 9.1 Event Types — Extend the Real Union, Don't Invent a New One
+
+`AgentSessionEvent` is defined once in `packages/types/src/events.ts` and hand-mirrored in `apps/desktop/crates/console-core/src/types/events.rs`. It does **not** currently have `queueUpdated`, `runStarted`, or `turnFinished` — the existing lifecycle events are `turnStart`, `turnEnd`, and the synthetic re-attach frames `done`/`aborted`/`streamReset`.
+
+Resolution:
+- Add exactly one new variant to the shared union: `{ type: "queueUpdated"; queuedPrompt: QueuedPrompt | null }`.
+- Do **not** add `runStarted`/`turnFinished`; reuse the existing `turnStart { prompt }` event for the auto-popped or steered turn, and existing `done`/`aborted` synthetic frames to signal turn settlement. This avoids widening every exhaustive match over `AgentSessionEvent` (`apps/desktop/src/state/run.rs`, `apps/mobile/utils/chat-events.ts`, the Rust enum) for concepts that already exist.
+- Any change to the TS union in `packages/types/src/events.ts` must be mirrored in `apps/desktop/crates/console-core/src/types/events.rs` in the same change; these two files are not auto-generated from one another.
+
+### 9.2 Steering — Reuse `RunService`'s Existing Settle/Abort Invariant
+
+`RunService.abortRun()` intentionally does **not** delete the session's `activeRuns` entry synchronously — that deletion happens only in `runAgentStreamInternal`'s `finally` block, specifically to prevent a second `runAgentStream` call from racing the first run's teardown (shared `RunEventHub`/session state).
+
+The spec's steer flow ("await current step cancellation... immediately invoke `runAgentStream`") as a separate caller would violate that invariant. Resolution:
+- Add a `pendingNextTurn: Map<sessionId, RunPromptDto>` slot to `RunService` (parallel to `activeRuns`).
+- `POST /sessions/:id/steer` sets `pendingNextTurn`, calls the existing `abortRun(sessionId)`, and returns immediately — it does **not** call `runAgentStream` itself.
+- `runAgentStreamInternal`'s existing `finally` block, right before it deletes the `activeRuns` entry, checks `pendingNextTurn` for the session. If present, it clears the slot and kicks off the next `runAgentStream` call (fire-and-forget, same as how the top-level HTTP handler invokes it) instead of finishing quietly.
+- The normal auto-pop path (§3 "Normal Completion") uses the same `pendingNextTurn` mechanism, populated by `POST /sessions/:id/queue` instead of `/steer`. This means **queueing and steering share one queue slot and one drain path** — "steer" is simply "abort, then let the existing drain-on-settle logic run early." This removes the separate mutex/lock language in §7.4, which has no real analog in this single-threaded-per-session code; the `activeRuns` Map itself is already the lock.
+
+### 9.3 Persistence — Match the `session-todos.ts` Pattern
+
+§7.3 requires the queue to survive server restarts and client reconnects. In-memory-only storage (a plain `Map` on `RunService`) satisfies reconnect-while-server-stays-up but not restart. Resolution: persist `QueuedPrompt` the same way `session-todos.ts` persists todos — one row per session in SQLite via `sessionStorage`, mirrored into an in-memory map for fast access during a run, loaded on `GET /sessions/:id/queue` and on session load. `queueUpdated` broadcasts stay in-memory/SSE-only (no need to re-fetch from disk on every broadcast).
+
+### 9.4 Composer State — Add a Field, Not a New Enum Variant
+
+`ComposerRunState` in `apps/desktop/crates/console-ui/src/common/composer_view.rs` is `Ready | Preparing | Running`, and "queued" is not a run state — a queue can exist independently of whether text is currently in the composer. Resolution: thread a separate `has_queued_prompt: bool` (or `Option<QueuedPrompt>`) prop into `ComposerView` alongside `run_state`, and derive the button variant (Stop / Queue / Disabled-Replace) from the `(run_state, composer_input.is_empty(), has_queued_prompt)` triple per the table in §2.1, rather than adding a `Queued` variant to `ComposerRunState` itself.
+
+### 9.5 Auto-Pop Failure and Attachment Re-Validation
+
+Two cases §7 doesn't cover:
+- If the auto-popped or steered turn fails to start (e.g., `catalogModel?.supportsImages === false` per the existing check in `run.service.ts`, or an unknown provider), the queue entry is **not** silently dropped: surface the failure as a normal turn-start error (`error` event + `needs_attention` session status, matching existing error handling in `runAgentStreamInternal`) and leave `pendingNextTurn` cleared so the user can retry manually. This is consistent with §7.1's "hold, don't discard" policy but clarifies the auto-pop case specifically.
+- Image attachments on a queued prompt are re-validated against the resolved model at drain time (not at queue time), since the model/provider active when the next turn actually starts may differ from when the prompt was queued.
