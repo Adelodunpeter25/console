@@ -148,6 +148,20 @@ impl TerminalHandle {
         b.snapshot()
     }
 
+    /// Damage since the last call: `Full` (repaint everything) or the dirty
+    /// row spans. Must be collected alongside each snapshot — the backend
+    /// clears dirty tracking when read, so snapshot and damage stay in sync.
+    pub async fn damage_snapshot(&self) -> termy_core::TerminalDamageSnapshot {
+        let b = self.backend.lock().await;
+        b.take_damage_snapshot()
+    }
+
+    /// Full link metadata (OSC 8, file paths, URLs) at a viewport cell.
+    pub async fn link_at(&self, row: usize, col: usize) -> Option<termy_core::DetectedViewportLink> {
+        let b = self.backend.lock().await;
+        b.link_at(row, col)
+    }
+
     pub async fn status(&self) -> TerminalStatus {
         *self.status.read().await
     }

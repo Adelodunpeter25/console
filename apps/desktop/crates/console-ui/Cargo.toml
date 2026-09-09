@@ -20,4 +20,5 @@ chrono = { workspace = true }
 pulldown-cmark = { workspace = true }
 regex = { workspace = true }
 base64 = { workspace = true }
-termy_core = { git = "https://github.com/lassejlv/termy" }
+# Pinned to a rev for reproducible builds (was floating on termy main).
+termy_core = { git = "https://github.com/lassejlv/termy", rev = "f5ddada41eab55c26b582140b5ef4eb4c9d696d8" }

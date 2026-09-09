@@ -24,8 +24,6 @@ pub struct TerminalCellPos {
 /// Drop-in terminal pane. Owns its `AlacrittyBackend` + WS `TerminalHandle`,
 /// feeds server output → grid → snapshot, and forwards keyboard → `input`.
 ///
-/// **Usage (not yet wired into `ConsoleDesktopApp`):**
-///
 /// ```ignore
 /// let params = TerminalSpawnParams { cwd: project.path.clone(), ..Default::default() };
 /// let view = cx.new(|cx| TerminalView::new(params, client.clone(), window, cx));
@@ -41,6 +39,14 @@ pub struct TerminalView {
     selection_anchor: Option<TerminalCellPos>,
     selection_head: Option<TerminalCellPos>,
     selection_dragging: bool,
+    /// Damage from the last snapshot: repaint only these rows. Termy's damage
+    /// tracking clears on read, so this always pairs with `snapshot` above.
+    damage: Option<termy_core::TerminalDamageSnapshot>,
+    /// Measured cell metrics from the last canvas paint. Mouse→cell mapping
+    /// must use these (not constants) or clicks land on the wrong cells.
+    cell_metrics: Option<(Pixels, Pixels)>,
+    /// Last mouse-down for double-click-to-open detection.
+    last_click: Option<(std::time::Instant, TerminalCellPos)>,
 }
 
 impl TerminalView {
@@ -64,6 +70,9 @@ impl TerminalView {
             selection_anchor: None,
             selection_head: None,
             selection_dragging: false,
+            damage: None,
+            cell_metrics: None,
+            last_click: None,
         };
 
         this.spawn(params, client, cx);
@@ -112,7 +121,7 @@ impl TerminalView {
             // (e.g. `git push` progress), so run the whole lock-and-snapshot on
             // the background executor and only hop back to the main thread to
             // apply the result.
-            let (initial_snapshot, initial_status, initial_error) = cx
+            let (initial_snapshot, initial_status, initial_error, initial_damage) = cx
                 .background_executor()
                 .spawn({
                     let handle = handle.clone();
@@ -120,7 +129,8 @@ impl TerminalView {
                         let snapshot = handle.snapshot().await;
                         let status = handle.status().await;
                         let error = handle.error.read().await.clone();
-                        (snapshot, status, error)
+                        let damage = handle.damage_snapshot().await;
+                        (snapshot, status, error, damage)
                     }
                 })
                 .await;
@@ -130,6 +140,7 @@ impl TerminalView {
                 view.snapshot = Some(initial_snapshot);
                 view.status = initial_status;
                 view.error = initial_error;
+                view.damage = Some(initial_damage);
                 cx.notify();
             });
 
@@ -146,19 +157,21 @@ impl TerminalView {
                     // snapshot above): termy's blocking mutex must never be
                     // awaited on the main thread.
                     let handle_for_snapshot = handle_for_watch.clone();
-                    let (snapshot, status, error) = cx
+                    let (snapshot, status, error, damage) = cx
                         .background_executor()
                         .spawn(async move {
                             let snapshot = handle_for_snapshot.snapshot().await;
                             let status = handle_for_snapshot.status().await;
                             let error = handle_for_snapshot.error.read().await.clone();
-                            (snapshot, status, error)
+                            let damage = handle_for_snapshot.damage_snapshot().await;
+                            (snapshot, status, error, damage)
                         })
                         .await;
                     let _ = this_watch.update(cx, |view, cx| {
                         view.snapshot = Some(snapshot);
                         view.status = status;
                         view.error = error;
+                        view.damage = Some(damage);
                         cx.notify();
                     });
                 }
@@ -277,6 +290,19 @@ impl TerminalView {
         };
         let bytes = keystroke_to_input(&ks, TerminalKeyEventKind::Press, mode, true)?;
         Some(String::from_utf8_lossy(&bytes).into_owned())
+    }
+
+    /// Map a mouse position to a grid cell using the measured cell metrics
+    /// from the last paint — never constants, which drift with the font and
+    /// put clicks/selections on the wrong cells.
+    fn cell_at_point(&self, x: Pixels, y: Pixels) -> TerminalCellPos {
+        let (cell_w, cell_h) = self.cell_metrics.unwrap_or((px(7.2), px(16.0)));
+        let col = ((x - px(8.0)).max(px(0.0)) / cell_w).floor() as u16;
+        let row = ((y - px(8.0)).max(px(0.0)) / cell_h).floor() as u16;
+        TerminalCellPos {
+            col: col.min(self.size.cols.saturating_sub(1)),
+            row: row.min(self.size.rows.saturating_sub(1)),
+        }
     }
 }
 
@@ -411,6 +437,15 @@ impl Render for TerminalView {
             .map(|s| s.bracketed_paste)
             .unwrap_or(false);
         let selection_range = self.selection_range();
+        // Damage → dirty row set, computed here (owned) so the paint closure
+        // stays 'static without cloning termy types. None = repaint all.
+        let repaint_rows: Option<std::collections::HashSet<u16>> = match &self.damage {
+            None => None,
+            Some(termy_core::TerminalDamageSnapshot::Full) => None,
+            Some(termy_core::TerminalDamageSnapshot::Partial(spans)) => {
+                Some(spans.iter().map(|s| s.row as u16).collect())
+            }
+        };
 
         div()
             .id("terminal-view")
@@ -480,7 +515,26 @@ impl Render for TerminalView {
                         return;
                     }
 
+                    // TEMP-DIAG: tab-completion report — run with RUST_LOG=debug,
+                    // press Tab, and check whether it reaches here and what bytes
+                    // come out. Remove once the Tab path is confirmed.
+                    let is_tab = key == "tab";
+                    if is_tab {
+                        log::debug!(
+                            "terminal tab keydown: ctrl={} alt={} shift={} platform={} func={} key_char={:?}",
+                            event.keystroke.modifiers.control,
+                            event.keystroke.modifiers.alt,
+                            event.keystroke.modifiers.shift,
+                            event.keystroke.modifiers.platform,
+                            event.keystroke.modifiers.function,
+                            event.keystroke.key_char,
+                        );
+                    }
+
                     if let Some(bytes) = TerminalView::key_to_bytes(event, keyboard_mode) {
+                        if is_tab {
+                            log::debug!("terminal tab -> {} bytes to pty", bytes.len());
+                        }
                         if let Some(h) = &handle_for_key {
                             h.send_input(bytes);
                         }
@@ -490,6 +544,8 @@ impl Render for TerminalView {
                             }
                         });
                         cx.stop_propagation();
+                    } else if is_tab {
+                        log::debug!("terminal tab swallowed: no bytes produced");
                     }
                 },
             )
@@ -526,14 +582,34 @@ impl Render for TerminalView {
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |this, event: &MouseDownEvent, _window, cx| {
-                            let cell_w = px(7.2);
-                            let cell_h = px(16.0);
-                            let col = ((event.position.x - px(8.0)).max(px(0.0)) / cell_w).floor() as u16;
-                            let row = ((event.position.y - px(8.0)).max(px(0.0)) / cell_h).floor() as u16;
-                            let pos = TerminalCellPos {
-                                col: col.min(this.size.cols.saturating_sub(1)),
-                                row: row.min(this.size.rows.saturating_sub(1)),
-                            };
+                            let pos = this.cell_at_point(event.position.x, event.position.y);
+
+                            // Double-click opens whatever termy resolved at
+                            // the cell (OSC 8 hyperlink, file path, URL) —
+                            // richer than the URL-regex list used for
+                            // single Cmd+Click highlighting.
+                            let now = std::time::Instant::now();
+                            let is_double = matches!(this.last_click, Some((t, p))
+                                if p == pos && now.duration_since(t).as_millis() < 500);
+                            this.last_click = Some((now, pos));
+                            if is_double {
+                                this.clear_selection();
+                                if let Some(h) = this.handle.clone() {
+                                    if let Ok(b) = h.backend.try_lock() {
+                                        if let Some(link) =
+                                            b.link_at(pos.row as usize, pos.col as usize)
+                                        {
+                                            let target = link.target.clone();
+                                            drop(b);
+                                            cx.notify();
+                                            open_url_in_browser(&target);
+                                            return;
+                                        }
+                                    }
+                                }
+                                cx.notify();
+                                return;
+                            }
 
                             // Cmd+Click (Ctrl+Click elsewhere) on a URL opens
                             // it in the default browser instead of selecting.
@@ -554,14 +630,7 @@ impl Render for TerminalView {
                     )
                     .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _window, cx| {
                         if this.selection_dragging {
-                            let cell_w = px(7.2);
-                            let cell_h = px(16.0);
-                            let col = ((event.position.x - px(8.0)).max(px(0.0)) / cell_w).floor() as u16;
-                            let row = ((event.position.y - px(8.0)).max(px(0.0)) / cell_h).floor() as u16;
-                            let pos = TerminalCellPos {
-                                col: col.min(this.size.cols.saturating_sub(1)),
-                                row: row.min(this.size.rows.saturating_sub(1)),
-                            };
+                            let pos = this.cell_at_point(event.position.x, event.position.y);
                             if this.selection_head != Some(pos) {
                                 this.selection_head = Some(pos);
                                 cx.notify();
@@ -620,6 +689,7 @@ impl Render for TerminalView {
                                     );
 
                                     view_for_canvas.update(cx, |view, _| {
+                                        view.cell_metrics = Some((cell_w, cell_h));
                                         if view.size.cols != cols || view.size.rows != rows {
                                             view.size = TerminalSize { cols, rows };
                                             if let Some(h) = &view.handle {
@@ -636,6 +706,7 @@ impl Render for TerminalView {
                                         cell_h,
                                         snapshot.as_ref(),
                                         selection_range,
+                                        repaint_rows.as_ref(),
                                         ttheme,
                                         window,
                                         cx,
@@ -664,6 +735,7 @@ fn render_canvas_grid(
     cell_h: gpui::Pixels,
     snapshot: Option<&console_core::types::terminal::TerminalGridSnapshot>,
     selection_range: Option<(TerminalCellPos, TerminalCellPos)>,
+    repaint_rows: Option<&std::collections::HashSet<u16>>,
     theme: TerminalTheme,
     window: &mut Window,
     cx: &mut App,
@@ -683,6 +755,19 @@ fn render_canvas_grid(
     for (row_idx, row) in snap.rows.iter().enumerate() {
         if row_idx as u16 >= rows {
             break;
+        }
+        // Damage repaint: skip rows the emulator reports clean. Cursor and
+        // selection rows always repaint — that state lives outside damage.
+        let row_u16 = row_idx as u16;
+        if let Some(dirty) = repaint_rows {
+            let cursor_here = cursor.visible && row_u16 == cursor.row;
+            let selection_here = match selection_range {
+                Some((start, end)) => row_u16 >= start.row && row_u16 <= end.row,
+                None => false,
+            };
+            if !dirty.contains(&row_u16) && !cursor_here && !selection_here {
+                continue;
+            }
         }
         let y = origin.y + cell_h * row_idx as f32;
 

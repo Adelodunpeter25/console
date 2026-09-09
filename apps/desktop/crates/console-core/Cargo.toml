@@ -17,4 +17,4 @@ log = { workspace = true }
 urlencoding = { workspace = true }
 eventsource-stream = { workspace = true }
 similar = { workspace = true }
-termy_core = { git = "https://github.com/lassejlv/termy" }
+termy_core = { git = "https://github.com/lassejlv/termy", rev = "f5ddada41eab55c26b582140b5ef4eb4c9d696d8" }

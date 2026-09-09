@@ -169,6 +169,20 @@ impl TermyBackend {
         self.term.bracketed_paste_mode()
     }
 
+    /// Rows changed since the last damage snapshot. The renderer uses this to
+    /// repaint only dirty rows instead of the full grid (alt-screen TUIs like
+    /// btop redraw constantly; repainting everything each frame saturates).
+    pub fn take_damage_snapshot(&self) -> termy_core::TerminalDamageSnapshot {
+        self.term.take_damage_snapshot()
+    }
+
+    /// Full link metadata (OSC 8 hyperlinks, file paths, URLs) at a viewport
+    /// cell. Unlike the URL-regex pass in `snapshot()`, this resolves what the
+    /// shell actually marked — used for double-click-to-open.
+    pub fn link_at(&self, row: usize, col: usize) -> Option<termy_core::DetectedViewportLink> {
+        self.term.link_at(row, col)
+    }
+
     /// Feed PTY output and drain the terminal's event queue, returning the
     /// reply bytes the shell expects written back to the PTY. Must be called
     /// after every `advance` (device queries arrive inside PTY output; the
