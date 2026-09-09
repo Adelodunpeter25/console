@@ -174,8 +174,6 @@ export function appendSubagentActivity(
   stmt.run(currentTurn, JSON.stringify(activities), now, event.subagentId);
 }
 
-export const SUBAGENT_COMPLETED_RETENTION_MS = 10_000;
-
 export function completeSubagent(
   state: StorageState,
   sessionId: string,
@@ -185,34 +183,10 @@ export function completeSubagent(
   if (projectId === undefined) return;
 
   const sessionDb = getSessionDb(state, sessionId, projectId);
-  const now = Date.now();
 
-  const stmt = sessionDb.prepare(`
-    UPDATE session_subagents
-    SET status = ?, summary = COALESCE(?, summary), error = COALESCE(?, error), current_turn = CASE WHEN ? > 0 THEN ? ELSE current_turn END, updated_at = ?
-    WHERE id = ?
-  `);
-
-  stmt.run(
-    event.status,
-    event.summary ?? null,
-    event.error ?? null,
-    event.totalTurns,
-    event.totalTurns,
-    now,
-    event.subagentId,
-  );
-
-  // Schedule deletion after 10 seconds
-  setTimeout(() => {
-    try {
-      sessionDb
-        .prepare("DELETE FROM session_subagents WHERE id = ? AND status != 'running'")
-        .run(event.subagentId);
-    } catch {
-      // Session database may have closed or session deleted
-    }
-  }, SUBAGENT_COMPLETED_RETENTION_MS).unref?.();
+  // Subagents are runtime activity, not session history. Remove the row as
+  // soon as the run ends so a later session load only ever exposes live work.
+  sessionDb.prepare("DELETE FROM session_subagents WHERE id = ?").run(event.subagentId);
 }
 
 export function getSessionSubagents(
@@ -223,22 +197,9 @@ export function getSessionSubagents(
   if (projectId === undefined) return [];
 
   const sessionDb = getSessionDb(state, sessionId, projectId);
-  const cutoff = Date.now() - SUBAGENT_COMPLETED_RETENTION_MS;
-
-  // Clean up any stale completed/aborted/error subagents older than cutoff
-  try {
-    sessionDb
-      .prepare("DELETE FROM session_subagents WHERE status != 'running' AND updated_at < ?")
-      .run(cutoff);
-  } catch {
-    // Ignore cleanup error
-  }
-
   const rows = sessionDb
-    .prepare(
-      "SELECT * FROM session_subagents WHERE status = 'running' OR updated_at >= ? ORDER BY created_at ASC",
-    )
-    .all(cutoff) as SubagentRow[];
+    .prepare("SELECT * FROM session_subagents WHERE status = 'running' ORDER BY created_at ASC")
+    .all() as SubagentRow[];
 
   return rows.map((r) => {
     let activities: SubagentActivityItem[] = [];
