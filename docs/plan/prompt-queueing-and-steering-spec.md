@@ -1,11 +1,12 @@
 # Prompt Queueing & Steering Specification
 
-**Status**: Draft  
-**Applies to**: Desktop (`apps/desktop`), Mobile (`apps/mobile`), Server API (`apps/server`)  
+**Status**: Draft (reconciled against current codebase)
+**Applies to**: Desktop (`apps/desktop`), Mobile (`apps/mobile`), Server API (`apps/server`)
 **Target Capabilities**: Real-Time Agent Collaboration, Turn Orchestration, Mid-Flight Steering
 
-> [!IMPORTANT]
-> **Addendum (2026-09-09)**: A pre-implementation review against the current codebase found several places where this spec's data flow does not match how `RunService`, `AgentSessionEvent`, and `ComposerRunState` actually work today. Section 9 records the concrete resolutions; treat it as normative alongside sections 3–4 wherever they conflict.
+> This revision replaces the original draft's server/event-model sections with designs that match the
+> real `RunService`, `AgentSessionEvent`, and `ComposerRunState` implementations in this repo, rather than
+> inventing parallel types and endpoints. UX intent (sections 1–2) is unchanged.
 
 ---
 
@@ -62,6 +63,10 @@ Currently:
 
 > [!NOTE]
 > When the composer is empty during a run, the primary button is **Stop** (`■`). As soon as the user begins typing a follow-up, the button transitions into a **Queue** button (`↑`). If the user deletes their text, it smoothly reverts to the **Stop** button.
+>
+> This state is orthogonal to whether a prompt is already queued (see §5.2): "has queued prompt" and
+> "run is active" are tracked independently, and the button/table above only concerns the latter plus
+> current composer content.
 
 ### 2.2 The Queued Prompt Card (Single Compact Row)
 
@@ -79,38 +84,44 @@ The Queued Prompt Card is an ultra-compact, single-line strip (`h(32px)`, `round
 
 ## 3. Architecture & Data Flow
 
+Both "auto-pop on completion" and "steer now" are the **same underlying mechanism**: a single
+per-session `pendingNextTurn` slot that `RunService` drains from one place — the `finally` block of the
+run it's currently executing. Steering just aborts the current run early so that drain point is reached
+sooner. There is no separate "start turn 2" call racing the first run's teardown.
+
 ```mermaid
 sequenceDiagram
     autonumber
     actor User
     participant Client as Desktop / Mobile Client
     participant API as Server Run & Queue API
-    participant Agent as Agent Execution Loop
+    participant Run as RunService (per-session)
 
     User->>Client: Types follow-up while Turn 1 is running
     Client->>Client: Composer shows Queue [↑] button
     User->>Client: Clicks Queue / presses Enter
     Client->>API: POST /api/sessions/:id/queue { prompt, attachments }
-    API->>API: Persist in Session Queue Store
+    API->>Run: setPendingNextTurn(sessionId, dto)  (persisted + in-memory)
     API-->>Client: SSE: queueUpdated { queuedPrompt }
     Client->>Client: Renders Queued Prompt Card above composer
 
-    alt Normal Completion (Auto-Pop)
-        Agent->>API: Turn 1 Completes (turnFinished)
-        API->>API: Pop queuedPrompt from Queue Store
-        API->>Agent: Start Turn 2 with queuedPrompt
-        API-->>Client: SSE: runStarted { turn: 2 }, queueUpdated { queuedPrompt: null }
+    alt Normal Completion (Auto-Drain)
+        Run->>Run: Turn 1 settles (existing finally block in runAgentStreamInternal)
+        Run->>Run: pendingNextTurn present -> clear slot, broadcast queueUpdated(null)
+        Run->>Run: fire-and-forget runAgentStream(sessionId, pendingNextTurn) for Turn 2
+        Run-->>Client: SSE: turnStart { prompt } for Turn 2 (existing event, no new type)
         Client->>Client: Dismiss Queued Prompt Card & stream Turn 2
     else User Steers Mid-Flight (Send Now)
         User->>Client: Clicks "Steer Now"
         Client->>API: POST /api/sessions/:id/steer { queueId }
-        API->>Agent: Abort Turn 1 immediately
-        Agent-->>API: Turn 1 Aborted (persists partial tools/messages)
-        API->>Agent: Start Turn 2 with queuedPrompt
-        API-->>Client: SSE: queueUpdated { queuedPrompt: null }, runStarted { turn: 2 }
+        API->>Run: setPendingNextTurn(sessionId, dto); abortRun(sessionId)
+        Run->>Run: Turn 1's existing abort handling persists partial tools/messages
+        Run->>Run: finally block sees pendingNextTurn -> drains it exactly as above
+        Run-->>Client: SSE: queueUpdated { queuedPrompt: null }, turnStart for Turn 2
     else User Edits Queued Prompt
         User->>Client: Clicks "Edit"
-        Client->>API: DELETE /api/sessions/:id/queue/:queueId
+        Client->>API: DELETE /api/sessions/:id/queue
+        API->>Run: clearPendingNextTurn(sessionId)
         API-->>Client: SSE: queueUpdated { queuedPrompt: null }
         Client->>Client: Loads prompt text & attachments into Composer Input
     end
@@ -135,43 +146,83 @@ export interface QueuedPrompt {
 }
 ```
 
+Persisted the same way `session-todos.ts` persists todos: one row per session via `sessionStorage`
+(SQLite), mirrored into an in-memory `Map<sessionId, QueuedPrompt>` on `RunService` for fast access
+during a run. This satisfies both same-server SSE sync and reconnect-after-restart (§7.3) without a
+separate "Session Queue Store" abstraction.
+
 ### 4.2 REST Endpoints
 
 #### `POST /api/sessions/:id/queue`
 Adds or replaces the queued prompt for the session.
 - **Request Body**: `RunPromptDto`
 - **Response**: `{ success: true, data: QueuedPrompt }`
-- **Emits Event**: `queueUpdated` over SSE.
+- **Behavior**: persists the prompt, sets `RunService`'s in-memory `pendingNextTurn` slot for the
+  session, and broadcasts `queueUpdated` on that session's `RunEventHub` (a no-op if no run/hub is
+  active — the client still sees the value via `GET`).
 
 #### `GET /api/sessions/:id/queue`
 Fetches the current queued prompt for the session (if any).
 - **Response**: `{ success: true, data: QueuedPrompt | null }`
 
-#### `DELETE /api/sessions/:id/queue/:queueId`
-Deletes a queued prompt.
+#### `DELETE /api/sessions/:id/queue`
+Deletes the queued prompt for the session (used by both the "Delete" and "Edit" card actions; "Edit"
+additionally reads the value client-side via `GET` before deleting).
 - **Response**: `{ success: true, data: { deleted: true } }`
-- **Emits Event**: `queueUpdated` with `null`.
+- **Emits Event**: `queueUpdated` with `queuedPrompt: null`.
 
 #### `POST /api/sessions/:id/steer`
-Halts the active run and immediately starts the specified queued prompt (or incoming prompt) as a new turn.
-- **Request Body**: `{ queueId?: string, prompt?: string, attachments?: ImageAttachment[] }`
+Halts the active run and arranges for the given prompt to start as the next turn as soon as the current
+run settles.
+- **Request Body**: `RunPromptDto` (same shape as `/queue`; a client typically sends the queued
+  prompt's own fields, but steer does not require a prompt to have been queued first)
 - **Response**: `{ success: true, data: { steered: true } }`
 - **Behavior**:
-  1. Calls `runService.abortRun(sessionId)`.
-  2. Awaits current step cancellation and DB flush.
-  3. Immediately invokes `runService.runAgentStream(sessionId, nextPrompt)`.
+  1. Sets `pendingNextTurn` for the session to the request body (persisted + in-memory), overwriting any
+     existing queued prompt.
+  2. Calls the existing `runService.abortRun(sessionId)`. Returns `404` if there is no active run — the
+     caller should use `POST /sessions/:id/run` directly in that case.
+  3. Returns immediately; it does **not** itself call `runAgentStream`. Turn 2 starts once the aborted
+     run's own `finally` block (see §4.4) drains `pendingNextTurn`, matching the auto-pop path exactly.
 
 ### 4.3 SSE Event Stream Extensions
 
-The server's real-time event stream (`/api/sessions/:id/run/stream`) emits:
+The server's real-time event stream (`/api/sessions/:id/run/stream`) gains exactly one new frame type,
+added to the existing `AgentSessionEvent` union in `packages/types/src/events.ts` (and mirrored in
+`apps/desktop/crates/console-core/src/types/events.rs` in the same change — these two are hand-written,
+not generated from each other):
 
 ```typescript
 export type AgentSessionEvent =
-  | { type: "queueUpdated"; data: { queuedPrompt: QueuedPrompt | null } }
-  | { type: "turnStarted"; data: { turnId: string; prompt: string } }
-  | { type: "turnFinished"; data: { turnId: string; status: "completed" | "aborted" | "error" } }
-  // ... existing events (textDelta, toolCall, toolResult, etc.)
+  | // ...all existing variants unchanged (sessionStart, turnStart, turnEnd,
+    // modelStreamStart/Part/End, toolExecutionStart/Result/End, permissionRequest,
+    // askQuestion, todoUpdate, compaction, sessionEnd, error, subagent*, done, aborted, streamReset)
+  | { type: "queueUpdated"; queuedPrompt: QueuedPrompt | null };
 ```
+
+No `runStarted` or `turnFinished` events are introduced. Turn 2 starting is communicated with the
+existing `turnStart { prompt }` event; turn settlement (success, error, or abort) is communicated with
+the existing `done` / `aborted` / `error` events. This keeps every current exhaustive `match` over
+`AgentSessionEvent` — in `apps/desktop/src/state/run.rs`, `apps/mobile/utils/chat-events.ts`, and the Rust
+enum — limited to one new arm instead of several.
+
+### 4.4 Drain Point: `RunService` Internals
+
+- Add `private pendingNextTurn = new Map<string, RunPromptDto>()` to `RunService`, parallel to the
+  existing `private static activeRuns = new Map<string, AbortController>()`.
+- `queuePrompt(sessionId, dto)`: persists + sets `pendingNextTurn`, broadcasts `queueUpdated` on the
+  session's hub if one exists.
+- `clearQueuedPrompt(sessionId)`: persists + clears `pendingNextTurn`, broadcasts `queueUpdated(null)`.
+- `steer(sessionId, dto)`: sets `pendingNextTurn` to `dto`, then calls the existing `abortRun(sessionId)`.
+- In `runAgentStreamInternal`'s existing `finally` block, immediately **before** the line that deletes
+  `RunService.activeRuns.get(sessionId)` (in the outer `runAgentStream` method, not
+  `runAgentStreamInternal`, which is where that deletion actually happens today), check
+  `pendingNextTurn.get(sessionId)`. If present: delete it, broadcast `queueUpdated(null)`, and
+  fire-and-forget a new `this.runAgentStream(sessionId, nextDto, onEvent)` call reusing the same
+  `onEvent` callback chain (so SSE subscribers keep receiving frames for Turn 2 without reconnecting).
+  This preserves the documented invariant that `activeRuns` cleanup and the next run's start happen from
+  the same synchronous section, so a client's steer request arriving at the exact moment a run settles
+  cannot start two runs — the Map itself is the lock, no separate mutex primitive is needed.
 
 ---
 
@@ -187,12 +238,31 @@ export type AgentSessionEvent =
      - `on_delete: Rc<dyn Fn(&mut Window, &mut App)>`
      - `on_steer: Rc<dyn Fn(&mut Window, &mut App)>`
 2. **`ComposerView` Updates** (`crates/console-ui/src/common/composer_view.rs`):
-   - When `run_state.is_running()`:
-     - If `composer_input` has text: action button renders as `↑ Queue` (`btn-queue-follow-up`).
-     - If `composer_input` is empty: action button renders as `■ Stop` (`btn-abort-prompt`).
+   - `ComposerRunState` stays `Ready | Preparing | Running` — "queued" is not a run state (a queue can
+     exist independently of what's currently typed). Add a separate `has_queued_prompt: bool` prop to
+     `ComposerView` instead of a new enum variant.
+   - Button variant is derived from the triple `(run_state, composer_input.is_empty(), has_queued_prompt)`:
+     - `run_state.is_running()` and input non-empty → `↑ Queue` (`btn-queue-follow-up`), regardless of
+       `has_queued_prompt` (submitting again replaces the existing queued prompt — see §2.1's "Queued +
+       Running" row).
+     - `run_state.is_running()` and input empty → `■ Stop` (`btn-abort-prompt`).
+     - Otherwise (idle) → existing Arrow Up behavior, unaffected by queue state.
 3. **State Management** (`apps/desktop/src/state/`):
-   - Store `queued_prompts: HashMap<String, Option<QueuedPrompt>>` keyed by `session_id`.
-   - On `ComposerEvent::Submit` when running: trigger `this.queue_prompt_for_session(sid, prompt, attachments, cx)`.
+   - Store `queued_prompts: HashMap<String, Option<QueuedPrompt>>` keyed by `session_id`, updated from
+     the `queueUpdated` SSE frame (§4.3) the same way other session-scoped event state is updated in
+     `apps/desktop/src/state/run.rs`.
+   - On `ComposerEvent::Submit` when `run_state.is_running()`: call `POST /sessions/:id/queue` (replacing
+     any existing queued prompt) instead of `POST /sessions/:id/run`.
+
+### 5.2 Queue vs. Run State Independence
+
+A session can be in any of these combinations, all of which the UI must render correctly:
+- Idle, no queue (default).
+- Running, no queue (today's behavior).
+- Running, queue present (new: card shown above composer, Stop/Queue button per §5.1).
+- Idle, queue present (transient — only possible for the instant between a run settling and the
+  auto-drained Turn 2's `turnStart` arriving; the client should treat this like "Running" for button
+  purposes until `turnStart` or `done`/`aborted` without a follow-up event clears it).
 
 ---
 
@@ -205,77 +275,65 @@ export type AgentSessionEvent =
    - Smooth animated slide-up entry and exit using `react-native-reanimated`.
 2. **Mobile Composer Actions**:
    - When turn is running and input field is focused with text: Send icon changes to a blue Queue badge (`↑`).
-   - Tapping Queue adds the prompt and clears the input without interrupting the run.
+   - Tapping Queue calls `POST /sessions/:id/queue` and clears the input without interrupting the run.
 3. **Card Actions**:
-   - **Edit**: Tapping the card or edit icon restores the text to the `TextInput` and focuses keyboard.
-   - **Trash**: Discards the queue.
-   - **Steer / Send Now**: Instant button with confirmation haptic to interrupt and re-route the agent.
+   - **Edit**: Tapping the card or edit icon calls `DELETE /sessions/:id/queue`, then restores the text to the `TextInput` and focuses keyboard.
+   - **Trash**: Calls `DELETE /sessions/:id/queue`.
+   - **Steer / Send Now**: Calls `POST /sessions/:id/steer` with a confirmation haptic to interrupt and re-route the agent.
+4. **Event handling**: `apps/mobile/utils/chat-events.ts` and `apps/mobile/stores/useChatStore.ts` gain one
+   new case for `queueUpdated`, mirroring how `todoUpdate` is already handled — no other event handling
+   changes are required (see §4.3).
 
 ---
 
 ## 7. Edge Cases & Safety Invariants
 
 1. **Run Errors / Tool Failures**:
-   - If Turn 1 encounters an error or requires manual permission that gets rejected:
-     - Policy: The queue is **held** (not discarded). The user can either click Steer to proceed or Edit to adjust.
+   - If Turn 1 encounters an error, or a required permission is rejected, the queue is **held, not
+     discarded** — the `finally` drain in §4.4 still runs, but the resulting Turn 2 error path (see item 5
+     below) is what actually decides whether the queue survives. The user can also click Steer to
+     proceed immediately or Edit to adjust before Turn 1 even settles.
 2. **Session Switching**:
-   - Queued state is strictly scoped per `sessionId`. Switching between tabs or sessions shows the corresponding session's queue.
+   - Queued state is strictly scoped per `sessionId` (`pendingNextTurn` is keyed by session, like
+     `activeRuns`). Switching between tabs or sessions shows the corresponding session's queue.
 3. **Client Disconnection / Reconnection**:
-   - Because the queue is held in the server's Session Manager, restarting the desktop app or reloading mobile reconnects to the active run and pulls the current queued prompt via `GET /api/sessions/:id/queue`.
-4. **Race Conditions on Auto-Pop**:
-   - Server handles turn transition atomically: `runService` pops the queue inside a mutex/lock to prevent double execution if a client sends a steer request at the exact millisecond the turn settles.
+   - Because the queue is persisted via `sessionStorage` (§4.1), restarting the desktop app or reloading
+     mobile — even across a server restart — recovers the queued prompt via
+     `GET /api/sessions/:id/queue`, not just from in-memory server state.
+4. **Race Conditions on Auto-Drain vs. Steer**:
+   - No separate mutex is introduced. `RunService.activeRuns` (existing) already serializes run
+     lifecycle per session; the `finally`-block drain in §4.4 is the single place `pendingNextTurn` is
+     read and cleared, so a steer request arriving at the exact moment a turn settles cannot cause two
+     Turn-2 starts — either the steer's `abortRun` call lands before the natural settle (aborting sooner)
+     or after (a no-op `abortRun` since the run already finished), but the drain itself always happens
+     exactly once, from one call site.
+5. **Auto-Drained or Steered Turn Fails to Start**:
+   - If the drained `runAgentStream` call itself throws before producing any events — e.g. an unknown
+     provider, or `catalogModel?.supportsImages === false` for an attachment carried over from the queue
+     (per the existing check in `run.service.ts`) — surface it as a normal turn error (`error` event +
+     `needs_attention` session status, matching existing error handling in `runAgentStreamInternal`)
+     rather than silently dropping the prompt. `pendingNextTurn` is already cleared at this point, so it
+     will not be retried automatically; the user must Edit or resend.
+   - Attachments on a queued prompt are validated against the resolved model at drain time, not at queue
+     time, since the active model/provider may change between when a prompt is queued and when it
+     actually starts.
 
 ---
 
 ## 8. Summary of Tasks for Implementation
 
 - [ ] **Server (`apps/server`)**:
-  - Implement `SessionQueueService` and persistence in `RunService`.
-  - Add REST endpoints (`/queue`, `/steer`).
-  - Emit `queueUpdated` event over SSE and handle auto-pop on turn settle.
+  - Add `pendingNextTurn` map, `queuePrompt`/`clearQueuedPrompt`/`steer` methods, and the `finally`-block
+    drain to `RunService` (§4.4).
+  - Persist `QueuedPrompt` via `sessionStorage`, following the `session-todos.ts` pattern (§4.1).
+  - Add REST endpoints: `POST`/`GET`/`DELETE /sessions/:id/queue`, `POST /sessions/:id/steer` (§4.2).
+  - Add the single `queueUpdated` variant to `AgentSessionEvent` in `packages/types/src/events.ts` and
+    mirror it in `apps/desktop/crates/console-core/src/types/events.rs` (§4.3).
 - [ ] **Desktop (`apps/desktop`)**:
   - Build `QueuedPromptCard` component in `console-ui`.
-  - Update `ComposerView` action button logic.
-  - Wire queue, edit, delete, and steer actions to client RPC.
+  - Add `has_queued_prompt` prop to `ComposerView`; do not add a new `ComposerRunState` variant (§5.1).
+  - Wire queue, edit, delete, and steer actions to the new REST endpoints; handle `queueUpdated` in
+    `apps/desktop/src/state/run.rs`.
 - [ ] **Mobile (`apps/mobile`)**:
   - Build `QueuedPromptBanner` with Reanimated animations.
-  - Connect to queue/steer REST endpoints and SSE stream handler.
-
----
-
-## 9. Addendum: Codebase Reconciliation
-
-This section resolves conflicts found between sections 2–8 above and the current implementation of `apps/server`, `packages/types`, and `apps/desktop`. Implementers should follow this section where it overrides earlier text.
-
-### 9.1 Event Types — Extend the Real Union, Don't Invent a New One
-
-`AgentSessionEvent` is defined once in `packages/types/src/events.ts` and hand-mirrored in `apps/desktop/crates/console-core/src/types/events.rs`. It does **not** currently have `queueUpdated`, `runStarted`, or `turnFinished` — the existing lifecycle events are `turnStart`, `turnEnd`, and the synthetic re-attach frames `done`/`aborted`/`streamReset`.
-
-Resolution:
-- Add exactly one new variant to the shared union: `{ type: "queueUpdated"; queuedPrompt: QueuedPrompt | null }`.
-- Do **not** add `runStarted`/`turnFinished`; reuse the existing `turnStart { prompt }` event for the auto-popped or steered turn, and existing `done`/`aborted` synthetic frames to signal turn settlement. This avoids widening every exhaustive match over `AgentSessionEvent` (`apps/desktop/src/state/run.rs`, `apps/mobile/utils/chat-events.ts`, the Rust enum) for concepts that already exist.
-- Any change to the TS union in `packages/types/src/events.ts` must be mirrored in `apps/desktop/crates/console-core/src/types/events.rs` in the same change; these two files are not auto-generated from one another.
-
-### 9.2 Steering — Reuse `RunService`'s Existing Settle/Abort Invariant
-
-`RunService.abortRun()` intentionally does **not** delete the session's `activeRuns` entry synchronously — that deletion happens only in `runAgentStreamInternal`'s `finally` block, specifically to prevent a second `runAgentStream` call from racing the first run's teardown (shared `RunEventHub`/session state).
-
-The spec's steer flow ("await current step cancellation... immediately invoke `runAgentStream`") as a separate caller would violate that invariant. Resolution:
-- Add a `pendingNextTurn: Map<sessionId, RunPromptDto>` slot to `RunService` (parallel to `activeRuns`).
-- `POST /sessions/:id/steer` sets `pendingNextTurn`, calls the existing `abortRun(sessionId)`, and returns immediately — it does **not** call `runAgentStream` itself.
-- `runAgentStreamInternal`'s existing `finally` block, right before it deletes the `activeRuns` entry, checks `pendingNextTurn` for the session. If present, it clears the slot and kicks off the next `runAgentStream` call (fire-and-forget, same as how the top-level HTTP handler invokes it) instead of finishing quietly.
-- The normal auto-pop path (§3 "Normal Completion") uses the same `pendingNextTurn` mechanism, populated by `POST /sessions/:id/queue` instead of `/steer`. This means **queueing and steering share one queue slot and one drain path** — "steer" is simply "abort, then let the existing drain-on-settle logic run early." This removes the separate mutex/lock language in §7.4, which has no real analog in this single-threaded-per-session code; the `activeRuns` Map itself is already the lock.
-
-### 9.3 Persistence — Match the `session-todos.ts` Pattern
-
-§7.3 requires the queue to survive server restarts and client reconnects. In-memory-only storage (a plain `Map` on `RunService`) satisfies reconnect-while-server-stays-up but not restart. Resolution: persist `QueuedPrompt` the same way `session-todos.ts` persists todos — one row per session in SQLite via `sessionStorage`, mirrored into an in-memory map for fast access during a run, loaded on `GET /sessions/:id/queue` and on session load. `queueUpdated` broadcasts stay in-memory/SSE-only (no need to re-fetch from disk on every broadcast).
-
-### 9.4 Composer State — Add a Field, Not a New Enum Variant
-
-`ComposerRunState` in `apps/desktop/crates/console-ui/src/common/composer_view.rs` is `Ready | Preparing | Running`, and "queued" is not a run state — a queue can exist independently of whether text is currently in the composer. Resolution: thread a separate `has_queued_prompt: bool` (or `Option<QueuedPrompt>`) prop into `ComposerView` alongside `run_state`, and derive the button variant (Stop / Queue / Disabled-Replace) from the `(run_state, composer_input.is_empty(), has_queued_prompt)` triple per the table in §2.1, rather than adding a `Queued` variant to `ComposerRunState` itself.
-
-### 9.5 Auto-Pop Failure and Attachment Re-Validation
-
-Two cases §7 doesn't cover:
-- If the auto-popped or steered turn fails to start (e.g., `catalogModel?.supportsImages === false` per the existing check in `run.service.ts`, or an unknown provider), the queue entry is **not** silently dropped: surface the failure as a normal turn-start error (`error` event + `needs_attention` session status, matching existing error handling in `runAgentStreamInternal`) and leave `pendingNextTurn` cleared so the user can retry manually. This is consistent with §7.1's "hold, don't discard" policy but clarifies the auto-pop case specifically.
-- Image attachments on a queued prompt are re-validated against the resolved model at drain time (not at queue time), since the model/provider active when the next turn actually starts may differ from when the prompt was queued.
+  - Connect to queue/steer REST endpoints; handle `queueUpdated` in `chat-events.ts` / `useChatStore.ts`.
