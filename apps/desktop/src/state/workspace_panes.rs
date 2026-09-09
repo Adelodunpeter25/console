@@ -795,6 +795,41 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    /// If a sidebar drag carries a session whose chat tab is already open in
+    /// any pane, focus that pane/tab instead of creating a duplicate.
+    /// Returns true when the drop was handled this way.
+    /// Tab-bar drags are moves of the tab itself, so they are always allowed through.
+    fn focus_existing_chat_tab_from_drag(
+        &mut self,
+        drag: &WorkspaceDrag,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if drag.source_pane_id.is_some() {
+            return false;
+        }
+        let session_id = match &drag.tab {
+            WorkspaceTabConfig::Chat { session_id, .. } => session_id.clone(),
+            _ => return false,
+        };
+        let tab_id = format!("chat:{session_id}");
+        let Some(existing_pane_id) = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|leaf| leaf.tabs.iter().any(|t| t.id() == tab_id))
+            .map(|leaf| leaf.id.clone())
+        else {
+            return false;
+        };
+
+        workspace_ops::select_tab(&mut self.workspace_root, &existing_pane_id, &tab_id);
+        self.active_pane_id = Some(existing_pane_id);
+        self.selected_session_id = Some(session_id);
+        self.persist_workspaces();
+        cx.notify();
+        true
+    }
+
     /// Move a dragged tab into the existing target pane as a new tab.
     pub fn move_workspace_tab_to_pane(
         &mut self,
@@ -803,6 +838,9 @@ impl ConsoleDesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.focus_existing_chat_tab_from_drag(&drag, cx) {
+            return;
+        }
         self.save_transcript_scroll_position(cx);
         let source_pane_id = drag.source_pane_id.clone();
         let tab = drag.tab.clone();
@@ -864,6 +902,9 @@ impl ConsoleDesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.focus_existing_chat_tab_from_drag(&drag, cx) {
+            return;
+        }
         self.save_transcript_scroll_position(cx);
         let source_pane_id = drag.source_pane_id.clone();
         let tab = drag.tab.clone();
