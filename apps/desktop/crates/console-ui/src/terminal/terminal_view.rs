@@ -3,11 +3,13 @@ use console_core::types::terminal::{TerminalSize, TerminalSpawnParams, TerminalS
 use gpui::{
     App, Bounds, Context, ElementInputHandler, EntityInputHandler, FocusHandle, Focusable,
     IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    ParentElement, Pixels, Render, SharedString, Styled, UTF16Selection, Window, div,
-    prelude::*, px,
+    ParentElement, Pixels, Render, ScrollWheelEvent, SharedString, Styled, UTF16Selection, Window,
+    div, prelude::*, px,
 };
 use termy_core::{
     TerminalKeyEventKind, TerminalKeyboardMode, TermyKeystroke, TermyModifiers, keystroke_to_input,
+    TerminalMouseButton, TerminalMouseEventKind, TerminalMouseModifiers, TerminalMousePosition,
+    encode_mouse_report,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -99,6 +101,9 @@ pub struct TerminalView {
     cell_metrics: Option<(Pixels, Pixels)>,
     /// Last mouse-down for double-click-to-open detection.
     last_click: Option<(std::time::Instant, TerminalCellPos)>,
+    /// Button currently held while the PTY has mouse reporting enabled —
+    /// drives drag/motion reports. `None` when reporting is off.
+    mouse_down: Option<TerminalMouseButton>,
 }
 
 impl TerminalView {
@@ -126,6 +131,7 @@ impl TerminalView {
             cache_theme: None,
             cell_metrics: None,
             last_click: None,
+            mouse_down: None,
         };
 
         this.spawn(params, client, cx);
@@ -397,6 +403,43 @@ impl TerminalView {
             row: row.min(self.size.rows.saturating_sub(1)),
         }
     }
+
+    /// Mouse-reporting mode of the live backend (default = disabled). TUIs
+    /// like btop/opencode enable it via DECSET 1000/1002/1003/1006.
+    fn mouse_mode(&self) -> termy_core::TerminalMouseMode {
+        self.handle
+            .as_ref()
+            .and_then(|h| h.backend.try_lock().ok().map(|b| b.mouse_mode()))
+            .unwrap_or_default()
+    }
+
+    /// Forward a mouse event to the PTY when the running TUI has enabled
+    /// mouse reporting. Returns true when the event was consumed as a report;
+    /// callers then skip local selection handling.
+    fn forward_mouse_report(
+        &self,
+        kind: TerminalMouseEventKind,
+        pos: TerminalCellPos,
+        modifiers: gpui::Modifiers,
+    ) -> bool {
+        let Some(bytes) = encode_mouse_report(
+            self.mouse_mode(),
+            kind,
+            TerminalMousePosition {
+                col: pos.col as usize,
+                row: pos.row as usize,
+            },
+            TerminalMouseModifiers {
+                shift: modifiers.shift,
+                alt: modifiers.alt,
+                control: modifiers.control,
+            },
+        ) else {
+            return false;
+        };
+        self.send_input(String::from_utf8_lossy(&bytes).into_owned());
+        true
+    }
 }
 
 /// Open a URL in the user's default browser. Fire-and-forget: a failure to
@@ -519,7 +562,6 @@ impl Render for TerminalView {
         let view_handle = cx.entity().clone();
         let view_for_key = view_handle.clone();
         let handle_for_key = self.handle.clone();
-        let handle_for_scroll = self.handle.clone();
         let focus_for_key = self.focus.clone();
         let keyboard_mode = snapshot
             .as_ref()
@@ -625,20 +667,40 @@ impl Render for TerminalView {
                     }
                 },
             )
-            .on_scroll_wheel(move |event, _window, cx| {
-                if let Some(h) = &handle_for_scroll {
+            .on_scroll_wheel(cx.listener(
+                move |this, event: &ScrollWheelEvent, _window, cx| {
                     let delta = match event.delta {
                         gpui::ScrollDelta::Lines(lines) => lines.y.round() as i32,
                         gpui::ScrollDelta::Pixels(pixels) => {
                             (f32::from(pixels.y) / 16.0).round() as i32
                         }
                     };
-                    if delta != 0 {
+                    if delta == 0 {
+                        return;
+                    }
+                    // TUI mouse reporting: forward wheel as WheelUp/WheelDown
+                    // reports (one per notch) instead of scrolling local
+                    // scrollback. Shift bypasses so scrollback still works.
+                    let mode = this.mouse_mode();
+                    if mode.enabled && !event.modifiers.shift {
+                        let pos = this.cell_at_point(event.position.x, event.position.y);
+                        let kind = if delta > 0 {
+                            TerminalMouseEventKind::WheelUp
+                        } else {
+                            TerminalMouseEventKind::WheelDown
+                        };
+                        for _ in 0..delta.unsigned_abs().min(10) {
+                            this.forward_mouse_report(kind, pos, event.modifiers);
+                        }
+                        cx.stop_propagation();
+                        return;
+                    }
+                    if let Some(h) = &this.handle {
                         h.scroll(delta);
                         cx.stop_propagation();
                     }
-                }
-            })
+                },
+            ))
             .when_some(status_banner, |el, (msg, color)| {
                 el.child(
                     div()
@@ -659,6 +721,23 @@ impl Render for TerminalView {
                         MouseButton::Left,
                         cx.listener(move |this, event: &MouseDownEvent, _window, cx| {
                             let pos = this.cell_at_point(event.position.x, event.position.y);
+
+                            // TUI mouse reporting (btop, opencode, ...): when
+                            // the shell enabled mouse mode, forward the click
+                            // as an escape report instead of doing local
+                            // selection. Shift bypasses reporting so text can
+                            // still be selected and copied.
+                            if !event.modifiers.shift
+                                && this.forward_mouse_report(
+                                    TerminalMouseEventKind::Press(TerminalMouseButton::Left),
+                                    pos,
+                                    event.modifiers,
+                                )
+                            {
+                                this.mouse_down = Some(TerminalMouseButton::Left);
+                                cx.notify();
+                                return;
+                            }
 
                             // Double-click opens whatever termy resolved at
                             // the cell (OSC 8 hyperlink, file path, URL) —
@@ -705,6 +784,37 @@ impl Render for TerminalView {
                         }),
                     )
                     .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _window, cx| {
+                        // TUI mouse reporting: drag (1002) or full motion
+                        // (1003) reports instead of local selection drags.
+                        if this.mouse_mode().enabled {
+                            let pos = this.cell_at_point(event.position.x, event.position.y);
+                            match this.mouse_down {
+                                Some(button) => {
+                                    if !this.forward_mouse_report(
+                                        TerminalMouseEventKind::Drag(button),
+                                        pos,
+                                        event.modifiers,
+                                    ) && this.mouse_mode().report_motion
+                                    {
+                                        this.forward_mouse_report(
+                                            TerminalMouseEventKind::Move,
+                                            pos,
+                                            event.modifiers,
+                                        );
+                                    }
+                                }
+                                None => {
+                                    if this.mouse_mode().report_motion {
+                                        this.forward_mouse_report(
+                                            TerminalMouseEventKind::Move,
+                                            pos,
+                                            event.modifiers,
+                                        );
+                                    }
+                                }
+                            }
+                            return;
+                        }
                         if this.selection_dragging {
                             let pos = this.cell_at_point(event.position.x, event.position.y);
                             if this.selection_head != Some(pos) {
@@ -715,7 +825,18 @@ impl Render for TerminalView {
                     }))
                     .on_mouse_up(
                         MouseButton::Left,
-                        cx.listener(move |this, _event: &MouseUpEvent, _window, cx| {
+                        cx.listener(move |this, event: &MouseUpEvent, _window, cx| {
+                            // Release report for an in-progress TUI mouse drag/click.
+                            if let Some(button) = this.mouse_down.take() {
+                                let pos = this.cell_at_point(event.position.x, event.position.y);
+                                this.forward_mouse_report(
+                                    TerminalMouseEventKind::Release(button),
+                                    pos,
+                                    event.modifiers,
+                                );
+                                cx.notify();
+                                return;
+                            }
                             if this.selection_dragging {
                                 this.selection_dragging = false;
                                 if this.selection_anchor == this.selection_head {

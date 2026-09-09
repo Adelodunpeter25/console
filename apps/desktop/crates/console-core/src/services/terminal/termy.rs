@@ -200,6 +200,12 @@ impl TermyBackend {
         let _ = self.term.drain_events(&mut collector);
         collector.replies
     }
+
+    /// Current xterm mouse-reporting mode (DECSET 1000/1002/1003/1005/1006).
+    /// TUIs like btop or opencode enable this so clicks can be forwarded.
+    pub fn mouse_mode(&self) -> termy_core::TerminalMouseMode {
+        self.term.mouse_mode()
+    }
 }
 
 /// Case-insensitive prefix check for the ASCII URL schemes we detect.
