@@ -131,23 +131,9 @@ impl RenderOnce for ModelDropdownMenu {
                     })
                     .collect();
 
-                if favs.is_empty() {
-                    // Fallback to first provider's models or all
-                    if let Some(first) = self.providers.first() {
-                        let models = live
-                            .get(&first.name)
-                            .map(|v| v.as_slice())
-                            .unwrap_or(&first.models);
-                        models
-                            .iter()
-                            .map(|m| (first.name.clone(), first.display_name.clone(), m.clone()))
-                            .collect()
-                    } else {
-                        Vec::new()
-                    }
-                } else {
-                    favs
-                }
+                // Empty favourites shows the picker's empty state — no
+                // fallback to another provider's models.
+                favs
             }
             PickerTab::Provider(prov) => self
                 .providers
@@ -307,18 +293,25 @@ impl RenderOnce for ModelDropdownMenu {
                             .flex_col()
                             .gap_y(px(3.0))
                             .when(visible_models.is_empty(), |el| {
+                                let is_favorites = active_tab == PickerTab::Favorites;
                                 el.size_full()
                                     .flex()
                                     .flex_col()
                                     .items_center()
                                     .justify_center()
                                     .gap_y(px(4.0))
-                                    .child(app_icon(IconName::Star, 18.0, theme.text_ghost))
+                                    .when(!is_favorites, |el| {
+                                        el.child(app_icon(IconName::Star, 18.0, theme.text_ghost))
+                                    })
                                     .child(
                                         div()
                                             .text_size(px(11.5))
                                             .text_color(theme.text_tertiary)
-                                            .child("No models found"),
+                                            .child(if is_favorites {
+                                                "No Favourites"
+                                            } else {
+                                                "No models found"
+                                            }),
                                     )
                             })
                             .children(visible_models.into_iter().map(
