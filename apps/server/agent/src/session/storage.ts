@@ -17,7 +17,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { AgentMessage, ModelFavorite, SessionHeader, ProjectInfo, ToolResult } from "@/agent/src/types/index.js";
-import type { SessionFileChange, TodoItem } from "@console/types";
+import type { QueuedPrompt, SessionFileChange, TodoItem } from "@console/types";
 import { initGlobalDatabase } from "./schema.js";
 import { getGlobalDbPath, getConsoleStorageDir } from "./apppaths.js";
 import { MAX_CACHED_SESSION_DBS, type StorageState } from "./utils.js";
@@ -222,6 +222,20 @@ export class SqliteSessionStorage {
 
   getSessionSubagents(sessionId: string): import("@console/types").SubagentInfo[] {
     return Sessions.getSessionSubagents(this.state, sessionId);
+  }
+
+  // MARK: - Queued Prompt
+
+  saveQueuedPrompt(sessionId: string, queuedPrompt: QueuedPrompt): void {
+    Sessions.saveQueuedPrompt(this.state, sessionId, queuedPrompt);
+  }
+
+  getQueuedPrompt(sessionId: string): QueuedPrompt | null {
+    return Sessions.getQueuedPrompt(this.state, sessionId);
+  }
+
+  clearQueuedPrompt(sessionId: string): void {
+    Sessions.clearQueuedPrompt(this.state, sessionId);
   }
 
   // MARK: - Lifecycle

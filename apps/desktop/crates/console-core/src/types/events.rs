@@ -1,6 +1,6 @@
 use super::agent::{
-    AskQuestionRequest, AssistantMessage, ImageAttachment, PermissionRequest, TodoItem, ToolCall,
-    ToolCallPreview, ToolResult,
+    AskQuestionRequest, AssistantMessage, ImageAttachment, PermissionRequest, QueuedPrompt,
+    TodoItem, ToolCall, ToolCallPreview, ToolResult,
 };
 use serde::{Deserialize, Serialize};
 
@@ -119,6 +119,11 @@ pub enum AgentSessionEvent {
     SessionEnd,
     Error {
         error: ServerErrorPayload,
+    },
+    /// The session's queued next-turn prompt changed (queued, replaced, or cleared).
+    QueueUpdated {
+        #[serde(rename = "queuedPrompt")]
+        queued_prompt: Option<QueuedPrompt>,
     },
 }
 

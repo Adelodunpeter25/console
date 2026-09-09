@@ -174,6 +174,65 @@ runRoutes.post("/sessions/:id/abort", (c) => {
 });
 
 /**
+ * POST /api/sessions/:id/queue — Stage (or replace) the prompt that runs
+ * automatically once the session's active turn settles.
+ */
+runRoutes.post("/sessions/:id/queue", async (c) => {
+  const sessionId = c.req.param("id");
+  const body = await c.req.json<RunPromptDto>();
+  const prompt = body.prompt?.trim();
+
+  if (!prompt) {
+    return c.json({ success: false, error: "Field 'prompt' is required." }, 400);
+  }
+
+  const queuedPrompt = runService.queuePrompt(sessionId, body);
+  return c.json({ success: true, data: queuedPrompt });
+});
+
+/**
+ * GET /api/sessions/:id/queue — Fetch the current queued prompt, if any.
+ */
+runRoutes.get("/sessions/:id/queue", (c) => {
+  const sessionId = c.req.param("id");
+  const queuedPrompt = runService.getQueuedPrompt(sessionId);
+  return c.json({ success: true, data: queuedPrompt });
+});
+
+/**
+ * DELETE /api/sessions/:id/queue — Discard the queued prompt for a session.
+ */
+runRoutes.delete("/sessions/:id/queue", (c) => {
+  const sessionId = c.req.param("id");
+  const deleted = runService.clearQueuedPrompt(sessionId);
+  return c.json({ success: true, data: { deleted } });
+});
+
+/**
+ * POST /api/sessions/:id/steer — Halt the active run and stage `body` to
+ * start as the next turn as soon as the aborted run settles.
+ */
+runRoutes.post("/sessions/:id/steer", async (c) => {
+  const sessionId = c.req.param("id");
+  const body = await c.req.json<RunPromptDto>();
+  const prompt = body.prompt?.trim();
+
+  if (!prompt) {
+    return c.json({ success: false, error: "Field 'prompt' is required." }, 400);
+  }
+
+  const steered = runService.steer(sessionId, body);
+  if (!steered) {
+    return c.json(
+      { success: false, error: `No active run found for session '${sessionId}'.` },
+      404,
+    );
+  }
+
+  return c.json({ success: true, data: { steered: true } });
+});
+
+/**
  * POST /api/sessions/:id/answer — Answer a pending agent question.
  */
 runRoutes.post("/sessions/:id/answer", async (c) => {

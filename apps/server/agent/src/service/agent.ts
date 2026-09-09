@@ -170,9 +170,16 @@ export class Agent {
     this._running = true;
     this._abortController = new AbortController();
 
-    // If the caller passes their own signal, link it to ours
+    // If the caller passes their own signal, link it to ours. The signal may
+    // already be aborted by the time run() is called (e.g. a steer request
+    // landing during the async setup before this call) — addEventListener
+    // alone would silently miss that, so check the current state too.
     if (signal) {
-      signal.addEventListener("abort", () => this._abortController?.abort());
+      if (signal.aborted) {
+        this._abortController.abort();
+      } else {
+        signal.addEventListener("abort", () => this._abortController?.abort());
+      }
     }
 
     let eventEmitter: ((event: AgentSessionEvent) => void) | undefined;

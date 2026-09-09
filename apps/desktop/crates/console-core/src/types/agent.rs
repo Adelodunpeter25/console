@@ -156,3 +156,21 @@ pub struct SubagentInfo {
     #[serde(default)]
     pub activities: Vec<SubagentActivityItem>,
 }
+
+/// A prompt staged to run automatically once the session's active turn settles.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueuedPrompt {
+    pub id: String,
+    pub session_id: String,
+    pub prompt: String,
+    #[serde(default)]
+    pub attachments: Option<Vec<ImageAttachment>>,
+    #[serde(default)]
+    pub model_id: Option<String>,
+    #[serde(default)]
+    pub provider: Option<String>,
+    #[serde(default)]
+    pub approval_mode: Option<String>,
+    pub created_at: String,
+}

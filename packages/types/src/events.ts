@@ -1,4 +1,5 @@
 import type { AgentMessage, AssistantMessage } from "./agent";
+import type { QueuedPrompt } from "./api";
 import type { PermissionRequest, ToolCall, ToolCallPreview, ToolResult } from "./tool";
 import type { TodoItem } from "./todo";
 
@@ -102,6 +103,8 @@ export type AgentSessionEvent =
   | SubagentStartEvent
   | SubagentActivityEvent
   | SubagentEndEvent
+  /** The session's queued next-turn prompt changed (queued, replaced, or cleared). */
+  | { type: "queueUpdated"; queuedPrompt: QueuedPrompt | null }
   /** Synthetic frame (re-attach streams only): run completed. */
   | { type: "done"; summary?: string }
   /** Synthetic frame (re-attach streams only): run was aborted. */

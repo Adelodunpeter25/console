@@ -43,6 +43,18 @@ export interface ImageAttachment {
   mimeType: string;
 }
 
+/** A prompt staged to run automatically once the session's active turn settles. */
+export interface QueuedPrompt {
+  id: string;
+  sessionId: string;
+  prompt: string;
+  attachments?: ImageAttachment[];
+  modelId?: string;
+  provider?: ProviderId;
+  approvalMode?: "always-ask" | "accept-edits" | "plan-mode" | "full-access";
+  createdAt: string;
+}
+
 export interface OAuthLoginUrlDto {
   provider: OAuthProviderId;
 }
