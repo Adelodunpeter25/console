@@ -8,10 +8,8 @@ import { ChangesRowItem } from "@/components/changes/ChangesRows";
 import { useChanges } from "@/hooks/useChanges";
 import { app$, setActiveTab } from "@/stores/useAppStore";
 import { useValue } from "@legendapp/state/react";
-import { statusColor, statusLetter, type ChangesScope } from "@/utils/changes";
+import { statusColor, statusLetter } from "@/utils/changes";
 import { theme } from "@/styles/theme";
-
-const SCOPES: ChangesScope[] = ["turn", "all"];
 
 export function ChangesScreen() {
   const previousTab = useValue(app$.previousTab);
@@ -40,7 +38,9 @@ export function ChangesScreen() {
 
   const fallbackAdded = useMemo(() => {
     if (vm.diff || !vm.selectedChange) return null;
-    if (vm.selectedChange.status === "added") return vm.selectedChange.additions ?? 0;
+    if (vm.selectedChange.status === "A" || vm.selectedChange.status === "?") {
+      return vm.selectedChange.additions ?? 0;
+    }
     return null;
   }, [vm.diff, vm.selectedChange]);
 
@@ -82,19 +82,12 @@ export function ChangesScreen() {
           </Pressable>
         }
       />
-      <View className="flex-row px-4 pb-2 gap-2">
-        {SCOPES.map((s) => (
-          <Pressable key={s} onPress={() => vm.setScope(s)} className={`px-3 py-1.5 rounded-full border ${vm.scope === s ? "bg-foreground border-foreground" : "bg-card border-border"}`}>
-            <Text className={`text-xs font-semibold ${vm.scope === s ? "text-black" : "text-foreground-secondary"}`}>{s === "turn" ? "This Turn" : "All Turns"}</Text>
-          </Pressable>
-        ))}
-      </View>
       {vm.isLoading ? (
         <View className="flex-1 items-center justify-center"><ActivityIndicator color={theme.colors.text.muted} /><Text className="mt-2 text-xs text-foreground-muted">Loading changes…</Text></View>
       ) : vm.error ? (
-        <View className="flex-1 items-center justify-center px-6"><Text className="text-sm font-bold text-foreground">Couldn&apos;t load changes</Text><Text className="mt-1 text-xs text-foreground-muted">{(vm.error as Error).message}</Text></View>
+        <View className="flex-1 items-center justify-center px-6"><Text className="text-sm font-bold text-foreground">Couldn&apos;t load changes</Text><Text className="mt-1 text-xs text-foreground-muted">{typeof vm.error === "string" ? vm.error : "Failed to load git status."}</Text></View>
       ) : vm.rows.length === 0 ? (
-        <View className="flex-1 items-center justify-center px-6"><Text className="text-sm font-bold text-foreground">No working tree changes</Text><Text className="mt-1 text-xs text-foreground-muted text-center">Edits from this session will appear here.</Text></View>
+        <View className="flex-1 items-center justify-center px-6"><Text className="text-sm font-bold text-foreground">No working tree changes</Text><Text className="mt-1 text-xs text-foreground-muted text-center">The working tree is clean.</Text></View>
       ) : (
         <LegendList
           data={vm.rows}
@@ -106,7 +99,6 @@ export function ChangesScreen() {
           renderItem={renderItem}
         />
       )}
-      {vm.isFetching ? <View className="absolute top-1 right-4"><ActivityIndicator size="small" color={theme.colors.text.muted} /></View> : null}
     </View>
   );
 }

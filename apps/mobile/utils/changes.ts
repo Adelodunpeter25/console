@@ -1,16 +1,16 @@
-import type { SessionFileChange } from "@console/types";
-
-export type ChangesScope = "turn" | "all";
+import type { GitFileEntry, GitFileStatus } from "@console/types";
 
 export type ChangesRow =
   | { kind: "folder"; key: string; name: string; additions: number; deletions: number; count: number }
-  | { kind: "file"; key: string; path: string; name: string; rel: string; status: string; additions: number; deletions: number };
+  | { kind: "file"; key: string; path: string; name: string; rel: string; status: GitFileStatus; additions: number; deletions: number };
 
 export function statusLetter(s: string): string {
   const u = (s ?? "").toUpperCase();
-  if (u.startsWith("ADD") || u === "A") return "A";
-  if (u.startsWith("DEL") || u === "D") return "D";
-  if (u === "R") return "R";
+  if (u === "A") return "A";
+  if (u === "D") return "D";
+  if (u === "R" || u === "C") return "R";
+  if (u === "U") return "U";
+  if (u === "?") return "?";
   return "M";
 }
 
@@ -19,6 +19,8 @@ export function statusColor(s: string): string {
   if (l === "A") return "#34d399";
   if (l === "D") return "#f87171";
   if (l === "R") return "#38bdf8";
+  if (l === "U") return "#fb7185";
+  if (l === "?") return "#a1a1aa";
   return "#facc15";
 }
 
@@ -37,14 +39,7 @@ export function stripRepoPrefix(path: string, repoPath: string | null): string {
   return path;
 }
 
-export function filterByScope(changes: SessionFileChange[], scope: ChangesScope): SessionFileChange[] {
-  if (scope === "all" || changes.length === 0) return changes;
-  let max = 0;
-  for (const c of changes) max = Math.max(max, c.turnIndex ?? 0);
-  return changes.filter((c) => (c.turnIndex ?? 0) === max);
-}
-
-export function sumTotals(changes: SessionFileChange[]): { files: number; additions: number; deletions: number } {
+export function sumTotals(changes: GitFileEntry[]): { files: number; additions: number; deletions: number } {
   let additions = 0;
   let deletions = 0;
   for (const c of changes) {
@@ -54,9 +49,9 @@ export function sumTotals(changes: SessionFileChange[]): { files: number; additi
   return { files: changes.length, additions, deletions };
 }
 
-export function buildRows(scoped: SessionFileChange[], collapsed: ReadonlySet<string>, repoPath: string | null): ChangesRow[] {
-  const groups = new Map<string, SessionFileChange[]>();
-  for (const c of scoped) {
+export function buildRows(files: GitFileEntry[], collapsed: ReadonlySet<string>, repoPath: string | null): ChangesRow[] {
+  const groups = new Map<string, GitFileEntry[]>();
+  for (const c of files) {
     const d = dirOf(c.path) || ".";
     const g = groups.get(d);
     if (g) g.push(c);

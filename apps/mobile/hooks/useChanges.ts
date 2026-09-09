@@ -4,25 +4,23 @@ import { gitService } from "@console/api";
 import { sessionsView$ } from "@/stores/useSessionStore";
 import { app$ } from "@/stores/useAppStore";
 import { project$ } from "@/stores/useProjectStore";
-import { useSessionChanges } from "@/hooks/queries";
 import { useGitStatus } from "@/hooks/useGit";
 import {
   baseOf,
   buildRows,
-  filterByScope,
   parseUnifiedDiff,
   stripRepoPrefix,
   sumTotals,
-  type ChangesScope,
 } from "@/utils/changes";
 
 /**
- * View-model for the Changes tab. Keeps data-fetching, grouping, and diff
- * caching out of the screen so the screen only renders.
+ * View-model for the Changes tab: a live `git status` file list.
+ * Keeps data-fetching, grouping, and diff caching out of the screen so the
+ * screen only renders.
  *
  * Perf notes:
- * - scoped/totals/rows are memoized; rows rebuild only when scope, collapse
- *   set, or repoPath identity changes.
+ * - totals/rows are memoized; rows rebuild only when the git file list,
+ *   collapse set, or repoPath identity changes.
  * - collapsed is a Set keyed by dir; toggle creates one new Set (no array churn).
  * - diffs cached in a ref Map so revisiting a file never refetches.
  * - stale diff fetches cancelled via incrementing request id.
@@ -43,11 +41,14 @@ export function useChanges() {
   );
   const repoPath = sessionCwd ?? project?.path ?? null;
 
-  const { data: sessionChanges = [], isLoading, error, refetch, isFetching } =
-    useSessionChanges(selectedSessionId ?? "");
-  const { summary: gitSummary, refetch: refetchGit } = useGitStatus(repoPath);
+  const { summary, loading: isLoading, error, refetch } = useGitStatus(repoPath);
 
-  const [scope, setScope] = useState<ChangesScope>("all");
+  // Ignored files (!) are not working-tree changes.
+  const files = useMemo(
+    () => (summary?.files ?? []).filter((f) => f.status !== "!"),
+    [summary],
+  );
+
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [diffText, setDiffText] = useState<string | null>(null);
@@ -55,20 +56,16 @@ export function useChanges() {
   const diffCache = useRef(new Map<string, string | null>());
   const diffReqId = useRef(0);
 
-  const scoped = useMemo(
-    () => filterByScope(sessionChanges, scope),
-    [sessionChanges, scope],
-  );
-  const totals = useMemo(() => sumTotals(scoped), [scoped]);
+  const totals = useMemo(() => sumTotals(files), [files]);
   const rows = useMemo(
-    () => buildRows(scoped, collapsed, repoPath),
-    [scoped, collapsed, repoPath],
+    () => buildRows(files, collapsed, repoPath),
+    [files, collapsed, repoPath],
   );
-  // Fingerprint drives LegendList extraData so tool-count updates re-render
+  // Fingerprint drives LegendList extraData so count updates re-render
   // rows without changing row identities.
   const rowsFingerprint = useMemo(
-    () => `${scope}:${rows.length}:${totals.additions}:${totals.deletions}:${isFetching}`,
-    [scope, rows.length, totals.additions, totals.deletions, isFetching],
+    () => `${rows.length}:${totals.additions}:${totals.deletions}`,
+    [rows.length, totals.additions, totals.deletions],
   );
 
   const toggleFolder = useCallback((name: string) => {
@@ -85,8 +82,7 @@ export function useChanges() {
 
   const refresh = useCallback(() => {
     refetch();
-    refetchGit();
-  }, [refetch, refetchGit]);
+  }, [refetch]);
 
   useEffect(() => {
     if (!selectedPath || !repoPath) {
@@ -118,8 +114,8 @@ export function useChanges() {
   }, [selectedPath, repoPath]);
 
   const selectedChange = useMemo(
-    () => (selectedPath ? scoped.find((c) => c.path === selectedPath) ?? null : null),
-    [selectedPath, scoped],
+    () => (selectedPath ? files.find((c) => c.path === selectedPath) ?? null : null),
+    [selectedPath, files],
   );
   const selectedRel = selectedPath ? stripRepoPrefix(selectedPath, repoPath) : "";
   const selectedName = selectedPath ? baseOf(selectedPath) : "";
@@ -135,12 +131,9 @@ export function useChanges() {
   return {
     selectedSessionId,
     repoPath,
-    branch: gitSummary?.branch ?? null,
+    branch: summary?.branch ?? null,
     isLoading,
     error,
-    isFetching,
-    scope,
-    setScope,
     collapsed,
     toggleFolder,
     rows,

@@ -173,17 +173,6 @@ export function useSearchFiles(root: string | null, query: string, enabled = tru
   });
 }
 
-export function useSessionChanges(id: string) {
-  return useQuery({
-    queryKey: [...sessionKeys.detail(id), "changes"],
-    queryFn: () => sessionService.getChanges(id),
-    enabled: Boolean(id),
-    staleTime: 5000,
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-  });
-}
-
 export function useReadFile(
   path: string,
   options?: { enabled?: boolean },
