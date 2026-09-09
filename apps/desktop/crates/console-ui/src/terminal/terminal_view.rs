@@ -612,26 +612,7 @@ impl Render for TerminalView {
                         return;
                     }
 
-                    // TEMP-DIAG: tab-completion report — run with RUST_LOG=debug,
-                    // press Tab, and check whether it reaches here and what bytes
-                    // come out. Remove once the Tab path is confirmed.
-                    let is_tab = key == "tab";
-                    if is_tab {
-                        log::debug!(
-                            "terminal tab keydown: ctrl={} alt={} shift={} platform={} func={} key_char={:?}",
-                            event.keystroke.modifiers.control,
-                            event.keystroke.modifiers.alt,
-                            event.keystroke.modifiers.shift,
-                            event.keystroke.modifiers.platform,
-                            event.keystroke.modifiers.function,
-                            event.keystroke.key_char,
-                        );
-                    }
-
                     if let Some(bytes) = TerminalView::key_to_bytes(event, keyboard_mode) {
-                        if is_tab {
-                            log::debug!("terminal tab -> {} bytes to pty", bytes.len());
-                        }
                         if let Some(h) = &handle_for_key {
                             h.send_input(bytes);
                         }
@@ -641,8 +622,6 @@ impl Render for TerminalView {
                             }
                         });
                         cx.stop_propagation();
-                    } else if is_tab {
-                        log::debug!("terminal tab swallowed: no bytes produced");
                     }
                 },
             )
