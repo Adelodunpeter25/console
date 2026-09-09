@@ -1,6 +1,6 @@
 # Prompt Queueing & Steering Specification
 
-**Status**: Draft (reconciled against current codebase)
+**Status**: Server done; Desktop + Mobile pending
 **Applies to**: Desktop (`apps/desktop`), Mobile (`apps/mobile`), Server API (`apps/server`)
 **Target Capabilities**: Real-Time Agent Collaboration, Turn Orchestration, Mid-Flight Steering
 
@@ -322,13 +322,15 @@ A session can be in any of these combinations, all of which the UI must render c
 
 ## 8. Summary of Tasks for Implementation
 
-- [ ] **Server (`apps/server`)**:
-  - Add `pendingNextTurn` map, `queuePrompt`/`clearQueuedPrompt`/`steer` methods, and the `finally`-block
-    drain to `RunService` (§4.4).
-  - Persist `QueuedPrompt` via `sessionStorage`, following the `session-todos.ts` pattern (§4.1).
-  - Add REST endpoints: `POST`/`GET`/`DELETE /sessions/:id/queue`, `POST /sessions/:id/steer` (§4.2).
-  - Add the single `queueUpdated` variant to `AgentSessionEvent` in `packages/types/src/events.ts` and
-    mirror it in `apps/desktop/crates/console-core/src/types/events.rs` (§4.3).
+- [x] **Server (`apps/server`)** — done:
+  - `pendingNextTurn` slot, `queuePrompt`/`editQueuedPrompt`/`clearQueuedPrompt`/`steer`, and the
+    turn-loop drain in `RunService` (§4.4).
+  - `QueuedPrompt` persisted via `sessionStorage`, following the `session-todos.ts` pattern (§4.1).
+  - REST endpoints: `POST`/`GET`/`PUT`/`DELETE /sessions/:id/queue`, `POST /sessions/:id/steer` (§4.2).
+  - `queueUpdated` variant on `AgentSessionEvent` in `packages/types/src/events.ts`, mirrored in
+    `apps/desktop/crates/console-core/src/types/events.rs` (§4.3).
+  - Covered by `apps/server/tests/queue.test.ts` (round-trip, replace, edit, validation, auto-drain,
+    steer-drain, abort-clears).
 - [ ] **Desktop (`apps/desktop`)**:
   - Build `QueuedPromptCard` component in `console-ui`.
   - Add `has_queued_prompt` prop to `ComposerView`; do not add a new `ComposerRunState` variant (§5.1).
@@ -337,3 +339,16 @@ A session can be in any of these combinations, all of which the UI must render c
 - [ ] **Mobile (`apps/mobile`)**:
   - Build `QueuedPromptBanner` with Reanimated animations.
   - Connect to queue/steer REST endpoints; handle `queueUpdated` in `chat-events.ts` / `useChatStore.ts`.
+
+## 9. Server implementation notes (as built)
+
+Deliberate deviations from the draft above, kept because they fix real races found during review:
+- Chained turns reuse one `RunEventHub` for the whole chain instead of destroy + fire-and-forget
+  re-`runAgentStream` (§3/`§4.4` describe the old shape). Live SSE subscribers keep one connection with
+  monotonic seq numbers; `waitForRunSettle` resolves when the chain ends.
+- `POST /abort` also discards the staged prompt (Stop means stop everything); `steer` is unaffected.
+- A failed turn holds (neither auto-runs nor drops) the staged prompt for later steer/edit/delete.
+- Added `PUT /sessions/:id/queue` for in-place edits (keeps the queue id); the card "Edit" flow in
+  §2.2/§5/§6 may use it instead of delete-then-restore.
+- `POST /queue` 404s for unknown sessions; the drain falls back to the persisted row so a queue
+  staged before a server restart still fires.
