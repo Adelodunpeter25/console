@@ -220,9 +220,16 @@ impl InputElement {
     }
 }
 
+pub(crate) struct MentionIconLayout {
+    pub(crate) range: std::ops::Range<usize>,
+    pub(crate) icon: gpui::AnyElement,
+    pub(crate) _layout_id: LayoutId,
+}
+
 pub(crate) struct InputLayoutState {
     pub(crate) text: StyledText,
     pub(crate) text_layout_state: (),
+    pub(crate) mention_icons: Vec<MentionIconLayout>,
 }
 
 pub(crate) struct PrepaintState {
@@ -256,70 +263,108 @@ impl Element for InputElement {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        let input = self.input.read(cx);
-        let content = input.content.clone();
-        let style = window.text_style();
-        let theme = Theme::current(cx);
-        let content_is_empty = content.is_empty();
-        let (display_text, text_color, selected_range, marked_range) = if content_is_empty {
-            (input.placeholder.clone(), theme.text_ghost, None, None)
-        } else {
-            (
-                content,
-                style.color,
-                Some(&input.selected_range),
-                input.marked_range.as_ref(),
-            )
-        };
-        let base_run = TextRun {
-            len: display_text.len(),
-            font: style.font(),
-            color: text_color,
-            background_color: None,
-            underline: None,
-            strikethrough: None,
-        };
-        let palette = crate::markdown::render::Palette::from_theme(&theme);
-        let search = if content_is_empty {
-            SearchPaint::none()
-        } else {
-            SearchPaint {
-                matches: &input.search_matches,
-                active: input
-                    .active_search_match
-                    .and_then(|index| input.search_matches.get(index)),
-                match_color: theme.warning.opacity(0.22),
-                active_color: theme.warning.opacity(0.5),
-            }
-        };
-        let runs = input_text_runs(
-            display_text.len(),
-            base_run,
-            selected_range,
-            marked_range,
-            theme.selection,
-            if content_is_empty {
-                &[]
+        let (display_text, runs, mentions_to_layout) = {
+            let input = self.input.read(cx);
+            let content = input.content.clone();
+            let style = window.text_style();
+            let theme = Theme::current(cx);
+            let content_is_empty = content.is_empty();
+            let (display_text, text_color, selected_range, marked_range) = if content_is_empty {
+                (input.placeholder.clone(), theme.text_ghost, None, None)
             } else {
-                &input.highlight
-            },
-            |class| palette.token(class),
-            search,
-            if content_is_empty || input.mode != FieldMode::Composer {
-                &[]
+                (
+                    content,
+                    style.color,
+                    Some(&input.selected_range),
+                    input.marked_range.as_ref(),
+                )
+            };
+            let base_run = TextRun {
+                len: display_text.len(),
+                font: style.font(),
+                color: text_color,
+                background_color: None,
+                underline: None,
+                strikethrough: None,
+            };
+            let palette = crate::markdown::render::Palette::from_theme(&theme);
+            let search = if content_is_empty {
+                SearchPaint::none()
             } else {
-                &input.mentions
-            },
-            theme.accent,
-            theme.accent.opacity(0.12),
-        );
+                SearchPaint {
+                    matches: &input.search_matches,
+                    active: input
+                        .active_search_match
+                        .and_then(|index| input.search_matches.get(index)),
+                    match_color: theme.warning.opacity(0.22),
+                    active_color: theme.warning.opacity(0.5),
+                }
+            };
+            let runs = input_text_runs(
+                display_text.len(),
+                base_run,
+                selected_range,
+                marked_range,
+                theme.selection,
+                if content_is_empty {
+                    &[]
+                } else {
+                    &input.highlight
+                },
+                |class| palette.token(class),
+                search,
+                if content_is_empty || input.mode != FieldMode::Composer {
+                    &[]
+                } else {
+                    &input.mentions
+                },
+                theme.accent,
+                theme.accent.opacity(0.12),
+            );
+            let mentions_to_layout = if input.mode == FieldMode::Composer && !input.mentions.is_empty() {
+                input
+                    .mentions
+                    .iter()
+                    .filter(|m| m.range.end <= input.content.len())
+                    .cloned()
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
+            (display_text, runs, mentions_to_layout)
+        };
+
         let mut text = StyledText::new(display_text).with_runs(runs);
-        let (layout_id, text_layout_state) = text.request_layout(id, inspector_id, window, cx);
+        let (text_layout_id, text_layout_state) = text.request_layout(id, inspector_id, window, cx);
+        let mut mention_icons = Vec::new();
+        let mut child_layout_ids = vec![text_layout_id];
+
+        for mention in mentions_to_layout {
+            let mut icon = crate::primitives::file_type_icon(&mention.path, 11.0).into_any_element();
+            let icon_layout_id = icon.request_layout(window, cx);
+            child_layout_ids.push(icon_layout_id);
+            mention_icons.push(MentionIconLayout {
+                range: mention.range,
+                icon,
+                _layout_id: icon_layout_id,
+            });
+        }
+
+        let layout_id = window.request_layout(
+            gpui::Style {
+                display: gpui::Display::Flex,
+                ..Default::default()
+            },
+            child_layout_ids,
+            cx,
+        );
+
         (
             layout_id,
             InputLayoutState {
                 text,
                 text_layout_state,
+                mention_icons,
             },
         )
     }
@@ -398,6 +443,21 @@ impl Element for InputElement {
             self.input
                 .update(cx, |input, _| input.caret_reconciled = Some(follow_state));
         }
+        for mention_icon in &mut layout_state.mention_icons {
+            let layout = layout_state.text.layout();
+            let rects = crate::markdown::render::range_rects(layout, &mention_icon.range, 3.0, 1.0);
+            if let Some(first_rect) = rects.first() {
+                let icon_size = px(11.0);
+                let icon_origin = point(
+                    first_rect.origin.x + px(2.0),
+                    first_rect.origin.y + (first_rect.size.height - icon_size) / 2.0,
+                );
+                let offset = icon_origin - bounds.origin;
+                window.with_element_offset(Point::new(offset.x.round(), offset.y.round()), |window| {
+                    mention_icon.icon.prepaint(window, cx);
+                });
+            }
+        }
         PrepaintState { cursor }
     }
 
@@ -460,6 +520,9 @@ impl Element for InputElement {
             window,
             cx,
         );
+        for mention_icon in &mut layout_state.mention_icons {
+            mention_icon.icon.paint(window, cx);
+        }
         if visually_focused && let Some(cursor) = prepaint.cursor.take() {
             window.paint_quad(cursor);
         }
