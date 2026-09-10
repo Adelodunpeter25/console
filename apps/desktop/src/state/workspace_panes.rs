@@ -1074,8 +1074,16 @@ impl ConsoleDesktopApp {
                     input.clear(cx);
                 }
             });
-            // Keep the previous transcript visible until the new request
-            // succeeds; a failed load must not leave the pane empty.
+            // Switching tabs: clear synchronously so the old session's
+            // messages never linger while the new session loads. (The
+            // close-tab path intentionally keeps the old transcript
+            // visible until its load succeeds; here the tab highlight
+            // already moved, so stale content reads as lag.)
+            if prev_sid.as_deref() != Some(sid) {
+                self.transcript_for_pane(pane_id).update(cx, |t, cx| {
+                    t.set_messages(Vec::new(), cx);
+                });
+            }
             self.load_session_messages_for_pane(pane_id.to_string(), sid.to_string(), cx);
         } else {
             self.selected_session_id = None;
