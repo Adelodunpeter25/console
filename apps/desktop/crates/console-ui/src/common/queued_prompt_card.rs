@@ -1,5 +1,5 @@
 //! Queued next-turn prompt card shown above the composer while a run is
-//! active. Compact single-row strip with truncate, Edit / Delete / Steer.
+//! active. Wrapping multi-line body with hover-only Edit / Delete / Steer.
 
 use std::rc::Rc;
 
@@ -25,6 +25,10 @@ pub fn queued_prompt_card(
         .as_ref()
         .is_some_and(|attachments| !attachments.is_empty());
     let text = prompt.prompt.clone();
+    let group_name = format!("queued-prompt-{}", prompt.id);
+    let edit_id = format!("queued-edit-{}", prompt.id);
+    let delete_id = format!("queued-delete-{}", prompt.id);
+    let steer_id = format!("queued-steer-{}", prompt.id);
 
     let edit_handler = on_edit.clone();
     let delete_handler = on_delete.clone();
@@ -34,58 +38,78 @@ pub fn queued_prompt_card(
         div()
             .w_full()
             .max_w(px(728.0))
-            .h(px(32.0))
-            .px(px(8.0))
+            .p(px(10.0))
             .rounded(px(8.0))
             .bg(theme.composer)
             .border_1()
             .border_color(theme.border_strong)
             .shadow_sm()
             .flex()
-            .items_center()
-            .justify_between()
+            .flex_col()
             .gap(px(6.0))
-            // Left: icon + truncated prompt preview + optional attachment badge
+            .group(group_name.clone())
+            // Body: icon + wrapping multi-line prompt text. No truncate, no
+            // fixed height — long prompts and embedded newlines grow the card.
             .child(
                 div()
-                    .flex_1()
-                    .min_w(px(0.0))
+                    .w_full()
                     .flex()
-                    .items_center()
-                    .gap(px(6.0))
-                    .child(app_icon(IconName::LoaderCircle, 11.0, theme.text_tertiary))
+                    .items_start()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .pt(px(2.0))
+                            .child(app_icon(IconName::LoaderCircle, 11.0, theme.text_tertiary)),
+                    )
                     .child(
                         div()
                             .flex_1()
                             .min_w(px(0.0))
-                            .text_size(px(11.5))
-                            .text_color(theme.text_secondary)
-                            .overflow_hidden()
+                            .flex()
+                            .flex_col()
+                            .gap(px(4.0))
                             .child(
                                 div()
-                                    .truncate()
+                                    .text_size(px(10.5))
+                                    .text_color(theme.text_ghost)
+                                    .child("Queued — runs next"),
+                            )
+                            .child(
+                                div()
+                                    .w_full()
+                                    .text_size(px(12.5))
+                                    .line_height(px(18.0))
+                                    .text_color(theme.text)
                                     .child(text),
-                            ),
-                    )
-                    .when(has_attachments, |el| {
-                        el.child(
-                            div()
-                                .flex_shrink_0()
-                                .child(app_icon(IconName::Paperclip, 11.0, theme.text_ghost)),
-                        )
-                    }),
+                            )
+                            .when(has_attachments, |el| {
+                                el.child(
+                                    div().flex_shrink_0().child(app_icon(
+                                        IconName::Paperclip,
+                                        11.0,
+                                        theme.text_ghost,
+                                    )),
+                                )
+                            }),
+                    ),
             )
-            // Right: three compact controls
+            // Actions: hover-only so the card reads as plain text until the
+            // mouse lands on it. `invisible` reserves the row height so the
+            // card does not jump when the buttons appear.
             .child(
                 div()
-                    .flex_shrink_0()
+                    .w_full()
                     .flex()
                     .items_center()
+                    .justify_end()
                     .gap(px(4.0))
+                    .invisible()
+                    .group_hover(group_name, |element| element.visible())
                     // Edit
                     .child(
                         div()
-                            .id("queued-edit")
+                            .id(edit_id)
                             .px(px(6.0))
                             .py(px(3.0))
                             .rounded(px(5.0))
@@ -108,7 +132,7 @@ pub fn queued_prompt_card(
                     // Delete
                     .child(
                         div()
-                            .id("queued-delete")
+                            .id(delete_id)
                             .size(px(22.0))
                             .rounded(px(5.0))
                             .flex()
@@ -130,7 +154,7 @@ pub fn queued_prompt_card(
                     // Steer / Send Now
                     .child(
                         div()
-                            .id("queued-steer")
+                            .id(steer_id)
                             .px(px(7.0))
                             .py(px(3.0))
                             .rounded(px(5.0))
