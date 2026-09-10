@@ -221,4 +221,80 @@ impl FsService {
 
         Ok(Box::pin(stream))
     }
+
+    /// Read raw file bytes from `GET /api/fs/file/raw` for image/SVG preview.
+    ///
+    /// Returns `(bytes, content_type)`. If the backend blocks the file or errors,
+    /// parses the structured JSON error body into `RawFileError` so callers can
+    /// inspect the preview block code and details.
+    pub async fn read_file_bytes(&self, path: &str) -> Result<(Vec<u8>, String)> {
+        let url = format!(
+            "{}/api/fs/file/raw?path={}",
+            self.transport.url("").await,
+            urlencoding::encode(path)
+        );
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to read raw file bytes")?;
+
+        let status = resp.status();
+        if status.is_success() {
+            let content_type = resp
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("application/octet-stream")
+                .to_string();
+            let bytes = resp
+                .bytes()
+                .await
+                .context("Failed to read response body bytes")?
+                .to_vec();
+            Ok((bytes, content_type))
+        } else {
+            let body_text = resp.text().await.unwrap_or_default();
+            if let Ok(err_obj) = serde_json::from_str::<RawFileError>(&body_text) {
+                Err(anyhow::Error::new(err_obj))
+            } else {
+                Err(anyhow!(
+                    "Failed to read raw file (status {}): {}",
+                    status,
+                    body_text
+                ))
+            }
+        }
+    }
 }
+
+/// Structured error returned by `GET /api/fs/file/raw` when preview is blocked.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct RawFileError {
+    #[serde(default)]
+    pub success: bool,
+    pub error: Option<String>,
+    pub code: Option<String>,
+    #[serde(rename = "sizeBytes")]
+    pub size_bytes: Option<u64>,
+    #[serde(rename = "maxBytes")]
+    pub max_bytes: Option<u64>,
+}
+
+impl std::fmt::Display for RawFileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(msg) = &self.error {
+            write!(f, "{}", msg)
+        } else if let Some(code) = &self.code {
+            write!(f, "{}", code)
+        } else {
+            write!(f, "Failed to read raw file")
+        }
+    }
+}
+
+impl std::error::Error for RawFileError {}
+

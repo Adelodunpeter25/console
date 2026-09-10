@@ -7,9 +7,14 @@ import os from "node:os";
 import path from "node:path";
 import { listDirTool, readFileTool, writeFileTool } from "@/agent/src/tools/index.js";
 import {
+  IMAGE_MAX_BYTES,
   MAX_FILE_PREVIEW_BYTES,
   formatBytes,
   getFilePreviewBlock,
+  imageMimeForExtension,
+  isLockFileName,
+  isPreviewableImageName,
+  isSvgFileName,
 } from "@console/types";
 import type { FilePreviewBlockedCode } from "@console/types";
 import type { FsTreeEntry } from "@console/types";
@@ -197,6 +202,51 @@ export class FsService {
     const start = startLine ? Math.max(1, startLine) - 1 : 0;
     const end = endLine ? Math.min(lines.length, endLine) : lines.length;
     return lines.slice(start, end).join("\n");
+  }
+
+  /**
+   * Read raw image / SVG bytes for binary preview.
+   *
+   * Only allows supported raster image extensions and SVG.
+   * Lockfiles and non-image binaries/text are blocked.
+   * Enforces IMAGE_MAX_BYTES.
+   */
+  async readFileBytes(
+    filePath: string,
+  ): Promise<{ bytes: Buffer; mimeType: string; sizeBytes: number }> {
+    const fileName = path.basename(filePath);
+
+    if (isLockFileName(fileName)) {
+      throw new FilePreviewBlockedError(
+        "LOCKFILE_BLOCKED",
+        `"${fileName}" is a generated lockfile — open it on your machine instead.`,
+      );
+    }
+
+    if (!isPreviewableImageName(fileName) && !isSvgFileName(fileName)) {
+      throw new FilePreviewBlockedError(
+        "BINARY_FILE",
+        `"${fileName}" is not a supported image format.`,
+      );
+    }
+
+    const stat = await fs.stat(filePath);
+    if (!stat.isFile()) {
+      throw new Error(`${filePath} is not a regular file.`);
+    }
+
+    if (stat.size > IMAGE_MAX_BYTES) {
+      throw new FilePreviewBlockedError(
+        "FILE_TOO_LARGE",
+        `"${fileName}" is ${formatBytes(stat.size)} — image previews are capped at ${formatBytes(IMAGE_MAX_BYTES)}.`,
+        { status: 413, detail: { sizeBytes: stat.size, maxBytes: IMAGE_MAX_BYTES } },
+      );
+    }
+
+    const mimeType = imageMimeForExtension(path.extname(filePath)) ?? "application/octet-stream";
+    const bytes = await fs.readFile(filePath);
+
+    return { bytes, mimeType, sizeBytes: stat.size };
   }
 
   /**

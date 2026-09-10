@@ -109,6 +109,34 @@ fsRoutes.get("/tree", async (c) => {
 });
 
 /**
+ * GET /api/fs/file/raw — Read raw file bytes (for image/SVG preview).
+ */
+fsRoutes.get("/file/raw", async (c) => {
+  const filePath = c.req.query("path");
+  if (!filePath) {
+    return c.json({ success: false, error: "Query parameter 'path' is required." }, 400);
+  }
+
+  try {
+    const { bytes, mimeType, sizeBytes } = await fsService.readFileBytes(filePath);
+    return c.body(bytes, 200, {
+      "Content-Type": mimeType,
+      "Content-Length": String(sizeBytes),
+      "Cache-Control": "private, max-age=30",
+    });
+  } catch (err) {
+    if (err instanceof FilePreviewBlockedError) {
+      return c.json(
+        { success: false, error: err.message, code: err.code, ...err.detail },
+        err.status,
+      );
+    }
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return c.json({ success: false, error: errorMsg }, 400);
+  }
+});
+
+/**
  * GET /api/fs/file — Read file content.
  */
 fsRoutes.get("/file", async (c) => {

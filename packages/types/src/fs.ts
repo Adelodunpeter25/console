@@ -10,6 +10,22 @@
 /** Files larger than this are rejected for text preview (~512 KB). */
 export const MAX_FILE_PREVIEW_BYTES = 512 * 1024;
 
+/** Extensions that can be previewed as raster images. */
+export const IMAGE_PREVIEW_EXTENSIONS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".bmp",
+  ".ico",
+]);
+
+export const SVG_EXTENSION = ".svg";
+
+/** Files larger than this are rejected for image preview (10 MB). */
+export const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+
 /** Structured codes returned by `GET /api/fs/file` when a preview is blocked. */
 export type FilePreviewBlockedCode = "LOCKFILE_BLOCKED" | "BINARY_FILE" | "FILE_TOO_LARGE";
 
@@ -56,6 +72,22 @@ function extensionOf(fileName: string): string {
   return idx === -1 ? "" : fileName.slice(idx).toLowerCase();
 }
 
+const MIME_BY_EXTENSION: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".bmp": "image/bmp",
+  ".ico": "image/x-icon",
+  ".svg": "image/svg+xml",
+};
+
+export function imageMimeForExtension(ext: string): string | null {
+  const normalized = (ext.startsWith(".") ? ext : `.${ext}`).toLowerCase();
+  return MIME_BY_EXTENSION[normalized] ?? null;
+}
+
 export function isLockFileName(fileName: string): boolean {
   const lower = fileName.toLowerCase();
   if (LOCK_FILE_BASENAMES.has(lower)) return true;
@@ -64,6 +96,14 @@ export function isLockFileName(fileName: string): boolean {
 
 export function isBinaryFileName(fileName: string): boolean {
   return BINARY_FILE_EXTENSIONS.has(extensionOf(fileName));
+}
+
+export function isPreviewableImageName(fileName: string): boolean {
+  return IMAGE_PREVIEW_EXTENSIONS.has(extensionOf(fileName));
+}
+
+export function isSvgFileName(fileName: string): boolean {
+  return extensionOf(fileName) === SVG_EXTENSION;
 }
 
 export function formatBytes(bytes: number): string {

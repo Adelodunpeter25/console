@@ -14,7 +14,7 @@ pub mod usage;
 
 pub use assist::AssistService;
 pub use auth::AuthService;
-pub use fs::FsService;
+pub use fs::{FsService, RawFileError};
 pub use git::GitService;
 pub use model_favorites::ModelFavoriteService;
 pub use notification::NotificationService;

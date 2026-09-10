@@ -55,6 +55,25 @@ pub struct WorkspaceTerminalState {
     pub next_id: usize,
 }
 
+#[derive(Clone, Debug)]
+pub enum ImageFileState {
+    Loading,
+    Loaded {
+        image: std::sync::Arc<gpui::Image>,
+        w: Option<u32>,
+        h: Option<u32>,
+        size_bytes: u64,
+        mime: String,
+    },
+    Failed {
+        message: String,
+    },
+    Blocked {
+        title: String,
+        message: String,
+    },
+}
+
 pub struct ConsoleDesktopApp {
     pub client: ConsoleClient,
     /// Shared session history for the sidebar/titlebar. `Rc` so per-frame
@@ -208,6 +227,8 @@ pub struct ConsoleDesktopApp {
         Rc<RefCell<std::collections::HashMap<String, Rc<RefCell<console_ui::markdown::render::MarkdownView>>>>>,
     pub preview_tab: Option<(String, std::time::Instant)>,
     pub open_file_contents: std::collections::HashMap<String, String>,
+    pub open_image_contents: std::collections::HashMap<String, ImageFileState>,
+    pub svg_preview_mode: std::collections::HashMap<String, console_ui::SvgViewMode>,
     pub open_diff_contents: std::collections::HashMap<String, (console_core::DiffResult, String)>,
     pub viewer_list_states: std::collections::HashMap<String, ListState>,
     pub viewer_selection_states: std::collections::HashMap<
@@ -800,6 +821,8 @@ impl ConsoleDesktopApp {
             subagent_markdown_views: Rc::new(RefCell::new(std::collections::HashMap::new())),
             preview_tab: None,
             open_file_contents: std::collections::HashMap::new(),
+            open_image_contents: std::collections::HashMap::new(),
+            svg_preview_mode: std::collections::HashMap::new(),
             open_diff_contents: std::collections::HashMap::new(),
             viewer_list_states: std::collections::HashMap::new(),
             viewer_selection_states: std::collections::HashMap::new(),

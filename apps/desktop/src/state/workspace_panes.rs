@@ -9,7 +9,7 @@ use console_ui::workspace::{WorkspaceDrag, ops as workspace_ops};
 use gpui::{AppContext, Context, Entity, Focusable as _, Window};
 use std::rc::Rc;
 
-use crate::state::app::ConsoleDesktopApp;
+use crate::state::app::{ConsoleDesktopApp, ImageFileState};
 use crate::types::WorkspacePaneState;
 
 impl ConsoleDesktopApp {
@@ -678,29 +678,211 @@ impl ConsoleDesktopApp {
         self.trim_file_caches();
         self.persist_workspaces();
 
-        // Fetch file content if not cached
-        let client = self.client.clone();
-        let file_path = path.clone();
-        cx.spawn(
-            async move |entity, cx| match client.fs.read_file(&file_path).await {
-                Ok(resp) => {
+        // Fetch file content or image preview
+        self.fetch_file_tab_content(path, cx);
+
+        cx.notify();
+    }
+
+    /// Fetch tab content depending on file kind (text/markdown vs raster image/SVG vs blocked).
+    pub fn fetch_file_tab_content(&mut self, path: String, cx: &mut Context<Self>) {
+        let kind = console_core::file_kind_for_path(&path);
+        match kind {
+            console_core::FileKind::Markdown | console_core::FileKind::Text => {
+                let client = self.client.clone();
+                let file_path = path;
+                cx.spawn(async move |entity, cx| match client.fs.read_file(&file_path).await {
+                    Ok(resp) => {
+                        cx.update(|cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.open_file_contents.insert(file_path, resp.content);
+                                    cx.notify();
+                                });
+                            }
+                        });
+                    }
+                    Err(err) => {
+                        log::warn!("Failed to read file for tab {}: {}", file_path, err);
+                    }
+                })
+                .detach();
+            }
+            console_core::FileKind::RasterImage | console_core::FileKind::Svg => {
+                self.open_image_contents
+                    .insert(path.clone(), ImageFileState::Loading);
+                cx.notify();
+
+                let client = self.client.clone();
+                let file_path = path;
+                let is_svg = kind == console_core::FileKind::Svg;
+
+                cx.spawn(async move |entity, cx| {
+                    let res = client.fs.read_file_bytes(&file_path).await;
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.open_file_contents.insert(file_path, resp.content);
+                                match res {
+                                    Ok((bytes, content_type)) => {
+                                        if is_svg {
+                                            if let Some((png_bytes, w, h)) =
+                                                console_ui::rasterize_svg(&bytes, 2048)
+                                            {
+                                                let img = std::sync::Arc::new(
+                                                    gpui::Image::from_bytes(
+                                                        gpui::ImageFormat::Png,
+                                                        png_bytes,
+                                                    ),
+                                                );
+                                                this.open_image_contents.insert(
+                                                    file_path.clone(),
+                                                    ImageFileState::Loaded {
+                                                        image: img,
+                                                        w: Some(w),
+                                                        h: Some(h),
+                                                        size_bytes: bytes.len() as u64,
+                                                        mime: "image/svg+xml".to_string(),
+                                                    },
+                                                );
+                                            } else {
+                                                this.open_image_contents.insert(
+                                                    file_path.clone(),
+                                                    ImageFileState::Blocked {
+                                                        title: "SVG Preview Unavailable".to_string(),
+                                                        message: "The SVG could not be rendered as a preview. You can view the raw XML in Source mode.".to_string(),
+                                                    },
+                                                );
+                                                this.svg_preview_mode.insert(
+                                                    file_path.clone(),
+                                                    console_ui::SvgViewMode::Source,
+                                                );
+                                            }
+                                            // Also populate text content for SVG Source mode
+                                            if let Ok(text) = String::from_utf8(bytes) {
+                                                this.open_file_contents
+                                                    .insert(file_path.clone(), text);
+                                            }
+                                        } else {
+                                            // Raster image
+                                            let format =
+                                                gpui::ImageFormat::from_mime_type(&content_type);
+                                            if let Some(fmt) = format {
+                                                let dims = console_ui::image_dimensions(&bytes);
+                                                let (w, h) = dims.unzip();
+                                                let img = std::sync::Arc::new(
+                                                    gpui::Image::from_bytes(fmt, bytes.clone()),
+                                                );
+                                                this.open_image_contents.insert(
+                                                    file_path.clone(),
+                                                    ImageFileState::Loaded {
+                                                        image: img,
+                                                        w,
+                                                        h,
+                                                        size_bytes: bytes.len() as u64,
+                                                        mime: content_type,
+                                                    },
+                                                );
+                                            } else {
+                                                this.open_image_contents.insert(
+                                                    file_path.clone(),
+                                                    ImageFileState::Failed {
+                                                        message: format!(
+                                                            "Unsupported image format: {}",
+                                                            content_type
+                                                        ),
+                                                    },
+                                                );
+                                            }
+                                        }
+                                    }
+                                    Err(err) => {
+                                        let file_name = std::path::Path::new(&file_path)
+                                            .file_name()
+                                            .and_then(|n| n.to_str())
+                                            .unwrap_or(&file_path);
+
+                                        let (title, message, is_blocked) = if let Some(raw_err) =
+                                            err.downcast_ref::<console_core::RawFileError>()
+                                        {
+                                            let title = match raw_err.code.as_deref() {
+                                                Some("LOCKFILE_BLOCKED") => {
+                                                    "Lockfiles can't be previewed"
+                                                }
+                                                Some("FILE_TOO_LARGE") => "File too large",
+                                                Some("BINARY_FILE") => "Binary file",
+                                                _ => "Preview unavailable",
+                                            };
+                                            let message =
+                                                raw_err.error.clone().unwrap_or_else(|| {
+                                                    format!("\"{}\" cannot be previewed.", file_name)
+                                                });
+                                            (title.to_string(), message, true)
+                                        } else if let Ok(raw_err) =
+                                            serde_json::from_str::<console_core::RawFileError>(
+                                                &err.to_string(),
+                                            )
+                                        {
+                                            let title = match raw_err.code.as_deref() {
+                                                Some("LOCKFILE_BLOCKED") => {
+                                                    "Lockfiles can't be previewed"
+                                                }
+                                                Some("FILE_TOO_LARGE") => "File too large",
+                                                Some("BINARY_FILE") => "Binary file",
+                                                _ => "Preview unavailable",
+                                            };
+                                            let message = raw_err.error.unwrap_or_else(|| {
+                                                format!("\"{}\" cannot be previewed.", file_name)
+                                            });
+                                            (title.to_string(), message, true)
+                                        } else {
+                                            (
+                                                "Failed to load file".to_string(),
+                                                err.to_string(),
+                                                false,
+                                            )
+                                        };
+
+                                        let state = if is_blocked {
+                                            ImageFileState::Blocked { title, message }
+                                        } else {
+                                            ImageFileState::Failed { message }
+                                        };
+                                        this.open_image_contents.insert(file_path, state);
+                                    }
+                                }
                                 cx.notify();
                             });
                         }
                     });
-                }
-                Err(err) => {
-                    log::warn!("Failed to read file for tab {}: {}", file_path, err);
-                }
-            },
-        )
-        .detach();
+                })
+                .detach();
+            }
+            console_core::FileKind::Blocked => {
+                let file_name = std::path::Path::new(&path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(&path);
 
-        cx.notify();
+                let (title, message) = if console_core::is_lock_file(file_name) {
+                    (
+                        "Lockfiles can't be previewed".to_string(),
+                        format!(
+                            "\"{file_name}\" is a generated lockfile — open it on your machine instead."
+                        ),
+                    )
+                } else {
+                    (
+                        "Binary file".to_string(),
+                        format!(
+                            "\"{file_name}\" isn't a text file, so there's nothing to preview here."
+                        ),
+                    )
+                };
+                self.open_image_contents
+                    .insert(path, ImageFileState::Blocked { title, message });
+                cx.notify();
+            }
+        }
     }
 
     pub fn open_diff_tab(&mut self, path: String, cx: &mut Context<Self>) {
@@ -949,6 +1131,7 @@ impl ConsoleDesktopApp {
     pub(crate) fn trim_file_caches(&mut self) {
         const MAX_CACHED_FILES: usize = 30;
         let over = self.open_file_contents.len() > MAX_CACHED_FILES
+            || self.open_image_contents.len() > MAX_CACHED_FILES
             || self.open_diff_contents.len() > MAX_CACHED_FILES
             || self.viewer_cached_file_lines.len() > MAX_CACHED_FILES
             || self.viewer_cached_diff_lines.len() > MAX_CACHED_FILES
@@ -958,6 +1141,8 @@ impl ConsoleDesktopApp {
         }
         let open = self.open_file_paths_everywhere();
         self.open_file_contents.retain(|path, _| open.contains(path));
+        self.open_image_contents.retain(|path, _| open.contains(path));
+        self.svg_preview_mode.retain(|path, _| open.contains(path));
         self.open_diff_contents.retain(|path, _| open.contains(path));
         self.viewer_cached_file_lines
             .retain(|path, _| open.contains(path));
@@ -1005,6 +1190,8 @@ impl ConsoleDesktopApp {
     /// Drop cached contents + viewer state for one closed file path.
     fn evict_file_caches_for_path(&mut self, path: &str) {
         self.open_file_contents.remove(path);
+        self.open_image_contents.remove(path);
+        self.svg_preview_mode.remove(path);
         self.open_diff_contents.remove(path);
         self.viewer_cached_file_lines.remove(path);
         self.viewer_cached_diff_lines.remove(path);

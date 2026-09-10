@@ -33,7 +33,7 @@ mod workspace_panes;
 
 mod app;
 
-pub use app::ConsoleDesktopApp;
+pub use app::{ConsoleDesktopApp, ImageFileState};
 // Shared by the sibling handler modules (`layout`, `sessions`, `run`).
 pub(crate) use app::{
     RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT, RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT, RIGHT_SIDEBAR_MAX_WIDTH,

@@ -14,7 +14,7 @@ use gpui::{
 };
 use std::rc::Rc;
 
-use crate::state::ConsoleDesktopApp;
+use crate::state::{ConsoleDesktopApp, ImageFileState};
 
 impl ConsoleDesktopApp {
     pub(crate) fn render_workspace_content(
@@ -70,65 +70,361 @@ impl ConsoleDesktopApp {
             };
         }
 
-        // File tab: render full-page MarkdownViewer if markdown, or FileViewer
+        // File tab: render full-page MarkdownViewer, FileViewer, ImagePreview, or BlockedFilePanel
         if let Some(console_core::WorkspaceTabConfig::File { path, .. }) = active_tab {
-            if !self.open_file_contents.contains_key(path) {
-                let client = self.client.clone();
-                let file_path = path.clone();
-                cx.spawn(async move |entity, cx| {
-                    if let Ok(resp) = client.fs.read_file(&file_path).await {
-                        cx.update(|cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.open_file_contents.insert(file_path, resp.content);
-                                    cx.notify();
-                                });
-                            }
-                        });
+            let theme = Theme::current(cx);
+            let kind = console_core::file_kind_for_path(path);
+
+            match kind {
+                console_core::FileKind::RasterImage => {
+                    if !self.open_image_contents.contains_key(path) {
+                        self.fetch_file_tab_content(path.clone(), cx);
                     }
-                })
-                .detach();
+                    let state = self
+                        .open_image_contents
+                        .get(path)
+                        .cloned()
+                        .unwrap_or(ImageFileState::Loading);
+                    match state {
+                        ImageFileState::Loading => {
+                            return div()
+                                .size_full()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .gap(px(8.0))
+                                .text_color(theme.text_tertiary)
+                                .text_size(px(13.0))
+                                .child(console_ui::app_icon(
+                                    console_ui::IconName::LoaderCircle,
+                                    16.0,
+                                    theme.text_tertiary,
+                                ))
+                                .child("Loading image...")
+                                .into_any_element();
+                        }
+                        ImageFileState::Loaded {
+                            image,
+                            w,
+                            h,
+                            size_bytes,
+                            mime,
+                        } => {
+                            let meta = console_ui::ImageMeta {
+                                width: w,
+                                height: h,
+                                size_bytes: Some(size_bytes),
+                                mime_type: Some(mime),
+                            };
+                            let zoom_img = image.clone();
+                            let entity = cx.entity().downgrade();
+                            return console_ui::ImagePreview::new(path.clone(), image)
+                                .meta(meta)
+                                .on_zoom(move |_w, cx| {
+                                    let img = zoom_img.clone();
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.zoomed_image = Some(img);
+                                            cx.notify();
+                                        });
+                                    }
+                                })
+                                .into_any_element();
+                        }
+                        ImageFileState::Failed { message } => {
+                            let retry_path = path.clone();
+                            let entity = cx.entity().downgrade();
+                            return console_ui::BlockedFilePanel::new(
+                                "Failed to load image",
+                                message,
+                            )
+                            .icon(console_ui::IconName::TriangleAlert)
+                            .on_retry(move |_w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.fetch_file_tab_content(retry_path.clone(), cx);
+                                    });
+                                }
+                            })
+                            .into_any_element();
+                        }
+                        ImageFileState::Blocked { title, message } => {
+                            return console_ui::BlockedFilePanel::new(title, message)
+                                .icon(console_ui::IconName::File)
+                                .into_any_element();
+                        }
+                    }
+                }
+                console_core::FileKind::Blocked => {
+                    if !self.open_image_contents.contains_key(path) {
+                        self.fetch_file_tab_content(path.clone(), cx);
+                    }
+                    let state = self
+                        .open_image_contents
+                        .get(path)
+                        .cloned()
+                        .unwrap_or(ImageFileState::Loading);
+                    match state {
+                        ImageFileState::Loading => {
+                            return div()
+                                .size_full()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .gap(px(8.0))
+                                .text_color(theme.text_tertiary)
+                                .text_size(px(13.0))
+                                .child(console_ui::app_icon(
+                                    console_ui::IconName::LoaderCircle,
+                                    16.0,
+                                    theme.text_tertiary,
+                                ))
+                                .child("Checking file...")
+                                .into_any_element();
+                        }
+                        ImageFileState::Blocked { title, message } => {
+                            return console_ui::BlockedFilePanel::new(title, message)
+                                .icon(console_ui::IconName::File)
+                                .into_any_element();
+                        }
+                        ImageFileState::Failed { message } => {
+                            let retry_path = path.clone();
+                            let entity = cx.entity().downgrade();
+                            return console_ui::BlockedFilePanel::new(
+                                "Preview unavailable",
+                                message,
+                            )
+                            .icon(console_ui::IconName::TriangleAlert)
+                            .on_retry(move |_w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.fetch_file_tab_content(retry_path.clone(), cx);
+                                    });
+                                }
+                            })
+                            .into_any_element();
+                        }
+                        _ => {
+                            return console_ui::BlockedFilePanel::new(
+                                "Binary file",
+                                format!(
+                                    "\"{}\" isn't a text file, so there's nothing to preview here.",
+                                    path
+                                ),
+                            )
+                            .icon(console_ui::IconName::File)
+                            .into_any_element();
+                        }
+                    }
+                }
+                console_core::FileKind::Svg => {
+                    let mode = self
+                        .svg_preview_mode
+                        .get(path)
+                        .copied()
+                        .unwrap_or(console_ui::SvgViewMode::Preview);
+                    match mode {
+                        console_ui::SvgViewMode::Preview => {
+                            if !self.open_image_contents.contains_key(path) {
+                                self.fetch_file_tab_content(path.clone(), cx);
+                            }
+                            let state = self
+                                .open_image_contents
+                                .get(path)
+                                .cloned()
+                                .unwrap_or(ImageFileState::Loading);
+                            match state {
+                                ImageFileState::Loading => {
+                                    return div()
+                                        .size_full()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .gap(px(8.0))
+                                        .text_color(theme.text_tertiary)
+                                        .text_size(px(13.0))
+                                        .child(console_ui::app_icon(
+                                            console_ui::IconName::LoaderCircle,
+                                            16.0,
+                                            theme.text_tertiary,
+                                        ))
+                                        .child("Loading SVG preview...")
+                                        .into_any_element();
+                                }
+                                ImageFileState::Loaded {
+                                    image,
+                                    w,
+                                    h,
+                                    size_bytes,
+                                    mime,
+                                } => {
+                                    let meta = console_ui::ImageMeta {
+                                        width: w,
+                                        height: h,
+                                        size_bytes: Some(size_bytes),
+                                        mime_type: Some(mime),
+                                    };
+                                    let zoom_img = image.clone();
+                                    let toggle_path = path.clone();
+                                    let entity = cx.entity().downgrade();
+                                    return console_ui::ImagePreview::new(path.clone(), image)
+                                        .meta(meta)
+                                        .is_svg(true)
+                                        .svg_mode(console_ui::SvgViewMode::Preview)
+                                        .on_toggle_svg_mode(move |new_mode, _w, cx| {
+                                            if let Some(app) = entity.upgrade() {
+                                                app.update(cx, |this, cx| {
+                                                    this.svg_preview_mode
+                                                        .insert(toggle_path.clone(), new_mode);
+                                                    cx.notify();
+                                                });
+                                            }
+                                        })
+                                        .on_zoom({
+                                            let entity = cx.entity().downgrade();
+                                            move |_w, cx| {
+                                                let img = zoom_img.clone();
+                                                if let Some(app) = entity.upgrade() {
+                                                    app.update(cx, |this, cx| {
+                                                        this.zoomed_image = Some(img);
+                                                        cx.notify();
+                                                    });
+                                                }
+                                            }
+                                        })
+                                        .into_any_element();
+                                }
+                                ImageFileState::Failed { message } => {
+                                    let retry_path = path.clone();
+                                    let entity = cx.entity().downgrade();
+                                    return console_ui::BlockedFilePanel::new(
+                                        "Failed to render SVG",
+                                        message,
+                                    )
+                                    .icon(console_ui::IconName::TriangleAlert)
+                                    .on_retry(move |_w, cx| {
+                                        if let Some(app) = entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.fetch_file_tab_content(retry_path.clone(), cx);
+                                            });
+                                        }
+                                    })
+                                    .into_any_element();
+                                }
+                                ImageFileState::Blocked { title, message } => {
+                                    return console_ui::BlockedFilePanel::new(title, message)
+                                        .icon(console_ui::IconName::File)
+                                        .into_any_element();
+                                }
+                            }
+                        }
+                        console_ui::SvgViewMode::Source => {
+                            if !self.open_file_contents.contains_key(path) {
+                                self.fetch_file_tab_content(path.clone(), cx);
+                            }
+                            let content = self
+                                .open_file_contents
+                                .get(path)
+                                .cloned()
+                                .unwrap_or_else(|| "Loading file content...".to_string());
+
+                            let lines = self.get_or_build_file_lines(path, &content);
+                            let line_count = lines.len();
+                            let list_state = self.viewer_list_state(
+                                &format!("file:{}", path),
+                                line_count,
+                                console_ui::CODE_LINE_HEIGHT,
+                            );
+                            let selection_state =
+                                self.viewer_selection_state(&format!("file:{}", path), cx);
+                            let focus_handle =
+                                self.viewer_focus_handle(&format!("file:{}", path), cx);
+                            let scrollbar_state =
+                                self.viewer_scrollbar_state(&format!("file:{}", path));
+                            let file_viewer =
+                                console_ui::FileViewer::new(path.clone(), content, list_state)
+                                    .rc_lines(lines)
+                                    .selection_state(selection_state)
+                                    .scrollbar_state(scrollbar_state)
+                                    .focus_handle(focus_handle);
+
+                            let toggle_path = path.clone();
+                            let entity = cx.entity().downgrade();
+                            let header = console_ui::svg_source_header(
+                                theme,
+                                Some(Rc::new(move |new_mode, _w, cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.svg_preview_mode
+                                                .insert(toggle_path.clone(), new_mode);
+                                            cx.notify();
+                                        });
+                                    }
+                                })),
+                            );
+
+                            return div()
+                                .size_full()
+                                .flex()
+                                .flex_col()
+                                .child(header)
+                                .child(div().flex_1().min_h_0().size_full().child(file_viewer))
+                                .into_any_element();
+                        }
+                    }
+                }
+                console_core::FileKind::Markdown => {
+                    if !self.open_file_contents.contains_key(path) {
+                        self.fetch_file_tab_content(path.clone(), cx);
+                    }
+
+                    let content = self
+                        .open_file_contents
+                        .get(path)
+                        .cloned()
+                        .unwrap_or_else(|| "Loading file content...".to_string());
+
+                    let view = self.get_or_build_markdown_view(path, &content);
+                    let selection = self.viewer_markdown_selection(path);
+                    let block_count = view.borrow().block_count();
+                    let list_state =
+                        self.viewer_list_state(&format!("md:{}", path), block_count, 60.0);
+                    let scrollbar_state = self.viewer_scrollbar_state(&format!("md:{}", path));
+                    return console_ui::MarkdownViewer::new(path.clone(), view, list_state)
+                        .selection(selection)
+                        .scrollbar_state(scrollbar_state)
+                        .into_any_element();
+                }
+                console_core::FileKind::Text => {
+                    if !self.open_file_contents.contains_key(path) {
+                        self.fetch_file_tab_content(path.clone(), cx);
+                    }
+
+                    let content = self
+                        .open_file_contents
+                        .get(path)
+                        .cloned()
+                        .unwrap_or_else(|| "Loading file content...".to_string());
+
+                    let lines = self.get_or_build_file_lines(path, &content);
+                    let line_count = lines.len();
+                    let list_state = self.viewer_list_state(
+                        &format!("file:{}", path),
+                        line_count,
+                        console_ui::CODE_LINE_HEIGHT,
+                    );
+                    let selection_state =
+                        self.viewer_selection_state(&format!("file:{}", path), cx);
+                    let focus_handle = self.viewer_focus_handle(&format!("file:{}", path), cx);
+                    let scrollbar_state = self.viewer_scrollbar_state(&format!("file:{}", path));
+                    return console_ui::FileViewer::new(path.clone(), content, list_state)
+                        .rc_lines(lines)
+                        .selection_state(selection_state)
+                        .scrollbar_state(scrollbar_state)
+                        .focus_handle(focus_handle)
+                        .into_any_element();
+                }
             }
-
-            let content = self
-                .open_file_contents
-                .get(path)
-                .cloned()
-                .unwrap_or_else(|| "Loading file content...".to_string());
-
-            let is_markdown = {
-                let lower = path.to_lowercase();
-                lower.ends_with(".md") || lower.ends_with(".markdown") || lower.ends_with(".mdx")
-            };
-
-            if is_markdown {
-                let view = self.get_or_build_markdown_view(path, &content);
-                let selection = self.viewer_markdown_selection(path);
-                let block_count = view.borrow().block_count();
-                let list_state = self.viewer_list_state(&format!("md:{}", path), block_count, 60.0);
-                let scrollbar_state = self.viewer_scrollbar_state(&format!("md:{}", path));
-                return console_ui::MarkdownViewer::new(path.clone(), view, list_state)
-                    .selection(selection)
-                    .scrollbar_state(scrollbar_state)
-                    .into_any_element();
-            }
-
-            let lines = self.get_or_build_file_lines(path, &content);
-            let line_count = lines.len();
-            let list_state = self.viewer_list_state(
-                &format!("file:{}", path),
-                line_count,
-                console_ui::CODE_LINE_HEIGHT,
-            );
-            let selection_state = self.viewer_selection_state(&format!("file:{}", path), cx);
-            let focus_handle = self.viewer_focus_handle(&format!("file:{}", path), cx);
-            let scrollbar_state = self.viewer_scrollbar_state(&format!("file:{}", path));
-            return console_ui::FileViewer::new(path.clone(), content, list_state)
-                .rc_lines(lines)
-                .selection_state(selection_state)
-                .scrollbar_state(scrollbar_state)
-                .focus_handle(focus_handle)
-                .into_any_element();
         }
 
         // Diff tab: render full-page DiffViewer
