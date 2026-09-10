@@ -444,14 +444,14 @@ impl Element for InputElement {
                 .update(cx, |input, _| input.caret_reconciled = Some(follow_state));
         }
         let icon_size = px(11.0);
-        let extra_left = px(15.0);
+        let extra_left = px(14.0);
 
         for mention_icon in &mut layout_state.mention_icons {
             let layout = layout_state.text.layout();
             let rects = crate::markdown::render::range_rects(layout, &mention_icon.range, 3.0, 1.0);
             if let Some(first_rect) = rects.first() {
                 let icon_origin = point(
-                    first_rect.origin.x - extra_left + px(2.5),
+                    first_rect.origin.x - extra_left + px(2.0),
                     first_rect.origin.y + (first_rect.size.height - icon_size) / 2.0,
                 );
                 let child_origin = window.layout_bounds(mention_icon._layout_id).origin;
@@ -499,7 +499,7 @@ impl Element for InputElement {
         if input.mode == FieldMode::Composer && !input.mentions.is_empty() {
             let theme = Theme::current(cx);
             let layout = layout_state.text.layout();
-            let extra_left = px(15.0);
+            let extra_left = px(14.0);
 
             for mention in &input.mentions {
                 if mention.range.end <= input.content.len() {

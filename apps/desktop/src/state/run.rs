@@ -819,7 +819,18 @@ impl ConsoleDesktopApp {
                 } else {
                     let mut list = self.queued_prompts_for_session(run_session_id);
                     if !list.is_empty() {
-                        list.remove(0);
+                        let popped = list.remove(0);
+                        let user_msg = console_core::AgentMessage::User {
+                            content: popped.prompt,
+                            attachments: popped.attachments,
+                            created_at: Some(chrono::Utc::now().timestamp()),
+                        };
+                        if pane_shows_run {
+                            self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                                t.push_message(user_msg, cx);
+                                t.begin_streaming(cx);
+                            });
+                        }
                         if list.is_empty() {
                             self.set_queued_prompt_for_session(run_session_id, None);
                         } else {
