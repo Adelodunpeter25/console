@@ -53,6 +53,7 @@ function runAgentLoop(
     systemPrompt,
     tools,
     streamFn,
+    thinkingLevel,
     approvalMode = "always-ask",
     onApproval,
     onEvent,
@@ -117,7 +118,7 @@ function runAgentLoop(
         const turnId = randomUUID();
 
         const assistantMessage = await streamOneTurn(
-          { model, systemPrompt, messages: [...messages], tools, signal },
+          { model, systemPrompt, messages: [...messages], tools, signal, thinkingLevel },
           streamFn,
           turnId,
           emit,

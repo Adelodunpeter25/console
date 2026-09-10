@@ -11,6 +11,7 @@
  * Usage: call createAntigravityStreamFn() once per Agent instance.
  */
 import type { StreamFn } from "@/agent/src/service/agent-loop.js";
+import type { ThinkingLevel } from "@console/types";
 import { refreshIfNeeded } from "@/providers/src/auth/token-refresh.js";
 import { loadCredential, credentialExists } from "@/providers/src/auth/token-store.js";
 import { loginAntigravity } from "@/providers/src/auth/login.js";
@@ -128,6 +129,21 @@ function normalizeAntigravityTools(
   }));
 }
 
+const ANTIGRAVITY_THINKING_LEVELS = new Set<ThinkingLevel>(["minimal", "low", "medium", "high"]);
+
+export function resolveAntigravityThinkingLevel(
+  model: { supportedThinkingLevels?: readonly ThinkingLevel[]; defaultThinkingLevel?: ThinkingLevel },
+  requested?: ThinkingLevel,
+): ThinkingLevel | undefined {
+  const level = requested ?? model.defaultThinkingLevel;
+  if (level === undefined) return undefined;
+  const supported = model.supportedThinkingLevels ?? [...ANTIGRAVITY_THINKING_LEVELS];
+  if (!supported.includes(level) || !ANTIGRAVITY_THINKING_LEVELS.has(level)) {
+    throw new Error(`Thinking level \"${level}\" is not supported by Antigravity model`);
+  }
+  return level;
+}
+
 function buildAntigravityRequest(
   projectId: string,
   modelId: string,
@@ -135,6 +151,7 @@ function buildAntigravityRequest(
   contents: ReturnType<typeof convertMessages>,
   tools: GeminiFunctionDeclaration[],
   sessionState: AntigravitySessionState,
+  thinkingLevel?: ThinkingLevel,
 ): CloudCodeAssistRequest {
   const envelope = buildEnvelope(sessionState, modelId);
   const maxOutputTokens = MODEL_MAX_OUTPUT_TOKENS[modelId] ?? 65536;
@@ -142,7 +159,9 @@ function buildAntigravityRequest(
   const generationConfig: GenerationConfig = {
     maxOutputTokens,
     temperature: undefined,
-    thinkingConfig: undefined,
+    thinkingConfig: thinkingLevel
+      ? { includeThoughts: true, thinkingBudget: undefined, thinkingLevel: thinkingLevel.toUpperCase() }
+      : undefined,
   };
 
   const payload: CcaRequestPayload = {
@@ -180,7 +199,7 @@ function buildAntigravityRequest(
 export function createAntigravityStreamFn(): StreamFn {
   const sessionState: AntigravitySessionState = createSessionState();
 
-  return async function* ({ model, systemPrompt, messages, tools, signal }) {
+  return async function* ({ model, systemPrompt, messages, tools, signal, thinkingLevel }) {
     // Check if credentials exist and are valid, auto-login if not
     let cred;
     try {
@@ -210,6 +229,7 @@ export function createAntigravityStreamFn(): StreamFn {
       contents,
       functionDeclarations,
       sessionState,
+      resolveAntigravityThinkingLevel(model, thinkingLevel),
     );
 
     yield* streamCore({

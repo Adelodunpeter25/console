@@ -5,6 +5,8 @@
 
 export type ProviderId = "antigravity" | "opencode" | "codex" | "cline" | "devin";
 
+export type ThinkingLevel = "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
 /** Providers that authenticate via OAuth (login-only providers). */
 export type OAuthProviderId = "antigravity" | "codex" | "devin";
 
@@ -14,6 +16,10 @@ export interface Model {
   contextWindow: number;
   /** Whether the provider explicitly reports support for image input. */
   supportsImages?: boolean;
+  /** Thinking levels accepted by this model. */
+  supportedThinkingLevels?: ThinkingLevel[];
+  /** Default thinking level when no runtime override is supplied. */
+  defaultThinkingLevel?: ThinkingLevel;
 }
 
 export interface ModelFavorite {
