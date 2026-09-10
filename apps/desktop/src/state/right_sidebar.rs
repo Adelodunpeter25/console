@@ -167,15 +167,27 @@ impl ConsoleDesktopApp {
             return;
         };
 
-        if let Some(state) = self.right_sidebar_terminals_by_cwd.get_mut(&cwd) {
-            if index < state.terminals.len() {
-                state.terminals.remove(index);
-                if state.active_idx >= state.terminals.len() {
-                    state.active_idx = state.terminals.len().saturating_sub(1);
+        let removed = self
+            .right_sidebar_terminals_by_cwd
+            .get_mut(&cwd)
+            .and_then(|state| {
+                if index < state.terminals.len() {
+                    let removed = state.terminals.remove(index);
+                    if state.active_idx >= state.terminals.len() {
+                        state.active_idx = state.terminals.len().saturating_sub(1);
+                    }
+                    Some(removed)
+                } else {
+                    None
                 }
-                self.persist_workspaces();
-                cx.notify();
-            }
+            });
+        if let Some((_, view)) = removed {
+            // Send kill to the server PTY before the view entity drops —
+            // without this the shell keeps running orphaned (see the
+            // workspace tab path `dispose_closed_tab`, which does the same).
+            view.update(cx, |terminal, _| terminal.kill());
+            self.persist_workspaces();
+            cx.notify();
         }
     }
 
