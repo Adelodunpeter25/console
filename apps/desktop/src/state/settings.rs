@@ -7,6 +7,33 @@ use gpui::{
 };
 
 impl ConsoleDesktopApp {
+    /// Reload server-backed settings so every workspace uses the latest model roles.
+    pub fn refresh_settings(&mut self, cx: &mut Context<Self>) {
+        let client = self.client.clone();
+        cx.spawn(async move |this, cx| {
+            let Ok(settings) = client.settings.get().await else {
+                return;
+            };
+            cx.update(|cx| {
+                this.update(cx, |app, cx| {
+                    app.apply_settings(settings, cx);
+                });
+            });
+        })
+        .detach();
+    }
+
+    fn apply_settings(&mut self, settings: ConsoleSettings, cx: &mut Context<Self>) {
+        if let Some(settings_view) = self
+            .settings_window_view
+            .as_ref()
+            .and_then(|view| view.upgrade())
+        {
+            settings_view.update(cx, |view, cx| view.apply_model_settings(&settings, cx));
+        }
+        cx.notify();
+    }
+
     pub fn save_model_settings(&mut self, settings: ConsoleSettings, cx: &mut Context<Self>) {
         let client = self.client.clone();
         let Some(settings_view) = self
@@ -26,13 +53,24 @@ impl ConsoleDesktopApp {
         cx.spawn(async move |_, cx| {
             let result = client.settings.update(&settings).await;
             cx.update(|cx| {
-                settings_view.update(cx, |view, cx| {
-                    view.model_saving = false;
-                    if let Err(error) = result {
-                        view.model_error = Some(error.to_string());
+                match result {
+                    Ok(saved_settings) => {
+                        settings_view.update(cx, |view, cx| {
+                            view.model_saving = false;
+                            view.apply_model_settings(&saved_settings, cx);
+                            view.model_error = None;
+                            cx.notify();
+                        });
+                        crate::window::broadcast_settings_refresh(cx);
                     }
-                    cx.notify();
-                });
+                    Err(error) => {
+                        settings_view.update(cx, |view, cx| {
+                            view.model_saving = false;
+                            view.model_error = Some(error.to_string());
+                            cx.notify();
+                        });
+                    }
+                }
             });
         })
         .detach();

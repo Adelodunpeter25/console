@@ -139,6 +139,25 @@ impl SettingsWindow {
         }
     }
 
+    pub fn apply_model_settings(
+        &mut self,
+        settings: &console_core::ConsoleSettings,
+        cx: &mut Context<Self>,
+    ) {
+        self.model_default_input.update(cx, |input, cx| {
+            input.set_content(settings.model_roles.default.clone().unwrap_or_default(), cx);
+        });
+        self.model_plan_input.update(cx, |input, cx| {
+            input.set_content(settings.model_roles.plan.clone().unwrap_or_default(), cx);
+        });
+        self.model_vision_input.update(cx, |input, cx| {
+            input.set_content(settings.model_roles.vision.clone().unwrap_or_default(), cx);
+        });
+        self.model_smol_input.update(cx, |input, cx| {
+            input.set_content(settings.model_roles.smol.clone().unwrap_or_default(), cx);
+        });
+    }
+
     pub fn set_tab(&mut self, tab: SettingsTab, cx: &mut Context<Self>) {
         self.active_tab = tab;
         if tab == SettingsTab::Usage {

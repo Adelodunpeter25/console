@@ -33,6 +33,33 @@ pub fn register_window(handle: AnyWindowHandle, app: WeakEntity<ConsoleDesktopAp
     });
 }
 
+/// Ask every open workspace to reload settings from the server.
+///
+/// The registry is pruned here as well as when selecting the active window so
+/// settings changes do not retain closed workspace entities.
+pub fn broadcast_settings_refresh(cx: &mut App) {
+    WORKSPACE_WINDOWS.with(|windows| {
+        let mut list = windows.borrow_mut();
+        let live_handles = cx.windows();
+        let mut apps = Vec::with_capacity(list.len());
+        list.retain(|(handle, app)| {
+            let Some(app) = app.upgrade() else {
+                return false;
+            };
+            if !live_handles.contains(handle) {
+                return false;
+            }
+            apps.push(app);
+            true
+        });
+        drop(list);
+
+        for app in apps {
+            app.update(cx, |app, cx| app.refresh_settings(cx));
+        }
+    });
+}
+
 pub fn get_active_window(
     cx: &mut App,
 ) -> Option<(AnyWindowHandle, gpui::Entity<ConsoleDesktopApp>)> {
