@@ -31,6 +31,15 @@ use crate::utils::{
 /// Collapsed-project key for sessions without a known project.
 pub const NO_PROJECT_KEY: &str = "none";
 
+/// Display project names as sentence case without changing the persisted name.
+fn sentence_case_project_name(name: &str) -> String {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return String::new();
+    };
+    first.to_uppercase().chain(chars).collect()
+}
+
 #[derive(Clone)]
 enum SidebarRow {
     Draft(usize),
@@ -271,7 +280,7 @@ impl RenderOnce for SidebarView {
                 Some(id) => projects
                     .iter()
                     .find(|project| &project.id == id)
-                    .map(|project| project.name.clone())
+                    .map(|project| sentence_case_project_name(&project.name))
                     .unwrap_or_else(|| "Unknown Project".to_string()),
                 None => "No Project".to_string(),
             }
