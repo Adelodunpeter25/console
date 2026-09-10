@@ -24,6 +24,7 @@ pub struct SettingsWindow {
     model_plan_input: Entity<ComposerInput>,
     model_vision_input: Entity<ComposerInput>,
     model_smol_input: Entity<ComposerInput>,
+    model_menus: [console_ui::ContextMenuHandle; 4],
     pub(crate) model_saving: bool,
     pub(crate) model_error: Option<String>,
     _subscription: Option<gpui::Subscription>,
@@ -101,6 +102,12 @@ impl SettingsWindow {
             .detach();
         }
 
+        let model_menus = [
+            console_ui::ContextMenuHandle::new(cx),
+            console_ui::ContextMenuHandle::new(cx),
+            console_ui::ContextMenuHandle::new(cx),
+            console_ui::ContextMenuHandle::new(cx),
+        ];
         let focus_handle = cx.focus_handle();
         window.focus(&focus_handle, cx);
 
@@ -117,6 +124,7 @@ impl SettingsWindow {
             model_plan_input,
             model_vision_input,
             model_smol_input,
+            model_menus,
             model_saving: false,
             model_error: None,
             _subscription: subscription,
@@ -424,6 +432,7 @@ impl Render for SettingsWindow {
                     plan_input: self.model_plan_input.clone(),
                     vision_input: self.model_vision_input.clone(),
                     smol_input: self.model_smol_input.clone(),
+                    menus: self.model_menus.clone(),
                     on_select,
                     on_save,
                     saving: self.model_saving,
