@@ -7,8 +7,15 @@ use gpui::{
 };
 
 impl ConsoleDesktopApp {
-    /// Reload server-backed settings so every workspace uses the latest model roles.
+    /// Reload all server-backed settings-window data in this workspace.
     pub fn refresh_settings(&mut self, cx: &mut Context<Self>) {
+        self.refresh_auth_status(cx);
+        self.refresh_deleted_sessions(cx);
+        self.load_projects(cx);
+        self.load_sessions(cx);
+        self.load_providers(cx);
+        self.fetch_usage(cx);
+
         let client = self.client.clone();
         cx.spawn(async move |this, cx| {
             let Ok(settings) = client.settings.get().await else {

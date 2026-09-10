@@ -28,6 +28,7 @@ impl ConsoleDesktopApp {
                         app.update(cx, |this, cx| {
                             this.refresh_deleted_sessions(cx);
                             this.load_sessions(cx);
+                            crate::window::broadcast_settings_refresh(cx);
                             cx.notify();
                         });
                     }
@@ -45,6 +46,7 @@ impl ConsoleDesktopApp {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
                             this.refresh_deleted_sessions(cx);
+                            crate::window::broadcast_settings_refresh(cx);
                             cx.notify();
                         });
                     }
