@@ -109,7 +109,7 @@ pub fn activity_icon(tool_name: &str) -> &'static str {
         "edit_file" | "write_file" | "str_replace" => IconName::Pencil,
         "read_file" => IconName::File,
         "list_files" | "ls" => IconName::Folder,
-        "search_files" | "grep" => IconName::Search,
+        "search_files" | "grep" | "glob" | "find" | "findFile" | "find_file" => IconName::Search,
         "web_search" => IconName::Globe,
         "plan" => IconName::List,
         _ => IconName::Wrench,
