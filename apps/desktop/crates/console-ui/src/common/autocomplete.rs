@@ -95,35 +95,44 @@ impl AutocompleteItem {
 
 /// Detect the trigger immediately before the composer's caret.
 ///
-/// Slash commands are recognized only at the beginning of a line. File
-/// references must begin at whitespace or the beginning of the prompt, which
-/// prevents email addresses and ordinary prose from opening the popup.
+/// Slash commands must begin at whitespace or the beginning of the prompt.
+/// File references use the same boundary rule, which prevents email addresses,
+/// URLs, and ordinary prose from opening the popup.
 pub fn detect_trigger(value: &str, cursor: usize) -> Option<AutocompleteTrigger> {
     let cursor = cursor.min(value.len());
     if !value.is_char_boundary(cursor) {
         return None;
     }
     let before = &value[..cursor];
-    let line_start = before.rfind('\n').map_or(0, |index| index + 1);
-
-    // The caret may briefly report the position before the inserted trigger
-    // while the input element is reconciling. Never construct `trigger + 1..`
-    // until the caret is known to be after the trigger byte.
-    if cursor > line_start && value.as_bytes().get(line_start) == Some(&b'/') {
-        let query_start = line_start + 1;
-        if query_start <= cursor && value.is_char_boundary(query_start) {
+    // Find the trigger nearest to the caret. A slash command can appear after
+    // whitespace anywhere in the prompt, not only at the beginning of a line.
+    // Searching backwards also makes multiple commands in one prompt behave
+    // naturally: only the command currently being typed is replaced.
+    if let Some(slash) = before
+        .char_indices()
+        .rev()
+        .find_map(|(index, character)| {
+            (character == '/' && (index == 0 || before[..index].chars().next_back().is_some_and(char::is_whitespace)))
+                .then_some(index)
+        })
+    {
+        let query_start = slash + 1;
+        if value.is_char_boundary(query_start) {
             let query = &value[query_start..cursor];
             if query.chars().all(valid_command_character) {
                 return Some(AutocompleteTrigger {
                     kind: AutocompleteKind::Command,
-                    range: line_start..cursor,
+                    range: slash..cursor,
                     query: query.to_owned(),
                 });
             }
         }
     }
 
-    let at_start = before.rfind('@')?;
+    let at_start = before
+        .char_indices()
+        .rev()
+        .find_map(|(index, character)| (character == '@').then_some(index))?;
     let previous = before[..at_start].chars().next_back();
     let query = &value[at_start + 1..cursor];
     if (previous.is_none() || previous.is_some_and(char::is_whitespace))

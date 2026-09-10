@@ -1,5 +1,6 @@
 use console_ui::ComposerMention;
 use console_ui::{adjust_mentions as real_adjust_mentions, reconcile_mentions as real_reconcile};
+use console_ui::{AutocompleteKind, detect_trigger};
 use std::ops::Range;
 
 fn adjust_mentions(
@@ -35,6 +36,21 @@ fn adjust_mentions(
         content.get(m.range.clone()) == Some(m.path.as_str())
     });
     mentions.sort_by_key(|m| m.range.start);
+}
+
+#[test]
+fn test_slash_command_can_start_after_words() {
+    let value = "please run /review";
+    let trigger = detect_trigger(value, value.len()).expect("slash command trigger");
+    assert_eq!(trigger.kind, AutocompleteKind::Command);
+    assert_eq!(trigger.query, "review");
+    assert_eq!(&value[trigger.range], "/review");
+}
+
+#[test]
+fn test_slash_command_does_not_start_inside_word_or_url() {
+    assert!(detect_trigger("foo/bar", "foo/bar".len()).is_none());
+    assert!(detect_trigger("https://example.com", "https://example.com".len()).is_none());
 }
 
 #[test]
