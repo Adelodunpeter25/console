@@ -11,6 +11,7 @@ use std::rc::Rc;
 
 use console_core::{
     ActivityEvent, ToolCall, ToolCallEntry, ToolResult, diff_lines, extract_edit_args,
+    extract_write_args,
 };
 use gpui::{
     AnyElement, App, ElementId, FontWeight, IntoElement, ParentElement, RenderOnce, Styled, Window,
@@ -310,15 +311,22 @@ impl ToolCalls {
         let (status_icon, status_color) = Self::status_icon(&entry, &theme);
         let call_id_for_action = call_id.clone();
         let is_edit = is_edit_file(&entry.call.name);
-        let file_path = argument_path(&entry.call).map(str::to_owned);
-        let diff = if is_edit {
+        let is_write = is_write_file(&entry.call.name);
+        let file_path = argument_path(&entry.call)
+            .map(str::to_owned)
+            .or_else(|| extract_write_args(&entry.call.arguments).map(|(path, _)| path));
+        // Both editFile and writeFile describe a file transition. `editFile`
+        // supplies the old and new contents directly; `writeFile` creates a
+        // new file, so diff it against an empty file. Keeping this in the same
+        // cache/rendering path ensures writeFile gets the same DiffView rather
+        // than falling back to the JSON arguments section.
+        let diff = if is_edit || is_write {
             let mut cache = self.state.borrow_mut();
-            if let Some((cached_args, cached_diff)) = cache.diff_cache.get(&call_id) {
+            let computed = if let Some((cached_args, cached_diff)) = cache.diff_cache.get(&call_id) {
                 if cached_args == &entry.call.arguments {
                     cached_diff.clone()
                 } else {
-                    let computed = extract_edit_args(&entry.call.arguments)
-                        .map(|(old, new)| diff_lines(old, new, 3));
+                    let computed = tool_call_diff(&entry.call);
                     cache.diff_cache.insert(
                         call_id.clone(),
                         (entry.call.arguments.clone(), computed.clone()),
@@ -326,14 +334,14 @@ impl ToolCalls {
                     computed
                 }
             } else {
-                let computed = extract_edit_args(&entry.call.arguments)
-                    .map(|(old, new)| diff_lines(old, new, 3));
+                let computed = tool_call_diff(&entry.call);
                 cache.diff_cache.insert(
                     call_id.clone(),
                     (entry.call.arguments.clone(), computed.clone()),
                 );
                 computed
-            }
+            };
+            computed
         } else {
             None
         };
@@ -953,6 +961,23 @@ impl ToolCalls {
 /// arguments carry `oldContent` / `newContent` for diffing.
 fn is_edit_file(name: &str) -> bool {
     matches!(name, "editFile" | "edit_file" | "str_replace")
+}
+
+/// Whether a tool-call name writes complete file content.
+fn is_write_file(name: &str) -> bool {
+    matches!(name, "writeFile" | "write_file" | "batchWrite" | "batch_write")
+}
+
+/// Build the visual diff for a file transition. A write starts with an empty
+/// file, so every written line is shown as an addition.
+fn tool_call_diff(call: &ToolCall) -> Option<console_core::DiffResult> {
+    if is_edit_file(&call.name) {
+        extract_edit_args(&call.arguments).map(|(old, new)| diff_lines(old, new, 3))
+    } else if is_write_file(&call.name) {
+        extract_write_args(&call.arguments).map(|(_, content)| diff_lines("", &content, 3))
+    } else {
+        None
+    }
 }
 
 /// Whether a tool-call name reads file content into its result.
