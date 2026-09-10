@@ -169,6 +169,10 @@ pub fn save_layout(state: PersistedLayoutState) {
     update_document(|document| document.layout = Some(state));
 }
 
+pub fn load_environments() -> Option<PersistedEnvironmentsState> {
+    read_document().environments
+}
+
 pub fn save_environments(state: PersistedEnvironmentsState) {
     update_document(|document| document.environments = Some(state));
 }
