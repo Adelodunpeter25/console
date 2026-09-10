@@ -183,4 +183,4 @@ mod stub {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub(crate) use stub::{clear_for_session, ensure_initialized, notify_session};
+pub(crate) use stub::{clear_all, clear_for_session, ensure_initialized, notify_session};
