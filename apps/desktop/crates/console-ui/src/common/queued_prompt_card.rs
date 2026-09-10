@@ -106,14 +106,15 @@ pub fn queued_prompt_card(
                     .gap(px(4.0))
                     .invisible()
                     .group_hover(group_name, |element| element.visible())
-                    // Edit
+                    // Edit (icon-only)
                     .child(
                         div()
                             .id(edit_id)
-                            .px(px(6.0))
-                            .py(px(3.0))
+                            .size(px(22.0))
                             .rounded(px(5.0))
-                            .text_size(px(10.5))
+                            .flex()
+                            .items_center()
+                            .justify_center()
                             .border_1()
                             .border_color(theme.border_strong)
                             .when_some(edit_handler, |element, handler| {
@@ -126,8 +127,7 @@ pub fn queued_prompt_card(
                                     })
                             })
                             .bg(theme.overlay)
-                            .text_color(theme.text_secondary)
-                            .child("Edit"),
+                            .child(app_icon(IconName::Pencil, 11.0, theme.text_tertiary)),
                     )
                     // Delete
                     .child(
@@ -151,19 +151,16 @@ pub fn queued_prompt_card(
                             })
                             .child(app_icon(IconName::X, 10.0, theme.text_tertiary)),
                     )
-                    // Steer / Send Now
+                    // Steer / Send Now (icon-only)
                     .child(
                         div()
                             .id(steer_id)
-                            .px(px(7.0))
-                            .py(px(3.0))
+                            .size(px(22.0))
                             .rounded(px(5.0))
                             .flex()
                             .items_center()
-                            .gap(px(4.0))
-                            .text_size(px(10.5))
+                            .justify_center()
                             .bg(theme.accent)
-                            .text_color(theme.canvas)
                             .when_some(steer_handler, |element, handler| {
                                 element
                                     .cursor_default()
@@ -173,8 +170,7 @@ pub fn queued_prompt_card(
                                         (handler)(window, cx);
                                     })
                             })
-                            .child(app_icon(IconName::Zap, 10.0, theme.canvas))
-                            .child("Steer"),
+                            .child(app_icon(IconName::Zap, 11.0, theme.canvas)),
                     ),
             ),
         6.0,
