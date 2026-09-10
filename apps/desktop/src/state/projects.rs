@@ -412,6 +412,7 @@ impl ConsoleDesktopApp {
                             Rc::make_mut(&mut this.projects).push(project.clone());
                         }
                         this.select_project_for_pane(pane_id.clone(), project.id, cx);
+                        crate::window::broadcast_settings_refresh(cx);
                     });
                 }
             }),
@@ -521,6 +522,12 @@ impl ConsoleDesktopApp {
                 cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| this.set_error(message, cx));
+                    }
+                });
+            } else {
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |_, cx| crate::window::broadcast_settings_refresh(cx));
                     }
                 });
             }

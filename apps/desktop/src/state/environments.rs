@@ -181,6 +181,7 @@ impl ConsoleDesktopApp {
         let env = Environment { id, name, url };
         self.environments.push(env);
         self.save_persisted_environments();
+        crate::window::broadcast_settings_refresh(cx);
         cx.notify();
     }
 
@@ -218,6 +219,7 @@ impl ConsoleDesktopApp {
             }
 
             self.probe_environment(env_id, cx);
+            crate::window::broadcast_settings_refresh(cx);
             cx.notify();
         }
     }
@@ -229,6 +231,7 @@ impl ConsoleDesktopApp {
         self.environments.retain(|e| e.id != env_id);
         self.env_probes.remove(&env_id);
         self.save_persisted_environments();
+        crate::window::broadcast_settings_refresh(cx);
         cx.notify();
     }
 
