@@ -6,7 +6,7 @@ use console_ui::terminal::TerminalView;
 use console_ui::{
     ApprovalModeDropdown, ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
     QuestionInteractionCard, Theme, WorkspaceFooter, centered_stripe, error_banner, notice_banner,
-    todo_card,
+    queued_prompt_card, todo_card,
 };
 use gpui::{
     App, AppContext, Context, IntoElement, ParentElement, Styled, Window, div,
@@ -188,6 +188,7 @@ impl ConsoleDesktopApp {
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
         let client = self.client.clone();
+        let queued_prompt = self.queued_prompt_for_pane(&pane_id);
         let error_message = self
             .error_for_pane(&pane_id)
             .map(|error| error.message.clone());
@@ -232,6 +233,43 @@ impl ConsoleDesktopApp {
         })
         .when_some(agent_notice, |el, notice| {
             el.child(notice_banner(notice, theme))
+        })
+        .when_some(queued_prompt.clone(), |el, prompt| {
+            let theme = Theme::current(cx);
+            let entity_edit = entity.clone();
+            let entity_delete = entity.clone();
+            let entity_steer = entity.clone();
+            let pane_for_edit = pane_id.clone();
+            let pane_for_delete = pane_id.clone();
+            let pane_for_steer = pane_id.clone();
+            el.child(queued_prompt_card(
+                prompt,
+                Some(Rc::new(move |_window, cx| {
+                    if let Some(app) = entity_edit.upgrade() {
+                        let pid = pane_for_edit.clone();
+                        app.update(cx, |this, cx| {
+                            this.edit_queued_prompt_for_pane(pid, cx);
+                        });
+                    }
+                })),
+                Some(Rc::new(move |_window, cx| {
+                    if let Some(app) = entity_delete.upgrade() {
+                        let pid = pane_for_delete.clone();
+                        app.update(cx, |this, cx| {
+                            this.delete_queued_prompt_for_pane(pid, cx);
+                        });
+                    }
+                })),
+                Some(Rc::new(move |_window, cx| {
+                    if let Some(app) = entity_steer.upgrade() {
+                        let pid = pane_for_steer.clone();
+                        app.update(cx, |this, cx| {
+                            this.steer_queued_prompt_for_pane(pid, cx);
+                        });
+                    }
+                })),
+                theme,
+            ))
         })
         .when(
             !todo_items.is_empty()
@@ -597,9 +635,27 @@ impl ConsoleDesktopApp {
                                     pane_composer.clone(),
                                     {
                                         let entity = entity.clone();
+                                        let q_pane = submit_pane_id.clone();
                                         move |_w, cx| {
                                             if let Some(app) = entity.upgrade() {
                                                 app.update(cx, |this, cx| {
+                                                    if this.is_active_session_running_for_pane(&q_pane) {
+                                                        let prompt = this
+                                                            .composer_for_pane(&q_pane)
+                                                            .read(cx)
+                                                            .content()
+                                                            .to_string();
+                                                        let attachments = (*this
+                                                            .attachments_for_pane(&q_pane))
+                                                        .clone();
+                                                        this.queue_prompt_for_pane(
+                                                            q_pane.clone(),
+                                                            prompt,
+                                                            attachments,
+                                                            cx,
+                                                        );
+                                                        return;
+                                                    }
                                                     let prompt = this
                                                         .composer_for_pane(&submit_pane_id)
                                                         .read(cx)
@@ -671,6 +727,22 @@ impl ConsoleDesktopApp {
                                     },
                                 )
                                 .running(self.is_active_session_running_for_pane(&pane_id))
+                                .has_queued_prompt(self.has_queued_prompt_for_pane(&pane_id))
+                                .on_queue({
+                                    let entity = entity.clone();
+                                    let qp = pane_id.clone();
+                                    move |_w, cx| {
+                                        if let Some(app) = entity.upgrade() {
+                                            let pane = qp.clone();
+                                            app.update(cx, |this, cx| {
+                                                let prompt =
+                                                    this.composer_for_pane(&pane).read(cx).content().to_string();
+                                                let atts = (*this.attachments_for_pane(&pane)).clone();
+                                                this.queue_prompt_for_pane(pane, prompt, atts, cx);
+                                            });
+                                        }
+                                    }
+                                })
                                 .selected_model(pane_selected_model)
                                 .approval_mode(pane_approval_mode)
                                 .model_dropdown(model_dropdown, model_handle)

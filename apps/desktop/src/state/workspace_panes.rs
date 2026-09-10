@@ -88,14 +88,28 @@ impl ConsoleDesktopApp {
         });
         let submit_pane_id = pane_id.to_string();
         let edit_pane_id = pane_id.to_string();
+        let steer_pane_id = pane_id.to_string();
         self._subscriptions.push(cx.subscribe(
             &composer_input,
             move |this, input, event: &ComposerEvent, cx| match event {
                 ComposerEvent::Submit(prompt) => {
+                    if this.is_active_session_running_for_pane(&submit_pane_id) {
+                        let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
+                        this.queue_prompt_for_pane(
+                            submit_pane_id.clone(),
+                            prompt.clone(),
+                            attachments,
+                            cx,
+                        );
+                        return;
+                    }
                     this.active_pane_id = Some(submit_pane_id.clone());
                     this.selected_session_id = this.active_session_for_pane(&submit_pane_id);
                     let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
                     this.submit_prompt(prompt.clone(), attachments, cx);
+                }
+                ComposerEvent::SubmitSteer(prompt) => {
+                    this.submit_steer_for_pane(steer_pane_id.clone(), prompt.clone(), cx);
                 }
                 ComposerEvent::Edited => {
                     // Save raw text for crash safety; does NOT update sidebar_draft_ids.

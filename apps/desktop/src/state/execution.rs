@@ -208,4 +208,30 @@ impl ConsoleDesktopApp {
         out.extend(self.pending_questions.keys().cloned());
         out
     }
+
+    pub(crate) fn queued_prompt_for_session(&self, session_id: &str) -> Option<console_core::QueuedPrompt> {
+        self.queued_prompts.get(session_id).cloned()
+    }
+
+    pub(crate) fn set_queued_prompt_for_session(
+        &mut self,
+        session_id: &str,
+        queued: Option<console_core::QueuedPrompt>,
+    ) {
+        if let Some(q) = queued {
+            self.queued_prompts.insert(session_id.to_string(), q);
+        } else {
+            self.queued_prompts.remove(session_id);
+        }
+    }
+
+    pub(crate) fn queued_prompt_for_pane(&self, pane_id: &str) -> Option<console_core::QueuedPrompt> {
+        self.active_session_for_pane(pane_id)
+            .and_then(|sid| self.queued_prompts.get(&sid).cloned())
+    }
+
+    pub(crate) fn has_queued_prompt_for_pane(&self, pane_id: &str) -> bool {
+        self.active_session_for_pane(pane_id)
+            .is_some_and(|sid| self.queued_prompts.contains_key(&sid))
+    }
 }

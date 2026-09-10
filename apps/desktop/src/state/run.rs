@@ -43,6 +43,203 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    /// Stage `prompt` to run right after the active turn settles (POST /queue).
+    /// Replaces any existing queued prompt for the session.
+    pub fn queue_prompt_for_pane(
+        &mut self,
+        pane_id: String,
+        prompt: String,
+        attachments: Vec<ImageAttachment>,
+        cx: &mut Context<Self>,
+    ) {
+        if prompt.trim().is_empty() {
+            return;
+        }
+        let Some(session_id) = self.active_session_for_pane(&pane_id) else {
+            // No session yet — a fresh chat cannot have a running turn to queue behind.
+            // Fall through to a normal turn instead.
+            self.submit_prompt(prompt, attachments, cx);
+            return;
+        };
+        let dq = RunPromptDto {
+            prompt: prompt.clone(),
+            model_id: self
+                .pane_selected_model(&pane_id)
+                .as_ref()
+                .map(|m| m.model_id.clone()),
+            provider: self
+                .pane_selected_model(&pane_id)
+                .as_ref()
+                .map(|m| m.provider.clone()),
+            approval_mode: Some(self.pane_approval_mode(&pane_id).value().to_string()),
+            attachments: if attachments.is_empty() {
+                None
+            } else {
+                Some(attachments.clone())
+            },
+        };
+        // Clear the composer for the next draft; the queue card is now the source of truth.
+        self.composer_for_pane(&pane_id)
+            .update(cx, |input, cx| input.clear(cx));
+        self.set_attachments_for_pane(&pane_id, Vec::new());
+        self.clear_draft_for_session(Some(&session_id), cx);
+        self.revoke_sidebar_draft(&session_id);
+        self.composer_for_pane(&pane_id).update(cx, |input, cx| {
+            input.record_prompt_history(prompt.clone(), cx);
+        });
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_, cx| {
+            match client.runs.queue_prompt(&session_id, dq).await {
+                Ok(queued) => {
+                    let sid = queued.session_id.clone();
+                    let _ = cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.set_queued_prompt_for_session(&sid, Some(queued));
+                                cx.notify();
+                            });
+                        }
+                    });
+                }
+                Err(err) => {
+                    let msg = format!("Unable to queue prompt: {err}");
+                    let _ = cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.set_error_for_session(&session_id, msg, cx);
+                            });
+                        }
+                    });
+                }
+            }
+        })
+        .detach();
+        cx.notify();
+    }
+
+    pub fn delete_queued_prompt_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
+        let Some(session_id) = self.active_session_for_pane(&pane_id) else {
+            return;
+        };
+        // Optimistic clear; the ensuing queueUpdated(null) will confirm it.
+        self.set_queued_prompt_for_session(&session_id, None);
+        cx.notify();
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_, cx| {
+            if let Err(err) = client.runs.clear_queued_prompt(&session_id).await {
+                let msg = format!("Unable to clear queued prompt: {err}");
+                let _ = cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.set_error_for_session(&session_id, msg, cx);
+                        });
+                    }
+                });
+            } else {
+                let _ = cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.set_queued_prompt_for_session(&session_id, None);
+                            cx.notify();
+                        });
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
+    pub fn edit_queued_prompt_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
+        let Some(session_id) = self.active_session_for_pane(&pane_id) else {
+            return;
+        };
+        let Some(queued) = self.queued_prompt_for_session(&session_id) else {
+            return;
+        };
+        let prompt = queued.prompt.clone();
+        let attachments = queued.attachments.clone().unwrap_or_default();
+        // Restore into composer for editing, then discard the queue entry.
+        self.composer_for_pane(&pane_id)
+            .update(cx, |input, cx| input.set_content(prompt.clone(), cx));
+        if !attachments.is_empty() {
+            self.set_attachments_for_pane(&pane_id, attachments);
+        }
+        self.set_queued_prompt_for_session(&session_id, None);
+        cx.notify();
+        let client = self.client.clone();
+        cx.spawn(async move |_, _| {
+            let _ = client.runs.clear_queued_prompt(&session_id).await;
+        })
+        .detach();
+    }
+
+    pub fn steer_queued_prompt_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
+        let Some(session_id) = self.active_session_for_pane(&pane_id) else {
+            return;
+        };
+        let Some(queued) = self.queued_prompt_for_session(&session_id) else {
+            return;
+        };
+        let dto = RunPromptDto {
+            prompt: queued.prompt.clone(),
+            model_id: queued.model_id.clone().or_else(|| {
+                self.pane_selected_model(&pane_id)
+                    .as_ref()
+                    .map(|m| m.model_id.clone())
+            }),
+            provider: queued.provider.clone().or_else(|| {
+                self.pane_selected_model(&pane_id)
+                    .as_ref()
+                    .map(|m| m.provider.clone())
+            }),
+            approval_mode: queued
+                .approval_mode
+                .clone()
+                .or_else(|| Some(self.pane_approval_mode(&pane_id).value().to_string())),
+            attachments: queued.attachments.clone(),
+        };
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_, cx| {
+            if let Err(err) = client.runs.steer(&session_id, dto).await {
+                let msg = format!("Unable to steer run: {err}");
+                let _ = cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.set_error_for_session(&session_id, msg, cx);
+                        });
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Cmd/Ctrl+Enter while a turn is running: if a prompt is already staged,
+    /// steer with it; otherwise queue the current composer content (spec §5.1:
+    /// SubmitSteer falls back to queue when no staged prompt exists).
+    pub fn submit_steer_for_pane(
+        &mut self,
+        pane_id: String,
+        prompt: String,
+        cx: &mut Context<Self>,
+    ) {
+        if self.has_queued_prompt_for_pane(&pane_id) {
+            // Steer with the staged prompt; any freshly typed text stays in the
+            // composer so it is not lost.
+            self.steer_queued_prompt_for_pane(pane_id, cx);
+            return;
+        }
+        if prompt.trim().is_empty() {
+            return;
+        }
+        // No staged prompt: behave like a normal queue (POST /queue, no abort).
+        let attachments = (*self.attachments_for_pane(&pane_id)).clone();
+        self.queue_prompt_for_pane(pane_id, prompt, attachments, cx);
+    }
+
     pub fn submit_prompt(
         &mut self,
         prompt: String,
@@ -589,6 +786,9 @@ impl ConsoleDesktopApp {
                     session.title = title.clone();
                 }
                 self.update_session_title_in_panes(run_session_id, &title, cx);
+            }
+            AgentSessionEvent::QueueUpdated { queued_prompt } => {
+                self.set_queued_prompt_for_session(run_session_id, queued_prompt);
             }
             AgentSessionEvent::Error { error } => {
                 self.set_session_running(run_session_id, None);

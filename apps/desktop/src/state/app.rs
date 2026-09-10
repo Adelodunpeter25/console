@@ -6,8 +6,8 @@
 
 use console_core::{
     AgentMessage, ApprovalMode, AskQuestionRequest, ConsoleClient, GitBranchInfo, ImageAttachment,
-    Model, ModelFavorite, PermissionRequest, ProjectInfo, ProviderCatalogEntry, SelectedModel,
-    SessionHeader, TodoItem, WorkspaceNode,
+    Model, ModelFavorite, PermissionRequest, ProjectInfo, ProviderCatalogEntry, QueuedPrompt,
+    SelectedModel, SessionHeader, TodoItem, WorkspaceNode,
 };
 use console_ui::markdown::render::TranscriptSelection;
 use console_ui::terminal::TerminalView;
@@ -146,6 +146,9 @@ pub struct ConsoleDesktopApp {
     pub question_selected: std::collections::HashMap<String, std::collections::HashSet<String>>,
     pub todo_items: std::collections::HashMap<String, Vec<TodoItem>>,
     pub todos_collapsed: std::collections::HashMap<String, bool>,
+    /// Staged next-turn prompt per session, persisted on the server and
+    /// broadcast as `queueUpdated` via SSE.
+    pub queued_prompts: std::collections::HashMap<String, QueuedPrompt>,
     pub agent_notices: std::collections::HashMap<String, String>,
     /// App-level error banner (not tied to any chat); shown in every pane.
     pub error_message: Option<super::errors::BannerError>,
@@ -615,10 +618,26 @@ impl ConsoleDesktopApp {
                         // against the chat this input is mounted in.
                         this.active_pane_id = Some("pane-main".to_string());
                         this.selected_session_id = this.active_session_for_pane("pane-main");
+                        let pane_id = "pane-main".to_string();
+                        if this.is_active_session_running_for_pane(&pane_id) {
+                            // Turn is running: queue behind it instead of starting a parallel run.
+                            let attachments = (*this.attachments_for_pane(&pane_id)).clone();
+                            this.queue_prompt_for_pane(pane_id, prompt.clone(), attachments, cx);
+                            return;
+                        }
                         // Deep-copy only at the submit boundary; the Rc
                         // keeps per-frame renders cheap.
                         let attachments = (*this.attachments_for_pane("pane-main")).clone();
                         this.submit_prompt(prompt.clone(), attachments, cx);
+                    }
+                    ComposerEvent::SubmitSteer(prompt) => {
+                        this.active_pane_id = Some("pane-main".to_string());
+                        this.selected_session_id = this.active_session_for_pane("pane-main");
+                        this.submit_steer_for_pane(
+                            "pane-main".to_string(),
+                            prompt.clone(),
+                            cx,
+                        );
                     }
                     ComposerEvent::Edited => {
                         // Save raw text for crash safety; does NOT update sidebar_draft_ids.
@@ -738,6 +757,7 @@ impl ConsoleDesktopApp {
             question_selected: std::collections::HashMap::new(),
             todo_items: std::collections::HashMap::new(),
             todos_collapsed: std::collections::HashMap::new(),
+            queued_prompts: std::collections::HashMap::new(),
             agent_notices: std::collections::HashMap::new(),
             error_message: None,
             session_errors: std::collections::HashMap::new(),

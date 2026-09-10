@@ -256,6 +256,7 @@ impl ConsoleDesktopApp {
                         this.terminals.clear();
                         this.attachments.clear();
                         this.todo_items.clear();
+                        this.queued_prompts.clear();
                         this.running_sessions.clear();
                         this.stream_render_pending.clear();
                         this.transcript_view

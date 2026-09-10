@@ -894,6 +894,40 @@ impl ConsoleDesktopApp {
                                 })
                                 .detach();
 
+                                // Hydrate any staged next-turn prompt so a queue
+                                // set before restart or on another device shows
+                                // immediately without waiting for queueUpdated SSE.
+                                let queue_client = client.clone();
+                                let queue_pane_id = pane_id.clone();
+                                let queue_session_id = session_id.clone();
+                                cx.spawn(async move |entity, cx| {
+                                    if let Ok(q) = queue_client
+                                        .runs
+                                        .get_queued_prompt(&queue_session_id)
+                                        .await
+                                    {
+                                        let _ = cx.update(|cx| {
+                                            if let Some(app) = entity.upgrade() {
+                                                app.update(cx, |this, cx| {
+                                                    if this
+                                                        .active_session_for_pane(&queue_pane_id)
+                                                        .as_deref()
+                                                        != Some(queue_session_id.as_str())
+                                                    {
+                                                        return;
+                                                    }
+                                                    this.set_queued_prompt_for_session(
+                                                        &queue_session_id,
+                                                        q,
+                                                    );
+                                                    cx.notify();
+                                                });
+                                            }
+                                        });
+                                    }
+                                })
+                                .detach();
+
                                 cx.notify();
                             });
                         }

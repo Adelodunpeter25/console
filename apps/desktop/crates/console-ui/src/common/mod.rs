@@ -12,6 +12,7 @@ pub mod palette;
 pub mod project_browse_palette;
 pub mod quick_open_palette;
 pub mod stripe;
+pub mod queued_prompt_card;
 pub mod todo_card;
 pub mod workspace_footer;
 
@@ -34,6 +35,7 @@ pub use notice_banner::notice_banner;
 pub use palette::{CommandPalette, CommandPaletteModal, PaletteEntry};
 pub use project_browse_palette::ProjectBrowsePalette;
 pub use quick_open_palette::QuickOpenPalette;
+pub use queued_prompt_card::queued_prompt_card;
 pub use stripe::centered_stripe;
 pub use todo_card::todo_card;
 pub use workspace_footer::WorkspaceFooter;

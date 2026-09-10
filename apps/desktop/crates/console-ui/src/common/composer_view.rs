@@ -47,6 +47,9 @@ pub struct ComposerView {
     pub selected_model: Option<SelectedModel>,
     pub approval_mode: ApprovalMode,
     pub attachments: Rc<Vec<ImageAttachment>>,
+    /// Whether the active session already has a staged prompt (server's `queueUpdated` not null).
+    /// Rendered independently of `run_state` so a replace does not need a new state variant.
+    pub has_queued_prompt: bool,
     model_menu: Option<(ModelDropdownMenu, ContextMenuHandle)>,
     approval_menu: Option<(ApprovalModeDropdown, ContextMenuHandle)>,
     autocomplete: Option<AutocompleteView>,
@@ -77,6 +80,7 @@ impl ComposerView {
             selected_model: None,
             approval_mode: ApprovalMode::AlwaysAsk,
             attachments: Rc::new(Vec::new()),
+            has_queued_prompt: false,
             model_menu: None,
             approval_menu: None,
             autocomplete: None,
@@ -151,7 +155,17 @@ impl ComposerView {
         self
     }
 
+    pub fn has_queued_prompt(mut self, queued: bool) -> Self {
+        self.has_queued_prompt = queued;
+        self
+    }
+
     pub fn on_queue(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_queue = Rc::new(handler);
+        self
+    }
+
+    pub fn with_queue_handler(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_queue = Rc::new(handler);
         self
     }

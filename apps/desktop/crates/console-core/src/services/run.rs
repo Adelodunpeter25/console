@@ -164,4 +164,160 @@ impl RunService {
 
         Ok(SseStreamReader::parse_stream(resp))
     }
+
+    pub async fn queue_prompt(
+        &self,
+        session_id: &str,
+        payload: RunPromptDto,
+    ) -> Result<QueuedPrompt> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/queue", session_id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .json(&payload)
+            .send()
+            .await
+            .context("Failed to queue prompt")?;
+
+        let body: ApiResponse<QueuedPrompt> = resp
+            .json()
+            .await
+            .context("Failed to parse queue prompt response")?;
+        if body.success {
+            body.data
+                .ok_or_else(|| anyhow!("Queue prompt response missing data"))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to queue prompt".into())
+            ))
+        }
+    }
+
+    pub async fn get_queued_prompt(&self, session_id: &str) -> Result<Option<QueuedPrompt>> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/queue", session_id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to get queued prompt")?;
+
+        let body: ApiResponse<Option<QueuedPrompt>> = resp
+            .json()
+            .await
+            .context("Failed to parse queued prompt response")?;
+        if body.success {
+            Ok(body.data.flatten())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to get queued prompt".into())
+            ))
+        }
+    }
+
+    pub async fn edit_queued_prompt(
+        &self,
+        session_id: &str,
+        payload: RunPromptDto,
+    ) -> Result<QueuedPrompt> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/queue", session_id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .put(&url)
+            .headers(self.transport.build_headers().await)
+            .json(&payload)
+            .send()
+            .await
+            .context("Failed to edit queued prompt")?;
+
+        let body: ApiResponse<QueuedPrompt> = resp
+            .json()
+            .await
+            .context("Failed to parse edit queued prompt response")?;
+        if body.success {
+            body.data
+                .ok_or_else(|| anyhow!("Edit queued prompt response missing data"))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to edit queued prompt".into())
+            ))
+        }
+    }
+
+    pub async fn clear_queued_prompt(&self, session_id: &str) -> Result<bool> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/queue", session_id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .delete(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to clear queued prompt")?;
+
+        let body: ApiResponse<serde_json::Value> = resp
+            .json()
+            .await
+            .context("Failed to parse clear queued prompt response")?;
+        if body.success {
+            Ok(body
+                .data
+                .and_then(|v| v.get("deleted").and_then(|b| b.as_bool()))
+                .unwrap_or(true))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to clear queued prompt".into())
+            ))
+        }
+    }
+
+    pub async fn steer(&self, session_id: &str, payload: RunPromptDto) -> Result<()> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/steer", session_id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .json(&payload)
+            .send()
+            .await
+            .context("Failed to steer run")?;
+
+        let body: ApiResponse<serde_json::Value> = resp
+            .json()
+            .await
+            .context("Failed to parse steer response")?;
+        if body.success {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to steer run".into())
+            ))
+        }
+    }
 }
