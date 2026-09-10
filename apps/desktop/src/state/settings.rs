@@ -25,7 +25,7 @@ impl ConsoleDesktopApp {
                 return;
             };
             cx.update(|cx| {
-                this.update(cx, |app, cx| {
+                let _ = this.update(cx, |app, cx| {
                     app.apply_settings(settings, cx);
                 });
             });
