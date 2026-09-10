@@ -209,8 +209,13 @@ impl ConsoleDesktopApp {
         out
     }
 
+    pub(crate) fn queued_prompts_for_session(&self, session_id: &str) -> Vec<console_core::QueuedPrompt> {
+        self.queued_prompts.get(session_id).cloned().unwrap_or_default()
+    }
+
+    #[allow(dead_code)]
     pub(crate) fn queued_prompt_for_session(&self, session_id: &str) -> Option<console_core::QueuedPrompt> {
-        self.queued_prompts.get(session_id).cloned()
+        self.queued_prompts.get(session_id).and_then(|v| v.first().cloned())
     }
 
     pub(crate) fn set_queued_prompt_for_session(
@@ -219,19 +224,60 @@ impl ConsoleDesktopApp {
         queued: Option<console_core::QueuedPrompt>,
     ) {
         if let Some(q) = queued {
-            self.queued_prompts.insert(session_id.to_string(), q);
+            let list = self.queued_prompts.entry(session_id.to_string()).or_default();
+            if let Some(existing) = list.iter_mut().find(|p| p.id == q.id) {
+                *existing = q;
+            } else if list.is_empty() {
+                list.push(q);
+            }
         } else {
             self.queued_prompts.remove(session_id);
         }
     }
 
-    pub(crate) fn queued_prompt_for_pane(&self, pane_id: &str) -> Option<console_core::QueuedPrompt> {
+    pub(crate) fn add_queued_prompt_for_session(
+        &mut self,
+        session_id: &str,
+        queued: console_core::QueuedPrompt,
+    ) {
+        let list = self.queued_prompts.entry(session_id.to_string()).or_default();
+        if let Some(existing) = list.iter_mut().find(|p| p.id == queued.id) {
+            *existing = queued;
+        } else {
+            list.push(queued);
+        }
+    }
+
+    pub(crate) fn remove_queued_prompt_for_session(
+        &mut self,
+        session_id: &str,
+        prompt_id: &str,
+    ) -> Option<console_core::QueuedPrompt> {
+        if let Some(list) = self.queued_prompts.get_mut(session_id) {
+            let idx = list.iter().position(|p| p.id == prompt_id);
+            let removed = idx.map(|i| list.remove(i));
+            if list.is_empty() {
+                self.queued_prompts.remove(session_id);
+            }
+            removed
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn queued_prompts_for_pane(&self, pane_id: &str) -> Vec<console_core::QueuedPrompt> {
         self.active_session_for_pane(pane_id)
             .and_then(|sid| self.queued_prompts.get(&sid).cloned())
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn queued_prompt_for_pane(&self, pane_id: &str) -> Option<console_core::QueuedPrompt> {
+        self.active_session_for_pane(pane_id)
+            .and_then(|sid| self.queued_prompts.get(&sid).and_then(|v| v.first().cloned()))
     }
 
     pub(crate) fn has_queued_prompt_for_pane(&self, pane_id: &str) -> bool {
         self.active_session_for_pane(pane_id)
-            .is_some_and(|sid| self.queued_prompts.contains_key(&sid))
+            .is_some_and(|sid| self.queued_prompts.get(&sid).is_some_and(|v| !v.is_empty()))
     }
 }

@@ -35,7 +35,7 @@ pub use notice_banner::notice_banner;
 pub use palette::{CommandPalette, CommandPaletteModal, PaletteEntry};
 pub use project_browse_palette::ProjectBrowsePalette;
 pub use quick_open_palette::QuickOpenPalette;
-pub use queued_prompt_card::queued_prompt_card;
+pub use queued_prompt_card::{queued_prompt_card, queued_prompt_row, queued_prompts_stack};
 pub use stripe::centered_stripe;
 pub use todo_card::todo_card;
 pub use workspace_footer::WorkspaceFooter;

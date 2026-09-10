@@ -78,6 +78,18 @@ impl ConsoleDesktopApp {
                 Some(attachments.clone())
             },
         };
+        let queued_item = console_core::QueuedPrompt {
+            id: format!("queued-{}", chrono::Utc::now().timestamp_micros()),
+            session_id: session_id.clone(),
+            prompt: prompt.clone(),
+            model_id: dq.model_id.clone(),
+            provider: dq.provider.clone(),
+            approval_mode: dq.approval_mode.clone(),
+            attachments: dq.attachments.clone(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+        self.add_queued_prompt_for_session(&session_id, queued_item);
+
         // Clear the composer for the next draft; the queue card is now the source of truth.
         self.composer_for_pane(&pane_id)
             .update(cx, |input, cx| input.clear(cx));
@@ -96,7 +108,7 @@ impl ConsoleDesktopApp {
                     let _ = cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.set_queued_prompt_for_session(&sid, Some(queued));
+                                this.add_queued_prompt_for_session(&sid, queued);
                                 cx.notify();
                             });
                         }
@@ -118,44 +130,40 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    pub fn delete_queued_prompt_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
+    pub fn delete_queued_prompt_for_pane(&mut self, pane_id: String, prompt_id: String, cx: &mut Context<Self>) {
         let Some(session_id) = self.active_session_for_pane(&pane_id) else {
             return;
         };
-        // Optimistic clear; the ensuing queueUpdated(null) will confirm it.
-        self.set_queued_prompt_for_session(&session_id, None);
+        self.remove_queued_prompt_for_session(&session_id, &prompt_id);
         cx.notify();
         let client = self.client.clone();
-        let entity = cx.entity().downgrade();
-        cx.spawn(async move |_, cx| {
-            if let Err(err) = client.runs.clear_queued_prompt(&session_id).await {
-                let msg = format!("Unable to clear queued prompt: {err}");
-                let _ = cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.set_error_for_session(&session_id, msg, cx);
-                        });
-                    }
-                });
-            } else {
-                let _ = cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.set_queued_prompt_for_session(&session_id, None);
-                            cx.notify();
-                        });
-                    }
-                });
-            }
-        })
-        .detach();
+        let remaining = self.queued_prompts_for_session(&session_id);
+        if remaining.is_empty() {
+            cx.spawn(async move |_, _| {
+                let _ = client.runs.clear_queued_prompt(&session_id).await;
+            })
+            .detach();
+        } else {
+            let next = remaining[0].clone();
+            let dq = console_core::RunPromptDto {
+                prompt: next.prompt,
+                model_id: next.model_id,
+                provider: next.provider,
+                approval_mode: next.approval_mode,
+                attachments: next.attachments,
+            };
+            cx.spawn(async move |_, _| {
+                let _ = client.runs.queue_prompt(&session_id, dq).await;
+            })
+            .detach();
+        }
     }
 
-    pub fn edit_queued_prompt_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
+    pub fn edit_queued_prompt_for_pane(&mut self, pane_id: String, prompt_id: String, cx: &mut Context<Self>) {
         let Some(session_id) = self.active_session_for_pane(&pane_id) else {
             return;
         };
-        let Some(queued) = self.queued_prompt_for_session(&session_id) else {
+        let Some(queued) = self.remove_queued_prompt_for_session(&session_id, &prompt_id) else {
             return;
         };
         let prompt = queued.prompt.clone();
@@ -166,20 +174,35 @@ impl ConsoleDesktopApp {
         if !attachments.is_empty() {
             self.set_attachments_for_pane(&pane_id, attachments);
         }
-        self.set_queued_prompt_for_session(&session_id, None);
         cx.notify();
         let client = self.client.clone();
-        cx.spawn(async move |_, _| {
-            let _ = client.runs.clear_queued_prompt(&session_id).await;
-        })
-        .detach();
+        let remaining = self.queued_prompts_for_session(&session_id);
+        if remaining.is_empty() {
+            cx.spawn(async move |_, _| {
+                let _ = client.runs.clear_queued_prompt(&session_id).await;
+            })
+            .detach();
+        } else {
+            let next = remaining[0].clone();
+            let dq = console_core::RunPromptDto {
+                prompt: next.prompt,
+                model_id: next.model_id,
+                provider: next.provider,
+                approval_mode: next.approval_mode,
+                attachments: next.attachments,
+            };
+            cx.spawn(async move |_, _| {
+                let _ = client.runs.queue_prompt(&session_id, dq).await;
+            })
+            .detach();
+        }
     }
 
-    pub fn steer_queued_prompt_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
+    pub fn steer_queued_prompt_for_pane(&mut self, pane_id: String, prompt_id: String, cx: &mut Context<Self>) {
         let Some(session_id) = self.active_session_for_pane(&pane_id) else {
             return;
         };
-        let Some(queued) = self.queued_prompt_for_session(&session_id) else {
+        let Some(queued) = self.remove_queued_prompt_for_session(&session_id, &prompt_id) else {
             return;
         };
         let dto = RunPromptDto {
@@ -226,10 +249,10 @@ impl ConsoleDesktopApp {
         prompt: String,
         cx: &mut Context<Self>,
     ) {
-        if self.has_queued_prompt_for_pane(&pane_id) {
+        if let Some(queued) = self.queued_prompt_for_pane(&pane_id) {
             // Steer with the staged prompt; any freshly typed text stays in the
             // composer so it is not lost.
-            self.steer_queued_prompt_for_pane(pane_id, cx);
+            self.steer_queued_prompt_for_pane(pane_id, queued.id, cx);
             return;
         }
         if prompt.trim().is_empty() {
@@ -788,7 +811,33 @@ impl ConsoleDesktopApp {
                 self.update_session_title_in_panes(run_session_id, &title, cx);
             }
             AgentSessionEvent::QueueUpdated { queued_prompt } => {
-                self.set_queued_prompt_for_session(run_session_id, queued_prompt);
+                if let Some(q) = queued_prompt {
+                    self.add_queued_prompt_for_session(run_session_id, q);
+                } else {
+                    let mut list = self.queued_prompts_for_session(run_session_id);
+                    if !list.is_empty() {
+                        list.remove(0);
+                        if list.is_empty() {
+                            self.set_queued_prompt_for_session(run_session_id, None);
+                        } else {
+                            let next = list[0].clone();
+                            self.queued_prompts.insert(run_session_id.to_string(), list);
+                            let client = self.client.clone();
+                            let sid = run_session_id.to_string();
+                            let dq = console_core::RunPromptDto {
+                                prompt: next.prompt,
+                                model_id: next.model_id,
+                                provider: next.provider,
+                                approval_mode: next.approval_mode,
+                                attachments: next.attachments,
+                            };
+                            cx.spawn(async move |_, _| {
+                                let _ = client.runs.queue_prompt(&sid, dq).await;
+                            })
+                            .detach();
+                        }
+                    }
+                }
             }
             AgentSessionEvent::Error { error } => {
                 self.set_session_running(run_session_id, None);

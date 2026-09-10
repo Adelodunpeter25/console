@@ -6,7 +6,7 @@ use console_ui::terminal::TerminalView;
 use console_ui::{
     ApprovalModeDropdown, ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
     QuestionInteractionCard, Theme, WorkspaceFooter, centered_stripe, error_banner, notice_banner,
-    queued_prompt_card, todo_card,
+    queued_prompts_stack, todo_card,
 };
 use gpui::{
     App, AppContext, Context, IntoElement, ParentElement, Styled, Window, div,
@@ -188,7 +188,7 @@ impl ConsoleDesktopApp {
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
         let client = self.client.clone();
-        let queued_prompt = self.queued_prompt_for_pane(&pane_id);
+        let queued_prompts = self.queued_prompts_for_pane(&pane_id);
         let error_message = self
             .error_for_pane(&pane_id)
             .map(|error| error.message.clone());
@@ -234,7 +234,7 @@ impl ConsoleDesktopApp {
         .when_some(agent_notice, |el, notice| {
             el.child(notice_banner(notice, theme))
         })
-        .when_some(queued_prompt.clone(), |el, prompt| {
+        .when(!queued_prompts.is_empty(), |el| {
             let theme = Theme::current(cx);
             let entity_edit = entity.clone();
             let entity_delete = entity.clone();
@@ -242,29 +242,29 @@ impl ConsoleDesktopApp {
             let pane_for_edit = pane_id.clone();
             let pane_for_delete = pane_id.clone();
             let pane_for_steer = pane_id.clone();
-            el.child(queued_prompt_card(
-                prompt,
-                Some(Rc::new(move |_window, cx| {
+            el.child(queued_prompts_stack(
+                queued_prompts,
+                Some(Rc::new(move |prompt_id, _window, cx| {
                     if let Some(app) = entity_edit.upgrade() {
                         let pid = pane_for_edit.clone();
                         app.update(cx, |this, cx| {
-                            this.edit_queued_prompt_for_pane(pid, cx);
+                            this.edit_queued_prompt_for_pane(pid, prompt_id, cx);
                         });
                     }
                 })),
-                Some(Rc::new(move |_window, cx| {
+                Some(Rc::new(move |prompt_id, _window, cx| {
                     if let Some(app) = entity_delete.upgrade() {
                         let pid = pane_for_delete.clone();
                         app.update(cx, |this, cx| {
-                            this.delete_queued_prompt_for_pane(pid, cx);
+                            this.delete_queued_prompt_for_pane(pid, prompt_id, cx);
                         });
                     }
                 })),
-                Some(Rc::new(move |_window, cx| {
+                Some(Rc::new(move |prompt_id, _window, cx| {
                     if let Some(app) = entity_steer.upgrade() {
                         let pid = pane_for_steer.clone();
                         app.update(cx, |this, cx| {
-                            this.steer_queued_prompt_for_pane(pid, cx);
+                            this.steer_queued_prompt_for_pane(pid, prompt_id, cx);
                         });
                     }
                 })),
