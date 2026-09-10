@@ -99,6 +99,7 @@ export type AgentSessionEvent =
       compactedMessages?: AgentMessage[];
     }
   | { type: "sessionEnd" }
+  | { type: "sessionTitleUpdated"; title: string }
   | { type: "error"; error: { message: string; data?: unknown } }
   | SubagentStartEvent
   | SubagentActivityEvent

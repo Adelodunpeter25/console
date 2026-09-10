@@ -7,6 +7,7 @@ import { logger } from "hono/logger";
 import { authRoutes } from "./routes/auth.js";
 import { assistRoutes } from "./routes/assist.js";
 import { configRoutes } from "./routes/config.js";
+import { settingsRoutes } from "./routes/settings.js";
 import { fsRoutes } from "./routes/fs.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { projectRoutes } from "./routes/projects.js";
@@ -35,6 +36,7 @@ export function createApiApp(): Hono {
   api.route("/auth", authRoutes);
   api.route("/", assistRoutes);
   api.route("/", configRoutes);
+  api.route("/", settingsRoutes);
   api.route("/fs", fsRoutes);
   api.route("/git", gitRoutes);
   api.route("/", notificationRoutes);

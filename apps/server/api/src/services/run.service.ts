@@ -34,6 +34,8 @@ import { extractErrorMessage } from "@/agent/src/utils/error.js";
 import { DecisionManager } from "./run/run-decisions.js";
 import { assembleAgentTools, buildRunModel } from "./run/run-tools.js";
 import { extractAndRecordFileChange } from "./run/run-file-changes.js";
+import { generateSessionTitle, isGenericSessionTitle } from "@/agent/src/service/session-title.js";
+import { resolveModelRole } from "@/agent/src/service/role-resolver.js";
 
 export class RunService {
   private sessionStorage = getSharedSessionStorage();
@@ -283,11 +285,27 @@ export class RunService {
     this.sessionStorage.updateModel(sessionId, modelId, provider);
     this.sessionStorage.updateApprovalMode(sessionId, approvalMode);
 
-    const model = buildRunModel(provider, modelId);
+    let model = buildRunModel(provider, modelId);
     const providerEntry = getProvider(provider);
-    const streamFn = providerEntry?.getStreamFn();
+    let streamFn = providerEntry?.getStreamFn();
     if (!streamFn) {
       throw new Error(`Unknown provider '${provider}'.`);
+    }
+
+    const role = approvalMode === "plan-mode" ? "plan" : "default";
+    model = await resolveModelRole(role, model);
+    if (model.provider !== provider) {
+      const roleProvider = getProvider(model.provider);
+      if (roleProvider) streamFn = roleProvider.getStreamFn();
+    }
+
+    if (dto.attachments && dto.attachments.length > 0 && model.supportsImages === false) {
+      const visionModel = await resolveModelRole("vision", model);
+      if (visionModel.supportsImages !== false) {
+        model = visionModel;
+        const visionProvider = getProvider(model.provider);
+        if (visionProvider) streamFn = visionProvider.getStreamFn();
+      }
     }
 
     const { systemPrompt } = await buildSystemPrompt({
@@ -326,7 +344,21 @@ export class RunService {
       content: prompt,
       ...(attachments && attachments.length > 0 ? { attachments } : {}),
     };
+    const shouldGenerateTitle = isGenericSessionTitle(session.header.title) && session.messages.length === 0;
     this.sessionStorage.appendMessage(sessionId, userMessage);
+
+    if (shouldGenerateTitle) {
+      void generateSessionTitle(prompt, model, streamFn)
+        .then((title) => {
+          if (!title) return;
+          const latest = this.sessionStorage.loadSession(sessionId);
+          if (latest && isGenericSessionTitle(latest.header.title)) {
+            this.sessionStorage.updateTitle(sessionId, title);
+            hub.broadcast({ type: "sessionTitleUpdated", title });
+          }
+        })
+        .catch(() => {});
+    }
     agent.loadHistory(session.messages);
 
     this.sessionStorage.markSessionNeedsRepair(sessionId);
