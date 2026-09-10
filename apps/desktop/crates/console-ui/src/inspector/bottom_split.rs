@@ -131,12 +131,15 @@ impl RenderOnce for RightSidebarBottomSplit {
                     .bg(theme.sidebar)
                     .border_b_1()
                     .border_color(theme.sidebar_border)
+                    // Tabs row: fixed chevron + [+] at the edges, tabs scroll
+                    // horizontally in the middle so 5 tabs fit narrow widths.
                     .child(
                         div()
+                            .flex_1()
+                            .min_w_0()
                             .flex()
                             .items_center()
-                            .gap(px(4.0))
-                            .overflow_x_hidden()
+                            .overflow_hidden()
                             // Chevron collapse/expand button
                             .when_some(on_toggle_collapsed, |el, on_toggle| {
                                 el.child(
@@ -163,78 +166,96 @@ impl RenderOnce for RightSidebarBottomSplit {
                                         )),
                                 )
                             })
-                            .children(self.tabs.into_iter().enumerate().map(|(idx, tab_info)| {
-                                let is_active = idx == self.active_tab_index;
-                                let on_tab = on_tab.clone();
-                                let on_close = self.on_close_tab.clone();
-                                let tab_id = format!("bottom-tab-{}", tab_info.id);
-                                let group_name = format!("bottom-tab-group-{}", tab_info.id);
-
+                            .child(
                                 div()
-                                    .id(gpui::ElementId::from(tab_id))
+                                    .id("bottom-tabs-scroll")
+                                    .flex_1()
+                                    .min_w_0()
                                     .h(px(31.0))
                                     .flex()
                                     .items_center()
-                                    .gap(px(5.0))
-                                    .px(px(8.0))
-                                    .cursor_pointer()
-                                    .group(group_name.clone())
-                                    .when(is_active, |s| {
-                                        s.border_b_2()
-                                            .border_color(theme.accent)
-                                            .text_color(theme.text)
-                                    })
-                                    .when(!is_active, |s| {
-                                        s.text_color(theme.text_tertiary)
-                                            .hover(|h| h.bg(theme.raised).text_color(theme.text))
-                                    })
-                                    .text_size(px(11.0))
-                                    .font_weight(if is_active {
-                                        gpui::FontWeight::SEMIBOLD
-                                    } else {
-                                        gpui::FontWeight::NORMAL
-                                    })
-                                    .on_click(move |_, window, cx| {
-                                        (on_tab)(idx, window, cx);
-                                    })
-                                    .child(tab_info.title)
-                                    // Close Tab Button: hidden until the tab is hovered
-                                    .when_some(on_close, |el, on_close| {
-                                        el.child(
-                                            div()
-                                                .id(gpui::ElementId::from(format!(
-                                                    "close-terminal-{}",
-                                                    tab_info.id
-                                                )))
-                                                .size(px(14.0))
-                                                .rounded(px(2.0))
-                                                .flex()
-                                                .items_center()
-                                                .justify_center()
-                                                .cursor_pointer()
-                                                .invisible()
-                                                .group_hover(group_name.clone(), |el| el.visible())
-                                                .hover(|s| s.bg(theme.overlay_strong))
-                                                .on_mouse_down(
-                                                    MouseButton::Left,
-                                                    move |_, window, cx| {
-                                                        cx.stop_propagation();
-                                                        (on_close)(idx, window, cx);
-                                                    },
+                                    .gap(px(4.0))
+                                    .overflow_x_scroll()
+                                    .children(self.tabs.into_iter().enumerate().map(|(idx, tab_info)| {
+                                        let is_active = idx == self.active_tab_index;
+                                        let on_tab = on_tab.clone();
+                                        let on_close = self.on_close_tab.clone();
+                                        let tab_id = format!("bottom-tab-{}", tab_info.id);
+                                        let group_name = format!("bottom-tab-group-{}", tab_info.id);
+
+                                        div()
+                                            .id(gpui::ElementId::from(tab_id))
+                                            .h(px(31.0))
+                                            .flex_none()
+                                            .flex_shrink(0.0)
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(5.0))
+                                            .px(px(8.0))
+                                            .cursor_pointer()
+                                            .group(group_name.clone())
+                                            .when(is_active, |s| {
+                                                s.border_b_2()
+                                                    .border_color(theme.accent)
+                                                    .text_color(theme.text)
+                                            })
+                                            .when(!is_active, |s| {
+                                                s.text_color(theme.text_tertiary).hover(|h| {
+                                                    h.bg(theme.raised).text_color(theme.text)
+                                                })
+                                            })
+                                            .text_size(px(11.0))
+                                            .font_weight(if is_active {
+                                                gpui::FontWeight::SEMIBOLD
+                                            } else {
+                                                gpui::FontWeight::NORMAL
+                                            })
+                                            .on_click(move |_, window, cx| {
+                                                (on_tab)(idx, window, cx);
+                                            })
+                                            .child(tab_info.title)
+                                            // Close Tab Button: hidden until the tab is hovered
+                                            .when_some(on_close, |el, on_close| {
+                                                el.child(
+                                                    div()
+                                                        .id(gpui::ElementId::from(format!(
+                                                            "close-terminal-{}",
+                                                            tab_info.id
+                                                        )))
+                                                        .size(px(14.0))
+                                                        .rounded(px(2.0))
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .cursor_pointer()
+                                                        .invisible()
+                                                        .group_hover(group_name.clone(), |el| {
+                                                            el.visible()
+                                                        })
+                                                        .hover(|s| s.bg(theme.overlay_strong))
+                                                        .on_mouse_down(
+                                                            MouseButton::Left,
+                                                            move |_, window, cx| {
+                                                                cx.stop_propagation();
+                                                                (on_close)(idx, window, cx);
+                                                            },
+                                                        )
+                                                        .child(app_icon(
+                                                            IconName::X,
+                                                            10.0,
+                                                            theme.text_tertiary,
+                                                        )),
                                                 )
-                                                .child(app_icon(
-                                                    IconName::X,
-                                                    10.0,
-                                                    theme.text_tertiary,
-                                                )),
-                                        )
-                                    })
-                            }))
+                                            })
+                                    }))
+                            )
                             .when_some(self.on_new_terminal, |el, on_new| {
                                 el.child(
                                     div()
                                         .id("bottom-new-terminal-btn")
                                         .size(px(20.0))
+                                        .flex_none()
+                                        .flex_shrink(0.0)
                                         .rounded(px(4.0))
                                         .flex()
                                         .items_center()

@@ -134,8 +134,8 @@ impl ConsoleDesktopApp {
                 next_id: 1,
             });
 
-        // Max 3 terminal tabs per workspace
-        if state.terminals.len() >= 3 {
+        // Max 5 terminal tabs per workspace
+        if state.terminals.len() >= 5 {
             return;
         }
 
@@ -303,14 +303,14 @@ impl ConsoleDesktopApp {
                 next_id: 1,
             });
 
-        // If no terminals exist for this workspace, restore persisted tab count (max 3) or spawn initial Terminal 1
+        // If no terminals exist for this workspace, restore persisted tab count (max 5) or spawn initial Terminal 1
         if state.terminals.is_empty() {
             let (target_count, target_active_idx) = self
                 .persisted_bottom_terminals
                 .get(&cwd)
                 .cloned()
                 .unwrap_or((1, 0));
-            let target_count = target_count.clamp(1, 3);
+            let target_count = target_count.clamp(1, 5);
 
             let client = self.client.clone();
             for _ in 0..target_count {
