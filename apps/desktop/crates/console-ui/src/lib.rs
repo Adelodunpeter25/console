@@ -1,3 +1,4 @@
+pub mod browser;
 pub mod chat;
 pub mod common;
 pub mod inspector;
@@ -11,6 +12,7 @@ pub mod utils;
 pub mod viewer;
 pub mod workspace;
 
+pub use browser::*;
 pub use chat::*;
 pub use common::*;
 pub use inspector::*;
