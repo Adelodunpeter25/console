@@ -6,7 +6,7 @@ use console_ui::model_picker::PickerTab;
 use console_ui::primitives::menu::ContextMenuHandle;
 use console_ui::terminal::TerminalView;
 use console_ui::workspace::{WorkspaceDrag, ops as workspace_ops};
-use gpui::{AppContext, Context, Entity, Window};
+use gpui::{AppContext, Context, Entity, Focusable as _, Window};
 use std::rc::Rc;
 
 use crate::state::app::ConsoleDesktopApp;
