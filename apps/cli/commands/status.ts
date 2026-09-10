@@ -16,7 +16,4 @@ export async function statusDaemon(): Promise<void> {
   console.log(`PID: ${status.pid}`);
   console.log(`Uptime: ${status.uptime || "unknown"}`);
   console.log(`Server: http://${status.host}:${status.port}`);
-  console.log(`Logs: ~/.console/logs/daemon.log`);
-  console.log(`Run 'console logs' to view logs`);
-  console.log(`Run 'console stop' to stop the daemon`);
 }
