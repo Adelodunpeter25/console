@@ -112,8 +112,10 @@ fn drop_zone(
 ) -> gpui::AnyElement {
     let label = match action {
         WorkspaceDropAction::SplitLeft => "Split left",
+        WorkspaceDropAction::SplitTop => "Split top (terminals)",
         WorkspaceDropAction::AddTab => "Add tab",
         WorkspaceDropAction::SplitRight => "Split right",
+        WorkspaceDropAction::SplitBottom => "Split bottom (terminals)",
     };
     let on_drop = on_drop_tab.clone();
     div()
@@ -220,8 +222,8 @@ fn render_leaf(
                 .overflow_hidden()
                 .child((render_content)(leaf.id.as_str(), active_tab, window, cx)),
         )
-        // Three equal drop zones distinguish splitting left, adding a tab to
-        // this pane, and splitting right.
+        // Five drop zones: top/bottom stack rows (terminals only) and the
+        // middle row splits left, adds a tab, or splits right.
         .child(
             div()
                 .id(ElementId::Name(
@@ -230,21 +232,41 @@ fn render_leaf(
                 .absolute()
                 .inset_0()
                 .flex()
+                .flex_col()
                 .child(drop_zone(
                     leaf.id.clone(),
-                    WorkspaceDropAction::SplitLeft,
+                    WorkspaceDropAction::SplitTop,
                     &on_drop,
                     Theme::current(cx),
                 ))
+                .child(
+                    div()
+                        .flex_1()
+                        .w_full()
+                        .min_h_0()
+                        .flex()
+                        .child(drop_zone(
+                            leaf.id.clone(),
+                            WorkspaceDropAction::SplitLeft,
+                            &on_drop,
+                            Theme::current(cx),
+                        ))
+                        .child(drop_zone(
+                            leaf.id.clone(),
+                            WorkspaceDropAction::AddTab,
+                            &on_drop,
+                            Theme::current(cx),
+                        ))
+                        .child(drop_zone(
+                            leaf.id.clone(),
+                            WorkspaceDropAction::SplitRight,
+                            &on_drop,
+                            Theme::current(cx),
+                        )),
+                )
                 .child(drop_zone(
                     leaf.id.clone(),
-                    WorkspaceDropAction::AddTab,
-                    &on_drop,
-                    Theme::current(cx),
-                ))
-                .child(drop_zone(
-                    leaf.id.clone(),
-                    WorkspaceDropAction::SplitRight,
+                    WorkspaceDropAction::SplitBottom,
                     &on_drop,
                     Theme::current(cx),
                 )),

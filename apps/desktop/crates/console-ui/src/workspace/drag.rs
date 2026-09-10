@@ -13,11 +13,16 @@ pub fn cancel_workspace_drags() {
 }
 
 /// Where a dragged tab is dropped relative to an existing pane.
+///
+/// `SplitTop`/`SplitBottom` are terminal-only (stacked rows cramp chat and
+/// file content); the drop handler no-ops for any other tab type.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkspaceDropAction {
     SplitLeft,
+    SplitTop,
     AddTab,
     SplitRight,
+    SplitBottom,
 }
 
 /// A tab being dragged toward another workspace pane.

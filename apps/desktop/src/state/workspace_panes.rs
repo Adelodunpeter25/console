@@ -1129,12 +1129,15 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// Move a dragged tab into a new horizontal split beside the target pane.
+    /// Move a dragged tab into a new split adjacent to the target pane.
+    /// `insert_first` puts the dragged tab's pane before the target pane
+    /// (left for horizontal, above for vertical splits).
     pub fn move_workspace_tab_to_split(
         &mut self,
         target_pane_id: String,
         drag: WorkspaceDrag,
-        insert_left: bool,
+        direction: console_core::SplitDirection,
+        insert_first: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1152,7 +1155,8 @@ impl ConsoleDesktopApp {
             source_pane_id.as_deref(),
             &target_pane_id,
             drag.tab,
-            insert_left,
+            direction,
+            insert_first,
         ) else {
             return;
         };

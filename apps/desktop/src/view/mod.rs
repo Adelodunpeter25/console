@@ -151,6 +151,7 @@ impl Render for ConsoleDesktopApp {
                             this.move_workspace_tab_to_split(
                                 target_pane_id,
                                 drag,
+                                console_core::SplitDirection::Horizontal,
                                 true,
                                 window,
                                 cx,
@@ -160,11 +161,45 @@ impl Render for ConsoleDesktopApp {
                             this.move_workspace_tab_to_split(
                                 target_pane_id,
                                 drag,
+                                console_core::SplitDirection::Horizontal,
                                 false,
                                 window,
                                 cx,
                             );
                         }
+                        // Stacked rows are terminal-only: any other tab dropped
+                        // on the top/bottom zones no-ops instead of retabbing.
+                        WorkspaceDropAction::SplitTop
+                            if matches!(
+                                drag.tab,
+                                console_core::WorkspaceTabConfig::Terminal { .. }
+                            ) =>
+                        {
+                            this.move_workspace_tab_to_split(
+                                target_pane_id,
+                                drag,
+                                console_core::SplitDirection::Vertical,
+                                true,
+                                window,
+                                cx,
+                            );
+                        }
+                        WorkspaceDropAction::SplitBottom
+                            if matches!(
+                                drag.tab,
+                                console_core::WorkspaceTabConfig::Terminal { .. }
+                            ) =>
+                        {
+                            this.move_workspace_tab_to_split(
+                                target_pane_id,
+                                drag,
+                                console_core::SplitDirection::Vertical,
+                                false,
+                                window,
+                                cx,
+                            );
+                        }
+                        WorkspaceDropAction::SplitTop | WorkspaceDropAction::SplitBottom => {}
                     });
                 }
             })

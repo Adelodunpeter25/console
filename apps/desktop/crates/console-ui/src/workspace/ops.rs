@@ -332,7 +332,10 @@ pub fn split_pane(
     }
 }
 
-/// Move a tab into a new left/right split adjacent to `target_pane_id`.
+/// Move a tab into a new split adjacent to `target_pane_id`.
+///
+/// `insert_first` puts the dragged tab's pane before the target pane (left
+/// for `Horizontal`, above for `Vertical`).
 ///
 /// The source pane is optional so sidebar sessions can be dropped into a new
 /// pane without first existing in the workspace tree. Existing workspace tabs
@@ -342,7 +345,8 @@ pub fn move_tab_to_split(
     source_pane_id: Option<&str>,
     target_pane_id: &str,
     tab: WorkspaceTabConfig,
-    insert_left: bool,
+    direction: SplitDirection,
+    insert_first: bool,
 ) -> Option<String> {
     if root.leaf_mut(target_pane_id).is_none() {
         return None;
@@ -365,16 +369,17 @@ pub fn move_tab_to_split(
         node: &mut WorkspaceNode,
         target_pane_id: &str,
         split_id: &str,
-        insert_left: bool,
+        direction: SplitDirection,
+        insert_first: bool,
         new_leaf: WorkspaceNode,
     ) -> bool {
         match node {
             WorkspaceNode::Leaf(leaf) if leaf.id == target_pane_id => {
                 let original = node.clone();
-                *node = if insert_left {
-                    split_node(split_id, SplitDirection::Horizontal, new_leaf, original)
+                *node = if insert_first {
+                    split_node(split_id, direction, new_leaf, original)
                 } else {
-                    split_node(split_id, SplitDirection::Horizontal, original, new_leaf)
+                    split_node(split_id, direction, original, new_leaf)
                 };
                 true
             }
@@ -384,20 +389,49 @@ pub fn move_tab_to_split(
                     &mut split.children[0],
                     target_pane_id,
                     split_id,
-                    insert_left,
+                    direction,
+                    insert_first,
                     new_leaf.clone(),
                 ) || inject(
                     &mut split.children[1],
                     target_pane_id,
                     split_id,
-                    insert_left,
+                    direction,
+                    insert_first,
                     new_leaf,
                 )
             }
         }
     }
 
-    inject(root, target_pane_id, &split_id, insert_left, new_leaf).then_some(new_pane_id)
+    inject(
+        root,
+        target_pane_id,
+        &split_id,
+        direction,
+        insert_first,
+        new_leaf,
+    )
+    .then_some(new_pane_id)
+}
+
+/// Move a tab into a new left/right split adjacent to `target_pane_id`.
+/// Convenience wrapper over [`move_tab_to_split`] for the horizontal case.
+pub fn move_tab_to_horizontal_split(
+    root: &mut WorkspaceNode,
+    source_pane_id: Option<&str>,
+    target_pane_id: &str,
+    tab: WorkspaceTabConfig,
+    insert_left: bool,
+) -> Option<String> {
+    move_tab_to_split(
+        root,
+        source_pane_id,
+        target_pane_id,
+        tab,
+        SplitDirection::Horizontal,
+        insert_left,
+    )
 }
 
 /// Update the proportion of a split node given a new size for the first child (in percent, e.g. 10.0..=90.0).

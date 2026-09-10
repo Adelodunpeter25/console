@@ -49,7 +49,7 @@ fn test_split_and_deduplication_across_panes() {
     );
 
     // Split off a new pane with a second chat
-    let new_pane_id = ops::move_tab_to_split(
+    let new_pane_id = ops::move_tab_to_horizontal_split(
         &mut root,
         None,
         "pane-main",
