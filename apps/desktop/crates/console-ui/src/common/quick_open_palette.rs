@@ -121,19 +121,6 @@ impl QuickOpenPalette {
 
     fn schedule_search(&mut self, query: &str, immediate: bool, cx: &mut Context<Self>) {
         let query = query.to_string();
-        // Empty query searches nothing — show the empty state instead of a
-        // broad directory-mixed scan. Still record it and bump the generation
-        // so clearing the input invalidates in-flight searches.
-        if query.trim().is_empty() {
-            self.last_dispatched_query = Some(query);
-            self.search_generation += 1;
-            self.modal.update(cx, |m, cx| {
-                if m.is_open() {
-                    m.set_entries(Vec::new(), cx);
-                }
-            });
-            return;
-        }
         // Drop no-op re-fires (CommandState often re-emits the same query).
         if self.last_dispatched_query.as_deref() == Some(query.as_str()) {
             return;
@@ -158,6 +145,25 @@ impl QuickOpenPalette {
                 .read_with(cx, |this, _| this.search_generation == generation)
                 .unwrap_or(false);
             if !still_current {
+                return;
+            }
+
+            // Empty query searches nothing — show the empty state instead of
+            // a broad scan. This must run here, not synchronously above: the
+            // query handler can fire while the modal is already borrowed
+            // (open/show cascade), and touching it re-entrantly panics
+            // GPUI's entity lease (double_lease_panic).
+            if query.trim().is_empty() {
+                let _ = this.update(cx, |this, cx| {
+                    if generation != this.search_generation {
+                        return;
+                    }
+                    this.modal.update(cx, |m, cx| {
+                        if m.is_open() {
+                            m.set_entries(Vec::new(), cx);
+                        }
+                    });
+                });
                 return;
             }
 
