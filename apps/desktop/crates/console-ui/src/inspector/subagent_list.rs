@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use console_core::types::SubagentInfo;
+use console_core::types::{SubagentActivityItem, SubagentInfo};
 use gpui::{
     App, FontWeight, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
@@ -14,6 +14,28 @@ use crate::chat::markdown_helpers::{compact_ctx, render_selectable_markdown};
 use crate::markdown::render::{MarkdownView, Palette, TranscriptSelection};
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
+
+struct ActivityGroup<'a> {
+    tool_name: &'a str,
+    activities: Vec<&'a SubagentActivityItem>,
+}
+
+fn group_activities(activities: &[SubagentActivityItem]) -> Vec<ActivityGroup<'_>> {
+    let mut groups = Vec::new();
+    for activity in activities {
+        if let Some(group) = groups.last_mut()
+            && group.tool_name == activity.tool_name
+        {
+            group.activities.push(activity);
+        } else {
+            groups.push(ActivityGroup {
+                tool_name: &activity.tool_name,
+                activities: vec![activity],
+            });
+        }
+    }
+    groups
+}
 
 #[derive(IntoElement)]
 pub struct SubagentListView {
@@ -282,7 +304,21 @@ impl RenderOnce for SubagentListView {
                                                     .flex()
                                                     .flex_col()
                                                     .gap(px(4.0))
-                                                    .children(subagent.activities.iter().map(|act| {
+                                                    .children(group_activities(&subagent.activities).into_iter().map(|group| {
+                                                         let group_running = group.activities.iter().any(|act| act.status == "running");
+                                                         let group_failed = group.activities.iter().any(|act| act.status != "running" && act.status != "completed");
+                                                         let completed_count = group.activities.iter().filter(|act| act.status == "completed").count();
+                                                         let group_count = group.activities.len();
+                                                         let (group_icon, group_color) = if group_running { (IconName::Bot, theme.accent) } else if group_failed { (IconName::Alert, theme.danger) } else { (IconName::CircleCheck, theme.success) };
+                                                         div()
+                                                             .flex()
+                                                             .flex_col()
+                                                             .rounded(px(6.0))
+                                                             .border_1()
+                                                             .border_color(theme.sidebar_border)
+                                                             .bg(theme.surface)
+                                                             .child(div().flex().items_center().gap(px(6.0)).px(px(8.0)).py(px(5.0)).child(app_icon(group_icon, 12.0, group_color)).child(div().font_family(crate::markdown::render::MONO_FAMILY).text_size(px(11.0)).text_color(theme.text_secondary).child(group.tool_name.to_owned())).child(div().flex_1().text_size(px(10.0)).text_color(theme.text_tertiary).child(format!("{group_count} calls"))).child(div().text_size(px(10.0)).text_color(theme.text_tertiary).child(if group_running { "Running".to_owned() } else { format!("{completed_count}/{group_count}") })))
+                                                             .child(div().flex().flex_col().gap(px(2.0)).px(px(6.0)).pb(px(4.0)).children(group.activities.into_iter().map(|act| {
                                                         let act_running = act.status == "running";
                                                         let act_completed = act.status == "completed";
 
@@ -390,6 +426,9 @@ impl RenderOnce for SubagentListView {
                                                                 )
                                                             })
                                                     }))
+                                                    .into_any_element()
+                                                                    )
+                                                            }))
                                                     .into_any_element()
                                             }),
                                     )
