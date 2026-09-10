@@ -18,6 +18,7 @@ use crate::state::ConsoleDesktopApp;
 
 impl Render for ConsoleDesktopApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        crate::state::clear_all_notifications();
         self.maybe_persist_window_state(window, cx);
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();

@@ -16,6 +16,7 @@ mod execution;
 mod global_actions;
 mod layout;
 mod macos_notifications;
+pub(crate) use macos_notifications::clear_all as clear_all_notifications;
 mod notifications;
 mod pagination;
 mod projects;

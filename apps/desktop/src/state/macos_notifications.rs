@@ -158,11 +158,17 @@ mod imp {
         center.removePendingNotificationRequestsWithIdentifiers(&ids);
     }
 
+    pub(crate) fn clear_all() {
+        let center = UNUserNotificationCenter::currentNotificationCenter();
+        center.removeAllDeliveredNotifications();
+        center.removeAllPendingNotificationRequests();
+    }
+
 }
 
 
 #[cfg(target_os = "macos")]
-pub(crate) use imp::{clear_for_session, ensure_initialized, notify_session};
+pub(crate) use imp::{clear_all, clear_for_session, ensure_initialized, notify_session};
 
 #[cfg(not(target_os = "macos"))]
 mod stub {
@@ -173,6 +179,7 @@ mod stub {
     }
     pub(crate) fn notify_session(_session_id: &str, _title: &str, _body: &str) {}
     pub(crate) fn clear_for_session(_session_id: &str) {}
+    pub(crate) fn clear_all() {}
 }
 
 #[cfg(not(target_os = "macos"))]
