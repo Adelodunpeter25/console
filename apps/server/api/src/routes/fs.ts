@@ -28,7 +28,8 @@ fsRoutes.get("/browse", async (c) => {
 
 /**
  * GET /api/fs/search — FFF-backed fuzzy file search scoped to a project root.
- * Query: root=<project dir>, q=<fuzzy query>, limit=<max results, default 20>
+ * Query: root=<project dir>, q=<fuzzy query>, limit=<max results, default 20>,
+ *   includeDirs=<false to return files only; default true>
  * Powers the Files-screen search without the client loading the whole tree.
  */
 fsRoutes.get("/search", async (c) => {
@@ -38,8 +39,10 @@ fsRoutes.get("/search", async (c) => {
     return c.json({ success: false, error: "Missing required query param: root" }, 400);
   }
   const limit = Math.min(Math.max(Number.parseInt(c.req.query("limit") ?? "20", 10) || 20, 1), 100);
+  const includeDirs =
+    c.req.query("includeDirs") !== "false" && c.req.query("includeDirs") !== "0";
   try {
-    const items = await searchFiles(root, query, limit);
+    const items = await searchFiles(root, query, limit, includeDirs);
     return c.json({ success: true, data: items });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);

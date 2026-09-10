@@ -138,7 +138,8 @@ impl ConsoleDesktopApp {
             cx.spawn(async move |_, cx| {
                 let files = client
                     .assist
-                    .search_files(session_for_file.as_deref(), &query, root.as_deref())
+                    // @-mentions may reference directories, so keep them here.
+                    .search_files(session_for_file.as_deref(), &query, root.as_deref(), true)
                     .await
                     .map(|response| response.items)
                     .unwrap_or_default();

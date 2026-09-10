@@ -55,7 +55,8 @@ impl QuickOpenPalette {
         self.on_open_file = Some(Rc::new(callback));
     }
 
-    /// Open the palette scoped to `root` and immediately list its top files.
+    /// Open the palette scoped to `root` with an empty list. Nothing is
+    /// searched until the user types — an empty query shows the empty state.
     /// `None` shows an empty state instead of searching the app's cwd.
     pub fn open(&mut self, root: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
         self.root = root.clone();
@@ -108,8 +109,6 @@ impl QuickOpenPalette {
             modal.set_entries(Vec::new(), cx);
             modal.show(window, cx);
         });
-        // First paint: no debounce so the list appears ASAP.
-        self.schedule_search("", /*immediate*/ true, cx);
     }
 
     pub fn hide(&mut self, cx: &mut Context<Self>) {
@@ -122,6 +121,19 @@ impl QuickOpenPalette {
 
     fn schedule_search(&mut self, query: &str, immediate: bool, cx: &mut Context<Self>) {
         let query = query.to_string();
+        // Empty query searches nothing — show the empty state instead of a
+        // broad directory-mixed scan. Still record it and bump the generation
+        // so clearing the input invalidates in-flight searches.
+        if query.trim().is_empty() {
+            self.last_dispatched_query = Some(query);
+            self.search_generation += 1;
+            self.modal.update(cx, |m, cx| {
+                if m.is_open() {
+                    m.set_entries(Vec::new(), cx);
+                }
+            });
+            return;
+        }
         // Drop no-op re-fires (CommandState often re-emits the same query).
         if self.last_dispatched_query.as_deref() == Some(query.as_str()) {
             return;
@@ -150,7 +162,12 @@ impl QuickOpenPalette {
             }
 
             let items = match root {
-                Some(root) => client.assist.search_files(None, &query, Some(&root)).await,
+                Some(root) => {
+                    client
+                        .assist
+                        .search_files(None, &query, Some(&root), false)
+                        .await
+                }
                 None => return,
             };
             let Ok(items) = items else { return };

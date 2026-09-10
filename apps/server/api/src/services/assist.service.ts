@@ -35,6 +35,9 @@ export async function searchFiles(
   root: string,
   query: string,
   maxResults = MAX_RESULTS,
+  // When false, directories are filtered out so every slot holds a file.
+  // Defaults to true to preserve the file-browser and @-mention behavior.
+  includeDirs = true,
 ): Promise<FileSearchResult[]> {
   const basePath = path.resolve(root);
 
@@ -47,22 +50,29 @@ export async function searchFiles(
   try {
     await finder.waitForScan(5000);
 
-    const result = finder.mixedSearch(query, { pageSize: maxResults });
+    // Request headroom when excluding directories so a full page of files
+    // survives the filter instead of returning short.
+    const result = finder.mixedSearch(query, {
+      pageSize: includeDirs ? maxResults : maxResults * 3,
+    });
     if (!result.ok) {
       throw new Error(`Search error: ${result.error}`);
     }
 
     const { items, scores } = result.value;
-    return items.map((entry, i) => {
-      const isDir = entry.type === "directory";
-      const relativePath = entry.item.relativePath;
-      return {
-        relativePath,
-        absolutePath: path.join(basePath, relativePath),
-        isDir,
-        score: scores[i]?.total ?? 0,
-      };
-    });
+    return items
+      .map((entry, i) => ({ entry, score: scores[i]?.total ?? 0 }))
+      .filter(({ entry }) => includeDirs || entry.type !== "directory")
+      .slice(0, maxResults)
+      .map(({ entry, score }) => {
+        const relativePath = entry.item.relativePath;
+        return {
+          relativePath,
+          absolutePath: path.join(basePath, relativePath),
+          isDir: entry.type === "directory",
+          score,
+        };
+      });
   } finally {
     finder.destroy();
   }

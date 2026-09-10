@@ -36,11 +36,15 @@ async function handleSearch(c: Context) {
   const query = (c.req.query("q") ?? c.req.query("query") ?? "").trim();
   const session = sessionId ? sessionStorage.loadSession(sessionId) : null;
   const root = c.req.query("root") ?? session?.header.cwd ?? process.cwd();
+  // Opt-out for file-only consumers (e.g. desktop ⌘P): defaults to true so
+  // the @-mention picker keeps directory results.
+  const includeDirs =
+    c.req.query("includeDirs") !== "false" && c.req.query("includeDirs") !== "0";
 
   try {
     // When query is empty (user just typed "@") fall back to a broad scan so
     // the desktop autocomplete can show something instead of a blank popup.
-    const items = await searchFiles(root, query || ".");
+    const items = await searchFiles(root, query || ".", undefined, includeDirs);
     return c.json({ success: true, data: { root, query, items } });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);

@@ -46,6 +46,7 @@ impl AssistService {
         session_id: Option<&str>,
         query: &str,
         root: Option<&str>,
+        include_dirs: bool,
     ) -> Result<FileSearchResponse> {
         let path = match session_id {
             Some(id) if !id.is_empty() => format!("/api/assist/{}/search", id),
@@ -57,6 +58,7 @@ impl AssistService {
         if let Some(r) = root {
             params.push(format!("root={}", urlencoding::encode(r)));
         }
+        params.push(format!("includeDirs={}", include_dirs));
         url.push('?');
         url.push_str(&params.join("&"));
 
