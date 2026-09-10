@@ -548,6 +548,8 @@ impl Render for ConsoleDesktopApp {
                         self.projects.clone(),
                         self.selected_session_id.clone(),
                         self.collapsed_groups.clone(),
+                        self.sidebar_sort_mode,
+                        self.collapsed_projects.clone(),
                         self.running_sessions_snapshot(),
                         self.waiting_sessions_snapshot(),
                         self.draft_summaries(),
@@ -606,6 +608,26 @@ impl Render for ConsoleDesktopApp {
                             move |group: console_ui::utils::SessionDateGroup, _w, cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| this.toggle_sidebar_group(group, cx));
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |key: String, _w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.toggle_sidebar_project(key, cx);
+                                    });
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |_w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.toggle_sidebar_sort_mode(cx);
+                                    });
                                 }
                             }
                         },

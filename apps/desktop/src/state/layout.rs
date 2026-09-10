@@ -66,6 +66,8 @@ impl ConsoleDesktopApp {
                 .iter()
                 .map(|group| group.index())
                 .collect(),
+            sidebar_sort_mode: self.sidebar_sort_mode.label().to_string(),
+            collapsed_projects: self.collapsed_projects.iter().cloned().collect(),
         });
         let cur_wid = self
             .selected_project_id
@@ -261,6 +263,24 @@ impl ConsoleDesktopApp {
         if !collapsed.remove(&group) {
             collapsed.insert(group);
         }
+        self.persist_layout();
+        cx.notify();
+    }
+
+    /// Collapse or expand a sidebar project section (`project id`, or "none"
+    /// for sessions without a project).
+    pub fn toggle_sidebar_project(&mut self, project_key: String, cx: &mut Context<Self>) {
+        let collapsed = Rc::make_mut(&mut self.collapsed_projects);
+        if !collapsed.remove(&project_key) {
+            collapsed.insert(project_key);
+        }
+        self.persist_layout();
+        cx.notify();
+    }
+
+    /// Switch the sidebar session sort axis, persisting the choice.
+    pub fn toggle_sidebar_sort_mode(&mut self, cx: &mut Context<Self>) {
+        self.sidebar_sort_mode = self.sidebar_sort_mode.toggle();
         self.persist_layout();
         cx.notify();
     }

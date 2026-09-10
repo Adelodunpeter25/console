@@ -247,6 +247,12 @@ pub struct ConsoleDesktopApp {
     /// Calendar-period groups the user collapsed in the sidebar. Shared with
     /// the sidebar; cloned per frame as a refcount bump.
     pub collapsed_groups: Rc<std::collections::HashSet<SessionDateGroup>>,
+    /// Which axis the sidebar session list is sectioned by (date buckets or
+    /// project sections). Persisted; defaults to date.
+    pub sidebar_sort_mode: console_ui::utils::SidebarSortMode,
+    /// Collapsed project sections (project id, or "none") in project sort
+    /// mode. Shared with the sidebar; cloned per frame as a refcount bump.
+    pub collapsed_projects: Rc<std::collections::HashSet<String>>,
     /// Last window frame known to be on disk. Seeded from storage at startup
     /// and compared in memory each render, so unchanged frames perform no I/O.
     pub(crate) saved_window_state: Option<persistence::window::PersistedWindowState>,
@@ -814,6 +820,8 @@ impl ConsoleDesktopApp {
                     .filter_map(|index| SessionDateGroup::ALL.get(*index).copied())
                     .collect(),
             ),
+            sidebar_sort_mode: layout.sidebar_sort_mode(),
+            collapsed_projects: Rc::new(layout.collapsed_projects.iter().cloned().collect()),
             _subscriptions: subscriptions,
         };
 

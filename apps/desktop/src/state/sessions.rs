@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 use console_core::{ApprovalMode, ProjectInfo, SelectedModel, SessionHeader, UpdateSessionDto};
-use console_ui::utils::group_indices_by_date;
+use console_ui::utils::{SidebarSortMode, group_indices_by_date, group_indices_by_project};
 use gpui::{Context, Window};
 
 use super::ConsoleDesktopApp;
@@ -685,25 +685,54 @@ impl ConsoleDesktopApp {
             .into_iter()
             .filter_map(|d| d.session_id)
             .collect();
-        let grouped = group_indices_by_date(self.sessions.len(), |index| {
+        let timestamp = |index: usize| {
             let session = &self.sessions[index];
             if draft_ids.contains(&session.id) {
                 0
             } else {
                 session.updated_at.max(session.created_at)
             }
-        });
+        };
         let mut ids = Vec::new();
-        for (group, positions) in grouped {
-            if self.collapsed_groups.contains(&group) {
-                continue;
-            }
-            for idx in positions {
-                let session = &self.sessions[idx];
-                if draft_ids.contains(&session.id) {
-                    continue;
+        match self.sidebar_sort_mode {
+            SidebarSortMode::Date => {
+                let grouped = group_indices_by_date(self.sessions.len(), timestamp);
+                for (group, positions) in grouped {
+                    if self.collapsed_groups.contains(&group) {
+                        continue;
+                    }
+                    for idx in positions {
+                        let session = &self.sessions[idx];
+                        if !draft_ids.contains(&session.id) {
+                            ids.push(session.id.clone());
+                        }
+                    }
                 }
-                ids.push(session.id.clone());
+            }
+            SidebarSortMode::Project => {
+                let grouped = group_indices_by_project(
+                    self.sessions.len(),
+                    |index| {
+                        let session = &self.sessions[index];
+                        self.projects
+                            .iter()
+                            .find(|project| project.matches_session(session))
+                            .map(|project| project.id.clone())
+                    },
+                    timestamp,
+                );
+                for (key, positions) in grouped {
+                    let collapse_key = key.unwrap_or_else(|| "none".to_string());
+                    if self.collapsed_projects.contains(&collapse_key) {
+                        continue;
+                    }
+                    for idx in positions {
+                        let session = &self.sessions[idx];
+                        if !draft_ids.contains(&session.id) {
+                            ids.push(session.id.clone());
+                        }
+                    }
+                }
             }
         }
         ids
