@@ -27,7 +27,7 @@ import {
 import { codexModelsUrl } from "@/providers/src/codex/constants.js";
 import type { StreamFn } from "@/agent/src/service/agent-loop.js";
 
-import type { Model, ProviderCatalogEntry, ProviderId } from "@/agent/src/types/index.js";
+import type { Model, ProviderCatalogEntry, ProviderId, ThinkingLevel } from "@/agent/src/types/index.js";
 
 export interface ProviderEntry extends ProviderCatalogEntry {
   getStreamFn: () => StreamFn;
@@ -48,10 +48,18 @@ export const AVAILABLE_MODELS = [
   "gpt-oss-120b-medium",
 ] as const;
 
+const GEMINI_THINKING_LEVELS: ThinkingLevel[] = ["minimal", "low", "medium", "high"];
+
 export const DEFAULT_ANTIGRAVITY_MODELS: Model[] = AVAILABLE_MODELS.map((id) => ({
   id,
   provider: "antigravity",
   contextWindow: id.startsWith("claude-") ? 250_000 : 1_048_576,
+  ...(id.startsWith("gemini-")
+    ? {
+        supportedThinkingLevels: GEMINI_THINKING_LEVELS,
+        defaultThinkingLevel: "medium" as const,
+      }
+    : {}),
 }));
 
 export const DEFAULT_OPENCODE_MODELS: Model[] = OPENCODE_FREE_MODEL_IDS.map((id) => ({

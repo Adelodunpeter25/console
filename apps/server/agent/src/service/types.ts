@@ -4,6 +4,7 @@ import type {
   AgentTool,
   ApprovalMode,
   Model,
+  ThinkingLevel,
   PermissionRequest,
   ToolCall,
   ToolResult,
@@ -27,6 +28,7 @@ export type StreamFn = (params: {
   messages: AgentMessage[];
   tools: AgentTool[];
   signal?: AbortSignal;
+  thinkingLevel?: ThinkingLevel;
 }) => AsyncIterable<LLMDelta>;
 
 export interface AgentLoopConfig {
@@ -38,6 +40,8 @@ export interface AgentLoopConfig {
   tools: AgentTool[];
   /** Provider-specific streaming function — inject your Antigravity/OpenCode/Codex/Cline client here. */
   streamFn: StreamFn;
+  /** Optional runtime thinking override for providers that support it. */
+  thinkingLevel?: ThinkingLevel;
   /** Security approval mode ("always-ask" | "accept-edits" | "plan-mode" | "full-access"). Default: "always-ask" */
   approvalMode?: ApprovalMode;
   /** Hook for user approval when a tool call requires permission. */
@@ -63,4 +67,5 @@ export interface StreamParams {
   messages: AgentMessage[];
   tools: AgentTool[];
   signal?: AbortSignal;
+  thinkingLevel?: ThinkingLevel;
 }

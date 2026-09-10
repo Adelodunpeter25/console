@@ -1,7 +1,25 @@
 # Thinking Levels Support Spec
 
 ## Summary
-Models expose a reasoning dial under different names but the same primitive: how long the model thinks before it speaks. Console should expose it as a single `thinkingLevel` / `reasoningEffort` control, normalized per-provider, with model-aware defaults and per-session persistence.
+Models expose a reasoning dial under different names but the same primitive: how long the model thinks before it speaks. Console should expose it as a single `thinkingLevel` / `reasoningEffort` control, normalized per-provider, with model-aware defaults.
+
+## Current Scope
+This first implementation is **backend-only** and supports **Antigravity/Gemini models only**.
+
+Included:
+- Shared backend/types definitions for thinking levels and model capabilities.
+- Runtime validation and resolution of a thinking level for each Antigravity request.
+- Antigravity request mapping through Gemini `generationConfig.thinkingConfig`.
+- Backend tests for defaults, supported levels, invalid values, and request payloads.
+
+Explicitly deferred:
+- Desktop and mobile UI changes.
+- Session or per-turn persistence and API changes.
+- OpenCode, Codex, Cline, Devin, Anthropic, and direct OpenAI provider support.
+- Model ID migration or normalization. Existing model IDs remain unchanged.
+- Gemini numeric `thinkingBudget` compatibility unless required by a currently registered Antigravity model.
+
+The backend should use a model's configured default when no level is supplied. Until session/API persistence is introduced, callers may pass an optional runtime level to the agent request path; omitted values must preserve current behavior or use the model's declared default.
 
 ## Research
 
@@ -41,6 +59,8 @@ thinking_level?: ThinkingLevel | null  // null = use model default
 ```
 
 ### 2) Provider mapping
+
+> **Backend MVP note:** only the Gemini/Antigravity column is in scope initially. Other provider mappings are design references only and must not be implemented in this phase.
 | Console `ThinkingLevel` | OpenAI `reasoning.effort` | Anthropic `effort` | Gemini `thinkingLevel` |
 |---|---|---|---|
 | `none` | `none` | — (thinking off) | — |
@@ -67,21 +87,24 @@ Provider adapters:
 * Existing sessions with suffixed IDs (`gemini-3.1-pro-high`) auto-migrate: parse suffix → set `thinkingLevel`, normalize ID to base.
 * API defaults: if client omits level, server uses `model.defaultThinkingLevel` (avoid Gemini high-cost default surprise).
 
-## Implementation Steps
-1. `packages/types/src/model.ts` + `packages/types/src/session.ts` + `apps/desktop/crates/console-core/src/types` — add `ThinkingLevel`, `supportedThinkingLevels`, `thinking_level`.
-2. `apps/server/agent/src/commands/provider-registry.ts` — populate `supportedThinkingLevels`/`defaultThinkingLevel` per model/provider.
-3. `apps/server/agent/src/session/schema.ts` + `session-ops.ts` — add `thinking_level` column, migration, `updateThinkingLevel`.
-4. `apps/server/agent/src/service/agent-loop.ts` + providers — pass `thinkingLevel` into streamFn request.
-5. `apps/server/api/src/routes/sessions.ts` + `services/session.service.ts` — accept/return `thinkingLevel`.
-6. `apps/desktop/src/state/*` + `console-ui` — picker, persistence, title/inspector updates.
-7. Docs: update `docs/plan/custom-provider.md` wire protocol with `thinkingLevel`.
+## Backend MVP Implementation Steps
+1. `packages/types/src/model.ts` — add `ThinkingLevel`, `supportedThinkingLevels`, and `defaultThinkingLevel` to shared model metadata.
+2. `apps/server/agent/src/service/types.ts` and agent construction — carry an optional runtime thinking level through the backend stream request path.
+3. `apps/server/agent/src/commands/provider-registry.ts` — populate Antigravity/Gemini capabilities and defaults without changing existing model IDs.
+4. `apps/server/providers/src/antigravity/stream-fn.ts` — map the resolved level to Gemini `generationConfig.thinkingConfig.thinkingLevel` and validate unsupported values.
+5. Add backend-only tests for capability resolution and the generated Antigravity request payload.
 
-## Verification
-* `gpt-5.5` low vs high: second call shows more reasoning tokens, slower.
-* `gemini-3.1-pro` with `low` vs `high` (Deep Think Mini): high cost/latency higher.
-* `claude-opus-4-8` high vs max: max uses more tokens on hard task.
-* `cargo check` + `bun tests/terminal.test.ts` + manual model picker round-trip.
+Do not modify desktop, mobile, session persistence, frontend APIs, or non-Antigravity providers in this phase.
 
-## Risks
-* Model-dependent valid sets — validate per-model, reject `xhigh` on `gptoai` with 400 → user sees error. Gate UI to only valid options.
-* Cost trap on Gemini default high — ensure console default overrides to `medium` unless user picks high.
+## Backend MVP Verification
+* Antigravity request payloads contain the expected Gemini thinking configuration for each supported level.
+* Unsupported levels are rejected before the provider request is sent.
+* Omitted levels resolve to the registered Antigravity model default.
+* Existing Antigravity model IDs and request behavior remain compatible when no level is supplied.
+* Run the focused server/provider tests and `bunx tsc --noEmit`.
+
+## Backend MVP Risks
+* Model-dependent valid sets — validate per Antigravity model and reject unsupported levels with a clear error.
+* Existing Antigravity model IDs may encode a level suffix — preserve those IDs and aliases in this phase; do not migrate them yet.
+* Gemini models may use either named `thinkingLevel` or numeric `thinkingBudget` — do not send both, and defer numeric-budget models until one is registered.
+* Cost trap on Gemini defaults — explicitly configure a safe model default rather than assuming the provider default is inexpensive.

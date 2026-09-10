@@ -6,6 +6,7 @@ import type {
   ImagePart,
   Model,
   PermissionRequest,
+  ThinkingLevel,
 } from "@/agent/src/types/index.js";
 import { createSubagentTool } from "@/agent/src/tools/subagent.js";
 import { bindToolCwd } from "@console/types";
@@ -35,6 +36,8 @@ export interface AgentOptions {
   tools: AgentTool[];
   systemPrompt?: string;
   streamFn: StreamFn;
+  /** Optional runtime thinking override for providers that support it. */
+  thinkingLevel?: ThinkingLevel;
   /** Security approval mode ("always-ask" | "accept-edits" | "plan-mode" | "full-access"). Default: "always-ask" */
   approvalMode?: ApprovalMode;
   /** Context window auto-compaction configuration, or `false` to disable. */
@@ -57,6 +60,7 @@ export class Agent {
   private _tools: AgentTool[];
   private _systemPrompt: string;
   private _streamFn: StreamFn;
+  private _thinkingLevel?: ThinkingLevel;
   private _approvalMode: ApprovalMode;
   private _compaction?: CompactionOptions;
   private _onApproval?: AgentOptions["onApproval"];
@@ -71,6 +75,7 @@ export class Agent {
     this._tools = options.tools;
     this._systemPrompt = options.systemPrompt ?? "";
     this._streamFn = options.streamFn;
+    this._thinkingLevel = options.thinkingLevel;
     this._approvalMode = options.approvalMode ?? "always-ask";
     this._onApproval = options.onApproval;
     this._onEvent = options.onEvent;
@@ -203,6 +208,7 @@ export class Agent {
       systemPrompt: this._systemPrompt,
       tools,
       streamFn: this._streamFn,
+      thinkingLevel: this._thinkingLevel,
       approvalMode: this._approvalMode,
       onApproval: this._onApproval,
       compaction: this._compaction,
