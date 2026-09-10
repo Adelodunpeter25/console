@@ -10,7 +10,7 @@ impl ConsoleDesktopApp {
     /// Reload all server-backed settings-window data in this workspace.
     pub fn refresh_settings(&mut self, cx: &mut Context<Self>) {
         if let Some(persisted) = crate::persistence::store::load_environments() {
-            self.init_environments(persisted, self.active_env_id.clone(), cx);
+            self.init_environments(Some(persisted), self.active_env_id.clone(), cx);
         }
         self.refresh_auth_status(cx);
         self.refresh_deleted_sessions(cx);
