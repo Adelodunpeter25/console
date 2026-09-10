@@ -21,7 +21,7 @@ struct ActivityGroup<'a> {
 }
 
 fn group_activities(activities: &[SubagentActivityItem]) -> Vec<ActivityGroup<'_>> {
-    let mut groups = Vec::new();
+    let mut groups: Vec<ActivityGroup<'_>> = Vec::new();
     for activity in activities {
         if let Some(group) = groups.last_mut()
             && group.tool_name == activity.tool_name
