@@ -91,6 +91,10 @@ pub struct TerminalView {
     selection_anchor: Option<TerminalCellPos>,
     selection_head: Option<TerminalCellPos>,
     selection_dragging: bool,
+    /// Non-zero while the local terminal scrollback viewport is away from the
+    /// live prompt. The backend snapshot keeps the cursor at its live-grid row;
+    /// rendering it during scrollback makes the cursor appear to follow history.
+    scrollback_offset: i32,
     /// Paint cache: row → pre-shaped runs. Shared with the paint closure so
     /// frames repaint cached rows without shaping. Cleared on theme change
     /// (resolved colors are baked into cached runs).
@@ -131,6 +135,7 @@ impl TerminalView {
             selection_anchor: None,
             selection_head: None,
             selection_dragging: false,
+            scrollback_offset: 0,
             paint_cache: Rc::new(RefCell::new(HashMap::new())),
             cache_theme: None,
             cell_metrics: None,
@@ -583,6 +588,7 @@ impl Render for TerminalView {
             .map(|s| s.bracketed_paste)
             .unwrap_or(false);
         let selection_range = self.selection_range();
+        let render_cursor = self.scrollback_offset == 0;
         // Theme change invalidates every cached row (resolved colors are
         // baked into cached runs).
         if self.cache_theme != Some((ttheme.background, ttheme.foreground)) {
@@ -670,6 +676,7 @@ impl Render for TerminalView {
                             h.send_input(bytes);
                         }
                         view_for_key.update(cx, |view, cx| {
+                            view.scrollback_offset = 0;
                             if view.clear_selection() {
                                 cx.notify();
                             }
@@ -708,6 +715,7 @@ impl Render for TerminalView {
                     }
                     if let Some(h) = &this.handle {
                         h.scroll(delta);
+                        this.scrollback_offset = (this.scrollback_offset + delta).max(0);
                         cx.stop_propagation();
                     }
                 },
@@ -919,6 +927,7 @@ impl Render for TerminalView {
                                         cell_h,
                                         snapshot.as_ref(),
                                         selection_range,
+                                        render_cursor,
                                         &paint_cache,
                                         ttheme,
                                         window,
@@ -948,6 +957,7 @@ fn render_canvas_grid(
     cell_h: gpui::Pixels,
     snapshot: Option<&console_core::types::terminal::TerminalGridSnapshot>,
     selection_range: Option<(TerminalCellPos, TerminalCellPos)>,
+    render_cursor: bool,
     paint_cache: &Rc<RefCell<HashMap<u16, CachedRowPaint>>>,
     theme: TerminalTheme,
     window: &mut Window,
@@ -963,7 +973,15 @@ fn render_canvas_grid(
         return;
     };
 
-    let cursor = snap.cursor;
+    let cursor = if render_cursor {
+        snap.cursor
+    } else {
+        console_core::types::terminal::CursorPosition {
+            col: 0,
+            row: 0,
+            visible: false,
+        }
+    };
 
     for (row_idx, row) in snap.rows.iter().enumerate() {
         if row_idx as u16 >= rows {
