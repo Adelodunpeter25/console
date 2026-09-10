@@ -59,14 +59,15 @@ Currently:
 | **Idle Ready** | Non-empty | Idle | Arrow Up (active) | Run new turn | `Enter` |
 | **Running** | Empty | Running | Stop Button (`■`) | Abort active turn | `Esc` / `⌘.` |
 | **Running** | Non-empty | Running | **Queue Button (`↑`)** | **Queue prompt** | `Enter` |
-| **Queued + Running** | Non-empty | Running | Disabled / Replace Queue | Update queue | `Enter` |
+| **Queued + Running** | Non-empty | Running | **Queue Button (`↑`) — enabled, replaces existing queued prompt** | **Replace queued prompt** (`POST /queue` overwrites) | `Enter` |
 
 > [!NOTE]
 > When the composer is empty during a run, the primary button is **Stop** (`■`). As soon as the user begins typing a follow-up, the button transitions into a **Queue** button (`↑`). If the user deletes their text, it smoothly reverts to the **Stop** button.
 >
 > This state is orthogonal to whether a prompt is already queued (see §5.2): "has queued prompt" and
 > "run is active" are tracked independently, and the button/table above only concerns the latter plus
-> current composer content.
+> current composer content. Submitting a second queued prompt when one already exists **replaces** it
+> (no disabled state).
 
 ### 2.2 The Queued Prompt Card (Single Compact Row)
 
@@ -76,9 +77,9 @@ The Queued Prompt Card is an ultra-compact, single-line strip (`h(32px)`, `round
   - Subtle `⏳` icon or `Queued:` label.
   - The prompt text truncated with ellipsis (`truncate()`) before reaching the action buttons on the right.
 - **Right Action Buttons (3 Compact Controls)**:
-  1. **Edit (`✏️`)**: Clears the queue from the server and restores the prompt text & attachments into the active composer input.
-  2. **Delete (`🗑️` / `✕`)**: Discards the queued prompt completely.
-  3. **Steer / Send Now (`⚡` / `↑`)**: Halts the active agent turn immediately and starts this queued prompt as the new turn.
+  1. **Edit (`✏️`)**: Restores the queued prompt text + attachments into the composer input for editing. Prefer `PUT /sessions/:id/queue` in-place (keeps the queue `id`) or `DELETE` + restore — either clears the card via the ensuing `queueUpdated(null)` broadcast so the composer is the single source of truth.
+  2. **Delete (`🗑️` / `✕`)**: Discards the queued prompt (`DELETE /sessions/:id/queue`).
+  3. **Steer / Send Now (`⚡` / `↑`)**: Halts the active agent turn immediately and starts this queued prompt as the new turn (`POST /sessions/:id/steer` with the queued prompt's `RunPromptDto`). Attachments travel with the queued prompt.
 
 ---
 
@@ -113,17 +114,17 @@ sequenceDiagram
         Client->>Client: Dismiss Queued Prompt Card & stream Turn 2
     else User Steers Mid-Flight (Send Now)
         User->>Client: Clicks "Steer Now"
-        Client->>API: POST /api/sessions/:id/steer { queueId }
+        Client->>API: POST /api/sessions/:id/steer { prompt, attachments, modelId, provider, approvalMode }
         API->>Run: setPendingNextTurn(sessionId, dto); abortRun(sessionId)
         Run->>Run: Turn 1's existing abort handling persists partial tools/messages
-        Run->>Run: finally block sees pendingNextTurn -> drains it exactly as above
+        Run->>Run: finally block sees pendingNextTurn -> drains it (same drain as auto-pop, hub reused — see §9)
         Run-->>Client: SSE: queueUpdated { queuedPrompt: null }, turnStart for Turn 2
     else User Edits Queued Prompt
         User->>Client: Clicks "Edit"
-        Client->>API: DELETE /api/sessions/:id/queue
-        API->>Run: clearPendingNextTurn(sessionId)
-        API-->>Client: SSE: queueUpdated { queuedPrompt: null }
-        Client->>Client: Loads prompt text & attachments into Composer Input
+        Client->>API: PUT /api/sessions/:id/queue { prompt, attachments }  // or DELETE + restore; PUT keeps queue id
+        API->>Run: editPendingNextTurn(sessionId, dto)
+        API-->>Client: SSE: queueUpdated { queuedPrompt }
+        Client->>Client: Loads prompt text & attachments into Composer Input (and re-queues on submit)
     end
 ```
 
@@ -231,28 +232,23 @@ enum — limited to one new arm instead of several.
 ### 5.1 Component Structure
 
 1. **`QueuedPromptCard`** (`crates/console-ui/src/common/queued_prompt_card.rs`):
-   - Standalone GPUI component rendered above `ComposerView`.
-   - Props:
-     - `queued_prompt: Option<QueuedPrompt>`
-     - `on_edit: Rc<dyn Fn(&mut Window, &mut App)>`
-     - `on_delete: Rc<dyn Fn(&mut Window, &mut App)>`
-     - `on_steer: Rc<dyn Fn(&mut Window, &mut App)>`
+   - Standalone GPUI component rendered directly above `ComposerView` in `view/workspace_content.rs` when `queued_prompts[session_id]` is `Some`.
+   - Props: `queued_prompt: QueuedPrompt` (parent guards `Option`), `on_edit`, `on_delete`, `on_steer` as `Rc<dyn Fn(&mut Window, &mut App)>`. Layout: `h(32px)`, `rounded(8px)`, `bg(theme.composer)`, `border_strong`, left `⏳` + truncated prompt, right 3x 26px circular buttons (Edit `Pencil`, Delete `Trash`/`X`, Steer `Zap` with `danger_soft` hover). No new global state inside the card.
 2. **`ComposerView` Updates** (`crates/console-ui/src/common/composer_view.rs`):
    - `ComposerRunState` stays `Ready | Preparing | Running` — "queued" is not a run state (a queue can
      exist independently of what's currently typed). Add a separate `has_queued_prompt: bool` prop to
-     `ComposerView` instead of a new enum variant.
+     `ComposerView` (the parent `WorkspaceContent` holds the full `Option<QueuedPrompt>` for the card) instead of a new enum variant.
    - Button variant is derived from the triple `(run_state, composer_input.is_empty(), has_queued_prompt)`:
-     - `run_state.is_running()` and input non-empty → `↑ Queue` (`btn-queue-follow-up`), regardless of
-       `has_queued_prompt` (submitting again replaces the existing queued prompt — see §2.1's "Queued +
-       Running" row).
+     - `run_state.is_running()` and input non-empty → `↑ Queue` (`btn-queue-follow-up`, `theme.inverse`), regardless of
+       `has_queued_prompt` (submitting again replaces the existing queued prompt via `POST /queue` — see §2.1's "Queued +
+        Running" row).
      - `run_state.is_running()` and input empty → `■ Stop` (`btn-abort-prompt`).
      - Otherwise (idle) → existing Arrow Up behavior, unaffected by queue state.
+   - `on_queue` already exists (defaulted to `on_send.clone()`); wire it to `POST /sessions/:id/queue` in `workspace_content.rs` — do not leave the default.
 3. **State Management** (`apps/desktop/src/state/`):
-   - Store `queued_prompts: HashMap<String, Option<QueuedPrompt>>` keyed by `session_id`, updated from
-     the `queueUpdated` SSE frame (§4.3) the same way other session-scoped event state is updated in
-     `apps/desktop/src/state/run.rs`.
-   - On `ComposerEvent::Submit` when `run_state.is_running()`: call `POST /sessions/:id/queue` (replacing
-     any existing queued prompt) instead of `POST /sessions/:id/run`.
+   - Store `queued_prompts: HashMap<String, Option<QueuedPrompt>>` keyed by `session_id` in `state/app.rs` (mirror `todo_items` pattern), with `set_queued_prompt_for_session` in `state/execution.rs`, updated from the `queueUpdated` SSE frame (§4.3) in `state/run.rs::process_agent_event`.
+   - Hydrate `GET /sessions/:id/queue` on session open / pane switch (`state/sessions.rs`) so a queue staged before a restart or on another device appears without waiting for SSE.
+   - On `ComposerEvent::Submit` when `run_state.is_running()`: call `POST /sessions/:id/queue` (replacing any existing queued prompt) instead of `POST /sessions/:id/run`. On `ComposerEvent::SubmitSteer` (`Cmd/Ctrl+Enter`): if `has_queued_prompt` is true, call `POST /sessions/:id/steer` with the staged prompt's `RunPromptDto`; otherwise fall back to queue. Wire both in `state/app.rs` / `state/workspace_panes.rs` — this shortcut is currently dead.
 
 ### 5.2 Queue vs. Run State Independence
 
@@ -291,7 +287,7 @@ A session can be in any of these combinations, all of which the UI must render c
 1. **Run Errors / Tool Failures**:
    - If Turn 1 encounters an error, or a required permission is rejected, the queue is **held, not
      discarded** — the `finally` drain in §4.4 still runs, but the resulting Turn 2 error path (see item 5
-     below) is what actually decides whether the queue survives. The user can also click Steer to
+     below) is what actually decides whether the queue survives; a failed drain keeps the queue staged for later Steer/Edit/Delete (§9). Only `POST /api/sessions/:id/abort` (Stop button) actively clears `pendingNextTurn` and broadcasts `queueUpdated(null)` — failed turns do not. The user can also click Steer to
      proceed immediately or Edit to adjust before Turn 1 even settles.
 2. **Session Switching**:
    - Queued state is strictly scoped per `sessionId` (`pendingNextTurn` is keyed by session, like
@@ -331,11 +327,12 @@ A session can be in any of these combinations, all of which the UI must render c
     `apps/desktop/crates/console-core/src/types/events.rs` (§4.3).
   - Covered by `apps/server/tests/queue.test.ts` (round-trip, replace, edit, validation, auto-drain,
     steer-drain, abort-clears).
-- [ ] **Desktop (`apps/desktop`)**:
-  - Build `QueuedPromptCard` component in `console-ui`.
-  - Add `has_queued_prompt` prop to `ComposerView`; do not add a new `ComposerRunState` variant (§5.1).
-  - Wire queue, edit, delete, and steer actions to the new REST endpoints; handle `queueUpdated` in
-    `apps/desktop/src/state/run.rs`.
+- [ ] **Desktop (`apps/desktop`)** — build in this order:
+  1. `crates/console-core/src/services/run.rs` — add `queue_prompt` / `get_queued_prompt` / `edit_queued_prompt` / `clear_queued_prompt` / `steer` (`POST/GET/PUT/DELETE /queue`, `POST /steer` via `HttpTransport`, §4.2).
+  2. `apps/desktop/src/state/app.rs` + `state/execution.rs` — add `queued_prompts: HashMap<String, Option<QueuedPrompt>>` (mirror `todo_items`) + `set_queued_prompt_for_session`; `state/run.rs` — add `QueueUpdated` arm in `process_agent_event` (§4.3); `state/sessions.rs` — hydrate `GET /queue` on session open / pane switch so a queue staged before restart or on another device appears without SSE.
+  3. `crates/console-ui/src/common/queued_prompt_card.rs` — build `QueuedPromptCard` (§2.2, §5.1); register in `common/mod.rs`.
+  4. `crates/console-ui/src/common/composer_view.rs` — add `has_queued_prompt: bool` prop (§5.1); derive button from `(run_state, is_empty, has_queued_prompt)` per §2.1; do not add a new `ComposerRunState` variant.
+  5. `apps/desktop/src/view/workspace_content.rs` + `state/app.rs` / `state/workspace_panes.rs` — render card above composer when `Some`; wire `on_queue` → `POST /queue` (replaces), `on_edit` → `PUT /queue` (keeps id) or `DELETE`+restore, `on_delete` → `DELETE /queue`, `on_steer` → `POST /steer`; wire `ComposerEvent::SubmitSteer` (`Cmd/Ctrl+Enter`) to `steer` when `has_queued_prompt` else `queue` (currently dead, §5.1).
 - [ ] **Mobile (`apps/mobile`)**:
   - Build `QueuedPromptBanner` with Reanimated animations.
   - Connect to queue/steer REST endpoints; handle `queueUpdated` in `chat-events.ts` / `useChatStore.ts`.
