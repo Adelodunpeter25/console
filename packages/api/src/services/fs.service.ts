@@ -35,8 +35,8 @@ export const fsService = {
     return res.data.data ?? res.data;
   },
 
-  async searchFiles(root: string, query: string, limit = 20): Promise<FileSearchResult[]> {
-    const res = await getConsoleApiClient().get("/api/fs/search", { params: { root, q: query, limit } });
+  async searchFiles(root: string, query: string, limit = 20, includeDirs = true): Promise<FileSearchResult[]> {
+    const res = await getConsoleApiClient().get("/api/fs/search", { params: { root, q: query, limit, includeDirs } });
     return res.data.data ?? [];
   },
 

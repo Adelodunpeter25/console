@@ -161,12 +161,13 @@ export { useDirectoryChildren } from "@console/api";
 
 /**
  * Server-side FFF-backed fuzzy file search (Files screen search bar).
- * Only fires when `query` has non-whitespace content.
+ * Only fires when `query` has non-whitespace content. Directories are
+ * excluded — every row must be previewable as a file.
  */
 export function useSearchFiles(root: string | null, query: string, enabled = true) {
   return useQuery({
     queryKey: ["fs", "search", root ?? "", query.trim()],
-    queryFn: () => fsService.searchFiles(root!, query.trim()),
+    queryFn: () => fsService.searchFiles(root!, query.trim(), 20, false),
     enabled: enabled && Boolean(root) && query.trim().length > 0,
     staleTime: 30_000,
     placeholderData: (prev) => prev,
