@@ -21,6 +21,11 @@ pub(crate) struct WorkspacePaneState {
     pub(crate) selected_model: Option<SelectedModel>,
     pub(crate) active_picker_tab: PickerTab,
     pub(crate) approval_mode: ApprovalMode,
+    /// Most-recently-used approval modes for this pane, newest last. Updated
+    /// by every mode change (picker or Shift+Tab) and read by the Shift+Tab
+    /// toggle to jump back to where the user was. Session-local on purpose:
+    /// it is a navigation aid, not persisted state.
+    pub(crate) approval_mode_history: Vec<ApprovalMode>,
     pub(crate) model_menu: ContextMenuHandle,
     pub(crate) approval_menu: ContextMenuHandle,
     pub(crate) selected_project_id: Option<String>,

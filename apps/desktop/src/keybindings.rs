@@ -33,6 +33,10 @@ actions!(
         /// Scoped to the open-menu key context, so it only fires while a
         /// menu/popover card is open.
         FocusModelSearch,
+        /// Cycle the active pane's approval mode (shift-tab). Scoped to the
+        /// composer's key context so Shift+Tab keeps its focus meaning
+        /// everywhere else.
+        CycleApprovalMode,
         /// Open settings window.
         OpenSettings,
         /// Toggle the left sidebar.
@@ -95,6 +99,9 @@ pub fn init(cx: &mut App) {
         // holds focus (`ConsoleMenu > ComposerInput`); the handler checks
         // focus and inserts a literal `/` in that case.
         KeyBinding::new("/", FocusModelSearch, Some(console_ui::MENU_CONTEXT)),
+        // Shift+Tab cycles approval mode, but only while the composer holds
+        // focus — elsewhere Shift+Tab is focus-previous as usual.
+        KeyBinding::new("shift-tab", CycleApprovalMode, Some("ComposerInput")),
         KeyBinding::new("secondary-,", OpenSettings, None),
         KeyBinding::new("secondary-b", ToggleLeftSidebar, None),
         KeyBinding::new("secondary-shift-b", ToggleRightSidebar, None),
@@ -223,6 +230,18 @@ pub fn init_handlers(cx: &mut App) {
                 window
                     .update(cx, |_, window, cx| {
                         app.update(cx, |this, cx| this.focus_model_search(window, cx));
+                    })
+                    .ok();
+            });
+        }
+    });
+
+    cx.on_action(|_: &CycleApprovalMode, cx| {
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.cycle_approval_mode(window, cx));
                     })
                     .ok();
             });

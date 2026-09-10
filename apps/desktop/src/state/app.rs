@@ -101,6 +101,9 @@ pub struct ConsoleDesktopApp {
     pub active_picker_tab: PickerTab,
     pub favorites: Rc<std::collections::HashSet<String>>,
     pub approval_mode: ApprovalMode,
+    /// Global fallback for the per-pane approval-mode MRU history, used when
+    /// a pane has no state entry yet (same pattern as `approval_mode` above).
+    pub(crate) approval_mode_history: Vec<ApprovalMode>,
     pub model_menu: ContextMenuHandle,
     pub approval_menu: ContextMenuHandle,
     /// Shared with the sidebar and footer; cloned per frame as a refcount
@@ -704,6 +707,7 @@ impl ConsoleDesktopApp {
             active_picker_tab: PickerTab::Provider("antigravity".to_string()),
             favorites: Rc::new(std::collections::HashSet::new()),
             approval_mode: ApprovalMode::AlwaysAsk,
+            approval_mode_history: Vec::new(),
             model_menu,
             approval_menu,
             projects: Rc::new(Vec::new()),
@@ -869,6 +873,7 @@ impl ConsoleDesktopApp {
                 selected_model: app.selected_model.clone(),
                 active_picker_tab: app.active_picker_tab.clone(),
                 approval_mode: app.approval_mode,
+                approval_mode_history: Vec::new(),
                 model_menu: app.model_menu.clone(),
                 approval_menu: app.approval_menu.clone(),
                 selected_project_id: app.selected_project_id.clone(),
