@@ -443,16 +443,19 @@ impl Element for InputElement {
             self.input
                 .update(cx, |input, _| input.caret_reconciled = Some(follow_state));
         }
+        let icon_size = px(12.0);
+        let gap = px(3.0);
+
         for mention_icon in &mut layout_state.mention_icons {
             let layout = layout_state.text.layout();
             let rects = crate::markdown::render::range_rects(layout, &mention_icon.range, 3.0, 1.0);
             if let Some(first_rect) = rects.first() {
-                let icon_size = px(11.0);
                 let icon_origin = point(
-                    first_rect.origin.x + px(2.0),
+                    first_rect.origin.x - icon_size - gap,
                     first_rect.origin.y + (first_rect.size.height - icon_size) / 2.0,
                 );
-                let offset = icon_origin - bounds.origin;
+                let child_origin = window.layout_bounds(mention_icon._layout_id).origin;
+                let offset = icon_origin - child_origin;
                 window.with_element_offset(Point::new(offset.x.round(), offset.y.round()), |window| {
                     mention_icon.icon.prepaint(window, cx);
                 });
@@ -496,11 +499,22 @@ impl Element for InputElement {
         if input.mode == FieldMode::Composer && !input.mentions.is_empty() {
             let theme = Theme::current(cx);
             let layout = layout_state.text.layout();
+            let icon_size = px(12.0);
+            let gap = px(3.0);
+            let pad_left = px(4.0);
+            let extra_left = icon_size + gap + pad_left;
+
             for mention in &input.mentions {
                 if mention.range.end <= input.content.len() {
-                    for rect in crate::markdown::render::range_rects(layout, &mention.range, 3.0, 1.0) {
+                    let rects = crate::markdown::render::range_rects(layout, &mention.range, 3.0, 1.0);
+                    for (idx, rect) in rects.iter().enumerate() {
+                        let mut quad_rect = *rect;
+                        if idx == 0 {
+                            quad_rect.origin.x -= extra_left;
+                            quad_rect.size.width += extra_left;
+                        }
                         window.paint_quad(quad(
-                            rect,
+                            quad_rect,
                             px(4.0),
                             theme.accent.opacity(0.10),
                             px(1.0),
