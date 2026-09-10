@@ -24,7 +24,8 @@ const testModel: Model = {
 
   // Verify internal compaction config exists and defaults match
   assert.equal((agentDefault as any)._compaction?.enabled, true);
-  assert.equal((agentDefault as any)._compaction?.keepRecentTokens, 20_000);
+  assert.equal((agentDefault as any)._compaction?.keepRecentTokens, 40_000);
+  assert.equal((agentDefault as any)._compaction?.minimumRecentTurns, 3);
   assert.equal((agentDefault as any)._compaction?.maxThresholdRatio, 0.85);
   assert.equal((agentDefault as any)._compaction?.maxToolResultChars, 8_000);
 

@@ -10,6 +10,9 @@ import type { AgentMessage, Model } from "@/agent/src/types/index.js";
 import { findCutPoint } from "./cut-point.js";
 import { estimateMessageTokens } from "./token-estimator.js";
 import { buildStructuralSummary } from "./structural-summary.js";
+import { protectedRecentStart, shakeConversation } from "./shake.js";
+
+export { protectedRecentStart, shakeConversation } from "./shake.js";
 
 export * from "./token-estimator.js";
 export * from "./cut-point.js";
@@ -66,22 +69,28 @@ export function compactHistory(
   options: CompactionOptions = {},
 ): CompactionResult {
   const tokensBefore = estimateMessageTokens(messages);
-  const keepRecent = options.keepRecentTokens ?? 20_000;
+  const keepRecent = options.keepRecentTokens ?? 40_000;
+  const minimumRecentTurns = options.minimumRecentTurns ?? 3;
+  const shakenMessages = shakeConversation(
+    messages,
+    options.maxToolResultChars ?? 8_000,
+    protectedRecentStart(messages, minimumRecentTurns),
+  );
 
-  const { firstKeptIndex, isUserBoundary } = findCutPoint(messages, keepRecent);
+  const { firstKeptIndex, isUserBoundary } = findCutPoint(shakenMessages, keepRecent, minimumRecentTurns);
 
   if (firstKeptIndex === 0 || messages.length <= 4) {
     return {
-      compactedMessages: [...messages],
+      compactedMessages: [...shakenMessages],
       summary: "History too short or cannot be safely partitioned.",
       originalCount: messages.length,
       tokensBefore,
-      tokensAfter: tokensBefore,
+      tokensAfter: estimateMessageTokens(shakenMessages),
     };
   }
 
-  const olderMessages = messages.slice(0, firstKeptIndex);
-  const recentMessages = messages.slice(firstKeptIndex);
+  const olderMessages = shakenMessages.slice(0, firstKeptIndex);
+  const recentMessages = shakenMessages.slice(firstKeptIndex);
 
   const summary = buildStructuralSummary(olderMessages);
 

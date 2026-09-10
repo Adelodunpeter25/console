@@ -115,7 +115,8 @@ export class Agent {
       this._compaction = {
         enabled: true,
         maxThresholdRatio: 0.85,
-        keepRecentTokens: 20_000,
+        keepRecentTokens: 40_000,
+        minimumRecentTurns: 3,
         maxToolResultChars: 8_000,
         summaryStrategy: "structural",
         ...(options.compaction ?? {}),

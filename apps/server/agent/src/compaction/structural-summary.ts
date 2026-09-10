@@ -60,6 +60,15 @@ export function buildStructuralSummary(messages: AgentMessage[]): string {
       if (calls.length > 0) {
         highlights.push(`- Executed: ${calls.slice(0, 4).join(", ")}${calls.length > 4 ? ` (+${calls.length - 4} more)` : ""}`);
       }
+      const text = msg.content
+        .filter((part): part is Extract<typeof part, { type: "text" | "thinking" }> => part.type === "text" || part.type === "thinking")
+        .map((part) => part.text.trim())
+        .filter(Boolean)
+        .join(" ");
+      if (text) {
+        const truncated = text.length > MAX_PROMPT_CHARS ? text.slice(0, MAX_PROMPT_CHARS) + "…" : text;
+        highlights.push(`- Assistant concluded: "${truncated.replace(/\n+/g, " ")}"`);
+      }
     } else if (msg.role === "toolResult") {
       for (const res of msg.results) {
         if (res.isError) {

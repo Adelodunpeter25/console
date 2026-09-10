@@ -56,19 +56,21 @@ export function isToolCallSafe(messages: AgentMessage[], candidateIndex: number)
  */
 export function findCutPoint(
   messages: AgentMessage[],
-  keepRecentTokens: number = 20_000,
+  keepRecentTokens: number = 40_000,
+  minimumRecentTurns = 3,
 ): CutPointResult {
   if (messages.length <= 4) {
     return { firstKeptIndex: 0, isUserBoundary: true };
   }
 
-  // Find all user turn indices
+  // Find all user turn indices. The most recent complete turns are protected
+  // independently of their size; a single large tool result must not erase them.
   const userIndices: number[] = [];
   for (let i = 0; i < messages.length; i++) {
-    if (messages[i].role === "user") {
-      userIndices.push(i);
-    }
+    if (messages[i].role === "user") userIndices.push(i);
   }
+  const protectedStart =
+    userIndices.length > minimumRecentTurns ? userIndices[userIndices.length - minimumRecentTurns] : 0;
 
   // Walk backwards from newest, accumulating token count
   let accumulatedTokens = 0;
@@ -82,6 +84,9 @@ export function findCutPoint(
     }
   }
 
+  // Never allow the token target to cut into the protected suffix.
+  if (protectedStart > 0) targetIndex = Math.min(targetIndex, protectedStart);
+
   // Preference 1: Nearest user turn at or after targetIndex (to ensure we preserve enough tokens,
   // or right before targetIndex if targetIndex is after the last user turn).
   // Look for a user turn that gives a safe cut point.
@@ -91,7 +96,7 @@ export function findCutPoint(
   for (let u = userIndices.length - 1; u >= 0; u--) {
     const idx = userIndices[u];
     // We want a user turn such that we don't discard the whole conversation (idx > 0)
-    if (idx > 0 && idx >= targetIndex && isToolCallSafe(messages, idx)) {
+    if (idx > 0 && idx >= targetIndex && idx <= protectedStart && isToolCallSafe(messages, idx)) {
       bestCutIndex = idx;
       break;
     }
@@ -115,6 +120,7 @@ export function findCutPoint(
   // Preference 2: If the session has only 1 user turn (e.g. 50 tool turns in one prompt),
   // walk backwards from targetIndex and find the first tool-call safe assistant message.
   for (let i = targetIndex; i < messages.length - 2; i++) {
+    if (i > protectedStart) continue;
     if (messages[i].role === "assistant" && isToolCallSafe(messages, i)) {
       return { firstKeptIndex: i, isUserBoundary: false };
     }
