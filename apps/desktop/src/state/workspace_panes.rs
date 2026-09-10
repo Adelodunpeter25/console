@@ -44,11 +44,17 @@ impl ConsoleDesktopApp {
             move |open, window, cx| {
                 if open {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.approval_menu.close(window, cx);
-                            if let PickerTab::Provider(name) = this.pane_picker_tab(&pane_id_owned)
-                            {
-                                this.load_models_for_provider(&name, cx);
+                        let pane_id = pane_id_owned.clone();
+                        cx.defer(move |cx| {
+                            if let Some(window) = cx.active_window() {
+                                let _ = window.update(cx, |_, window, cx| {
+                                    app.update(cx, |this, cx| {
+                                        this.approval_menu.close(window, cx);
+                                        if let PickerTab::Provider(name) = this.pane_picker_tab(&pane_id) {
+                                            this.load_models_for_provider(&name, cx);
+                                        }
+                                    });
+                                });
                             }
                         });
                     }

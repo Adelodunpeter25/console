@@ -495,14 +495,20 @@ impl ConsoleDesktopApp {
             move |open, window, cx| {
                 if open {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.approval_menu.close(window, cx);
-                            // Lazy: fetch only the active provider's live models.
-                            // Static catalog stays visible as fallback, so we
-                            // avoid N network calls on every open. Favorites
-                            // shows static until its tab is visited.
-                            if let PickerTab::Provider(name) = this.pane_picker_tab("pane-main") {
-                                this.load_models_for_provider(&name, cx);
+                        cx.defer(move |cx| {
+                            if let Some(window) = cx.active_window() {
+                                let _ = window.update(cx, |_, window, cx| {
+                                    app.update(cx, |this, cx| {
+                                        this.approval_menu.close(window, cx);
+                                        // Lazy: fetch only the active provider's live models.
+                                        // Static catalog stays visible as fallback, so we
+                                        // avoid N network calls on every open. Favorites
+                                        // shows static until its tab is visited.
+                                        if let PickerTab::Provider(name) = this.pane_picker_tab("pane-main") {
+                                            this.load_models_for_provider(&name, cx);
+                                        }
+                                    });
+                                });
                             }
                         });
                     }
@@ -528,30 +534,48 @@ impl ConsoleDesktopApp {
         });
         let approval_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
-            move |open, window, cx| {
+            move |open, _window, cx| {
                 if open {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| this.model_menu.close(window, cx));
+                        cx.defer(move |cx| {
+                            if let Some(window) = cx.active_window() {
+                                let _ = window.update(cx, |_, window, cx| {
+                                    app.update(cx, |this, cx| this.model_menu.close(window, cx));
+                                });
+                            }
+                        });
                     }
                 }
             }
         });
         let project_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
-            move |open, window, cx| {
+            move |open, _window, cx| {
                 if open {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| this.branch_menu.close(window, cx));
+                        cx.defer(move |cx| {
+                            if let Some(window) = cx.active_window() {
+                                let _ = window.update(cx, |_, window, cx| {
+                                    app.update(cx, |this, cx| this.branch_menu.close(window, cx));
+                                });
+                            }
+                        });
                     }
                 }
             }
         });
         let branch_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
-            move |open, window, cx| {
+            move |open, _window, cx| {
                 if open {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| this.project_menu.close(window, cx));
+                        cx.defer(move |cx| {
+                            if let Some(window) = cx.active_window() {
+                                let _ = window.update(cx, |_, window, cx| {
+                                    app.update(cx, |this, cx| this.project_menu.close(window, cx));
+                                });
+                            }
+                        });
                     }
                 }
             }
