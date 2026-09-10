@@ -419,7 +419,7 @@ impl ConsoleDesktopApp {
                     store_doc.window.clone(),
                 )
             }
-            crate::window::WindowLaunchTarget::Fresh
+            crate::window::WindowLaunchTarget::Fresh { .. }
             | crate::window::WindowLaunchTarget::Session(_) => {
                 let sb_visible = ws_state.sidebar_visible;
                 let sb_width =
@@ -852,7 +852,11 @@ impl ConsoleDesktopApp {
             crate::assets::register_remaining_fonts_once(cx);
         });
 
-        app.init_environments(store_doc.environments.clone(), cx);
+        let inherited_environment_id = match target {
+            crate::window::WindowLaunchTarget::Fresh { ref environment_id } => environment_id.clone(),
+            _ => None,
+        };
+        app.init_environments(store_doc.environments.clone(), inherited_environment_id, cx);
         app.refresh_auth_status(cx);
         app.init_notifications(cx);
 
@@ -953,7 +957,7 @@ impl ConsoleDesktopApp {
                                     }
                                 }
                                 match target_for_bootstrap {
-                                    crate::window::WindowLaunchTarget::Fresh => {
+                                    crate::window::WindowLaunchTarget::Fresh { .. } => {
                                         // Blank independent canvas, no session opened by default.
                                     }
                                     crate::window::WindowLaunchTarget::Session(session_id) => {

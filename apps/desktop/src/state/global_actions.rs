@@ -15,6 +15,7 @@ use super::ConsoleDesktopApp;
 fn command_palette_entries(
     entity: WeakEntity<ConsoleDesktopApp>,
     sessions: &[console_core::SessionHeader],
+    environments: &[super::environments::Environment],
 ) -> Vec<PaletteEntry> {
     let mut entries = vec![
         PaletteEntry::new("new-chat", "New Chat", {
@@ -36,6 +37,20 @@ fn command_palette_entries(
         })
         .icon(IconName::Terminal),
     ];
+
+    for environment in environments {
+        let environment_id = environment.id.clone();
+        let entity = entity.clone();
+        let label = format!("Switch Server: {}", environment.name);
+        entries.push(
+            PaletteEntry::new(format!("environment-{}", environment_id), label, move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.activate_environment(environment_id.clone(), cx));
+                }
+            })
+            .icon(IconName::Server),
+        );
+    }
 
     for session in sessions {
         let sid = session.id.clone();
@@ -170,8 +185,9 @@ impl ConsoleDesktopApp {
     pub fn toggle_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let entity = cx.entity().downgrade();
         let sessions = self.sessions.clone();
+        let environments = self.environments.clone();
         self.command_palette.update(cx, |palette, cx| {
-            palette.set_entries(command_palette_entries(entity, &sessions), cx);
+            palette.set_entries(command_palette_entries(entity, &sessions, &environments), cx);
             palette.toggle(window, cx);
         });
         cx.notify();
@@ -209,8 +225,9 @@ impl ConsoleDesktopApp {
         }
         let entity = cx.entity().downgrade();
         let sessions = self.sessions.clone();
+        let environments = self.environments.clone();
         self.command_palette.update(cx, |palette, cx| {
-            palette.set_entries(command_palette_entries(entity, &sessions), cx);
+            palette.set_entries(command_palette_entries(entity, &sessions, &environments), cx);
             palette.show(window, cx);
         });
         cx.notify();

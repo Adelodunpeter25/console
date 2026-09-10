@@ -137,7 +137,12 @@ pub fn init(cx: &mut App) {
 /// setups dispatch shortcuts to whichever window the user is currently working in.
 pub fn init_handlers(cx: &mut App) {
     cx.on_action(|_: &NewWindow, cx| {
-        crate::window::open_workspace_window(cx, crate::window::WindowLaunchTarget::Fresh);
+        let environment_id = crate::window::get_active_window(cx)
+            .and_then(|(_, app)| app.read(cx).active_env_id.clone());
+        crate::window::open_workspace_window(
+            cx,
+            crate::window::WindowLaunchTarget::Fresh { environment_id },
+        );
     });
 
     cx.on_action(|_: &CloseTab, cx| {

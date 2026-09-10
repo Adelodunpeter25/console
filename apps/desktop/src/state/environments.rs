@@ -30,6 +30,7 @@ impl ConsoleDesktopApp {
     pub fn init_environments(
         &mut self,
         persisted: Option<PersistedEnvironmentsState>,
+        inherited_environment_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
         let def = Environment::default_local();
@@ -59,8 +60,13 @@ impl ConsoleDesktopApp {
                         }
                     })
                     .collect();
-                self.active_env_id = state
-                    .active_id
+                let persisted_active_id = state.active_id;
+                self.active_env_id = inherited_environment_id
+                    .filter(|id| self.environments.iter().any(|e| &e.id == id))
+                    .or_else(|| {
+                        persisted_active_id
+                            .filter(|id| self.environments.iter().any(|e| &e.id == id))
+                    })
                     .or_else(|| self.environments.first().map(|e| e.id.clone()));
                 mutated = fixed_legacy_url;
             }
@@ -69,6 +75,8 @@ impl ConsoleDesktopApp {
             self.active_env_id = Some(def.id.clone());
             self.environments = vec![def];
             mutated = true;
+        } else if self.active_env_id.is_none() {
+            self.active_env_id = self.environments.first().map(|e| e.id.clone());
         }
         if mutated {
             self.save_persisted_environments();
@@ -229,7 +237,6 @@ impl ConsoleDesktopApp {
             return;
         };
         self.active_env_id = Some(env_id);
-        self.save_persisted_environments();
 
         let client = self.client.clone();
         let url = env.url.clone();

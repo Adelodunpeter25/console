@@ -11,7 +11,7 @@ use crate::state::ConsoleDesktopApp;
 pub enum WindowLaunchTarget {
     /// Startup restore of the single persisted main window.
     RestorePersisted,
-    Fresh,
+    Fresh { environment_id: Option<String> },
     Session(String),
 }
 
@@ -92,7 +92,7 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
             update_active_window_bounds(bounds);
             b
         }
-        WindowLaunchTarget::Fresh | WindowLaunchTarget::Session(_) => compute_new_window_bounds(cx),
+        WindowLaunchTarget::Fresh { .. } | WindowLaunchTarget::Session(_) => compute_new_window_bounds(cx),
     };
 
     let options = WindowOptions {

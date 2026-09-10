@@ -416,17 +416,24 @@ impl Render for ConsoleDesktopApp {
             .flex_col()
             .overflow_hidden()
             .on_action(cx.listener(Self::copy_selection_action))
-            .on_key_down(|event: &KeyDownEvent, _, cx| {
-                if event.keystroke.key == "escape" {
-                    cancel_workspace_drags();
-                } else if event.keystroke.modifiers.platform
-                    && event.keystroke.modifiers.shift
-                    && event.keystroke.key.eq_ignore_ascii_case("n")
-                {
-                    crate::window::open_workspace_window(
-                        cx,
-                        crate::window::WindowLaunchTarget::Fresh,
-                    );
+            .on_key_down({
+                let entity = entity.clone();
+                move |event: &KeyDownEvent, _, cx| {
+                    if event.keystroke.key == "escape" {
+                        cancel_workspace_drags();
+                    } else if event.keystroke.modifiers.platform
+                        && event.keystroke.modifiers.shift
+                        && event.keystroke.key.eq_ignore_ascii_case("n")
+                    {
+                        let environment_id = entity
+                            .upgrade()
+                            .map(|app| app.read(cx).active_env_id.clone())
+                            .flatten();
+                        crate::window::open_workspace_window(
+                            cx,
+                            crate::window::WindowLaunchTarget::Fresh { environment_id },
+                        );
+                    }
                 }
             })
             .on_mouse_move({
