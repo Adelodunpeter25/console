@@ -65,7 +65,7 @@ function shouldInjectSystemInstruction(modelId: string): boolean {
   return lower.includes("claude") || lower.includes("gemini-3");
 }
 
-function isClaudeModel(modelId: string): boolean {
+export function isClaudeModel(modelId: string): boolean {
   return modelId.toLowerCase().includes("claude");
 }
 
@@ -220,7 +220,9 @@ export function createAntigravityStreamFn(): StreamFn {
     const baseUrl = (model as { baseUrl?: string }).baseUrl?.trim() ?? ANTIGRAVITY_BASE_URL;
     const endpoint = buildEndpointUrl(baseUrl);
 
-    const contents = convertMessages(messages);
+    const contents = convertMessages(messages, {
+      requireUserTerminator: isClaudeModel(model.id),
+    });
     const functionDeclarations = convertTools(tools, model.id);
     const body = buildAntigravityRequest(
       cred.projectId,

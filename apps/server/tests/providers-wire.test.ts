@@ -108,6 +108,20 @@ console.log("Running Provider Wire Converter tests...");
   const strippedWire = convertMessages(prefillRiskMessages);
   assert.equal(strippedWire[strippedWire.length - 1]?.role, "user");
   console.log("  ✅ Trailing model turn dropped (assistant prefill prevention)");
+
+  const assistantOnlyWire = convertMessages(
+    [
+      {
+        role: "assistant",
+        id: "turn-only",
+        content: [{ type: "text", text: "stale response" }],
+        stopReason: "stop",
+      },
+    ],
+    { requireUserTerminator: true },
+  );
+  assert.equal(assistantOnlyWire.length, 0);
+  console.log("  ✅ Assistant-only history is removed for Claude requests");
 }
 
 // 1b. Legacy function calls receive the documented compatibility sentinel.

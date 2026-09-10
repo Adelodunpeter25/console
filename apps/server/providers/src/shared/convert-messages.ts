@@ -64,7 +64,15 @@ function normalizeToolCallId(id: string): string {
   return id.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
 }
 
-export function convertMessages(messages: AgentMessage[]): GeminiContent[] {
+export interface ConvertMessagesOptions {
+  /** Claude models reject requests that end with an assistant/model turn. */
+  requireUserTerminator?: boolean;
+}
+
+export function convertMessages(
+  messages: AgentMessage[],
+  options: ConvertMessagesOptions = {},
+): GeminiContent[] {
   // 1. Build toolCallId -> toolName lookup map from assistant tool calls in history
   const toolNameByCallId = new Map<string, string>();
   for (const msg of messages) {
@@ -153,7 +161,7 @@ export function convertMessages(messages: AgentMessage[]): GeminiContent[] {
   // 3. Enforce conversation begins and ends with user when user turns exist
   // (prevents "This model does not support assistant message prefill")
   const hasUserTurn = mergedTurns.some((t) => t.role === "user");
-  if (hasUserTurn) {
+  if (hasUserTurn || options.requireUserTerminator) {
     while (mergedTurns.length > 0 && mergedTurns[0]!.role !== "user") {
       mergedTurns.shift();
     }
