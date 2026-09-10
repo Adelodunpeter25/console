@@ -55,11 +55,12 @@ impl ConsoleDesktopApp {
                     search.update(cx, |input, cx| input.clear(cx));
                     let focus = search.read(cx).focus();
                     let weak = entity.clone();
+                    let pane_id_owned = pane_id_owned.clone();
                     window.on_next_frame(move |window, _| {
                         window.on_next_frame(move |window, cx| {
-                            let still_open = weak
-                                .upgrade()
-                                .is_some_and(|app| app.read(cx).model_menu.is_open());
+                            let still_open = weak.upgrade().is_some_and(|app| {
+                                app.read(cx).pane_model_menu(&pane_id_owned).is_open()
+                            });
                             if still_open {
                                 window.focus(&focus, cx);
                             }

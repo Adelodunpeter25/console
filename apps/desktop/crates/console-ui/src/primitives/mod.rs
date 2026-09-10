@@ -22,7 +22,9 @@ pub use file_icons::{
     lang_tag_for_path,
 };
 pub use icons::{FileTypeIcon, IconName, ProviderIcon, app_icon, provider_app_icon};
-pub use menu::{ContextMenuHandle, MenuAlign, MenuItem, dropdown_menu, popover};
+pub use menu::{
+    ContextMenuHandle, MENU_CONTEXT, MenuAlign, MenuItem, dropdown_menu, popover, toggle_popover,
+};
 pub use scrollbar::ScrollbarState;
 pub use text_field::TextField;
 

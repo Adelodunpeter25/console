@@ -6,7 +6,7 @@
 use std::rc::Rc;
 
 use console_core::CreateSessionDto;
-use console_ui::{IconName, PaletteEntry};
+use console_ui::{IconName, MenuAlign, PaletteEntry, toggle_popover};
 use gpui::{Context, Focusable as _, WeakEntity, Window};
 
 use super::ConsoleDesktopApp;
@@ -271,5 +271,59 @@ impl ConsoleDesktopApp {
         composer.update(cx, |input, cx| {
             window.focus(&input.focus_handle(cx), cx);
         });
+    }
+
+    /// ⌘/ — toggle the active pane's model picker. Open reuses the picker's
+    /// own toggle observer (clear + autofocus); close returns focus to that
+    /// pane's composer so the keyboard flow feels complete.
+    pub fn toggle_model_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Don't fight any palette for focus while it is open.
+        if self.command_palette.read(cx).is_open(cx)
+            || self.quick_open_palette.read(cx).is_open(cx)
+            || self.project_browse_palette.read(cx).is_open(cx)
+        {
+            return;
+        }
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".to_string());
+        let handle = self.pane_model_menu(&pane_id);
+        if handle.is_open() {
+            handle.close(window, cx);
+            let composer = self.composer_for_pane(&pane_id);
+            composer.update(cx, |input, cx| {
+                window.focus(&input.focus_handle(cx), cx);
+            });
+            return;
+        }
+        // As if the trigger were clicked: anchors to the chip's last
+        // recorded bounds and no-ops until the trigger has drawn once.
+        toggle_popover(&handle, MenuAlign::AboveLeft, window, cx);
+    }
+
+    /// `/` while a menu is open — move focus into the active pane's picker
+    /// search field. Never opens the picker: when the search field itself
+    /// already holds focus the keystroke instead inserts a literal `/`.
+    pub fn focus_model_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".to_string());
+        if !self.pane_model_menu(&pane_id).is_open() {
+            return;
+        }
+        let search = self.pane_model_search(&pane_id);
+        let focus = search.read(cx).focus();
+        if focus.is_focused(window) {
+            // The binding consumed the keystroke, so the field would never
+            // see it as text: insert the `/` the user typed by hand.
+            search.update(cx, |input, cx| {
+                let at = input.cursor();
+                input.replace_range(at..at, "/", cx);
+            });
+            return;
+        }
+        window.focus(&focus, cx);
     }
 }

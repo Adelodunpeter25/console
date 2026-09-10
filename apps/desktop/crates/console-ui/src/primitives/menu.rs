@@ -46,7 +46,11 @@ actions!(
 );
 
 /// Key context the open menu declares, and the scope its bindings live in.
-const MENU_CONTEXT: &str = "ConsoleMenu";
+///
+/// Public so window-level shortcuts (e.g. the model picker's `/`-to-focus
+/// binding) can scope themselves to open menus without duplicating the
+/// literal.
+pub const MENU_CONTEXT: &str = "ConsoleMenu";
 
 /// Vertical gap between a trigger and its anchored card.
 const TRIGGER_GAP: f32 = 4.0;

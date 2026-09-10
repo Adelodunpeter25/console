@@ -27,6 +27,12 @@ actions!(
         ToggleCommandPalette,
         /// Move keyboard focus to the active pane's composer.
         FocusComposer,
+        /// Toggle the active pane's model picker (cmd-/).
+        ToggleModelPicker,
+        /// Move keyboard focus into the open picker's search field (/).
+        /// Scoped to the open-menu key context, so it only fires while a
+        /// menu/popover card is open.
+        FocusModelSearch,
         /// Open settings window.
         OpenSettings,
         /// Toggle the left sidebar.
@@ -77,6 +83,18 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-p", QuickOpenFile, None),
         KeyBinding::new("secondary-k", ToggleCommandPalette, None),
         KeyBinding::new("secondary-l", FocusComposer, None),
+        KeyBinding::new(
+            "secondary-/",
+            ToggleModelPicker,
+            None,
+        ),
+        // Plain `/` refocuses the open picker's search box. Scoped to the
+        // menu context so it can only fire while a menu/popover card is
+        // open — everywhere else `/` types normally. `ConsoleMenu` matches
+        // at any depth, so this also fires when the search field itself
+        // holds focus (`ConsoleMenu > ComposerInput`); the handler checks
+        // focus and inserts a literal `/` in that case.
+        KeyBinding::new("/", FocusModelSearch, Some(console_ui::MENU_CONTEXT)),
         KeyBinding::new("secondary-,", OpenSettings, None),
         KeyBinding::new("secondary-b", ToggleLeftSidebar, None),
         KeyBinding::new("secondary-shift-b", ToggleRightSidebar, None),
@@ -181,6 +199,30 @@ pub fn init_handlers(cx: &mut App) {
                 window
                     .update(cx, |_, window, cx| {
                         app.update(cx, |this, cx| this.focus_composer(window, cx));
+                    })
+                    .ok();
+            });
+        }
+    });
+
+    cx.on_action(|_: &ToggleModelPicker, cx| {
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.toggle_model_picker(window, cx));
+                    })
+                    .ok();
+            });
+        }
+    });
+
+    cx.on_action(|_: &FocusModelSearch, cx| {
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.focus_model_search(window, cx));
                     })
                     .ok();
             });
