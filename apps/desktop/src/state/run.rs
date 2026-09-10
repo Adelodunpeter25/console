@@ -582,7 +582,10 @@ impl ConsoleDesktopApp {
                 self.set_agent_notice_for_session(run_session_id, None);
             }
             AgentSessionEvent::SessionTitleUpdated { title } => {
-                if let Some(session) = Rc::make_mut(&mut self.sessions).iter_mut().find(|session| session.id == run_session_id) {
+                if let Some(session) = Rc::make_mut(&mut self.sessions)
+                    .iter_mut()
+                    .find(|session| session.id == run_session_id)
+                {
                     session.title = title.clone();
                 }
                 self.update_session_title_in_panes(run_session_id, &title, cx);

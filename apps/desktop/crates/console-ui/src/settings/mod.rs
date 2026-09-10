@@ -3,16 +3,16 @@
 pub mod accounts_page;
 pub mod connection_page;
 pub mod deleted_chats_page;
-pub mod projects_page;
 pub mod models_page;
+pub mod projects_page;
 pub mod settings_shell;
 pub mod usage_page;
 
 pub use accounts_page::*;
 pub use connection_page::*;
 pub use deleted_chats_page::*;
-pub use projects_page::*;
 pub use models_page::*;
+pub use projects_page::*;
 pub use settings_shell::*;
 pub use usage_page::*;
 

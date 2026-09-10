@@ -27,7 +27,9 @@ pub use copy_button::{copy_button, copy_button_with_action};
 pub use error_banner::error_banner;
 pub use image_viewer::ImageViewerModal;
 pub use input::*;
-pub use model_picker::{ModelDropdownMenu, PickerTab, format_model_name, provider_svg_path};
+pub use model_picker::{
+    ModelDropdownMenu, ModelRolePicker, PickerTab, format_model_name, provider_svg_path,
+};
 pub use notice_banner::notice_banner;
 pub use palette::{CommandPalette, CommandPaletteModal, PaletteEntry};
 pub use project_browse_palette::ProjectBrowsePalette;

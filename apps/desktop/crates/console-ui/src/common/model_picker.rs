@@ -433,3 +433,40 @@ impl RenderOnce for ModelDropdownMenu {
             )
     }
 }
+
+/// Compact provider/model selector used by settings role configuration.
+#[derive(Clone, IntoElement)]
+pub struct ModelRolePicker {
+    pub label: &'static str,
+    pub description: &'static str,
+    pub selected: Option<SelectedModel>,
+    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
+    pub on_select: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
+}
+
+impl RenderOnce for ModelRolePicker {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let theme = Theme::current(cx);
+        let selected = self.selected;
+        let label = self.label;
+        let description = self.description;
+        let on_select = self.on_select;
+        let selected_text = selected.as_ref().map(|model| format!("{}/{}", model.provider, format_model_name(&model.model_id))).unwrap_or_else(|| "Uses Default".to_string());
+        let options = self.providers.iter().flat_map(|provider| {
+            let models = self.models_by_provider.get(&provider.name).map(Vec::as_slice).unwrap_or(&provider.models);
+            models.iter().take(8).map(|model| (provider.name.clone(), provider.display_name.clone(), model.clone())).collect::<Vec<_>>()
+        }).collect::<Vec<_>>();
+        div().flex().flex_col().gap(px(5.0))
+            .child(div().text_size(px(12.5)).font_weight(FontWeight::MEDIUM).text_color(theme.text).child(label))
+            .child(div().text_size(px(11.5)).text_color(theme.text_secondary).child(description))
+            .child(div().p(px(8.0)).rounded(px(7.0)).border_1().border_color(theme.border).bg(theme.inset).flex().items_center().gap(px(7.0)).child(div().flex_1().text_size(px(12.5)).text_color(theme.text).child(selected_text)))
+            .child(div().flex().flex_col().gap(px(1.0)).children(options.into_iter().map(|(provider, display, model)| {
+                let provider_for_click = provider.clone();
+                let model_id = model.id.clone();
+                let callback = on_select.clone();
+                let selected_row = selected.as_ref().is_some_and(|value| value.provider == provider && value.model_id == model.id);
+                div().id(ElementId::Name(format!("model-role-{}-{}", provider, model.id).into())).px(px(7.0)).py(px(5.0)).rounded(px(5.0)).cursor_pointer().when(selected_row, |el| el.bg(theme.overlay_strong)).hover(|el| el.bg(theme.overlay)).on_click(move |_, window, cx| callback(provider_for_click.clone(), model_id.clone(), window, cx)).flex().items_center().gap(px(7.0)).child(provider_app_icon(&provider, 12.0, theme.text_tertiary)).child(div().flex_1().text_size(px(11.5)).text_color(theme.text).child(format_model_name(&model.id))).child(div().text_size(px(10.5)).text_color(theme.text_ghost).child(display))
+            })))
+    }
+}
