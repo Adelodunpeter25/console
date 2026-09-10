@@ -71,65 +71,7 @@ impl Render for ConsoleDesktopApp {
                 move |pane_id: String, tab_id: String, _w: &mut Window, cx: &mut App| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            let prev_active_session = this
-                                .active_session_for_pane(&pane_id)
-                                .map(|s| s.to_string());
-                            this.save_transcript_scroll_position(cx);
-                            this.close_workspace_tab(&pane_id, &tab_id, cx);
-                            this.active_pane_id = Some(pane_id.clone());
-                            let transcript = this.transcript_for_pane(&pane_id);
-                            let composer = this.composer_for_pane(&pane_id);
-                            let new_active_session = this
-                                .active_session_for_pane(&pane_id)
-                                .map(|s| s.to_string());
-
-                            if new_active_session == prev_active_session
-                                && new_active_session.is_some()
-                            {
-                                this.maybe_refresh_inspector(cx);
-                                cx.notify();
-                                return;
-                            }
-
-                            if let Some(sid) = new_active_session {
-                                this.selected_session_id = Some(sid.clone());
-                                let already_loaded = this
-                                    .workspace_pane_states
-                                    .get(&pane_id)
-                                    .and_then(|state| state.loaded_session_id.as_deref())
-                                    == Some(&sid);
-                                if already_loaded {
-                                    this.maybe_refresh_inspector(cx);
-                                    cx.notify();
-                                    return;
-                                }
-                                let draft = this
-                                    .get_draft_for_session(Some(&sid))
-                                    .map(|s| s.to_string());
-                                composer.update(cx, |input, cx| {
-                                    input.set_prompt_history(Vec::new(), cx);
-                                    if let Some(draft_text) = draft {
-                                        input.set_content(draft_text, cx);
-                                    } else {
-                                        input.clear(cx);
-                                    }
-                                });
-                                transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
-                                this.load_session_messages_for_pane(pane_id.clone(), sid, cx);
-                            } else {
-                                this.selected_session_id = None;
-                                let draft = this.get_draft_for_session(None).map(|s| s.to_string());
-                                composer.update(cx, |input, cx| {
-                                    if let Some(draft_text) = draft {
-                                        input.set_content(draft_text, cx);
-                                    } else {
-                                        input.clear(cx);
-                                    }
-                                });
-                                transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
-                            }
-                            this.maybe_refresh_inspector(cx);
-                            cx.notify();
+                            this.close_tab_and_sync_pane(&pane_id, &tab_id, cx);
                         });
                     }
                 },

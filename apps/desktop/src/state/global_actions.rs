@@ -161,49 +161,7 @@ impl ConsoleDesktopApp {
         let Some(tab_id) = self.active_tab_id() else {
             return;
         };
-        let prev_active_session = self
-            .active_session_for_pane(&pane_id)
-            .map(|s| s.to_string());
-
-        // Commit the current composer text to sidebar draft state at close time.
-        // This is the ONLY moment the sidebar updates for this session's draft.
-        if let Some(ref sid) = prev_active_session {
-            let text = self
-                .composer_for_pane(&pane_id)
-                .read(cx)
-                .content()
-                .to_string();
-            self.commit_draft_to_sidebar(sid, &text, cx);
-        }
-
-        self.save_transcript_scroll_position(cx);
-        self.close_workspace_tab(&pane_id, &tab_id, cx);
-        let transcript = self.transcript_for_pane(&pane_id);
-        let composer = self.composer_for_pane(&pane_id);
-        let new_active_session = self
-            .active_session_for_pane(&pane_id)
-            .map(|s| s.to_string());
-
-        if new_active_session == prev_active_session && new_active_session.is_some() {
-            self.maybe_refresh_inspector(cx);
-            cx.notify();
-            return;
-        }
-
-        if let Some(sid) = new_active_session {
-            self.selected_session_id = Some(sid.clone());
-            composer.update(cx, |input, cx| {
-                input.set_prompt_history(Vec::new(), cx);
-            });
-            transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
-            self.load_session_messages_for_pane(pane_id.clone(), sid, cx);
-        } else {
-            self.selected_session_id = None;
-            composer.update(cx, |input, cx| input.set_content("", cx));
-            transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
-        }
-        self.maybe_refresh_inspector(cx);
-        cx.notify();
+        self.close_tab_and_sync_pane(&pane_id, &tab_id, cx);
     }
 
     /// ⌘K — toggle the command palette. Static command entries are rebuilt here

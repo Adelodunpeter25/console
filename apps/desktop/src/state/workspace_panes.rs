@@ -795,6 +795,76 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    /// Close a tab and synchronize the pane's selected session, composer, and
+    /// transcript. All close entry points use this so the tab-bar button and
+    /// keyboard shortcut cannot drift apart.
+    pub fn close_tab_and_sync_pane(
+        &mut self,
+        pane_id: &str,
+        tab_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let previous_session = self.active_session_for_pane(pane_id);
+
+        if let Some(session_id) = previous_session.as_deref() {
+            let text = self
+                .composer_for_pane(pane_id)
+                .read(cx)
+                .content()
+                .to_string();
+            self.commit_draft_to_sidebar(session_id, &text, cx);
+        }
+
+        self.save_transcript_scroll_position(cx);
+        self.close_workspace_tab(pane_id, tab_id, cx);
+        self.active_pane_id = Some(pane_id.to_string());
+
+        let next_session = self.active_session_for_pane(pane_id);
+        let transcript = self.transcript_for_pane(pane_id);
+        let composer = self.composer_for_pane(pane_id);
+
+        if next_session == previous_session {
+            self.maybe_refresh_inspector(cx);
+            cx.notify();
+            return;
+        }
+
+        match next_session {
+            Some(session_id) => {
+                self.selected_session_id = Some(session_id.clone());
+                let draft = self
+                    .get_draft_for_session(Some(&session_id))
+                    .map(str::to_string);
+                composer.update(cx, |input, cx| {
+                    input.set_prompt_history(Vec::new(), cx);
+                    if let Some(draft) = draft {
+                        input.set_content(draft, cx);
+                    } else {
+                        input.clear(cx);
+                    }
+                });
+                // Keep the previous transcript visible until the new load
+                // succeeds. A failed request must not strand the pane empty.
+                self.load_session_messages_for_pane(pane_id.to_string(), session_id, cx);
+            }
+            None => {
+                self.selected_session_id = None;
+                let draft = self.get_draft_for_session(None).map(str::to_string);
+                composer.update(cx, |input, cx| {
+                    if let Some(draft) = draft {
+                        input.set_content(draft, cx);
+                    } else {
+                        input.clear(cx);
+                    }
+                });
+                transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
+            }
+        }
+
+        self.maybe_refresh_inspector(cx);
+        cx.notify();
+    }
+
     /// Close a tab in a pane. Returns the newly active tab id, if any.
     pub fn close_workspace_tab(
         &mut self,
@@ -978,12 +1048,19 @@ impl ConsoleDesktopApp {
                     }
                 }
             }
+            let transcript_has_messages = self
+                .transcript_for_pane(pane_id)
+                .read(cx)
+                .message_count()
+                > 0;
             let already_loaded = self
                 .workspace_pane_states
                 .get(pane_id)
                 .and_then(|state| state.loaded_session_id.as_deref())
                 == Some(sid);
-            if already_loaded || prev_sid.as_deref() == Some(sid) {
+            if transcript_has_messages
+                && (already_loaded || prev_sid.as_deref() == Some(sid))
+            {
                 self.maybe_refresh_inspector(cx);
                 cx.notify();
                 return;
@@ -997,9 +1074,8 @@ impl ConsoleDesktopApp {
                     input.clear(cx);
                 }
             });
-            self.transcript_for_pane(pane_id).update(cx, |t, cx| {
-                t.set_messages(Vec::new(), cx);
-            });
+            // Keep the previous transcript visible until the new request
+            // succeeds; a failed load must not leave the pane empty.
             self.load_session_messages_for_pane(pane_id.to_string(), sid.to_string(), cx);
         } else {
             self.selected_session_id = None;
