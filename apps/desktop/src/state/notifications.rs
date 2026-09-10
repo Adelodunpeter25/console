@@ -46,12 +46,17 @@ impl ConsoleDesktopApp {
                                     if let Some(app) = entity.upgrade() {
                                         app.update(cx, |this, cx| {
                                             // Suppress the banner when the user is already
-                                            // viewing this session — silent in-app update,
-                                            // matching mobile. Same identifier replaces the
-                                            // previous banner instead of stacking.
-                                            let viewing = this.active_pane_id.as_deref().and_then(|pane| {
-                                                this.active_session_for_pane(pane)
-                                            });
+                                            // viewing this session and the window is active —
+                                            // silent in-app update, matching mobile. If the window
+                                            // is in the background, we notify even for the active tab.
+                                            // Same identifier replaces the previous banner instead of stacking.
+                                            let viewing = if this.is_window_active {
+                                                this.active_pane_id.as_deref().and_then(|pane| {
+                                                    this.active_session_for_pane(pane)
+                                                })
+                                            } else {
+                                                None
+                                            };
                                             match decide_notification(viewing.as_deref(), &session_id) {
                                                 NotificationDecision::SuppressViewing => {
                                                     macos_notifications::clear_for_session(&session_id);

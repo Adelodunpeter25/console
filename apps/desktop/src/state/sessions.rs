@@ -490,6 +490,7 @@ impl ConsoleDesktopApp {
     }
 
     pub fn select_and_open_session(&mut self, id: String, cx: &mut Context<Self>) {
+        super::macos_notifications::clear_for_session(&id);
         let active_pane_id = self
             .active_pane_id
             .clone()

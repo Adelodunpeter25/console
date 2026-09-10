@@ -299,6 +299,7 @@ pub struct ConsoleDesktopApp {
     /// so the sidebar stays frozen while a tab is open.
     pub sidebar_draft_ids: std::collections::HashSet<String>,
     pub drafts_collapsed: bool,
+    pub is_window_active: bool,
     pub _subscriptions: Vec<Subscription>,
 }
 
@@ -609,6 +610,13 @@ impl ConsoleDesktopApp {
         }
 
         let subscriptions = vec![
+            cx.observe_window_activation(window, |this, window, cx| {
+                this.is_window_active = window.is_window_active();
+                if this.is_window_active {
+                    crate::state::clear_all_notifications();
+                }
+                cx.notify();
+            }),
             cx.subscribe(&composer_input, |this, input, event: &ComposerEvent, cx| {
                 match event {
                     ComposerEvent::Submit(prompt) => {
@@ -842,6 +850,7 @@ impl ConsoleDesktopApp {
             ),
             sidebar_sort_mode: layout.sidebar_sort_mode(),
             collapsed_projects: Rc::new(layout.collapsed_projects.iter().cloned().collect()),
+            is_window_active: window.is_window_active(),
             _subscriptions: subscriptions,
         };
 

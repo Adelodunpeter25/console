@@ -1040,6 +1040,7 @@ impl ConsoleDesktopApp {
             .map(|s| s.to_string());
         self.select_workspace_tab(pane_id, tab_id);
         if let Some(sid) = tab_id.strip_prefix("chat:") {
+            super::macos_notifications::clear_for_session(sid);
             self.selected_session_id = Some(sid.to_string());
             if let Some(session) = self.sessions.iter().find(|s| s.id == sid) {
                 if let Some(pid) = &session.project_id {
