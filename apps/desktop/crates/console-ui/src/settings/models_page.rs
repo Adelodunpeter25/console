@@ -18,6 +18,7 @@ pub struct ModelsPage {
     pub vision_input: Entity<ComposerInput>,
     pub smol_input: Entity<ComposerInput>,
     pub menus: [crate::primitives::ContextMenuHandle; 4],
+    pub searches: [Entity<ComposerInput>; 4],
     pub on_select:
         Rc<dyn Fn(String, String, String, Entity<ComposerInput>, &mut Window, &mut App) + 'static>,
     pub on_save: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -32,7 +33,8 @@ impl RenderOnce for ModelsPage {
         let picker = |label: &'static str,
                       description: &'static str,
                       input: Entity<ComposerInput>,
-                      menu: crate::primitives::ContextMenuHandle| {
+                      menu: crate::primitives::ContextMenuHandle,
+                       search: Entity<ComposerInput>| {
             let value = input.read(cx).content().trim().to_string();
             let selected = value
                 .split_once('/')
@@ -48,6 +50,8 @@ impl RenderOnce for ModelsPage {
                 providers: self.providers.clone(),
                 models_by_provider: self.models_by_provider.clone(),
                 menu,
+                search,
+                search_query: String::new(),
                 on_select: Rc::new(move |provider, model, window, cx| {
                     callback(
                         label.to_lowercase(),
@@ -61,13 +65,14 @@ impl RenderOnce for ModelsPage {
             }
         };
         let [default_menu, plan_menu, vision_menu, smol_menu] = self.menus;
+        let [default_search, plan_search, vision_search, smol_search] = self.searches;
         div().flex().flex_col().gap(px(16.0))
             .child(div().flex().flex_col().gap(px(4.0)).child(div().text_size(px(16.0)).font_weight(gpui::FontWeight::SEMIBOLD).text_color(theme.text).child("Model roles")).child(div().text_size(px(12.5)).text_color(theme.text_secondary).child("Choose the model used for each harness role. Unset roles use the default model.")))
             .child(div().p(px(14.0)).rounded(px(8.0)).border_1().border_color(theme.border).bg(theme.surface).flex().flex_col().gap(px(14.0))
-                .child(picker("Default", "Main coding and execution model", self.default_input, default_menu))
-                .child(picker("Plan", "Architecture and planning model", self.plan_input, plan_menu))
-                .child(picker("Vision", "Image and screenshot inspection model", self.vision_input, vision_menu))
-                .child(picker("Smol", "Fast summaries and session titles model", self.smol_input, smol_menu))
+                .child(picker("Default", "Main coding and execution model", self.default_input, default_menu, default_search))
+                .child(picker("Plan", "Architecture and planning model", self.plan_input, plan_menu, plan_search))
+                .child(picker("Vision", "Image and screenshot inspection model", self.vision_input, vision_menu, vision_search))
+                .child(picker("Smol", "Fast summaries and session titles model", self.smol_input, smol_menu, smol_search))
                 .child(div().id("save-model-roles").px(px(10.0)).py(px(6.0)).rounded(px(6.0)).bg(theme.accent).text_color(theme.on_inverse).cursor_pointer().on_click(move |_, window, cx| (on_save)(window, cx)).child("Save model roles"))
                 .when(self.saving, |el| el.child(div().text_size(px(12.0)).text_color(theme.text_secondary).child("Saving…")))
                 .when_some(self.error, |el, error| el.child(div().text_size(px(12.0)).text_color(theme.danger).child(error))))

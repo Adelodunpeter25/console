@@ -443,6 +443,8 @@ pub struct ModelRolePicker {
     pub providers: Rc<Vec<ProviderCatalogEntry>>,
     pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
     pub menu: ContextMenuHandle,
+    pub search: Entity<ComposerInput>,
+    pub search_query: String,
     pub on_select: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
 }
 
@@ -464,6 +466,8 @@ impl RenderOnce for ModelRolePicker {
         let models_by_provider = self.models_by_provider;
         let on_select = self.on_select;
         let menu = self.menu;
+        let search = self.search;
+        let query = self.search_query.trim().to_lowercase();
         let trigger = div()
             .id(ElementId::Name(
                 format!("model-role-trigger-{}", self.label).into(),
@@ -493,7 +497,7 @@ impl RenderOnce for ModelRolePicker {
             );
         let panel = move |_handle: &ContextMenuHandle, _window: &mut Window, _cx: &mut App| {
             let mut content = div()
-                .w(px(360.0))
+                .w(px(400.0))
                 .max_h(px(360.0))
                 .p(px(6.0))
                 .rounded(px(8.0))
@@ -502,7 +506,8 @@ impl RenderOnce for ModelRolePicker {
                 .bg(theme.canvas)
                 .flex()
                 .flex_col()
-                .gap(px(6.0));
+                .gap(px(6.0))
+                .child(div().h(px(30.0)).px(px(6.0)).border_1().border_color(theme.border_strong).bg(theme.inset).flex().items_center().child(search.clone()));
             for provider in providers.iter() {
                 let models = models_by_provider
                     .get(&provider.name)
@@ -517,7 +522,7 @@ impl RenderOnce for ModelRolePicker {
                         .text_color(theme.text_secondary)
                         .child(provider.display_name.clone()),
                 );
-                for model in models.iter() {
+                for model in models.iter().filter(|model| query.is_empty() || model.id.to_lowercase().contains(&query)) {
                     let provider_id = provider.name.clone();
                     let model_id = model.id.clone();
                     let callback = on_select.clone();
