@@ -32,6 +32,7 @@ export interface ModelRoleMapping {
    - Invoked for low-latency, high-frequency utility tasks:
      - Context compaction structural/LLM summaries.
      - Git commit message generation.
+     - Session title generation (first prompt → single-line, ~6-word name; async with truncation fallback; never overwrites user renames).
      - Fast file triage and subagent quick scans.
 
 ---
@@ -76,4 +77,5 @@ Beyond model roles, `oh-my-pi` includes several sophisticated harness capabiliti
 ### Phase 3: Integration with Agent Loop
 - **Plan Mode**: When `session.mode === "plan"`, resolve and use `roleResolver.resolve("plan")`.
 - **Compaction & Commits**: When running compaction summarization or git commit workflows, dispatch with `roleResolver.resolve("smol")`.
+- **Session Titles**: After a session's first prompt, generate a concise (~6-word, single-line) title via `roleResolver.resolve("smol")` — async, with naive truncation as fallback; only when the title is still generic, never overwriting user renames.
 - **Image Prompts**: When user input contains images and the default model lacks vision capability, automatically switch the turn to `roleResolver.resolve("vision")`.
