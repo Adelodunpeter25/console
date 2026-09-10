@@ -243,6 +243,8 @@ impl ConsoleDesktopApp {
         let list = self.queued_prompts.entry(session_id.to_string()).or_default();
         if let Some(existing) = list.iter_mut().find(|p| p.id == queued.id) {
             *existing = queued;
+        } else if let Some(existing) = list.iter_mut().find(|p| p.prompt == queued.prompt && p.id.starts_with("queued-")) {
+            *existing = queued;
         } else {
             list.push(queued);
         }

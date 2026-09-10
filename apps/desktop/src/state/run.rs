@@ -99,34 +99,37 @@ impl ConsoleDesktopApp {
         self.composer_for_pane(&pane_id).update(cx, |input, cx| {
             input.record_prompt_history(prompt.clone(), cx);
         });
-        let client = self.client.clone();
-        let entity = cx.entity().downgrade();
-        cx.spawn(async move |_, cx| {
-            match client.runs.queue_prompt(&session_id, dq).await {
-                Ok(queued) => {
-                    let sid = queued.session_id.clone();
-                    let _ = cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.add_queued_prompt_for_session(&sid, queued);
-                                cx.notify();
-                            });
-                        }
-                    });
+        let is_first = self.queued_prompts_for_session(&session_id).len() == 1;
+        if is_first {
+            let client = self.client.clone();
+            let entity = cx.entity().downgrade();
+            cx.spawn(async move |_, cx| {
+                match client.runs.queue_prompt(&session_id, dq).await {
+                    Ok(queued) => {
+                        let sid = queued.session_id.clone();
+                        let _ = cx.update(|cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.add_queued_prompt_for_session(&sid, queued);
+                                    cx.notify();
+                                });
+                            }
+                        });
+                    }
+                    Err(err) => {
+                        let msg = format!("Unable to queue prompt: {err}");
+                        let _ = cx.update(|cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.set_error_for_session(&session_id, msg, cx);
+                                });
+                            }
+                        });
+                    }
                 }
-                Err(err) => {
-                    let msg = format!("Unable to queue prompt: {err}");
-                    let _ = cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.set_error_for_session(&session_id, msg, cx);
-                            });
-                        }
-                    });
-                }
-            }
-        })
-        .detach();
+            })
+            .detach();
+        }
         cx.notify();
     }
 
