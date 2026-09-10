@@ -11,7 +11,7 @@
  *  7. Loop until stopReason === 'stop' or signal aborted
  */
 import { randomUUID } from "node:crypto";
-import { compactHistory, shouldCompact } from "@/agent/src/compaction/index.js";
+import { compactHistory, estimateMessageTokens, shouldCompact } from "@/agent/src/compaction/index.js";
 import {
   DEFAULT_TOOL_RESULT_MAX_CHARS,
   truncateMessageToolResults,
@@ -42,6 +42,26 @@ export { streamOneTurn } from "./stream-turn.js";
 /**
  * Centralized agentic turn loop execution core.
  */
+function compactHistoryWithSummary(
+  messages: AgentMessage[],
+  options: import("@/agent/src/compaction/index.js").CompactionOptions,
+  summary: string,
+) {
+  const structural = compactHistory(messages, options);
+  if (structural.compactedMessages.length === messages.length) return structural;
+  const firstUserIndex = structural.compactedMessages.findIndex((message) => message.role === "user");
+  if (firstUserIndex < 0) return structural;
+  const summaryUserMessage: AgentMessage = { role: "user", content: summary };
+  const rest = structural.compactedMessages.slice(firstUserIndex + 1);
+  const compactedMessages = [summaryUserMessage, ...rest];
+  return {
+    ...structural,
+    compactedMessages,
+    summary,
+    tokensAfter: estimateMessageTokens(compactedMessages),
+  };
+}
+
 function runAgentLoop(
   prompt: string,
   config: AgentLoopConfig,
@@ -61,6 +81,7 @@ function runAgentLoop(
     compaction,
     onToolCall,
     onToolResult,
+    summarizeCompaction,
   } = config;
 
   const stream = new EventStream<AgentSessionEvent, AgentMessage[]>(
@@ -98,10 +119,18 @@ function runAgentLoop(
 
         // Auto-compaction check
         if (compaction && shouldCompact(messages, model, compaction)) {
-          const { compactedMessages, summary, originalCount, tokensBefore, tokensAfter } = compactHistory(
-            messages,
-            compaction,
-          );
+          let compactionResult = compactHistory(messages, compaction);
+          if (compaction.summaryStrategy === "llm" && summarizeCompaction) {
+            try {
+              const summary = await summarizeCompaction(messages, signal);
+              if (summary.trim()) {
+                compactionResult = compactHistoryWithSummary(messages, compaction, summary);
+              }
+            } catch {
+              // Structural compaction remains the safe fallback.
+            }
+          }
+          const { compactedMessages, summary, originalCount, tokensBefore, tokensAfter } = compactionResult;
           messages.length = 0;
           messages.push(...compactedMessages);
           emit({

@@ -117,6 +117,9 @@ pub enum AgentSessionEvent {
         total_turns: usize,
     },
     SessionEnd,
+    SessionTitleUpdated {
+        title: String,
+    },
     Error {
         error: ServerErrorPayload,
     },

@@ -11,6 +11,8 @@ import type {
 import { createSubagentTool } from "@/agent/src/tools/subagent.js";
 import { bindToolCwd } from "@console/types";
 import type { CompactionOptions } from "../compaction/index.js";
+import type { CompactionSummaryFn } from "./types.js";
+import { hasConfiguredRole, resolveModelRole } from "./role-resolver.js";
 import { agentLoop, agentLoopContinue, type AgentLoopConfig, type StreamFn } from "./agent-loop.js";
 import type { EventStream } from "./event-stream.js";
 
@@ -36,6 +38,8 @@ export interface AgentOptions {
   tools: AgentTool[];
   systemPrompt?: string;
   streamFn: StreamFn;
+  /** Optional provider-aware transport resolver for role models. */
+  getStreamFnForModel?: (model: Model) => StreamFn;
   /** Optional runtime thinking override for providers that support it. */
   thinkingLevel?: ThinkingLevel;
   /** Security approval mode ("always-ask" | "accept-edits" | "plan-mode" | "full-access"). Default: "always-ask" */
@@ -44,6 +48,8 @@ export interface AgentOptions {
   compaction?: CompactionOptions | false;
   /** Hook called when a tool call requires user permission. */
   onApproval?: (request: PermissionRequest) => Promise<boolean> | boolean;
+  /** Optional smol-backed compaction summary generator. */
+  summarizeCompaction?: CompactionSummaryFn;
   /** Called for every event emitted during a run. */
   onEvent?: (event: AgentSessionEvent) => void;
 }
@@ -60,11 +66,13 @@ export class Agent {
   private _tools: AgentTool[];
   private _systemPrompt: string;
   private _streamFn: StreamFn;
+  private _getStreamFnForModel?: AgentOptions["getStreamFnForModel"];
   private _thinkingLevel?: ThinkingLevel;
   private _approvalMode: ApprovalMode;
   private _compaction?: CompactionOptions;
   private _onApproval?: AgentOptions["onApproval"];
   private _onEvent?: (event: AgentSessionEvent) => void;
+  private summarizeCompaction?: CompactionSummaryFn;
 
   private _messages: AgentMessage[] = [];
   private _abortController?: AbortController;
@@ -75,10 +83,31 @@ export class Agent {
     this._tools = options.tools;
     this._systemPrompt = options.systemPrompt ?? "";
     this._streamFn = options.streamFn;
+    this._getStreamFnForModel = options.getStreamFnForModel;
     this._thinkingLevel = options.thinkingLevel;
     this._approvalMode = options.approvalMode ?? "always-ask";
     this._onApproval = options.onApproval;
     this._onEvent = options.onEvent;
+    this.summarizeCompaction = options.summarizeCompaction;
+    if (!this.summarizeCompaction && this._compaction?.summaryStrategy === "llm") {
+      this.summarizeCompaction = async (messages, signal) => {
+        if (!(await hasConfiguredRole("smol"))) throw new Error("No smol model configured");
+        const smolModel = await resolveModelRole("smol", this._model);
+        let summary = "";
+        const summaryStreamFn = this._getStreamFnForModel?.(smolModel) ?? this._streamFn;
+        for await (const delta of summaryStreamFn({
+          model: smolModel,
+          systemPrompt: "Summarize the prior coding conversation for future continuation. Preserve decisions, files, changes, unresolved work, and important constraints. Return only the summary.",
+          messages,
+          tools: [],
+          signal,
+        })) {
+          if (delta.type === "text") summary += delta.text;
+        }
+        if (!summary.trim()) throw new Error("Empty compaction summary");
+        return summary.trim();
+      };
+    }
 
     if (options.compaction === false) {
       this._compaction = undefined;
@@ -212,6 +241,7 @@ export class Agent {
       approvalMode: this._approvalMode,
       onApproval: this._onApproval,
       compaction: this._compaction,
+      summarizeCompaction: this.summarizeCompaction,
       signal: this._abortController.signal,
       onEvent: this._onEvent,
     };

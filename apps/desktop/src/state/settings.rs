@@ -1,11 +1,43 @@
 use super::ConsoleDesktopApp;
 use crate::persistence::store::load_settings_window;
 use crate::settings_window::SettingsWindow;
+use console_core::ConsoleSettings;
 use gpui::{
     AppContext, Context, TitlebarOptions, Window, WindowBounds, WindowOptions, point, px, size,
 };
 
 impl ConsoleDesktopApp {
+    pub fn save_model_settings(&mut self, settings: ConsoleSettings, cx: &mut Context<Self>) {
+        let client = self.client.clone();
+        let Some(settings_view) = self
+            .settings_window_view
+            .as_ref()
+            .and_then(|view| view.upgrade())
+        else {
+            return;
+        };
+
+        settings_view.update(cx, |view, cx| {
+            view.model_saving = true;
+            view.model_error = None;
+            cx.notify();
+        });
+
+        cx.spawn(async move |_, cx| {
+            let result = client.settings.update(&settings).await;
+            cx.update(|cx| {
+                settings_view.update(cx, |view, cx| {
+                    view.model_saving = false;
+                    if let Err(error) = result {
+                        view.model_error = Some(error.to_string());
+                    }
+                    cx.notify();
+                });
+            });
+        })
+        .detach();
+    }
+
     pub fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.open_settings_tab(console_ui::settings::SettingsTab::Accounts, window, cx);
     }

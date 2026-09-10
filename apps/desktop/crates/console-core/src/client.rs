@@ -15,6 +15,7 @@ pub struct ConsoleClient {
     pub model_favorites: ModelFavoriteService,
     pub notifications: NotificationService,
     pub usage: UsageService,
+    pub settings: SettingsService,
 }
 
 impl ConsoleClient {
@@ -32,6 +33,7 @@ impl ConsoleClient {
             model_favorites: ModelFavoriteService::new(transport.clone()),
             notifications: NotificationService::new(transport.clone()),
             usage: UsageService::new(transport.clone()),
+            settings: SettingsService::new(transport.clone()),
             transport: transport.clone(),
         }
     }

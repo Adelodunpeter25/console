@@ -8,6 +8,7 @@ pub mod project;
 pub mod provider;
 pub mod run;
 pub mod session;
+pub mod settings;
 pub mod terminal;
 pub mod usage;
 
@@ -21,5 +22,6 @@ pub use project::ProjectService;
 pub use provider::ProviderService;
 pub use run::RunService;
 pub use session::SessionService;
+pub use settings::SettingsService;
 pub use terminal::TerminalService;
 pub use usage::UsageService;

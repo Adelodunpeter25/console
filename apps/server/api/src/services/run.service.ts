@@ -330,6 +330,7 @@ export class RunService {
       tools: boundTools as any,
       systemPrompt,
       streamFn,
+      getStreamFnForModel: (roleModel) => getProvider(roleModel.provider)?.getStreamFn() ?? streamFn,
       approvalMode,
       onApproval: this.decisions.createApprovalHandler(sessionId),
     });

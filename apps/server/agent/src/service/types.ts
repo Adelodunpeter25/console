@@ -31,6 +31,8 @@ export type StreamFn = (params: {
   thinkingLevel?: ThinkingLevel;
 }) => AsyncIterable<LLMDelta>;
 
+export type CompactionSummaryFn = (messages: AgentMessage[], signal?: AbortSignal) => Promise<string>;
+
 export interface AgentLoopConfig {
   /** The model to use. */
   model: Model;
@@ -55,6 +57,8 @@ export interface AgentLoopConfig {
   signal?: AbortSignal;
   /** Compaction options for automated history summarization. */
   compaction?: CompactionOptions;
+  /** Optional role-aware summary generator; failures should fall back structurally. */
+  summarizeCompaction?: CompactionSummaryFn;
   /** Hook called before a tool is executed. Useful for approval flows. */
   onToolCall?: (call: ToolCall) => Promise<void> | void;
   /** Hook called after a tool finishes executing. */

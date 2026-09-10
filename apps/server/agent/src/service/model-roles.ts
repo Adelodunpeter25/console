@@ -55,6 +55,11 @@ function parseModelReference(reference: string, fallback: Model): { provider: Pr
   return { provider: fallback.provider, modelId: reference };
 }
 
+export async function hasConfiguredRole(role: ConsoleModelRole): Promise<boolean> {
+  const settings = await loadSettings();
+  return Boolean(settings.modelRoles?.[role]);
+}
+
 export async function resolveRoleModel(role: ConsoleModelRole, fallback: Model): Promise<Model> {
   const settings = await loadSettings();
   const reference = settings.modelRoles?.[role] ?? settings.modelRoles?.default;

@@ -1,8 +1,8 @@
 use crate::state::ConsoleDesktopApp;
 use console_ui::input::ComposerInput;
 use console_ui::settings::{
-    AccountsPage, ConnectionPage, DeletedChatsPage, ProbeState, ProjectsPage, SettingsShell,
-    SettingsTab, UsagePage,
+    AccountsPage, ConnectionPage, DeletedChatsPage, ModelsPage, ProbeState, ProjectsPage,
+    SettingsShell, SettingsTab, UsagePage,
 };
 use gpui::{
     App, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
@@ -20,6 +20,12 @@ pub struct SettingsWindow {
     new_env_name_input: Entity<ComposerInput>,
     new_env_url_input: Entity<ComposerInput>,
     new_env_probe: ProbeState,
+    model_default_input: Entity<ComposerInput>,
+    model_plan_input: Entity<ComposerInput>,
+    model_vision_input: Entity<ComposerInput>,
+    model_smol_input: Entity<ComposerInput>,
+    pub(crate) model_saving: bool,
+    pub(crate) model_error: Option<String>,
     _subscription: Option<gpui::Subscription>,
 }
 
@@ -54,6 +60,29 @@ impl SettingsWindow {
             input
         });
 
+        let model_default_input = cx.new(|cx| ComposerInput::new(window, cx).placeholder("provider/model, e.g. antigravity/claude-sonnet-4-6"));
+        let model_plan_input = cx.new(|cx| ComposerInput::new(window, cx).placeholder("provider/model or leave blank for default"));
+        let model_vision_input = cx.new(|cx| ComposerInput::new(window, cx).placeholder("provider/model or leave blank for default"));
+        let model_smol_input = cx.new(|cx| ComposerInput::new(window, cx).placeholder("provider/model or leave blank for default"));
+
+        let settings_client = app.upgrade().map(|entity| entity.read(cx).client.clone());
+        let default_for_load = model_default_input.clone();
+        let plan_for_load = model_plan_input.clone();
+        let vision_for_load = model_vision_input.clone();
+        let smol_for_load = model_smol_input.clone();
+        if let Some(client) = settings_client {
+            cx.spawn(async move |_, cx| {
+                if let Ok(settings) = client.settings.get().await {
+                    cx.update(|cx| {
+                        default_for_load.update(cx, |input, cx| input.set_content(settings.model_roles.default.unwrap_or_default(), cx));
+                        plan_for_load.update(cx, |input, cx| input.set_content(settings.model_roles.plan.unwrap_or_default(), cx));
+                        vision_for_load.update(cx, |input, cx| input.set_content(settings.model_roles.vision.unwrap_or_default(), cx));
+                        smol_for_load.update(cx, |input, cx| input.set_content(settings.model_roles.smol.unwrap_or_default(), cx));
+                    });
+                }
+            }).detach();
+        }
+
         let focus_handle = cx.focus_handle();
         window.focus(&focus_handle, cx);
 
@@ -66,6 +95,12 @@ impl SettingsWindow {
             new_env_name_input,
             new_env_url_input,
             new_env_probe: ProbeState::Unknown,
+            model_default_input,
+            model_plan_input,
+            model_vision_input,
+            model_smol_input,
+            model_saving: false,
+            model_error: None,
             _subscription: subscription,
         }
     }
@@ -327,6 +362,36 @@ impl Render for SettingsWindow {
                     on_save_new,
                 }
                 .into_any_element()
+            }
+            SettingsTab::Models => {
+                let on_save: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let app_handle = self.app.clone();
+                    let default_input = self.model_default_input.clone();
+                    let plan_input = self.model_plan_input.clone();
+                    let vision_input = self.model_vision_input.clone();
+                    let smol_input = self.model_smol_input.clone();
+                    Rc::new(move |_window: &mut Window, cx: &mut App| {
+                        let Some(app) = app_handle.upgrade() else { return; };
+                        let settings = console_core::ConsoleSettings {
+                            model_roles: console_core::ModelRoleMapping {
+                                default: Some(default_input.read(cx).content().trim().to_string()).filter(|v| !v.is_empty()),
+                                plan: Some(plan_input.read(cx).content().trim().to_string()).filter(|v| !v.is_empty()),
+                                vision: Some(vision_input.read(cx).content().trim().to_string()).filter(|v| !v.is_empty()),
+                                smol: Some(smol_input.read(cx).content().trim().to_string()).filter(|v| !v.is_empty()),
+                            },
+                        };
+                        app.update(cx, |app_state, cx| app_state.save_model_settings(settings, cx));
+                    })
+                };
+                ModelsPage {
+                    default_input: self.model_default_input.clone(),
+                    plan_input: self.model_plan_input.clone(),
+                    vision_input: self.model_vision_input.clone(),
+                    smol_input: self.model_smol_input.clone(),
+                    on_save,
+                    saving: self.model_saving,
+                    error: self.model_error.clone(),
+                }.into_any_element()
             }
             SettingsTab::Usage => {
                 let on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
