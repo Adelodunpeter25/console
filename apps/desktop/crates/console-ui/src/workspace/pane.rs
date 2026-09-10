@@ -135,7 +135,23 @@ fn drop_zone(
                 .border_2()
                 .border_color(theme.accent.opacity(0.65))
         })
-        .can_drop(|value, _, _| value.is::<WorkspaceDrag>())
+        // GPUI skips the drag_over highlight entirely when this returns
+        // false, so non-terminal drags never light up the terminal-only
+        // top/bottom zones. The on_drop handler no-ops for them too.
+        .can_drop(move |value: &dyn std::any::Any, _, _| {
+            let Some(drag) = value.downcast_ref::<WorkspaceDrag>() else {
+                return false;
+            };
+            match action {
+                WorkspaceDropAction::SplitTop | WorkspaceDropAction::SplitBottom => {
+                    matches!(
+                        drag.tab,
+                        console_core::WorkspaceTabConfig::Terminal { .. }
+                    )
+                }
+                _ => true,
+            }
+        })
         .on_drop(move |drag: &WorkspaceDrag, window, cx| {
             (on_drop)(target_pane_id.clone(), drag.clone(), action, window, cx);
         })
