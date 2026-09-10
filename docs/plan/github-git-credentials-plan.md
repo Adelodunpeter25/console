@@ -63,8 +63,8 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
     without touching global `~/.gitconfig`.
   - `pty.manager.ts startShell` env: same three vars, so every interactive
     terminal inherits working git auth.
-  - Add `url."https://github.com/".insteadOf git@github.com:` via the same
-    `GIT_CONFIG_*` channel so pasted SSH remote URLs work over HTTPS too.
+  - *(Optional — skip if you only use HTTPS URLs, no SSH setup needed)* `url."https://github.com/".insteadOf git@github.com:` via the same
+    `GIT_CONFIG_*` channel so a pasted `git@github.com:org/repo` SSH-style URL also works over HTTPS with the same PAT. No SSH keys, `~/.ssh`, or `ssh-agent` needed — purely an HTTPS rewrite. Safe to omit.
 - Boot behavior: helpers read the creds file at invocation time (not daemon
   start), so a VPS reboot or `console restart` keeps working with no re-login.
   Missing file → helper exits silently → git behaves exactly as today.
