@@ -3,7 +3,7 @@
  */
 import { spawn } from "node:child_process";
 import * as path from "node:path";
-import { ensureConsoleDir, writePidFile, saveConfig, loadConfig, resolvePortHost, getDaemonStatus } from "../daemon-manager.js";
+import { ensureConsoleDir, writePidFile, saveConfig, loadConfig, resolvePortHost, getDaemonStatus, loadEnvFile, getEnvFilePath } from "../daemon-manager.js";
 import type { StartOptions } from "../types.js";
 
 interface ServerLaunch {
@@ -57,6 +57,15 @@ export async function startDaemon(options: StartOptions): Promise<void> {
     console.log(`Using saved config from ~/.console/config.json (port ${port}, host ${host}).`);
   }
 
+  // Provider keys (e.g. FIRECRAWL_API_KEY) live in ~/.console/env so every
+  // daemon picks them up without shell exports. Explicit process env wins.
+  const fileEnv = await loadEnvFile();
+  const baseEnv = { ...fileEnv, ...process.env };
+  const firecrawlStatus =
+    process.env.FIRECRAWL_API_KEY ?? fileEnv.FIRECRAWL_API_KEY
+      ? "Firecrawl: API key configured"
+      : `Firecrawl: no API key (keyless mode) — run 'console env' to add one`;
+
   // Resolve how to launch the server (binary install or dev source tree)
   const launch = resolveServerLaunch();
 
@@ -65,9 +74,10 @@ export async function startDaemon(options: StartOptions): Promise<void> {
     console.log(`Starting console agent daemon...`);
     console.log(`Port: ${port}`);
     console.log(`Host: ${host}`);
+    console.log(firecrawlStatus);
 
     const env = {
-      ...process.env,
+      ...baseEnv,
       PORT: port,
       HOST: host,
       CONSOLE_DAEMON: "true",
@@ -100,10 +110,11 @@ export async function startDaemon(options: StartOptions): Promise<void> {
     console.log(`Starting console agent in foreground...`);
     console.log(`Port: ${port}`);
     console.log(`Host: ${host}`);
+    console.log(firecrawlStatus);
     console.log(`Press Ctrl+C to stop`);
 
     const env = {
-      ...process.env,
+      ...baseEnv,
       PORT: port,
       HOST: host,
       CONSOLE_DAEMON: "true",

@@ -21,6 +21,79 @@ export const LOGS_DIR = path.join(CONSOLE_DIR, "logs");
 const CONFIG_FILE = path.join(CONSOLE_DIR, "config.json");
 
 /**
+ * Per-machine secret env file (~/.console/env, ~/.console-dev/env in dev).
+ * KEY=VALUE lines (see parseEnvFile) loaded into the daemon environment on
+ * `console start`, so provider keys (e.g. FIRECRAWL_API_KEY) work for every
+ * current and future daemon without shell exports. Explicit process env
+ * always wins over the file. Managed by `console env`, mode 0600.
+ */
+export function getEnvFilePath(): string {
+  return path.join(CONSOLE_DIR, "env");
+}
+
+export function parseEnvFile(contents: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const rawLine of contents.split("\n")) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    if (
+      value.length >= 2 &&
+      ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'")))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (key) out[key] = value;
+  }
+  return out;
+}
+
+export async function loadEnvFile(): Promise<Record<string, string>> {
+  try {
+    return parseEnvFile(await fs.readFile(getEnvFilePath(), "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Insert or replace entries, leaving every other line (comments, blank
+ * lines, other keys) byte-identical. Creates the file at mode 0600.
+ */
+export async function upsertEnvValues(values: Record<string, string>): Promise<void> {
+  await ensureConsoleDir();
+  let raw = "";
+  try {
+    raw = await fs.readFile(getEnvFilePath(), "utf-8");
+  } catch {
+    raw = "";
+  }
+  const pending = { ...values };
+  const out: string[] = [];
+  for (const line of raw.split("\n")) {
+    const trimmed = line.trim();
+    const eq = trimmed.indexOf("=");
+    const key = eq > 0 ? trimmed.slice(0, eq).trim() : "";
+    if (key && Object.hasOwn(pending, key)) {
+      out.push(`${key}="${pending[key]}"`);
+      delete pending[key];
+    } else {
+      out.push(line);
+    }
+  }
+  for (const [key, value] of Object.entries(pending)) {
+    out.push(`${key}="${value}"`);
+  }
+  const text = `${out.join("\n").replace(/\n+$/, "")}\n`;
+  await fs.writeFile(getEnvFilePath(), text, { mode: 0o600 });
+  await fs.chmod(getEnvFilePath(), 0o600);
+}
+
+/**
  * Ensure console directory structure exists
  */
 export async function ensureConsoleDir(): Promise<void> {

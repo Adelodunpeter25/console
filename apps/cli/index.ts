@@ -9,6 +9,7 @@
  *   console logs    - Tail daemon logs
  *   console restart - Restart the daemon
  *   console upgrade  - Re-download the latest binary and restart
+ *   console env     - Save provider API keys (e.g. Firecrawl) for the daemon
  */
 import { Command } from "commander";
 import { startDaemon } from "./commands/start.js";
@@ -17,6 +18,7 @@ import { statusDaemon } from "./commands/status.js";
 import { logsDaemon } from "./commands/logs.js";
 import { restartDaemon } from "./commands/restart.js";
 import { upgradeDaemon } from "./commands/upgrade.js";
+import { envCommand } from "./commands/env.js";
 
 const program = new Command();
 
@@ -56,5 +58,10 @@ program
   .option("-p, --port <number>", "Port to run the server on (omit to reuse saved port)")
   .option("-h, --host <string>", "Host to bind to (omit to reuse saved host)")
   .action(restartDaemon);
+
+program
+  .command("env")
+  .description("Save provider API keys for the daemon (restart to apply)")
+  .action(envCommand);
 
 program.parse();
