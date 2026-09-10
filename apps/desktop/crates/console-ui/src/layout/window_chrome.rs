@@ -157,7 +157,7 @@ fn client_window_button<V: 'static>(
     theme: Theme,
     cx: &mut Context<V>,
 ) -> AnyElement {
-    let (id, icon_name, label) = match button {
+    let (id, icon_name, _label) = match button {
         WindowButton::Minimize => (
             "client-window-minimize",
             IconName::WindowMinimize,

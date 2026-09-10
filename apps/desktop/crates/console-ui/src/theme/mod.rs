@@ -23,6 +23,7 @@ fn resolves_to_dark(preference: ThemePreference, system_appearance: WindowAppear
     }
 }
 
+#[cfg(target_os = "macos")]
 fn native_override(preference: ThemePreference) -> Option<bool> {
     match preference {
         ThemePreference::System => None,
