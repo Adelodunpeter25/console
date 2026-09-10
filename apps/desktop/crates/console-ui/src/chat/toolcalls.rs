@@ -18,7 +18,7 @@ use gpui::{
     div, prelude::*, px, transparent_black,
 };
 
-use crate::chat::markdown_helpers::{assistant_ctx, render_selectable_markdown};
+use crate::chat::markdown_helpers::{assistant_ctx, compact_ctx, render_selectable_markdown};
 use crate::chat::{DiffView, ThinkingBlock, WorkingIndicator};
 use crate::markdown::render::{
     LinkHandler, MarkdownView, Palette, TranscriptSelection, plain_text,
@@ -518,6 +518,8 @@ impl ToolCalls {
                                 file_path.as_deref(),
                                 theme,
                             ))
+                        } else if is_subagent(&entry.call.name) {
+                            element.child(self.subagent_result_section(&call_id, raw, theme))
                         } else {
                             element.child(self.section(&call_id, "Result", raw, theme))
                         }
@@ -901,6 +903,63 @@ impl ToolCalls {
             .into_any_element()
     }
 
+    /// Renders a subagent result as formatted markdown — the same treatment the
+    /// inspector panel's summary block uses — instead of raw monospace text.
+    /// A `MarkdownView` is stored in `state.markdown_views` keyed by call id so
+    /// the rendered AST survives transcript virtualisation without re-parsing on
+    /// every frame.
+    fn subagent_result_section(
+        &self,
+        call_id: &str,
+        raw: String,
+        theme: Theme,
+    ) -> AnyElement {
+        let palette = Palette::from_theme(&theme);
+        let ctx = compact_ctx(
+            format!("tool-{call_id}-subagent-result"),
+            &palette,
+            self.selection.clone(),
+            self.link_handler.clone(),
+        );
+
+        // Reuse or create the MarkdownView for this call so streaming repaints
+        // don't restart parsing from scratch every frame.
+        let md_view = {
+            let mut state = self.state.borrow_mut();
+            state
+                .markdown_views
+                .entry(format!("subagent-result-{call_id}"))
+                .or_insert_with(|| Rc::new(RefCell::new(MarkdownView::new())))
+                .clone()
+        };
+
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(3.0))
+            .child(
+                div()
+                    .text_size(px(10.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme.text_ghost)
+                    .child("Result"),
+            )
+            .child(
+                div()
+                    .id(ElementId::Name(
+                        format!("tool-output-{call_id}-subagent-result").into(),
+                    ))
+                    .max_h(px(320.0))
+                    .overflow_y_scroll()
+                    .rounded(px(5.0))
+                    .bg(theme.inset)
+                    .px(px(8.0))
+                    .py(px(6.0))
+                    .child(render_selectable_markdown(&raw, Some(&md_view), &ctx, false)),
+            )
+            .into_any_element()
+    }
+
     /// A labelled, scrollable, selectable block of tool output (arguments or
     /// results). The `call_id` namespaces the selection row so each call's
     /// Arguments/Result get distinct registry keys instead of colliding with
@@ -983,6 +1042,11 @@ fn tool_call_diff(call: &ToolCall) -> Option<console_core::DiffResult> {
 /// Whether a tool-call name reads file content into its result.
 fn is_read_file(name: &str) -> bool {
     matches!(name, "readFile" | "read_file" | "view" | "Read")
+}
+
+/// Whether a tool-call name is a subagent call whose result is prose markdown.
+fn is_subagent(name: &str) -> bool {
+    matches!(name, "subagent")
 }
 
 /// Byte length of the `\s*\d+:\s?` line-number prefix, if present.
