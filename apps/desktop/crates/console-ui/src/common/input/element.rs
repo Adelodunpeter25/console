@@ -2,7 +2,7 @@ use gpui::{
     fill, point, px, quad, size, App, BorderStyle, Bounds, DispatchPhase,
     Element, ElementId, ElementInputHandler, Entity, GlobalElementId, InspectorElementId,
     IntoElement, LayoutId, MouseMoveEvent, PaintQuad, Pixels, Point, ScrollHandle, StyledText,
-    TextLayout, TextRun, Window,
+    TextLayout, TextRun, TextStyleRefinement, WhiteSpace, Window,
 };
 
 use super::text_runs::{input_text_runs, SearchPaint};
@@ -335,7 +335,24 @@ impl Element for InputElement {
         };
 
         let mut text = StyledText::new(display_text).with_runs(runs);
-        let (text_layout_id, text_layout_state) = text.request_layout(id, inspector_id, window, cx);
+        // Push WhiteSpace::Normal onto the text-style stack before calling
+        // StyledText::request_layout. StyledText captures window.text_style()
+        // at layout time to decide its wrap_width. Without this the inherited
+        // style is Nowrap and long lines overflow the composer horizontally.
+        let (text_layout_id, text_layout_state) = {
+            let mode = self.input.read(cx).mode;
+            if mode == FieldMode::Composer {
+                window.with_text_style(
+                    Some(TextStyleRefinement {
+                        white_space: Some(WhiteSpace::Normal),
+                        ..Default::default()
+                    }),
+                    |window| text.request_layout(id, inspector_id, window, cx),
+                )
+            } else {
+                text.request_layout(id, inspector_id, window, cx)
+            }
+        };
         let mut mention_icons = Vec::new();
         let mut child_layout_ids = vec![text_layout_id];
 
