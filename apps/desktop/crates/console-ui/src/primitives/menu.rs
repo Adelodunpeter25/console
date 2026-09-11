@@ -802,7 +802,8 @@ where
                 px(TRIGGER_GAP),
                 px(8.0),
             ))
-            .with_priority(1),
+            // Menus must paint above embedded/native browser surfaces.
+            .with_priority(100),
         )
         .into_any_element()
 }
