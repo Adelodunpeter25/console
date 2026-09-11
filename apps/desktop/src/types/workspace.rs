@@ -5,6 +5,7 @@
 use std::rc::Rc;
 
 use console_core::{ApprovalMode, GitBranchInfo, SelectedModel};
+use console_ui::workspace::TabStripFollow;
 use console_ui::{ComposerInput, ContextMenuHandle, PickerTab, TranscriptView};
 use gpui::Entity;
 
@@ -42,4 +43,6 @@ pub(crate) struct WorkspacePaneState {
     pub(crate) model_search: Entity<ComposerInput>,
     /// The session id whose messages are currently loaded in this pane's transcript.
     pub(crate) loaded_session_id: Option<String>,
+    /// Retained tab strip scroll-follow state for this pane.
+    pub(crate) tab_strip_follow: TabStripFollow,
 }

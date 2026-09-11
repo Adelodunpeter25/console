@@ -176,6 +176,7 @@ impl ConsoleDesktopApp {
                 branch_menu,
                 model_search,
                 loaded_session_id: None,
+                tab_strip_follow: console_ui::workspace::TabStripFollow::new(),
             },
         );
     }

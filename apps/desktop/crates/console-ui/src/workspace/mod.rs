@@ -16,4 +16,4 @@ pub use ops::{
     resize_split, retain_project_tabs, select_tab, set_tab_project, split_pane, take_tab,
 };
 pub use pane::{ContentRenderer, WorkspacePane};
-pub use tab_bar::WorkspaceTabBar;
+pub use tab_bar::{TabStripFollow, WorkspaceTabBar};

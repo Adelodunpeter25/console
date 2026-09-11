@@ -257,3 +257,9 @@ fn test_preview_replace_stays_within_kind() {
     assert_eq!(root.leaves()[0].tabs.len(), 2);
     assert!(root.leaves()[0].tabs.iter().any(|t| t.id() == "diff:/a/b.rs"));
 }
+
+#[test]
+fn test_tab_strip_follow_initial_state() {
+    let follow = console_ui::workspace::TabStripFollow::new();
+    assert_eq!(follow.scroll_handle.offset().x, gpui::px(0.0));
+}

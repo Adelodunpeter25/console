@@ -835,6 +835,14 @@ impl Render for ConsoleDesktopApp {
                             .overflow_hidden()
                             .child({
                                 let entity_for_split = entity.clone();
+                                let tab_follows: std::collections::HashMap<
+                                    String,
+                                    console_ui::workspace::TabStripFollow,
+                                > = self
+                                    .workspace_pane_states
+                                    .iter()
+                                    .map(|(k, v)| (k.clone(), v.tab_strip_follow.clone()))
+                                    .collect();
                                 WorkspacePane::new(
                                     workspace_root,
                                     active_pane,
@@ -845,6 +853,7 @@ impl Render for ConsoleDesktopApp {
                                     on_close_pane,
                                     on_focus_pane,
                                 )
+                                .with_tab_follow(move |pane_id| tab_follows.get(pane_id).cloned())
                                 .with_new_tab({
                                     let entity = entity.clone();
                                     move |_pane_id, _window, cx| {

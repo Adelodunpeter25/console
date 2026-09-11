@@ -1,10 +1,11 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use console_core::LeafPaneNode;
 use gpui::{
-    App, AppContext, ElementId, FontWeight, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, RenderOnce, StatefulInteractiveElement, Styled, Window, div,
-    prelude::FluentBuilder, px,
+    App, AppContext, Bounds, ElementId, FontWeight, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, Pixels, RenderOnce, ScrollHandle, StatefulInteractiveElement, Styled, Window,
+    div, point, prelude::FluentBuilder, px,
 };
 
 use crate::primitives::file_icon;
@@ -13,6 +14,89 @@ use crate::primitives::{IconName, app_icon};
 use crate::theme::{TABBAR_HEIGHT, Theme};
 
 use super::{WorkspaceDrag, WorkspaceDragPreview};
+
+/// Retained follow state for a pane's tab strip scroll handle.
+/// Automatically scrolls the strip the minimum distance to bring the active
+/// tab into view when active tab changes or viewport resizes, without fighting
+/// manual wheel scrolling.
+#[derive(Clone, Debug)]
+pub struct TabStripFollow {
+    pub scroll_handle: ScrollHandle,
+    last_active_tab: Rc<RefCell<Option<String>>>,
+    last_viewport: Rc<RefCell<Option<Bounds<Pixels>>>>,
+}
+
+impl Default for TabStripFollow {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TabStripFollow {
+    pub fn new() -> Self {
+        Self {
+            scroll_handle: ScrollHandle::new(),
+            last_active_tab: Rc::new(RefCell::new(None)),
+            last_viewport: Rc::new(RefCell::new(None)),
+        }
+    }
+
+    /// Measures the active tab's layout bounds and adjusts the scroll offset
+    /// if the tab is outside the visible viewport.
+    pub fn follow_if_needed(
+        &self,
+        active_tab_id: &str,
+        tab_bounds: Bounds<Pixels>,
+        window: &mut Window,
+    ) {
+        let viewport = self.scroll_handle.bounds();
+        if viewport.size.width <= px(0.0) {
+            return;
+        }
+
+        let mut last_tab = self.last_active_tab.borrow_mut();
+        let mut last_vp = self.last_viewport.borrow_mut();
+
+        let tab_changed = last_tab.as_deref() != Some(active_tab_id);
+        let viewport_changed = match *last_vp {
+            Some(prev) => {
+                (prev.origin.x - viewport.origin.x).abs() > px(0.5)
+                    || (prev.size.width - viewport.size.width).abs() > px(0.5)
+            }
+            None => true,
+        };
+
+        if !tab_changed && !viewport_changed {
+            return;
+        }
+
+        *last_tab = Some(active_tab_id.to_string());
+        *last_vp = Some(viewport);
+
+        // Visual cushion so tab borders/corners aren't hard-clipped against strip edge.
+        let padding = px(4.0);
+        let offset = self.scroll_handle.offset();
+        let mut x = offset.x;
+
+        // If tab right is beyond viewport right, scroll left (offset.x decreases / becomes more negative).
+        if tab_bounds.right() + padding > viewport.right() {
+            x -= (tab_bounds.right() + padding) - viewport.right();
+        }
+        // If tab left is before viewport left, scroll right (offset.x increases / becomes less negative).
+        // Evaluated second so that if tab is wider than viewport, left edge is prioritized.
+        if tab_bounds.left() - padding < viewport.left() {
+            x += viewport.left() - (tab_bounds.left() - padding);
+        }
+
+        let max_x = self.scroll_handle.max_offset().x;
+        let x = x.clamp(-max_x, px(0.0));
+
+        if (x - offset.x).abs() > px(0.5) {
+            self.scroll_handle.set_offset(point(x, offset.y));
+            window.request_animation_frame();
+        }
+    }
+}
 
 /// The workspace's tab strip for one leaf pane. Dragging tabs between panes
 /// and the per-type icons come from the desktop app's `WorkspaceTabItem`.
@@ -25,6 +109,7 @@ pub struct WorkspaceTabBar {
     can_close_pane: bool,
     on_close_pane: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_tab: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    follow: Option<TabStripFollow>,
 }
 
 impl WorkspaceTabBar {
@@ -44,6 +129,7 @@ impl WorkspaceTabBar {
             can_close_pane,
             on_close_pane: Rc::new(on_close_pane),
             on_new_tab: None,
+            follow: None,
         }
     }
 
@@ -52,6 +138,11 @@ impl WorkspaceTabBar {
         on_new_tab: impl Fn(String, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_new_tab = Some(Rc::new(on_new_tab));
+        self
+    }
+
+    pub fn with_scroll_follow(mut self, follow: Option<TabStripFollow>) -> Self {
+        self.follow = follow;
         self
     }
 }
@@ -67,6 +158,7 @@ impl RenderOnce for WorkspaceTabBar {
         let can_close_pane = self.can_close_pane;
         let on_close_pane = self.on_close_pane;
         let on_new_tab = self.on_new_tab;
+        let follow = self.follow;
 
         div()
             .id("workspace-tab-bar")
@@ -89,6 +181,9 @@ impl RenderOnce for WorkspaceTabBar {
                     .items_center()
                     .gap_x(px(2.0))
                     .overflow_x_scroll()
+                    .when_some(follow.as_ref(), |el, fol| {
+                        el.track_scroll(&fol.scroll_handle)
+                    })
                     .children(self.pane.tabs.into_iter().map(|tab| {
                         let tab_id = tab.id();
                         let is_active = active_id.as_deref() == Some(&tab_id.as_str());
@@ -100,9 +195,11 @@ impl RenderOnce for WorkspaceTabBar {
                         let s_on_sel = on_sel.clone();
                         let s_on_cls = on_cls.clone();
                         let group_name = format!("workspace-tab-{}", tab_id);
+                        let tab_follow = follow.clone();
 
                         div()
-                            .id(ElementId::Name(tab_id.into()))
+                            .id(ElementId::Name(tab_id.clone().into()))
+                            .relative()
                             .flex_shrink(0.0)
                             .on_drag(drag, |drag, _, _, cx| {
                                 cx.new(|_| WorkspaceDragPreview::new(drag.tab.title()))
@@ -115,13 +212,29 @@ impl RenderOnce for WorkspaceTabBar {
                             .gap_x(px(6.0))
                             .group(group_name.clone())
                             .when(is_active, |s| {
-                                s.bg(theme.surface)
+                                let s = s.bg(theme.surface)
                                     .text_color(theme.text)
                                     // Only the focused pane shows the orange
                                     // underline; other panes show none.
                                     .when(pane_focused, |s| {
                                         s.border_b_2().border_color(theme.accent)
-                                    })
+                                    });
+
+                                if let Some(follow) = tab_follow {
+                                    let tab_id = tab_id.clone();
+                                    s.child(
+                                        gpui::canvas(
+                                            |_, _, _| (),
+                                            move |bounds, _, window, _cx| {
+                                                follow.follow_if_needed(&tab_id, bounds, window);
+                                            },
+                                        )
+                                        .absolute()
+                                        .inset_0(),
+                                    )
+                                } else {
+                                    s
+                                }
                             })
                             .when(!is_active, |s| {
                                 s.text_color(theme.text_tertiary)

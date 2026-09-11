@@ -12,7 +12,7 @@ use gpui::{
 
 use crate::theme::Theme;
 
-use super::{WorkspaceDrag, WorkspaceDropAction, WorkspaceTabBar};
+use super::{TabStripFollow, WorkspaceDrag, WorkspaceDropAction, WorkspaceTabBar};
 
 /// Renders the content area for a leaf's active tab. The app shell supplies
 /// this (chat transcript + composer today); file/terminal/diff views can be
@@ -25,6 +25,9 @@ pub type ContentRenderer = Rc<
         &mut App,
     ) -> gpui::AnyElement,
 >;
+
+/// Provider for each leaf pane's retained tab scroll follow state.
+pub type TabFollowProvider = Rc<dyn Fn(&str) -> Option<TabStripFollow> + 'static>;
 
 /// The whole workspace: tree + which pane currently holds focus.
 #[derive(IntoElement)]
@@ -39,6 +42,7 @@ pub struct WorkspacePane {
     on_close_pane: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_focus_pane: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_tab: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    tab_follow: Option<TabFollowProvider>,
     on_resize_split: Option<
         Rc<
             dyn Fn(
@@ -75,6 +79,7 @@ impl WorkspacePane {
             on_close_pane,
             on_focus_pane,
             on_new_tab: None,
+            tab_follow: None,
             on_resize_split: None,
         }
     }
@@ -84,6 +89,14 @@ impl WorkspacePane {
         on_new_tab: impl Fn(String, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_new_tab = Some(Rc::new(on_new_tab));
+        self
+    }
+
+    pub fn with_tab_follow(
+        mut self,
+        tab_follow: impl Fn(&str) -> Option<TabStripFollow> + 'static,
+    ) -> Self {
+        self.tab_follow = Some(Rc::new(tab_follow));
         self
     }
 
@@ -182,6 +195,7 @@ fn render_leaf(
     on_close_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_focus_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_tab: &Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    tab_follow: &Option<TabFollowProvider>,
     can_close_pane: bool,
     window: &mut Window,
     cx: &mut App,
@@ -196,6 +210,7 @@ fn render_leaf(
     let on_drop = on_drop_tab.clone();
     let on_close_pane = on_close_pane.clone();
     let on_focus_pane = on_focus_pane.clone();
+    let follow = tab_follow.as_ref().and_then(|f| (f)(leaf.id.as_str()));
     let mut bar = WorkspaceTabBar::new(
         leaf.clone(),
         is_focused,
@@ -203,7 +218,8 @@ fn render_leaf(
         move |pane_id, tab_id, window, cx| (on_cls)(pane_id, tab_id, window, cx),
         can_close_pane,
         move |pane_id, window, cx| (on_close_pane)(pane_id, window, cx),
-    );
+    )
+    .with_scroll_follow(follow);
     if let Some(on_new) = on_new_tab.clone() {
         bar = bar.with_new_tab(move |pane_id, window, cx| (on_new)(pane_id, window, cx));
     }
@@ -302,6 +318,7 @@ fn render_node(
     on_close_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_focus_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_tab: &Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    tab_follow: &Option<TabFollowProvider>,
     on_resize_split: &Option<
         Rc<
             dyn Fn(
@@ -328,6 +345,7 @@ fn render_node(
             on_close_pane,
             on_focus_pane,
             on_new_tab,
+            tab_follow,
             can_close_pane,
             window,
             cx,
@@ -370,6 +388,7 @@ fn render_node(
                             on_close_pane,
                             on_focus_pane,
                             on_new_tab,
+                            tab_follow,
                             on_resize_split,
                             can_close_pane,
                             window,
@@ -434,6 +453,7 @@ fn render_node(
                             on_close_pane,
                             on_focus_pane,
                             on_new_tab,
+                            tab_follow,
                             on_resize_split,
                             can_close_pane,
                             window,
@@ -458,6 +478,7 @@ impl RenderOnce for WorkspacePane {
             &self.on_close_pane,
             &self.on_focus_pane,
             &self.on_new_tab,
+            &self.tab_follow,
             &self.on_resize_split,
             can_close_pane,
             window,
