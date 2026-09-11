@@ -498,7 +498,6 @@ impl Render for ConsoleDesktopApp {
                 let ports = self.forwarded_ports_for_active_workspace();
                 let entity_ports = entity.clone();
                 let entity_unforward = entity.clone();
-                let entity_forward = entity.clone();
                 let ports_popover = console_ui::PortsPopover::new(
                     ports,
                     self.ports_menu_handle.clone(),
@@ -510,11 +509,6 @@ impl Render for ConsoleDesktopApp {
                     move |port, _window, cx| {
                         if let Some(app) = entity_unforward.upgrade() {
                             app.update(cx, |this, cx| this.unforward_port(port, cx));
-                        }
-                    },
-                    move |port, _window, cx| {
-                        if let Some(app) = entity_forward.upgrade() {
-                            app.update(cx, |this, cx| this.forward_port(port, cx));
                         }
                     },
                 );

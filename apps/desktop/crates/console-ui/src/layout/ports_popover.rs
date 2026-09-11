@@ -18,7 +18,6 @@ pub struct PortsPopover {
     menu_handle: ContextMenuHandle,
     on_open_url: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_unforward: Rc<dyn Fn(u16, &mut Window, &mut App) + 'static>,
-    on_forward: Rc<dyn Fn(u16, &mut Window, &mut App) + 'static>,
 }
 
 impl PortsPopover {
@@ -27,14 +26,12 @@ impl PortsPopover {
         menu_handle: ContextMenuHandle,
         on_open_url: impl Fn(String, &mut Window, &mut App) + 'static,
         on_unforward: impl Fn(u16, &mut Window, &mut App) + 'static,
-        on_forward: impl Fn(u16, &mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
             ports,
             menu_handle,
             on_open_url: Rc::new(on_open_url),
             on_unforward: Rc::new(on_unforward),
-            on_forward: Rc::new(on_forward),
         }
     }
 }
@@ -46,7 +43,6 @@ impl RenderOnce for PortsPopover {
         let has_ports = !ports.is_empty();
         let on_open = self.on_open_url.clone();
         let on_unforward = self.on_unforward.clone();
-        let on_forward = self.on_forward.clone();
 
         let trigger_icon_color = if has_ports {
             theme.accent
@@ -76,7 +72,6 @@ impl RenderOnce for PortsPopover {
                 let ports = ports.clone();
                 let on_open = on_open.clone();
                 let on_unforward = on_unforward.clone();
-                let on_forward = on_forward.clone();
                 let handle_close = handle.clone();
 
                 div()
@@ -200,36 +195,6 @@ impl RenderOnce for PortsPopover {
                             }))
                             .into_any_element()
                     })
-                    .child(
-                        div()
-                            .h(px(1.0))
-                            .w_full()
-                            .bg(theme.border)
-                            .my(px(2.0)),
-                    )
-                    // Bottom "+ Add port" action
-                    .child(
-                        div()
-                            .id("add-forwarded-port-btn")
-                            .h(px(26.0))
-                            .px(px(6.0))
-                            .rounded(px(4.0))
-                            .flex()
-                            .items_center()
-                            .gap(px(6.0))
-                            .cursor_pointer()
-                            .hover(|s| s.bg(theme.overlay))
-                            .on_click(move |_, _window, _cx| {
-                                (on_forward)(3000, _window, _cx);
-                            })
-                            .child(app_icon(IconName::Plus, 11.0, theme.text_tertiary))
-                            .child(
-                                div()
-                                    .text_size(px(11.5))
-                                    .text_color(theme.text_secondary)
-                                    .child("Add port"),
-                            ),
-                    )
                     .into_any_element()
             },
         )
