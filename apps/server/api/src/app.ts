@@ -19,6 +19,7 @@ import { usageRoutes } from "./routes/usage.js";
 
 import { gitRoutes } from "./routes/git.js";
 import { portRoutes } from "./routes/ports.js";
+import { projectScriptRoutes } from "./routes/project-scripts.js";
 
 export function createApiApp(): Hono {
   const app = new Hono();
@@ -48,6 +49,7 @@ export function createApiApp(): Hono {
   api.route("/", runRoutes);
   api.route("/", usageRoutes);
   api.route("/", portRoutes);
+  api.route("/", projectScriptRoutes);
 
   app.route("/api", api);
 

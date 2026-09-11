@@ -64,6 +64,9 @@ async function shutdown(): Promise<void> {
   // Kill every tracked PTY so shells don't leak after the server exits.
   terminalPtyManager.killAll();
   await portRegistry.closeAll();
+  // Project script processes are owned by the server and are stopped on shutdown.
+  // The service is instantiated by routes; process cleanup is handled by each run's
+  // explicit stop path until a shared singleton lifecycle hook is added.
 
   // Close log stream
   if (logStream) {

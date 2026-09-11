@@ -6,4 +6,6 @@ export * from "./notification.service.js";
 export * from "./project.service.js";
 export * from "./provider.service.js";
 export * from "./run.service.js";
+export * from "./project-scripts/service.js";
+export * from "./project-scripts/types.js";
 export * from "./session.service.js";
