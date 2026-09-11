@@ -950,7 +950,7 @@ impl Render for ConsoleDesktopApp {
                                 self.expanded_subagents.clone(),
                                 self.inspector_selected_path.clone(),
                                 self.inspector_open_auxiliary_tabs.clone(),
-                                self.ports_menu_handle.clone(),
+                                self.inspector_add_tab_menu.clone(),
                                 on_select_inspector_tab,
                                 on_open_auxiliary_tab,
                                 on_close_auxiliary_tab,

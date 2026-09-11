@@ -211,6 +211,7 @@ pub struct ConsoleDesktopApp {
     pub forwarded_ports_by_project:
         std::collections::HashMap<String, Rc<Vec<console_core::ForwardedPort>>>,
     pub ports_menu_handle: console_ui::ContextMenuHandle,
+    pub inspector_add_tab_menu: console_ui::ContextMenuHandle,
     pub inspector_search_query: String,
     pub inspector_tree: Rc<Vec<console_ui::FileTreeNode>>,
     pub inspector_working_changes: Rc<Vec<console_core::types::GitFileEntry>>,
@@ -828,6 +829,7 @@ impl ConsoleDesktopApp {
             browser_view: None,
             forwarded_ports_by_project: std::collections::HashMap::new(),
             ports_menu_handle: console_ui::ContextMenuHandle::new(cx),
+            inspector_add_tab_menu: console_ui::ContextMenuHandle::new(cx),
             inspector_search_query: String::new(),
             inspector_tree: Rc::new(Vec::new()),
             inspector_working_changes: Rc::new(Vec::new()),
