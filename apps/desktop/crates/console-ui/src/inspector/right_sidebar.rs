@@ -34,7 +34,9 @@ pub enum AuxiliaryTab {
 }
 
 impl AuxiliaryTab {
-    pub const ALL: [Self; 3] = [Self::Browser, Self::Subagents, Self::Devices];
+    /// Auxiliary tabs currently available to users. Devices is reserved until
+    /// the device simulator surface is implemented.
+    pub const ALL: [Self; 2] = [Self::Browser, Self::Subagents];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -208,7 +210,9 @@ impl RenderOnce for RightSidebar {
                     let on_tab = on_tab.clone();
                     let on_close = on_close.clone();
                     let active = self.active_tab == tab;
+                    let group_name = format!("inspector-tab-{id}");
                     div()
+                        .group(group_name.clone())
                         .id(id)
                         .px(px(7.0))
                         .py(px(3.0))
@@ -231,6 +235,8 @@ impl RenderOnce for RightSidebar {
                                     .id(SharedString::from(id.to_owned() + "-close"))
                                     .px(px(2.0))
                                     .text_color(theme.text_tertiary)
+                                    .invisible()
+                                    .group_hover(group_name.clone(), |el| el.visible())
                                     .hover(|s| s.text_color(theme.text))
                                     .on_mouse_down(MouseButton::Left, move |_event: &MouseDownEvent, window, cx| {
                                         (on_close)(auxiliary, window, cx);
