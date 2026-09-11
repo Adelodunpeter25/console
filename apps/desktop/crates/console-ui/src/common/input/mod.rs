@@ -1065,9 +1065,12 @@ impl ComposerInput {
             return;
         };
         let text = match self.mode {
-            // A composer is one prompt — and a search box one query — so
-            // pasted line breaks become spaces.
-            FieldMode::Composer | FieldMode::Search => text.replace(['\n', '\r'], " "),
+            // A search box is a single line — collapse all line breaks to spaces.
+            FieldMode::Search => text.replace(['\n', '\r'], " "),
+            // The composer supports multiple lines (Shift+Enter), so preserve
+            // them when pasting. Only normalize Windows-style \r\n → \n and
+            // strip any bare \r that the clipboard may carry.
+            FieldMode::Composer => text.replace("\r\n", "\n").replace('\r', ""),
             FieldMode::Code => text.replace('\r', ""),
         };
         // A paste is its own undo step, never part of the typing around it —
@@ -1385,6 +1388,10 @@ impl Render for ComposerInput {
                     .px(padding_x)
                     .line_height(px(22.0))
                     .text_size(px(13.5))
+                    // Explicitly allow text to wrap at the container width.
+                    // Without this the inherited text style is Nowrap and
+                    // long lines paint past the right edge of the composer.
+                    .whitespace_normal()
             })
             // A search-mode field is visually one line: the text never wraps,
             // and the overlong remainder slides horizontally under this
