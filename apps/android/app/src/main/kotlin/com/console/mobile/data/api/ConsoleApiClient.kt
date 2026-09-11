@@ -9,15 +9,20 @@ import okhttp3.OkHttpClient
  * Phase 0: holds clients + stores, exposes baseUrl/token resolution.
  * Phase 1: add Ktor/OkHttp interceptors, kotlinx.serialization, ConsoleApi endpoints.
  */
-class ConsoleApiClient(
+open class ConsoleApiClient(
     val httpCallClient: OkHttpClient,
     val httpClient: OkHttpClient,
-    private val preferencesStore: PreferencesStore,
-    private val tokenStore: TokenStore,
+    private val preferencesStore: PreferencesStore? = null,
+    private val tokenStore: TokenStore? = null,
+    private val baseUrlOverride: String? = null,
+    private val authTokenOverride: String? = null,
+    private val hasAuthOverride: Boolean = false,
 ) {
-    val baseUrl: String
-        get() = preferencesStore.backendUrl?.trim()?.trimEnd('/') ?: "http://localhost:3000"
+    open val baseUrl: String
+        get() = baseUrlOverride
+            ?: preferencesStore?.backendUrl?.trim()?.trimEnd('/')?.takeIf { it.isNotEmpty() }
+            ?: "http://localhost:3000"
 
-    val authToken: String?
-        get() = tokenStore.authToken
+    open val authToken: String?
+        get() = if (hasAuthOverride) authTokenOverride else tokenStore?.authToken ?: authTokenOverride
 }
