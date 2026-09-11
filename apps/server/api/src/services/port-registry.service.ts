@@ -89,7 +89,21 @@ export class PortRegistry extends EventEmitter {
     return this.createEntry(port, { manual: true });
   }
 
-  list(host: string): ClientPort[] {
+  async list(host: string): Promise<ClientPort[]> {
+    const entries = [...this.entries.values()];
+    const availability = await Promise.all(
+      entries.map(async (entry) => ({
+        entry,
+        listening: await this.isListening(entry.port),
+      })),
+    );
+
+    for (const { entry, listening } of availability) {
+      if (!listening && this.entries.get(entry.port) === entry) {
+        await this.remove(entry.port);
+      }
+    }
+
     return [...this.entries.values()]
       .sort((a, b) => a.port - b.port)
       .map((entry) => this.clientEntry(entry, host));

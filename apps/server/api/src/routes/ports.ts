@@ -3,9 +3,9 @@ import { portRegistry } from "@/api/src/services/port-registry.service.js";
 
 export const portRoutes = new Hono();
 
-portRoutes.get("/ports", (c) => {
+portRoutes.get("/ports", async (c) => {
   const host = (c.req.header("host") ?? "localhost").replace(/:\d+$/, "");
-  return c.json({ success: true, data: portRegistry.list(host) });
+  return c.json({ success: true, data: await portRegistry.list(host) });
 });
 
 portRoutes.post("/ports/forward", async (c) => {
