@@ -31,7 +31,7 @@ const TOOLBAR_HEIGHT: f32 = 42.0;
 
 #[cfg(target_os = "macos")]
 const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
-     AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15";
+     AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PageLoad {
