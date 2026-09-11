@@ -14,9 +14,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
-    App, Context, Div, Entity, FocusHandle, Focusable, HitboxBehavior, IntoElement, ObjectFit,
-    ParentElement, Render, SharedString, Stateful, Styled, Subscription, Window, canvas, div, img,
-    prelude::*, px,
+    App, Context, Div, Entity, FocusHandle, Focusable, HitboxBehavior, IntoElement, MouseButton,
+    ObjectFit, ParentElement, Render, SharedString, Stateful, Styled, Subscription, Window,
+    canvas, div, img, prelude::*, px,
 };
 
 use super::actions::*;
@@ -437,9 +437,13 @@ impl BrowserView {
         host.set_visible(show);
     }
 
-    pub fn reclaim_native_keyboard(&mut self, _cx: &mut Context<Self>) {
+    pub fn reclaim_native_keyboard(&mut self, cx: &mut Context<Self>) {
         if let Some(host) = self.host.clone() {
-            host.focus_parent();
+            cx.foreground_executor()
+                .spawn(async move {
+                    host.focus_parent();
+                })
+                .detach();
         }
     }
 
@@ -663,6 +667,12 @@ impl BrowserView {
                     .flex_1()
                     .mx(px(4.0))
                     .relative()
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, _, window, cx| {
+                            this.focus_address(window, cx);
+                        }),
+                    )
                     .child(app_icon(
                         if secure {
                             IconName::Lock
@@ -794,6 +804,7 @@ impl BrowserView {
 
     fn render_page_area(&self, theme: Theme) -> Div {
         let host = self.host.clone();
+        let occluded = self.occluded;
         div()
             .flex_1()
             .min_h_0()
@@ -804,7 +815,11 @@ impl BrowserView {
                     move |bounds, window, _| {
                         if let Some(host) = &host {
                             host.sync_bounds(bounds, window.scale_factor());
-                            host.set_visible(true);
+                            if !occluded {
+                                host.set_visible(true);
+                            } else {
+                                host.set_visible(false);
+                            }
                         }
                         window.insert_hitbox(bounds, HitboxBehavior::Normal)
                     },

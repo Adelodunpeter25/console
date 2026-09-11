@@ -216,9 +216,7 @@ mod macos_host {
         }
 
         pub fn focus_parent(&self) {
-            if let Some(window) = self.ns_view().window() {
-                window.makeFirstResponder(None);
-            }
+            let _ = self.webview.focus_parent();
         }
 
         pub fn can_go_back(&self) -> bool {
