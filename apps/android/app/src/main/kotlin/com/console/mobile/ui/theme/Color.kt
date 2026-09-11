@@ -2,11 +2,6 @@ package com.console.mobile.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-/**
- * Port of apps/mobile/styles/theme.ts + global.css --color-* tokens.
- * Single source of truth remains global.css; this file mirrors it for Compose.
- * Regenerate intent: edit global.css then update here (or run theme:generate equivalent).
- */
 object ConsoleColors {
     // Base — --color-screen / theme.colors.background
     val Background = Color(0xFF0A0A0B)

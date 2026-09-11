@@ -11,9 +11,11 @@ import com.console.mobile.core.chat.finalizeSessionRun
 import com.console.mobile.core.chat.isAbortError
 import com.console.mobile.core.chat.newMessageId
 import com.console.mobile.core.chat.toChatSnapshot
-import com.console.mobile.core.util.reconstructRuns
+import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.api.ConsoleApiClient
+import com.console.mobile.data.api.ConsoleJson
+import com.console.mobile.data.local.ChatPersistence
 import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.AgentSessionEvent
 import com.console.mobile.data.model.AskQuestionRequest
@@ -36,24 +38,28 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-/**
- * Drives one session's run lifecycle against the backend and folds events
- * into ChatStateHolder/SessionStateHolder.
- *
- * Port of apps/mobile/stores/useChatStore.ts (sendMessage/abort/
- * attachServerRun/handleEvent/loadMessages) + chat-stream-runner.ts
- * (finalizeSessionRun/abortSessionStream). Streaming coalescing is direct
- * (no RAF on Android) — ChatEvents.applyChatEvent accumulates buffers.
- */
 class ChatRepository(
     private val api: ConsoleApi,
     private val apiClient: ConsoleApiClient,
     private val streamClient: ChatStreamClient,
     private val chats: ChatStateHolder,
     private val sessions: SessionStateHolder,
+    private val persistence: ChatPersistence? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) {
     private val controllers = mutableMapOf<String, RunStreamController>()
+
+    init {
+        persistence?.let { p ->
+            val cached = p.load()
+            if (cached.isNotEmpty()) chats.setAll(cached)
+            scope.launch {
+                chats.sessions.collect { current ->
+                    p.scheduleSave(current)
+                }
+            }
+        }
+    }
 
     fun snapshot(sessionId: String) = toChatSnapshot(chats.get(sessionId))
 
@@ -137,14 +143,16 @@ class ChatRepository(
             approvalMode = view.approvalMode.takeIf { it.isNotBlank() },
             attachments = attachments,
         )
-        val bodyJson = com.console.mobile.data.model.ConsoleJson.encodeToString(RunPromptDto.serializer(), body)
+        val bodyJson = ConsoleJson.encodeToString(RunPromptDto.serializer(), body)
         val controller = getOrCreate(sessionId, bodyJson)
+        persistence?.setSuppress(true)
         try {
             controller.startRun(streamClient)
         } catch (e: Exception) {
             val msg = e.message ?: "Failed to send message. Is the backend running?"
             if (!isAbortError(msg)) markError(sessionId, msg)
             finalize(sessionId, !isAbortError(msg))
+            persistence?.setSuppress(false)
         }
     }
 
@@ -181,6 +189,7 @@ class ChatRepository(
             )
         }
         sessions.setStatus(sessionId, SessionStatus.Working)
+        persistence?.setSuppress(true)
         try {
             // since=0 replays the whole current run buffer.
             getOrCreate(sessionId, "{}").attach(0, streamClient)
@@ -253,6 +262,7 @@ class ChatRepository(
     private fun finalize(sessionId: String, hadError: Boolean) {
         chats.update(sessionId) { finalizeSessionRun(it, hadError) }
         sessions.setStatus(sessionId, if (hadError) SessionStatus.NeedsAttention else SessionStatus.Done)
+        persistence?.setSuppress(false)
     }
 
     private fun parseQuestion(event: AgentSessionEvent): AskQuestionRequest? {

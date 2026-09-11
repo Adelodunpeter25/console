@@ -15,7 +15,6 @@ data class ProjectState(
     val deletedLoading: Boolean = false,
 )
 
-/** Port of useProjectStore.ts list mutations (loading done by repositories). */
 class ProjectStateHolder(initial: ProjectState = ProjectState()) {
     private val _state = MutableStateFlow(initial)
     val state: StateFlow<ProjectState> = _state.asStateFlow()

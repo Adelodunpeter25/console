@@ -12,15 +12,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-/**
- * Shared OkHttp plumbing for the Console backend.
- *
- * Mirrors packages/api client semantics: `{ success, data, error }` envelope,
- * `Authorization: Bearer <token>` when present, query params appended like
- * axios `params`. Bodies are pre-encoded JSON strings — callers use
- * [encodeBody] with the model's serializer. Streaming (SSE) stays in
- * ChatStreamClient; this is plain JSON request/response only.
- */
 class HttpTransport(
     private val callClient: OkHttpClient,
     private val json: Json = ConsoleJson,

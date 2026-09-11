@@ -6,9 +6,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Port of useChatStore.ts session map (streaming coalescing simplified: direct apply). */
-class ChatStateHolder {
-    private val _sessions = MutableStateFlow<Map<String, ChatSessionState>>(emptyMap())
+class ChatStateHolder(initial: Map<String, ChatSessionState> = emptyMap()) {
+    private val _sessions = MutableStateFlow(initial)
     val sessions: StateFlow<Map<String, ChatSessionState>> = _sessions.asStateFlow()
 
     fun get(id: String): ChatSessionState = _sessions.value[id] ?: createChatSessionState()
@@ -17,6 +16,11 @@ class ChatStateHolder {
         _sessions.value = _sessions.value + (id to fn(get(id)))
     }
 
+    fun setAll(all: Map<String, ChatSessionState>) {
+        _sessions.value = all
+    }
+
     fun setInput(id: String, value: String) = update(id) { it.copy(input = value) }
     fun clear(id: String) { _sessions.value = _sessions.value + (id to createChatSessionState()) }
+    fun clearAll() { _sessions.value = emptyMap() }
 }

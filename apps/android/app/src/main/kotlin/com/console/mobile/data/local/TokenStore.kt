@@ -5,11 +5,6 @@ import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
-/**
- * Phase 0 stub for auth token storage.
- * Phase 1 should ensure EncryptedSharedPreferences is used on all devices (current code
- * already does), with fallback handling for StrongBox vs TEE.
- */
 class TokenStore(context: Context) {
     private val prefs: SharedPreferences by lazy {
         try {

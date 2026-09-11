@@ -27,6 +27,6 @@ fun OnboardingPlaceholderScreen(onConnected: () -> Unit) {
         Text("Enter your Console server URL to connect.", color = ConsoleColors.TextSecondary, modifier = Modifier.padding(bottom = 24.dp))
         OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp))
         OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("http://192.168.1.X:3000") }, modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp))
-        Button(onClick = onConnected, enabled = url.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Connect (Phase 1 wires real Test Connection)") }
+        Button(onClick = onConnected, enabled = url.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Connect") }
     }
 }

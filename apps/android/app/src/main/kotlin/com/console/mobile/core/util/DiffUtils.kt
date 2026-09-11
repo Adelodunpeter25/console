@@ -5,7 +5,6 @@ enum class DiffLineType { Added, Removed, Context }
 data class DiffLine(val type: DiffLineType, val text: String, val oldLineNo: Int? = null, val newLineNo: Int? = null)
 data class DiffResult(val lines: List<DiffLine>, val addedCount: Int, val removedCount: Int)
 
-/** Port of parseUnifiedDiff in utils/changes.ts */
 fun parseUnifiedDiff(diff: String): DiffResult {
     val out = mutableListOf<DiffLine>()
     var added = 0

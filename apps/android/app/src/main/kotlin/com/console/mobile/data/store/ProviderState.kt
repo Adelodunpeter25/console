@@ -17,7 +17,6 @@ data class ProviderState(
     val loadingApprovalModes: Boolean = false,
 )
 
-/** Port of useProviderStore.ts. */
 class ProviderStateHolder(initial: ProviderState = ProviderState()) {
     private val _state = MutableStateFlow(initial)
     val state: StateFlow<ProviderState> = _state.asStateFlow()

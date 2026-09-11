@@ -74,10 +74,7 @@ data class SubagentInfo(
     val updatedAt: Long? = null,
 )
 
-/**
- * Agent session SSE event. Port of AgentSessionEvent union in packages/types.
- * `type` discriminates; only the relevant payload fields are set.
- */
+/** Agent session SSE event. */
 @Serializable
 data class AgentSessionEvent(
     val type: String,

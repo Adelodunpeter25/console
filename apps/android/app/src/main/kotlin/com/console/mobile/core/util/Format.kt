@@ -1,6 +1,5 @@
 package com.console.mobile.core.util
 
-/** Port of apps/mobile/utils/format.ts */
 fun folderName(path: String?): String {
     if (path.isNullOrEmpty()) return ""
     val trimmed = path.trimEnd('/')

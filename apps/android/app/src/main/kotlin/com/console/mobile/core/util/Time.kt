@@ -4,7 +4,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Port of apps/mobile/utils/time.ts */
 fun formatMessageTime(dateInput: Any?): String {
     if (dateInput == null) return ""
     val ms = when (dateInput) {

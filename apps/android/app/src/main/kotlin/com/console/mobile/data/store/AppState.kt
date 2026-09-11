@@ -16,7 +16,6 @@ data class AppState(
     val pendingConnectionSection: Boolean = false,
 )
 
-/** Port of stores/useAppStore.ts (Legend State -> StateFlow). */
 class AppStateHolder(initial: AppState = AppState()) {
     private val _state = MutableStateFlow(initial)
     val state: StateFlow<AppState> = _state.asStateFlow()

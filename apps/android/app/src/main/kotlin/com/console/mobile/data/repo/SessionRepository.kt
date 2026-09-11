@@ -17,12 +17,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * Session list/detail repository. Port of useProjectStore session-header
- * refresh + hooks/useHomeSessions list loading + useInfiniteSession paging.
- * Thin wrapper over ConsoleApi with in-memory header cache; chat transcript
- * loading delegates to ChatRepository.loadMessages.
- */
 class SessionRepository(
     private val api: ConsoleApi,
     private val sessions: SessionStateHolder,

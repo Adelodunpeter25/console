@@ -37,15 +37,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 
-/**
- * OkHttp implementation of ConsoleApi. Thin 1:1 port of
- * packages/api/src/services/*.ts — same paths, same query params, same
- * envelope unwrapping. Blocking calls; repositories dispatch to Dispatchers.IO.
- */
 class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private fun enc(v: String): String = URLEncoder.encode(v, "UTF-8")
-
-    // --- sessions (session.service.ts) ---
 
     override suspend fun getSessions(cwd: String?, projectId: String?, onlyDeleted: Boolean): List<SessionHeader> {
         val params = mutableMapOf<String, String?>()
@@ -104,8 +97,6 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         return http.unwrap(raw, ListSerializer(SessionFileChange.serializer()), "get session changes")
     }
 
-    // --- run (run.service.ts) ---
-
     override suspend fun abortRun(sessionId: String) {
         val raw = http.post("/api/sessions/${enc(sessionId)}/abort")
         ensureOk(raw, "abort run")
@@ -127,8 +118,6 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         ensureOk(raw, "approve permission")
         return payload.allow
     }
-
-    // --- fs (fs.service.ts) ---
 
     override suspend fun getProjects(): List<ProjectInfo> {
         val raw = http.get("/api/projects")
@@ -203,8 +192,6 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         http.unwrapOrRaw(raw, JsonElement.serializer(), "delete dir")
     }
 
-    // --- git (git.service.ts) ---
-
     override suspend fun getDiff(repoPath: String, filePath: String?): String? {
         val params = mutableMapOf("repoPath" to repoPath)
         if (filePath != null) params["path"] = filePath
@@ -225,8 +212,6 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         }
     }
 
-    // --- providers / config ---
-
     override suspend fun getProviders(): List<ProviderCatalogEntry> {
         val raw = http.get("/api/providers")
         return http.unwrap(raw, ListSerializer(ProviderCatalogEntry.serializer()), "list providers")
@@ -235,7 +220,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     override suspend fun getProviderModels(providerId: String): List<Model> {
         val raw = http.get("/api/providers/${enc(providerId)}/models")
         return try {
-            http.unwrap(raw, ProviderModelsSerializer, "list provider models")
+            http.unwrapOrRaw(raw, ProviderModelsResponse.serializer(), "list provider models").models
         } catch (_: Exception) {
             emptyList()
         }
@@ -245,8 +230,6 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         val raw = http.get("/api/config/approval-modes")
         return http.unwrap(raw, ListSerializer(ApprovalModeOption.serializer()), "list approval modes")
     }
-
-    // --- auth (auth.service.ts) ---
 
     override suspend fun getAuthStatus(): AuthStatusShim {
         val raw = http.get("/api/auth/status")
@@ -265,16 +248,12 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
 
     override suspend fun saveProjectId(provider: String, projectId: String?) {
         val body = buildJsonObject {
-            projectId?.let { put("projectId", it) } ?: put("projectId", "")
+            put("provider", provider)
+            projectId?.let { put("projectId", it) }
         }.toString()
-        // Best-effort: exact route varies by provider; failure must not break login.
-        try {
-            http.post("/api/providers/${enc(provider)}/project", body)
-        } catch (_: Exception) {
-        }
+        val raw = http.post("/api/auth/project-id", body)
+        http.unwrapOrRaw(raw, JsonElement.serializer(), "save project id")
     }
-
-    // --- assist (assist.service.ts) ---
 
     override suspend fun listSlashCommands(sessionId: String?): List<SlashCommandInfo> {
         val path = if (sessionId != null) "/api/assist/${enc(sessionId)}/commands" else "/api/assist/commands"
@@ -289,8 +268,6 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         val raw = http.get(path, params)
         return http.unwrapOrRaw(raw, FileSearchResponse.serializer(), "assist search")
     }
-
-    // --- usage (usage.service.ts) ---
 
     override suspend fun getProviderUsage(providerId: String): UsageReport? {
         val raw = http.get("/api/providers/${enc(providerId)}/usage")
@@ -309,8 +286,6 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
             emptyMap()
         }
     }
-
-    // --- favorites (model-favorites.service.ts) ---
 
     override suspend fun listFavorites(): List<ModelFavorite> {
         val raw = http.get("/api/model-favorites")
@@ -337,7 +312,6 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         } catch (e: ApiException) {
             throw e
         } catch (_: Exception) {
-            // Non-JSON success body — HTTP 2xx already verified.
         }
     }
 

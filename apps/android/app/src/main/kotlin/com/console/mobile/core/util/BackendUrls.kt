@@ -1,6 +1,5 @@
 package com.console.mobile.core.util
 
-/** Port of apps/mobile/utils/url.ts */
 fun normalizeBackendUrl(input: String): String? {
     var url = input.trim().trimEnd('/')
     if (url.isEmpty()) return null

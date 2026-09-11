@@ -6,16 +6,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Owns one session's run stream lifecycle: the initial POST /run pipe plus
- * reconnect-with-resume against GET /run/stream?since=<lastSeq>.
- *
- * Port of apps/mobile/stores/chat/run-stream-controller.ts RunStreamController:
- *  - finalize runs at most once per controller lifetime
- *  - transport failure -> up to 3 resumptions with 1s/2s/4s backoff
- *  - 409 (no active run) or terminal done/aborted frame -> finish cleanly
- *  - cancel() (user stop) kills timers/streams; late callbacks are inert
- */
 class RunStreamController(
     val sessionId: String,
     private val deps: Deps,

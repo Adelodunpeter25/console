@@ -6,10 +6,6 @@ import android.os.Bundle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-/**
- * Foreground/background tracking (port of apps/mobile/utils/app-focus-manager.ts).
- * Phase 1 wires this to refetchOnWindowFocus / staleTime equivalent.
- */
 object AppForegroundTracker {
     private val _isForeground = MutableStateFlow(false)
     val isForeground: StateFlow<Boolean> = _isForeground

@@ -14,7 +14,6 @@ data class SessionViewState(
 
 val EMPTY_SESSION_VIEW = SessionViewState()
 
-/** Port of useSessionStatusStore + useSessionStore view state (network calls live in repositories). */
 class SessionStateHolder {
     private val _statuses = MutableStateFlow<Map<String, SessionStatus>>(emptyMap())
     val statuses: StateFlow<Map<String, SessionStatus>> = _statuses.asStateFlow()

@@ -37,8 +37,6 @@ private data class Tab(
 @Composable
 fun AppNavGraph() {
     val navController = rememberNavController()
-    // Phase 0: backendUrl gating lives here in Phase 1 (mirrors index.tsx backendUrl ? MainContent : OnboardingScreen).
-    // For now always show shell so nav is testable.
     var showOnboarding by remember { mutableStateOf(false) }
 
     if (showOnboarding) {

@@ -23,7 +23,6 @@ fun HomePlaceholderScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("Home", color = ConsoleColors.TextPrimary)
-        Text("Phase 0 placeholder — Phase 2 implements session list", color = ConsoleColors.TextMuted)
         Button(onClick = onOpenSettings, modifier = Modifier.padding(top = 16.dp)) { Text("Settings") }
         Button(onClick = onOpenSubagents, modifier = Modifier.padding(top = 8.dp)) { Text("Subagents") }
     }

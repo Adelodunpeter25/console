@@ -22,7 +22,6 @@ object LocalNotificationPresenter {
     }
 
     fun consumeLaunchToken(context: Context, intent: android.content.Intent?, threadId: String): Boolean {
-        // Phase 0: just validate token ownership; Phase 1 adds real consume logic.
         return threadId.isNotEmpty()
     }
 }

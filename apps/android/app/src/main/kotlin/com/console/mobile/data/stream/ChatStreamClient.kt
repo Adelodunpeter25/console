@@ -34,24 +34,11 @@ data class SseStreamFrame(val seq: Long?, val event: AgentSessionEvent)
 
 /** Terminal state for a stream — mirrors onStreamEnd/onStreamError contract. */
 sealed interface StreamEnd {
-    /** Server closed the stream cleanly (run settled -> done/aborted frame first). */
     data object Completed : StreamEnd
-    /** Caller cancelled (user pressed stop). */
     data object Aborted : StreamEnd
-    /** Transport failure — caller may reconnect with ?since=lastSeq. */
     data class Failed(val message: String, val statusCode: Int? = null) : StreamEnd
 }
 
-/**
- * Native chat SSE client. Port of the Kotlin NativeStreamModule
- * (startChatStream/startGetStream) to a cold Flow usable without Expo:
- *
- *  - POST {baseUrl}/api/sessions/{id}/run with RunPromptDto JSON body
- *  - GET  {baseUrl}/api/sessions/{id}/run/stream[?since=seq] for re-attach
- *  - `Accept: text/event-stream`, `Cache-Control: no-cache`
- *  - 409 on re-attach = run settled server-side (finish, don't retry)
- *  - Bearer token header when available
- */
 class ChatStreamClient(
     private val httpClient: OkHttpClient,
     private val json: Json = ConsoleJson,
