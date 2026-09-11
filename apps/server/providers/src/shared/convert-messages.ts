@@ -90,13 +90,20 @@ export function convertMessages(
 
   for (const msg of messages) {
     if (msg.role === "user") {
-      // Skip empty user messages
-      if (!msg.content || msg.content.trim() === "") {
+      const text = msg.content ?? "";
+      const attachments = msg.attachments ?? [];
+      // Skip truly empty user messages. A text-empty message that carries
+      // image attachments must still be sent — dropping it (attachments
+      // included) can leave a trailing assistant turn, which Claude
+      // rejects as prefill ("must end with a user message").
+      if (text.trim() === "" && attachments.length === 0) {
         continue;
       }
-      const parts: GeminiOutgoingPart[] = [makeTextPart(msg.content)];
+      const parts: GeminiOutgoingPart[] = [
+        makeTextPart(text.trim() === "" ? "(see attached images)" : text),
+      ];
       // Inline image attachments become Gemini inlineData parts.
-      for (const att of msg.attachments ?? []) {
+      for (const att of attachments) {
         parts.push(makeInlineDataPart(att.data, att.mimeType));
       }
       rawTurns.push({ role: "user", parts });
@@ -168,6 +175,14 @@ export function convertMessages(
     while (mergedTurns.length > 0 && mergedTurns[mergedTurns.length - 1]!.role !== "user") {
       mergedTurns.pop();
     }
+  }
+
+  // 4. Claude hard-fails on an empty conversation ("must end with a user
+  // message"), which is what an assistant-only history trims down to above
+  // (e.g. a restored session whose only turns are stale assistant text).
+  // A neutral continuator is strictly better than a 400.
+  if (options.requireUserTerminator && mergedTurns.length === 0) {
+    mergedTurns.push({ role: "user", parts: [makeTextPart("(continue)")] });
   }
 
   return mergedTurns;

@@ -120,8 +120,33 @@ console.log("Running Provider Wire Converter tests...");
     ],
     { requireUserTerminator: true },
   );
-  assert.equal(assistantOnlyWire.length, 0);
-  console.log("  ✅ Assistant-only history is removed for Claude requests");
+  // Assistant-only history trims to empty, so Claude gets a neutral
+  // continuator instead of a guaranteed-400 empty conversation.
+  assert.equal(assistantOnlyWire.length, 1);
+  assert.equal(assistantOnlyWire[0]?.role, "user");
+  console.log("  ✅ Assistant-only history becomes a continuator for Claude requests");
+
+  // An image-only user message (empty text + attachments) must survive
+  // conversion — dropping it can strand a trailing assistant turn.
+  const imageOnlyWire = convertMessages(
+    [
+      {
+        role: "assistant",
+        id: "turn-1",
+        content: [{ type: "text", text: "Here is what I found." }],
+        stopReason: "stop",
+      },
+      {
+        role: "user",
+        content: "",
+        attachments: [{ type: "image", data: "aGVsbG8=", mimeType: "image/png" }],
+      },
+    ],
+    { requireUserTerminator: true },
+  );
+  assert.equal(imageOnlyWire[imageOnlyWire.length - 1]?.role, "user");
+  assert.equal(imageOnlyWire[imageOnlyWire.length - 1]?.parts.length, 2);
+  console.log("  ✅ Image-only user message preserved (prefill prevention)");
 }
 
 // 1b. Legacy function calls receive the documented compatibility sentinel.
