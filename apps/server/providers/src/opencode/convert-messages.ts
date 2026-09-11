@@ -90,9 +90,23 @@ export function convertOpencodeMessages(messages: AgentMessage[]): ModelMessage[
 
 function getToolResultOutput(r: { content: any; isError?: boolean }): any {
   if (r.isError) {
+    let errorText = "";
+    if (typeof r.content === "string") {
+      errorText = r.content;
+    } else if (Array.isArray(r.content)) {
+      errorText = r.content
+        .map((item) =>
+          item && typeof item === "object" && "text" in item
+            ? item.text
+            : JSON.stringify(item),
+        )
+        .join("\n");
+    } else {
+      errorText = JSON.stringify(r.content);
+    }
     return {
       type: "error-text",
-      value: typeof r.content === "string" ? r.content : JSON.stringify(r.content),
+      value: errorText,
     };
   }
 
@@ -100,6 +114,20 @@ function getToolResultOutput(r: { content: any; isError?: boolean }): any {
     return {
       type: "text",
       value: r.content,
+    };
+  }
+
+  if (Array.isArray(r.content)) {
+    const text = r.content
+      .map((item) =>
+        item && typeof item === "object" && "text" in item
+          ? item.text
+          : JSON.stringify(item),
+      )
+      .join("\n");
+    return {
+      type: "text",
+      value: text,
     };
   }
 

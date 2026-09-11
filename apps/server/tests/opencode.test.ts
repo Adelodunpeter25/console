@@ -81,6 +81,27 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
     type: "json",
     value: { files: ["a.ts", "b.ts"] },
   });
+
+  // Test array-wrapped tool output (e.g. readFile returning [{ type: "text", text: "..." }])
+  const textArrayMsg: AgentMessage[] = [
+    {
+      role: "toolResult",
+      results: [
+        {
+          toolCallId: "call_read_1",
+          toolName: "readFile",
+          content: [{ type: "text", text: "File contents here\nline 2" }],
+        },
+      ],
+    },
+  ];
+  const wireTextArray = convertOpencodeMessages(textArrayMsg);
+  const textArrayToolPart = (wireTextArray[0]!.content as Array<Record<string, unknown>>)[0];
+  assert.deepEqual(textArrayToolPart?.output, {
+    type: "text",
+    value: "File contents here\nline 2",
+  });
+
   console.log("  ✅ convertOpencodeMessages → UIMessage[] wire transformation");
 }
 
