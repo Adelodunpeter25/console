@@ -119,7 +119,7 @@ fsRoutes.get("/file/raw", async (c) => {
 
   try {
     const { bytes, mimeType, sizeBytes } = await fsService.readFileBytes(filePath);
-    return c.body(bytes, 200, {
+    return c.body(new Uint8Array(bytes), 200, {
       "Content-Type": mimeType,
       "Content-Length": String(sizeBytes),
       "Cache-Control": "private, max-age=30",

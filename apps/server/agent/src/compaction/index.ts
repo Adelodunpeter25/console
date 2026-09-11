@@ -28,6 +28,8 @@ export interface CompactionOptions {
   keepRecentTokens?: number;
   /** Hard token threshold override. */
   tokenThreshold?: number;
+  /** Keep at least this many recent conversation turns intact. Default: 3. */
+  minimumRecentTurns?: number;
   /** Max characters allowed per tool result before truncation. Default: 8,000 */
   maxToolResultChars?: number;
   /** Strategy for generating summary text. Default: "structural" */
