@@ -789,20 +789,43 @@ impl ConsoleDesktopApp {
                 self.maybe_refresh_inspector(cx);
             }
             AgentSessionEvent::SessionEnd => {
-                self.set_session_running(run_session_id, None);
+                // A mid-chain sessionEnd (server auto-popped a queued prompt
+                // and the next turn follows on this same stream) must not
+                // tear down running state: the SSE loop breaks as soon as
+                // `is_session_running` is false and would miss the queued
+                // turn's events, leaving the UI stale until the tab reloads.
+                let chained = !self.queued_prompts_for_session(run_session_id).is_empty();
                 self.set_pending_permission_for_session(run_session_id, None);
                 self.set_pending_question_for_session(run_session_id, None);
                 self.clear_question_selected_for_session(run_session_id);
                 self.clear_question_inputs_for_session(run_session_id, cx);
-                if pane_shows_run {
-                    self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
-                        t.finish_streaming(cx);
-                    });
+                if !chained {
+                    self.set_session_running(run_session_id, None);
+                    if pane_shows_run {
+                        self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                            t.finish_streaming(cx);
+                        });
+                    }
                 }
                 self.maybe_refresh_inspector(cx);
             }
             AgentSessionEvent::SessionStart => {
                 self.set_agent_notice_for_session(run_session_id, None);
+                // A chained queued turn re-announces sessionStart on the same
+                // stream. Re-engage streaming so the auto-sent prompt visibly
+                // keeps working even if queueUpdated(null) arrived out of
+                // order or with an empty local queue.
+                let started_at = self
+                    .running_sessions
+                    .get(run_session_id)
+                    .copied()
+                    .unwrap_or_else(|| chrono::Utc::now().timestamp());
+                self.set_session_running(run_session_id, Some(started_at));
+                if pane_shows_run {
+                    self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                        t.resume_streaming(started_at, cx);
+                    });
+                }
             }
             AgentSessionEvent::SessionTitleUpdated { title } => {
                 if let Some(session) = Rc::make_mut(&mut self.sessions)
@@ -817,8 +840,11 @@ impl ConsoleDesktopApp {
                 if let Some(q) = queued_prompt {
                     self.add_queued_prompt_for_session(run_session_id, q);
                 } else {
-                    let mut list = self.queued_prompts_for_session(run_session_id);
+                    let list = self.queued_prompts_for_session(run_session_id);
                     if !list.is_empty() {
+                        // Optimistic fast path: pop the card, paint the user
+                        // bubble, and re-engage streaming for the next turn.
+                        let mut list = list;
                         let popped = list.remove(0);
                         let user_msg = console_core::AgentMessage::User {
                             content: popped.prompt,
@@ -850,6 +876,65 @@ impl ConsoleDesktopApp {
                             })
                             .detach();
                         }
+                    } else {
+                        // The server auto-sent a queued turn we hold no local
+                        // record of (e.g. the optimistic entry was replaced by
+                        // id). Stay marked running and refresh from canonical
+                        // state so the new turn paints live instead of only
+                        // after a tab reload.
+                        let started_at = self
+                            .running_sessions
+                            .get(run_session_id)
+                            .copied()
+                            .unwrap_or_else(|| chrono::Utc::now().timestamp());
+                        self.set_session_running(run_session_id, Some(started_at));
+                        if pane_shows_run {
+                            self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                                t.resume_streaming(started_at, cx);
+                            });
+                        }
+                        let client = self.client.clone();
+                        let sid = run_session_id.to_string();
+                        let pane = run_pane_id.to_string();
+                        let current_token =
+                            self.current_run_token_for_session(run_session_id);
+                        cx.spawn(async move |entity, cx| {
+                            if let Ok(detail) = client.sessions.get(&sid).await {
+                                let _ = cx.update(|cx| {
+                                    if let Some(app) = entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            if this.current_run_token_for_session(&sid)
+                                                != current_token
+                                            {
+                                                return;
+                                            }
+                                            if this.active_session_for_pane(&pane).as_deref()
+                                                == Some(sid.as_str())
+                                            {
+                                                this.transcript_for_pane(&pane).update(
+                                                    cx,
+                                                    |t, cx| {
+                                                        if detail.messages.len()
+                                                            >= t.message_count()
+                                                        {
+                                                            t.set_messages(
+                                                                detail.messages,
+                                                                cx,
+                                                            );
+                                                            t.resume_streaming(
+                                                                started_at,
+                                                                cx,
+                                                            );
+                                                        }
+                                                    },
+                                                );
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                        })
+                        .detach();
                     }
                 }
             }
