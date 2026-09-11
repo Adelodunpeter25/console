@@ -126,6 +126,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.browser:browser:1.8.0")
     implementation("com.composables:icons-lucide-android:2.2.1")
     implementation("com.valentinilk.shimmer:compose-shimmer:1.4.0")
 

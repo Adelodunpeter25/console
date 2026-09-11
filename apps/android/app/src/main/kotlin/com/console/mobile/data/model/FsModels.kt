@@ -77,3 +77,9 @@ fun getFilePreviewBlock(fileName: String, sizeBytes: Long? = null): FilePreviewB
     )
     return null
 }
+
+fun isMarkdownPath(path: String?): Boolean {
+    if (path.isNullOrEmpty()) return false
+    val lower = path.lowercase()
+    return lower.endsWith(".md") || lower.endsWith(".mdx") || lower.endsWith(".markdown") || lower.endsWith(".mkd")
+}
