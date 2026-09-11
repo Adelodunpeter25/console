@@ -7,7 +7,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 
 class ConsoleApplication : Application() {
     override fun onCreate() {
-        // Mirror Remodex: insert BC so TLS/crypto works before anything else. No-op if already present.
+        // Insert BC so TLS/crypto works before anything else. No-op if already present.
         if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
             Security.insertProviderAt(BouncyCastleProvider(), 1)
         }

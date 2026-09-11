@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
             val context = LocalContext.current
             val configuration = LocalConfiguration.current
             // Theme is dark-only (Console #0a0a0b) but we keep the hook so Phase 2
-            // settings can toggle if needed. Mirrors Remodex MainActivity structure.
+            // settings can toggle if needed.
             val systemDark = isSystemInDarkTheme()
             val darkTheme = remember(systemDark) { true }
 

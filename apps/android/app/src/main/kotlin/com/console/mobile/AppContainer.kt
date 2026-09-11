@@ -9,9 +9,9 @@ import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 
 /**
- * Application-wide services — mirrors Remodex AppContainer (object + initialize).
+ * Application-wide services (object + initialize).
  * Phase 0: minimal. Phase 1 will add SessionPersistence, repositories, etc.
- * No Hilt for v1 (see plan §5.5); manual container keeps migration incremental.
+ * No Hilt for v1; manual container keeps migration incremental.
  */
 object AppContainer {
     private val pendingNotificationLock = Any()

@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Mirrors Remodex AppForegroundTracker + apps/mobile/utils/app-focus-manager.ts.
+ * Foreground/background tracking (port of apps/mobile/utils/app-focus-manager.ts).
  * Phase 1 wires this to refetchOnWindowFocus / staleTime equivalent.
  */
 object AppForegroundTracker {
