@@ -1,172 +1,229 @@
-# Desktop Architecture: Native iOS Simulator & Android Emulator Specification
+# Console Device Architecture: Server-Hosted iOS Simulator & Android Emulator Specification
 
 ## 1. Overview & Vision
 
-Console Desktop is a high-performance native desktop application written in **Rust** using **GPUI** (backed by Metal on macOS). 
+Console delivers full lifecycle control and interactive streaming for **iOS Simulators** and **Android Emulators / Physical Devices**.
 
-Rather than relying on web browser streaming (which introduces WebSocket framing, H.264 compression overhead, and WebCodecs latency), the native Rust desktop architecture allows us to achieve **ultra-low-latency, zero-copy display mirroring and direct input control** for both **iOS Simulators** and **Android Emulators / Physical Devices**.
+Instead of embedding platform-specific capture and JNI/Metal bindings directly in the native client binaries, Console employs an **Environment Server-First Architecture** hosted entirely inside `apps/server` (Bun / TypeScript). 
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ Window: Console Workspace                                                                        │
-├───────────────┬────────────────────────────────────────┬─────────────────────────────────────────┤
-│ Left Sidebar  │ Center Cockpit                         │ Right Sidebar (Device / Inspector)      │
-│               │                                        │ ┌─────────────────────────────────────┐ │
-│ • Today       │ ┌────────────────────────────────────┐ │ │ [Changes] [Files] [📱 Devices] [>_]  │ │
-│   - Chat A    │ │ Active Agent Transcript            │ │ ├─────────────────────────────────────┤ │
-│   - Chat B    │ │                                    │ │ │ Device: [ iPhone 16 Pro (Booted) ▾] │ │
-│               │ │ "I have launched the iOS app and   │ │ ├─────────────────────────────────────┤ │
-│ • Yesterday   │ │  tapped the login button."         │ │ │ ┌─────────────────────────────────┐ │ │
-│   - Chat C    │ ├────────────────────────────────────┤ │ │ │                                 │ │ │
-│               │ │ Composer                           │ │ │ │   📱 Live Interactive Device    │ │ │
-│               │ │                                    │ │ │ │      Surface (Metal / GPUI)     │ │ │
-│               │ └────────────────────────────────────┘ │ │ │ │                                 │ │ │
-│               │                                        │ │ │ └─────────────────────────────────┘ │ │
-│               │                                        │ │ │ [ ⌂ Home ] [ 🔒 Lock ] [ 📸 Snap ]  │ │
-│               │                                        │ │ └─────────────────────────────────────┘ │ │
-└───────────────┴────────────────────────────────────────┴─────────────────────────────────────────┘
+│ Console Server Subsystem (apps/server - Bun / TypeScript)                                        │
+│                                                                                                  │
+│  ┌─────────────────────────┐   ┌─────────────────────────────┐   ┌────────────────────────────┐  │
+│  │ Platform Discovery      │   │ Callstack agent-device Core │   │ Media & Streaming Tunnel   │  │
+│  │ • xcrun simctl list     │   │ • Semantic Accessibility    │   │ • WebSocket Stream (scrcpy)│  │
+│  │ • adb & AVD Manager     │   │ • Selector Chains & Match   │   │ • Frame Buffering / MJPEG  │  │
+│  │ • Diagnostic Wizard     │   │ • Metro Runtime Bridge      │   │ • Normalized Input Proxy   │  │
+│  └────────────┬────────────┘   └──────────────┬──────────────┘   └─────────────┬──────────────┘  │
+└───────────────┼───────────────────────────────┼────────────────────────────────┼─────────────────┘
+                │ HTTP REST / JSON-RPC          │ Agent Tool Bus                 │ Streaming WebSocket
+                ▼                               ▼                                ▼
+┌────────────────────────────────┐ ┌─────────────────────────────┐ ┌────────────────────────────────┐
+│ Desktop Client (Rust / GPUI)   │ │ Autonomous Agent Loop       │ │ Mobile Client (React Native)   │
+│ • Interactive Stream Canvas    │ │ (Antigravity, Codex, Devin) │ │ • Live Timeline Screenshots    │
+│ • Pointer / Touch Normalizer   │ │ • device_snapshot           │ │ • Approval Prompts & Steer     │
+│ • Physical Hardware Buttons    │ │ • device_interact           │ │ • Remote Device Inspector      │
+└────────────────────────────────┘ └─────────────────────────────┘ └────────────────────────────────┘
 ```
+
+This ensures that:
+1. **Multi-Client Parity**: **Desktop (GPUI)**, **Mobile (Expo / React Native)**, **Web**, and **Remote CLI/SSH servers** share the exact same simulator sessions and tools.
+2. **Deterministic Agent Automation**: Autonomous agents interact via semantic accessibility trees and selector chains rather than brittle vision-only coordinate guessing.
+3. **Zero Native C/Metal Client Bloat**: Desktop and mobile applications remain clean presentation surfaces that receive a standardized stream and dispatch normalized pointer events.
 
 ---
 
-## 2. Platform Ingestion Strategies
+## 2. Key References & Upstream Blueprints
 
-### A. iOS Simulator (macOS Native Pipeline)
-On macOS, iOS Simulators run directly on the host kernel via `CoreSimulator`:
-1. **Display Mirroring**:
-   - **Zero-Copy Metal Texture Rendering**: The simulator's display framebuffer is backed by an `IOSurface`. In Rust on macOS, we can import the `IOSurfaceID` directly into a Metal texture (`MTLDevice.newTextureWithDescriptor:iosSurface:plane:`) and bind it directly to GPUI's Metal render pipeline.
-   - **Zero CPU/GPU Encoding Overhead**: No H.264 encoding or decoding is required on macOS; the pixels are rendered directly from shared GPU memory.
-   - **Alternative / Fallback**: `xcrun simctl io booted screenshot` or `idb video-stream` for headless frame capture.
-2. **Input Injection & Lifecycle**:
-   - Device discovery, boot, shutdown, app install, and app launch via `xcrun simctl`.
-   - Touch events, swipes, and keystrokes via `idb_companion` or direct Indigo Mach HID event injection.
+When implementing or extending this subsystem, consult these primary references:
 
-### B. Android Emulator & Physical Devices (Cross-Platform Pipeline)
-1. **Display Mirroring**:
-   - **`scrcpy` Native Protocol**: Run a background `adb` connection that pushes the lightweight `scrcpy-server.jar` to the Android device.
-   - The device streams raw H.264/H.265 video packets over an ADB TCP forwarding socket.
-   - **Rust Decoding**: Decode the stream in Rust using macOS hardware VideoToolbox (via `core-foundation` / `video-toolbox-sys`) or `ffmpeg-next`, then update GPUI's image texture.
-2. **Input Injection & Lifecycle**:
-   - Touch, multi-touch gestures, key events, and text typing sent as binary control packets over the `scrcpy` control socket.
-   - Device discovery and APK deployment via `adb` (`adb devices`, `adb install -r`, `adb shell am start`).
+1. **T3 Code Simulator & Emulator Architecture ([PR #10677](https://github.com/pingdotgg/t3code/pull/10677))**:
+   - Environment server execution model, 3-step opt-in onboarding wizard (enable -> tool diagnostic -> agent grant).
+   - Scoped loopback proxying, allowlisted routes, input permission boundaries, and cold AVD boot state machines.
+2. **Callstack `agent-device` Framework ([GitHub Repository](https://github.com/callstack/agent-device))**:
+   - Deterministic Node.js/Bun driver for iOS and Android devices, session leases, and app lifecycle management.
+3. **Callstack `agent-device` Client API Documentation ([Documentation](https://oss.callstack.com/agent-device/docs/client-api))**:
+   - `createAgentDeviceClient()`, `client.snapshot()` accessibility traversal, `parseSelectorChain()`, `client.batch.run()`, and `agent-device/metro` runtime bridges.
 
 ---
 
-## 3. Architecture & Module Design
+## 3. Server Architecture (`apps/server`)
 
-```
-apps/desktop/
-├── crates/
-│   ├── console-core/
-│   │   └── src/services/device/
-│   │       ├── mod.rs                # DeviceService facade & state machine
-│   │       ├── manager.rs            # Lifecycle (discovery, boot, shutdown, active device)
-│   │       ├── traits.rs             # DeviceBackend trait definition
-│   │       ├── ios/
-│   │       │   ├── simctl.rs         # xcrun simctl CLI & process controller
-│   │       │   ├── iosurface.rs      # macOS IOSurface -> Metal texture bridge
-│   │       │   └── idb_client.rs     # idb companion IPC / HID injector
-│   │       └── android/
-│   │           ├── adb.rs            # ADB process wrapper and discovery
-│   │           ├── scrcpy_client.rs  # scrcpy protocol & control packet parser
-│   │           └── decoder.rs        # Hardware video decoder pipeline
-│   └── console-ui/
-│       └── src/device/
-│           ├── mod.rs                # Device panel export
-│           ├── device_panel.rs       # GPUI right-sidebar tab panel
-│           ├── device_viewport.rs    # Interactive Metal surface / render quad
-│           ├── device_bezel.rs       # Hardware frame & buttons (Power, Volume, Home)
-│           └── device_picker.rs      # Dropdown selector for available devices
-```
+The device orchestration layer lives in `apps/server/api/src/devices/` and `apps/server/agent/src/tools/devices/`.
 
-### Core Abstractions (`console-core`)
+### A. Core Engine: Callstack `agent-device`
+The server instantiates an `AgentDeviceClient` instance per active session:
+```ts
+import { createAgentDeviceClient } from "agent-device";
 
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum DevicePlatform {
-    IosSimulator,
-    Android,
-}
+export class DeviceManager {
+  private client = createAgentDeviceClient({ session: "console-device-session" });
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeviceDescriptor {
-    pub id: String,           // UDID or ADB Serial
-    pub name: String,         // "iPhone 16 Pro", "Pixel 8"
-    pub platform: DevicePlatform,
-    pub state: DeviceState,   // Booted, Shutdown, Booting
-    pub screen_width: u32,
-    pub screen_height: u32,
-}
+  async listDevices(): Promise<DeviceDescriptor[]> {
+    // Queries xcrun simctl and adb for booted and available cold AVDs
+  }
 
-#[async_trait]
-pub trait DeviceBackend: Send + Sync {
-    async fn attach(&mut self, id: &str) -> Result<()>;
-    async fn detach(&mut self) -> Result<()>;
-    async fn tap(&self, x: f32, y: f32) -> Result<()>;
-    async fn swipe(&self, start: (f32, f32), end: (f32, f32), duration_ms: u32) -> Result<()>;
-    async fn key(&self, key_code: u32) -> Result<()>;
-    async fn send_text(&self, text: &str) -> Result<()>;
-    async fn screenshot(&self) -> Result<Vec<u8>>;
-    async fn describe_ui(&self) -> Result<serde_json::Value>;
+  async getSnapshot(sessionId: string): Promise<DeviceSnapshot> {
+    const session = await this.client.sessions.get(sessionId);
+    const snapshot = await session.snapshot({ screenshot: { scale: 0.5 } });
+    return {
+      tree: snapshot.nodes, // Semantic Accessibility Hierarchy
+      screenshotBase64: snapshot.screenshot,
+      activeApp: snapshot.foregroundApp,
+    };
+  }
+
+  async interact(action: DeviceAction): Promise<ActionResult> {
+    // Dispatches tap, type, swipe, or keypress via agent-device
+  }
 }
 ```
 
----
-
-## 4. GPUI Viewport & Interaction Model (`console-ui`)
-
-1. **Aspect Ratio Preservation**:
-   - The device viewport dynamically scales to fit the available right sidebar width while strictly maintaining the device's native screen aspect ratio.
-2. **Coordinate Normalization**:
-   - Pointer clicks and drag gestures inside the GPUI viewport are normalized to `(0.0..1.0)` space relative to the active display bounds, then mapped to actual device points/pixels before sending to the backend.
-3. **Hardware Controls Bar**:
-   - Bottom / Top rail buttons:
-     - ⌂ **Home** (Cmd+Shift+H on iOS, Back/Home on Android)
-     - 🔒 **Lock / Power**
-     - 🔊 **Volume Up / Down**
-     - 🔄 **Rotate Screen**
-     - 📸 **Capture Screenshot into Chat Composer**
-4. **Agent Concurrency Indicator**:
-   - When an autonomous agent is driving the device (executing UI tests or navigating an app), a subtle visual badge ("Agent is interacting with device...") appears with an option for the user to pause or take over.
+### B. Streaming & Media Ingestion
+1. **Android**: Server launches `scrcpy-server.jar` via `adb forward` tunnel. Video packets are decoded/demuxed on the server and piped to connected clients over a binary WebSocket connection.
+2. **iOS**: Server captures simulator framebuffer via `idb video-stream` or native `simctl io booted stream` frame buffers, broadcasting frames to connected client subscribers.
+3. **Loopback Auth Proxy**: Input sockets and stream tuning require explicit session authorization (`operate` scope), preventing unauthorized external processes from driving the local device.
 
 ---
 
-## 5. Phased Implementation Plan
+## 4. API & Wire Protocol Specification
 
-### Phase 1: Device Discovery & Manager Foundation
-- Implement `DeviceDescriptor` and `DeviceService` in `crates/console-core`.
-- Implement `simctl.rs` for iOS discovery (`xcrun simctl list --json`) and boot/shutdown operations.
-- Implement `adb.rs` for Android device discovery (`adb devices -l`).
-- Add Device tab toggle in the right sidebar in `console-ui`.
+### REST Endpoints
+| Method | Route | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/devices` | Lists all active simulators, physical devices, and stopped Android AVDs. |
+| `GET` | `/api/devices/diagnostics` | Runs the 3-step setup check (Xcode, Android SDK, KVM, disk space). |
+| `POST` | `/api/devices/:id/boot` | Boots a specified iOS Simulator or Android AVD. |
+| `POST` | `/api/devices/:id/shutdown` | Powers off the specified device. |
+| `POST` | `/api/devices/:id/open-app` | Installs or launches a target bundle/package (`client.apps.open`). |
+| `POST` | `/api/devices/:id/interact` | Executes a manual tap, swipe, keystroke, or text entry. |
+| `GET` | `/api/devices/:id/snapshot` | Returns the accessibility tree hierarchy and screenshot. |
 
-### Phase 2: iOS Simulator Zero-Copy Surface Ingestion
-- Implement macOS `IOSurface` binding and Metal texture integration in `console-core`.
-- Connect Metal texture directly to a custom GPUI `RenderImage` element in `console-ui`.
-- Implement HID event injection (click-to-tap, drag-to-swipe) via `idb` / `simctl`.
-
-### Phase 3: Android `scrcpy` Ingestion & Video Decoder
-- Integrate ADB socket tunnel and `scrcpy-server` deployment in `console-core`.
-- Add hardware H.264 video frame decoder (VideoToolbox on macOS).
-- Implement Android touch and key control packets.
-
-### Phase 4: UI Refinement & Hardware Controls
-- Build device bezel SVG styling and physical button actions (Home, Volume, Lock).
-- Add device switcher dropdown with live status badges.
-- Implement "Attach Screenshot to Composer" shortcut.
-
-### Phase 5: Agent Tools & Autonomous UI Driving
-- Expose device control tools to the Console agent engine (`apps/server`):
-  - `device_tap(x, y)`
-  - `device_type(text)`
-  - `device_swipe(startX, startY, endX, endY)`
-  - `device_screenshot()`
-  - `device_describe_ui()`
-- Provide end-to-end verification and performance benchmarks.
+### WebSocket Endpoint (`/api/devices/:id/stream`)
+- **Downstream (Server → Client)**:
+  - `FrameHeader { width, height, timestamp, format: "jpeg" | "h264" }` + Binary Frame Payload.
+  - `DeviceStatusMessage { state: "booting" | "ready" | "error", details?: string }`.
+- **Upstream (Client → Server)**:
+  - `PointerEvent { type: "down" | "move" | "up", x: 0.0..1.0, y: 0.0..1.0, button: number }`.
+  - `KeyEvent { type: "press", key: string, modifiers: string[] }`.
+  - `HardwareButtonEvent { button: "home" | "back" | "volume_up" | "volume_down" | "power" }`.
 
 ---
 
-## 6. Verification & Performance Targets
-- **iOS Display Latency**: < 16ms (60 FPS zero-copy Metal texture update).
-- **Android Display Latency**: < 35ms (hardware decoded H.264 stream).
-- **Memory Footprint**: < 60 MB additional RAM overhead in desktop process.
-- **Reliability**: Seamless recovery when simulators reboot, app crashes occur, or cables disconnect.
+## 5. Onboarding Diagnostics & Permission Model
+
+Following the T3 Code blueprint, opening the Device panel triggers a non-blocking diagnostic wizard:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 📱 Device Setup & Diagnostics                               │
+├─────────────────────────────────────────────────────────────┤
+│ 1. Platform Tools Check                                     │
+│    ✓ Xcode CLI (xcrun simctl) installed                     │
+│    ✓ Android SDK (adb, emulator) found in PATH              │
+│    ✓ Disk Space: 48 GB available (Minimum 10 GB required)   │
+│                                                             │
+│ 2. Available Virtual Devices                                │
+│    • iOS: iPhone 16 Pro (iOS 18.0) - Booted                 │
+│    • iOS: iPad Air 13-inch (M2) - Stopped                   │
+│    • Android: Pixel_8_API_34 - Stopped                      │
+│                                                             │
+│ 3. Autonomous Agent Permissions                             │
+│    [x] Allow agent to capture screenshots and UI snapshots   │
+│    [ ] Allow agent to automatically tap and type into device │
+│                                                             │
+│ [ Cancel ]                                   [ Enable Device ] │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- **Safe Failure Feedback**: Clear error explanations when Xcode tools or ADB are missing, with actionable install hints.
+- **View Close vs. Power Off**: Closing a tab in the desktop/web client disconnects the stream; shutting down the simulator is an explicit power-off button.
+
+---
+
+## 6. Agent Tools Specification
+
+The following tools are registered with Console’s agent system (`apps/server/agent/src/tools/`):
+
+### 1. `device_list`
+Lists running and available devices with platform metadata and state.
+
+### 2. `device_open`
+Boots a device or launches a specific app target / deep link.
+```json
+{
+  "deviceId": "iPhone-16-Pro-UUID",
+  "app": "com.example.myapp"
+}
+```
+
+### 3. `device_snapshot`
+Returns the foreground accessibility hierarchy and visual screenshot.
+- Returns semantic nodes: `[{ "id": "btn_login", "label": "Log In", "type": "Button", "rect": [100, 450, 200, 50], "editable": false }]`.
+
+### 4. `device_interact`
+Executes pointer or keyboard interaction using either semantic selectors or coordinates:
+```json
+{
+  "deviceId": "Pixel_8_API_34",
+  "action": "tap",
+  "selector": "label:Log In",
+  "fallbackCoordinates": [0.5, 0.65]
+}
+```
+
+### 5. `device_batch`
+Executes an atomic multi-step interaction macro (`agent-device/batch`) to reduce LLM roundtrip latency:
+```json
+{
+  "deviceId": "Pixel_8_API_34",
+  "steps": [
+    { "command": "tap", "input": { "selector": "id:username_field" } },
+    { "command": "type", "input": { "text": "testuser@console.sh" } },
+    { "command": "tap", "input": { "selector": "id:password_field" } },
+    { "command": "type", "input": { "text": "secret123" } },
+    { "command": "tap", "input": { "selector": "id:login_button" } }
+  ]
+}
+```
+
+---
+
+## 7. Client Implementations
+
+### A. Desktop Client (`apps/desktop` - GPUI / Rust)
+- **Component**: `DeviceViewer` in `crates/console-ui/src/devices/`.
+- **Display**: Pure GPUI element rendering incoming JPEG/RGBA frames decoded from WebSocket into an `Image` or texture surface.
+- **Input**: GPUI `on_mouse_down`, `on_mouse_move`, `on_mouse_up` converts local coordinates to normalized `(0.0..1.0)` space and sends JSON payloads over WebSocket.
+- **Hardware Rail**: Physical buttons on the right/bottom bezel for Home, Back, Volume, Power, and "Snap to Composer".
+
+### B. Mobile Client (`apps/mobile` - Expo / React Native)
+- **Timeline Cards**: Renders inline snapshots of agent UI interactions inside the chat transcript.
+- **Remote Viewer**: Optional live WebSocket stream viewer using standard React Native image frames or WebRTC stream.
+
+---
+
+## 8. Implementation Roadmap
+
+### Phase 1: Server Device Core & Diagnostics
+- [ ] Add `agent-device` dependency to `apps/server/package.json`.
+- [ ] Implement `DeviceService` in `apps/server/api/src/services/device.service.ts`.
+- [ ] Implement diagnostics endpoint (`GET /api/devices/diagnostics`) checking `simctl`, `adb`, and disk space.
+- [ ] Build `device_list`, `device_open`, `device_snapshot`, `device_interact`, and `device_batch` agent tools.
+
+### Phase 2: Streaming & Input Pipeline
+- [ ] Implement WebSocket media stream server in `apps/server/api/src/devices/stream.route.ts`.
+- [ ] Wire `scrcpy-server` process supervisor for Android devices.
+- [ ] Wire `simctl io stream` / `idb` frame capture for iOS Simulators.
+- [ ] Implement normalized coordinate transformer and event dispatcher.
+
+### Phase 3: Desktop UI Integration (`console-ui`)
+- [ ] Add **📱 Devices** tab to the right sidebar in `console-ui`.
+- [ ] Implement device switcher dropdown, status pill (Booting / Ready), and hardware rail buttons.
+- [ ] Connect WebSocket client in `console-core` to stream live frames to GPUI viewport.
+- [ ] Add "Send Screenshot to Composer" button.
+
+### Phase 4: Metro & React Native Bridge
+- [ ] Integrate `agent-device/metro` to detect active Metro bundlers on `http://localhost:8081`.
+- [ ] Expose "Fast Refresh" and "Reload Bundle" action buttons in the device toolbar.
