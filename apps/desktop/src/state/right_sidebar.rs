@@ -430,7 +430,6 @@ impl ConsoleDesktopApp {
         self.fetch_inspector_git_changes(cx);
         self.fetch_inspector_session_changes(cx);
         self.fetch_inspector_subagents(cx);
-        self.fetch_forwarded_ports(cx);
         self.ensure_inspector_fs_watcher(cx);
         self.ensure_inspector_git_watcher(cx);
     }

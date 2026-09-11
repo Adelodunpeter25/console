@@ -1242,34 +1242,16 @@ impl ConsoleDesktopApp {
 
         // Port forwards can be created by the agent or another client, so keep
         // the title-bar popover synchronized even when the inspector is closed.
-        let ports_client = app.client.clone();
         cx.spawn(async move |entity, cx| {
             loop {
                 cx.background_executor()
                     .timer(std::time::Duration::from_secs(2))
                     .await;
 
-                let project_id = match cx.update(|cx| {
-                    entity
-                        .upgrade()
-                        .map(|app| app.read(cx).active_project_id_or_global())
-                }) {
-                    Some(project_id) => project_id,
-                    None => break,
+                let Some(app) = entity.upgrade() else {
+                    break;
                 };
-                let project_id_ref = (project_id != "global").then_some(project_id.as_str());
-
-                if let Ok(ports) = ports_client.ports.list(project_id_ref).await {
-                    let _ = cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.forwarded_ports_by_project
-                                    .insert(project_id, Rc::new(ports));
-                                cx.notify();
-                            });
-                        }
-                    });
-                }
+                app.update(cx, |this, cx| this.fetch_forwarded_ports(cx));
             }
         })
         .detach();

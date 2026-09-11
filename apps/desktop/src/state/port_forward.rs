@@ -40,9 +40,15 @@ impl ConsoleDesktopApp {
                 let _ = cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            this.forwarded_ports_by_project
-                                .insert(pid_clone, Rc::new(ports));
-                            cx.notify();
+                            let changed = this
+                                .forwarded_ports_by_project
+                                .get(&pid_clone)
+                                .is_none_or(|current| current.as_ref() != &ports);
+                            if changed {
+                                this.forwarded_ports_by_project
+                                    .insert(pid_clone, Rc::new(ports));
+                                cx.notify();
+                            }
                         });
                     }
                 });
@@ -77,6 +83,9 @@ impl ConsoleDesktopApp {
                                 *list = Rc::new(items);
                             }
                             cx.notify();
+                            // Reconcile with the server immediately after the optimistic
+                            // removal so externally managed metadata stays authoritative.
+                            this.fetch_forwarded_ports(cx);
                         });
                     }
                 });
