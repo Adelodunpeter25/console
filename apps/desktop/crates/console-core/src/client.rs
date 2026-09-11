@@ -16,6 +16,7 @@ pub struct ConsoleClient {
     pub notifications: NotificationService,
     pub usage: UsageService,
     pub settings: SettingsService,
+    pub ports: PortService,
 }
 
 impl ConsoleClient {
@@ -34,6 +35,7 @@ impl ConsoleClient {
             notifications: NotificationService::new(transport.clone()),
             usage: UsageService::new(transport.clone()),
             settings: SettingsService::new(transport.clone()),
+            ports: PortService::new(transport.clone()),
             transport: transport.clone(),
         }
     }
