@@ -34,16 +34,6 @@ class PreferencesStore(context: Context) {
             } catch (_: Exception) {
             }
         }
-        val legacy = backendUrl
-        if (!legacy.isNullOrBlank()) {
-            val env = Environment(
-                id = "env_" + (1000..9999).random().toString(16),
-                name = "Default",
-                url = legacy,
-            )
-            saveEnvironments(listOf(env), env.id)
-            return listOf(env) to env.id
-        }
         return emptyList<Environment>() to null
     }
 

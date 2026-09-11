@@ -12,12 +12,20 @@ import com.console.mobile.data.local.TokenStore
 import com.console.mobile.data.repo.AuthRepository
 import com.console.mobile.data.repo.ChatRepository
 import com.console.mobile.data.repo.EnvironmentsRepository
+import com.console.mobile.data.repo.FsRepository
+import com.console.mobile.data.repo.GitRepository
+import com.console.mobile.data.repo.NotificationRepository
+import com.console.mobile.data.repo.ProjectRepository
+import com.console.mobile.data.repo.ProviderRepository
 import com.console.mobile.data.repo.SessionRepository
+import com.console.mobile.data.repo.TerminalRepository
+import com.console.mobile.data.repo.UsageRepository
 import com.console.mobile.data.store.AppStateHolder
 import com.console.mobile.data.store.AuthStateHolder
 import com.console.mobile.data.store.ChatStateHolder
 import com.console.mobile.data.store.EnvironmentsStateHolder
 import com.console.mobile.data.store.FsStateHolder
+import com.console.mobile.data.store.MobileTab
 import com.console.mobile.data.store.ProjectStateHolder
 import com.console.mobile.data.store.ProviderStateHolder
 import com.console.mobile.data.store.SessionStateHolder
@@ -25,6 +33,10 @@ import com.console.mobile.data.store.TerminalStateHolder
 import com.console.mobile.data.store.UsageStateHolder
 import com.console.mobile.data.stream.ChatStreamClient
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
 object AppContainer {
@@ -105,6 +117,27 @@ object AppContainer {
     lateinit var sessionRepository: SessionRepository
         private set
 
+    lateinit var projectRepository: ProjectRepository
+        private set
+
+    lateinit var providerRepository: ProviderRepository
+        private set
+
+    lateinit var fsRepository: FsRepository
+        private set
+
+    lateinit var usageRepository: UsageRepository
+        private set
+
+    lateinit var gitRepository: GitRepository
+        private set
+
+    lateinit var terminalRepository: TerminalRepository
+        private set
+
+    lateinit var notificationRepository: NotificationRepository
+        private set
+
     lateinit var authRepository: AuthRepository
         private set
 
@@ -160,6 +193,40 @@ object AppContainer {
 
         chatPersistence = ChatPersistence.create(app)
         val streamClient = ChatStreamClient(httpClient)
+
+        projectRepository = ProjectRepository(
+            api = consoleApi,
+            projectState = projectStateHolder,
+            sessionState = sessionStateHolder,
+            appState = appStateHolder,
+        )
+        providerRepository = ProviderRepository(
+            api = consoleApi,
+            providerState = providerStateHolder,
+        )
+        fsRepository = FsRepository(
+            api = consoleApi,
+            fsState = fsStateHolder,
+        )
+        usageRepository = UsageRepository(
+            api = consoleApi,
+            usageState = usageStateHolder,
+        )
+        gitRepository = GitRepository(
+            api = consoleApi,
+            apiClient = consoleApiClient,
+            httpClient = httpClient,
+        )
+        terminalRepository = TerminalRepository(
+            apiClient = consoleApiClient,
+            httpClient = httpClient,
+            terminalState = terminalStateHolder,
+        )
+        notificationRepository = NotificationRepository(
+            apiClient = consoleApiClient,
+            httpClient = httpClient,
+        )
+
         chatRepository = ChatRepository(
             api = consoleApi,
             apiClient = consoleApiClient,
@@ -167,6 +234,7 @@ object AppContainer {
             chats = chatStateHolder,
             sessions = sessionStateHolder,
             persistence = chatPersistence,
+            providerRepo = providerRepository,
         )
         sessionRepository = SessionRepository(
             api = consoleApi,
@@ -192,11 +260,35 @@ object AppContainer {
             usageState = usageStateHolder,
             terminalState = terminalStateHolder,
             onBackendUrlChanged = {
+                projectRepository.loadProjects()
+                projectRepository.loadSessions()
+                providerRepository.loadProviders()
+                providerRepository.loadApprovalModes()
+                usageRepository.loadAllUsage()
                 sessionRepository.refresh()
                 authRepository.loadStatus()
             },
         )
 
         LocalNotificationPresenter.ensureChannelCreated(app)
+
+        val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        appScope.launch {
+            try {
+                notificationRepository.notifications().collect { event ->
+                    val viewingSame = appStateHolder.state.value.activeTab == MobileTab.Chat &&
+                        appStateHolder.state.value.selectedSessionId == event.sessionId
+                    if (!viewingSame) {
+                        LocalNotificationPresenter.showNotification(
+                            app,
+                            event.title,
+                            event.body,
+                            event.sessionId,
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
     }
 }

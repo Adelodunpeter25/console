@@ -150,6 +150,16 @@ class ChatRepositoryTest {
         assertEquals(1, chats2.get("s2").messages.size)
     }
 
+    @Test fun attachmentManagementAndImageCheck() = runTest {
+        val (r, chats, sessions) = repo(this)
+        r.addAttachments("s1", listOf(com.console.mobile.data.model.ImageAttachment("b1", "image/png"), com.console.mobile.data.model.ImageAttachment("b2", "image/png"), com.console.mobile.data.model.ImageAttachment("b3", "image/png")))
+        assertEquals(2, chats.get("s1").attachments.size) // trimmed to 2
+        r.removeAttachment("s1", 0)
+        assertEquals(1, chats.get("s1").attachments.size)
+        r.clearAttachments("s1")
+        assertTrue(chats.get("s1").attachments.isEmpty())
+    }
+
     // Minimal ConsoleApiClient stand-in: ChatRepository only needs baseUrl/authToken.
     private class TestApiClient : ConsoleApiClient(
         httpCallClient = OkHttpClient(),

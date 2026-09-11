@@ -212,6 +212,24 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         }
     }
 
+    override suspend fun listBranches(repoPath: String): GitBranchesResponse? {
+        val raw = http.get("/api/git/branches", mapOf("path" to repoPath))
+        return try {
+            http.unwrap(raw, GitBranchesResponse.serializer().nullable, "list git branches")
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    override suspend fun checkoutBranch(repoPath: String, branch: String) {
+        val body = buildJsonObject {
+            put("path", repoPath)
+            put("branch", branch)
+        }.toString()
+        val raw = http.post("/api/git/checkout", body)
+        ensureOk(raw, "checkout branch")
+    }
+
     override suspend fun getProviders(): List<ProviderCatalogEntry> {
         val raw = http.get("/api/providers")
         return http.unwrap(raw, ListSerializer(ProviderCatalogEntry.serializer()), "list providers")

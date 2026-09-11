@@ -62,6 +62,8 @@ interface ConsoleApi {
     // git
     suspend fun getDiff(repoPath: String, filePath: String?): String?
     suspend fun getGitStatus(path: String): GitStatusSummary?
+    suspend fun listBranches(repoPath: String): GitBranchesResponse?
+    suspend fun checkoutBranch(repoPath: String, branch: String)
     // providers / config
     suspend fun getProviders(): List<ProviderCatalogEntry>
     suspend fun getProviderModels(providerId: String): List<Model>

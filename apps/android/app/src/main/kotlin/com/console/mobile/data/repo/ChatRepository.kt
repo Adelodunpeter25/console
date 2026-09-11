@@ -16,6 +16,7 @@ import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.api.ConsoleApiClient
 import com.console.mobile.data.api.ConsoleJson
 import com.console.mobile.data.local.ChatPersistence
+import com.console.mobile.core.chat.trimDraftAttachments
 import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.AgentSessionEvent
 import com.console.mobile.data.model.AskQuestionRequest
@@ -23,6 +24,8 @@ import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.PermissionRequest
 import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionStatus
+import com.console.mobile.data.model.SubagentInfo
+import com.console.mobile.data.model.TodoItem
 import com.console.mobile.data.model.UserMessage
 import com.console.mobile.data.store.ChatStateHolder
 import com.console.mobile.data.store.SessionStateHolder
@@ -45,6 +48,7 @@ class ChatRepository(
     private val chats: ChatStateHolder,
     private val sessions: SessionStateHolder,
     private val persistence: ChatPersistence? = null,
+    private val providerRepo: ProviderRepository? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) {
     private val controllers = mutableMapOf<String, RunStreamController>()
@@ -63,7 +67,82 @@ class ChatRepository(
 
     fun snapshot(sessionId: String) = toChatSnapshot(chats.get(sessionId))
 
-    fun setInput(sessionId: String, value: String) = chats.setInput(sessionId, value)
+    fun setInput(sessionId: String, value: String) {
+        chats.update(sessionId) {
+            it.copy(
+                input = value,
+                draftUpdatedAt = if (value.trim().isNotEmpty() || it.attachments.isNotEmpty()) System.currentTimeMillis() else null,
+            )
+        }
+    }
+
+    fun addAttachments(sessionId: String, attachments: List<ImageAttachment>) {
+        if (attachments.isEmpty()) return
+        chats.update(sessionId) { current ->
+            val merged = trimDraftAttachments(current.attachments + attachments)
+            current.copy(
+                attachments = merged,
+                draftUpdatedAt = System.currentTimeMillis(),
+            )
+        }
+    }
+
+    fun removeAttachment(sessionId: String, index: Int) {
+        chats.update(sessionId) { current ->
+            val next = current.attachments.filterIndexed { i, _ -> i != index }
+            current.copy(
+                attachments = next,
+                draftUpdatedAt = if (current.input.trim().isNotEmpty() || next.isNotEmpty()) System.currentTimeMillis() else null,
+            )
+        }
+    }
+
+    fun clearAttachments(sessionId: String) {
+        chats.update(sessionId) { current ->
+            current.copy(
+                attachments = emptyList(),
+                draftUpdatedAt = if (current.input.trim().isNotEmpty()) System.currentTimeMillis() else null,
+            )
+        }
+    }
+
+    fun setTodoItems(sessionId: String, items: List<TodoItem>) {
+        chats.update(sessionId) { it.copy(todoItems = items) }
+    }
+
+    fun setSubagents(sessionId: String, subagents: List<SubagentInfo>) {
+        chats.update(sessionId) { it.copy(subagents = subagents) }
+    }
+
+    fun loadTodos(sessionId: String) {
+        val current = chats.get(sessionId)
+        if (current.todoItems.isNotEmpty()) return
+        scope.launch {
+            try {
+                val todos = withContext(Dispatchers.IO) { api.getTodos(sessionId) }
+                val fresh = chats.get(sessionId)
+                if (fresh.todoItems.isEmpty()) {
+                    setTodoItems(sessionId, todos)
+                }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun loadSubagents(sessionId: String) {
+        val current = chats.get(sessionId)
+        if (current.subagents.isNotEmpty()) return
+        scope.launch {
+            try {
+                val subagents = withContext(Dispatchers.IO) { api.getSubagents(sessionId) }
+                val fresh = chats.get(sessionId)
+                if (fresh.subagents.isEmpty()) {
+                    setSubagents(sessionId, subagents)
+                }
+            } catch (_: Exception) {
+            }
+        }
+    }
 
     fun loadMessages(sessionId: String, messages: List<AgentMessage>) {
         val current = chats.get(sessionId)
@@ -113,15 +192,33 @@ class ChatRepository(
         val view = sessions.getView(sessionId)
         val attachments = session.attachments
 
+        if (attachments.isNotEmpty() && providerRepo?.supportsImages(view.sessionProvider, view.sessionModelId) == false) {
+            chats.update(sessionId) { current ->
+                current.copy(
+                    messages = current.messages + AssistantMessage(
+                        id = newMessageId(),
+                        createdAt = System.currentTimeMillis(),
+                        content = listOf(TextPart("Error: The selected model '${view.sessionModelId}' does not support image attachments.")),
+                    ),
+                )
+            }
+            return
+        }
+
+        val userMessageAttachments = attachments.map {
+            com.console.mobile.data.model.ImagePart(data = it.data, mimeType = it.mimeType)
+        }
+
         chats.update(sessionId) {
             it.copy(
                 messages = it.messages + UserMessage(
                     id = newMessageId(),
                     createdAt = System.currentTimeMillis(),
                     content = prompt,
-                    attachments = emptyList(),
+                    attachments = userMessageAttachments,
                 ),
                 input = "",
+                draftUpdatedAt = null,
                 streamingText = "",
                 streamingThinking = "",
                 activeToolCalls = emptyList(),
