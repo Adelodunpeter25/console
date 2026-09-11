@@ -12,6 +12,7 @@ pub mod motion;
 pub mod scrollbar;
 pub mod text_field;
 pub mod tooltip;
+pub mod transparency;
 
 use crate::theme::Theme;
 use console_core::SessionStatus;
@@ -27,6 +28,7 @@ pub use menu::{
 };
 pub use scrollbar::ScrollbarState;
 pub use text_field::TextField;
+pub use transparency::transparency_grid;
 
 /// A monochrome icon from the embedded set, tinted via text color.
 pub fn icon(path: &'static str, size: f32, color: Hsla) -> Svg {

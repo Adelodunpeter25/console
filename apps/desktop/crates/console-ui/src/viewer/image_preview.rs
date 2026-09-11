@@ -8,6 +8,7 @@ use gpui::{
     px,
 };
 
+use crate::primitives::transparency_grid;
 use crate::theme::Theme;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -235,15 +236,21 @@ impl RenderOnce for ImagePreview {
                     .child(
                         div()
                             .id("image-preview-box")
+                            .relative()
                             .max_w_full()
                             .max_h_full()
                             .flex()
                             .items_center()
                             .justify_center()
+                            .rounded(px(4.0))
+                            .overflow_hidden()
                             .when_some(self.on_zoom.clone(), |s, on_zoom| {
                                 s.cursor_pointer()
                                     .on_click(move |_, window, cx| (on_zoom)(window, cx))
                             })
+                            // Checkerboard behind the image so dark SVGs on a
+                            // transparent background stay visible in dark mode.
+                            .child(transparency_grid())
                             .child(
                                 img(self.image.clone())
                                     .id("image-preview-img")

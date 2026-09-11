@@ -1,4 +1,4 @@
-use crate::primitives::{IconName, app_icon};
+use crate::primitives::{IconName, app_icon, transparency_grid};
 use crate::theme::Theme;
 use gpui::{
     App, IntoElement, MouseButton, ParentElement, RenderOnce, SharedString, Styled, Window, div,
@@ -65,9 +65,12 @@ impl RenderOnce for ImageViewerModal {
             // Image preview: the img is constrained directly (max size +
             // ScaleDown, like the transcript's images) so it always has a
             // concrete layout size — a zero-sized wrapper would collapse it.
+            // The checkerboard sits behind the image so dark artwork on a
+            // transparent background stays visible against the dark overlay.
             .child(
                 div()
                     .id("image-viewer-content")
+                    .relative()
                     .max_w(px(960.0))
                     .max_h(px(640.0))
                     .rounded(px(12.0))
@@ -75,8 +78,8 @@ impl RenderOnce for ImageViewerModal {
                     .shadow_xl()
                     .border_1()
                     .border_color(theme.border_strong)
-                    .bg(theme.surface)
                     .on_mouse_down(MouseButton::Left, |_, _, _| {})
+                    .child(transparency_grid())
                     .child(
                         img(self.image.clone())
                             .max_w(px(936.0))
