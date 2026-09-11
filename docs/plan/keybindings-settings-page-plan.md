@@ -56,7 +56,7 @@ This document defines the plan for adding a dedicated, read-only **"Keyboard Sho
 │                 │ Navigate Back (`BrowserBack`)                         [ ⌘ ] [ [ ]         │
 │                 │ Navigate Forward (`BrowserForward`)                   [ ⌘ ] [ ] ]         │
 │                 │ Stop Loading (`BrowserStop`)                          [ Esc ]             │
-│                 │ Toggle Web Inspector / DevTools (`BrowserDevtools`)   [ ⌥ ] [ ⌘ ] [ I ]   │
+│                 │ Toggle Web Inspector / DevTools (`BrowserDevtools`)   [ ⇧ ] [ ⌘ ] [ I ]   │
 │                 │ Cancel Address Edit (`BrowserAddressCancel`)          [ Esc ]             │
 │                 │                                                                           │
 │                 │ ── Terminal & Code Viewer ─────────────────────────────────────────────── │
