@@ -169,6 +169,7 @@ impl RenderOnce for RightSidebar {
         let open_auxiliary = self.open_auxiliary_tabs.clone();
         let on_refresh = self.on_refresh;
         let on_resize = self.on_begin_resize;
+        let changes_count = self.working_changes.len();
 
         div()
             .id("right-sidebar-shell")
@@ -228,6 +229,19 @@ impl RenderOnce for RightSidebar {
                         .hover(|s| s.bg(theme.overlay))
                         .on_click(move |_, window, cx| (on_tab)(tab, window, cx))
                         .child(label)
+                        .when(tab == InspectorTab::Primary(PrimaryTab::Changes) && changes_count > 0, |el| {
+                            el.child(
+                                div()
+                                    .px(px(4.0))
+                                    .py(px(1.0))
+                                    .rounded(px(4.0))
+                                    .bg(theme.overlay)
+                                    .text_size(px(10.0))
+                                    .font_weight(gpui::FontWeight::BOLD)
+                                    .text_color(theme.accent)
+                                    .child(changes_count.to_string()),
+                            )
+                        })
                         .when_some(closable, |el, auxiliary| {
                             let on_close = on_close.clone();
                             el.child(
