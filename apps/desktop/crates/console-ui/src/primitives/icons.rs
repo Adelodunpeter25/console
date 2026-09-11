@@ -192,6 +192,7 @@ pub enum IconName {
     Moon,
     Tuning,
     Heart,
+    Port,
     Provider(ProviderIcon),
     FileType(FileTypeIcon),
 }
@@ -504,6 +505,7 @@ impl IconName {
             Self::Moon => "icons/moon.svg",
             Self::Tuning => "icons/tuning.svg",
             Self::Heart => "icons/heart.svg",
+            Self::Port => "icons/port.svg",
             Self::Provider(provider) => provider.path(),
             Self::FileType(file_type) => file_type.path(),
         }

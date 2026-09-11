@@ -25,6 +25,7 @@ pub struct TitleBar {
     on_toggle_sidebar: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_right_sidebar: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     right_sidebar_open: bool,
+    ports_element: Option<gpui::AnyElement>,
 }
 
 impl TitleBar {
@@ -39,6 +40,7 @@ impl TitleBar {
             on_toggle_sidebar,
             on_toggle_right_sidebar: None,
             right_sidebar_open: false,
+            ports_element: None,
         }
     }
 
@@ -49,6 +51,11 @@ impl TitleBar {
     ) -> Self {
         self.right_sidebar_open = open;
         self.on_toggle_right_sidebar = Some(on_toggle);
+        self
+    }
+
+    pub fn with_ports(mut self, ports: Option<gpui::AnyElement>) -> Self {
+        self.ports_element = ports;
         self
     }
 }
@@ -113,7 +120,7 @@ impl RenderOnce for TitleBar {
                     )
                 },
             ))
-            // Right: spacer + right inspector toggle button
+            // Right: spacer + ports popover + right inspector toggle button
             .child(
                 div()
                     .w(px(sidebar_width))
@@ -121,7 +128,9 @@ impl RenderOnce for TitleBar {
                     .flex()
                     .items_center()
                     .justify_end()
+                    .gap(px(4.0))
                     .pr(px(12.0))
+                    .when_some(self.ports_element, |el, ports| el.child(ports))
                     .when_some(on_toggle_right, |el, on_toggle_right| {
                         el.child(
                             div()

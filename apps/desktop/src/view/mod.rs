@@ -494,10 +494,35 @@ impl Render for ConsoleDesktopApp {
                     }
                 }
             })
-            .child(
+            .child({
+                let ports = self.forwarded_ports_for_active_workspace();
+                let entity_ports = entity.clone();
+                let entity_unforward = entity.clone();
+                let entity_forward = entity.clone();
+                let ports_popover = console_ui::PortsPopover::new(
+                    ports,
+                    self.ports_menu_handle.clone(),
+                    move |url, window, cx| {
+                        if let Some(app) = entity_ports.upgrade() {
+                            app.update(cx, |this, cx| this.open_port_in_browser(url, window, cx));
+                        }
+                    },
+                    move |port, _window, cx| {
+                        if let Some(app) = entity_unforward.upgrade() {
+                            app.update(cx, |this, cx| this.unforward_port(port, cx));
+                        }
+                    },
+                    move |port, _window, cx| {
+                        if let Some(app) = entity_forward.upgrade() {
+                            app.update(cx, |this, cx| this.forward_port(port, cx));
+                        }
+                    },
+                );
+
                 TitleBar::new(titlebar_text, self.sidebar_width, on_toggle_sidebar)
-                    .with_right_sidebar_toggle(self.right_sidebar_visible, on_toggle_right_sidebar),
-            )
+                    .with_right_sidebar_toggle(self.right_sidebar_visible, on_toggle_right_sidebar)
+                    .with_ports(Some(ports_popover.into_any_element()))
+            })
             // Sidebar + workspace sit in a row below the title bar.
             .child(
                 div()

@@ -207,6 +207,9 @@ pub struct ConsoleDesktopApp {
         std::collections::HashMap<String, (usize, usize)>,
     pub inspector_active_tab: console_ui::InspectorTab,
     pub browser_view: Option<gpui::Entity<console_ui::BrowserView>>,
+    pub forwarded_ports_by_project:
+        std::collections::HashMap<String, Rc<Vec<console_core::ForwardedPort>>>,
+    pub ports_menu_handle: console_ui::ContextMenuHandle,
     pub inspector_search_query: String,
     pub inspector_tree: Rc<Vec<console_ui::FileTreeNode>>,
     pub inspector_working_changes: Rc<Vec<console_core::types::GitFileEntry>>,
@@ -821,6 +824,8 @@ impl ConsoleDesktopApp {
             persisted_bottom_terminals,
             inspector_active_tab: console_ui::InspectorTab::AllFiles,
             browser_view: None,
+            forwarded_ports_by_project: std::collections::HashMap::new(),
+            ports_menu_handle: console_ui::ContextMenuHandle::new(cx),
             inspector_search_query: String::new(),
             inspector_tree: Rc::new(Vec::new()),
             inspector_working_changes: Rc::new(Vec::new()),
