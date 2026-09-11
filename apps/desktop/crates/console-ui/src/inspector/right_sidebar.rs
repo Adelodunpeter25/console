@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use console_core::types::{GitFileEntry, SessionFileChange, SubagentInfo};
 use gpui::{
-    App, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement, RenderOnce,
+    AnyElement, App, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
@@ -23,6 +23,7 @@ pub enum InspectorTab {
     #[default]
     AllFiles,
     Changes,
+    Browser,
     Subagents,
 }
 
@@ -40,6 +41,7 @@ pub struct RightSidebar {
     selected_path: Option<String>,
     bottom_split: Option<RightSidebarBottomSplit>,
     subagent_markdown_views: Option<Rc<RefCell<HashMap<String, Rc<RefCell<MarkdownView>>>>>>,
+    browser_view: Option<AnyElement>,
     on_select_tab: Rc<dyn Fn(InspectorTab, &mut Window, &mut App) + 'static>,
     on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -83,6 +85,7 @@ impl RightSidebar {
             selected_path,
             bottom_split: None,
             subagent_markdown_views: None,
+            browser_view: None,
             on_select_tab,
             on_toggle_folder,
             on_select_file,
@@ -103,6 +106,11 @@ impl RightSidebar {
         views: Rc<RefCell<HashMap<String, Rc<RefCell<MarkdownView>>>>>,
     ) -> Self {
         self.subagent_markdown_views = Some(views);
+        self
+    }
+
+    pub fn with_browser_view(mut self, browser_view: Option<AnyElement>) -> Self {
+        self.browser_view = browser_view;
         self
     }
 }
@@ -245,7 +253,39 @@ impl RenderOnce for RightSidebar {
                                         )
                                     })
                             })
-                            // Tab 3: Subagents (N)
+                            // Tab 3: Browser
+                            .child({
+                                let on_tab = on_tab.clone();
+                                let is_active = self.active_tab == InspectorTab::Browser;
+                                div()
+                                    .id("tab-browser")
+                                    .px(px(8.0))
+                                    .py(px(3.0))
+                                    .rounded(px(4.0))
+                                    .text_size(px(11.0))
+                                    .font_weight(if is_active {
+                                        gpui::FontWeight::SEMIBOLD
+                                    } else {
+                                        gpui::FontWeight::NORMAL
+                                    })
+                                    .text_color(if is_active {
+                                        theme.text
+                                    } else {
+                                        theme.text_tertiary
+                                    })
+                                    .bg(if is_active {
+                                        theme.overlay_strong
+                                    } else {
+                                        gpui::transparent_black()
+                                    })
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(theme.overlay))
+                                    .on_click(move |_, window, cx| {
+                                        (on_tab)(InspectorTab::Browser, window, cx);
+                                    })
+                                    .child("Browser")
+                            })
+                            // Tab 4: Subagents (N)
                             .child({
                                 let on_tab = on_tab.clone();
                                 let is_active = self.active_tab == InspectorTab::Subagents;
@@ -335,6 +375,20 @@ impl RenderOnce for RightSidebar {
                             self.on_select_file,
                         )
                         .into_any_element(),
+                        InspectorTab::Browser => {
+                            if let Some(browser) = self.browser_view {
+                                browser
+                            } else {
+                                div()
+                                    .size_full()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .text_color(theme.text_tertiary)
+                                    .child("Browser unavailable")
+                                    .into_any_element()
+                            }
+                        }
                         InspectorTab::Subagents => {
                             let mut list = SubagentListView::new(
                                 self.subagents,

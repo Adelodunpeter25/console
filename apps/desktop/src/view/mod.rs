@@ -307,7 +307,7 @@ impl Render for ConsoleDesktopApp {
                         console_ui::InspectorTab::Changes => {
                             this.open_diff_tab(path, cx);
                         }
-                        console_ui::InspectorTab::Subagents => {}
+                        console_ui::InspectorTab::Browser | console_ui::InspectorTab::Subagents => {}
                     });
                 }
             })
@@ -865,6 +865,13 @@ impl Render for ConsoleDesktopApp {
                         .with_new_terminal(on_new_right_sidebar_terminal)
                         .with_toggle_collapsed(on_toggle_right_sidebar_bottom_collapsed);
 
+                        let browser_element = if self.inspector_active_tab == console_ui::InspectorTab::Browser {
+                            let browser = self.browser_view_for_inspector(window, cx);
+                            Some(browser.into_any_element())
+                        } else {
+                            None
+                        };
+
                         el.child(
                             RightSidebar::new(
                                 self.right_sidebar_width,
@@ -886,6 +893,7 @@ impl Render for ConsoleDesktopApp {
                                 on_begin_right_sidebar_resize,
                             )
                             .with_bottom_split(Some(bottom_split))
+                            .with_browser_view(browser_element)
                             .subagent_markdown_views(self.subagent_markdown_views.clone()),
                         )
                     }),

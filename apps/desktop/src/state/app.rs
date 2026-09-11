@@ -206,6 +206,7 @@ pub struct ConsoleDesktopApp {
     pub(crate) persisted_bottom_terminals:
         std::collections::HashMap<String, (usize, usize)>,
     pub inspector_active_tab: console_ui::InspectorTab,
+    pub browser_view: Option<gpui::Entity<console_ui::BrowserView>>,
     pub inspector_search_query: String,
     pub inspector_tree: Rc<Vec<console_ui::FileTreeNode>>,
     pub inspector_working_changes: Rc<Vec<console_core::types::GitFileEntry>>,
@@ -809,6 +810,7 @@ impl ConsoleDesktopApp {
             right_sidebar_terminals_by_cwd: std::collections::HashMap::new(),
             persisted_bottom_terminals,
             inspector_active_tab: console_ui::InspectorTab::AllFiles,
+            browser_view: None,
             inspector_search_query: String::new(),
             inspector_tree: Rc::new(Vec::new()),
             inspector_working_changes: Rc::new(Vec::new()),

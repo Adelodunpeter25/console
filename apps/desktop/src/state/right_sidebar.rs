@@ -273,9 +273,24 @@ impl ConsoleDesktopApp {
                 self.fetch_inspector_git_changes(cx);
                 self.fetch_inspector_session_changes(cx);
             }
+            InspectorTab::Browser => {}
             InspectorTab::Subagents => self.fetch_inspector_subagents(cx),
         }
         cx.notify();
+    }
+
+    pub fn browser_view_for_inspector(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::Entity<console_ui::BrowserView> {
+        if let Some(ref view) = self.browser_view {
+            view.clone()
+        } else {
+            let view = cx.new(|cx| console_ui::BrowserView::new(window, cx));
+            self.browser_view = Some(view.clone());
+            view
+        }
     }
 
     #[allow(dead_code)]

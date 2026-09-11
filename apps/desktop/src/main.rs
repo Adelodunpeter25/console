@@ -50,6 +50,7 @@ fn main() {
         console_ui::init_session_rename_keybindings(cx);
         console_ui::init_code_viewer_keybindings(cx);
         console_ui::terminal::init_terminal_keybindings(cx);
+        console_ui::init_browser_keybindings(cx);
         console_ui::primitives::menu::init(cx);
 
         // Only the main window is persisted and restored. Extra windows
