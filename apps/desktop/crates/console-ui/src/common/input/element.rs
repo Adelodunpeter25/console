@@ -463,8 +463,12 @@ impl Element for InputElement {
                 .then_some(cursor_position)
                 .flatten()
                 .map(|cursor_position| {
+                    let line_height = layout.line_height();
+                    let cursor_height = (line_height - px(4.0)).max(px(14.0)).min(px(16.0));
+                    let offset_y = (line_height - cursor_height) / 2.0;
+                    let aligned_origin = point(cursor_position.x, cursor_position.y + offset_y);
                     fill(
-                        Bounds::new(cursor_position, size(px(1.5), layout.line_height())),
+                        Bounds::new(aligned_origin, size(px(1.5), cursor_height)),
                         theme.accent,
                     )
                 });
