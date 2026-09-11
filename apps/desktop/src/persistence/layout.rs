@@ -23,9 +23,16 @@ pub struct PersistedLayoutState {
     /// Collapsed project sections (project id, or "none") in project sort mode.
     #[serde(default)]
     pub collapsed_projects: Vec<String>,
+    /// Auxiliary inspector tabs mounted in the right-sidebar tab strip.
+    #[serde(default)]
+    pub open_auxiliary_tabs: Vec<console_ui::AuxiliaryTab>,
 }
 
 impl PersistedLayoutState {
+    pub fn open_auxiliary_tabs(&self) -> Vec<console_ui::AuxiliaryTab> {
+        self.open_auxiliary_tabs.clone()
+    }
+
     pub fn sidebar_sort_mode(&self) -> console_ui::utils::SidebarSortMode {
         match self.sidebar_sort_mode.as_str() {
             "project" => console_ui::utils::SidebarSortMode::Project,
@@ -65,6 +72,7 @@ impl Default for PersistedLayoutState {
             collapsed_groups: Vec::new(),
             sidebar_sort_mode: String::new(),
             collapsed_projects: Vec::new(),
+            open_auxiliary_tabs: Vec::new(),
         }
     }
 }

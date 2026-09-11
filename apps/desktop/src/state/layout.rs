@@ -68,6 +68,7 @@ impl ConsoleDesktopApp {
                 .collect(),
             sidebar_sort_mode: self.sidebar_sort_mode.label().to_string(),
             collapsed_projects: self.collapsed_projects.iter().cloned().collect(),
+            open_auxiliary_tabs: self.inspector_open_auxiliary_tabs.clone(),
         });
         let cur_wid = self
             .selected_project_id

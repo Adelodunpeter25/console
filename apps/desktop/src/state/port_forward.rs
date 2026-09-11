@@ -102,7 +102,14 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         self.right_sidebar_visible = true;
-        self.inspector_active_tab = console_ui::InspectorTab::Browser;
+        if !self
+            .inspector_open_auxiliary_tabs
+            .contains(&console_ui::AuxiliaryTab::Browser)
+        {
+            self.inspector_open_auxiliary_tabs
+                .push(console_ui::AuxiliaryTab::Browser);
+        }
+        self.inspector_active_tab = console_ui::InspectorTab::Auxiliary(console_ui::AuxiliaryTab::Browser);
         let browser = self.browser_view_for_inspector(window, cx);
         browser.update(cx, |view, cx| {
             view.navigate_to_url(url, cx);

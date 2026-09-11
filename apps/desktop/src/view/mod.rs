@@ -286,6 +286,22 @@ impl Render for ConsoleDesktopApp {
                 }
             })
         };
+        let on_open_auxiliary_tab: Rc<dyn Fn(console_ui::AuxiliaryTab, &mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |tab, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.open_auxiliary_tab(tab, cx));
+                }
+            })
+        };
+        let on_close_auxiliary_tab: Rc<dyn Fn(console_ui::AuxiliaryTab, &mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |tab, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.close_auxiliary_tab(tab, cx));
+                }
+            })
+        };
         let on_toggle_inspector_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
             let entity = entity.clone();
             Rc::new(move |path, _w, cx| {
@@ -301,13 +317,13 @@ impl Render for ConsoleDesktopApp {
             Rc::new(move |path, _w, cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| match this.inspector_active_tab {
-                        console_ui::InspectorTab::AllFiles => {
+                        console_ui::InspectorTab::Primary(console_ui::PrimaryTab::AllFiles) => {
                             this.open_file_tab(path, cx);
                         }
-                        console_ui::InspectorTab::Changes => {
+                        console_ui::InspectorTab::Primary(console_ui::PrimaryTab::Changes) => {
                             this.open_diff_tab(path, cx);
                         }
-                        console_ui::InspectorTab::Browser | console_ui::InspectorTab::Subagents => {}
+                        console_ui::InspectorTab::Auxiliary(_) => {}
                     });
                 }
             })
@@ -901,7 +917,8 @@ impl Render for ConsoleDesktopApp {
                         .with_toggle_collapsed(on_toggle_right_sidebar_bottom_collapsed);
 
                         let browser_visible = self.right_sidebar_visible
-                            && self.inspector_active_tab == console_ui::InspectorTab::Browser;
+                            && self.inspector_active_tab
+                                == console_ui::InspectorTab::Auxiliary(console_ui::AuxiliaryTab::Browser);
                         let browser_element = if browser_visible {
                             let browser = self.browser_view_for_inspector(window, cx);
                             let is_overlay_open = self.command_palette.read(cx).is_open(cx)
@@ -932,7 +949,11 @@ impl Render for ConsoleDesktopApp {
                                 (*self.inspector_expanded_folders).clone(),
                                 self.expanded_subagents.clone(),
                                 self.inspector_selected_path.clone(),
+                                self.inspector_open_auxiliary_tabs.clone(),
+                                self.ports_menu_handle.clone(),
                                 on_select_inspector_tab,
+                                on_open_auxiliary_tab,
+                                on_close_auxiliary_tab,
                                 on_toggle_inspector_folder,
                                 on_select_inspector_file,
                                 on_toggle_subagent,

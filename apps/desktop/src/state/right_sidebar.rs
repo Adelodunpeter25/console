@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use console_ui::InspectorTab;
+use console_ui::{AuxiliaryTab, InspectorTab, PrimaryTab};
 use gpui::{AppContext, Context};
 
 use super::{
@@ -12,7 +12,8 @@ use super::{
 impl ConsoleDesktopApp {
     pub fn toggle_right_sidebar(&mut self, cx: &mut Context<Self>) {
         self.right_sidebar_visible = !self.right_sidebar_visible;
-        let is_browser = self.right_sidebar_visible && self.inspector_active_tab == InspectorTab::Browser;
+        let is_browser = self.right_sidebar_visible
+            && self.inspector_active_tab == InspectorTab::Auxiliary(AuxiliaryTab::Browser);
         if let Some(ref browser) = self.browser_view {
             browser.update(cx, |view, cx| {
                 view.sync_native_state(is_browser, false, cx);
@@ -29,7 +30,8 @@ impl ConsoleDesktopApp {
             return;
         }
         self.right_sidebar_visible = visible;
-        let is_browser = self.right_sidebar_visible && self.inspector_active_tab == InspectorTab::Browser;
+        let is_browser = self.right_sidebar_visible
+            && self.inspector_active_tab == InspectorTab::Auxiliary(AuxiliaryTab::Browser);
         if let Some(ref browser) = self.browser_view {
             browser.update(cx, |view, cx| {
                 view.sync_native_state(is_browser, false, cx);
@@ -274,25 +276,44 @@ impl ConsoleDesktopApp {
         }
     }
 
+    pub fn open_auxiliary_tab(&mut self, tab: AuxiliaryTab, cx: &mut Context<Self>) {
+        if !self.inspector_open_auxiliary_tabs.contains(&tab) {
+            self.inspector_open_auxiliary_tabs.push(tab);
+        }
+        self.set_inspector_tab(InspectorTab::Auxiliary(tab), cx);
+        self.persist_layout();
+    }
+
+    pub fn close_auxiliary_tab(&mut self, tab: AuxiliaryTab, cx: &mut Context<Self>) {
+        self.inspector_open_auxiliary_tabs.retain(|open| *open != tab);
+        if self.inspector_active_tab == InspectorTab::Auxiliary(tab) {
+            self.set_inspector_tab(InspectorTab::default(), cx);
+        }
+        self.persist_layout();
+        cx.notify();
+    }
+
     pub fn set_inspector_tab(&mut self, tab: InspectorTab, cx: &mut Context<Self>) {
         if self.inspector_active_tab == tab {
             return;
         }
         self.inspector_active_tab = tab;
-        let is_browser = self.right_sidebar_visible && tab == InspectorTab::Browser;
+        let is_browser = self.right_sidebar_visible
+            && tab == InspectorTab::Auxiliary(AuxiliaryTab::Browser);
         if let Some(ref browser) = self.browser_view {
             browser.update(cx, |view, cx| {
                 view.sync_native_state(is_browser, false, cx);
             });
         }
         match tab {
-            InspectorTab::AllFiles => self.fetch_inspector_fs_tree(cx),
-            InspectorTab::Changes => {
+            InspectorTab::Primary(PrimaryTab::AllFiles) => self.fetch_inspector_fs_tree(cx),
+            InspectorTab::Primary(PrimaryTab::Changes) => {
                 self.fetch_inspector_git_changes(cx);
                 self.fetch_inspector_session_changes(cx);
             }
-            InspectorTab::Browser => {}
-            InspectorTab::Subagents => self.fetch_inspector_subagents(cx),
+            InspectorTab::Auxiliary(AuxiliaryTab::Browser) => {}
+            InspectorTab::Auxiliary(AuxiliaryTab::Subagents) => self.fetch_inspector_subagents(cx),
+            InspectorTab::Auxiliary(AuxiliaryTab::Devices) => {}
         }
         cx.notify();
     }
@@ -381,7 +402,8 @@ impl ConsoleDesktopApp {
 
     pub fn view_subagent_in_panel(&mut self, _call_or_subagent_id: &str, cx: &mut Context<Self>) {
         self.right_sidebar_visible = true;
-        self.inspector_active_tab = InspectorTab::Subagents;
+        self.inspector_open_auxiliary_tabs.push(AuxiliaryTab::Subagents);
+        self.inspector_active_tab = InspectorTab::Auxiliary(AuxiliaryTab::Subagents);
         self.fetch_inspector_subagents(cx);
         self.persist_layout();
         cx.notify();
