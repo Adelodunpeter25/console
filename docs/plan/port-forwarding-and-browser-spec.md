@@ -17,9 +17,9 @@ Non-goals for v1: SSH tunneling, path-prefix proxying (`/api/proxy/:port/*`), HT
 │                                                                                                  │
 │  ┌────────────────────────┐    ┌───────────────────────────┐    ┌─────────────────────────────┐  │
 │  │ Session-Scoped         │    │ Dumb-Pipe Proxy Listeners │    │ Port Registry               │  │
-│  │ Discovery              │    │ • :45173 → 127.0.0.1:5173 │    │ • 5173 -> terminal X / job Y│  │
+│  │ Discovery              │    │ • :45173 → 127.0.0.1:5173 │    │ • 5173 -> proxy :45173    │  │
 │  │ • PTY output regex     │    │ • :45174 → 127.0.0.1:3000 │    │ • probe-verified listening  │  │
-│  │ • bash job output regex│    │ • HTTP passthrough        │    │ • proxyPort mapping         │  │
+│  │ • bash job output regex│    │ • HTTP passthrough        │    │ • client sees {port, url}   │  │
 │  │ • loopback TCP probe   │    │ • WS frame relay (HMR)    │    │ • dies with owner session   │  │
 │  └───────────┬────────────┘    └─────────────┬─────────────┘    └──────────────┬──────────────┘  │
 └──────────────┼───────────────────────────────┼─────────────────────────────────┼─────────────────┘
@@ -32,7 +32,7 @@ Non-goals for v1: SSH tunneling, path-prefix proxying (`/api/proxy/:port/*`), HT
 │  │ Right Sidebar Tab: [ Files ] [ Changes ] [ 🌐 Browser ] [ 📱 Devices ] [ Subagents ]        │  │
 │  ├────────────────────────────────────────────────────────────────────────────────────────────┤  │
 │  │ ┌────────────────────────────────────────────────────────────────────────────────────────┐ │  │
-│  │ │ Active Ports: [ ● 3000 (Next.js) ] [ ● 5173 (Vite) ] [ + Forward Port ]                 │ │  │
+│  │ │ Active Ports: [ ● 3000 ] [ ● 5173 ] [ + Forward Port ]                         │ │  │
 │  │ └────────────────────────────────────────────────────────────────────────────────────────┘ │  │
 │  │ ┌────────────────────────────────────────────────────────────────────────────────────────┐ │  │
 │  │ │ ◀  ▶  ↻  [ http://<server-host>:45173                                         ]  ↗     │ │  │
@@ -58,17 +58,18 @@ A dedicated proxy port means the app thinks it lives at root: absolute paths, co
 New file: `apps/server/api/src/services/port-registry.ts` (~100 lines). One map:
 
 ```ts
+// Internal only — never leaves the server process.
 interface PortEntry {
   port: number;            // dev port, e.g. 5173
   proxyPort: number;       // allocated from PROXY_PORT_RANGE, e.g. 45173
-  terminalId?: string;     // owner PTY session
-  jobId?: string;          // owner bash background job
-  pid: number;             // owner process pid
-  label: string;           // inferred, e.g. "Vite Frontend"
-  status: "starting" | "ready";
-  createdAt: string;
+  terminalId?: string;     // owner PTY session (for lifecycle cleanup)
+  jobId?: string;          // owner bash background job (for lifecycle cleanup)
+  manual?: boolean;        // registered via POST /api/ports/forward, no owner session
 }
 ```
+
+The client only ever sees `{ port, url }`. Owner ids stay server-side,
+used solely to delete entries when the owning session/job dies.
 
 ### A. Ownership Tagging (env injection at spawn)
 
@@ -88,8 +89,7 @@ The env var is an **identity tag only**. It does not detect ports; it labels who
    - PTY: `pty.manager.ts` `handleOutput()` (strip ANSI, buffer partial lines across chunks).
    - Bash jobs: `bash/manager.ts` `drain()`/`append()`.
    - Patterns: `http://localhost:PORT`, `http://127.0.0.1:PORT`, `http://0.0.0.0:PORT`, `Local:\s+http://localhost:PORT` (Vite/Next/Astro conventions). Also match bare `:PORT` forms printed by common dev servers where unambiguous.
-2. **Verify with a probe, never trust print alone.** On candidate, TCP-connect (or `fetch(http://127.0.0.1:PORT/)`, 2s timeout). Only probed ports enter the registry as `ready`. A URL printed before bind, or a crashed server, never advertises.
-3. **Label** is inferred from the owning command (`npm run dev`, `vite`, `next dev`) with a static keyword table; falls back to `"Port 5173"`.
+2. **Verify with a probe, never trust print alone.** On candidate, TCP-connect (or `fetch(http://127.0.0.1:PORT/)`, 2s timeout). Only probed ports enter the registry. A URL printed before bind, or a crashed server, never advertises. No `starting`/`ready` states leak to clients — an entry is only registered (and only listed) once verified.
 
 ### C. Dumb-Pipe Proxy (one `Bun.serve` listener per dev port)
 
@@ -114,22 +114,16 @@ Proxy base: fully-qualified URLs built from the server's reachable host, e.g. `h
 
 ### 1. `GET /api/ports`
 
-Returns only probe-verified, session-owned ports:
+Returns only probe-verified, session-owned ports. Two fields per entry: `port`
+(the real dev port, for display and terminal-click matching) and `url` (the
+fully-qualified proxy URL to open — the only URL the client needs):
 
 ```json
 {
   "success": true,
   "data": [
-    {
-      "port": 5173,
-      "proxyPort": 45173,
-      "proxyUrl": "http://192.168.1.10:45173/",
-      "terminalId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-      "pid": 48231,
-      "label": "Vite Frontend",
-      "status": "ready",
-      "createdAt": "2026-09-11T12:01:00.000Z"
-    }
+    { "port": 5173, "url": "http://192.168.1.10:45173/" },
+    { "port": 3000, "url": "http://192.168.1.10:45174/" }
   ]
 }
 ```
@@ -138,7 +132,7 @@ Clients poll every ~3s. No SSE in v1.
 
 ### 2. `POST /api/ports/forward` (manual, optional)
 
-For ports the regex missed. Body: `{ "port": 8080, "label": "Backend API" }`. Server probes `127.0.0.1:8080`; if listening, registers it as manually-owned and opens a proxy listener. Returns the created entry. If nothing is listening, `400`.
+For ports the regex missed. Body: `{ "port": 8080 }`. Server probes `127.0.0.1:8080`; if listening, registers it as manually-owned and opens a proxy listener. Returns the created entry (`{ "port", "url" }`). If nothing is listening, `400`.
 
 ### 3. `DELETE /api/ports/:port`
 
@@ -151,16 +145,16 @@ Closes the proxy listener and removes the registry entry. Revokes preview access
 `BrowserView`, `WebviewHost`, address bar, and shortcuts already exist — this phase only wires ports into them.
 
 - **`console-core`**: new `Port` type + `PortService` (`GET /api/ports`, `POST`, `DELETE`) on `ConsoleClient`, polled every ~3s.
-- **Ports chip bar** above the existing `BrowserView` toolbar: green dot + `[ ● 5173 (Vite) ]` chips; click navigates the existing browser to that entry's `proxyUrl`. `[ + ]` popover calls the manual forward endpoint.
-- **Terminal URL clicks**: a localhost URL printed in `TerminalView` routes to the matching entry's `proxyUrl` (open Browser tab + navigate) instead of the raw localhost address.
-- **States**: `starting` (dimmed chip), `ready`, unreachable (probe failed on click → error toast + refresh). Multiple ports: most-recently-ready is the default selection.
+- **Ports chip bar** above the existing `BrowserView` toolbar: green dot + `[ ● 5173 ]` chips; click navigates the existing browser to that entry's `url`. `[ + ]` popover calls the manual forward endpoint.
+- **Terminal URL clicks**: a localhost URL printed in `TerminalView` routes to the matching entry's `url` (open Browser tab + navigate) instead of the raw localhost address.
+- **States**: listed means verified — no `starting` state on the client. Unreachable on click (dev server died between polls) → error toast + refresh. Multiple ports: most recently listed first.
 - Shortcuts (`⌘L`, `⌘R`, `⌘[`/`⌘]`, `⌥⌘I`) already exist; add platform equivalents for Windows/Linux when that platform ships.
 
 ---
 
 ## 5. Mobile Client Integration (`apps/mobile`)
 
-Nothing platform-specific. Same `GET /api/ports` list, same `proxyUrl` opened in a WebView/link. No LAN URLs, no QR codes in v1 (those need a separate access design — out of scope).
+Nothing platform-specific. Same `GET /api/ports` list, same `url` opened in a WebView/link. No LAN URLs, no QR codes in v1 (those need a separate access design — out of scope).
 
 ---
 
@@ -170,7 +164,7 @@ Nothing platform-specific. Same `GET /api/ports` list, same `proxyUrl` opened in
 - [ ] Create `api/src/services/port-registry.ts` (`port → entry` map).
 - [ ] Per-session `CONSOLE_TERMINAL_ID` in `pty.manager.ts` `startShell()`; `CONSOLE_BASH_JOB_ID` in `bash/manager.ts` `start()`.
 - [ ] Regex candidate scan in `handleOutput()` + job `append()` (ANSI-strip, partial-line buffer).
-- [ ] Loopback probe before `ready`; `GET /api/ports` + `DELETE /api/ports/:port`; 3s client polling contract.
+- [ ] Loopback probe before registering; `GET /api/ports` + `DELETE /api/ports/:port`; 3s client polling contract.
 
 ### Phase 2: Dumb-pipe proxy (server)
 - [ ] Proxy listener manager: allocate from `PROXY_PORT_RANGE` (default `45000–45999`), `Bun.serve({ fetch, websocket })` per entry.
@@ -180,9 +174,9 @@ Nothing platform-specific. Same `GET /api/ports` list, same `proxyUrl` opened in
 
 ### Phase 3: Desktop + mobile wiring
 - [ ] `console-core` `Port` type + `PortService`; 3s poll.
-- [ ] Ports chip bar over existing `BrowserView`; click-to-navigate via `proxyUrl`; `[ + ]` manual forward popover.
-- [ ] Terminal localhost-click → `proxyUrl` routing.
-- [ ] Mobile ports list → open `proxyUrl`.
+- [ ] Ports chip bar over existing `BrowserView`; click-to-navigate via `url`; `[ + ]` manual forward popover.
+- [ ] Terminal localhost-click → `url` routing.
+- [ ] Mobile ports list → open `url`.
 
 ### Explicitly out of v1
 Path-prefix proxy, HTML/header rewriting, SSE, QR/LAN URLs, auth/capability tokens, `lsof`/`/proc/net/tcp` host scan.
