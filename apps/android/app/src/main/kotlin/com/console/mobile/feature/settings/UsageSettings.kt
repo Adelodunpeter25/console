@@ -99,7 +99,7 @@ fun UsageSettings(onBack: () -> Unit) {
                 Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
                     Text("Remaining quota for your signed-in providers. Pull to refresh.", color = ConsoleColors.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 4.dp).padding(top = 8.dp, bottom = 16.dp))
                     cards.forEach { (key, displayName, auth) ->
-                        UsageProviderCard(providerKey = key, displayName = displayName, report = usageState.reports[key], loggedIn = auth?.loggedIn == true, email = auth?.email)
+                        UsageProviderCard(displayName = displayName, report = usageState.reports[key], loggedIn = auth?.loggedIn == true, email = auth?.email)
                     }
                 }
             }
