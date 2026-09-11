@@ -35,7 +35,7 @@ pub fn input_text_runs(
     base_run: TextRun,
     selected_range: Option<&Range<usize>>,
     marked_range: Option<&Range<usize>>,
-    selection_color: Hsla,
+    _selection_color: Hsla,
     highlight: &[(Range<usize>, TokenClass)],
     token_color: impl Fn(TokenClass) -> Hsla,
     search: SearchPaint,
@@ -88,9 +88,10 @@ pub fn input_text_runs(
             let end = boundary[1];
             let token_index = highlight.partition_point(|(range, _)| range.end <= start);
             let is_in_mention = covering_mention(start, end);
-            let color = if is_in_mention
-                && selected_range.is_none_or(|range| range.start >= end || range.end <= start)
-            {
+            let is_selected = selected_range.is_some_and(|range| range.start < end && range.end > start);
+            let color = if is_selected {
+                gpui::white()
+            } else if is_in_mention {
                 mention_color
             } else {
                 highlight
@@ -103,8 +104,6 @@ pub fn input_text_runs(
                 .is_some_and(|range| range.start <= start && range.end >= end)
             {
                 Some(search.active_color)
-            } else if selected_range.is_some_and(|range| range.start < end && range.end > start) {
-                Some(selection_color)
             } else if covering_match(start, end) {
                 Some(search.match_color)
             } else if is_in_mention {

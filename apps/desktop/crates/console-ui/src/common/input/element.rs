@@ -543,9 +543,22 @@ impl Element for InputElement {
                 }
             }
         });
+        let theme = Theme::current(cx);
+        let layout = layout_state.text.layout();
+        if !input.selected_range.is_empty() {
+            let selection_rects = crate::markdown::render::range_rects(layout, &input.selected_range, 0.0, 3.5);
+            for rect in selection_rects {
+                window.paint_quad(quad(
+                    rect,
+                    px(3.0),
+                    theme.selection,
+                    px(0.0),
+                    gpui::transparent_black(),
+                    BorderStyle::default(),
+                ));
+            }
+        }
         if input.mode == FieldMode::Composer && !input.mentions.is_empty() {
-            let theme = Theme::current(cx);
-            let layout = layout_state.text.layout();
             let extra_left = px(14.0);
 
             for mention in &input.mentions {
