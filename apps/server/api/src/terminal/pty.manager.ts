@@ -18,6 +18,7 @@ import type {
   TerminalSpawnParams,
   TerminalSpawnedEvent,
 } from "@console/types";
+import { portRegistry } from "@/api/src/services/port-registry.service.js";
 
 /** Callback the route registers to receive pty events for a session. */
 export interface PtyCallbacks {
@@ -94,9 +95,14 @@ const MAX_SPAWNS_PER_MINUTE = 20;
 /** Process env snapshot: spawns are frequent enough that re-copying it per
     spawn is pure GC pressure — the server env is static after boot. */
 let cachedBaseEnv: Record<string, string> | null = null;
-function shellEnv(): Record<string, string> {
+function shellEnv(terminalId: string): Record<string, string> {
   cachedBaseEnv ??= { ...(process.env as Record<string, string>) };
-  return { ...cachedBaseEnv, TERM: "xterm-256color", CONSOLE_TERMINAL: "true" };
+  return {
+    ...cachedBaseEnv,
+    TERM: "xterm-256color",
+    CONSOLE_TERMINAL: "true",
+    CONSOLE_TERMINAL_ID: terminalId,
+  };
 }
 
 function isAllowedShell(shell: string): boolean {
@@ -218,7 +224,7 @@ export class TerminalPtyManager {
         },
       },
       cwd: session.cwd,
-      env: shellEnv(),
+      env: shellEnv(session.id),
     });
     session.terminal = proc.terminal ?? null;
     session.proc = {
@@ -231,6 +237,7 @@ export class TerminalPtyManager {
       if (session.killed) return;
       session.killed = true;
       this.sessions.delete(session.id);
+      void portRegistry.removeOwner({ kind: "terminal", id: session.id });
       session.callbacks?.onExit(code);
     });
 
@@ -259,6 +266,7 @@ export class TerminalPtyManager {
   /** Route PTY output to callbacks, coalescing bursts into fewer frames. */
   private handleOutput(session: PtySession, data: Uint8Array): void {
     if (session.killed) return;
+    void portRegistry.observeOutput({ kind: "terminal", id: session.id }, data);
     if (session.paused) {
       // Client send buffer saturated: hold output until resume().
       session.pausedBuffer.push(data);
@@ -383,6 +391,7 @@ export class TerminalPtyManager {
     } catch {
       // Already closed — fine.
     }
+    void portRegistry.removeOwner({ kind: "terminal", id: session.id });
     session.callbacks?.onExit(null);
   }
 

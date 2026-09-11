@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { buildShellArgv, safeKill, unref } from "./proc.js";
+import { portRegistry } from "@/api/src/services/port-registry.service.js";
 import {
   MAX_RETAINED_JOBS,
   MAX_RUNNING_JOBS,
@@ -41,6 +42,7 @@ export class BashJobManager {
       else throw new Error(`Too many background jobs (max ${MAX_RETAINED_JOBS}).`);
     }
 
+    const jobId = `job_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
     let proc: Bun.Subprocess<any, any, any>;
     try {
       // `detached: true` puts the shell in its own process group, which is
@@ -51,7 +53,7 @@ export class BashJobManager {
       // is still piped so the existing drain logic is unaffected.
       proc = Bun.spawn(buildShellArgv(options.command), {
         cwd: options.cwd,
-        env: options.env as Record<string, string | undefined>,
+        env: { ...options.env, CONSOLE_BASH_JOB_ID: jobId } as Record<string, string | undefined>,
         stdin: "ignore",
         stdout: "pipe",
         stderr: "pipe",
@@ -63,7 +65,6 @@ export class BashJobManager {
       );
     }
 
-    const jobId = `job_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
     const rec: JobRecord = {
       jobId,
       command: options.command,
@@ -173,6 +174,7 @@ export class BashJobManager {
     rec.status = "killed";
     rec.aborted = true;
     rec.finishedAt = new Date().toISOString();
+    void portRegistry.removeOwner({ kind: "job", id: rec.jobId });
     this.scheduleRetention(rec);
     this.notify(rec);
     return this.snapshot(rec);
@@ -216,6 +218,7 @@ export class BashJobManager {
 
   private append(rec: JobRecord, stream: "stdout" | "stderr", text: string) {
     if (!text) return;
+    void portRegistry.observeOutput({ kind: "job", id: rec.jobId }, text);
     if (stream === "stdout") {
       rec.stdout += text;
       rec.stdoutTotal += text.length;
@@ -276,6 +279,7 @@ export class BashJobManager {
     rec.exitCode = code;
     rec.finishedAt = new Date().toISOString();
     rec.status = code === 0 ? "exited" : "failed";
+    void portRegistry.removeOwner({ kind: "job", id: rec.jobId });
     this.scheduleRetention(rec);
     this.notify(rec);
   }

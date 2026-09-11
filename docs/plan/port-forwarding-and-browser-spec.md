@@ -161,16 +161,16 @@ Nothing platform-specific. Same `GET /api/ports` list, same `url` opened in a We
 ## 6. Implementation Roadmap
 
 ### Phase 1: Registry + ownership tagging (server)
-- [ ] Create `api/src/services/port-registry.ts` (`port → entry` map).
-- [ ] Per-session `CONSOLE_TERMINAL_ID` in `pty.manager.ts` `startShell()`; `CONSOLE_BASH_JOB_ID` in `bash/manager.ts` `start()`.
-- [ ] Regex candidate scan in `handleOutput()` + job `append()` (ANSI-strip, partial-line buffer).
-- [ ] Loopback probe before registering; `GET /api/ports` + `DELETE /api/ports/:port`; 3s client polling contract.
+- [x] Create `api/src/services/port-registry.service.ts` (`port → entry` map).
+- [x] Per-session `CONSOLE_TERMINAL_ID` in `pty.manager.ts` `startShell()`; `CONSOLE_BASH_JOB_ID` in `bash/manager.ts` `start()`.
+- [x] Regex candidate scan in `handleOutput()` + job `append()` (ANSI-strip, partial-line buffer).
+- [x] Loopback probe before registering; `GET /api/ports` + `DELETE /api/ports/:port`; 3s client polling contract.
 
 ### Phase 2: Dumb-pipe proxy (server)
-- [ ] Proxy listener manager: allocate from `PROXY_PORT_RANGE` (default `45000–45999`), `Bun.serve({ fetch, websocket })` per entry.
-- [ ] HTTP passthrough (method/path/query/body streaming, `Host` set, hop-by-hop strip).
-- [ ] WS upgrade relay; test against Vite HMR + Next dev.
-- [ ] Close listener on session/job death and on `DELETE`.
+- [x] Proxy listener manager: allocate from `PROXY_PORT_RANGE` (default `45000–45999`), `Bun.serve({ fetch, websocket })` per entry.
+- [x] HTTP passthrough (method/path/query/body streaming, `Host` set, hop-by-hop strip).
+- [x] WS upgrade relay; test against Vite HMR + Next dev.
+- [x] Close listener on session/job death and on `DELETE`.
 
 ### Phase 3: Desktop + mobile wiring
 - [ ] `console-core` `Port` type + `PortService`; 3s poll.

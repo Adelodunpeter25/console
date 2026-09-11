@@ -11,6 +11,7 @@ import {
   type TerminalSocketData,
 } from "./api/src/terminal/socket.route.js";
 import { terminalPtyManager } from "./api/src/terminal/pty.manager.js";
+import { portRegistry } from "./api/src/services/port-registry.service.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
@@ -62,6 +63,7 @@ async function shutdown(): Promise<void> {
 
   // Kill every tracked PTY so shells don't leak after the server exits.
   terminalPtyManager.killAll();
+  await portRegistry.closeAll();
 
   // Close log stream
   if (logStream) {
