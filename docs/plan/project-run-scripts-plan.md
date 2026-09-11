@@ -199,17 +199,19 @@ A run record should support at least:
 - `failed`
 - `stopped`
 
-The process manager should retain a bounded output buffer so a desktop that connects slightly after startup can receive recent output. The implementation should reuse the server's existing process/terminal lifecycle patterns where practical, but a project script is a managed command execution rather than an interactive terminal session. Do not require the desktop to send keystrokes through a PTY unless interactive script input becomes a deliberate requirement.
+The process manager should retain a small recent output buffer so the desktop can display logs that arrived before it connected. The implementation should reuse the server's existing process lifecycle patterns where practical, but a project script is a managed command execution rather than an interactive terminal session. Do not add PTY input or terminal resize behavior; the first version only needs to capture stdout/stderr and provide a stop action.
+
+A run belongs to the server, not to a desktop window. Closing the desktop client must not stop a running script. The server keeps the process alive and keeps its current status and recent output until the process exits or the user explicitly stops it. When the desktop opens again, it lists the server's active runs and reconnects to their streams.
 
 ### 3. Stream updates
 
-Choose one consistent transport based on the existing server infrastructure. The preferred first implementation is an SSE endpoint:
+Use a simple SSE endpoint, following the existing server streaming patterns:
 
 ```text
 GET /api/projects/:projectId/scripts/runs/:runId/stream
 ```
 
-Events should include:
+The endpoint streams live logs and status changes while the process is running:
 
 ```json
 { "type": "status", "status": "running" }
@@ -218,7 +220,9 @@ Events should include:
 { "type": "exit", "status": "succeeded", "exitCode": 0 }
 ```
 
-The event stream must terminate after a final exit/stopped event. Reconnecting clients should be able to fetch the current run record and a bounded output tail before subscribing again.
+Keep reconnect behavior intentionally small: the desktop first fetches the current run record and recent output, then opens the SSE stream. If the desktop disconnects, the server does not stop the process. When the desktop reconnects, it fetches the current state again and resumes showing new logs. A bounded output tail is sufficient; do not add complex event replay or sequence cursors in the first version.
+
+The stream terminates after a final exit/stopped event. For a persistent development script, it remains open until the process exits or the user clicks Stop.
 
 ### 4. Add server tests
 
@@ -294,12 +298,13 @@ The desktop should:
 
 1. Fetch the current list when a project becomes active.
 2. Fetch active runs when the Run UI mounts or the project changes.
-3. Subscribe to each active run's stream.
-4. Re-fetch the run record after reconnect or a stream error.
-5. Stop listening after a terminal status.
-6. Remove or archive old runs according to a bounded UI history policy.
+3. Fetch each active run's recent output and current status.
+4. Subscribe to each active run's SSE stream.
+5. Re-fetch the run record and recent output after reconnect or a stream error.
+6. Stop listening after a terminal status.
+7. Remove or archive old runs according to a bounded UI history policy.
 
-Use the existing async task and entity update patterns in the desktop app. Network work must not block GPUI rendering.
+The desktop closing or reconnecting must not send a stop request. Only the explicit Stop action stops the server-side process. Use the existing async task and entity update patterns in the desktop app. Network work must not block GPUI rendering.
 
 ## Phase 4: Desktop Run UI
 
@@ -407,10 +412,10 @@ Add focused tests or integration coverage for:
 1. Add and test TOML parsing plus schema normalization.
 2. Add the project scripts list endpoint.
 3. Add managed script run state and start/stop endpoints.
-4. Add status/output streaming and server tests.
+4. Add the SSE log/status stream, bounded recent output, and server tests.
 5. Add desktop core API types and `ProjectScriptsService`.
 6. Add desktop project-scoped Run state and initial list rendering.
-7. Add start/stop controls and live run updates.
+7. Add start/stop controls, reconnect behavior, and live run updates.
 8. Add contextual GPUI shortcut handling and conflict warnings.
 9. Add desktop tests or focused integration checks.
 10. Document `console.toml` in the user-facing project documentation.
