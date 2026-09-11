@@ -30,6 +30,6 @@ termy_core = { git = "https://github.com/lassejlv/termy", rev = "f5ddada41eab55c
 [target.'cfg(target_os = "macos")'.dependencies]
 wry = { version = "0.56", features = ["devtools"] }
 objc2 = { workspace = true }
-objc2-foundation = { workspace = true, features = ["NSDictionary", "NSKeyValueObserving", "NSProcessInfo", "NSString", "NSURL"] }
+objc2-foundation = { workspace = true, features = ["NSDictionary", "NSKeyValueObserving", "NSValue", "NSProcessInfo", "NSString", "NSURL", "NSURLRequest"] }
 objc2-app-kit = { workspace = true, features = ["NSView", "NSWindow", "NSApplication", "NSEvent", "NSAppearance"] }
 objc2-web-kit = { workspace = true, features = ["WKWebView", "WKWebViewConfiguration", "WKNavigation", "WKNavigationDelegate"] }

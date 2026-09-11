@@ -116,6 +116,19 @@ mod macos_host {
         pub fn new(webview: wry::WebView, on_responder_change: Box<dyn Fn(bool)>) -> Self {
             let wk: Retained<WKWebView> = Retained::into_super(webview.webview());
             lower_below_scene_overlay(&wk);
+
+            // Disable WebKit back-forward page cache (bfcache) so navigating to a new URL
+            // terminates the previous origin's WebContent process instead of keeping every
+            // visited site alive concurrently in macOS Activity Monitor.
+            unsafe {
+                let config = wk.configuration();
+                let prefs = config.preferences();
+                let no = objc2_foundation::NSNumber::new_bool(false);
+                let _: () = msg_send![&prefs, setValue: &*no, forKey: ns_string!("pageCacheEnabled")];
+                let _: () = msg_send![&prefs, setValue: &*no, forKey: ns_string!("_pageCacheEnabled")];
+                let _: () = msg_send![&prefs, setValue: &*no, forKey: ns_string!("usesPageCache")];
+            }
+
             let responder_observer = wk
                 .window()
                 .map(|window| ResponderObserver::new(window, on_responder_change));
@@ -229,6 +242,20 @@ mod macos_host {
 
         pub fn estimated_progress(&self) -> f64 {
             unsafe { self.wk().estimatedProgress() }
+        }
+    }
+
+    impl Drop for WebviewHost {
+        fn drop(&mut self) {
+            unsafe {
+                self.wk.stopLoading();
+                let nil_url = objc2_foundation::NSURL::URLWithString(objc2_foundation::ns_string!("about:blank"));
+                if let Some(url) = nil_url {
+                    let req = objc2_foundation::NSURLRequest::requestWithURL(&url);
+                    self.wk.loadRequest(&req);
+                }
+                self.ns_view().removeFromSuperview();
+            }
         }
     }
 
