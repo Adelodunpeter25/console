@@ -638,6 +638,17 @@ impl ConsoleDesktopApp {
         self.open_file_tab_in_pane(pane_id, resolved, cx);
     }
 
+    /// Open a chat transcript web link inside the embedded browser (same path
+    /// as forwarded-port previews). File links stay on workspace tabs.
+    pub fn open_chat_url_in_browser(
+        &mut self,
+        url: String,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_port_in_browser(url, window, cx);
+    }
+
     pub fn open_file_tab(&mut self, path: String, cx: &mut Context<Self>) {
         let pane_id = self
             .active_pane_id

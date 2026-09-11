@@ -27,27 +27,41 @@ pub(crate) fn wire_open_file_for_pane(
     entity: WeakEntity<ConsoleDesktopApp>,
     pane_id: String,
 ) {
+    let file_entity = entity.clone();
     transcript.set_on_open_file(move |link, _window, cx| {
-        if let Some(app) = entity.upgrade() {
+        if let Some(app) = file_entity.upgrade() {
             app.update(cx, |this, cx| {
                 this.open_file_link(link, &pane_id, cx);
             });
         }
     });
+    wire_open_url(transcript, entity);
 }
 
 pub(crate) fn wire_open_file_for_active_pane(
     transcript: &mut TranscriptView,
     entity: WeakEntity<ConsoleDesktopApp>,
 ) {
+    let file_entity = entity.clone();
     transcript.set_on_open_file(move |link, _window, cx| {
-        if let Some(app) = entity.upgrade() {
+        if let Some(app) = file_entity.upgrade() {
             app.update(cx, |this, cx| {
                 let pane_id = this
                     .active_pane_id
                     .clone()
                     .unwrap_or_else(|| "pane-main".to_string());
                 this.open_file_link(link, &pane_id, cx);
+            });
+        }
+    });
+    wire_open_url(transcript, entity);
+}
+
+fn wire_open_url(transcript: &mut TranscriptView, entity: WeakEntity<ConsoleDesktopApp>) {
+    transcript.set_on_open_url(move |url, window, cx| {
+        if let Some(app) = entity.upgrade() {
+            app.update(cx, |this, cx| {
+                this.open_chat_url_in_browser(url, window, cx);
             });
         }
     });

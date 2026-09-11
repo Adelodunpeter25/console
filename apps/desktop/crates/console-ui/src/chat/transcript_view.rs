@@ -79,6 +79,8 @@ pub struct TranscriptView {
     /// clicks an image inside a message bubble.
     on_preview_image: Option<Rc<dyn Fn(Arc<gpui::Image>, &mut Window, &mut App) + 'static>>,
     on_view_subagent: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    on_open_file_raw: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    on_open_url_raw: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     link_handler: Option<LinkHandler>,
 }
 
@@ -112,6 +114,8 @@ impl TranscriptView {
             on_load_older: None,
             on_preview_image: None,
             on_view_subagent: None,
+            on_open_file_raw: None,
+            on_open_url_raw: None,
             link_handler: None,
         }
     }
@@ -134,18 +138,41 @@ impl TranscriptView {
 
     /// Wire file-path link clicks (the app opens a workspace tab). Same shape
     /// as `on_preview_image`: the transcript stays unaware of projects and
-    /// panes, the shell owns resolution + opening. `http(s)` keeps opening in
-    /// the browser; file-like destinations forward their raw link text.
+    /// panes, the shell owns resolution + opening. File-like destinations
+    /// forward their raw link text; `http(s)` goes to `on_open_url_raw` when
+    /// set, otherwise the external browser.
     pub fn set_on_open_file(
         &mut self,
         handler: impl Fn(String, &mut Window, &mut App) + 'static,
     ) {
-        let open_file = Rc::new(handler);
+        self.on_open_file_raw = Some(Rc::new(handler));
+        self.rebuild_link_handler();
+    }
+
+    /// Wire web-link clicks (the app opens its embedded browser). When unset,
+    /// `http(s)` falls back to the external browser.
+    pub fn set_on_open_url(
+        &mut self,
+        handler: impl Fn(String, &mut Window, &mut App) + 'static,
+    ) {
+        self.on_open_url_raw = Some(Rc::new(handler));
+        self.rebuild_link_handler();
+    }
+
+    fn rebuild_link_handler(&mut self) {
+        let open_file = self.on_open_file_raw.clone();
+        let open_url = self.on_open_url_raw.clone();
         self.link_handler = Some(Rc::new(move |url: &str, window: &mut Window, cx: &mut App| {
             if is_http_url(url) {
-                cx.open_url(url);
+                if let Some(open_url) = &open_url {
+                    open_url(url.to_owned(), window, cx);
+                } else {
+                    cx.open_url(url);
+                }
             } else if is_file_link(url) {
-                open_file(url.to_owned(), window, cx);
+                if let Some(open_file) = &open_file {
+                    open_file(url.to_owned(), window, cx);
+                }
             } else {
                 cx.open_url(url);
             }
