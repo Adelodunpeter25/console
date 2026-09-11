@@ -59,9 +59,12 @@ fn image_attachment_from_clipboard(image: &gpui::Image) -> ImageAttachment {
 impl ConsoleDesktopApp {
     /// Stage attachments pasted into the composer: clipboard images are
     /// encoded immediately; image files dropped or pasted as paths are read
-    /// off disk on the background executor.
+    /// off disk on the background executor. The target pane is captured by
+    /// the caller (paste event / drop site) so splits stage into the pane
+    /// the user acted in, not whatever is active when async work finishes.
     pub fn stage_clipboard_attachments(
         &mut self,
+        pane_id: &str,
         entries: Vec<ClipboardEntry>,
         cx: &mut Context<Self>,
     ) {
@@ -80,15 +83,12 @@ impl ConsoleDesktopApp {
         }
 
         if !staged.is_empty() {
-            let pane_id = self
-                .active_pane_id
-                .clone()
-                .unwrap_or_else(|| "pane-main".to_string());
-            self.append_attachments_for_pane(&pane_id, staged);
+            self.append_attachments_for_pane(pane_id, staged);
             cx.notify();
         }
         if !paths.is_empty() {
             let entity = cx.entity().downgrade();
+            let pane_id = pane_id.to_string();
             cx.spawn(async move |_entity, cx| {
                 let attachments = cx
                     .background_executor()
@@ -102,10 +102,6 @@ impl ConsoleDesktopApp {
                 cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            let pane_id = this
-                                .active_pane_id
-                                .clone()
-                                .unwrap_or_else(|| "pane-main".to_string());
                             this.append_attachments_for_pane(&pane_id, attachments);
                             cx.notify();
                         });
@@ -117,8 +113,11 @@ impl ConsoleDesktopApp {
     }
 
     /// Stage image files dropped onto the composer as attachment chips.
+    /// `pane_id` is the drop site's pane — captured, not re-read, so drops
+    /// onto a non-focused split land where the user dropped them.
     pub fn stage_dropped_files(
         &mut self,
+        pane_id: &str,
         paths: &ExternalPaths,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -128,6 +127,9 @@ impl ConsoleDesktopApp {
         }
         let paths = paths.paths().to_vec();
         let entity = cx.entity().downgrade();
+        let drop_pane_id = pane_id.to_string();
+        let focus_pane_id = drop_pane_id.clone();
+        let pane_id = drop_pane_id;
         cx.spawn(async move |_entity, cx| {
             let attachments = cx
                 .background_executor()
@@ -141,10 +143,6 @@ impl ConsoleDesktopApp {
             cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        let pane_id = this
-                            .active_pane_id
-                            .clone()
-                            .unwrap_or_else(|| "pane-main".to_string());
                         this.append_attachments_for_pane(&pane_id, attachments);
                         cx.notify();
                     });
@@ -152,12 +150,18 @@ impl ConsoleDesktopApp {
             });
         })
         .detach();
-        window.focus(&self.active_composer_input().read(cx).focus(), cx);
+        window.focus(
+            &self.composer_for_pane(&focus_pane_id).read(cx).focus(),
+            cx,
+        );
     }
 
     /// Open the native file picker and stage the chosen image. Dismissing the
-    /// dialog is a silent no-op, like the folder picker.
-    pub fn pick_image(&mut self, cx: &mut Context<Self>) {
+    /// dialog is a silent no-op, like the folder picker. The target pane is
+    /// captured up front so the chip lands where the picker was opened even
+    /// if focus moved while the dialog was open.
+    pub fn pick_image(&mut self, pane_id: &str, cx: &mut Context<Self>) {
+        let pane_id = pane_id.to_string();
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_entity, cx| {
             let picked = cx
@@ -179,10 +183,6 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| match attachment {
                         Some(attachment) => {
-                            let pane_id = this
-                                .active_pane_id
-                                .clone()
-                                .unwrap_or_else(|| "pane-main".to_string());
                             this.append_attachments_for_pane(&pane_id, vec![attachment]);
                             cx.notify();
                         }
@@ -194,17 +194,15 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// Remove a staged attachment by index.
-    pub fn remove_attachment(&mut self, index: usize, cx: &mut Context<Self>) {
-        let pane_id = self
-            .active_pane_id
-            .clone()
-            .unwrap_or_else(|| "pane-main".to_string());
-        if let Some(staged) = self.attachments.get_mut(&pane_id) {
+    /// Remove a staged attachment by index. Pane-scoped like the rest of the
+    /// staging path — the chip row for `pane_id` renders that pane's list,
+    /// so removal must hit the same pane.
+    pub fn remove_attachment(&mut self, pane_id: &str, index: usize, cx: &mut Context<Self>) {
+        if let Some(staged) = self.attachments.get_mut(pane_id) {
             if index < staged.len() {
                 Rc::make_mut(staged).remove(index);
                 if staged.is_empty() {
-                    self.attachments.remove(&pane_id);
+                    self.attachments.remove(pane_id);
                 }
                 cx.notify();
             }
@@ -212,14 +210,10 @@ impl ConsoleDesktopApp {
     }
 
     /// Open the image preview modal for a staged attachment.
-    pub fn preview_attachment(&mut self, index: usize, cx: &mut Context<Self>) {
-        let pane_id = self
-            .active_pane_id
-            .clone()
-            .unwrap_or_else(|| "pane-main".to_string());
+    pub fn preview_attachment(&mut self, pane_id: &str, index: usize, cx: &mut Context<Self>) {
         if let Some(attachment) = self
             .attachments
-            .get(&pane_id)
+            .get(pane_id)
             .and_then(|v| v.get(index))
             .cloned()
         {

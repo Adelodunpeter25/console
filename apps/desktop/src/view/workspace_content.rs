@@ -1013,10 +1013,11 @@ impl ConsoleDesktopApp {
                                     },
                                     {
                                         let entity = entity.clone();
+                                        let pane_id = composer_pane_id.clone();
                                         move |_w, cx| {
                                             if let Some(app) = entity.upgrade() {
                                                 app.update(cx, |this, cx| {
-                                                    this.pick_image(cx);
+                                                    this.pick_image(&pane_id, cx);
                                                 });
                                             }
                                         }
@@ -1095,30 +1096,33 @@ impl ConsoleDesktopApp {
                                 .attachments(self.attachments_for_pane(&composer_pane_id))
                                 .on_remove_attachment({
                                     let entity = entity.clone();
+                                    let pane_id = composer_pane_id.clone();
                                     move |index, _w, cx| {
                                         if let Some(app) = entity.upgrade() {
                                             app.update(cx, |this, cx| {
-                                                this.remove_attachment(index, cx);
+                                                this.remove_attachment(&pane_id, index, cx);
                                             });
                                         }
                                     }
                                 })
                                 .on_preview_attachment({
                                     let entity = entity.clone();
+                                    let pane_id = composer_pane_id.clone();
                                     move |index, _w, cx| {
                                         if let Some(app) = entity.upgrade() {
                                             app.update(cx, |this, cx| {
-                                                this.preview_attachment(index, cx);
+                                                this.preview_attachment(&pane_id, index, cx);
                                             });
                                         }
                                     }
                                 })
                                 .on_drop_files({
                                     let entity = entity.clone();
+                                    let pane_id = composer_pane_id.clone();
                                     move |paths, window, cx| {
                                         if let Some(app) = entity.upgrade() {
                                             app.update(cx, |this, cx| {
-                                                this.stage_dropped_files(paths, window, cx);
+                                                this.stage_dropped_files(&pane_id, paths, window, cx);
                                             });
                                         }
                                     }

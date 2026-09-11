@@ -134,16 +134,12 @@ pub enum ComposerEvent {
 #[derive(Clone)]
 pub struct ComposerAttachmentPaste(pub Vec<ClipboardEntry>);
 
-/// Respect the representation priority chosen by the source application.
-/// Finder puts paths first (and a text fallback second), while screenshots put
-/// an image first. Text-first clipboard content remains ordinary text paste.
+/// Respect any image or file representation in the clipboard, regardless of
+/// entry order. Finder puts paths first (and a text fallback second), while
+/// screenshots put an image first — but browsers and other apps often lead
+/// with text/HTML and carry the image second. Only pure-text clipboards
+/// remain ordinary text paste.
 fn attachment_paste_entries(clipboard: &ClipboardItem) -> Option<Vec<ClipboardEntry>> {
-    if !matches!(
-        clipboard.entries().first(),
-        Some(ClipboardEntry::Image(_) | ClipboardEntry::ExternalPaths(_))
-    ) {
-        return None;
-    }
     let entries = clipboard
         .entries()
         .iter()
@@ -1412,10 +1408,13 @@ impl Render for ComposerInput {
                         && input.selected_range.end == input.content.len();
                     (has_selection, has_content, all_selected)
                 };
-                let can_paste = cx
-                    .read_from_clipboard()
-                    .and_then(|item| item.text())
-                    .is_some();
+                // Paste is available for text or for image/file payloads the
+                // composer stages as attachment chips (e.g. screenshots carry
+                // no text representation, so a text-only check would disable
+                // the item even though paste would work).
+                let can_paste = cx.read_from_clipboard().is_some_and(|item| {
+                    item.text().is_some() || attachment_paste_entries(&item).is_some()
+                });
 
                 // Call the editing methods directly rather than dispatching the
                 // actions: by the time an item runs, focus is still unwinding

@@ -700,11 +700,13 @@ impl ConsoleDesktopApp {
                 }
             }),
             // Pasting an image (or image files) stages them as attachment
-            // chips instead of inserting text.
+            // chips instead of inserting text. pane-main is the only
+            // composer owned here; splits subscribe their own in
+            // `ensure_workspace_pane_state` with their pane id captured.
             cx.subscribe(
                 &composer_input,
                 |this, _input, event: &ComposerAttachmentPaste, cx| {
-                    this.stage_clipboard_attachments(event.0.clone(), cx);
+                    this.stage_clipboard_attachments("pane-main", event.0.clone(), cx);
                 },
             ),
             cx.subscribe(
