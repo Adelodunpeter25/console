@@ -1,8 +1,8 @@
 use gpui::{
     fill, point, px, quad, size, App, BorderStyle, Bounds, DispatchPhase,
     Element, ElementId, ElementInputHandler, Entity, GlobalElementId, InspectorElementId,
-    IntoElement, LayoutId, MouseMoveEvent, PaintQuad, Pixels, Point, ScrollHandle, StyledText,
-    TextLayout, TextRun, TextStyleRefinement, WhiteSpace, Window,
+    IntoElement, LayoutId, MouseMoveEvent, PaintQuad, ParentElement, Pixels, Point, ScrollHandle,
+    Styled, StyledText, TextLayout, TextRun, TextStyleRefinement, WhiteSpace, Window,
 };
 
 use super::text_runs::{input_text_runs, SearchPaint};
@@ -353,11 +353,25 @@ impl Element for InputElement {
                 text.request_layout(id, inspector_id, window, cx)
             }
         };
+        if mentions_to_layout.is_empty() {
+            return (
+                text_layout_id,
+                InputLayoutState {
+                    text,
+                    text_layout_state,
+                    mention_icons: Vec::new(),
+                },
+            );
+        }
+
         let mut mention_icons = Vec::new();
         let mut child_layout_ids = vec![text_layout_id];
 
         for mention in mentions_to_layout {
-            let mut icon = crate::primitives::file_type_icon(&mention.path, 11.0).into_any_element();
+            let mut icon = gpui::div()
+                .absolute()
+                .child(crate::primitives::file_type_icon(&mention.path, 11.0))
+                .into_any_element();
             let icon_layout_id = icon.request_layout(window, cx);
             child_layout_ids.push(icon_layout_id);
             mention_icons.push(MentionIconLayout {
@@ -367,14 +381,13 @@ impl Element for InputElement {
             });
         }
 
-        // Keep the custom element constrained to the width supplied by its
-        // parent. Without an explicit width, the flex container sizes itself
-        // from the text's max-content width, so StyledText never receives a
-        // wrap width and long prompts paint past the right edge instead of
-        // forming soft-wrapped rows.
+        // When mention icons are present, place them in a Block container so
+        // the text child continues to receive a Definite available width from
+        // the block layout engine. (A Flex container would convert Definite
+        // width to MaxContent along the main axis, disabling text wrapping).
         let layout_id = window.request_layout(
             gpui::Style {
-                display: gpui::Display::Flex,
+                display: gpui::Display::Block,
                 size: gpui::size(
                     gpui::Length::Definite(gpui::relative(1.0)),
                     gpui::auto(),
