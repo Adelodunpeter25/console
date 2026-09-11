@@ -366,6 +366,7 @@ impl BrowserView {
     pub fn navigate_to_url(&mut self, url: String, cx: &mut Context<Self>) {
         if let Some(host) = &self.host {
             host.load_url(&url);
+            host.set_visible(true);
         }
         self.navigation_requested = true;
         self.loading = true;
@@ -803,6 +804,7 @@ impl BrowserView {
                     move |bounds, window, _| {
                         if let Some(host) = &host {
                             host.sync_bounds(bounds, window.scale_factor());
+                            host.set_visible(true);
                         }
                         window.insert_hitbox(bounds, HitboxBehavior::Normal)
                     },

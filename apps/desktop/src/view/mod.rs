@@ -865,10 +865,23 @@ impl Render for ConsoleDesktopApp {
                         .with_new_terminal(on_new_right_sidebar_terminal)
                         .with_toggle_collapsed(on_toggle_right_sidebar_bottom_collapsed);
 
-                        let browser_element = if self.inspector_active_tab == console_ui::InspectorTab::Browser {
+                        let browser_visible = self.right_sidebar_visible
+                            && self.inspector_active_tab == console_ui::InspectorTab::Browser;
+                        let browser_element = if browser_visible {
                             let browser = self.browser_view_for_inspector(window, cx);
+                            let is_overlay_open = self.command_palette.read(cx).is_open(cx)
+                                || self.quick_open_palette.read(cx).is_open(cx)
+                                || self.project_browse_palette.read(cx).is_open(cx);
+                            browser.update(cx, |view, cx| {
+                                view.sync_native_state(true, is_overlay_open, cx);
+                            });
                             Some(browser.into_any_element())
                         } else {
+                            if let Some(ref browser) = self.browser_view {
+                                browser.update(cx, |view, cx| {
+                                    view.sync_native_state(false, false, cx);
+                                });
+                            }
                             None
                         };
 

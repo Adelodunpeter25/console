@@ -12,6 +12,12 @@ use super::{
 impl ConsoleDesktopApp {
     pub fn toggle_right_sidebar(&mut self, cx: &mut Context<Self>) {
         self.right_sidebar_visible = !self.right_sidebar_visible;
+        let is_browser = self.right_sidebar_visible && self.inspector_active_tab == InspectorTab::Browser;
+        if let Some(ref browser) = self.browser_view {
+            browser.update(cx, |view, cx| {
+                view.sync_native_state(is_browser, false, cx);
+            });
+        }
         self.persist_layout();
         self.maybe_refresh_inspector(cx);
         cx.notify();
@@ -23,6 +29,12 @@ impl ConsoleDesktopApp {
             return;
         }
         self.right_sidebar_visible = visible;
+        let is_browser = self.right_sidebar_visible && self.inspector_active_tab == InspectorTab::Browser;
+        if let Some(ref browser) = self.browser_view {
+            browser.update(cx, |view, cx| {
+                view.sync_native_state(is_browser, false, cx);
+            });
+        }
         self.persist_layout();
         self.maybe_refresh_inspector(cx);
         cx.notify();
@@ -267,6 +279,12 @@ impl ConsoleDesktopApp {
             return;
         }
         self.inspector_active_tab = tab;
+        let is_browser = self.right_sidebar_visible && tab == InspectorTab::Browser;
+        if let Some(ref browser) = self.browser_view {
+            browser.update(cx, |view, cx| {
+                view.sync_native_state(is_browser, false, cx);
+            });
+        }
         match tab {
             InspectorTab::AllFiles => self.fetch_inspector_fs_tree(cx),
             InspectorTab::Changes => {
