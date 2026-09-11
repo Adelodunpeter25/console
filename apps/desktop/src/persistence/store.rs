@@ -22,10 +22,19 @@ pub struct PersistedEnvironmentsState {
     pub active_id: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersistedDraftMention {
+    pub start: usize,
+    pub end: usize,
+    pub path: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PersistedDraft {
     pub prompt: String,
     pub updated_at: i64,
+    #[serde(default)]
+    pub mentions: Vec<PersistedDraftMention>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

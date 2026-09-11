@@ -113,9 +113,11 @@ impl ConsoleDesktopApp {
                 }
                 ComposerEvent::Edited => {
                     // Save raw text for crash safety; does NOT update sidebar_draft_ids.
-                    let text = input.read(cx).content().to_string();
+                    let input = input.read(cx);
+                    let text = input.content().to_string();
+                    let mentions = input.mentions().to_vec();
                     let session_id = this.active_session_for_pane(&edit_pane_id);
-                    this.save_draft_for_session(session_id.as_deref(), &text, cx);
+                    this.save_draft_for_session(session_id.as_deref(), &text, &mentions, cx);
                 }
                 _ => {}
             },
@@ -996,12 +998,10 @@ impl ConsoleDesktopApp {
         let previous_session = self.active_session_for_pane(pane_id);
 
         if let Some(session_id) = previous_session.as_deref() {
-            let text = self
-                .composer_for_pane(pane_id)
-                .read(cx)
-                .content()
-                .to_string();
-            self.commit_draft_to_sidebar(session_id, &text, cx);
+            let input = self.composer_for_pane(pane_id).read(cx);
+            let text = input.content().to_string();
+            let mentions = input.mentions().to_vec();
+            self.commit_draft_to_sidebar(session_id, &text, &mentions, cx);
         }
 
         self.save_transcript_scroll_position(cx);
@@ -1021,13 +1021,11 @@ impl ConsoleDesktopApp {
         match next_session {
             Some(session_id) => {
                 self.selected_session_id = Some(session_id.clone());
-                let draft = self
-                    .get_draft_for_session(Some(&session_id))
-                    .map(str::to_string);
+                let draft = self.get_draft_with_mentions(Some(&session_id));
                 composer.update(cx, |input, cx| {
                     input.set_prompt_history(Vec::new(), cx);
-                    if let Some(draft) = draft {
-                        input.set_content(draft, cx);
+                    if let Some((draft, mentions)) = draft {
+                        input.set_content_with_mentions(draft, mentions, cx);
                     } else {
                         input.clear(cx);
                     }
@@ -1038,10 +1036,10 @@ impl ConsoleDesktopApp {
             }
             None => {
                 self.selected_session_id = None;
-                let draft = self.get_draft_for_session(None).map(str::to_string);
+                let draft = self.get_draft_with_mentions(None);
                 composer.update(cx, |input, cx| {
-                    if let Some(draft) = draft {
-                        input.set_content(draft, cx);
+                    if let Some((draft, mentions)) = draft {
+                        input.set_content_with_mentions(draft, mentions, cx);
                     } else {
                         input.clear(cx);
                     }
@@ -1260,11 +1258,11 @@ impl ConsoleDesktopApp {
                 cx.notify();
                 return;
             }
-            let draft = self.get_draft_for_session(Some(sid)).map(|s| s.to_string());
+            let draft = self.get_draft_with_mentions(Some(sid));
             self.composer_for_pane(pane_id).update(cx, |input, cx| {
                 input.set_prompt_history(Vec::new(), cx);
-                if let Some(draft_text) = draft {
-                    input.set_content(draft_text, cx);
+                if let Some((draft_text, mentions)) = draft {
+                    input.set_content_with_mentions(draft_text, mentions, cx);
                 } else {
                     input.clear(cx);
                 }
@@ -1552,14 +1550,12 @@ impl ConsoleDesktopApp {
         self.active_pane_id = Some(new_pane_id.clone());
         if let WorkspaceTabConfig::Chat { session_id, .. } = tab {
             self.selected_session_id = Some(session_id.clone());
-            let draft = self
-                .get_draft_for_session(Some(&session_id))
-                .map(|s| s.to_string());
+            let draft = self.get_draft_with_mentions(Some(&session_id));
             self.composer_for_pane(&new_pane_id)
                 .update(cx, |input, cx| {
                     input.set_prompt_history(Vec::new(), cx);
-                    if let Some(draft_text) = draft {
-                        input.set_content(draft_text, cx);
+                    if let Some((draft_text, mentions)) = draft {
+                        input.set_content_with_mentions(draft_text, mentions, cx);
                     } else {
                         input.clear(cx);
                     }

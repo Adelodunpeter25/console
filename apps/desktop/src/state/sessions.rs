@@ -661,11 +661,11 @@ impl ConsoleDesktopApp {
             return;
         }
 
-        let draft = self.get_draft_for_session(Some(&id)).map(|s| s.to_string());
+        let draft = self.get_draft_with_mentions(Some(&id));
         self.active_composer_input().update(cx, |input, cx| {
             input.set_prompt_history(Vec::new(), cx);
-            if let Some(draft_text) = draft {
-                input.set_content(draft_text, cx);
+            if let Some((draft_text, mentions)) = draft {
+                input.set_content_with_mentions(draft_text, mentions, cx);
             } else {
                 input.clear(cx);
             }

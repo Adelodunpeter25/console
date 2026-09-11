@@ -625,8 +625,16 @@ impl ConsoleDesktopApp {
             .collect();
         if let Some(initial_draft) = drafts.get("new_chat") {
             if !initial_draft.prompt.trim().is_empty() {
+                let mentions = initial_draft
+                    .mentions
+                    .iter()
+                    .map(|mention| console_ui::ComposerMention {
+                        range: mention.start..mention.end,
+                        path: mention.path.clone(),
+                    })
+                    .collect();
                 composer_input.update(cx, |input, cx| {
-                    input.set_content(initial_draft.prompt.clone(), cx);
+                    input.set_content_with_mentions(initial_draft.prompt.clone(), mentions, cx);
                 });
             }
         }
@@ -671,9 +679,11 @@ impl ConsoleDesktopApp {
                     }
                     ComposerEvent::Edited => {
                         // Save raw text for crash safety; does NOT update sidebar_draft_ids.
-                        let text = input.read(cx).content().to_string();
+                        let input = input.read(cx);
+                        let text = input.content().to_string();
+                        let mentions = input.mentions().to_vec();
                         let session_id = this.active_session_for_pane("pane-main");
-                        this.save_draft_for_session(session_id.as_deref(), &text, cx);
+                        this.save_draft_for_session(session_id.as_deref(), &text, &mentions, cx);
                     }
                     ComposerEvent::Focus => cx.notify(),
                     // Backspace on an empty composer removes the last staged

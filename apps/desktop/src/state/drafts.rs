@@ -1,4 +1,4 @@
-use console_ui::DraftSummary;
+use console_ui::{ComposerMention, DraftSummary};
 use gpui::Context;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -81,15 +81,31 @@ impl ConsoleDesktopApp {
         summaries
     }
 
-    pub fn get_draft_for_session(&self, session_id: Option<&str>) -> Option<&str> {
+    pub fn get_draft_with_mentions(
+        &self,
+        session_id: Option<&str>,
+    ) -> Option<(String, Vec<ComposerMention>)> {
         let key = session_id.unwrap_or("new_chat");
-        self.drafts.get(key).map(|d| d.prompt.as_str())
+        self.drafts.get(key).map(|draft| {
+            (
+                draft.prompt.clone(),
+                draft
+                    .mentions
+                    .iter()
+                    .map(|mention| ComposerMention {
+                        range: mention.start..mention.end,
+                        path: mention.path.clone(),
+                    })
+                    .collect(),
+            )
+        })
     }
 
     pub fn save_draft_for_session(
         &mut self,
         session_id: Option<&str>,
         text: &str,
+        mentions: &[ComposerMention],
         cx: &mut Context<Self>,
     ) {
         let key = session_id.unwrap_or("new_chat").to_string();
@@ -98,8 +114,16 @@ impl ConsoleDesktopApp {
                 self.schedule_drafts_save(cx);
             }
         } else {
+            let persisted_mentions = mentions
+                .iter()
+                .map(|mention| persistence::store::PersistedDraftMention {
+                    start: mention.range.start,
+                    end: mention.range.end,
+                    path: mention.path.clone(),
+                })
+                .collect::<Vec<_>>();
             let changed = match self.drafts.get(&key) {
-                Some(existing) => existing.prompt != text,
+                Some(existing) => existing.prompt != text || existing.mentions != persisted_mentions,
                 None => true,
             };
             if changed {
@@ -108,6 +132,7 @@ impl ConsoleDesktopApp {
                     persistence::store::PersistedDraft {
                         prompt: text.to_string(),
                         updated_at: chrono::Utc::now().timestamp(),
+                        mentions: persisted_mentions,
                     },
                 );
                 self.schedule_drafts_save(cx);
@@ -150,9 +175,10 @@ impl ConsoleDesktopApp {
         &mut self,
         session_id: &str,
         text: &str,
+        mentions: &[ComposerMention],
         cx: &mut Context<Self>,
     ) {
-        self.save_draft_for_session(Some(session_id), text, cx);
+        self.save_draft_for_session(Some(session_id), text, mentions, cx);
         if text.trim().is_empty() {
             self.sidebar_draft_ids.remove(session_id);
         } else {

@@ -630,6 +630,15 @@ impl ComposerInput {
     }
 
     pub fn set_content(&mut self, content: impl Into<SharedString>, cx: &mut Context<Self>) {
+        self.set_content_with_mentions(content, Vec::new(), cx);
+    }
+
+    pub fn set_content_with_mentions(
+        &mut self,
+        content: impl Into<SharedString>,
+        mentions: Vec<ComposerMention>,
+        cx: &mut Context<Self>,
+    ) {
         self.prompt_history.reset_navigation();
         let content = content.into();
         let changed = self.content != content;
@@ -639,7 +648,8 @@ impl ComposerInput {
         self.selection_reversed = false;
         self.marked_range = None;
         self.vertical_navigation = None;
-        self.mentions.clear();
+        self.mentions = mentions;
+        self.reconcile_mentions();
         // A load or reload from disk is a new baseline: undoing into text
         // from before an external change would silently revert that change.
         // An unchanged reload keeps the history alive.
