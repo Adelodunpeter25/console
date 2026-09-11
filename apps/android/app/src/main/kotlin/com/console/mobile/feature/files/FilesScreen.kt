@@ -16,7 +16,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
@@ -50,6 +49,7 @@ import com.console.mobile.data.model.getFilePreviewBlock
 import com.console.mobile.data.model.isMarkdownPath
 import com.console.mobile.feature.chat.MarkdownText
 import com.console.mobile.ui.components.EmptyState
+import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
@@ -349,29 +349,17 @@ private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expa
         } else {
             Box(modifier = Modifier.size(12.dp))
         }
-        Icon(
-            when {
-                entry.isDir && expanded -> Icons.Filled.FolderOpen
-                entry.isDir -> Icons.Filled.Folder
-                else -> Icons.Filled.Description
-            },
-            contentDescription = null,
-            tint = if (entry.isDir) ConsoleColors.TextSecondary else fileTint(entry.name),
-            modifier = Modifier.size(17.dp),
-        )
+        if (entry.isDir) {
+            Icon(
+                if (expanded) Icons.Filled.FolderOpen else Icons.Filled.Folder,
+                contentDescription = null,
+                tint = ConsoleColors.TextSecondary,
+                modifier = Modifier.size(17.dp),
+            )
+        } else {
+            FileIcon(filename = entry.name, sizeDp = 17)
+        }
         Text(entry.name, color = if (selected) ConsoleColors.TextPrimary else ConsoleColors.TextSecondary, fontSize = 14.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
-    }
-}
-
-private fun fileTint(name: String): Color {
-    val ext = name.substringAfterLast('.', "").lowercase()
-    return when (ext) {
-        "kt", "java" -> Color(0xFF7DD3FC)
-        "ts", "tsx", "js", "jsx" -> Color(0xFFFACC15)
-        "py", "rb", "go", "rs" -> Color(0xFF4ADE80)
-        "json", "yml", "yaml", "toml" -> Color(0xFFFB923C)
-        "md" -> Color(0xFFC084FC)
-        else -> ConsoleColors.TextSecondary
     }
 }
 

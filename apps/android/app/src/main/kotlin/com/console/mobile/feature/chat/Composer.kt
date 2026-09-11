@@ -298,11 +298,12 @@ private fun ModelPickerSheet(selectedModel: String?, selectedProvider: String?, 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = ConsoleColors.Background) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 40.dp)) {
             Text("Select Model", color = ConsoleColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 12.dp))
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 providerState.providers.forEach { p ->
                     val sel = p.name == activeProvider
-                    TextButton(onClick = { activeProvider = p.name }, modifier = Modifier.padding(end = 6.dp).clip(RoundedCornerShape(8.dp)).background(if (sel) ConsoleColors.CardAlt else Color.Transparent).border(1.dp, if (sel) ConsoleColors.Border else Color.Transparent, RoundedCornerShape(8.dp))) {
-                        Text(p.displayName.ifBlank { p.name }, color = if (sel) ConsoleColors.TextPrimary else ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Medium)
+                    Row(modifier = Modifier.padding(end = 6.dp).clip(RoundedCornerShape(8.dp)).background(if (sel) ConsoleColors.CardAlt else Color.Transparent).border(1.dp, if (sel) ConsoleColors.Border else Color.Transparent, RoundedCornerShape(8.dp)).clickable { activeProvider = p.name }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        com.console.mobile.ui.components.ProviderIcon(provider = p.name, sizeDp = 13)
+                        Text(p.displayName.ifBlank { p.name }, color = if (sel) ConsoleColors.TextPrimary else ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Medium, modifier = Modifier.padding(start = 6.dp))
                     }
                 }
             }

@@ -111,7 +111,8 @@ private fun CodeBlock(language: String, code: String) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(language.ifBlank { "code" }, color = ConsoleColors.TextSecondary, fontSize = 11.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            com.console.mobile.ui.components.FileLanguageIcon(language = language, sizeDp = 13)
+            Text(language.ifBlank { "code" }, color = ConsoleColors.TextSecondary, fontSize = 11.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 6.dp))
             IconButton(onClick = {
                 clipboard.setText(AnnotatedString(code))
                 copied = true

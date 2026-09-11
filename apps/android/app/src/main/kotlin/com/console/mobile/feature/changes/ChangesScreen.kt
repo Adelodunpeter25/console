@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
@@ -52,6 +51,7 @@ import com.console.mobile.core.util.sumTotals
 import com.console.mobile.data.model.GitFileEntry
 import com.console.mobile.feature.chat.DiffSummaryBadge
 import com.console.mobile.feature.chat.DiffView
+import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
@@ -215,7 +215,7 @@ fun ChangesScreen(onBack: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(statusLetter(row.status), color = parseChangeColor(statusColorHex(row.status)), fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.size(12.dp))
-                            Icon(Icons.Filled.Description, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp))
+                            FileIcon(filename = row.name, sizeDp = 16)
                             Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
                                 Text(row.name, color = ConsoleColors.TextPrimary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(row.rel, color = ConsoleColors.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

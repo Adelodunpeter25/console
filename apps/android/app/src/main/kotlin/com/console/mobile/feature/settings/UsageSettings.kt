@@ -15,8 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AlertTriangle
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,7 +27,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -102,9 +99,8 @@ fun UsageSettings(onBack: () -> Unit) {
                 Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
                     Text("Remaining quota for your signed-in providers. Pull to refresh.", color = ConsoleColors.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 4.dp).padding(top = 8.dp, bottom = 16.dp))
                     cards.forEach { (key, displayName, auth) ->
-                        UsageProviderCard(displayName = displayName, report = usageState.reports[key], loggedIn = auth?.loggedIn == true, email = auth?.email)
+                        UsageProviderCard(providerKey = key, displayName = displayName, report = usageState.reports[key], loggedIn = auth?.loggedIn == true, email = auth?.email)
                     }
-                    scope.toString()
                 }
             }
         }
@@ -183,15 +179,4 @@ private fun UsageLimitRow(limit: UsageLimit) {
             }
         }
         Box(modifier = Modifier.fillMaxWidth().padding(top = 6.dp).height(6.dp).clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.1f))) {
-            Box(modifier = Modifier.fillMaxWidth(barPct).height(6.dp).clip(RoundedCornerShape(999.dp)).background(color))
-        }
-    }
-}
-
-private fun parseUsageColor(hex: String): Color {
-    return try {
-        Color(android.graphics.Color.parseColor(hex))
-    } catch (_: Exception) {
-        ConsoleColors.TextMuted
-    }
-}
+            Box(modifier = Modifier.fillMaxWidth(barPct).height(6.dp).clip(RoundedCornerShape(999.dp)).background(colo                                                                                                                                                                                                                     
