@@ -465,7 +465,7 @@ impl RenderOnce for ComposerView {
                                 div()
                                     .w_full()
                                     .min_h(px(36.0))
-                                    .max_h(px(220.0))
+                                    .max_h(crate::input::COMPOSER_MAX_HEIGHT)
                                     .px(px(12.0))
                                     .pt(px(2.0))
                                     .pb(px(2.0))

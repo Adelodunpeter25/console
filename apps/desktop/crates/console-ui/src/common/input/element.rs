@@ -350,9 +350,22 @@ impl Element for InputElement {
             });
         }
 
+        // Keep the custom element constrained to the width supplied by its
+        // parent. Without an explicit width, the flex container sizes itself
+        // from the text's max-content width, so StyledText never receives a
+        // wrap width and long prompts paint past the right edge instead of
+        // forming soft-wrapped rows.
         let layout_id = window.request_layout(
             gpui::Style {
                 display: gpui::Display::Flex,
+                size: gpui::size(
+                    gpui::Length::Definite(gpui::relative(1.0)),
+                    gpui::auto(),
+                ),
+                min_size: gpui::size(
+                    gpui::Length::Definite(gpui::relative(0.0)),
+                    gpui::auto(),
+                ),
                 ..Default::default()
             },
             child_layout_ids,
