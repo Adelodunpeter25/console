@@ -352,6 +352,30 @@ impl BrowserView {
         self.address_dirty = false;
     }
 
+    /// Fully tear down the current native page before this browser surface is
+    /// removed from the inspector. The entity may be retained elsewhere, so
+    /// clearing state here is what makes reopening a fresh browser session.
+    pub fn close(&mut self, cx: &mut Context<Self>) {
+        if let Some(host) = self.host.clone() {
+            host.stop();
+            host.load_url("about:blank");
+            host.set_visible(false);
+            host.focus_parent();
+        }
+        self.navigation_requested = false;
+        self.current_url = None;
+        self.page_title = None;
+        self.loading = false;
+        self.can_go_back = false;
+        self.can_go_forward = false;
+        self.address_dirty = false;
+        self.snapshot = None;
+        self.snapshot_pending = false;
+        self.snapshot_epoch = self.snapshot_epoch.wrapping_add(1);
+        self.address.update(cx, |address, cx| address.set_content(String::new(), cx));
+        cx.notify();
+    }
+
     pub fn navigate_to_input(&mut self, raw: String, cx: &mut Context<Self>) {
         let Some(target) = resolve_address(&raw) else {
             return;

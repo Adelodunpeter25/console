@@ -285,6 +285,11 @@ impl ConsoleDesktopApp {
     }
 
     pub fn close_auxiliary_tab(&mut self, tab: AuxiliaryTab, cx: &mut Context<Self>) {
+        if tab == AuxiliaryTab::Browser {
+            if let Some(browser) = self.browser_view.take() {
+                browser.update(cx, |view, cx| view.close(cx));
+            }
+        }
         self.inspector_open_auxiliary_tabs.retain(|open| *open != tab);
         if self.inspector_active_tab == InspectorTab::Auxiliary(tab) {
             self.set_inspector_tab(InspectorTab::default(), cx);
