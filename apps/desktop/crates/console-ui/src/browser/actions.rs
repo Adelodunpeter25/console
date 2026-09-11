@@ -36,8 +36,11 @@ pub fn init_browser_keybindings(cx: &mut App) {
         KeyBinding::new("cmd-shift-r", BrowserHardReload, Some(BROWSER_KEY_CONTEXT)),
         KeyBinding::new("ctrl-shift-r", BrowserHardReload, Some(BROWSER_KEY_CONTEXT)),
         KeyBinding::new("escape", BrowserStop, Some(BROWSER_KEY_CONTEXT)),
-        KeyBinding::new("cmd-alt-i", BrowserDevtools, Some(BROWSER_KEY_CONTEXT)),
+        KeyBinding::new("cmd-shift-i", BrowserDevtools, Some(BROWSER_KEY_CONTEXT)),
+        KeyBinding::new("cmd-shift-I", BrowserDevtools, Some(BROWSER_KEY_CONTEXT)),
         KeyBinding::new("ctrl-shift-i", BrowserDevtools, Some(BROWSER_KEY_CONTEXT)),
+        KeyBinding::new("ctrl-shift-I", BrowserDevtools, Some(BROWSER_KEY_CONTEXT)),
+        KeyBinding::new("cmd-alt-i", BrowserDevtools, Some(BROWSER_KEY_CONTEXT)),
         KeyBinding::new("cmd-l", FocusBrowserAddress, Some(BROWSER_KEY_CONTEXT)),
         KeyBinding::new("ctrl-l", FocusBrowserAddress, Some(BROWSER_KEY_CONTEXT)),
         // Address bar escape cancels editing and reverts to current URL

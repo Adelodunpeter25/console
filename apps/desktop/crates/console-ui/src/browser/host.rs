@@ -200,15 +200,48 @@ mod macos_host {
         }
 
         pub fn open_devtools(&self) {
-            self.webview.open_devtools();
+            unsafe {
+                if let Some(inspector) = self.inspector() {
+                    let _: () = objc2::msg_send![&*inspector, show];
+                } else {
+                    self.webview.open_devtools();
+                }
+            }
         }
 
         pub fn close_devtools(&self) {
-            self.webview.close_devtools();
+            unsafe {
+                if let Some(inspector) = self.inspector() {
+                    let _: () = objc2::msg_send![&*inspector, close];
+                } else {
+                    self.webview.close_devtools();
+                }
+            }
         }
 
         pub fn is_devtools_open(&self) -> bool {
-            self.webview.is_devtools_open()
+            unsafe {
+                if let Some(inspector) = self.inspector() {
+                    let visible: bool = objc2::msg_send![&*inspector, isVisible];
+                    visible
+                } else {
+                    self.webview.is_devtools_open()
+                }
+            }
+        }
+
+        fn inspector(&self) -> Option<Retained<AnyObject>> {
+            unsafe {
+                use objc2::runtime::NSObjectProtocol;
+                let sel = objc2::runtime::Sel::register(c"_inspector");
+                if self.wk.respondsToSelector(sel) {
+                    let inspector: *mut AnyObject = objc2::msg_send![&*self.wk, _inspector];
+                    if !inspector.is_null() {
+                        return Retained::retain(inspector);
+                    }
+                }
+                None
+            }
         }
 
         pub fn focus(&self) {
