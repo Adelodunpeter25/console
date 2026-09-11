@@ -419,6 +419,22 @@ impl Render for ConsoleDesktopApp {
                 let entity = entity.clone();
                 move |event: &KeyDownEvent, _, cx| {
                     if event.keystroke.key == "escape" {
+                        // Close the image preview first — it sits above
+                        // everything else, so it owns Escape while open.
+                        if let Some(app) = entity.upgrade() {
+                            let had_preview = app.update(cx, |this, cx| {
+                                if this.zoomed_image.is_some() {
+                                    this.zoomed_image = None;
+                                    cx.notify();
+                                    true
+                                } else {
+                                    false
+                                }
+                            });
+                            if had_preview {
+                                return;
+                            }
+                        }
                         cancel_workspace_drags();
                     } else if event.keystroke.modifiers.platform
                         && event.keystroke.modifiers.shift
