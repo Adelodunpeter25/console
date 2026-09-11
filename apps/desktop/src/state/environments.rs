@@ -1,6 +1,7 @@
 use super::ConsoleDesktopApp;
 use crate::persistence::store::{
-    PersistedEnvironment, PersistedEnvironmentsState, save_environments,
+    PersistedEnvironment, PersistedEnvironmentsState, save_environment_list_preserving_active,
+    save_environments,
 };
 use console_ui::settings::{EnvironmentRow, ProbeState};
 use gpui::Context;
@@ -105,19 +106,26 @@ impl ConsoleDesktopApp {
     }
 
     pub fn save_persisted_environments(&self) {
-        let state = PersistedEnvironmentsState {
-            environments: self
-                .environments
-                .iter()
-                .map(|e| PersistedEnvironment {
-                    id: e.id.clone(),
-                    name: e.name.clone(),
-                    url: e.url.clone(),
-                })
-                .collect(),
-            active_id: self.active_env_id.clone(),
-        };
-        save_environments(state);
+        let environments: Vec<PersistedEnvironment> = self
+            .environments
+            .iter()
+            .map(|e| PersistedEnvironment {
+                id: e.id.clone(),
+                name: e.name.clone(),
+                url: e.url.clone(),
+            })
+            .collect();
+        if self.is_main_window {
+            // Only the main window owns the boot server (`active_id`).
+            save_environments(PersistedEnvironmentsState {
+                environments,
+                active_id: self.active_env_id.clone(),
+            });
+        } else {
+            // Secondary "New Window" instances share the server list but must
+            // never overwrite which server the main window boots with.
+            save_environment_list_preserving_active(environments);
+        }
     }
 
     pub fn environment_rows(&self) -> Vec<EnvironmentRow> {
@@ -236,10 +244,19 @@ impl ConsoleDesktopApp {
     }
 
     pub fn activate_environment(&mut self, env_id: String, cx: &mut Context<Self>) {
+        if self.active_env_id.as_deref() == Some(&env_id) {
+            return;
+        }
         let Some(env) = self.environments.iter().find(|e| e.id == env_id).cloned() else {
             return;
         };
         self.active_env_id = Some(env_id);
+        // Persist immediately (main window writes `active_id`; secondaries
+        // preserve it) so a restart boots this server instead of the stale
+        // one from the previous `state.json`.
+        self.save_persisted_environments();
+        crate::window::broadcast_settings_refresh(cx);
+        cx.notify();
 
         let client = self.client.clone();
         let url = env.url.clone();

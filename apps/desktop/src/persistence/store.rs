@@ -186,6 +186,23 @@ pub fn save_environments(state: PersistedEnvironmentsState) {
     update_document(|document| document.environments = Some(state));
 }
 
+/// List-only save for secondary windows: persists added/removed/edited
+/// servers without clobbering the main window's boot server (`active_id`).
+/// Runs as a single read-modify-write so the preserved `active_id` cannot
+/// race with a concurrent main-window switch.
+pub fn save_environment_list_preserving_active(environments: Vec<PersistedEnvironment>) {
+    update_document(|document| {
+        let active_id = document
+            .environments
+            .as_ref()
+            .and_then(|state| state.active_id.clone());
+        document.environments = Some(PersistedEnvironmentsState {
+            environments,
+            active_id,
+        });
+    });
+}
+
 pub fn save_drafts(drafts: std::collections::HashMap<String, PersistedDraft>) {
     update_document(|document| {
         document.drafts = Some(PersistedDraftsState { drafts });
