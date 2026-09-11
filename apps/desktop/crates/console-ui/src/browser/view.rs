@@ -601,6 +601,8 @@ impl BrowserView {
         let has_page = self.navigation_requested;
         let secure = self.current_url.as_deref().is_some_and(is_secure_url);
         let progress = self.loading.then_some(0.65f32);
+        let can_go_back = self.host.as_ref().is_some_and(|h| h.can_go_back());
+        let can_go_forward = self.host.as_ref().is_some_and(|h| h.can_go_forward());
 
         div()
             .h(px(TOOLBAR_HEIGHT))
@@ -615,7 +617,7 @@ impl BrowserView {
             .child(self.toolbar_button(
                 "browser-back",
                 IconName::ArrowLeft,
-                self.can_go_back,
+                can_go_back,
                 "Back (⌘[)",
                 theme,
                 |this, _, cx| this.go_back(cx),
@@ -624,7 +626,7 @@ impl BrowserView {
             .child(self.toolbar_button(
                 "browser-forward",
                 IconName::ArrowRight,
-                self.can_go_forward,
+                can_go_forward,
                 "Forward (⌘])",
                 theme,
                 |this, _, cx| this.go_forward(cx),
