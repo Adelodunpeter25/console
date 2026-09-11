@@ -709,67 +709,11 @@ impl BrowserView {
             ))
     }
 
-    fn render_start_page(&self, theme: Theme, cx: &mut Context<Self>) -> Div {
+    fn render_start_page(&self, theme: Theme) -> Div {
         div()
             .flex_1()
             .min_h_0()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .px(px(48.0))
-            .pb(px(40.0))
             .bg(theme.canvas)
-            .child(app_icon(IconName::Globe, 28.0, theme.text_ghost))
-            .child(
-                div()
-                    .mt(px(14.0))
-                    .text_size(px(14.0))
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(theme.text)
-                    .child("Browse the Web"),
-            )
-            .child(
-                div()
-                    .mt(px(6.0))
-                    .max_w(px(320.0))
-                    .text_center()
-                    .text_size(px(12.0))
-                    .line_height(px(18.0))
-                    .text_color(theme.text_tertiary)
-                    .child("Press ⌘L to search or enter a URL. Instant preview for local servers."),
-            )
-            .child(
-                div()
-                    .mt(px(20.0))
-                    .flex()
-                    .items_center()
-                    .gap(px(8.0))
-                    .child(self.quick_launch_button("localhost:3000", theme, cx))
-                    .child(self.quick_launch_button("localhost:5173", theme, cx))
-                    .child(self.quick_launch_button("localhost:8080", theme, cx)),
-            )
-    }
-
-    fn quick_launch_button(&self, target: &'static str, theme: Theme, cx: &mut Context<Self>) -> impl IntoElement {
-        let url = format!("http://{target}");
-        div()
-            .id(format!("quick-launch-{target}"))
-            .px(px(10.0))
-            .py(px(4.0))
-            .rounded(px(5.0))
-            .bg(theme.surface)
-            .border_1()
-            .border_color(theme.border)
-            .text_size(px(11.0))
-            .font_weight(gpui::FontWeight::MEDIUM)
-            .text_color(theme.text_secondary)
-            .cursor_pointer()
-            .hover(|s| s.bg(theme.overlay).text_color(theme.text))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.navigate_to_url(url.clone(), cx);
-            }))
-            .child(target)
     }
 
     fn render_host_error(&self, message: SharedString, theme: Theme) -> Div {
@@ -864,7 +808,7 @@ impl Render for BrowserView {
         } else if self.navigation_requested {
             self.render_page_area(theme).into_any_element()
         } else {
-            self.render_start_page(theme, cx).into_any_element()
+            self.render_start_page(theme).into_any_element()
         };
 
         div()
