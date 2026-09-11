@@ -70,6 +70,14 @@ android {
         buildConfig = true
     }
 
+    sourceSets {
+        // Centralized unit tests live in apps/android/tests (single folder).
+        // Keep the default src/test as well so IDE wizards still work.
+        getByName("test") {
+            java.srcDirs("../tests", "src/test/java", "src/test/kotlin")
+        }
+    }
+
     packaging {
         resources {
             pickFirsts += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
