@@ -55,5 +55,7 @@ rust-embed = { version = "8.7.2", features = ["interpolate-folder-path", "includ
 # apps/desktop/src/state/macos_notifications.rs. Replaces the old osascript path.
 objc2 = { version = "0.6" }
 objc2-foundation = { version = "0.3" }
+objc2-app-kit = { version = "0.3" }
+objc2-web-kit = { version = "0.3" }
 objc2-user-notifications = { version = "0.3" }
 block2 = { version = "0.6" }

@@ -29,6 +29,37 @@ use crate::theme::Theme;
 
 const TOOLBAR_HEIGHT: f32 = 42.0;
 
+#[cfg(target_os = "macos")]
+const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
+     AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PageLoad {
+    Started,
+    Finished,
+}
+
+#[derive(Clone)]
+#[cfg(target_os = "macos")]
+struct Deferred {
+    executor: gpui::ForegroundExecutor,
+    cx: gpui::AsyncApp,
+    view: gpui::WeakEntity<BrowserView>,
+}
+
+#[cfg(target_os = "macos")]
+impl Deferred {
+    fn update(&self, f: impl FnOnce(&mut BrowserView, &mut Context<BrowserView>) + 'static) {
+        let mut cx = self.cx.clone();
+        let view = self.view.clone();
+        self.executor
+            .spawn(async move {
+                let _ = view.update(&mut cx, f);
+            })
+            .detach();
+    }
+}
+
 pub struct BrowserView {
     focus_handle: FocusHandle,
     address: Entity<ComposerInput>,
@@ -108,10 +139,10 @@ impl BrowserView {
             }
         });
 
-        Self {
+        let mut this = Self {
             focus_handle,
             address,
-            host: Some(Rc::new(WebviewHost::new())),
+            host: None,
             host_error: None,
             navigation_requested: false,
             current_url: None,
@@ -127,6 +158,140 @@ impl BrowserView {
             snapshot_pending: false,
             snapshot_epoch: 0,
             _subscriptions: vec![submit_subscription, focus_in_address, focus_out_surface],
+        };
+        this.build_webview(window, cx);
+        this
+    }
+
+    #[cfg(target_os = "macos")]
+    fn build_webview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use wry::dpi::{LogicalPosition, LogicalSize};
+
+        let deferred = Deferred {
+            executor: cx.foreground_executor().clone(),
+            cx: cx.to_async(),
+            view: cx.entity().downgrade(),
+        };
+
+        let on_page_load = deferred.clone();
+        let on_title = deferred.clone();
+        let on_new_window = deferred.clone();
+
+        let on_responder_change: Box<dyn Fn(bool)> = {
+            let executor = cx.foreground_executor().clone();
+            let async_cx = cx.to_async();
+            let view = cx.entity().downgrade();
+            let window_handle = window.window_handle();
+            Box::new(move |user_gesture| {
+                let mut cx = async_cx.clone();
+                let view = view.clone();
+                executor
+                    .spawn(async move {
+                        let _ = window_handle.update(&mut cx, |_, window, cx| {
+                            let _ = view.update(cx, |this, cx| {
+                                this.native_responder_changed(user_gesture, window, cx);
+                            });
+                        });
+                    })
+                    .detach();
+            })
+        };
+
+        let built = wry::WebViewBuilder::new()
+            .with_bounds(wry::Rect {
+                position: LogicalPosition::new(0.0, 0.0).into(),
+                size: LogicalSize::new(0.0, 0.0).into(),
+            })
+            .with_visible(false)
+            .with_focused(false)
+            .with_accept_first_mouse(true)
+            .with_devtools(true)
+            .with_user_agent(USER_AGENT)
+            .with_navigation_handler(|_| true)
+            .with_on_page_load_handler(move |event, url| {
+                let event = match event {
+                    wry::PageLoadEvent::Started => PageLoad::Started,
+                    wry::PageLoadEvent::Finished => PageLoad::Finished,
+                };
+                on_page_load.update(move |this, cx| this.page_load_changed(event, url, cx));
+            })
+            .with_document_title_changed_handler(move |title| {
+                on_title.update(move |this, cx| this.title_changed(title, cx));
+            })
+            .with_new_window_req_handler(move |url, _features| {
+                on_new_window.update(move |this, cx| this.navigate_to_url(url, cx));
+                wry::NewWindowResponse::Deny
+            })
+            .build_as_child(window);
+
+        match built {
+            Ok(webview) => {
+                self.host = Some(Rc::new(WebviewHost::new(webview, on_responder_change)));
+            }
+            Err(error) => {
+                self.host_error = Some(error.to_string());
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn build_webview(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
+        self.host_error = Some("Browser preview is currently supported on macOS.".to_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    fn native_responder_changed(
+        &mut self,
+        user_gesture: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let natively_focused = self
+            .host
+            .as_ref()
+            .is_some_and(|host| host.native_focus_within());
+        if natively_focused {
+            let address_focused = self.address.read(cx).focus().is_focused(window);
+            if address_focused && !user_gesture {
+                self.reclaim_native_keyboard(cx);
+            } else {
+                window.focus(&self.focus_handle, cx);
+            }
+        }
+        self.was_natively_focused = natively_focused;
+    }
+
+    fn page_load_changed(&mut self, event: PageLoad, url: String, cx: &mut Context<Self>) {
+        match event {
+            PageLoad::Started => {
+                self.loading = true;
+                self.page_title = None;
+                self.snapshot = None;
+            }
+            PageLoad::Finished => {
+                self.loading = false;
+            }
+        }
+        if !url.is_empty() {
+            self.current_url = Some(url);
+        }
+        self.refresh_navigation_state();
+        self.echo_page_url(cx);
+        cx.notify();
+    }
+
+    fn title_changed(&mut self, title: String, cx: &mut Context<Self>) {
+        let title = (!title.trim().is_empty()).then_some(title);
+        if self.page_title != title {
+            self.page_title = title;
+            cx.notify();
+        }
+    }
+
+    fn refresh_navigation_state(&mut self) {
+        if let Some(host) = &self.host {
+            self.can_go_back = host.can_go_back();
+            self.can_go_forward = host.can_go_forward();
         }
     }
 

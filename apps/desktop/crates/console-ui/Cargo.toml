@@ -26,3 +26,10 @@ tiny-skia = "0.11.4"
 imagesize = "0.14"
 # Pinned to a rev for reproducible builds (was floating on termy main).
 termy_core = { git = "https://github.com/lassejlv/termy", rev = "f5ddada41eab55c26b582140b5ef4eb4c9d696d8" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+wry = { version = "0.56", features = ["devtools"] }
+objc2 = { workspace = true }
+objc2-foundation = { workspace = true, features = ["NSDictionary", "NSKeyValueObserving", "NSProcessInfo", "NSString", "NSURL"] }
+objc2-app-kit = { workspace = true, features = ["NSView", "NSWindow", "NSApplication", "NSEvent", "NSAppearance"] }
+objc2-web-kit = { workspace = true, features = ["WKWebView", "WKWebViewConfiguration", "WKNavigation", "WKNavigationDelegate"] }
