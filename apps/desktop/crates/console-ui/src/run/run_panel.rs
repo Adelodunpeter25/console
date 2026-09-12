@@ -423,7 +423,10 @@ impl RenderOnce for RunPanel {
                     .flex()
                     .flex_col()
                     .gap(px(6.0))
-                    .children(rows),
+                    .children(rows)
+                    // Trailing spacer: guarantees max scroll reveals the
+                    // last card fully with breathing room to spare.
+                    .child(div().h(px(16.0)).flex_none()),
             )
             .into_any_element()
     }
