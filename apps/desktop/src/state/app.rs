@@ -1265,6 +1265,48 @@ impl ConsoleDesktopApp {
         app
     }
 
+    pub fn toggle_model_favorite(
+        &mut self,
+        provider: String,
+        model_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let key = format!("{}:{}", provider, model_id);
+        let is_favorite = if self.favorites.contains(&key) {
+            Rc::make_mut(&mut self.favorites).remove(&key);
+            false
+        } else {
+            Rc::make_mut(&mut self.favorites).insert(key);
+            true
+        };
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_entity, cx| {
+            if let Err(error) = client
+                .model_favorites
+                .set(
+                    console_core::ModelFavorite {
+                        provider,
+                        model_id,
+                    },
+                    is_favorite,
+                )
+                .await
+            {
+                let message = format!("Unable to update model favorite: {error}");
+                let _ = cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.set_error(message, cx);
+                        });
+                    }
+                });
+            }
+        })
+        .detach();
+        cx.notify();
+    }
+
     pub fn viewer_list_state(
         &mut self,
         id: &str,

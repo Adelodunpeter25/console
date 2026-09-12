@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::input::ComposerInput;
-use crate::primitives::{ContextMenuHandle, IconName, MenuAlign, app_icon, provider_app_icon};
+use crate::primitives::{
+    ContextMenuHandle, IconName, MenuAlign, app_icon, provider_app_icon, provider_color,
+};
 use crate::theme::Theme;
 use console_core::{Model, ProviderCatalogEntry, SelectedModel};
 use gpui::{
@@ -442,10 +444,15 @@ pub struct ModelRolePicker {
     pub selected: Option<SelectedModel>,
     pub providers: Rc<Vec<ProviderCatalogEntry>>,
     pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
+    pub active_tab: PickerTab,
+    pub favorites: Rc<HashSet<String>>,
     pub menu: ContextMenuHandle,
     pub search: Entity<ComposerInput>,
     pub search_query: String,
     pub on_select: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
+    pub on_clear: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+    pub on_tab: Rc<dyn Fn(PickerTab, &mut Window, &mut App) + 'static>,
+    pub on_favorite: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
 }
 
 impl RenderOnce for ModelRolePicker {
@@ -462,12 +469,19 @@ impl RenderOnce for ModelRolePicker {
                 )
             })
             .unwrap_or_else(|| "Uses Default".to_string());
+        let selected_provider = selected.as_ref().map(|s| s.provider.clone());
         let providers = self.providers;
         let models_by_provider = self.models_by_provider;
+        let active_tab = self.active_tab;
+        let favorites = self.favorites;
         let on_select = self.on_select;
+        let on_clear = self.on_clear;
+        let on_tab = self.on_tab;
+        let on_favorite = self.on_favorite;
         let menu = self.menu;
         let search = self.search;
         let query = self.search_query.trim().to_lowercase();
+
         let trigger = div()
             .id(ElementId::Name(
                 format!("model-role-trigger-{}", self.label).into(),
@@ -482,11 +496,18 @@ impl RenderOnce for ModelRolePicker {
             .items_center()
             .gap(px(7.0))
             .cursor_pointer()
+            .when_some(selected_provider.as_deref(), |el, prov| {
+                el.child(provider_app_icon(prov, 14.0, provider_color(&theme, prov)))
+            })
             .child(
                 div()
                     .flex_1()
                     .text_size(px(12.5))
-                    .text_color(theme.text)
+                    .text_color(if selected.is_some() {
+                        theme.text
+                    } else {
+                        theme.text_secondary
+                    })
                     .child(selected_text),
             )
             .child(
@@ -495,105 +516,314 @@ impl RenderOnce for ModelRolePicker {
                     .text_color(theme.text_tertiary)
                     .child("▾"),
             );
-        let panel = move |_handle: &ContextMenuHandle, _window: &mut Window, _cx: &mut App| {
-            let mut content = div()
-                .w(px(400.0))
-                .max_h(px(360.0))
-                .p(px(6.0))
-                .rounded(px(8.0))
-                .border_1()
-                .border_color(theme.border)
-                .bg(theme.canvas)
-                .flex()
-                .flex_col()
-                .gap(px(6.0))
-                .child(
-                    div()
-                        .h(px(30.0))
-                        .px(px(6.0))
-                        .border_1()
-                        .border_color(theme.border_strong)
-                        .bg(theme.inset)
-                        .flex()
-                        .items_center()
-                        .child(search.clone()),
-                );
-            for provider in providers.iter() {
-                let models = models_by_provider
-                    .get(&provider.name)
-                    .map(Vec::as_slice)
-                    .unwrap_or(&provider.models);
-                content = content.child(
-                    div()
-                        .px(px(7.0))
-                        .pt(px(5.0))
-                        .text_size(px(11.0))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.text_secondary)
-                        .child(provider.display_name.clone()),
-                );
-                for model in models
-                    .iter()
-                    .filter(|model| query.is_empty() || model.id.to_lowercase().contains(&query))
-                {
-                    let provider_id = provider.name.clone();
-                    let model_id = model.id.clone();
-                    let callback = on_select.clone();
-                    let is_selected = selected.as_ref().is_some_and(|value| {
-                        value.provider == provider_id && value.model_id == model_id
-                    });
-                    content = content.child(
-                        div()
-                            .id(ElementId::Name(
-                                format!("role-model-{}-{}", provider_id, model_id).into(),
-                            ))
-                            .px(px(8.0))
-                            .py(px(6.0))
-                            .rounded(px(5.0))
-                            .cursor_pointer()
-                            .when(is_selected, |el| el.bg(theme.overlay_strong))
-                            .hover(|el| el.bg(theme.overlay))
-                            .on_click(move |_, window, cx| {
-                                callback(provider_id.clone(), model_id.clone(), window, cx);
+
+        let panel = {
+            let providers = providers.clone();
+            let models_by_provider = models_by_provider.clone();
+            let active_tab = active_tab.clone();
+            let search = search.clone();
+            let on_tab = on_tab.clone();
+            let on_select = on_select.clone();
+            let on_clear = on_clear.clone();
+            let on_favorite = on_favorite.clone();
+            let favorites = favorites.clone();
+            let selected_model = selected.clone();
+            let query = query.clone();
+
+            move |handle: &ContextMenuHandle, _window: &mut Window, _cx: &mut App| {
+                let close_handle = handle.clone();
+                let live = &models_by_provider;
+                let mut visible_models: Vec<(String, String, Model)> = match &active_tab {
+                    PickerTab::Favorites => {
+                        let favs: Vec<_> = providers
+                            .iter()
+                            .flat_map(|p| {
+                                let models = live.get(&p.name).map(|v| v.as_slice()).unwrap_or(&p.models);
+                                models.iter().filter_map(|m| {
+                                    let key = format!("{}:{}", p.name, m.id);
+                                    if favorites.contains(&key) {
+                                        Some((p.name.clone(), p.display_name.clone(), m.clone()))
+                                    } else {
+                                        None
+                                    }
+                                })
                             })
-                            .flex()
-                            .items_center()
-                            .gap(px(7.0))
-                            .child(provider_app_icon(&provider.name, 13.0, theme.text_tertiary))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .text_size(px(12.0))
-                                    .text_color(theme.text)
-                                    .child(format_model_name(&model.id)),
-                            )
-                            .child(
-                                div()
-                                    .text_size(px(10.5))
-                                    .text_color(theme.text_ghost)
-                                    .child(format!("{}k", model.context_window / 1000)),
-                            ),
-                    );
+                            .collect();
+                        favs
+                    }
+                    PickerTab::Provider(prov) => providers
+                        .iter()
+                        .find(|p| &p.name == prov)
+                        .map(|p| {
+                            let models = live.get(&p.name).map(|v| v.as_slice()).unwrap_or(&p.models);
+                            models
+                                .iter()
+                                .map(|m| (p.name.clone(), p.display_name.clone(), m.clone()))
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                };
+
+                if !query.is_empty() {
+                    visible_models.retain(|(_, _, m)| m.id.to_lowercase().contains(&query));
                 }
+
+                div()
+                    .id("model-role-dropdown-card")
+                    .w(px(460.0))
+                    .h(px(360.0))
+                    .rounded(px(12.0))
+                    .bg(theme.canvas)
+                    .border_1()
+                    .border_color(theme.border)
+                    .shadow_xl()
+                    .overflow_hidden()
+                    .flex()
+                    .on_click(|_, _, cx| {
+                        cx.stop_propagation();
+                    })
+                    // Left Provider Icon Sidebar
+                    .child(
+                        div()
+                            .w(px(48.0))
+                            .h_full()
+                            .flex_none()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .gap(px(4.0))
+                            .p(px(5.0))
+                            .bg(theme.canvas)
+                            .border_r_1()
+                            .border_color(theme.border)
+                            // Favorites Tab
+                            .child({
+                                let is_fav = active_tab == PickerTab::Favorites;
+                                let on_t = on_tab.clone();
+                                div()
+                                    .id("role-tab-fav")
+                                    .size(px(36.0))
+                                    .rounded(px(6.0))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .cursor_pointer()
+                                    .when(is_fav, |s| s.bg(theme.overlay_strong))
+                                    .hover(|h| h.bg(theme.overlay))
+                                    .on_click(move |_, window, cx| {
+                                        (on_t)(PickerTab::Favorites, window, cx);
+                                    })
+                                    .child(app_icon(
+                                        IconName::Star,
+                                        15.0,
+                                        if is_fav {
+                                            theme.text
+                                        } else {
+                                            theme.text_tertiary
+                                        },
+                                    ))
+                            })
+                            .child(div().w(px(32.0)).h(px(1.0)).my(px(2.0)).bg(theme.border))
+                            // Provider icons
+                            .children(providers.iter().map(|prov| {
+                                let is_active = match &active_tab {
+                                    PickerTab::Provider(p) => p == &prov.name,
+                                    _ => false,
+                                };
+                                let on_t = on_tab.clone();
+                                let prov_name = prov.name.clone();
+                                div()
+                                    .id(ElementId::Name(format!("role-tab-{}", prov.name).into()))
+                                    .size(px(36.0))
+                                    .rounded(px(6.0))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .cursor_pointer()
+                                    .when(is_active, |s| s.bg(theme.overlay_strong))
+                                    .hover(|h| h.bg(theme.overlay))
+                                    .on_click(move |_, window, cx| {
+                                        (on_t)(PickerTab::Provider(prov_name.clone()), window, cx);
+                                    })
+                                    .child(provider_app_icon(
+                                        &prov.name,
+                                        18.0,
+                                        provider_color(&theme, &prov.name),
+                                    ))
+                            })),
+                    )
+                    // Right Content Area
+                    .child(
+                        div()
+                            .flex_1()
+                            .h_full()
+                            .flex()
+                            .flex_col()
+                            .min_w_0()
+                            // Search box
+                            .child(
+                                div()
+                                    .h(px(34.0))
+                                    .px(px(8.0))
+                                    .border_b_1()
+                                    .border_color(theme.border)
+                                    .flex()
+                                    .items_center()
+                                    .child(search.clone()),
+                            )
+                            // Scrollable list
+                            .child(
+                                div()
+                                    .id("role-model-list-scroll")
+                                    .flex_1()
+                                    .overflow_y_scroll()
+                                    .p(px(6.0))
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(2.0))
+                                    // Optional "Use Default" button
+                                    .when_some(on_clear.clone(), |list, on_c| {
+                                        let h = close_handle.clone();
+                                        list.child(
+                                            div()
+                                                .id("role-clear-option")
+                                                .px(px(8.0))
+                                                .py(px(6.0))
+                                                .rounded(px(5.0))
+                                                .cursor_pointer()
+                                                .hover(|el| el.bg(theme.overlay))
+                                                .on_click(move |_, window, cx| {
+                                                    h.close(window, cx);
+                                                    (on_c)(window, cx);
+                                                })
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(7.0))
+                                                .child(app_icon(
+                                                    IconName::Restart,
+                                                    13.0,
+                                                    theme.text_tertiary,
+                                                ))
+                                                .child(
+                                                    div()
+                                                        .flex_1()
+                                                        .text_size(px(12.0))
+                                                        .font_weight(FontWeight::MEDIUM)
+                                                        .text_color(theme.text_secondary)
+                                                        .child("Use Default Model"),
+                                                ),
+                                        )
+                                    })
+                                    .children(visible_models.into_iter().map(|(prov_id, prov_disp, model)| {
+                                        let is_sel = selected_model.as_ref().is_some_and(|s| {
+                                            s.provider == prov_id && s.model_id == model.id
+                                        });
+                                        let on_s = on_select.clone();
+                                        let on_f = on_favorite.clone();
+                                        let p_id = prov_id.clone();
+                                        let m_id = model.id.clone();
+                                        let h = close_handle.clone();
+                                        let fav_key = format!("{}:{}", prov_id, model.id);
+                                        let is_fav = favorites.contains(&fav_key);
+                                        let star_id = format!("role-fav-btn-{}-{}", prov_id, model.id);
+
+                                        div()
+                                            .id(ElementId::Name(format!("role-m-{}-{}", prov_id, model.id).into()))
+                                            .px(px(8.0))
+                                            .py(px(6.0))
+                                            .rounded(px(5.0))
+                                            .cursor_pointer()
+                                            .when(is_sel, |el| el.bg(theme.overlay_strong))
+                                            .hover(|el| el.bg(theme.overlay))
+                                            .on_click(move |_, window, cx| {
+                                                h.close(window, cx);
+                                                (on_s)(p_id.clone(), m_id.clone(), window, cx);
+                                            })
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(8.0))
+                                            .child(provider_app_icon(&prov_id, 14.0, provider_color(&theme, &prov_id)))
+                                            .child(
+                                                div()
+                                                    .flex_1()
+                                                    .flex()
+                                                    .flex_col()
+                                                    .min_w_0()
+                                                    .child(
+                                                        div()
+                                                            .text_size(px(12.0))
+                                                            .text_color(theme.text)
+                                                            .truncate()
+                                                            .child(format_model_name(&model.id)),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_size(px(10.5))
+                                                            .text_color(theme.text_ghost)
+                                                            .child(prov_disp),
+                                                    ),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_size(px(10.5))
+                                                    .text_color(theme.text_ghost)
+                                                    .child(if model.context_window >= 1_000_000 {
+                                                        format!("{}M", model.context_window / 1_000_000)
+                                                    } else {
+                                                        format!("{}k", model.context_window / 1000)
+                                                    }),
+                                            )
+                                            .child({
+                                                let p = prov_id.clone();
+                                                let m = model.id.clone();
+                                                div()
+                                                    .id(ElementId::Name(star_id.into()))
+                                                    .p(px(2.0))
+                                                    .cursor_pointer()
+                                                    .hover(|el| el.bg(theme.overlay))
+                                                    .on_click(move |_, window, cx| {
+                                                        cx.stop_propagation();
+                                                        (on_f)(p.clone(), m.clone(), window, cx);
+                                                    })
+                                                    .child(app_icon(
+                                                        IconName::Star,
+                                                        13.0,
+                                                        if is_fav {
+                                                            theme.warning
+                                                        } else {
+                                                            theme.text_ghost
+                                                        },
+                                                    ))
+                                            })
+                                    })),
+                            ),
+                    )
+                    .into_any_element()
             }
-            content.into_any_element()
         };
+
         div()
             .flex()
             .flex_col()
             .gap(px(5.0))
             .child(
                 div()
-                    .text_size(px(12.5))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(theme.text)
-                    .child(self.label),
-            )
-            .child(
-                div()
-                    .text_size(px(11.5))
-                    .text_color(theme.text_secondary)
-                    .child(self.description),
+                    .flex()
+                    .flex_col()
+                    .gap(px(1.0))
+                    .child(
+                        div()
+                            .text_size(px(13.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme.text)
+                            .child(self.label),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(11.5))
+                            .text_color(theme.text_secondary)
+                            .child(self.description),
+                    ),
             )
             .child(crate::primitives::popover(
                 trigger,

@@ -1,5 +1,5 @@
 use console_core::{
-    ApprovalMode, ApproveToolPermissionDto, ModelFavorite, SelectedModel, UpdateSessionDto,
+    ApprovalMode, ApproveToolPermissionDto, SelectedModel, UpdateSessionDto,
 };
 use console_ui::terminal::TerminalView;
 use console_ui::workspace::EmptyChatState;
@@ -847,42 +847,7 @@ impl ConsoleDesktopApp {
                         move |prov: String, mid: String, _window, cx| {
                             if let Some(app) = entity.upgrade() {
                                 app.update(cx, |this, cx| {
-                                    let key = format!("{}:{}", prov, mid);
-                                    let is_favorite = if this.favorites.contains(&key) {
-                                        Rc::make_mut(&mut this.favorites).remove(&key);
-                                        false
-                                    } else {
-                                        Rc::make_mut(&mut this.favorites).insert(key);
-                                        true
-                                    };
-                                    let client = this.client.clone();
-                                    let entity_for_error = entity.clone();
-                                    cx.spawn(async move |_entity, cx| {
-                                        if let Err(error) = client
-                                            .model_favorites
-                                            .set(
-                                                ModelFavorite {
-                                                    provider: prov,
-                                                    model_id: mid,
-                                                },
-                                                is_favorite,
-                                            )
-                                            .await
-                                        {
-                                            let message = format!(
-                                                "Unable to update model favorite: {error}"
-                                            );
-                                            cx.update(|cx| {
-                                                if let Some(app) = entity_for_error.upgrade() {
-                                                    app.update(cx, |this, cx| {
-                                                        this.set_error(message, cx)
-                                                    });
-                                                }
-                                            });
-                                        }
-                                    })
-                                    .detach();
-                                    cx.notify();
+                                    this.toggle_model_favorite(prov, mid, cx);
                                 });
                             }
                         }

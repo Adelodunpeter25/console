@@ -26,9 +26,10 @@ pub struct SettingsWindow {
     model_smol_input: Entity<ComposerInput>,
     model_menus: [console_ui::ContextMenuHandle; 4],
     model_searches: [Entity<ComposerInput>; 4],
+    model_tabs: [console_ui::PickerTab; 4],
     pub(crate) model_saving: bool,
     pub(crate) model_error: Option<String>,
-    _subscription: Option<gpui::Subscription>,
+    _subscriptions: Vec<gpui::Subscription>,
 }
 
 impl SettingsWindow {
@@ -134,6 +135,15 @@ impl SettingsWindow {
         let focus_handle = cx.focus_handle();
         window.focus(&focus_handle, cx);
 
+        let mut subscriptions = Vec::new();
+        subscriptions.extend(subscription);
+        for search in &model_searches {
+            subscriptions.push(cx.subscribe(search, |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
+                console_ui::input::ComposerEvent::Edited | console_ui::input::ComposerEvent::Focus => cx.notify(),
+                _ => {}
+            }));
+        }
+
         Self {
             app,
             active_tab: initial_tab,
@@ -149,9 +159,15 @@ impl SettingsWindow {
             model_smol_input,
             model_menus,
             model_searches,
+            model_tabs: [
+                console_ui::PickerTab::Favorites,
+                console_ui::PickerTab::Favorites,
+                console_ui::PickerTab::Favorites,
+                console_ui::PickerTab::Favorites,
+            ],
             model_saving: false,
             model_error: None,
-            _subscription: subscription,
+            _subscriptions: subscriptions,
         }
     }
 
@@ -468,9 +484,38 @@ impl Render for SettingsWindow {
                         input.set_content(format!("{provider}/{model}"), cx)
                     });
                 });
+                let on_clear: Rc<dyn Fn(Entity<ComposerInput>, &mut Window, &mut App) + 'static> =
+                    Rc::new(move |input, _window, cx| {
+                        input.update(cx, |input, cx| {
+                            input.clear(cx);
+                        });
+                    });
+                let self_entity = cx.entity().downgrade();
+                let on_tab: Rc<dyn Fn(usize, console_ui::PickerTab, &mut Window, &mut App) + 'static> =
+                    Rc::new(move |idx, tab, _window, cx| {
+                        if let Some(settings) = self_entity.upgrade() {
+                            settings.update(cx, |this, cx| {
+                                if idx < 4 {
+                                    this.model_tabs[idx] = tab;
+                                    cx.notify();
+                                }
+                            });
+                        }
+                    });
+                let app_for_fav = self.app.clone();
+                let on_favorite: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static> =
+                    Rc::new(move |provider, model_id, _window, cx| {
+                        if let Some(app) = app_for_fav.upgrade() {
+                            app.update(cx, |app_state, cx| {
+                                app_state.toggle_model_favorite(provider, model_id, cx);
+                            });
+                        }
+                    });
                 ModelsPage {
                     providers: app.providers.clone(),
                     models_by_provider: app.models_by_provider.clone(),
+                    tabs: self.model_tabs.clone(),
+                    favorites: app.favorites.clone(),
                     default_input: self.model_default_input.clone(),
                     plan_input: self.model_plan_input.clone(),
                     vision_input: self.model_vision_input.clone(),
@@ -478,6 +523,9 @@ impl Render for SettingsWindow {
                     menus: self.model_menus.clone(),
                     searches: self.model_searches.clone(),
                     on_select,
+                    on_clear,
+                    on_tab,
+                    on_favorite,
                     on_save,
                     saving: self.model_saving,
                     error: self.model_error.clone(),

@@ -255,4 +255,32 @@ const app = createApiApp();
   console.log("  ✅ Session CRUD & Restore (/api/sessions)");
 }
 
+// 9. Settings Model Roles (/api/settings)
+{
+  const patchRes = await app.request("/api/settings", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      modelRoles: {
+        default: "antigravity/claude-sonnet-4-6",
+        plan: null,
+        vision: "",
+        smol: undefined,
+      },
+    }),
+  });
+  assert.equal(patchRes.status, 200);
+  const patchJson = await patchRes.json();
+  assert.equal(patchJson.success, true);
+  assert.equal(patchJson.data.modelRoles.default, "antigravity/claude-sonnet-4-6");
+  assert.equal(patchJson.data.modelRoles.plan, undefined);
+
+  const getRes = await app.request("/api/settings");
+  assert.equal(getRes.status, 200);
+  const getJson = await getRes.json();
+  assert.equal(getJson.data.modelRoles.default, "antigravity/claude-sonnet-4-6");
+
+  console.log("  ✅ Settings Model Roles (/api/settings)");
+}
+
 console.log("Hono API Layer & Service tests passed!\n");

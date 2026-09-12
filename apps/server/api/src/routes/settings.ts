@@ -14,10 +14,18 @@ settingsRoutes.patch("/settings", async (c) => {
   if (!raw || typeof raw !== "object") return c.json({ success: false, error: "modelRoles must be an object." }, 400);
   const modelRoles: ModelRoleMapping = {};
   for (const [role, model] of Object.entries(raw)) {
-    if (!isConsoleModelRole(role) || typeof model !== "string" || !model.trim()) {
+    if (!isConsoleModelRole(role)) {
       return c.json({ success: false, error: `Invalid model role '${role}'.` }, 400);
     }
-    modelRoles[role] = model.trim();
+    if (model === null || model === undefined) {
+      continue;
+    }
+    if (typeof model !== "string") {
+      return c.json({ success: false, error: `Value for model role '${role}' must be a string.` }, 400);
+    }
+    if (model.trim()) {
+      modelRoles[role] = model.trim();
+    }
   }
   return c.json({ success: true, data: await saveSettings({ modelRoles }) });
 });
