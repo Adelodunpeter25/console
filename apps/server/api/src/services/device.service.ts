@@ -172,6 +172,15 @@ export class DeviceService {
         } as any);
         return;
       } catch {}
+    } else if (req.action === "appearance" && req.appearance) {
+      try {
+        await this.client.settings.update({
+          device: id,
+          platform,
+          appearance: req.appearance,
+        } as any);
+        return;
+      } catch {}
     }
 
     // Hardware buttons and fallback inputs
@@ -180,6 +189,8 @@ export class DeviceService {
         await execAsync(`xcrun simctl io "${id}" sendkey home`);
       } else if (req.action === "type" && req.text) {
         await execAsync(`xcrun simctl io "${id}" keyboard send "${req.text.replace(/"/g, '\\"')}"`);
+      } else if (req.action === "appearance" && req.appearance) {
+        await execAsync(`xcrun simctl ui "${id}" appearance "${req.appearance}"`);
       }
     } else {
       if (req.action === "tap" && req.x !== undefined && req.y !== undefined) {
@@ -206,6 +217,9 @@ export class DeviceService {
         await execAsync(`adb -s "${id}" shell input keyevent 25`);
       } else if (req.action === "power") {
         await execAsync(`adb -s "${id}" shell input keyevent 26`);
+      } else if (req.action === "appearance" && req.appearance) {
+        const mode = req.appearance === "dark" ? "yes" : "no";
+        await execAsync(`adb -s "${id}" shell cmd uimode night ${mode}`);
       }
     }
   }

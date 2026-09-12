@@ -24,7 +24,7 @@ export interface DeviceDiagnostics {
 }
 
 export interface DeviceActionRequest {
-  action: "tap" | "swipe" | "type" | "key" | "home" | "back" | "volume_up" | "volume_down" | "power";
+  action: "tap" | "swipe" | "type" | "key" | "home" | "back" | "volume_up" | "volume_down" | "power" | "appearance";
   x?: number; // 0.0 .. 1.0 normalized
   y?: number; // 0.0 .. 1.0 normalized
   endX?: number; // for swipe
@@ -32,6 +32,7 @@ export interface DeviceActionRequest {
   durationMs?: number;
   text?: string;
   key?: string;
+  appearance?: "dark" | "light";
 }
 
 export interface DeviceOpenAppRequest {
