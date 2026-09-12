@@ -2,6 +2,8 @@
 gradle.properties.local
 /build
 **/build
+.cxx
+**/.cxx
 *.log
 logs/
 **/logs/
