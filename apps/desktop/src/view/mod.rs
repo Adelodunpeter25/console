@@ -512,10 +512,18 @@ impl Render for ConsoleDesktopApp {
                             cx,
                             crate::window::WindowLaunchTarget::Fresh { environment_id },
                         );
-                    } else if let Some(app) = entity.upgrade()
-                        && let Some(script_id) =
-                            app.read(cx).match_script_shortcut(&event.keystroke)
-                    {
+                    } else if let Some(app) = entity.upgrade() {
+                        // TEMP-DIAG: shortcut dispatch investigation. Logs every
+                        // cmd/ctrl/alt-modified key reaching the window root,
+                        // hits and misses alike.
+                        let modifiers = &event.keystroke.modifiers;
+                        if modifiers.platform || modifiers.control || modifiers.alt {
+                            log::info!(
+                                "script-shortcut key: canonical={:?} known_bindings={}",
+                                crate::keybindings::normalize_script_keystroke(&event.keystroke),
+                                app.read(cx).active_project_shortcuts.len()
+                            );
+                        }
                         // Project script shortcut. This handler sits at the
                         // window root, so it only sees keystrokes that matched
                         // no keymap binding and were consumed by no focused
@@ -523,14 +531,20 @@ impl Render for ConsoleDesktopApp {
                         // shortcuts always win on their own. Palettes get an
                         // explicit guard since their inputs let most combos
                         // bubble.
-                        if app.read(cx).any_palette_open(cx) {
-                            return;
+                        if let Some(script_id) =
+                            app.read(cx).match_script_shortcut(&event.keystroke)
+                        {
+                            if app.read(cx).any_palette_open(cx) {
+                                return;
+                            }
+                            cx.stop_propagation();
+                            log::info!(
+                                "Running project script '{script_id}' via keyboard shortcut"
+                            );
+                            app.update(cx, |this, cx| {
+                                this.run_project_script(&script_id, cx);
+                            });
                         }
-                        cx.stop_propagation();
-                        log::info!("Running project script '{script_id}' via keyboard shortcut");
-                        app.update(cx, |this, cx| {
-                            this.run_project_script(&script_id, cx);
-                        });
                     }
                 }
             })
