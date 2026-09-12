@@ -91,10 +91,21 @@ export interface CompactionConfig {
 
 ### 3.1. Full-Payload Token Estimator (`estimatePayloadTokens`)
 - Replaces naive message-only estimation with comprehensive payload accounting:
-  - Text parts: ~3.2 chars/token for code, markdown, and tool outputs.
-  - System prompt & instructions: accurately counted.
-  - Tool schemas: serialized JSON schema token cost.
-  - Image parts: dynamic estimation (1,600 tokens per standard image, 2,400 for high-res).
+  - Text parts: counted with a model/provider-aware tokenizer when available.
+  - System prompt & instructions: included in the count.
+  - Tool schemas: serialized in the same logical shape used for the provider request and counted.
+  - Image parts: counted through the provider's multimodal counting path when available; otherwise use a conservative documented estimate.
+  - Provider-specific wire overhead: represented by a calibrated safety margin rather than pretending local counts are exact.
+- Add a tokenizer policy layer, following the model-metadata pattern used by `oh-my-pi`:
+  - Resolve a bounded, cached `tokenizerFamily` from the canonical model identity; do not infer tokenizer behavior repeatedly inside the compaction loop.
+  - `openai`: use `gpt-tokenizer` for local BPE counting. It is dependency-free, TypeScript-native, and supports current OpenAI model families, but it must not be used as a claimed exact count for non-OpenAI providers.
+  - `gemini`: prefer Google's official `models.countTokens` endpoint through `@google/genai` when credentials and the provider route are available. This counts system instructions, tools, multimodal content, and conversation history in Gemini's own accounting. Cache or debounce counts so this does not become a request before every model call.
+  - `anthropic`: prefer the official Messages API token-counting endpoint (`messages.countTokens`) when available. Treat the old `@anthropic-ai/tokenizer` package as legacy/beta fallback only; it is not a substitute for the current provider count and is not suitable as the universal tokenizer.
+  - `unknown` / OpenCode-compatible providers: use the conservative fallback estimator and a provider-specific margin until an exact counting endpoint or verified tokenizer is available.
+- Counting modes:
+  - **Fast local estimate** for ordinary checks and after small tool results.
+  - **Provider count** when the local estimate is near the safety threshold, after substantial tool output, or before an emergency-sensitive dispatch. Provider counting must fail open to the conservative local estimate, never block the agent indefinitely.
+  - Record whether a decision used `local`, `provider`, or `fallback` counting for telemetry and calibration.
 - Model-specific safety ceilings:
   - 1,048,576 Gemini models: safe trigger at **800,000 tokens** (~76% capacity, leaving ~248k headroom for thinking + response).
   - 250,000 Claude models: safe trigger at **190,000 tokens** (~76% capacity).
@@ -154,11 +165,21 @@ export interface CompactionConfig {
 ## 4. Implementation Steps
 
 ### Step 1: Accurate Full-Payload Estimator (`apps/server/agent/src/compaction/token-estimator.ts`)
-1. Implement `estimatePayloadTokens({ messages, systemPrompt, tools, model })`:
-   - Compute characters in system prompt, tool definitions, and message parts.
-   - Use `CHARS_PER_TOKEN = 3.2` for tool results/code and `3.8` for plain chat.
-   - Calculate image attachment costs based on dimensions / base64 payload size.
-2. Update `shouldCompact` in `index.ts` to accept full payload context (`systemPrompt`, `tools`).
+1. Define model-aware metadata and interfaces:
+   - `TokenizerFamily = "openai" | "gemini" | "anthropic" | "fallback"`.
+   - `TokenCountSource = "local" | "provider" | "fallback"`.
+   - `estimatePayloadTokens({ messages, systemPrompt, tools, model, counter })` returns both the count and source metadata.
+2. Implement a bounded cached tokenizer-family resolver based on canonical model/provider identity, following `oh-my-pi`'s `resolveModelTokenizer` pattern.
+3. Implement local counting with `gpt-tokenizer` only for OpenAI-compatible models. Do not use it for Gemini or Anthropic merely because it is available.
+4. Add provider counter adapters:
+   - Gemini: `models.countTokens` via `@google/genai`, with the exact contents/system-instruction/tools representation sent to Gemini.
+   - Anthropic: `messages.countTokens` through the official SDK/API, including system and tools.
+   - Return a typed unavailable/error result rather than throwing from the estimator.
+5. Keep the conservative fallback for unsupported providers and provider-count failures:
+   - Use density-specific estimates for plain text, code/JSON/tool output, and multimodal parts.
+   - Apply a configurable wire-overhead/safety margin.
+6. Add a count policy that uses local counting normally and provider counting near thresholds or after large tool-output changes. Debounce/cache equivalent payload counts.
+7. Update `shouldCompact` in `index.ts` to accept full payload context (`systemPrompt`, `tools`) and preserve count-source metadata in compaction telemetry.
 
 ### Step 2: Unconditional Mechanical Shake (`apps/server/agent/src/compaction/shake.ts`)
 1. Update `shakeConversation` to accept an `emergency: boolean` flag:
@@ -203,6 +224,11 @@ export interface CompactionConfig {
 
 1. **Token Estimation Unit Tests** (`apps/server/tests/compaction-estimator.test.ts`):
    - Verify payload estimation includes system prompt, tool definitions, and dense code.
+   - Verify the tokenizer-family resolver selects OpenAI, Gemini, Anthropic, and fallback policies correctly.
+   - Verify OpenAI local counting uses `gpt-tokenizer` and does not silently apply to Gemini or Anthropic.
+   - Verify provider count adapters include system instructions, tools, multimodal parts, and full history.
+   - Verify provider-count failure falls back to a conservative local estimate with source metadata.
+   - Verify equivalent payloads use the bounded count cache and do not issue duplicate provider count requests.
    - Verify safety threshold triggers at ~800k for 1M models.
 
 2. **Short-Session Truncation Test** (`apps/server/tests/compaction-short-session.test.ts`):
@@ -238,6 +264,14 @@ This is distinct from provider context overflow:
 
 - **Provider overflow** means the outgoing model payload is too large.
 - **Harness read looping** means the agent repeatedly requests the same resource after context reconstruction failed.
+
+### Tokenizer/package research notes
+
+- `gpt-tokenizer` is the strongest local JavaScript candidate for OpenAI-family models: it is TypeScript-native, dependency-free, and exposes `countTokens`/encoding APIs. It should be scoped to OpenAI-compatible model families rather than treated as a universal tokenizer.
+- `@anthropic-ai/tokenizer` exists, but the published package is an older beta-era text tokenizer. Prefer Anthropic's current official token-counting API for Claude payloads; retain the package only as an explicitly labeled fallback if compatibility testing justifies it.
+- Gemini's official `models.countTokens` API is preferable to a third-party local package because it can count the actual Gemini representation, including system instructions, tools, multimodal content, and multi-turn history. Google documents that the endpoint has no charge/quota restriction and supports up to 3,000 requests per minute, but the implementation should still cache/debounce calls.
+- No credible universal local tokenizer was identified that can accurately count all providers' wire payloads. `tokenx` is useful for approximate splitting/estimation, not provider-exact accounting, and should not be selected as the primary estimator.
+- Package selection must be validated against Bun compatibility, bundle size/startup cost, licensing, model coverage, and representative golden payloads before adding dependencies.
 
 Both need explicit recovery controls.
 
