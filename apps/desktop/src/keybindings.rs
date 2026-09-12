@@ -46,11 +46,6 @@ actions!(
         ToggleLeftSidebar,
         /// Toggle the right workspace inspector panel.
         ToggleRightSidebar,
-        /// Run the project script bound to a configured `console.toml`
-        /// shortcut. The actual keystroke is resolved by the handler against
-        /// `ConsoleDesktopApp::active_project_shortcuts`, so the action
-        /// carries no payload.
-        RunConfiguredScript,
         /// Jump to the nth visible sidebar session (browser-tab style).
         SwitchSession1,
         SwitchSession2,
@@ -389,28 +384,34 @@ pub fn init_handlers(cx: &mut App) {
             app.update(cx, |this, cx| this.select_workspace_tab_by_index(8, cx));
         }
     });
+}
 
-    // Window-wide keyboard shortcut dispatch for `console.toml`-defined
-    // project script shortcuts. Runs BEFORE action resolution so we can stop
-    // propagation on a match; non-matching keystrokes fall through to the
-    // existing composer / terminal / browser handlers unchanged.
-    let _script_shortcut_subscription = cx.intercept_keystrokes(|event, _window, cx| {
-        // Normalize the GPUI keystroke into the same canonical form
-        // `console.toml` uses: "cmd-r", "shift-cmd-r", "ctrl-alt-l", etc.
-        let keystroke = event.keystroke.unparse();
-        let Some((_, app)) = crate::window::get_active_window(cx) else {
-            return;
-        };
-        let script_id = {
-            let map = app.read(cx).active_project_shortcuts.clone();
-            map.get(&keystroke).cloned()
-        };
-        let Some(script_id) = script_id else {
-            return;
-        };
-        cx.stop_propagation();
-        app.update(cx, |this, cx| {
-            this.run_project_script(&script_id, cx);
-        });
-    });
+/// Normalize a live keystroke into the canonical shortcut form
+/// (`console_core::canonicalize_shortcut`): modifiers in ctrl-alt-cmd-shift
+/// order, lowercase key. The platform (Cmd/Super/Win) modifier counts as
+/// `cmd`, matching what `console.toml` authors write on every OS.
+///
+/// Project script dispatch does not use keymap bindings — script ids are
+/// dynamic — so the main window's root key handler compares against this
+/// form instead. Only keystrokes that matched no binding and were consumed
+/// by no focused element ever reach that handler, which is what keeps
+/// composer, terminal, browser, and palette shortcuts intact.
+pub fn normalize_script_keystroke(keystroke: &gpui::Keystroke) -> Option<String> {
+    let mut raw = String::new();
+    let modifiers = &keystroke.modifiers;
+    // Extraction order is irrelevant: canonicalization reorders.
+    if modifiers.control {
+        raw.push_str("ctrl-");
+    }
+    if modifiers.alt {
+        raw.push_str("alt-");
+    }
+    if modifiers.platform {
+        raw.push_str("cmd-");
+    }
+    if modifiers.shift {
+        raw.push_str("shift-");
+    }
+    raw.push_str(&keystroke.key);
+    console_core::canonicalize_shortcut(&raw)
 }

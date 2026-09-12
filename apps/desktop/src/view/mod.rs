@@ -19,6 +19,9 @@ use crate::state::ConsoleDesktopApp;
 impl Render for ConsoleDesktopApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.maybe_persist_window_state(window, cx);
+        // Keep script-shortcut dispatch aimed at the active project even when
+        // the sidebar (and its panel) is hidden.
+        self.sync_active_shortcuts_to_active_project();
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
         let client = self.client.clone();
@@ -509,6 +512,24 @@ impl Render for ConsoleDesktopApp {
                             cx,
                             crate::window::WindowLaunchTarget::Fresh { environment_id },
                         );
+                    } else if let Some(app) = entity.upgrade()
+                        && let Some(script_id) =
+                            app.read(cx).match_script_shortcut(&event.keystroke)
+                    {
+                        // Project script shortcut. This handler sits at the
+                        // window root, so it only sees keystrokes that matched
+                        // no keymap binding and were consumed by no focused
+                        // element — composer, terminal, browser, and menu
+                        // shortcuts always win on their own. Palettes get an
+                        // explicit guard since their inputs let most combos
+                        // bubble.
+                        if app.read(cx).any_palette_open(cx) {
+                            return;
+                        }
+                        cx.stop_propagation();
+                        app.update(cx, |this, cx| {
+                            this.run_project_script(&script_id, cx);
+                        });
                     }
                 }
             })
@@ -959,11 +980,6 @@ impl Render for ConsoleDesktopApp {
                             .map(|(_, term)| term.clone().into_any_element());
 
                         let run_panel_element = {
-                            // Keep the keystroke interceptor's shortcut map
-                            // in sync with the active project. Idempotent —
-                            // no work unless the active project or its
-                            // scripts have changed since the last render.
-                            self.sync_active_shortcuts_to_active_project();
                             let scripts_project_id = self.active_scripts_project_id();
                             let (has_project, loading, error, source_missing, rows) =
                                 match scripts_project_id.as_ref().and_then(|pid| {
@@ -988,6 +1004,17 @@ impl Render for ConsoleDesktopApp {
                                             .iter()
                                             .map(|script| {
                                                 let view = state.runs.get(&script.id);
+                                                // Badges come from the stored
+                                                // conflict set so never-run
+                                                // scripts warn too.
+                                                let conflict = script
+                                                    .shortcut
+                                                    .as_deref()
+                                                    .and_then(console_core::canonicalize_shortcut)
+                                                    .filter(|canonical| {
+                                                        state.shortcut_conflicts.contains(canonical)
+                                                    })
+                                                    .and_then(|_| script.shortcut.clone());
                                                 RunScriptRow {
                                                     script_id: script.id.clone(),
                                                     label: script.label.clone(),
@@ -1007,8 +1034,7 @@ impl Render for ConsoleDesktopApp {
                                                         .map(|view| view.output.clone())
                                                         .unwrap_or_default(),
                                                     expanded: state.expanded.contains(&script.id),
-                                                    shortcut_conflict: view
-                                                        .and_then(|view| view.shortcut_conflict.clone()),
+                                                    shortcut_conflict: conflict,
                                                 }
                                             })
                                             .collect(),

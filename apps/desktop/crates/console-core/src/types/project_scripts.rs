@@ -18,41 +18,73 @@ pub struct ProjectScript {
     pub persistent: bool,
 }
 
-/// Derive the active shortcut map and conflict set from a script list.
-///
-/// - `Ok(map)`: shortcut string → script id, with one entry per *unique*
-///   shortcut. Conflicts are excluded.
-/// - `Err(conflicts)`: shortcut string → set of conflicting script ids,
-///   populated when two or more scripts claim the same shortcut.
-///
-/// Both halves come from a single pass so they stay consistent.
-pub fn compute_shortcut_state(
-    scripts: &[ProjectScript],
-) -> Result<HashMap<String, String>, HashMap<String, HashSet<String>>> {
+/// Canonicalize a `console.toml` shortcut (`shift-cmd-R`, `cmd-shift-r`)
+/// into one comparable form: modifiers in ctrl-alt-cmd-shift order, lowercase
+/// key (`cmd-shift-r`). Returns `None` for empty input, bare keys without a
+/// modifier, or unknown segments. The desktop normalizes live keystrokes into
+/// this same form, so author order and letter case never matter.
+pub fn canonicalize_shortcut(shortcut: &str) -> Option<String> {
+    let mut parts: Vec<&str> = shortcut.split('-').collect();
+    let key = parts.pop()?.to_lowercase();
+    if key.is_empty() {
+        return None;
+    }
+    let mut out = String::new();
+    let mut modifiers = 0;
+    for modifier in ["ctrl", "alt", "cmd", "shift"] {
+        if parts.iter().any(|part| part.eq_ignore_ascii_case(modifier)) {
+            if !out.is_empty() {
+                out.push('-');
+            }
+            out.push_str(modifier);
+            modifiers += 1;
+        }
+    }
+    if modifiers == 0 || modifiers != parts.len() {
+        return None;
+    }
+    out.push('-');
+    out.push_str(&key);
+    Some(out)
+}
+
+/// Shortcut dispatch state for one script list. Unique shortcuts stay live
+/// in `bindings`; only the duplicated ones land in `conflicts` and stay
+/// disabled — one bad pair never kills the rest.
+#[derive(Clone, Debug, Default)]
+pub struct ShortcutState {
+    /// Canonical shortcut → script id, unique shortcuts only.
+    pub bindings: HashMap<String, String>,
+    /// Canonical shortcut → claiming script ids, duplicates only.
+    pub conflicts: HashMap<String, HashSet<String>>,
+}
+
+/// Derive dispatch state from a script list in a single pass so both halves
+/// stay consistent. Unparseable shortcuts are ignored.
+pub fn compute_shortcut_state(scripts: &[ProjectScript]) -> ShortcutState {
     let mut groups: HashMap<String, HashSet<String>> = HashMap::new();
     for script in scripts {
-        if let Some(shortcut) = script.shortcut.as_deref() {
+        if let Some(shortcut) = script.shortcut.as_deref()
+            && let Some(canonical) = canonicalize_shortcut(shortcut)
+        {
             groups
-                .entry(shortcut.to_string())
+                .entry(canonical)
                 .or_default()
                 .insert(script.id.clone());
         }
     }
-    let mut map = HashMap::new();
-    let mut conflicts = HashMap::new();
+    let mut state = ShortcutState::default();
     for (shortcut, ids) in groups {
         if ids.len() > 1 {
-            conflicts.insert(shortcut, ids);
+            state.conflicts.insert(shortcut, ids);
         } else {
             // Unwrap is safe: `ids` has exactly one entry when len == 1.
-            map.insert(shortcut, ids.into_iter().next().unwrap());
+            state
+                .bindings
+                .insert(shortcut, ids.into_iter().next().unwrap());
         }
     }
-    if conflicts.is_empty() {
-        Ok(map)
-    } else {
-        Err(conflicts)
-    }
+    state
 }
 
 /// Script list result, including where the definitions came from.

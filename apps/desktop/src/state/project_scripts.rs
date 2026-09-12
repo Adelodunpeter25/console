@@ -7,10 +7,10 @@
 use std::collections::{HashMap, HashSet};
 
 use console_core::{
-    compute_shortcut_state, ProjectScript, ScriptRun, ScriptRunEvent, ScriptRunStatus,
+    ProjectScript, ScriptRun, ScriptRunEvent, ScriptRunStatus, compute_shortcut_state,
 };
 use console_ui::run::{push_run_output, truncate_run_output_head};
-use gpui::Context;
+use gpui::{Context, Keystroke};
 
 use super::ConsoleDesktopApp;
 
@@ -20,10 +20,6 @@ pub struct ProjectScriptRunView {
     pub run: Option<ScriptRun>,
     pub output: String,
     pub starting: bool,
-    /// `Some(shortcut)` when this script's shortcut is shared with another
-    /// script in the same project. Surfaces a warning badge in the row and
-    /// prevents the conflicting binding from registering.
-    pub shortcut_conflict: Option<String>,
 }
 
 /// Everything the Run tab needs for one project.
@@ -39,6 +35,10 @@ pub struct ProjectScriptsPanelState {
     pub runs: HashMap<String, ProjectScriptRunView>,
     /// Script ids with their output expanded.
     pub expanded: HashSet<String>,
+    /// Canonical shortcuts claimed by more than one script. Rows showing one
+    /// of these get a warning badge and the shortcut stays unbound — every
+    /// other script's shortcut keeps working.
+    pub shortcut_conflicts: HashSet<String>,
     pub generation: u64,
 }
 
@@ -172,31 +172,20 @@ impl ConsoleDesktopApp {
                                         Some(format!("Couldn't load run scripts: {err:#}"));
                                 }
                             }
-                            // Refresh per-row conflict metadata and the
-                            // active shortcut map now that we have the latest
-                            // script list. Cheap: O(scripts).
-                            let (active_map, conflicts) = match compute_shortcut_state(&state.scripts)
-                            {
-                                Ok(map) => (map, HashMap::new()),
-                                Err(conflicts) => (HashMap::new(), conflicts),
-                            };
-                            for script in &state.scripts {
-                                let conflict = script.shortcut.as_deref().and_then(|s| {
-                                    if conflicts.contains_key(s) {
-                                        Some(s.to_string())
-                                    } else {
-                                        None
-                                    }
-                                });
-                                if let Some(view) = state.runs.get_mut(&script.id) {
-                                    view.shortcut_conflict = conflict;
-                                }
-                            }
+                            // Refresh the dispatch state now that we have the
+                            // latest script list. Cheap: O(scripts). Unique
+                            // shortcuts stay live; only duplicated ones are
+                            // disabled, and every row reads its badge from the
+                            // stored set below — never from a run view, so
+                            // never-run scripts warn too.
+                            let shortcut_state = compute_shortcut_state(&state.scripts);
+                            state.shortcut_conflicts =
+                                shortcut_state.conflicts.keys().cloned().collect();
                             // Only repopulate the active shortcut map when
                             // this project is the one currently driving
                             // keyboard dispatch.
                             if active_pid.as_deref() == Some(project_id.as_str()) {
-                                this.active_project_shortcuts = active_map;
+                                this.active_project_shortcuts = shortcut_state.bindings;
                             }
                             for run in runs {
                                 // A live stream already owns running views —
@@ -215,7 +204,6 @@ impl ConsoleDesktopApp {
                                             run: Some(run),
                                             output,
                                             starting: false,
-                                            shortcut_conflict: None,
                                         },
                                     );
                                 }
@@ -304,7 +292,6 @@ impl ConsoleDesktopApp {
                                             run: Some(run),
                                             output,
                                             starting: false,
-                                            shortcut_conflict: None,
                                         },
                                     );
                                 }
@@ -391,10 +378,10 @@ impl ConsoleDesktopApp {
     }
 
     /// Rebuild `active_project_shortcuts` from the scripts of whatever
-    /// project is currently active. Idempotent — only writes when the active
-    /// project id has changed since the last call, or when the underlying
-    /// scripts have been reloaded. Call this whenever the user switches
-    /// projects so the keystroke interceptor targets the right shortcuts.
+    /// project is currently active. Unique shortcuts stay dispatchable;
+    /// duplicated ones stay out of the map (their rows warn instead). Call
+    /// this whenever the active project may have changed so root key
+    /// dispatch targets the right shortcuts.
     pub fn sync_active_shortcuts_to_active_project(&mut self) {
         let active_pid = self
             .selected_project_id
@@ -408,9 +395,26 @@ impl ConsoleDesktopApp {
             self.active_project_shortcuts.clear();
             return;
         };
-        let map = compute_shortcut_state(&state.scripts)
-            .unwrap_or_default();
-        self.active_project_shortcuts = map;
+        self.active_project_shortcuts = compute_shortcut_state(&state.scripts).bindings;
+    }
+
+    /// Match a live keystroke against the active project's script
+    /// shortcuts. Returns the script id to run, if any. Duplicated
+    /// shortcuts never enter the map, so they can never dispatch.
+    pub fn match_script_shortcut(&self, keystroke: &Keystroke) -> Option<String> {
+        if self.active_project_shortcuts.is_empty() {
+            return None;
+        }
+        let canonical = crate::keybindings::normalize_script_keystroke(keystroke)?;
+        self.active_project_shortcuts.get(&canonical).cloned()
+    }
+
+    /// Palettes and pickers own the keyboard while open — script shortcuts
+    /// never steal a keystroke from under them.
+    pub fn any_palette_open(&self, cx: &gpui::App) -> bool {
+        self.command_palette.read(cx).is_open(cx)
+            || self.quick_open_palette.read(cx).is_open(cx)
+            || self.project_browse_palette.read(cx).is_open(cx)
     }
 
     pub fn select_bottom_run_tab(&mut self, cx: &mut Context<Self>) {
@@ -565,7 +569,6 @@ impl ConsoleDesktopApp {
                         run: Some(run.clone()),
                         output,
                         starting: false,
-                        shortcut_conflict: None,
                     },
                 );
             }
