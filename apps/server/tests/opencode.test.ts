@@ -251,7 +251,6 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
 // 6. Prompt-cache observability — Responses-API models. We mock the wire
 // response (SSE) so the AI SDK's `result.usage` resolves to a controlled
 // value, then assert the emitted `usage` delta has the right `cacheStatus`.
-// This is Step 4b of docs/plan/prompt-cache-implementation-plan.md.
 {
   // Use the Responses-API model id so `isOpencodeResponsesModel` returns true.
   const model = { id: "muse-spark-1.3-contributor-free", provider: "opencode", contextWindow: 200_000 };

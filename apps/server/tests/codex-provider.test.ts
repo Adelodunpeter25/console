@@ -132,7 +132,7 @@ async function collectDeltas(body: string) {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// Prompt-cache tests (Step 4a of docs/plan/prompt-cache-implementation-plan.md)
+// Prompt-cache tests
 // ───────────────────────────────────────────────────────────────────────────
 
 /**

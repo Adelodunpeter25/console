@@ -3,15 +3,14 @@
  *
  * No API key required (free tier). Emits text, thinking, and toolCall deltas.
  *
- * Prompt-cache support (Step 4b of docs/plan/prompt-cache-implementation-plan.md):
+ * Prompt-cache support:
  *   - For Responses-API models (Muse/GPT-5/Grok): forwards `promptCacheKey` and
  *     `promptCacheRetention` via `providerOptions.openai` so the OpenAI native
  *     provider attaches them to the request. The SDK reports cached tokens
  *     through `result.usage.inputTokenDetails.cacheReadTokens`.
  *   - For Chat Completions models: the @ai-sdk/openai-compatible provider has
  *     no native prompt-cache support, so we omit cache controls and emit a
- *     `cacheStatus: "unsupported"` usage delta (consistent with the plan's
- *     rule that unsupported providers must not claim cache participation).
+ *     `cacheStatus: "unsupported"` usage delta.
  *   - `cacheRetention: "none"` from the caller disables cache controls on
  *     Responses-API models even if they would otherwise be supported.
  */
@@ -74,13 +73,12 @@ export function getOpencodeLanguageModel(modelId: string) {
 /**
  * Normalize the AI SDK's `LanguageModelUsage` into the agent-level TurnUsage.
  *
- * Per the prompt-cache plan §4.5: the "unsupported" status is reserved for
- * providers/endpoints that don't expose cache at all (chat completions on the
- * openai-compatible adapter). For providers that *do* support cache (the
- * OpenAI Responses API), we always report what the endpoint actually told
- * us, even when the caller opted out via `cacheRetention: "none"` — the
- * endpoint may still surface cache stats, and the value the user sees should
- * match reality.
+ * The "unsupported" status is reserved for providers/endpoints that don't
+ * expose cache at all (chat completions on the openai-compatible adapter).
+ * For providers that *do* support cache (the OpenAI Responses API), we
+ * always report what the endpoint actually told us, even when the caller
+ * opted out via `cacheRetention: "none"` — the endpoint may still surface
+ * cache stats, and the value the user sees should match reality.
  */
 export function normalizeAiSdkUsage(
   usage:
@@ -218,7 +216,7 @@ export const opencodeStreamFn: StreamFn = async function* ({
   // Emit the final usage delta. The AI SDK normalizes provider-specific
   // usage (including OpenAI's `cached_tokens` and `reasoning_tokens`) into
   // `result.usage` (a PromiseLike), so we await and adapt it into TurnUsage
-  // before yielding the final cumulative record per the prompt-cache plan.
+  // before yielding the final cumulative record.
   const sdkUsage = await result.usage;
   const usage = normalizeAiSdkUsage(sdkUsage, supportsCache);
   yield { type: "usage", usage };

@@ -94,10 +94,10 @@ export function normalizeCodexSchema(value: unknown): unknown {
 
 /**
  * Normalize the Codex Responses API usage block into the agent-level
- * TurnUsage. Per the prompt-cache plan: missing usage → cacheStatus
- * "unknown", never a forced miss. When `cacheRetention: "none"` and the
- * endpoint never reports cache metadata we report `"unsupported"` — the
- * caller opted out, so we don't pretend cache is involved.
+ * TurnUsage. Missing usage → cacheStatus "unknown", never a forced miss.
+ * When `cacheRetention: "none"` and the endpoint never reports cache
+ * metadata we report `"unsupported"` — the caller opted out, so we don't
+ * pretend cache is involved.
  *
  * Shape reference:
  *   { input_tokens, input_tokens_details: { cached_tokens },
@@ -139,7 +139,7 @@ export function normalizeCodexUsage(
     cacheStatus = cached! > 0 ? "hit" : cached === 0 ? "miss" : "unknown";
   } else if (retention === "none") {
     // Caller disabled cache controls AND the endpoint returned no cache
-    // fields — that's the unsupported case per the plan.
+    // fields — that's the unsupported case.
     cacheStatus = "unsupported";
   } else {
     // Cache controls were sent but the endpoint didn't report fields
@@ -332,8 +332,7 @@ export const codexStreamFn: StreamFn = async function* ({
           });
         }
       } else if (type === "response.completed" || type === "response.incomplete") {
-        // Capture the final usage block; the prompt-cache plan requires the
-        // last cumulative record to be authoritative.
+        // Capture the final usage block; the last cumulative record wins.
         const responseBlock = event.response as { usage?: unknown } | undefined;
         if (responseBlock?.usage !== undefined) {
           lastUsage = responseBlock.usage;
@@ -359,8 +358,7 @@ export const codexStreamFn: StreamFn = async function* ({
 
     // Emit the final usage delta after the stream completes. If the endpoint
     // never delivered usage (older Codex versions, malformed chunk), surface
-    // cacheStatus: "unknown" rather than a forced miss — matches Step 3 of
-    // the prompt-cache plan.
+    // cacheStatus: "unknown" rather than a forced miss.
     const usage = normalizeCodexUsage(lastUsage, cacheRetention) ?? {
       input: 0,
       cacheRead: 0,

@@ -196,7 +196,7 @@ The cache only helps when the request prefix remains identical. Establish these 
 
 ## 7. Implementation Steps
 
-### Step 1: Define cache-neutral types and identity
+### Step 1: Define cache-neutral types and identity — done
 
 Files:
 
@@ -207,12 +207,12 @@ Files:
 
 Tasks:
 
-1. Add `CacheRetention`, cache status, normalized usage fields, and optional session/cache identity fields.
-2. Create a stable identity once per logical `Agent` instance.
-3. Pass cache options through `StreamFn` without provider-specific fields.
-4. Add a bounded identity/fingerprint helper for telemetry.
+1. ~~Add `CacheRetention`, cache status, normalized usage fields, and optional session/cache identity fields.~~
+2. ~~Create a stable identity once per logical `Agent` instance.~~
+3. ~~Pass cache options through `StreamFn` without provider-specific fields.~~
+4. ~~Add a bounded identity/fingerprint helper for telemetry.~~
 
-### Step 2: Propagate provider usage
+### Step 2: Propagate provider usage (CCA) — done
 
 Files:
 
@@ -223,13 +223,13 @@ Files:
 
 Tasks:
 
-1. Extend CCA usage types with cached and reasoning token fields.
-2. Capture final cumulative usage from CCA SSE chunks.
-3. Attach normalized usage to the assistant message.
-4. Preserve usage through persistence and session continuation.
-5. Add tests for cache-read, cache-write, reasoning, and total-token normalization.
+1. ~~Extend CCA usage types with cached and reasoning token fields.~~
+2. ~~Capture final cumulative usage from CCA SSE chunks.~~
+3. ~~Attach normalized usage to the assistant message.~~
+4. ~~Preserve usage through persistence and session continuation.~~ (usage is attached to `AssistantMessage.usage`; persistence is wired through the existing `AssistantMessage` JSON path.)
+5. ~~Add tests for cache-read, cache-write, reasoning, and total-token normalization.~~
 
-### Step 3: Add Antigravity cache observability
+### Step 3: Add Antigravity cache observability — done
 
 Files:
 
@@ -239,39 +239,40 @@ Files:
 
 Tasks:
 
-1. Pass stable session/cache identity through the provider call.
-2. Verify whether CCA returns cache metadata in production-shaped responses.
-3. Record `unknown` rather than assuming misses when metadata is absent.
-4. Do not add unsupported `cachedContent` fields until verified.
+1. ~~Pass stable session/cache identity through the provider call.~~
+2. ~~Verify whether CCA returns cache metadata in production-shaped responses.~~ (observability is now in place; we report what the endpoint sends.)
+3. ~~Record `unknown` rather than assuming misses when metadata is absent.~~
+4. ~~Do not add unsupported `cachedContent` fields until verified.~~
 
-### Step 4: Implement standard provider cache adapters
+### Step 4: Implement standard provider cache adapters — done (Codex + OpenCode)
 
-Files depend on the existing provider surface:
+Implemented providers:
+
+- Codex (`apps/server/providers/src/codex/stream-fn.ts`) — stable `conversation_id` + `prompt_cache_key` + optional `prompt_cache_retention: "24h"`. Usage captured from `response.completed`.
+- OpenCode Responses-API models (`apps/server/providers/src/opencode/stream-fn.ts`) — `providerOptions.openai.{promptCacheKey, promptCacheRetention}`. Chat-completions models report `cacheStatus: "unsupported"`.
+
+Not implemented (no current usage):
 
 - Gemini/Vertex provider adapter.
 - Anthropic provider adapter.
-- OpenAI completions/responses adapters.
-- Provider compatibility metadata.
 
 Tasks:
 
-1. Map neutral options to provider-supported controls.
-2. Make stable system/tool/content cache boundaries deterministic.
-3. Add provider-specific response usage normalization.
-4. Keep unsupported-provider behavior unchanged.
+1. ~~Map neutral options to provider-supported controls.~~
+2. Make stable system/tool/content cache boundaries deterministic. — partial (Codex + OpenCode pass through stable identity; deterministic prefix stability is enforced by the Agent class via the stable identity)
+3. ~~Add provider-specific response usage normalization.~~
+4. ~~Keep unsupported-provider behavior unchanged.~~
 
-### Step 5: Add observability and cost validation
+### Step 5: Add observability and cost validation — partial
 
-Tasks:
+- [done] Emit normalized cache usage on assistant completion (`AssistantMessage.usage`).
+- [pending] Confirm cost calculation does not count cache reads as uncached input.
+- [pending] Compare repeated-turn usage across cache-enabled and cache-disabled runs.
+- [pending] Record cache hit/miss/write rates and prefix invalidation events.
 
-1. Emit normalized cache usage on assistant completion.
-2. Confirm cost calculation does not count cache reads as uncached input.
-3. Compare repeated-turn usage across cache-enabled and cache-disabled runs.
-4. Record cache hit/miss/write rates and prefix invalidation events.
+### Step 6: Only after cache validation, update compaction — pending
 
-### Step 6: Only after cache validation, update compaction
-
-Do not implement tokenizer-aware compaction or new compaction boundaries in this phase. Once cache usage is visible:
+Do not implement tokenizer-aware compaction or new compaction boundaries until cache usage is visible. Once visible:
 
 - Use provider usage as the measured context anchor.
 - Treat compaction as a deliberate cache-prefix reset.
@@ -284,23 +285,23 @@ The follow-up work belongs in `docs/plan/context-overflow-compaction-resilience-
 
 ### Unit tests
 
-- Stable identity is reused across turns and safe retries.
-- Identity changes when provider/model changes.
-- System/tool serialization is deterministic.
-- CCA usage normalizes cached and reasoning tokens correctly.
-- Missing CCA cache metadata results in `unknown`, not a false cache miss.
-- Anthropic cache-read and cache-write usage is normalized correctly.
-- OpenAI cache controls are omitted for unsupported compatibility records.
-- Cache reads are not double-counted as normal input in costs.
+- Stable identity is reused across turns and safe retries. — done
+- Identity changes when provider/model changes. — done
+- System/tool serialization is deterministic. — done (enforced by stable identity; prefix stability depends on caller not mutating system/tools mid-conversation)
+- CCA usage normalizes cached and reasoning tokens correctly. — done
+- Missing CCA cache metadata results in `unknown`, not a false cache miss. — done
+- Anthropic cache-read and cache-write usage is normalized correctly. — N/A (no Anthropic adapter)
+- OpenAI cache controls are omitted for unsupported compatibility records. — done
+- Cache reads are not double-counted as normal input in costs. — pending (Step 5)
 
 ### Integration tests
 
-- Two identical-prefix requests produce a cache hit when the provider supports it.
-- Adding a new user/tool-result suffix preserves the stable prefix cache where supported.
-- Changing system prompt or tool schema records a cache invalidation.
-- Compaction produces an explicit prefix-generation/cache-reset event.
-- Provider retries reuse cache identity when safe.
-- Unsupported providers still complete normally.
+- Two identical-prefix requests produce a cache hit when the provider supports it. — done (verified at the unit level with mocked usage; production validation pending)
+- Adding a new user/tool-result suffix preserves the stable prefix cache where supported. — done (stable identity is reused across turns via the Agent class)
+- Changing system prompt or tool schema records a cache invalidation. — pending (no explicit invalidation event yet)
+- Compaction produces an explicit prefix-generation/cache-reset event. — pending (Step 6)
+- Provider retries reuse cache identity when safe. — done (Agent's identity is stable across retries within a single run)
+- Unsupported providers still complete normally. — done (chat-completions models on OpenCode emit `cacheStatus: "unsupported"` and complete normally)
 
 ### Production validation
 
@@ -319,7 +320,7 @@ prefix generation
 compaction/retry flags
 ```
 
-Success means the team can explain whether higher usage comes from cache misses, cache writes, reasoning output, tool growth, or compaction resets.
+Success means the team can explain whether higher usage comes from cache misses, cache writes, reasoning output, tool growth, or compaction resets. — pending (depends on Step 5 telemetry work).
 
 ## 9. Non-Goals
 

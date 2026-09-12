@@ -53,12 +53,11 @@ function hasFunctionCall(part: CcaResponsePart): boolean {
 /**
  * Normalize a CCA `usageMetadata` block into the agent-level `TurnUsage`.
  *
- * Per the prompt-cache plan: missing metadata produces `cacheStatus:
- * "unknown"`, never a forced miss. We only report a "miss" when the
- * endpoint explicitly tells us `cachedContentTokenCount === 0` alongside a
- * `promptTokenCount` — and even then "miss" is reported as a separate signal
- * (the prompt was billed, no cache served it) rather than being inferred from
- * the absence of fields.
+ * Missing metadata produces `cacheStatus: "unknown"`, never a forced miss.
+ * We only report a "miss" when the endpoint explicitly tells us
+ * `cachedContentTokenCount === 0` alongside a `promptTokenCount` — and even
+ * then "miss" is reported as a separate signal (the prompt was billed, no
+ * cache served it) rather than being inferred from the absence of fields.
  */
 function normalizeUsage(
   metadata: CcaUsageMetadata | undefined,
@@ -149,8 +148,7 @@ export async function* streamCore(options: StreamCoreOptions): AsyncGenerator<LL
   }
 
   // Track the latest usageMetadata across all chunks. CCA sends cumulative
-  // counts in usageMetadata, so the last one wins (matches the plan's
-  // "final cumulative record is authoritative" rule). If the endpoint never
+  // counts in usageMetadata, so the last one wins. If the endpoint never
   // emits usageMetadata we still emit a delta with cacheStatus: "unknown"
   // so callers can see we tried to observe.
   let lastUsage: CcaUsageMetadata | undefined;
@@ -201,7 +199,7 @@ export async function* streamCore(options: StreamCoreOptions): AsyncGenerator<LL
     // Emit the final usage delta after the stream completes (whether or not
     // we observed a usage block). Providers that report cumulative usage per
     // chunk will overwrite earlier values; the final cumulative record is
-    // authoritative per the prompt-cache plan.
+    // authoritative.
     const usage = normalizeUsage(lastUsage, cacheRetention) ?? {
       input: 0,
       cacheRead: 0,
