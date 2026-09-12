@@ -199,7 +199,7 @@ function buildAntigravityRequest(
 export function createAntigravityStreamFn(): StreamFn {
   const sessionState: AntigravitySessionState = createSessionState();
 
-  return async function* ({ model, systemPrompt, messages, tools, signal, thinkingLevel }) {
+  return async function* ({ model, systemPrompt, messages, tools, signal, thinkingLevel, cacheRetention }) {
     // Check if credentials exist and are valid, auto-login if not
     let cred;
     try {
@@ -234,12 +234,18 @@ export function createAntigravityStreamFn(): StreamFn {
       resolveAntigravityThinkingLevel(model, thinkingLevel),
     );
 
+    // Step 3 of the prompt-cache plan: preserve stable session/cache identity
+    // (already handled via `sessionState` below) and forward `cacheRetention`
+    // so streamCore can report `cacheStatus` correctly when usage arrives.
+    // We deliberately do NOT add explicit CCA cache resource fields — that
+    // requires recorded evidence the endpoint honors them, per the plan.
     yield* streamCore({
       endpoint,
       accessToken: cred.accessToken,
       extraHeaders: { "User-Agent": getAntigravityUserAgent() },
       body,
       signal,
+      cacheRetention,
     });
   };
 }

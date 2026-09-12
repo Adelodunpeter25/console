@@ -196,7 +196,7 @@ export class DeviceManager {
       const res = await this.client.capture.screenshot({ device: id, platform } as any);
       if (res && Buffer.isBuffer(res)) return res;
       if (res && typeof (res as { data?: string }).data === "string") {
-        return Buffer.from((res as { data: string }).data, "base64");
+        return Buffer.from((res as unknown as { data: string }).data, "base64");
       }
     } catch {}
 

@@ -179,7 +179,11 @@ export interface CloudCodeAssistRequest {
 /** Token usage metadata from the response */
 export interface CcaUsageMetadata {
   promptTokenCount: number | undefined;
+  /** Tokens served from cached content. Mirrors Gemini's `cachedContentTokenCount`. */
+  cachedContentTokenCount: number | undefined;
   candidatesTokenCount: number | undefined;
+  /** Reasoning/thinking tokens when reported separately from candidate output. */
+  thoughtsTokenCount: number | undefined;
   totalTokenCount: number | undefined;
 }
 

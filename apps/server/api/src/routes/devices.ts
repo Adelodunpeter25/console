@@ -110,7 +110,10 @@ deviceRoutes.get("/devices/:id/screenshot", async (c) => {
   const platform = (c.req.query("platform") as "ios" | "android") || (id.includes("-") ? "ios" : "android");
   try {
     const pngBuffer = await deviceManager.screenshot(id, platform);
-    return new Response(pngBuffer, {
+    // Hono's Response typing accepts BodyInit (Uint8Array/Blob/etc.) but not
+    // Node's Buffer directly. Wrap as Uint8Array so the bytes pass through
+    // unchanged while satisfying the typings.
+    return new Response(new Uint8Array(pngBuffer), {
       headers: { "Content-Type": "image/png" },
     });
   } catch (error) {

@@ -243,4 +243,164 @@ console.log("Running Provider Wire Converter tests...");
   }
 }
 
+// 5. CCA usage normalization: cache hit → cacheStatus "hit", cache read
+// subtracted from uncached input. Reasoning tokens preserved when reported.
+{
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      'data: {"response":{"candidates":[{"content":{"parts":[{"text":"ok"}]}}],"usageMetadata":{"promptTokenCount":1000,"cachedContentTokenCount":750,"candidatesTokenCount":120,"thoughtsTokenCount":40,"totalTokenCount":410}}}\n\n',
+      { headers: { "Content-Type": "text/event-stream" } },
+    )) as unknown as typeof fetch;
+
+  try {
+    const deltas: any[] = [];
+    for await (const delta of streamCore({
+      endpoint: "https://example.test",
+      accessToken: "token",
+      extraHeaders: {},
+      body: {} as any,
+      signal: undefined,
+    })) {
+      deltas.push(delta);
+    }
+    const usage = deltas.find((d) => d.type === "usage")?.usage;
+    assert.ok(usage, "expected a final usage delta");
+    assert.equal(usage.input, 250); // 1000 - 750
+    assert.equal(usage.cacheRead, 750);
+    assert.equal(usage.output, 120);
+    assert.equal(usage.reasoningTokens, 40);
+    assert.equal(usage.totalTokens, 410);
+    assert.equal(usage.cacheStatus, "hit");
+    console.log("  ✅ CCA usage: cache hit reports read + uncached + reasoning");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+// 6. CCA usage normalization: cachedContentTokenCount === 0 with promptTokenCount
+// reported → cacheStatus "miss" (not "unknown") per the prompt-cache plan.
+{
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      'data: {"response":{"candidates":[{"content":{"parts":[{"text":"ok"}]}}],"usageMetadata":{"promptTokenCount":500,"cachedContentTokenCount":0,"candidatesTokenCount":80,"totalTokenCount":580}}}\n\n',
+      { headers: { "Content-Type": "text/event-stream" } },
+    )) as unknown as typeof fetch;
+
+  try {
+    const deltas: any[] = [];
+    for await (const delta of streamCore({
+      endpoint: "https://example.test",
+      accessToken: "token",
+      extraHeaders: {},
+      body: {} as any,
+      signal: undefined,
+    })) {
+      deltas.push(delta);
+    }
+    const usage = deltas.find((d) => d.type === "usage")?.usage;
+    assert.ok(usage, "expected a final usage delta");
+    assert.equal(usage.input, 500);
+    assert.equal(usage.cacheRead, 0);
+    assert.equal(usage.cacheStatus, "miss");
+    console.log("  ✅ CCA usage: explicit cache miss with prompt+cached fields");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+// 7. CCA usage normalization: missing usageMetadata entirely → cacheStatus
+// "unknown" (NOT a forced miss). This is the Step 3 contract.
+{
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      'data: {"response":{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}}\n\n',
+      { headers: { "Content-Type": "text/event-stream" } },
+    )) as unknown as typeof fetch;
+
+  try {
+    const deltas: any[] = [];
+    for await (const delta of streamCore({
+      endpoint: "https://example.test",
+      accessToken: "token",
+      extraHeaders: {},
+      body: {} as any,
+      signal: undefined,
+    })) {
+      deltas.push(delta);
+    }
+    const usage = deltas.find((d) => d.type === "usage")?.usage;
+    assert.ok(usage, "expected a final usage delta even without usageMetadata");
+    assert.equal(usage.cacheStatus, "unknown");
+    assert.equal(usage.cacheRead, 0);
+    assert.equal(usage.input, 0);
+    console.log("  ✅ CCA usage: missing metadata reports cacheStatus unknown, not miss");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+// 8. CCA usage normalization: prompt reported but cachedContentTokenCount
+// omitted → we cannot separate, so cacheStatus is "unknown".
+{
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      'data: {"response":{"candidates":[{"content":{"parts":[{"text":"ok"}]}}],"usageMetadata":{"promptTokenCount":300,"candidatesTokenCount":50,"totalTokenCount":350}}}\n\n',
+      { headers: { "Content-Type": "text/event-stream" } },
+    )) as unknown as typeof fetch;
+
+  try {
+    const deltas: any[] = [];
+    for await (const delta of streamCore({
+      endpoint: "https://example.test",
+      accessToken: "token",
+      extraHeaders: {},
+      body: {} as any,
+      signal: undefined,
+    })) {
+      deltas.push(delta);
+    }
+    const usage = deltas.find((d) => d.type === "usage")?.usage;
+    assert.ok(usage);
+    assert.equal(usage.input, 300);
+    assert.equal(usage.cacheRead, 0);
+    assert.equal(usage.cacheStatus, "unknown");
+    console.log("  ✅ CCA usage: missing cached field keeps cacheStatus unknown");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+// 9. cacheRetention: "none" downgrades missing metadata to "unsupported".
+{
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      'data: {"response":{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}}\n\n',
+      { headers: { "Content-Type": "text/event-stream" } },
+    )) as unknown as typeof fetch;
+
+  try {
+    const deltas: any[] = [];
+    for await (const delta of streamCore({
+      endpoint: "https://example.test",
+      accessToken: "token",
+      extraHeaders: {},
+      body: {} as any,
+      signal: undefined,
+      cacheRetention: "none",
+    })) {
+      deltas.push(delta);
+    }
+    const usage = deltas.find((d) => d.type === "usage")?.usage;
+    assert.equal(usage.cacheStatus, "unsupported");
+    console.log("  ✅ CCA usage: cacheRetention=none reports unsupported");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
 console.log("Provider Wire Converter tests passed!\n");

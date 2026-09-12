@@ -148,7 +148,7 @@ export class IosDeviceManager {
         await execAsync(`${serveSim} button home -d "${id}"`);
         return;
       } catch {}
-    } else if (req.action === "lock" || req.action === "power") {
+    } else if (req.action === "power") {
       try {
         await execAsync(`${serveSim} button lock -d "${id}"`);
         return;

@@ -86,7 +86,7 @@ try {
     const remaining = await portRegistry.list("localhost");
     assert.deepEqual(remaining, []);
     assert.ok(changes.length >= 1, "expected a change event after reaping a stopped target");
-    assert.ok(changes.every((ports) => !ports.includes(doomed.port)), "reaped port must not reappear");
+    assert.ok(changes.every((ports) => !ports.includes(doomed.port!)), "reaped port must not reappear");
   } finally {
     portRegistry.off("change", onChange);
   }
