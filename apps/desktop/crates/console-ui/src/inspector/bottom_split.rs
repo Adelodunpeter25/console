@@ -226,7 +226,7 @@ impl RenderOnce for RightSidebarBottomSplit {
                                                 .on_click(move |_, window, cx| {
                                                     (on_run_tab)(0, window, cx);
                                                 })
-                                                .child("Run"),
+                                                .child("Scripts"),
                                         )
                                     })
                                     .children(self.tabs.into_iter().enumerate().map(

@@ -341,9 +341,7 @@ impl RenderOnce for RunPanel {
                         .child(
                             div()
                                 .id(ElementId::from(format!("run-toggle-{toggle_id}")))
-                                .h(px(24.0))
-                                .min_w(px(44.0))
-                                .px(px(10.0))
+                                .size(px(24.0))
                                 .flex_none()
                                 .rounded(px(5.0))
                                 .flex()
