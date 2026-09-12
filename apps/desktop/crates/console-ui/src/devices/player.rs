@@ -23,14 +23,14 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
   #stage { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; user-select: none; -webkit-user-select: none; }
   canvas, #stream-img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; touch-action: none; }
   #stream-img { display: none; }
-  #status { position: absolute; left: 8px; bottom: 8px; font: 11px/1.4 -apple-system, system-ui, sans-serif; color: rgba(255,255,255,.75); background: rgba(0,0,0,.45); padding: 4px 8px; border-radius: 6px; pointer-events: none; }
+  #status { display: none; position: absolute; left: 8px; bottom: 8px; font: 11px/1.4 -apple-system, system-ui, sans-serif; color: rgba(255,255,255,.9); background: rgba(180,30,30,.85); padding: 4px 8px; border-radius: 6px; pointer-events: none; }
 </style>
 </head>
 <body>
 <div id="stage">
   <canvas id="screen"></canvas>
   <img id="stream-img" draggable="false" alt="device screen stream" />
-  <div id="status">idle</div>
+  <div id="status"></div>
 </div>
 <script>
 (function () {
@@ -43,7 +43,15 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
   let decoder = null;
   let frameCount = 0;
 
-  const setStatus = (s) => { status.textContent = s; report({ type: 'status', status: s }); };
+  const setStatus = (s) => {
+    status.textContent = s;
+    if (s && s.toLowerCase().includes('error')) {
+      status.style.display = 'block';
+    } else {
+      status.style.display = 'none';
+    }
+    report({ type: 'status', status: s });
+  };
   const report = (msg) => { try { window.ipc.postMessage(JSON.stringify(msg)); } catch (e) {} };
 
   function stopAll() {

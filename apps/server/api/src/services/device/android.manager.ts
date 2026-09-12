@@ -136,7 +136,7 @@ export class AndroidDeviceManager {
 
   async boot(id: string): Promise<void> {
     const emu = resolveEmulatorPath();
-    exec(`"${emu}" -avd "${id}"`);
+    exec(`"${emu}" -avd "${id}" -no-window -gpu host`);
   }
 
   async shutdown(id: string): Promise<void> {
