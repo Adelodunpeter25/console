@@ -435,6 +435,16 @@ impl CommandPalette {
             .update(cx, |modal, cx| modal.set_entries(entries, cx));
     }
 
+    /// Update the search-field placeholder text.
+    pub fn set_placeholder(
+        &mut self,
+        placeholder: impl Into<SharedString>,
+        cx: &mut Context<Self>,
+    ) {
+        self.modal
+            .update(cx, |modal, cx| modal.set_placeholder(placeholder, cx));
+    }
+
     pub fn show(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.modal.update(cx, |modal, cx| {
             modal.reset_state(window, cx);

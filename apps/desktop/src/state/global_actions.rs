@@ -325,6 +325,7 @@ impl ConsoleDesktopApp {
         let entity = cx.entity().downgrade();
         let workspace_root = self.workspace_root.clone();
         self.tab_palette.update(cx, |palette, cx| {
+            palette.set_placeholder("Switch open tab…", cx);
             palette.set_entries(tab_palette_entries(entity, &workspace_root), cx);
             palette.toggle(window, cx);
         });
