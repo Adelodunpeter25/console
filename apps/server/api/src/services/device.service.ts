@@ -278,59 +278,23 @@ export class DeviceService {
     }
   }
 
-  createVideoStream(id: string, platform: "ios" | "android", signal?: AbortSignal): ReadableStream<Uint8Array> {
-    let proc: ReturnType<typeof Bun.spawn> | undefined;
-
-    return new ReadableStream<Uint8Array>({
-      start(controller) {
-        try {
-          if (platform === "ios") {
-            proc = Bun.spawn(["xcrun", "simctl", "io", id, "recordVideo", "--codec=h264", "--force", "-"], {
-              stdout: "pipe",
-              stderr: "ignore",
-            });
-          } else {
-            proc = Bun.spawn([resolveAdbPath(), "-s", id, "exec-out", "screenrecord", "--output-format=h264", "-"], {
-              stdout: "pipe",
-              stderr: "ignore",
-            });
-          }
-
-          if (!proc || !proc.stdout) {
-            controller.close();
-            return;
-          }
-
-          const reader = (proc.stdout as ReadableStream<Uint8Array>).getReader();
-          const pump = async () => {
-            try {
-              while (true) {
-                if (signal?.aborted) break;
-                const { done, value } = await reader.read();
-                if (done) break;
-                if (value && value.byteLength > 0) {
-                  controller.enqueue(value);
-                }
-              }
-            } catch {
-            } finally {
-              try { controller.close(); } catch {}
-              try { proc?.kill(); } catch {}
-            }
-          };
-          pump();
-
-          signal?.addEventListener("abort", () => {
-            try { proc?.kill(); } catch {}
-          });
-        } catch (err) {
-          try { controller.error(err); } catch {}
-        }
-      },
-      cancel() {
-        try { proc?.kill(); } catch {}
-      },
-    });
+  async captureStreamFrame(id: string, platform: "ios" | "android"): Promise<{ data: Buffer; mimeType: string }> {
+    if (platform === "ios") {
+      const proc = Bun.spawn(["xcrun", "simctl", "io", id, "screenshot", "--type=jpeg", "-"], {
+        stdout: "pipe",
+        stderr: "ignore",
+      });
+      const data = Buffer.from(await new Response(proc.stdout).arrayBuffer());
+      return { data, mimeType: "image/jpeg" };
+    } else {
+      const adb = resolveAdbPath();
+      const proc = Bun.spawn([adb, "-s", id, "exec-out", "screencap", "-p"], {
+        stdout: "pipe",
+        stderr: "ignore",
+      });
+      const data = Buffer.from(await new Response(proc.stdout).arrayBuffer());
+      return { data, mimeType: "image/png" };
+    }
   }
 
   async screenshot(id: string, platform: "ios" | "android"): Promise<Buffer> {
@@ -342,20 +306,20 @@ export class DeviceService {
       }
     } catch {}
 
-    // Fallback
-    const tmpFile = `/tmp/console_device_${Date.now()}_${id}.png`;
-    try {
-      if (platform === "ios") {
-        await execAsync(`xcrun simctl io "${id}" screenshot "${tmpFile}"`);
-      } else {
-        await execAsync(`"${resolveAdbPath()}" -s "${id}" exec-out screencap -p > "${tmpFile}"`);
-      }
-      const data = await import("node:fs/promises").then((f) => f.readFile(tmpFile));
-      await import("node:fs/promises").then((f) => f.unlink(tmpFile).catch(() => {}));
-      return data;
-    } catch (err) {
-      await import("node:fs/promises").then((f) => f.unlink(tmpFile).catch(() => {}));
-      throw err;
+    // Fallback: fast in-memory capture without temp files
+    if (platform === "ios") {
+      const proc = Bun.spawn(["xcrun", "simctl", "io", id, "screenshot", "--type=png", "-"], {
+        stdout: "pipe",
+        stderr: "ignore",
+      });
+      return Buffer.from(await new Response(proc.stdout).arrayBuffer());
+    } else {
+      const adb = resolveAdbPath();
+      const proc = Bun.spawn([adb, "-s", id, "exec-out", "screencap", "-p"], {
+        stdout: "pipe",
+        stderr: "ignore",
+      });
+      return Buffer.from(await new Response(proc.stdout).arrayBuffer());
     }
   }
 }

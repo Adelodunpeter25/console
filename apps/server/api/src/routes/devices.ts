@@ -71,18 +71,39 @@ deviceRoutes.post("/devices/:id/interact", async (c) => {
 deviceRoutes.get("/devices/:id/stream", async (c) => {
   const id = c.req.param("id");
   const platform = (c.req.query("platform") as "ios" | "android") || (id.includes("-") ? "ios" : "android");
-  try {
-    const stream = deviceService.createVideoStream(id, platform, c.req.raw.signal);
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "video/mp4; codecs=avc1.42E01E",
-        "Cache-Control": "no-cache, no-store",
-        "Connection": "keep-alive",
-      },
-    });
-  } catch (error) {
-    return c.json({ success: false, error: error instanceof Error ? error.message : String(error) }, 500);
-  }
+  const signal = c.req.raw.signal;
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const boundary = "frame";
+      const encoder = new TextEncoder();
+
+      while (!signal.aborted) {
+        try {
+          const { data, mimeType } = await deviceService.captureStreamFrame(id, platform);
+          if (signal.aborted) break;
+          if (data && data.length > 0) {
+            const header = `--${boundary}\r\nContent-Type: ${mimeType}\r\nContent-Length: ${data.length}\r\n\r\n`;
+            controller.enqueue(encoder.encode(header));
+            controller.enqueue(new Uint8Array(data));
+            controller.enqueue(encoder.encode("\r\n"));
+          }
+        } catch {
+          break;
+        }
+      }
+      try { controller.close(); } catch {}
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "multipart/x-mixed-replace; boundary=frame",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      "Connection": "keep-alive",
+      "Pragma": "no-cache",
+    },
+  });
 });
 
 deviceRoutes.get("/devices/:id/screenshot", async (c) => {
