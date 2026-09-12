@@ -187,6 +187,70 @@ export class AndroidDeviceManager {
     }
   }
 
+  createH264Stream(id: string, signal?: AbortSignal): ReadableStream<Uint8Array> {
+    const adb = resolveAdbPath();
+    let proc: ReturnType<typeof Bun.spawn> | undefined;
+
+    return new ReadableStream<Uint8Array>({
+      start(controller) {
+        try {
+          proc = Bun.spawn(
+            [
+              adb,
+              "-s",
+              id,
+              "exec-out",
+              "screenrecord",
+              "--output-format=h264",
+              "--size",
+              "720x1280",
+              "--bit-rate",
+              "4000000",
+              "-",
+            ],
+            {
+              stdout: "pipe",
+              stderr: "ignore",
+            },
+          );
+
+          if (!proc || !proc.stdout) {
+            controller.close();
+            return;
+          }
+
+          const reader = (proc.stdout as ReadableStream<Uint8Array>).getReader();
+          const pump = async () => {
+            try {
+              while (true) {
+                if (signal?.aborted) break;
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (value && value.byteLength > 0) {
+                  controller.enqueue(value);
+                }
+              }
+            } catch {
+            } finally {
+              try { controller.close(); } catch {}
+              try { proc?.kill(); } catch {}
+            }
+          };
+          pump();
+
+          signal?.addEventListener("abort", () => {
+            try { proc?.kill(); } catch {}
+          });
+        } catch (err) {
+          try { controller.error(err); } catch {}
+        }
+      },
+      cancel() {
+        try { proc?.kill(); } catch {}
+      },
+    });
+  }
+
   async captureStreamFrame(id: string): Promise<{ data: Buffer; mimeType: string }> {
     const adb = resolveAdbPath();
     const proc = Bun.spawn([adb, "-s", id, "exec-out", "screencap", "-p"], {

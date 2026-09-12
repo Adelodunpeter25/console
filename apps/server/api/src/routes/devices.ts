@@ -73,6 +73,18 @@ deviceRoutes.get("/devices/:id/stream", async (c) => {
   const platform = (c.req.query("platform") as "ios" | "android") || (id.includes("-") ? "ios" : "android");
   const signal = c.req.raw.signal;
 
+  if (platform === "android") {
+    const stream = deviceManager.createH264Stream(id, signal);
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "video/h264",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Connection": "keep-alive",
+        "Pragma": "no-cache",
+      },
+    });
+  }
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const boundary = "frame";

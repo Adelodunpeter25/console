@@ -21,24 +21,28 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
 <style>
   html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: #0c0c0e; overflow: hidden; user-select: none; -webkit-user-select: none; }
   #stage { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; user-select: none; -webkit-user-select: none; }
-  #screen, #still { max-width: 100%; max-height: 100%; object-fit: contain; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; touch-action: none; }
-  #still { display: none; }
+  canvas, #stream-img, #still { max-width: 100%; max-height: 100%; object-fit: contain; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; touch-action: none; }
+  #stream-img, #still { display: none; }
   #status { position: absolute; left: 8px; bottom: 8px; font: 11px/1.4 -apple-system, system-ui, sans-serif; color: rgba(255,255,255,.75); background: rgba(0,0,0,.45); padding: 4px 8px; border-radius: 6px; pointer-events: none; }
 </style>
 </head>
 <body>
 <div id="stage">
-  <img id="screen" draggable="false" alt="device screen" />
+  <canvas id="screen"></canvas>
+  <img id="stream-img" draggable="false" alt="device screen stream" />
   <img id="still" draggable="false" alt="device screen still" />
   <div id="status">idle</div>
 </div>
 <script>
 (function () {
   const status = document.getElementById('status');
-  const screen = document.getElementById('screen');
+  const canvas = document.getElementById('screen');
+  const streamImg = document.getElementById('stream-img');
   const still = document.getElementById('still');
+  const ctx = canvas.getContext('2d');
   let cfg = null;
   let ws = null;
+  let decoder = null;
   let pollTimer = null;
   let frameCount = 0;
 
@@ -48,13 +52,16 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
   function stopAll() {
     try { if (ws) ws.close(); } catch (e) {}
     ws = null;
+    try { if (decoder && decoder.state !== 'closed') decoder.close(); } catch (e) {}
+    decoder = null;
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-    try { screen.src = ''; } catch (e) {}
+    try { streamImg.src = ''; } catch (e) {}
   }
 
   function startStills() {
     setStatus('stills');
-    screen.style.display = 'none';
+    canvas.style.display = 'none';
+    streamImg.style.display = 'none';
     still.style.display = 'block';
     const tick = async () => {
       try {
@@ -72,22 +79,118 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
     pollTimer = setInterval(tick, 1500);
   }
 
-  function startStream() {
+  function startMjpegStream() {
     setStatus('connecting');
+    canvas.style.display = 'none';
     still.style.display = 'none';
-    screen.style.display = 'block';
-    screen.src = cfg.streamUrl;
-    screen.onload = () => {
+    streamImg.style.display = 'block';
+    streamImg.src = cfg.streamUrl;
+    streamImg.onload = () => {
       setStatus('streaming');
       frameCount++;
       report({ type: 'frame', count: frameCount });
     };
-    screen.onerror = () => {
+    streamImg.onerror = () => {
       if (cfg && cfg.screenshotUrl) {
         setStatus('stream error, stills fallback');
         startStills();
       }
     };
+  }
+
+  async function ensureDecoder() {
+    if (decoder && decoder.state !== 'closed') return decoder;
+    if (!('VideoDecoder' in window)) throw new Error('WebCodecs not supported');
+    decoder = new VideoDecoder({
+      output: (frame) => {
+        if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
+          canvas.width = frame.displayWidth;
+          canvas.height = frame.displayHeight;
+        }
+        ctx.drawImage(frame, 0, 0);
+        frame.close();
+        frameCount++;
+        report({ type: 'frame', count: frameCount });
+      },
+      error: (e) => setStatus('decoder error: ' + (e && e.message || e)),
+    });
+    decoder.configure({ codec: cfg.codec || 'avc1.42E01E', optimizeForLatency: true });
+    return decoder;
+  }
+
+  async function startH264Stream() {
+    setStatus('connecting');
+    streamImg.style.display = 'none';
+    still.style.display = 'none';
+    canvas.style.display = 'block';
+    try {
+      const dec = await ensureDecoder();
+      const res = await fetch(cfg.streamUrl, { cache: 'no-store' });
+      if (!res.ok || !res.body) throw new Error('http ' + res.status);
+      setStatus('streaming');
+      const reader = res.body.getReader();
+      let buf = new Uint8Array(0);
+      const append = (chunk) => {
+        const next = new Uint8Array(buf.length + chunk.length);
+        next.set(buf);
+        next.set(chunk, buf.length);
+        buf = next;
+      };
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        append(value);
+
+        while (buf.length > 4) {
+          let start = -1;
+          let prefixLen = 0;
+          for (let i = 0; i < buf.length - 3; i++) {
+            if (buf[i] === 0 && buf[i+1] === 0 && buf[i+2] === 1) {
+              start = i;
+              prefixLen = 3;
+              break;
+            }
+            if (buf[i] === 0 && buf[i+1] === 0 && buf[i+2] === 0 && buf[i+3] === 1) {
+              start = i;
+              prefixLen = 4;
+              break;
+            }
+          }
+          if (start === -1) break;
+
+          let nextStart = -1;
+          for (let i = start + prefixLen; i < buf.length - 3; i++) {
+            if ((buf[i] === 0 && buf[i+1] === 0 && buf[i+2] === 1) ||
+                (buf[i] === 0 && buf[i+1] === 0 && buf[i+2] === 0 && buf[i+3] === 1)) {
+              nextStart = i;
+              break;
+            }
+          }
+          if (nextStart === -1) {
+            if (start > 0) buf = buf.slice(start);
+            break;
+          }
+
+          const nal = buf.slice(start, nextStart);
+          buf = buf.slice(nextStart);
+
+          const nalType = nal[prefixLen] & 0x1f;
+          const isKey = nalType === 5 || nalType === 7;
+          try {
+            dec.decode(new EncodedVideoChunk({
+              type: isKey ? 'key' : 'delta',
+              timestamp: performance.now() * 1000,
+              data: nal.buffer,
+            }));
+          } catch (e) {}
+        }
+      }
+    } catch (e) {
+      setStatus('stream error, stills fallback');
+      stopAll();
+      startStills();
+    }
   }
 
   window.__consoleDevice = {
@@ -97,7 +200,7 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
       try { cfg = JSON.parse(json); } catch (e) { setStatus('bad config'); return; }
       if (!cfg || !cfg.platform) { setStatus('no device'); return; }
       if (cfg.mode === 'stills' || !cfg.streamUrl) { startStills(); return; }
-      startStream();
+      if (cfg.platform === 'android') startH264Stream(); else startMjpegStream();
     },
     stop: () => { cfg = null; stopAll(); setStatus('idle'); },
     tap: (x, y) => {
@@ -156,7 +259,6 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
       const dist = Math.hypot(dx, dy);
 
       if (dist > 0.03) {
-        // Drag/swipe gesture (scrolling, swiping)
         report({
           type: 'swipe',
           startX: Math.max(0, Math.min(1, startX)),
@@ -166,7 +268,6 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
           durationMs: Math.max(150, Math.min(elapsed, 1000)),
         });
       } else {
-        // Tap gesture
         report({ type: 'tap', x: endX, y: endY });
         try { window.__consoleDevice.tap(endX, endY); } catch (e) {}
       }
@@ -179,7 +280,8 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
     });
   }
 
-  setupGestures(screen);
+  setupGestures(canvas);
+  setupGestures(streamImg);
   setupGestures(still);
 
   setStatus('ready');
