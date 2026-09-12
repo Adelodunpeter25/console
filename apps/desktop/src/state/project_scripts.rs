@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 
 use console_core::{ProjectScript, ScriptRun, ScriptRunEvent, ScriptRunStatus};
 use console_ui::run::{push_run_output, truncate_run_output_head};
-use gpui::{AppContext, Context};
+use gpui::Context;
 
 use super::ConsoleDesktopApp;
 
@@ -105,14 +105,16 @@ impl ConsoleDesktopApp {
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
             let list = client.scripts.list(&project_id).await;
-            let runs = client.scripts.list_runs(&project_id).await.unwrap_or_default();
+            let runs = client
+                .scripts
+                .list_runs(&project_id)
+                .await
+                .unwrap_or_default();
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         let running: Vec<(String, String, String)> = {
-                            let Some(state) = this
-                                .project_scripts_by_project
-                                .get_mut(&project_id)
+                            let Some(state) = this.project_scripts_by_project.get_mut(&project_id)
                             else {
                                 return;
                             };
@@ -126,9 +128,8 @@ impl ConsoleDesktopApp {
                                     state.error = None;
                                 }
                                 Err(err) => {
-                                    state.error = Some(format!(
-                                        "Couldn't load run scripts: {err:#}"
-                                    ));
+                                    state.error =
+                                        Some(format!("Couldn't load run scripts: {err:#}"));
                                 }
                             }
                             for run in runs {
@@ -158,9 +159,9 @@ impl ConsoleDesktopApp {
                                 .runs
                                 .iter()
                                 .filter(|(_, view)| {
-                                    view.run.as_ref().is_some_and(|run| {
-                                        run.status == ScriptRunStatus::Running
-                                    })
+                                    view.run
+                                        .as_ref()
+                                        .is_some_and(|run| run.status == ScriptRunStatus::Running)
                                 })
                                 .map(|(script_id, view)| {
                                     (
@@ -169,9 +170,7 @@ impl ConsoleDesktopApp {
                                         view.run.as_ref().map(|run| run.run_id.clone()),
                                     )
                                 })
-                                .filter_map(|(pid, sid, rid)| {
-                                    rid.map(|rid| (pid, sid, rid))
-                                })
+                                .filter_map(|(pid, sid, rid)| rid.map(|rid| (pid, sid, rid)))
                                 .collect()
                         };
                         for (pid, sid, rid) in running {
@@ -191,6 +190,18 @@ impl ConsoleDesktopApp {
         let Some(project_id) = self.active_scripts_project_id() else {
             return;
         };
+        // The row shows Stop while a run is active or starting — a second
+        // play press is always a no-op, never a duplicate run.
+        if let Some(state) = self.project_scripts_by_project.get(&project_id)
+            && let Some(view) = state.runs.get(script_id)
+            && (view.starting
+                || view
+                    .run
+                    .as_ref()
+                    .is_some_and(|run| run.status == ScriptRunStatus::Running))
+        {
+            return;
+        }
         if let Some(state) = self.project_scripts_by_project.get_mut(&project_id) {
             state
                 .runs
@@ -217,9 +228,8 @@ impl ConsoleDesktopApp {
                             Ok(run) => {
                                 let output = snapshot_output(&run);
                                 let run_id = run.run_id.clone();
-                                if let Some(state) = this
-                                    .project_scripts_by_project
-                                    .get_mut(&project_id_clone)
+                                if let Some(state) =
+                                    this.project_scripts_by_project.get_mut(&project_id_clone)
                                 {
                                     state.runs.insert(
                                         script_id_owned.clone(),
@@ -238,18 +248,13 @@ impl ConsoleDesktopApp {
                                 );
                             }
                             Err(err) => {
-                                if let Some(state) = this
-                                    .project_scripts_by_project
-                                    .get_mut(&project_id_clone)
+                                if let Some(state) =
+                                    this.project_scripts_by_project.get_mut(&project_id_clone)
                                 {
-                                    if let Some(view) =
-                                        state.runs.get_mut(&script_id_owned)
-                                    {
+                                    if let Some(view) = state.runs.get_mut(&script_id_owned) {
                                         view.starting = false;
                                     }
-                                    state.error = Some(format!(
-                                        "Couldn't start script: {err:#}"
-                                    ));
+                                    state.error = Some(format!("Couldn't start script: {err:#}"));
                                 }
                             }
                         }
@@ -287,8 +292,7 @@ impl ConsoleDesktopApp {
                             if let Some(state) =
                                 this.project_scripts_by_project.get_mut(&project_id)
                             {
-                                state.error =
-                                    Some(format!("Couldn't stop script: {err:#}"));
+                                state.error = Some(format!("Couldn't stop script: {err:#}"));
                             }
                             cx.notify();
                         });
@@ -442,19 +446,13 @@ impl ConsoleDesktopApp {
             .insert((project_id.to_string(), run_id.to_string()), (seq, task));
     }
 
-    fn apply_script_run_snapshot(
-        &mut self,
-        project_id: &str,
-        script_id: &str,
-        run: &ScriptRun,
-    ) {
+    fn apply_script_run_snapshot(&mut self, project_id: &str, script_id: &str, run: &ScriptRun) {
         if let Some(state) = self.project_scripts_by_project.get_mut(project_id) {
             // A live stream owns running views; only snapshots can replace a
             // finished run or introduce one the watcher hasn't seen.
             let live = state.runs.get(script_id).is_some_and(|view| {
                 view.run.as_ref().is_some_and(|current| {
-                    current.run_id == run.run_id
-                        && current.status == ScriptRunStatus::Running
+                    current.run_id == run.run_id && current.status == ScriptRunStatus::Running
                 })
             });
             if !live {

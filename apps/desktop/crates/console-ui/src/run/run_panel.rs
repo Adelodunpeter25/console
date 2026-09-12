@@ -214,8 +214,7 @@ impl RenderOnce for RunPanel {
             let toggle_id = row.script_id.clone();
             let is_running = row.status == Some(ScriptRunStatus::Running);
             let dot = status_dot_color(row.status, row.starting, &theme);
-            let mut status_text =
-                script_row_status_label(row.status, row.starting).to_string();
+            let mut status_text = script_row_status_label(row.status, row.starting).to_string();
             if row.status.is_some_and(|status| status.is_terminal())
                 && let Some(code) = row.exit_code
             {
@@ -268,13 +267,7 @@ impl RenderOnce for RunPanel {
                                     theme.text_tertiary,
                                 )),
                         )
-                        .child(
-                            div()
-                                .size(px(7.0))
-                                .flex_none()
-                                .rounded_full()
-                                .bg(dot),
-                        )
+                        .child(div().size(px(7.0)).flex_none().rounded_full().bg(dot))
                         .child(
                             div()
                                 .flex_1()

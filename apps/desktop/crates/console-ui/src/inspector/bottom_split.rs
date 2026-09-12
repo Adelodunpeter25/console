@@ -295,7 +295,9 @@ impl RenderOnce for RightSidebarBottomSplit {
                                                                 MouseButton::Left,
                                                                 move |_, window, cx| {
                                                                     cx.stop_propagation();
-                                                                    (on_close)(tab_index, window, cx);
+                                                                    (on_close)(
+                                                                        tab_index, window, cx,
+                                                                    );
                                                                 },
                                                             )
                                                             .child(app_icon(
@@ -331,37 +333,35 @@ impl RenderOnce for RightSidebarBottomSplit {
             )
             // Bottom Content Body (only shown when expanded)
             .when(!is_collapsed, |el| {
-                el.child(
-                    div().flex_1().w_full().min_h_0().overflow_hidden().child(
-                        if run_tab_active {
-                            match self.run_element {
-                                Some(run) => run,
-                                None => div()
-                                    .size_full()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .text_size(px(11.0))
-                                    .text_color(theme.text_ghost)
-                                    .child("No project selected")
-                                    .into_any_element(),
-                            }
-                        } else {
-                            match self.terminal_element {
-                                Some(term) => term,
-                                None => div()
-                                    .size_full()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .text_size(px(11.0))
-                                    .text_color(theme.text_ghost)
-                                    .child("No terminal active")
-                                    .into_any_element(),
-                            }
-                        },
-                    ),
-                )
+                el.child(div().flex_1().w_full().min_h_0().overflow_hidden().child(
+                    if run_tab_active {
+                        match self.run_element {
+                            Some(run) => run,
+                            None => div()
+                                .size_full()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .text_size(px(11.0))
+                                .text_color(theme.text_ghost)
+                                .child("No project selected")
+                                .into_any_element(),
+                        }
+                    } else {
+                        match self.terminal_element {
+                            Some(term) => term,
+                            None => div()
+                                .size_full()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .text_size(px(11.0))
+                                .text_color(theme.text_ghost)
+                                .child("No terminal active")
+                                .into_any_element(),
+                        }
+                    },
+                ))
             })
     }
 }

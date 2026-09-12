@@ -6,8 +6,8 @@ use console_ui::workspace::{
     ContentRenderer, WorkspaceDrag, WorkspaceDropAction, WorkspacePane, cancel_workspace_drags,
 };
 use console_ui::{
-    ImageViewerModal, RightSidebar, RightSidebarBottomSplit, SidebarView, TerminalTabInfo, Theme,
-    TitleBar,
+    ImageViewerModal, RightSidebar, RightSidebarBottomSplit, RunPanel, RunScriptRow, SidebarView,
+    TerminalTabInfo, Theme, TitleBar,
 };
 use gpui::{
     App, Context, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent,
@@ -382,7 +382,12 @@ impl Render for ConsoleDesktopApp {
             Rc::new(move |tab_idx, _w, cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.select_right_sidebar_terminal_tab(tab_idx, cx);
+                        // Index 0 is the pinned Run tab; terminals shift by one.
+                        if tab_idx == 0 {
+                            this.select_bottom_run_tab(cx);
+                        } else {
+                            this.select_right_sidebar_terminal_tab(tab_idx - 1, cx);
+                        }
                     });
                 }
             })
@@ -390,9 +395,13 @@ impl Render for ConsoleDesktopApp {
         let on_close_right_sidebar_bottom_tab: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static> = {
             let entity = entity.clone();
             Rc::new(move |tab_idx, _w, cx| {
+                if tab_idx == 0 {
+                    // The Run tab is never closable.
+                    return;
+                }
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.close_right_sidebar_terminal(tab_idx, cx);
+                        this.close_right_sidebar_terminal(tab_idx - 1, cx);
                     });
                 }
             })
@@ -413,6 +422,36 @@ impl Render for ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         this.toggle_right_sidebar_bottom_collapsed(cx);
+                    });
+                }
+            })
+        };
+        let on_run_project_script: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |script_id, _window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.run_project_script(&script_id, cx);
+                    });
+                }
+            })
+        };
+        let on_stop_project_script: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |script_id, _window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.stop_project_script(&script_id, cx);
+                    });
+                }
+            })
+        };
+        let on_toggle_project_script: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |script_id, _window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.toggle_project_script_expanded(&script_id, cx);
                     });
                 }
             })
@@ -883,6 +922,7 @@ impl Render for ConsoleDesktopApp {
                             .unwrap_or_else(|| Rc::new(Vec::new()));
 
                         self.ensure_right_sidebar_terminal(window, cx);
+                        self.ensure_project_scripts(cx);
 
                         let (_, active_cwd) = self.active_inspector_target();
                         let active_term_state = active_cwd
@@ -908,6 +948,68 @@ impl Render for ConsoleDesktopApp {
                             .and_then(|state| state.terminals.get(active_idx))
                             .map(|(_, term)| term.clone().into_any_element());
 
+                        let run_panel_element = {
+                            let scripts_project_id = self.active_scripts_project_id();
+                            let (has_project, loading, error, source_missing, rows) =
+                                match scripts_project_id.as_ref().and_then(|pid| {
+                                    self.project_scripts_by_project
+                                        .get(pid)
+                                        .map(|state| (pid, state))
+                                }) {
+                                    None => (
+                                        scripts_project_id.is_some(),
+                                        scripts_project_id.is_some(),
+                                        None,
+                                        false,
+                                        Vec::new(),
+                                    ),
+                                    Some((_pid, state)) => (
+                                        true,
+                                        state.loading,
+                                        state.error.clone(),
+                                        state.source == "missing",
+                                        state
+                                            .scripts
+                                            .iter()
+                                            .map(|script| {
+                                                let view = state.runs.get(&script.id);
+                                                RunScriptRow {
+                                                    script_id: script.id.clone(),
+                                                    label: script.label.clone(),
+                                                    command: script.command.clone(),
+                                                    shortcut: script.shortcut.clone(),
+                                                    status: view.and_then(|view| {
+                                                        view.run.as_ref().map(|run| run.status)
+                                                    }),
+                                                    exit_code: view.and_then(|view| {
+                                                        view.run
+                                                            .as_ref()
+                                                            .and_then(|run| run.exit_code)
+                                                    }),
+                                                    starting: view
+                                                        .is_some_and(|view| view.starting),
+                                                    output: view
+                                                        .map(|view| view.output.clone())
+                                                        .unwrap_or_default(),
+                                                    expanded: state.expanded.contains(&script.id),
+                                                }
+                                            })
+                                            .collect(),
+                                    ),
+                                };
+                            RunPanel {
+                                has_project,
+                                loading,
+                                error,
+                                source_missing,
+                                rows,
+                                on_run: on_run_project_script,
+                                on_stop: on_stop_project_script,
+                                on_toggle_expand: on_toggle_project_script,
+                            }
+                            .into_any_element()
+                        };
+
                         let bottom_split = RightSidebarBottomSplit::new(
                             self.right_sidebar_bottom_height,
                             self.right_sidebar_bottom_collapsed,
@@ -917,6 +1019,7 @@ impl Render for ConsoleDesktopApp {
                             on_select_right_sidebar_bottom_tab,
                             on_begin_right_sidebar_bottom_resize,
                         )
+                        .with_run_tab(self.right_sidebar_bottom_run_selected, run_panel_element)
                         .with_close_tab(on_close_right_sidebar_bottom_tab)
                         .with_new_terminal(on_new_right_sidebar_terminal)
                         .with_toggle_collapsed(on_toggle_right_sidebar_bottom_collapsed);

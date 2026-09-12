@@ -203,10 +203,8 @@ pub struct ConsoleDesktopApp {
     pub right_sidebar_terminals_by_cwd: std::collections::HashMap<String, WorkspaceTerminalState>,
     pub(crate) persisted_bottom_terminals: std::collections::HashMap<String, (usize, usize)>,
     pub right_sidebar_bottom_run_selected: bool,
-    pub project_scripts_by_project: std::collections::HashMap<
-        String,
-        super::project_scripts::ProjectScriptsPanelState,
-    >,
+    pub project_scripts_by_project:
+        std::collections::HashMap<String, super::project_scripts::ProjectScriptsPanelState>,
     pub(crate) project_script_streams:
         std::collections::HashMap<(String, String), (u64, gpui::Task<()>)>,
     pub(crate) project_script_stream_seq: u64,
@@ -1300,10 +1298,7 @@ impl ConsoleDesktopApp {
             if let Err(error) = client
                 .model_favorites
                 .set(
-                    console_core::ModelFavorite {
-                        provider,
-                        model_id,
-                    },
+                    console_core::ModelFavorite { provider, model_id },
                     is_favorite,
                 )
                 .await
