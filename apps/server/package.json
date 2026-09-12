@@ -18,6 +18,7 @@
     "agent-device": "^0.21.1",
     "ai": "^7.0.55",
     "hono": "^4.4.12",
+    "serve-sim": "^0.1.46",
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.25.2"
   },

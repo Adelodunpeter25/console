@@ -1,8 +1,18 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import type { DeviceActionRequest, DeviceDescriptor } from "@console/types";
 
 const execAsync = promisify(exec);
+
+export function resolveServeSimCmd(): string {
+  const localBin = path.resolve(process.cwd(), "node_modules/.bin/serve-sim");
+  if (fs.existsSync(localBin)) return `"${localBin}"`;
+  const appsServerBin = path.resolve(process.cwd(), "apps/server/node_modules/.bin/serve-sim");
+  if (fs.existsSync(appsServerBin)) return `"${appsServerBin}"`;
+  return "serve-sim";
+}
 
 export class IosDeviceManager {
   async getDiagnostics(): Promise<{
@@ -85,9 +95,10 @@ export class IosDeviceManager {
   }
 
   async interact(id: string, req: DeviceActionRequest): Promise<void> {
+    const serveSim = resolveServeSimCmd();
     if (req.action === "tap" && req.x !== undefined && req.y !== undefined) {
       try {
-        await execAsync(`bunx serve-sim tap -d "${id}" ${req.x} ${req.y}`);
+        await execAsync(`${serveSim} tap -d "${id}" ${req.x} ${req.y}`);
         return;
       } catch {}
     } else if (
@@ -105,32 +116,32 @@ export class IosDeviceManager {
           endX: req.endX,
           endY: req.endY,
         });
-        await execAsync(`bunx serve-sim gesture -d "${id}" '${payload}'`);
+        await execAsync(`${serveSim} gesture -d "${id}" '${payload}'`);
         return;
       } catch {}
     } else if (req.action === "type" && req.text) {
       try {
-        await execAsync(`bunx serve-sim type -d "${id}" "${req.text.replace(/"/g, '\\"')}"`);
+        await execAsync(`${serveSim} type -d "${id}" "${req.text.replace(/"/g, '\\"')}"`);
         return;
       } catch {}
     } else if (req.action === "home") {
       try {
-        await execAsync(`bunx serve-sim button home -d "${id}"`);
+        await execAsync(`${serveSim} button home -d "${id}"`);
         return;
       } catch {}
     } else if (req.action === "lock" || req.action === "power") {
       try {
-        await execAsync(`bunx serve-sim button lock -d "${id}"`);
+        await execAsync(`${serveSim} button lock -d "${id}"`);
         return;
       } catch {}
     } else if (req.action === "volume_up") {
       try {
-        await execAsync(`bunx serve-sim button volume_up -d "${id}"`);
+        await execAsync(`${serveSim} button volume_up -d "${id}"`);
         return;
       } catch {}
     } else if (req.action === "volume_down") {
       try {
-        await execAsync(`bunx serve-sim button volume_down -d "${id}"`);
+        await execAsync(`${serveSim} button volume_down -d "${id}"`);
         return;
       } catch {}
     }
