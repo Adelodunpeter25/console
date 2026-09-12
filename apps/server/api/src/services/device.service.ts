@@ -224,6 +224,61 @@ export class DeviceService {
     }
   }
 
+  createVideoStream(id: string, platform: "ios" | "android", signal?: AbortSignal): ReadableStream<Uint8Array> {
+    let proc: ReturnType<typeof Bun.spawn> | undefined;
+
+    return new ReadableStream<Uint8Array>({
+      start(controller) {
+        try {
+          if (platform === "ios") {
+            proc = Bun.spawn(["xcrun", "simctl", "io", id, "recordVideo", "--codec=h264", "--force", "-"], {
+              stdout: "pipe",
+              stderr: "ignore",
+            });
+          } else {
+            proc = Bun.spawn(["adb", "-s", id, "exec-out", "screenrecord", "--output-format=h264", "-"], {
+              stdout: "pipe",
+              stderr: "ignore",
+            });
+          }
+
+          if (!proc || !proc.stdout) {
+            controller.close();
+            return;
+          }
+
+          const reader = (proc.stdout as ReadableStream<Uint8Array>).getReader();
+          const pump = async () => {
+            try {
+              while (true) {
+                if (signal?.aborted) break;
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (value && value.byteLength > 0) {
+                  controller.enqueue(value);
+                }
+              }
+            } catch {
+            } finally {
+              try { controller.close(); } catch {}
+              try { proc?.kill(); } catch {}
+            }
+          };
+          pump();
+
+          signal?.addEventListener("abort", () => {
+            try { proc?.kill(); } catch {}
+          });
+        } catch (err) {
+          try { controller.error(err); } catch {}
+        }
+      },
+      cancel() {
+        try { proc?.kill(); } catch {}
+      },
+    });
+  }
+
   async screenshot(id: string, platform: "ios" | "android"): Promise<Buffer> {
     try {
       const res = await this.client.capture.screenshot({ device: id, platform } as any);

@@ -253,23 +253,25 @@ impl DeviceViewer {
             return;
         };
         let platform = device.platform_kind().as_str().to_string();
-        // Until the hub proxy lands server-side, stream URLs are absent and
-        // the player runs in stills mode against the screenshot endpoint.
         let base = self.stream_base(cx);
+        let stream_url = format!(
+            "{}/api/devices/{}/stream?platform={}",
+            base, device.id, platform
+        );
         let screenshot_url = format!(
             "{}/api/devices/{}/screenshot?platform={}",
             base, device.id, platform
         );
         let config = PlayerConfig {
             platform,
-            stream_url: None,
+            stream_url: Some(stream_url),
             control_url: None,
             screenshot_url,
-            codec: None,
+            codec: Some("avc1.42E01E".to_string()),
         };
         host.set_visible(true);
         host.evaluate_script(&config.start_script());
-        self.stream_status = Some("stills".to_string());
+        self.stream_status = Some("connecting".to_string());
     }
 
     fn player_event(&mut self, body: String, cx: &mut Context<Self>) {

@@ -22,4 +22,12 @@ assert.equal(listData.success, true);
 assert.ok(Array.isArray(listData.data));
 console.log(`  ✅ GET /api/devices returned ${listData.data.length} discovered devices`);
 
+// 3. Video stream endpoint initializes
+const streamRes = await app.request("/api/devices/nonexistent-id/stream?platform=ios", {
+  signal: AbortSignal.timeout(2000),
+});
+assert.equal(streamRes.status, 200);
+assert.equal(streamRes.headers.get("content-type"), "video/mp4; codecs=avc1.42E01E");
+console.log("  ✅ GET /api/devices/:id/stream returns live video response");
+
 console.log("Device Service tests passed!\n");

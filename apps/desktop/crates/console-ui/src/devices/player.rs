@@ -146,24 +146,60 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
     setStatus('connecting');
     still.style.display = 'none';
     canvas.style.display = 'block';
-    // iOS video: HTTP AVCC body; input over the control socket.
+    // Video stream: HTTP streaming body (AVCC or Annex B H.264).
     try {
       const res = await fetch(cfg.streamUrl, { cache: 'no-store' });
       if (!res.ok || !res.body) throw new Error('http ' + res.status);
       setStatus('streaming');
       const reader = res.body.getReader();
       let buf = new Uint8Array(0);
-      const append = (chunk) => { const next = new Uint8Array(buf.length + chunk.length); next.set(buf); next.set(chunk, buf.length); buf = next; };
+      const append = (chunk) => {
+        const next = new Uint8Array(buf.length + chunk.length);
+        next.set(buf);
+        next.set(chunk, buf.length);
+        buf = next;
+      };
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         append(value);
-        // AVCC envelopes: 4-byte big-endian length prefix per NAL run.
         while (buf.length > 4) {
           const len = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
-          if (len <= 0 || len > buf.length - 4) break;
-          const unit = buf.slice(4, 4 + len).buffer;
-          buf = buf.slice(4 + len);
+          if (len > 0 && len <= buf.length - 4 && (buf[0] !== 0 || buf[1] !== 0 || buf[2] > 1)) {
+            const unit = buf.slice(4, 4 + len).buffer;
+            buf = buf.slice(4 + len);
+            feed(unit, null);
+            continue;
+          }
+          let start = -1;
+          let prefixLen = 0;
+          for (let i = 0; i < buf.length - 3; i++) {
+            if (buf[i] === 0 && buf[i+1] === 0 && buf[i+2] === 1) {
+              start = i;
+              prefixLen = 3;
+              break;
+            }
+            if (buf[i] === 0 && buf[i+1] === 0 && buf[i+2] === 0 && buf[i+3] === 1) {
+              start = i;
+              prefixLen = 4;
+              break;
+            }
+          }
+          if (start === -1) break;
+          let nextStart = -1;
+          for (let i = start + prefixLen; i < buf.length - 3; i++) {
+            if ((buf[i] === 0 && buf[i+1] === 0 && buf[i+2] === 1) ||
+                (buf[i] === 0 && buf[i+1] === 0 && buf[i+2] === 0 && buf[i+3] === 1)) {
+              nextStart = i;
+              break;
+            }
+          }
+          if (nextStart === -1) {
+            if (start > 0) buf = buf.slice(start);
+            break;
+          }
+          const unit = buf.slice(start, nextStart).buffer;
+          buf = buf.slice(nextStart);
           feed(unit, null);
         }
       }
@@ -172,11 +208,13 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
       stopAll();
       startStills();
     }
-    // Control socket for input events.
-    try {
-      ws = new WebSocket(cfg.controlUrl);
-      ws.binaryType = 'arraybuffer';
-    } catch (e) {}
+    // Control socket for input events if configured.
+    if (cfg && cfg.controlUrl) {
+      try {
+        ws = new WebSocket(cfg.controlUrl);
+        ws.binaryType = 'arraybuffer';
+      } catch (e) {}
+    }
   }
 
   window.__consoleDevice = {
@@ -186,7 +224,7 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
       try { cfg = JSON.parse(json); } catch (e) { setStatus('bad config'); return; }
       if (!cfg || !cfg.platform) { setStatus('no device'); return; }
       if (cfg.mode === 'stills' || !cfg.streamUrl) { startStills(); return; }
-      if (cfg.platform === 'android') startAndroid(); else startIos();
+      if (cfg.platform === 'android' && cfg.streamUrl.startsWith('ws')) startAndroid(); else startIos();
     },
     stop: () => { cfg = null; stopAll(); setStatus('idle'); },
     tap: (x, y) => {

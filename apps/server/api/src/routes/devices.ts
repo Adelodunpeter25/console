@@ -68,6 +68,23 @@ deviceRoutes.post("/devices/:id/interact", async (c) => {
   }
 });
 
+deviceRoutes.get("/devices/:id/stream", async (c) => {
+  const id = c.req.param("id");
+  const platform = (c.req.query("platform") as "ios" | "android") || (id.includes("-") ? "ios" : "android");
+  try {
+    const stream = deviceService.createVideoStream(id, platform, c.req.raw.signal);
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "video/mp4; codecs=avc1.42E01E",
+        "Cache-Control": "no-cache, no-store",
+        "Connection": "keep-alive",
+      },
+    });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : String(error) }, 500);
+  }
+});
+
 deviceRoutes.get("/devices/:id/screenshot", async (c) => {
   const id = c.req.param("id");
   const platform = (c.req.query("platform") as "ios" | "android") || (id.includes("-") ? "ios" : "android");
