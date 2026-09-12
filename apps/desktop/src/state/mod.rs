@@ -20,6 +20,7 @@ pub(crate) use macos_notifications::clear_all as clear_all_notifications;
 mod notifications;
 mod pagination;
 mod port_forward;
+mod project_scripts;
 mod projects;
 mod providers;
 mod right_sidebar;

@@ -22,6 +22,9 @@ pub struct RightSidebarBottomSplit {
     tabs: Vec<TerminalTabInfo>,
     active_tab_index: usize,
     terminal_element: Option<gpui::AnyElement>,
+    show_run_tab: bool,
+    run_tab_active: bool,
+    run_element: Option<gpui::AnyElement>,
     on_select_tab: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     on_close_tab: Option<Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>>,
     on_begin_resize: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static>,
@@ -45,6 +48,9 @@ impl RightSidebarBottomSplit {
             tabs,
             active_tab_index,
             terminal_element,
+            show_run_tab: false,
+            run_tab_active: false,
+            run_element: None,
             on_select_tab,
             on_close_tab: None,
             on_begin_resize,
@@ -58,6 +64,15 @@ impl RightSidebarBottomSplit {
         callback: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     ) -> Self {
         self.on_close_tab = Some(callback);
+        self
+    }
+
+    /// Prepend the pinned Run tab at index 0 (terminal tabs shift by one).
+    /// The Run tab is never closable.
+    pub fn with_run_tab(mut self, active: bool, element: impl IntoElement) -> Self {
+        self.show_run_tab = true;
+        self.run_tab_active = active;
+        self.run_element = Some(element.into_any_element());
         self
     }
 
@@ -85,6 +100,10 @@ impl RenderOnce for RightSidebarBottomSplit {
         let on_tab = self.on_select_tab;
         let on_toggle_collapsed = self.on_toggle_collapsed.clone();
         let is_collapsed = self.collapsed;
+        let show_run_tab = self.show_run_tab;
+        let run_tab_active = self.run_tab_active;
+        // The pinned Run tab occupies index 0; terminal tabs shift by one.
+        let terminal_index_offset = if show_run_tab { 1 } else { 0 };
 
         div()
             .id("right-sidebar-bottom-split")
@@ -176,14 +195,51 @@ impl RenderOnce for RightSidebarBottomSplit {
                                     .items_center()
                                     .gap(px(4.0))
                                     .overflow_x_scroll()
+                                    .when(show_run_tab, |el| {
+                                        let on_run_tab = on_tab.clone();
+                                        el.child(
+                                            div()
+                                                .id(gpui::ElementId::from("bottom-tab-run"))
+                                                .h(px(31.0))
+                                                .flex_none()
+                                                .flex_shrink(0.0)
+                                                .flex()
+                                                .items_center()
+                                                .px(px(8.0))
+                                                .cursor_pointer()
+                                                .when(run_tab_active, |s| {
+                                                    s.border_b_2()
+                                                        .border_color(theme.accent)
+                                                        .text_color(theme.text)
+                                                })
+                                                .when(!run_tab_active, |s| {
+                                                    s.text_color(theme.text_tertiary).hover(|h| {
+                                                        h.bg(theme.raised).text_color(theme.text)
+                                                    })
+                                                })
+                                                .text_size(px(11.0))
+                                                .font_weight(if run_tab_active {
+                                                    gpui::FontWeight::SEMIBOLD
+                                                } else {
+                                                    gpui::FontWeight::NORMAL
+                                                })
+                                                .on_click(move |_, window, cx| {
+                                                    (on_run_tab)(0, window, cx);
+                                                })
+                                                .child("Run"),
+                                        )
+                                    })
                                     .children(self.tabs.into_iter().enumerate().map(
                                         |(idx, tab_info)| {
-                                            let is_active = idx == self.active_tab_index;
+                                            let is_active =
+                                                !run_tab_active && idx == self.active_tab_index;
                                             let on_tab = on_tab.clone();
                                             let on_close = self.on_close_tab.clone();
                                             let tab_id = format!("bottom-tab-{}", tab_info.id);
                                             let group_name =
                                                 format!("bottom-tab-group-{}", tab_info.id);
+                                            // Terminal tabs sit after the pinned Run tab.
+                                            let tab_index = idx + terminal_index_offset;
 
                                             div()
                                                 .id(gpui::ElementId::from(tab_id))
@@ -213,7 +269,7 @@ impl RenderOnce for RightSidebarBottomSplit {
                                                     gpui::FontWeight::NORMAL
                                                 })
                                                 .on_click(move |_, window, cx| {
-                                                    (on_tab)(idx, window, cx);
+                                                    (on_tab)(tab_index, window, cx);
                                                 })
                                                 .child(tab_info.title)
                                                 // Close Tab Button: hidden until the tab is hovered
@@ -239,7 +295,7 @@ impl RenderOnce for RightSidebarBottomSplit {
                                                                 MouseButton::Left,
                                                                 move |_, window, cx| {
                                                                     cx.stop_propagation();
-                                                                    (on_close)(idx, window, cx);
+                                                                    (on_close)(tab_index, window, cx);
                                                                 },
                                                             )
                                                             .child(app_icon(
@@ -277,17 +333,32 @@ impl RenderOnce for RightSidebarBottomSplit {
             .when(!is_collapsed, |el| {
                 el.child(
                     div().flex_1().w_full().min_h_0().overflow_hidden().child(
-                        match self.terminal_element {
-                            Some(term) => term,
-                            None => div()
-                                .size_full()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .text_size(px(11.0))
-                                .text_color(theme.text_ghost)
-                                .child("No terminal active")
-                                .into_any_element(),
+                        if run_tab_active {
+                            match self.run_element {
+                                Some(run) => run,
+                                None => div()
+                                    .size_full()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .text_size(px(11.0))
+                                    .text_color(theme.text_ghost)
+                                    .child("No project selected")
+                                    .into_any_element(),
+                            }
+                        } else {
+                            match self.terminal_element {
+                                Some(term) => term,
+                                None => div()
+                                    .size_full()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .text_size(px(11.0))
+                                    .text_color(theme.text_ghost)
+                                    .child("No terminal active")
+                                    .into_any_element(),
+                            }
                         },
                     ),
                 )
