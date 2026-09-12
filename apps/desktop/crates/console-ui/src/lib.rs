@@ -1,6 +1,7 @@
 pub mod browser;
 pub mod chat;
 pub mod common;
+pub mod devices;
 pub mod inspector;
 pub mod layout;
 pub mod markdown;
@@ -15,6 +16,7 @@ pub mod workspace;
 pub use browser::*;
 pub use chat::*;
 pub use common::*;
+pub use devices::*;
 pub use inspector::*;
 pub use layout::*;
 pub use markdown::*;

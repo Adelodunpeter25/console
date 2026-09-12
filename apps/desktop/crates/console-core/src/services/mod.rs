@@ -1,5 +1,6 @@
 pub mod assist;
 pub mod auth;
+pub mod device;
 pub mod fs;
 pub mod git;
 pub mod model_favorites;
@@ -15,6 +16,7 @@ pub mod usage;
 
 pub use assist::AssistService;
 pub use auth::AuthService;
+pub use device::DeviceService;
 pub use fs::{FsService, RawFileError};
 pub use git::GitService;
 pub use model_favorites::ModelFavoriteService;

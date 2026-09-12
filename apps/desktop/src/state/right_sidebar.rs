@@ -10,8 +10,7 @@ use super::{
 };
 
 impl ConsoleDesktopApp {
-    pub fn toggle_right_sidebar(&mut self, cx: &mut Context<Self>) {
-        self.right_sidebar_visible = !self.right_sidebar_visible;
+    fn sync_inspector_webviews(&self, cx: &mut Context<Self>) {
         let is_browser = self.right_sidebar_visible
             && self.inspector_active_tab == InspectorTab::Auxiliary(AuxiliaryTab::Browser);
         if let Some(ref browser) = self.browser_view {
@@ -19,6 +18,19 @@ impl ConsoleDesktopApp {
                 view.sync_native_state(is_browser, false, cx);
             });
         }
+        let is_device = self.right_sidebar_visible
+            && self.inspector_active_tab == InspectorTab::Auxiliary(AuxiliaryTab::Devices);
+        if let Some(ref device) = self.device_view {
+            let overlay_open = device.read(cx).overlay_open();
+            device.update(cx, |view, cx| {
+                view.sync_native_state(is_device, overlay_open, cx);
+            });
+        }
+    }
+
+    pub fn toggle_right_sidebar(&mut self, cx: &mut Context<Self>) {
+        self.right_sidebar_visible = !self.right_sidebar_visible;
+        self.sync_inspector_webviews(cx);
         self.persist_layout();
         self.maybe_refresh_inspector(cx);
         cx.notify();
@@ -30,13 +42,7 @@ impl ConsoleDesktopApp {
             return;
         }
         self.right_sidebar_visible = visible;
-        let is_browser = self.right_sidebar_visible
-            && self.inspector_active_tab == InspectorTab::Auxiliary(AuxiliaryTab::Browser);
-        if let Some(ref browser) = self.browser_view {
-            browser.update(cx, |view, cx| {
-                view.sync_native_state(is_browser, false, cx);
-            });
-        }
+        self.sync_inspector_webviews(cx);
         self.persist_layout();
         self.maybe_refresh_inspector(cx);
         cx.notify();
@@ -78,8 +84,10 @@ impl ConsoleDesktopApp {
             return false;
         };
         // Bottom split expands when dragged up (decreasing y)
-        let height = (start_height + (start_y - current_y))
-            .clamp(RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT, RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT);
+        let height = (start_height + (start_y - current_y)).clamp(
+            RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT,
+            RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT,
+        );
         if (self.right_sidebar_bottom_height - height).abs() < 0.5 {
             return false;
         }
@@ -102,11 +110,7 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    pub fn select_right_sidebar_terminal_tab(
-        &mut self,
-        index: usize,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn select_right_sidebar_terminal_tab(&mut self, index: usize, cx: &mut Context<Self>) {
         let (_, cwd) = self.active_inspector_target();
         let Some(cwd) = cwd else {
             return;
@@ -171,11 +175,7 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    pub fn close_right_sidebar_terminal(
-        &mut self,
-        index: usize,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn close_right_sidebar_terminal(&mut self, index: usize, cx: &mut Context<Self>) {
         let (_, cwd) = self.active_inspector_target();
         let Some(cwd) = cwd else {
             return;
@@ -206,10 +206,7 @@ impl ConsoleDesktopApp {
     }
 
     pub fn active_inspector_target(&self) -> (Option<String>, Option<String>) {
-        let pane_id = self
-            .active_pane_id
-            .as_deref()
-            .unwrap_or("pane-main");
+        let pane_id = self.active_pane_id.as_deref().unwrap_or("pane-main");
 
         let leaf = self
             .workspace_root
@@ -244,17 +241,16 @@ impl ConsoleDesktopApp {
                         }
                     })
                     .or_else(|| {
-                        project_id
-                            .as_ref()
-                            .and_then(|pid| {
-                                self.projects
-                                    .iter()
-                                    .find(|p| &p.id == pid)
-                                    .map(|p| p.path.clone())
-                            })
+                        project_id.as_ref().and_then(|pid| {
+                            self.projects
+                                .iter()
+                                .find(|p| &p.id == pid)
+                                .map(|p| p.path.clone())
+                        })
                     })
                     .or_else(|| {
-                        self.selected_project_for_pane(pane_id).map(|p| p.path.clone())
+                        self.selected_project_for_pane(pane_id)
+                            .map(|p| p.path.clone())
                     });
                 (Some(session_id.clone()), cwd)
             }
@@ -269,7 +265,10 @@ impl ConsoleDesktopApp {
                             .find(|p| &p.id == pid)
                             .map(|p| p.path.clone())
                     })
-                    .or_else(|| self.selected_project_for_pane(pane_id).map(|p| p.path.clone()));
+                    .or_else(|| {
+                        self.selected_project_for_pane(pane_id)
+                            .map(|p| p.path.clone())
+                    });
                 (None, cwd)
             }
             None => (None, None),
@@ -290,7 +289,13 @@ impl ConsoleDesktopApp {
                 browser.update(cx, |view, cx| view.close(cx));
             }
         }
-        self.inspector_open_auxiliary_tabs.retain(|open| *open != tab);
+        if tab == AuxiliaryTab::Devices {
+            if let Some(device) = self.device_view.take() {
+                device.update(cx, |view, cx| view.close(cx));
+            }
+        }
+        self.inspector_open_auxiliary_tabs
+            .retain(|open| *open != tab);
         if self.inspector_active_tab == InspectorTab::Auxiliary(tab) {
             self.set_inspector_tab(InspectorTab::default(), cx);
         }
@@ -303,13 +308,7 @@ impl ConsoleDesktopApp {
             return;
         }
         self.inspector_active_tab = tab;
-        let is_browser = self.right_sidebar_visible
-            && tab == InspectorTab::Auxiliary(AuxiliaryTab::Browser);
-        if let Some(ref browser) = self.browser_view {
-            browser.update(cx, |view, cx| {
-                view.sync_native_state(is_browser, false, cx);
-            });
-        }
+        self.sync_inspector_webviews(cx);
         match tab {
             InspectorTab::Primary(PrimaryTab::AllFiles) => self.fetch_inspector_fs_tree(cx),
             InspectorTab::Primary(PrimaryTab::Changes) => {
@@ -333,6 +332,32 @@ impl ConsoleDesktopApp {
         } else {
             let view = cx.new(|cx| console_ui::BrowserView::new(window, cx));
             self.browser_view = Some(view.clone());
+            view
+        }
+    }
+
+    pub fn device_view_for_inspector(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::Entity<console_ui::DeviceViewer> {
+        if let Some(ref view) = self.device_view {
+            view.clone()
+        } else {
+            let client = self.client.clone();
+            let entity = cx.entity().downgrade();
+            let view = cx.new(|cx| {
+                console_ui::DeviceViewer::new(client, window, cx).on_screenshot(
+                    move |bytes, name, _window, cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.stage_device_screenshot(bytes, name, cx);
+                            });
+                        }
+                    },
+                )
+            });
+            self.device_view = Some(view.clone());
             view
         }
     }
@@ -407,7 +432,8 @@ impl ConsoleDesktopApp {
 
     pub fn view_subagent_in_panel(&mut self, _call_or_subagent_id: &str, cx: &mut Context<Self>) {
         self.right_sidebar_visible = true;
-        self.inspector_open_auxiliary_tabs.push(AuxiliaryTab::Subagents);
+        self.inspector_open_auxiliary_tabs
+            .push(AuxiliaryTab::Subagents);
         self.inspector_active_tab = InspectorTab::Auxiliary(AuxiliaryTab::Subagents);
         self.fetch_inspector_subagents(cx);
         self.persist_layout();
@@ -682,7 +708,8 @@ impl ConsoleDesktopApp {
                                             .entry(sub.subagent_id.clone())
                                             .or_insert_with(|| {
                                                 Rc::new(RefCell::new(
-                                                    console_ui::markdown::render::MarkdownView::new(),
+                                                    console_ui::markdown::render::MarkdownView::new(
+                                                    ),
                                                 ))
                                             })
                                             .clone();

@@ -150,10 +150,7 @@ impl ConsoleDesktopApp {
             });
         })
         .detach();
-        window.focus(
-            &self.composer_for_pane(&focus_pane_id).read(cx).focus(),
-            cx,
-        );
+        window.focus(&self.composer_for_pane(&focus_pane_id).read(cx).focus(), cx);
     }
 
     /// Open the native file picker and stage the chosen image. Dismissing the
@@ -192,6 +189,31 @@ impl ConsoleDesktopApp {
             });
         })
         .detach();
+    }
+
+    /// Stage a device screenshot capture as a composer attachment chip.
+    /// Targets the active pane (falling back to `pane-main`), matching the
+    /// submit path so the chip lands where the next prompt will read it.
+    pub fn stage_device_screenshot(
+        &mut self,
+        bytes: Vec<u8>,
+        _device_name: String,
+        cx: &mut Context<Self>,
+    ) {
+        if bytes.is_empty() {
+            self.set_error("Device screenshot came back empty.", cx);
+            return;
+        }
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".to_string());
+        let attachment = console_core::ImageAttachment {
+            data: base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes),
+            mime_type: "image/png".to_string(),
+        };
+        self.append_attachments_for_pane(&pane_id, vec![attachment]);
+        cx.notify();
     }
 
     /// Remove a staged attachment by index. Pane-scoped like the rest of the

@@ -6,8 +6,9 @@ use std::rc::Rc;
 
 use console_core::types::{GitFileEntry, SessionFileChange, SubagentInfo};
 use gpui::{
-    AnyElement, App, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement, RenderOnce, SharedString,
-    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
+    AnyElement, App, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement,
+    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div,
+    prelude::FluentBuilder, px,
 };
 
 use crate::inspector::bottom_split::RightSidebarBottomSplit;
@@ -19,7 +20,9 @@ use crate::primitives::icons::{IconName, app_icon};
 use crate::primitives::{ContextMenuHandle, MenuAlign, MenuItem, dropdown_menu};
 use crate::theme::Theme;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize,
+)]
 pub enum PrimaryTab {
     #[default]
     AllFiles,
@@ -34,9 +37,9 @@ pub enum AuxiliaryTab {
 }
 
 impl AuxiliaryTab {
-    /// Auxiliary tabs currently available to users. Devices is reserved until
-    /// the device simulator surface is implemented.
-    pub const ALL: [Self; 2] = [Self::Browser, Self::Subagents];
+    /// Auxiliary tabs currently available to users, including Devices now
+    /// that the hub-stream viewer surface is implemented.
+    pub const ALL: [Self; 3] = [Self::Browser, Self::Subagents, Self::Devices];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -74,6 +77,7 @@ pub struct RightSidebar {
     bottom_split: Option<RightSidebarBottomSplit>,
     subagent_markdown_views: Option<Rc<RefCell<HashMap<String, Rc<RefCell<MarkdownView>>>>>>,
     browser_view: Option<AnyElement>,
+    device_view: Option<AnyElement>,
     open_auxiliary_tabs: Vec<AuxiliaryTab>,
     add_tab_menu: ContextMenuHandle,
     on_select_tab: Rc<dyn Fn(InspectorTab, &mut Window, &mut App) + 'static>,
@@ -128,6 +132,7 @@ impl RightSidebar {
             bottom_split: None,
             subagent_markdown_views: None,
             browser_view: None,
+            device_view: None,
             on_select_tab,
             on_open_auxiliary_tab,
             on_close_auxiliary_tab,
@@ -155,6 +160,11 @@ impl RightSidebar {
 
     pub fn with_browser_view(mut self, browser_view: Option<AnyElement>) -> Self {
         self.browser_view = browser_view;
+        self
+    }
+
+    pub fn with_device_view(mut self, device_view: Option<AnyElement>) -> Self {
+        self.device_view = device_view;
         self
     }
 }
@@ -207,59 +217,82 @@ impl RenderOnce for RightSidebar {
                 let on_close = on_close.clone();
                 let add_menu = add_menu.clone();
                 let open_auxiliary = open_auxiliary.clone();
-                let tab_chip = move |id: &'static str, label: &'static str, tab: InspectorTab, closable: Option<AuxiliaryTab>| {
-                    let on_tab = on_tab.clone();
-                    let on_close = on_close.clone();
-                    let active = self.active_tab == tab;
-                    let group_name = format!("inspector-tab-{id}");
-                    div()
-                        .group(group_name.clone())
-                        .id(id)
-                        .px(px(7.0))
-                        .py(px(3.0))
-                        .rounded(px(4.0))
-                        .flex()
-                        .items_center()
-                        .gap(px(3.0))
-                        .text_size(px(11.0))
-                        .font_weight(if active { gpui::FontWeight::SEMIBOLD } else { gpui::FontWeight::NORMAL })
-                        .text_color(if active { theme.text } else { theme.text_tertiary })
-                        .bg(if active { theme.overlay_strong } else { gpui::transparent_black() })
-                        .cursor_pointer()
-                        .hover(|s| s.bg(theme.overlay))
-                        .on_click(move |_, window, cx| (on_tab)(tab, window, cx))
-                        .child(label)
-                        .when(tab == InspectorTab::Primary(PrimaryTab::Changes) && changes_count > 0, |el| {
-                            el.child(
-                                div()
-                                    .px(px(4.0))
-                                    .py(px(1.0))
-                                    .rounded(px(4.0))
-                                    .bg(theme.overlay)
-                                    .text_size(px(10.0))
-                                    .font_weight(gpui::FontWeight::BOLD)
-                                    .text_color(theme.accent)
-                                    .child(changes_count.to_string()),
+                let tab_chip =
+                    move |id: &'static str,
+                          label: &'static str,
+                          tab: InspectorTab,
+                          closable: Option<AuxiliaryTab>| {
+                        let on_tab = on_tab.clone();
+                        let on_close = on_close.clone();
+                        let active = self.active_tab == tab;
+                        let group_name = format!("inspector-tab-{id}");
+                        div()
+                            .group(group_name.clone())
+                            .id(id)
+                            .px(px(7.0))
+                            .py(px(3.0))
+                            .rounded(px(4.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(3.0))
+                            .text_size(px(11.0))
+                            .font_weight(if active {
+                                gpui::FontWeight::SEMIBOLD
+                            } else {
+                                gpui::FontWeight::NORMAL
+                            })
+                            .text_color(if active {
+                                theme.text
+                            } else {
+                                theme.text_tertiary
+                            })
+                            .bg(if active {
+                                theme.overlay_strong
+                            } else {
+                                gpui::transparent_black()
+                            })
+                            .cursor_pointer()
+                            .hover(|s| s.bg(theme.overlay))
+                            .on_click(move |_, window, cx| (on_tab)(tab, window, cx))
+                            .child(label)
+                            .when(
+                                tab == InspectorTab::Primary(PrimaryTab::Changes)
+                                    && changes_count > 0,
+                                |el| {
+                                    el.child(
+                                        div()
+                                            .px(px(4.0))
+                                            .py(px(1.0))
+                                            .rounded(px(4.0))
+                                            .bg(theme.overlay)
+                                            .text_size(px(10.0))
+                                            .font_weight(gpui::FontWeight::BOLD)
+                                            .text_color(theme.accent)
+                                            .child(changes_count.to_string()),
+                                    )
+                                },
                             )
-                        })
-                        .when_some(closable, |el, auxiliary| {
-                            let on_close = on_close.clone();
-                            el.child(
-                                div()
-                                    .id(SharedString::from(id.to_owned() + "-close"))
-                                    .px(px(2.0))
-                                    .text_color(theme.text_tertiary)
-                                    .invisible()
-                                    .group_hover(group_name.clone(), |el| el.visible())
-                                    .hover(|s| s.text_color(theme.text))
-                                    .on_mouse_down(MouseButton::Left, move |_event: &MouseDownEvent, window, cx| {
-                                        (on_close)(auxiliary, window, cx);
-                                    })
-                                    .child("×"),
-                            )
-                        })
-                        .into_any_element()
-                };
+                            .when_some(closable, |el, auxiliary| {
+                                let on_close = on_close.clone();
+                                el.child(
+                                    div()
+                                        .id(SharedString::from(id.to_owned() + "-close"))
+                                        .px(px(2.0))
+                                        .text_color(theme.text_tertiary)
+                                        .invisible()
+                                        .group_hover(group_name.clone(), |el| el.visible())
+                                        .hover(|s| s.text_color(theme.text))
+                                        .on_mouse_down(
+                                            MouseButton::Left,
+                                            move |_event: &MouseDownEvent, window, cx| {
+                                                (on_close)(auxiliary, window, cx);
+                                            },
+                                        )
+                                        .child("×"),
+                                )
+                            })
+                            .into_any_element()
+                    };
                 let mut tabs = div()
                     .flex()
                     .items_center()
@@ -267,13 +300,32 @@ impl RenderOnce for RightSidebar {
                     .p(px(2.0))
                     .rounded(px(6.0))
                     .bg(theme.surface)
-                    .child(tab_chip("tab-all-files", "All files", InspectorTab::Primary(PrimaryTab::AllFiles), None))
-                    .child(tab_chip("tab-changes", "Changes", InspectorTab::Primary(PrimaryTab::Changes), None));
+                    .child(tab_chip(
+                        "tab-all-files",
+                        "All files",
+                        InspectorTab::Primary(PrimaryTab::AllFiles),
+                        None,
+                    ))
+                    .child(tab_chip(
+                        "tab-changes",
+                        "Changes",
+                        InspectorTab::Primary(PrimaryTab::Changes),
+                        None,
+                    ));
                 for auxiliary in &open_auxiliary {
                     let (id, tab) = match auxiliary {
-                        AuxiliaryTab::Browser => ("tab-browser", InspectorTab::Auxiliary(AuxiliaryTab::Browser)),
-                        AuxiliaryTab::Subagents => ("tab-subagents", InspectorTab::Auxiliary(AuxiliaryTab::Subagents)),
-                        AuxiliaryTab::Devices => ("tab-devices", InspectorTab::Auxiliary(AuxiliaryTab::Devices)),
+                        AuxiliaryTab::Browser => (
+                            "tab-browser",
+                            InspectorTab::Auxiliary(AuxiliaryTab::Browser),
+                        ),
+                        AuxiliaryTab::Subagents => (
+                            "tab-subagents",
+                            InspectorTab::Auxiliary(AuxiliaryTab::Subagents),
+                        ),
+                        AuxiliaryTab::Devices => (
+                            "tab-devices",
+                            InspectorTab::Auxiliary(AuxiliaryTab::Devices),
+                        ),
                     };
                     tabs = tabs.child(tab_chip(id, auxiliary.label(), tab, Some(*auxiliary)));
                 }
@@ -296,7 +348,9 @@ impl RenderOnce for RightSidebar {
                             .filter(|tab| !open_auxiliary.contains(tab))
                             .map(|tab| {
                                 let on_open = on_open.clone();
-                                MenuItem::new(tab.label(), move |window, cx| (on_open)(tab, window, cx))
+                                MenuItem::new(tab.label(), move |window, cx| {
+                                    (on_open)(tab, window, cx)
+                                })
                             })
                             .collect()
                     },
@@ -376,14 +430,20 @@ impl RenderOnce for RightSidebar {
                             }
                             list.into_any_element()
                         }
-                        InspectorTab::Auxiliary(AuxiliaryTab::Devices) => div()
-                            .size_full()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_color(theme.text_tertiary)
-                            .child("Device simulator unavailable")
-                            .into_any_element(),
+                        InspectorTab::Auxiliary(AuxiliaryTab::Devices) => {
+                            if let Some(device) = self.device_view {
+                                device
+                            } else {
+                                div()
+                                    .size_full()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .text_color(theme.text_tertiary)
+                                    .child("Device simulator unavailable")
+                                    .into_any_element()
+                            }
+                        }
                     }),
             )
             .when_some(self.bottom_split, |el, bottom| el.child(bottom))

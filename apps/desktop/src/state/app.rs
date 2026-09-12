@@ -87,8 +87,7 @@ pub struct ConsoleDesktopApp {
     /// The workspace pane tree (tabs, splits). Starts as a single leaf.
     pub workspace_root: WorkspaceNode,
     /// Cached workspace pane trees per project (keyed by Some(project_id) or None for no-project chats).
-    pub(crate) project_workspace_roots:
-        std::collections::HashMap<Option<String>, WorkspaceNode>,
+    pub(crate) project_workspace_roots: std::collections::HashMap<Option<String>, WorkspaceNode>,
     /// Focused pane per workspace (keyed like `project_workspace_roots`), so
     /// splits keep their focus across workspace switches and restarts.
     pub(crate) project_active_panes: std::collections::HashMap<Option<String>, String>,
@@ -201,13 +200,12 @@ pub struct ConsoleDesktopApp {
     pub right_sidebar_bottom_height: f32,
     pub(crate) right_sidebar_bottom_resize_start: Option<(f32, f32)>,
     pub right_sidebar_bottom_collapsed: bool,
-    pub right_sidebar_terminals_by_cwd:
-        std::collections::HashMap<String, WorkspaceTerminalState>,
-    pub(crate) persisted_bottom_terminals:
-        std::collections::HashMap<String, (usize, usize)>,
+    pub right_sidebar_terminals_by_cwd: std::collections::HashMap<String, WorkspaceTerminalState>,
+    pub(crate) persisted_bottom_terminals: std::collections::HashMap<String, (usize, usize)>,
     pub inspector_active_tab: console_ui::InspectorTab,
     pub inspector_open_auxiliary_tabs: Vec<console_ui::AuxiliaryTab>,
     pub browser_view: Option<gpui::Entity<console_ui::BrowserView>>,
+    pub device_view: Option<gpui::Entity<console_ui::DeviceViewer>>,
     pub forwarded_ports_by_project:
         std::collections::HashMap<String, Rc<Vec<console_core::ForwardedPort>>>,
     pub ports_menu_handle: console_ui::ContextMenuHandle,
@@ -229,18 +227,22 @@ pub struct ConsoleDesktopApp {
     pub session_subagents:
         std::collections::HashMap<String, Rc<Vec<console_core::types::SubagentInfo>>>,
     pub expanded_subagents: std::collections::HashSet<String>,
-    pub subagent_markdown_views:
-        Rc<RefCell<std::collections::HashMap<String, Rc<RefCell<console_ui::markdown::render::MarkdownView>>>>>,
+    pub subagent_markdown_views: Rc<
+        RefCell<
+            std::collections::HashMap<
+                String,
+                Rc<RefCell<console_ui::markdown::render::MarkdownView>>,
+            >,
+        >,
+    >,
     pub preview_tab: Option<(String, std::time::Instant)>,
     pub open_file_contents: std::collections::HashMap<String, String>,
     pub open_image_contents: std::collections::HashMap<String, ImageFileState>,
     pub svg_preview_mode: std::collections::HashMap<String, console_ui::SvgViewMode>,
     pub open_diff_contents: std::collections::HashMap<String, (console_core::DiffResult, String)>,
     pub viewer_list_states: std::collections::HashMap<String, ListState>,
-    pub viewer_selection_states: std::collections::HashMap<
-        String,
-        gpui::Entity<console_ui::SelectionState>,
-    >,
+    pub viewer_selection_states:
+        std::collections::HashMap<String, gpui::Entity<console_ui::SelectionState>>,
     pub viewer_focus_handles: std::collections::HashMap<String, gpui::FocusHandle>,
     pub viewer_scrollbar_states:
         std::collections::HashMap<String, std::rc::Rc<console_ui::ScrollbarState>>,
@@ -379,18 +381,18 @@ impl ConsoleDesktopApp {
         ) = match &target {
             crate::window::WindowLaunchTarget::RestorePersisted => {
                 let sb_visible = ws_state.sidebar_visible;
-                let sb_width =
-                    if ws_state.sidebar_width.is_finite() && ws_state.sidebar_width > 0.0 {
-                        ws_state
-                            .sidebar_width
-                            .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
-                    } else if layout.sidebar_width.is_finite() {
-                        layout
-                            .sidebar_width
-                            .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
-                    } else {
-                        SIDEBAR_DEFAULT_WIDTH
-                    };
+                let sb_width = if ws_state.sidebar_width.is_finite() && ws_state.sidebar_width > 0.0
+                {
+                    ws_state
+                        .sidebar_width
+                        .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+                } else if layout.sidebar_width.is_finite() {
+                    layout
+                        .sidebar_width
+                        .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+                } else {
+                    SIDEBAR_DEFAULT_WIDTH
+                };
                 let rsb_visible = ws_state.right_sidebar_visible;
                 let rsb_width = if ws_state.right_sidebar_width.is_finite()
                     && ws_state.right_sidebar_width > 0.0
@@ -450,14 +452,14 @@ impl ConsoleDesktopApp {
             crate::window::WindowLaunchTarget::Fresh { .. }
             | crate::window::WindowLaunchTarget::Session(_) => {
                 let sb_visible = ws_state.sidebar_visible;
-                let sb_width =
-                    if ws_state.sidebar_width.is_finite() && ws_state.sidebar_width > 0.0 {
-                        ws_state
-                            .sidebar_width
-                            .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
-                    } else {
-                        SIDEBAR_DEFAULT_WIDTH
-                    };
+                let sb_width = if ws_state.sidebar_width.is_finite() && ws_state.sidebar_width > 0.0
+                {
+                    ws_state
+                        .sidebar_width
+                        .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+                } else {
+                    SIDEBAR_DEFAULT_WIDTH
+                };
                 let rsb_visible = ws_state.right_sidebar_visible;
                 let rsb_width = if ws_state.right_sidebar_width.is_finite()
                     && ws_state.right_sidebar_width > 0.0
@@ -526,7 +528,10 @@ impl ConsoleDesktopApp {
             transcript_view.update(cx, |transcript, _| {
                 super::transcript_wiring::wire_preview_image(transcript, entity.clone());
                 super::transcript_wiring::wire_view_subagent(transcript, entity.clone());
-                super::transcript_wiring::wire_open_file_for_active_pane(transcript, entity.clone());
+                super::transcript_wiring::wire_open_file_for_active_pane(
+                    transcript,
+                    entity.clone(),
+                );
             });
         }
         let model_menu = ContextMenuHandle::new(cx).on_toggle({
@@ -544,7 +549,9 @@ impl ConsoleDesktopApp {
                                         // Static catalog stays visible as fallback, so we
                                         // avoid N network calls on every open. Favorites
                                         // shows static until its tab is visited.
-                                        if let PickerTab::Provider(name) = this.pane_picker_tab("pane-main") {
+                                        if let PickerTab::Provider(name) =
+                                            this.pane_picker_tab("pane-main")
+                                        {
                                             this.load_models_for_provider(&name, cx);
                                         }
                                     });
@@ -676,11 +683,7 @@ impl ConsoleDesktopApp {
                     ComposerEvent::SubmitSteer(prompt) => {
                         this.active_pane_id = Some("pane-main".to_string());
                         this.selected_session_id = this.active_session_for_pane("pane-main");
-                        this.submit_steer_for_pane(
-                            "pane-main".to_string(),
-                            prompt.clone(),
-                            cx,
-                        );
+                        this.submit_steer_for_pane("pane-main".to_string(), prompt.clone(), cx);
                     }
                     ComposerEvent::Edited => {
                         // Save raw text for crash safety; does NOT update sidebar_draft_ids.
@@ -827,6 +830,7 @@ impl ConsoleDesktopApp {
             inspector_active_tab: console_ui::InspectorTab::default(),
             inspector_open_auxiliary_tabs: layout.open_auxiliary_tabs(),
             browser_view: None,
+            device_view: None,
             forwarded_ports_by_project: std::collections::HashMap::new(),
             ports_menu_handle: console_ui::ContextMenuHandle::new(cx),
             inspector_add_tab_menu: console_ui::ContextMenuHandle::new(cx),
@@ -880,10 +884,7 @@ impl ConsoleDesktopApp {
             settings_window_handle: None,
             settings_window_view: None,
             main_window_handle: Some(window.window_handle().into()),
-            is_main_window: matches!(
-                &target,
-                crate::window::WindowLaunchTarget::RestorePersisted
-            ),
+            is_main_window: matches!(&target, crate::window::WindowLaunchTarget::RestorePersisted),
             drafts,
             sidebar_draft_ids,
             drafts_collapsed: false,
@@ -908,7 +909,9 @@ impl ConsoleDesktopApp {
         });
 
         let inherited_environment_id = match target {
-            crate::window::WindowLaunchTarget::Fresh { ref environment_id } => environment_id.clone(),
+            crate::window::WindowLaunchTarget::Fresh { ref environment_id } => {
+                environment_id.clone()
+            }
             _ => None,
         };
         app.init_environments(store_doc.environments.clone(), inherited_environment_id, cx);
@@ -1079,7 +1082,8 @@ impl ConsoleDesktopApp {
                                     if this.selected_model.is_none() {
                                         this.selected_model = first_model.clone();
                                     }
-                                    if let Some(state) = this.workspace_pane_states.get_mut("pane-main")
+                                    if let Some(state) =
+                                        this.workspace_pane_states.get_mut("pane-main")
                                     {
                                         if state.selected_model.is_none() {
                                             state.selected_model = first_model;
@@ -1106,8 +1110,8 @@ impl ConsoleDesktopApp {
             // like providers above.
             let favorites_client = client_clone.clone();
             let favorites_entity = entity.clone();
-            cx.spawn(async move |cx| {
-                match favorites_client.model_favorites.list().await {
+            cx.spawn(
+                async move |cx| match favorites_client.model_favorites.list().await {
                     Ok(model_favorites) => {
                         cx.update(|cx| {
                             if let Some(app) = favorites_entity.upgrade() {
@@ -1116,7 +1120,10 @@ impl ConsoleDesktopApp {
                                         model_favorites
                                             .into_iter()
                                             .map(|favorite: ModelFavorite| {
-                                                format!("{}:{}", favorite.provider, favorite.model_id)
+                                                format!(
+                                                    "{}:{}",
+                                                    favorite.provider, favorite.model_id
+                                                )
                                             })
                                             .collect(),
                                     );
@@ -1133,8 +1140,8 @@ impl ConsoleDesktopApp {
                             }
                         });
                     }
-                }
-            })
+                },
+            )
             .detach();
 
             // 4. Load projects; derive the selected project from the active
@@ -1156,7 +1163,10 @@ impl ConsoleDesktopApp {
                                             session.project_id.clone().or_else(|| {
                                                 this.projects
                                                     .iter()
-                                                    .find(|p| !session.cwd.is_empty() && p.path == session.cwd)
+                                                    .find(|p| {
+                                                        !session.cwd.is_empty()
+                                                            && p.path == session.cwd
+                                                    })
                                                     .map(|p| p.id.clone())
                                             })
                                         });
@@ -1297,11 +1307,7 @@ impl ConsoleDesktopApp {
     /// Focus handle for a code viewer tab. Cached per-id so a re-render of
     /// the same tab keeps the same handle, preserving focus across state
     /// updates.
-    pub fn viewer_focus_handle(
-        &mut self,
-        id: &str,
-        cx: &mut gpui::App,
-    ) -> gpui::FocusHandle {
+    pub fn viewer_focus_handle(&mut self, id: &str, cx: &mut gpui::App) -> gpui::FocusHandle {
         if let Some(handle) = self.viewer_focus_handles.get(id) {
             return handle.clone();
         }

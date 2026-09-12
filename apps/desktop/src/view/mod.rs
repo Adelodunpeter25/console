@@ -228,9 +228,7 @@ impl Render for ConsoleDesktopApp {
                     }
                 }
                 Some(console_core::WorkspaceTabConfig::Chat {
-                    session_id,
-                    title,
-                    ..
+                    session_id, title, ..
                 }) => {
                     let session = self.sessions.iter().find(|s| &s.id == session_id);
                     let folder = session.and_then(|s| {
@@ -286,7 +284,9 @@ impl Render for ConsoleDesktopApp {
                 }
             })
         };
-        let on_open_auxiliary_tab: Rc<dyn Fn(console_ui::AuxiliaryTab, &mut Window, &mut App) + 'static> = {
+        let on_open_auxiliary_tab: Rc<
+            dyn Fn(console_ui::AuxiliaryTab, &mut Window, &mut App) + 'static,
+        > = {
             let entity = entity.clone();
             Rc::new(move |tab, _w, cx| {
                 if let Some(app) = entity.upgrade() {
@@ -294,7 +294,9 @@ impl Render for ConsoleDesktopApp {
                 }
             })
         };
-        let on_close_auxiliary_tab: Rc<dyn Fn(console_ui::AuxiliaryTab, &mut Window, &mut App) + 'static> = {
+        let on_close_auxiliary_tab: Rc<
+            dyn Fn(console_ui::AuxiliaryTab, &mut Window, &mut App) + 'static,
+        > = {
             let entity = entity.clone();
             Rc::new(move |tab, _w, cx| {
                 if let Some(app) = entity.upgrade() {
@@ -375,9 +377,7 @@ impl Render for ConsoleDesktopApp {
                 }
             })
         };
-        let on_select_right_sidebar_bottom_tab: Rc<
-            dyn Fn(usize, &mut Window, &mut App) + 'static,
-        > = {
+        let on_select_right_sidebar_bottom_tab: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static> = {
             let entity = entity.clone();
             Rc::new(move |tab_idx, _w, cx| {
                 if let Some(app) = entity.upgrade() {
@@ -387,9 +387,7 @@ impl Render for ConsoleDesktopApp {
                 }
             })
         };
-        let on_close_right_sidebar_bottom_tab: Rc<
-            dyn Fn(usize, &mut Window, &mut App) + 'static,
-        > = {
+        let on_close_right_sidebar_bottom_tab: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static> = {
             let entity = entity.clone();
             Rc::new(move |tab_idx, _w, cx| {
                 if let Some(app) = entity.upgrade() {
@@ -409,9 +407,7 @@ impl Render for ConsoleDesktopApp {
                 }
             })
         };
-        let on_toggle_right_sidebar_bottom_collapsed: Rc<
-            dyn Fn(&mut Window, &mut App) + 'static,
-        > = {
+        let on_toggle_right_sidebar_bottom_collapsed: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
             let entity = entity.clone();
             Rc::new(move |_window, cx| {
                 if let Some(app) = entity.upgrade() {
@@ -927,7 +923,9 @@ impl Render for ConsoleDesktopApp {
 
                         let browser_visible = self.right_sidebar_visible
                             && self.inspector_active_tab
-                                == console_ui::InspectorTab::Auxiliary(console_ui::AuxiliaryTab::Browser);
+                                == console_ui::InspectorTab::Auxiliary(
+                                    console_ui::AuxiliaryTab::Browser,
+                                );
                         let browser_element = if browser_visible {
                             let browser = self.browser_view_for_inspector(window, cx);
                             let is_overlay_open = self.command_palette.read(cx).is_open(cx)
@@ -940,6 +938,28 @@ impl Render for ConsoleDesktopApp {
                         } else {
                             if let Some(ref browser) = self.browser_view {
                                 browser.update(cx, |view, cx| {
+                                    view.sync_native_state(false, false, cx);
+                                });
+                            }
+                            None
+                        };
+                        let device_visible = self.right_sidebar_visible
+                            && self.inspector_active_tab
+                                == console_ui::InspectorTab::Auxiliary(
+                                    console_ui::AuxiliaryTab::Devices,
+                                );
+                        let device_element = if device_visible {
+                            let device = self.device_view_for_inspector(window, cx);
+                            let is_overlay_open = self.command_palette.read(cx).is_open(cx)
+                                || self.quick_open_palette.read(cx).is_open(cx)
+                                || self.project_browse_palette.read(cx).is_open(cx);
+                            device.update(cx, |view, cx| {
+                                view.sync_native_state(true, is_overlay_open, cx);
+                            });
+                            Some(device.into_any_element())
+                        } else {
+                            if let Some(ref device) = self.device_view {
+                                device.update(cx, |view, cx| {
                                     view.sync_native_state(false, false, cx);
                                 });
                             }
@@ -972,6 +992,7 @@ impl Render for ConsoleDesktopApp {
                             )
                             .with_bottom_split(Some(bottom_split))
                             .with_browser_view(browser_element)
+                            .with_device_view(device_element)
                             .subagent_markdown_views(self.subagent_markdown_views.clone()),
                         )
                     }),
