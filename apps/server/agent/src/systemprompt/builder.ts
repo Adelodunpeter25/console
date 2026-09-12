@@ -129,14 +129,14 @@ function renderWorkstation(env: DiscoveredContext["environment"], approvalMode?:
       ? [
           "<critical>",
           "- Each response MUST advance the task.",
-          "- Default to discussion and questions; do not run commands or write files.",
+          "- Default to discussion and questions; do not write files or implement features.",
           "</critical>",
         ]
       : [
           "<critical>",
           "- Each response MUST advance the task.",
           "- Default to informed action; do not ask for confirmation when tools or repo context can answer.",
-          "- Verify significant behavioral changes before yielding when tools allow.",
+          "- Never search code/files via bash (grep, rg, find). Use the dedicated `grep` and `glob` tools — they run on an indexed engine and are faster",
           "</critical>",
         ];
 
