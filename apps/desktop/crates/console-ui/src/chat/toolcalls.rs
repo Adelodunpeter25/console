@@ -804,55 +804,37 @@ impl RenderOnce for ToolCalls {
             });
 
         if self.working {
-            header = header
-                .child(WorkingIndicator::new(
-                    self.started_at
-                        .unwrap_or_else(|| chrono::Utc::now().timestamp()),
-                    theme,
-                ))
-                .child(div().ml_auto());
+            header = header.child(WorkingIndicator::new(
+                self.started_at
+                    .unwrap_or_else(|| chrono::Utc::now().timestamp()),
+                theme,
+            ));
         } else if let Some(summary) = summary {
             header = header
                 .child(
                     div()
-                        .flex_1()
-                        .h(px(1.0))
-                        .bg(theme.border),
+                        .text_size(px(11.5))
+                        .text_color(theme.text_tertiary)
+                        .child(summary),
                 )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(5.0))
-                        .px(px(8.0))
-                        .child(
-                            div()
-                                .text_size(px(11.5))
-                                .text_color(theme.text_tertiary)
-                                .child(summary),
-                        )
-                        .child(app_icon(
-                            if expanded {
-                                IconName::ChevronUp
-                            } else {
-                                IconName::ChevronRight
-                            },
-                            12.0,
-                            theme.text_ghost,
-                        )),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .h(px(1.0))
-                        .bg(theme.border),
-                );
+                .child(app_icon(
+                    if expanded {
+                        IconName::ChevronUp
+                    } else {
+                        IconName::ChevronRight
+                    },
+                    12.0,
+                    theme.text_ghost,
+                ))
+                .child(div().ml_auto());
         } else {
             header = header.child(div().ml_auto());
         }
 
         let mut container = div()
             .w_full()
+            .border_b_1()
+            .border_color(theme.border)
             .children([header.into_any_element()]);
 
         if expanded {
