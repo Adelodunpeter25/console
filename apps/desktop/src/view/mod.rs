@@ -527,6 +527,7 @@ impl Render for ConsoleDesktopApp {
                             return;
                         }
                         cx.stop_propagation();
+                        log::info!("Running project script '{script_id}' via keyboard shortcut");
                         app.update(cx, |this, cx| {
                             this.run_project_script(&script_id, cx);
                         });

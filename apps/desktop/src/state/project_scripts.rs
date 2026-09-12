@@ -145,13 +145,12 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         // Snapshot the active-project id before any mutable
-                        // borrows land — both readers below are immutable
-                        // but the borrow checker can't see that across the
-                        // later `state.runs.get_mut`.
+                        // borrows land. Pane project wins, mirroring the
+                        // sync path and the Run panel: the dispatch map must
+                        // describe the project the panel shows.
                         let active_pid = this
-                            .selected_project_id
-                            .clone()
-                            .or_else(|| this.active_scripts_project_id());
+                            .active_scripts_project_id()
+                            .or_else(|| this.selected_project_id.clone());
 
                         let running: Vec<(String, String, String)> = {
                             let Some(state) = this.project_scripts_by_project.get_mut(&project_id)
@@ -382,11 +381,14 @@ impl ConsoleDesktopApp {
     /// duplicated ones stay out of the map (their rows warn instead). Call
     /// this whenever the active project may have changed so root key
     /// dispatch targets the right shortcuts.
+    ///
+    /// Pane project wins over the globally selected one: the Run panel
+    /// itself renders from `active_scripts_project_id`, and the map must
+    /// describe the same project or shortcuts silently miss.
     pub fn sync_active_shortcuts_to_active_project(&mut self) {
         let active_pid = self
-            .selected_project_id
-            .clone()
-            .or_else(|| self.active_scripts_project_id());
+            .active_scripts_project_id()
+            .or_else(|| self.selected_project_id.clone());
         let Some(active_pid) = active_pid else {
             self.active_project_shortcuts.clear();
             return;
