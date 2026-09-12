@@ -428,7 +428,7 @@ pub fn download_destination(
         _ => (name, String::new()),
     };
 
-    let mut counter = 1;
+    let mut counter = 2;
     while destination.exists() {
         destination = base.join(format!("{stem} ({counter}){ext}"));
         counter += 1;

@@ -90,10 +90,17 @@ impl BrowserView {
                 .placeholder("Search or enter website address (e.g. localhost:3000)")
         });
 
+        let window_handle = window.window_handle();
         let submit_subscription = cx.subscribe(
             &address,
-            |this: &mut Self, address, event: &ComposerEvent, cx| match event {
-                ComposerEvent::Submit(text) => this.navigate_to_input(text.clone(), cx),
+            move |this: &mut Self, address, event: &ComposerEvent, cx| match event {
+                ComposerEvent::Submit(text) => {
+                    this.navigate_to_input(text.clone(), cx);
+                    let focus = this.focus_handle.clone();
+                    let _ = window_handle.update(cx, |_, window, cx| {
+                        window.focus(&focus, cx);
+                    });
+                }
                 ComposerEvent::Edited => {
                     let shown = this.current_url.as_deref().map(display_url).unwrap_or("");
                     this.address_dirty = address.read(cx).content() != shown;
@@ -681,6 +688,11 @@ impl BrowserView {
             .child(
                 div()
                     .id("browser-address-container")
+                    .key_context(BROWSER_ADDRESS_KEY_CONTEXT)
+                    .on_action(cx.listener(|this, _: &BrowserAddressCancel, window, cx| {
+                        this.restore_address(cx);
+                        this.focus_default(window, cx);
+                    }))
                     .h(px(28.0))
                     .px(px(8.0))
                     .rounded(px(6.0))
