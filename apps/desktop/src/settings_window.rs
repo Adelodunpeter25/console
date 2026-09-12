@@ -1,8 +1,8 @@
 use crate::state::ConsoleDesktopApp;
 use console_ui::input::ComposerInput;
 use console_ui::settings::{
-    AccountsPage, ConnectionPage, DeletedChatsPage, ModelsPage, ProbeState, ProjectsPage,
-    SettingsShell, SettingsTab, UsagePage,
+    AccountsPage, ConnectionPage, DeletedChatsPage, KeybindingsPage, ModelsPage, ProbeState,
+    ProjectsPage, SettingsShell, SettingsTab, UsagePage,
 };
 use gpui::{
     App, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
@@ -27,6 +27,7 @@ pub struct SettingsWindow {
     model_menus: [console_ui::ContextMenuHandle; 4],
     model_searches: [Entity<ComposerInput>; 4],
     model_tabs: [console_ui::PickerTab; 4],
+    keybindings_search: Entity<ComposerInput>,
     pub(crate) model_saving: bool,
     pub(crate) model_error: Option<String>,
     _subscriptions: Vec<gpui::Subscription>,
@@ -135,6 +136,12 @@ impl SettingsWindow {
         let focus_handle = cx.focus_handle();
         window.focus(&focus_handle, cx);
 
+        let keybindings_search = cx.new(|cx| {
+            ComposerInput::new(window, cx)
+                .search_field()
+                .placeholder("Filter shortcuts (e.g. \"browser\", \"composer\", \"cmd+r\")...")
+        });
+
         let mut subscriptions = Vec::new();
         subscriptions.extend(subscription);
         for search in &model_searches {
@@ -143,6 +150,10 @@ impl SettingsWindow {
                 _ => {}
             }));
         }
+        subscriptions.push(cx.subscribe(&keybindings_search, |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
+            console_ui::input::ComposerEvent::Edited | console_ui::input::ComposerEvent::Focus => cx.notify(),
+            _ => {}
+        }));
 
         Self {
             app,
@@ -165,6 +176,7 @@ impl SettingsWindow {
                 console_ui::PickerTab::Favorites,
                 console_ui::PickerTab::Favorites,
             ],
+            keybindings_search,
             model_saving: false,
             model_error: None,
             _subscriptions: subscriptions,
@@ -493,15 +505,15 @@ impl Render for SettingsWindow {
                 let self_entity = cx.entity().downgrade();
                 let on_tab: Rc<dyn Fn(usize, console_ui::PickerTab, &mut Window, &mut App) + 'static> =
                     Rc::new(move |idx, tab, _window, cx| {
-                        if let Some(settings) = self_entity.upgrade() {
-                            settings.update(cx, |this, cx| {
-                                if idx < 4 {
-                                    this.model_tabs[idx] = tab;
-                                    cx.notify();
-                                }
-                            });
-                        }
-                    });
+                    if let Some(settings) = self_entity.upgrade() {
+                        settings.update(cx, |this, cx| {
+                            if idx < 4 {
+                                this.model_tabs[idx] = tab;
+                                cx.notify();
+                            }
+                        });
+                    }
+                });
                 let app_for_fav = self.app.clone();
                 let on_favorite: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static> =
                     Rc::new(move |provider, model_id, _window, cx| {
@@ -638,6 +650,11 @@ impl Render for SettingsWindow {
                 }
                 .into_any_element()
             }
+            SettingsTab::Keybindings => KeybindingsPage {
+                filter_query: self.keybindings_search.read(cx).content().to_string(),
+                search_input: Some(self.keybindings_search.clone()),
+            }
+            .into_any_element(),
         };
 
         div()

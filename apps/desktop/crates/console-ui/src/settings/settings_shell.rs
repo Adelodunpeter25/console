@@ -43,6 +43,7 @@ impl RenderOnce for SettingsShell {
                 IconName::TrashBinMinimalistic,
                 "Deleted chats",
             ),
+            (SettingsTab::Keybindings, IconName::Keyboard, "Keybindings"),
         ];
 
         div()
