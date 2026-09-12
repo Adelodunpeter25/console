@@ -959,6 +959,11 @@ impl Render for ConsoleDesktopApp {
                             .map(|(_, term)| term.clone().into_any_element());
 
                         let run_panel_element = {
+                            // Keep the keystroke interceptor's shortcut map
+                            // in sync with the active project. Idempotent —
+                            // no work unless the active project or its
+                            // scripts have changed since the last render.
+                            self.sync_active_shortcuts_to_active_project();
                             let scripts_project_id = self.active_scripts_project_id();
                             let (has_project, loading, error, source_missing, rows) =
                                 match scripts_project_id.as_ref().and_then(|pid| {
@@ -1002,6 +1007,8 @@ impl Render for ConsoleDesktopApp {
                                                         .map(|view| view.output.clone())
                                                         .unwrap_or_default(),
                                                     expanded: state.expanded.contains(&script.id),
+                                                    shortcut_conflict: view
+                                                        .and_then(|view| view.shortcut_conflict.clone()),
                                                 }
                                             })
                                             .collect(),

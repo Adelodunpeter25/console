@@ -108,6 +108,10 @@ pub struct RunScriptRow {
     pub starting: bool,
     pub output: String,
     pub expanded: bool,
+    /// `Some(shortcut)` when another script in the same project claims the
+    /// same keystroke — both bindings are blocked at the app layer and the
+    /// conflict surfaces here as a warning.
+    pub shortcut_conflict: Option<String>,
 }
 
 #[derive(IntoElement)]
@@ -299,6 +303,20 @@ impl RenderOnce for RunPanel {
                                     .font_family(MONO_FAMILY)
                                     .text_color(theme.text_secondary)
                                     .child(display_script_shortcut(&shortcut)),
+                            )
+                        })
+                        .when_some(row.shortcut_conflict.clone(), |el, _shortcut| {
+                            el.child(
+                                div()
+                                    .flex_none()
+                                    .px(px(5.0))
+                                    .py(px(1.0))
+                                    .rounded(px(4.0))
+                                    .border_1()
+                                    .border_color(theme.danger)
+                                    .text_size(px(10.0))
+                                    .text_color(theme.danger)
+                                    .child("⚠ shortcut conflict"),
                             )
                         })
                         .child(

@@ -4,6 +4,8 @@
 //! parsing, validation, and execution. The desktop only ever references
 //! scripts by id — it never sends a raw command.
 
+use std::collections::{HashMap, HashSet};
+
 use serde::{Deserialize, Serialize};
 
 /// A normalized script definition from `GET /api/projects/:projectId/scripts`.
@@ -14,6 +16,43 @@ pub struct ProjectScript {
     pub command: String,
     pub shortcut: Option<String>,
     pub persistent: bool,
+}
+
+/// Derive the active shortcut map and conflict set from a script list.
+///
+/// - `Ok(map)`: shortcut string → script id, with one entry per *unique*
+///   shortcut. Conflicts are excluded.
+/// - `Err(conflicts)`: shortcut string → set of conflicting script ids,
+///   populated when two or more scripts claim the same shortcut.
+///
+/// Both halves come from a single pass so they stay consistent.
+pub fn compute_shortcut_state(
+    scripts: &[ProjectScript],
+) -> Result<HashMap<String, String>, HashMap<String, HashSet<String>>> {
+    let mut groups: HashMap<String, HashSet<String>> = HashMap::new();
+    for script in scripts {
+        if let Some(shortcut) = script.shortcut.as_deref() {
+            groups
+                .entry(shortcut.to_string())
+                .or_default()
+                .insert(script.id.clone());
+        }
+    }
+    let mut map = HashMap::new();
+    let mut conflicts = HashMap::new();
+    for (shortcut, ids) in groups {
+        if ids.len() > 1 {
+            conflicts.insert(shortcut, ids);
+        } else {
+            // Unwrap is safe: `ids` has exactly one entry when len == 1.
+            map.insert(shortcut, ids.into_iter().next().unwrap());
+        }
+    }
+    if conflicts.is_empty() {
+        Ok(map)
+    } else {
+        Err(conflicts)
+    }
 }
 
 /// Script list result, including where the definitions came from.

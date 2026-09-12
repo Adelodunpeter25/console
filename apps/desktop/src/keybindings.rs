@@ -46,6 +46,11 @@ actions!(
         ToggleLeftSidebar,
         /// Toggle the right workspace inspector panel.
         ToggleRightSidebar,
+        /// Run the project script bound to a configured `console.toml`
+        /// shortcut. The actual keystroke is resolved by the handler against
+        /// `ConsoleDesktopApp::active_project_shortcuts`, so the action
+        /// carries no payload.
+        RunConfiguredScript,
         /// Jump to the nth visible sidebar session (browser-tab style).
         SwitchSession1,
         SwitchSession2,
@@ -383,5 +388,29 @@ pub fn init_handlers(cx: &mut App) {
         if let Some((_, app)) = crate::window::get_active_window(cx) {
             app.update(cx, |this, cx| this.select_workspace_tab_by_index(8, cx));
         }
+    });
+
+    // Window-wide keyboard shortcut dispatch for `console.toml`-defined
+    // project script shortcuts. Runs BEFORE action resolution so we can stop
+    // propagation on a match; non-matching keystrokes fall through to the
+    // existing composer / terminal / browser handlers unchanged.
+    let _script_shortcut_subscription = cx.intercept_keystrokes(|event, _window, cx| {
+        // Normalize the GPUI keystroke into the same canonical form
+        // `console.toml` uses: "cmd-r", "shift-cmd-r", "ctrl-alt-l", etc.
+        let keystroke = event.keystroke.unparse();
+        let Some((_, app)) = crate::window::get_active_window(cx) else {
+            return;
+        };
+        let script_id = {
+            let map = app.read(cx).active_project_shortcuts.clone();
+            map.get(&keystroke).cloned()
+        };
+        let Some(script_id) = script_id else {
+            return;
+        };
+        cx.stop_propagation();
+        app.update(cx, |this, cx| {
+            this.run_project_script(&script_id, cx);
+        });
     });
 }

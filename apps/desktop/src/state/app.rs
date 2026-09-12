@@ -208,6 +208,11 @@ pub struct ConsoleDesktopApp {
     pub(crate) project_script_streams:
         std::collections::HashMap<(String, String), (u64, gpui::Task<()>)>,
     pub(crate) project_script_stream_seq: u64,
+    /// Active project's shortcut map for window-wide keyboard dispatch. Rebuilt
+    /// whenever scripts load or the active project changes. Conflicts (two
+    /// scripts in the same project sharing a shortcut) are omitted and surfaced
+    /// via `shortcut_conflict` on the row's view model instead.
+    pub active_project_shortcuts: std::collections::HashMap<String, String>,
     pub inspector_active_tab: console_ui::InspectorTab,
     pub inspector_open_auxiliary_tabs: Vec<console_ui::AuxiliaryTab>,
     pub browser_view: Option<gpui::Entity<console_ui::BrowserView>>,
@@ -841,6 +846,7 @@ impl ConsoleDesktopApp {
             project_scripts_by_project: std::collections::HashMap::new(),
             project_script_streams: std::collections::HashMap::new(),
             project_script_stream_seq: 0,
+            active_project_shortcuts: std::collections::HashMap::new(),
             inspector_active_tab: console_ui::InspectorTab::default(),
             inspector_open_auxiliary_tabs: layout.open_auxiliary_tabs(),
             browser_view: None,

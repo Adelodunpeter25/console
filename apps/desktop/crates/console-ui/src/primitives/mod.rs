@@ -30,6 +30,12 @@ pub use scrollbar::ScrollbarState;
 pub use text_field::TextField;
 pub use transparency::transparency_grid;
 
+/// Key context pushed onto the workspace tree while a project has scripts with
+/// configured shortcuts. Bindings for those shortcuts are scoped to this
+/// context, so they fire regardless of focused widget but only when a project
+/// with shortcuts is active.
+pub const RUN_PANEL_CONTEXT: &str = "RunPanel";
+
 /// A monochrome icon from the embedded set, tinted via text color.
 pub fn icon(path: &'static str, size: f32, color: Hsla) -> Svg {
     svg()
