@@ -166,5 +166,50 @@ assert.equal(storage.repairSession(repairHeader.id), false);
 assert.equal(storage.deleteSession(repairHeader.id), true);
 console.log("  ✅ One-time interrupted-history repair");
 
+// 9. Expired soft-deleted sessions are purged; fresh ones and active ones survive.
+const DAY_MS = 24 * 60 * 60 * 1000;
+const now = Date.now();
+
+const fresh = storage.createSession({
+  cwd: "/projects/test",
+  modelId: "gemini-3.1-pro",
+  provider: "antigravity",
+  title: "Fresh Deleted",
+});
+assert.equal(storage.deleteSession(fresh.id), true);
+
+const expired = storage.createSession({
+  cwd: "/projects/test",
+  modelId: "gemini-3.1-pro",
+  provider: "antigravity",
+  title: "Expired Deleted",
+});
+assert.equal(storage.deleteSession(expired.id), true);
+
+const busy = storage.createSession({
+  cwd: "/projects/test",
+  modelId: "gemini-3.1-pro",
+  provider: "antigravity",
+  title: "Busy Expired",
+});
+assert.equal(storage.deleteSession(busy.id), true);
+
+// Backdate deleted_at: expired ones 8 days old, fresh one deleted just now.
+const eightDaysAgo = now - 8 * DAY_MS;
+const db = (storage as unknown as { state: { globalDb: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } } }).state.globalDb;
+db.prepare(`UPDATE sessions SET deleted_at = ? WHERE id = ?`).run(eightDaysAgo, expired.id);
+db.prepare(`UPDATE sessions SET deleted_at = ? WHERE id = ?`).run(eightDaysAgo, busy.id);
+
+const purged = storage.purgeExpiredDeletedSessions({ now, isActive: (id) => id === busy.id });
+assert.deepEqual(purged, [expired.id]);
+// Expired + busy are still gone from the deleted list except busy; fresh stays.
+const remainingDeleted = storage.listSessions({ onlyDeleted: true }).map((s) => s.id).sort();
+assert.ok(remainingDeleted.includes(fresh.id), "fresh delete must survive");
+assert.ok(remainingDeleted.includes(busy.id), "active session must survive");
+assert.ok(!remainingDeleted.includes(expired.id), "expired delete must be purged");
+assert.equal(storage.loadSession(expired.id), null);
+assert.ok(storage.loadSession(fresh.id) === null, "fresh delete stays soft-deleted");
+console.log("  ✅ Expired deleted chats purged after 7 days; fresh and active survive");
+
 storage.close();
 console.log("SqliteSessionStorage tests passed!\n");

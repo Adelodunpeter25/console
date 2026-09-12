@@ -12,10 +12,41 @@ import {
 } from "./api/src/terminal/socket.route.js";
 import { terminalPtyManager } from "./api/src/terminal/pty.manager.js";
 import { portRegistry } from "./api/src/services/port-registry.service.js";
+import { SessionService } from "./api/src/services/session.service.js";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
 import { getConsoleStorageDir } from "./agent/src/session/apppaths.js";
+
+// Deleted chats stay restorable for 7 days, then the backend purges them
+// permanently. The sweep itself runs once a day so any purge lands within
+// ~24h of the 7-day mark.
+const DELETED_CHAT_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+let deletedChatSweepTimer: ReturnType<typeof setInterval> | undefined;
+
+function sweepExpiredDeletedChats(): void {
+  try {
+    const purged = new SessionService().purgeExpiredDeletedSessions();
+    if (purged.length > 0) log(`Purged ${purged.length} deleted chat(s) older than 7 days.`);
+  } catch (error) {
+    console.error(`Deleted-chat sweep failed: ${error}`);
+  }
+}
+
+function startDeletedChatSweep(): void {
+  // One startup pass so restarts don't wait a full day to catch up.
+  sweepExpiredDeletedChats();
+  if (deletedChatSweepTimer) return;
+  deletedChatSweepTimer = setInterval(sweepExpiredDeletedChats, DELETED_CHAT_SWEEP_INTERVAL_MS);
+  (deletedChatSweepTimer as unknown as { unref?: () => void })?.unref?.();
+}
+
+function stopDeletedChatSweep(): void {
+  if (deletedChatSweepTimer) {
+    clearInterval(deletedChatSweepTimer);
+    deletedChatSweepTimer = undefined;
+  }
+}
 
 const app = createApiApp();
 const port = Number.parseInt(process.env.PORT || "3000", 10);
@@ -61,6 +92,7 @@ function log(message: string): void {
 async function shutdown(): Promise<void> {
   log("Shutting down server...");
 
+  stopDeletedChatSweep();
   // Kill every tracked PTY so shells don't leak after the server exits.
   terminalPtyManager.killAll();
   await portRegistry.closeAll();
@@ -86,6 +118,8 @@ async function startServer(): Promise<void> {
   // Sweeps stale forwarded ports whose target stopped while the owning
   // terminal/job stayed alive; removals emit "change" for SSE clients.
   portRegistry.startReaper();
+  // Permanently removes soft-deleted chats older than 7 days.
+  startDeletedChatSweep();
 
   Bun.serve<TerminalSocketData>({
     port,

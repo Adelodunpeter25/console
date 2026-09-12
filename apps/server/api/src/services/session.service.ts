@@ -130,7 +130,14 @@ export class SessionService {
     return this.storage.permanentlyDeleteSession(sessionId);
   }
 
-  getSessionFileChanges(sessionId: string) {
+  /**
+   * Backend-owned cleanup: permanently remove soft-deleted sessions older
+   * than 7 days. Sessions with an active run are skipped and deferred to a
+   * later sweep.
+   */
+  purgeExpiredDeletedSessions(): string[] {
+    return this.storage.purgeExpiredDeletedSessions({ isActive: RunService.isRunActive });
+  }  getSessionFileChanges(sessionId: string) {
     return this.storage.getSessionFileChanges(sessionId);
   }
 

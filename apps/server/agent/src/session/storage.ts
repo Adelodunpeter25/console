@@ -152,6 +152,14 @@ export class SqliteSessionStorage {
     return Sessions.permanentlyDeleteSession(this.state, sessionId);
   }
 
+  /**
+   * Permanently remove soft-deleted sessions older than 7 days. Skips
+   * sessions with an active run (they are picked up by a later sweep).
+   */
+  purgeExpiredDeletedSessions(options?: { now?: number; isActive?: (sessionId: string) => boolean }): string[] {
+    return Sessions.purgeExpiredDeletedSessions(this.state, options);
+  }
+
   updateSessionStatus(sessionId: string, status: string): void {
     Sessions.updateSessionStatus(this.state.globalDb, sessionId, status);
   }

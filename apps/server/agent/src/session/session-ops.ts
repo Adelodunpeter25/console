@@ -27,6 +27,9 @@ export interface CreateSessionOptions {
   approvalMode?: string;
 }
 
+/** Soft-deleted sessions older than this are permanently purged by the backend. */
+export const DELETED_SESSION_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
 export function createSession(state: StorageState, options: CreateSessionOptions): SessionHeader {
   const { globalDb } = state;
   const id = options.id ?? crypto.randomUUID();
@@ -336,8 +339,7 @@ export function restoreSession(state: StorageState, sessionId: string): boolean 
 }
 
 /** Permanently remove a session that has already been soft-deleted. */
-export function permanentlyDeleteSession(state: StorageState, sessionId: string): boolean {
-  const { globalDb, storageDir } = state;
+export function permanentlyDeleteSession(state: StorageState, sessionId: string): boolean {  const { globalDb, storageDir } = state;
   const row = globalDb
     .prepare(`SELECT project_id, deleted_at FROM sessions WHERE id = ?`)
     .get(sessionId) as { project_id: string | null; deleted_at: number | null } | undefined;
@@ -375,6 +377,36 @@ export function permanentlyDeleteSession(state: StorageState, sessionId: string)
 
   const info = globalDb.prepare(`DELETE FROM sessions WHERE id = ?`).run(sessionId);
   return info.changes > 0;
+}
+
+/**
+ * Permanently remove every soft-deleted session whose `deleted_at` is at
+ * least {@link DELETED_SESSION_RETENTION_MS} old. Reuses
+ * `permanentlyDeleteSession` so per-session DB files and scratch dirs are
+ * cleaned up identically to the manual permanent-delete path.
+ *
+ * `isActive` guards against purging a session that has a run in flight
+ * (deferred to the next sweep instead of racing the runner).
+ */
+export function purgeExpiredDeletedSessions(
+  state: StorageState,
+  options?: { now?: number; isActive?: (sessionId: string) => boolean },
+): string[] {
+  const now = options?.now ?? Date.now();
+  const cutoff = now - DELETED_SESSION_RETENTION_MS;
+  const rows = state.globalDb
+    .prepare(`SELECT id FROM sessions WHERE deleted_at IS NOT NULL AND deleted_at <= ?`)
+    .all(cutoff) as { id: string }[];
+  const purged: string[] = [];
+  for (const row of rows) {
+    if (options?.isActive?.(row.id)) continue;
+    try {
+      if (permanentlyDeleteSession(state, row.id)) purged.push(row.id);
+    } catch {
+      // Best-effort: one corrupt/locked session must not block the rest.
+    }
+  }
+  return purged;
 }
 
 export function updateTitle(state: StorageState, sessionId: string, title: string): boolean {
