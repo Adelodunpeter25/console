@@ -92,7 +92,21 @@ export class IosDeviceManager {
   }
 
   async shutdown(id: string): Promise<void> {
+    const serveSim = resolveServeSimCmd();
+    try {
+      await execAsync(`${serveSim} --kill "${id}"`);
+    } catch {}
     await execAsync(`xcrun simctl shutdown "${id}"`);
+  }
+
+  async shutdownAll(): Promise<void> {
+    const serveSim = resolveServeSimCmd();
+    try {
+      await execAsync(`${serveSim} --kill`);
+    } catch {}
+    try {
+      await execAsync("xcrun simctl shutdown all");
+    } catch {}
   }
 
   async openApp(id: string, app: string): Promise<void> {

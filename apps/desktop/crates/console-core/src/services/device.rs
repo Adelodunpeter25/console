@@ -104,6 +104,12 @@ impl DeviceService {
         Ok(())
     }
 
+    /// Power off all running simulators, emulators, and streaming helpers.
+    pub async fn shutdown_all(&self) -> Result<()> {
+        let _: Option<serde_json::Value> = self.post("/api/devices/shutdown-all", None).await.ok().flatten();
+        Ok(())
+    }
+
     /// Install or launch a target bundle/package on a booted device.
     pub async fn open_app(&self, id: &str, platform: &str, app: &str) -> Result<()> {
         let endpoint = format!("/api/devices/{}/open-app?platform={}", id, platform);

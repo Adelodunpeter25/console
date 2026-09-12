@@ -293,6 +293,11 @@ impl ConsoleDesktopApp {
             if let Some(device) = self.device_view.take() {
                 device.update(cx, |view, cx| view.close(cx));
             }
+            let client = self.client.clone();
+            cx.spawn(async move |_, _| {
+                let _ = client.devices.shutdown_all().await;
+            })
+            .detach();
         }
         self.inspector_open_auxiliary_tabs
             .retain(|open| *open != tab);

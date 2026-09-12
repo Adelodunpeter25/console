@@ -144,6 +144,23 @@ export class AndroidDeviceManager {
     await execAsync(`"${adb}" -s "${id}" emu kill`);
   }
 
+  async shutdownAll(): Promise<void> {
+    const adb = resolveAdbPath();
+    try {
+      const { stdout: adbOut } = await execAsync(`"${adb}" devices`);
+      const lines = adbOut.trim().split("\n").slice(1);
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 2 && parts[1] === "device") {
+          const serial = parts[0]!;
+          try {
+            await execAsync(`"${adb}" -s "${serial}" emu kill`);
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+
   async openApp(id: string, app: string): Promise<void> {
     const adb = resolveAdbPath();
     await execAsync(`"${adb}" -s "${id}" shell monkey -p "${app}" -c android.intent.category.LAUNCHER 1`);

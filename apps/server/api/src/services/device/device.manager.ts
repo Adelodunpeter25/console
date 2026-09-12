@@ -101,6 +101,13 @@ export class DeviceManager {
     }
   }
 
+  async shutdownAll(): Promise<void> {
+    await Promise.all([
+      iosDeviceManager.shutdownAll(),
+      androidDeviceManager.shutdownAll(),
+    ]);
+  }
+
   async openApp(id: string, platform: "ios" | "android", app: string): Promise<void> {
     if (platform === "ios") {
       await iosDeviceManager.openApp(id, app);

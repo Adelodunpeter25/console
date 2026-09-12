@@ -33,6 +33,15 @@ deviceRoutes.post("/devices/:id/boot", async (c) => {
   }
 });
 
+deviceRoutes.post("/devices/shutdown-all", async (c) => {
+  try {
+    await deviceManager.shutdownAll();
+    return c.json({ success: true, data: { success: true } });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : String(error) }, 500);
+  }
+});
+
 deviceRoutes.post("/devices/:id/shutdown", async (c) => {
   const id = c.req.param("id");
   const platform = (c.req.query("platform") as "ios" | "android") || (id.includes("-") ? "ios" : "android");
