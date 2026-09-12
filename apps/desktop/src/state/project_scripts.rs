@@ -178,13 +178,6 @@ impl ConsoleDesktopApp {
                             // stored set below — never from a run view, so
                             // never-run scripts warn too.
                             let shortcut_state = compute_shortcut_state(&state.scripts);
-                            // TEMP-DIAG: shortcut dispatch investigation.
-                            log::info!(
-                                "project scripts refreshed: project={} scripts={} bindings={:?}",
-                                project_id,
-                                state.scripts.len(),
-                                shortcut_state.bindings.keys().collect::<Vec<_>>()
-                            );
                             state.shortcut_conflicts =
                                 shortcut_state.conflicts.keys().cloned().collect();
                             // Only repopulate the active shortcut map when
