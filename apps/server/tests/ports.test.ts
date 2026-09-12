@@ -58,7 +58,42 @@ try {
   assert.equal(missing.status, 400);
 
   console.log("  ✅ manual forward, proxy, list, delete, and probe failure");
+
+  // Stopped target inside a live owner: the background sweep must reap the
+  // stale entry and notify SSE listeners (the production "stop server, keep
+  // terminal open" case).
+  const doomed = Bun.serve({
+    port: 0,
+    fetch() {
+      return new Response("doomed");
+    },
+  });
+  const changes: number[][] = [];
+  const onChange = (snapshot: Array<{ port: number }>) => {
+    changes.push(snapshot.map((entry) => entry.port));
+  };
+  portRegistry.on("change", onChange);
+  try {
+    const auto = await app.request("/api/ports/forward", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ port: doomed.port }),
+    });
+    assert.equal(auto.status, 200);
+    changes.length = 0;
+    doomed.stop(true);
+    await portRegistry.sweepOnce();
+    const remaining = await portRegistry.list("localhost");
+    assert.deepEqual(remaining, []);
+    assert.ok(changes.length >= 1, "expected a change event after reaping a stopped target");
+    assert.ok(changes.every((ports) => !ports.includes(doomed.port)), "reaped port must not reappear");
+  } finally {
+    portRegistry.off("change", onChange);
+  }
+
+  console.log("  ✅ stopped target is reaped with a change event");
 } finally {
+  portRegistry.stopReaper();
   await portRegistry.closeAll();
   target.stop(true);
 }

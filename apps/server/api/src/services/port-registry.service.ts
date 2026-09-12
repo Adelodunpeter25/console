@@ -5,6 +5,10 @@ const DEFAULT_PROXY_END = 45_999;
 const CANDIDATE_PATTERN = /(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?::|\s*:\s*)(\d{1,5})/gi;
 const ANSI_PATTERN = /\u001b\[[0-?]*[ -/]*[@-~]/g;
 const PROBE_TIMEOUT_MS = 2_000;
+const REAPER_INTERVAL_MS = (() => {
+  const parsed = Number.parseInt(process.env.PORT_REAPER_INTERVAL_MS ?? "", 10);
+  return Number.isInteger(parsed) && parsed >= 1_000 && parsed <= 60_000 ? parsed : 5_000;
+})();
 
 type Owner = { kind: "terminal" | "job"; id: string };
 
@@ -56,6 +60,9 @@ function stripHopByHopHeaders(headers: Headers): Headers {
 export class PortRegistry extends EventEmitter {
   private readonly entries = new Map<number, PortEntry>();
   private readonly ownerBuffers = new Map<string, string>();
+  private readonly ownerEpochs = new Map<string, number>();
+  private reaper: ReturnType<typeof setInterval> | undefined;
+  private reaping = false;
   private readonly proxyStart = parseRange(process.env.PROXY_PORT_START, DEFAULT_PROXY_START);
   private readonly proxyEnd = parseRange(process.env.PROXY_PORT_END, DEFAULT_PROXY_END);
   private nextProxyPort = this.proxyStart;
@@ -127,18 +134,75 @@ export class PortRegistry extends EventEmitter {
       (entry) => entry.owner?.kind === owner.kind && entry.owner.id === owner.id,
     );
     for (const entry of doomed) await this.remove(entry.port);
-    this.ownerBuffers.delete(`${owner.kind}:${owner.id}`);
+    const key = `${owner.kind}:${owner.id}`;
+    this.ownerBuffers.delete(key);
+    // Bump the epoch so any in-flight observeOutput → registerDetected probes
+    // for this owner cannot resurrect entries after cleanup.
+    this.ownerEpochs.set(key, (this.ownerEpochs.get(key) ?? 0) + 1);
   }
 
   async closeAll(): Promise<void> {
     for (const port of [...this.entries.keys()]) await this.remove(port);
   }
 
+  /** Start the background liveness sweep. Idempotent; safe to call twice. */
+  startReaper(intervalMs = REAPER_INTERVAL_MS): void {
+    if (this.reaper) return;
+    // One shared server-side sweep for all SSE clients. Without this, a dev
+    // server stopped inside a still-open terminal leaves a stale entry: no
+    // owner exit fires, so nothing emits "change" and the SSE stream never
+    // pushes the removal.
+    this.reaper = setInterval(() => {
+      void this.reap().catch(() => {});
+    }, intervalMs);
+    (this.reaper as unknown as { unref?: () => void })?.unref?.();
+  }
+
+  stopReaper(): void {
+    if (this.reaper) {
+      clearInterval(this.reaper);
+      this.reaper = undefined;
+    }
+  }
+
+  /** Run one liveness sweep immediately. Used by tests; the reaper calls reap() on a timer. */
+  async sweepOnce(): Promise<void> {
+    await this.reap();
+  }
+
+  private async reap(): Promise<void> {
+    if (this.reaping || this.entries.size === 0) return;
+    this.reaping = true;
+    try {
+      const entries = [...this.entries.values()];
+      const availability = await Promise.all(
+        entries.map(async (entry) => ({
+          entry,
+          listening: await this.isListening(entry.port),
+        })),
+      );
+      for (const { entry, listening } of availability) {
+        if (!listening && this.entries.get(entry.port) === entry) {
+          await this.remove(entry.port);
+        }
+      }
+    } finally {
+      this.reaping = false;
+    }
+  }
+
   private async registerDetected(port: number, owner: Owner): Promise<void> {
     this.validatePort(port);
+    const key = `${owner.kind}:${owner.id}`;
+    const epoch = this.ownerEpochs.get(key) ?? 0;
     const existing = this.entries.get(port);
     if (existing) return;
     if (!(await this.isListening(port))) return;
+    // The owner may have exited (or been killed) while the probe was in
+    // flight. Re-check the epoch so a late probe cannot recreate an entry
+    // that removeOwner() just cleaned up.
+    if ((this.ownerEpochs.get(key) ?? 0) !== epoch) return;
+    if (this.entries.get(port)) return;
     await this.createEntry(port, { owner, manual: false });
   }
 

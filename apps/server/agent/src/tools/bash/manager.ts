@@ -198,6 +198,7 @@ export class BashJobManager {
         rec.status = "killed";
         rec.aborted = true;
         rec.finishedAt = new Date().toISOString();
+        void portRegistry.removeOwner({ kind: "job", id: rec.jobId });
         this.notify(rec);
       }
     }
@@ -293,6 +294,7 @@ export class BashJobManager {
     rec.status = "expired";
     rec.finishedAt = new Date().toISOString();
     if (rec.timer) clearTimeout(rec.timer);
+    void portRegistry.removeOwner({ kind: "job", id: rec.jobId });
     this.scheduleRetention(rec);
     this.notify(rec);
     const fallback = setTimeout(() => safeKill(rec.proc, "SIGKILL"), 1000);

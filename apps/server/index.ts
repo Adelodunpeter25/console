@@ -83,6 +83,9 @@ process.on("SIGINT", shutdown);
 // Start server
 async function startServer(): Promise<void> {
   await setupLogging();
+  // Sweeps stale forwarded ports whose target stopped while the owning
+  // terminal/job stayed alive; removals emit "change" for SSE clients.
+  portRegistry.startReaper();
 
   Bun.serve<TerminalSocketData>({
     port,
