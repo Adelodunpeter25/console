@@ -1,9 +1,59 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { createAgentDeviceClient } from "agent-device";
 import type { DeviceActionRequest, DeviceDescriptor, DeviceDiagnostics } from "@console/types";
 
 const execAsync = promisify(exec);
+
+export function findAndroidSdk(): string | undefined {
+  const candidates = [
+    process.env.ANDROID_HOME,
+    process.env.ANDROID_SDK_ROOT,
+    process.env.HOME ? path.join(process.env.HOME, "Library", "Android", "sdk") : undefined,
+    process.env.HOME ? path.join(process.env.HOME, "Android", "Sdk") : undefined,
+    process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Android", "Sdk") : undefined,
+  ].filter((p): p is string => Boolean(p && fs.existsSync(p)));
+
+  return candidates[0];
+}
+
+export function resolveAdbPath(): string {
+  const sdk = findAndroidSdk();
+  if (sdk) {
+    const candidate = path.join(sdk, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb");
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return "adb";
+}
+
+export function resolveEmulatorPath(): string {
+  const sdk = findAndroidSdk();
+  if (sdk) {
+    const candidate = path.join(sdk, "emulator", process.platform === "win32" ? "emulator.exe" : "emulator");
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return "emulator";
+}
+
+// Ensure platform-tools & emulator directories are present in PATH for child tools
+const androidSdkRoot = findAndroidSdk();
+if (androidSdkRoot) {
+  const platformTools = path.join(androidSdkRoot, "platform-tools");
+  const emulatorDir = path.join(androidSdkRoot, "emulator");
+  const currentPath = process.env.PATH ?? "";
+  const toPrepend: string[] = [];
+  if (fs.existsSync(platformTools) && !currentPath.includes(platformTools)) {
+    toPrepend.push(platformTools);
+  }
+  if (fs.existsSync(emulatorDir) && !currentPath.includes(emulatorDir)) {
+    toPrepend.push(emulatorDir);
+  }
+  if (toPrepend.length > 0) {
+    process.env.PATH = `${toPrepend.join(":")}:${currentPath}`;
+  }
+}
 
 export class DeviceService {
   private client = createAgentDeviceClient({ session: "console-device-service" });
@@ -29,17 +79,20 @@ export class DeviceService {
     let emulatorAvailable = false;
     let androidSdkFound = false;
 
+    const adbBin = resolveAdbPath();
+    const emuBin = resolveEmulatorPath();
+
     try {
-      const { stdout: adbOut } = await execAsync("adb version");
+      const { stdout: adbOut } = await execAsync(`"${adbBin}" version`);
       if (adbOut) adbAvailable = true;
     } catch {}
 
     try {
-      const { stdout: emuOut } = await execAsync("emulator -version");
+      const { stdout: emuOut } = await execAsync(`"${emuBin}" -version`);
       if (emuOut) emulatorAvailable = true;
     } catch {}
 
-    if (process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT || adbAvailable) {
+    if (findAndroidSdk() || adbAvailable) {
       androidSdkFound = true;
     }
 
@@ -108,7 +161,7 @@ export class DeviceService {
       if (platform === "ios") {
         await execAsync(`xcrun simctl boot "${id}"`);
       } else {
-        exec(`emulator -avd "${id}"`);
+        exec(`"${resolveEmulatorPath()}" -avd "${id}"`);
       }
     }
   }
@@ -121,7 +174,7 @@ export class DeviceService {
       if (platform === "ios") {
         await execAsync(`xcrun simctl shutdown "${id}"`);
       } else {
-        await execAsync(`adb -s "${id}" emu kill`);
+        await execAsync(`"${resolveAdbPath()}" -s "${id}" emu kill`);
       }
     }
   }
@@ -134,7 +187,7 @@ export class DeviceService {
       if (platform === "ios") {
         await execAsync(`xcrun simctl launch "${id}" "${app}"`);
       } else {
-        await execAsync(`adb -s "${id}" shell monkey -p "${app}" -c android.intent.category.LAUNCHER 1`);
+        await execAsync(`"${resolveAdbPath()}" -s "${id}" shell monkey -p "${app}" -c android.intent.category.LAUNCHER 1`);
       }
     }
   }
@@ -193,33 +246,34 @@ export class DeviceService {
         await execAsync(`xcrun simctl ui "${id}" appearance "${req.appearance}"`);
       }
     } else {
+      const adb = resolveAdbPath();
       if (req.action === "tap" && req.x !== undefined && req.y !== undefined) {
         const pxX = Math.round(req.x * 1080);
         const pxY = Math.round(req.y * 2400);
-        await execAsync(`adb -s "${id}" shell input tap ${pxX} ${pxY}`);
+        await execAsync(`"${adb}" -s "${id}" shell input tap ${pxX} ${pxY}`);
       } else if (req.action === "swipe" && req.x !== undefined && req.y !== undefined && req.endX !== undefined && req.endY !== undefined) {
         const x1 = Math.round(req.x * 1080);
         const y1 = Math.round(req.y * 2400);
         const x2 = Math.round(req.endX * 1080);
         const y2 = Math.round(req.endY * 2400);
         const dur = req.durationMs ?? 300;
-        await execAsync(`adb -s "${id}" shell input swipe ${x1} ${y1} ${x2} ${y2} ${dur}`);
+        await execAsync(`"${adb}" -s "${id}" shell input swipe ${x1} ${y1} ${x2} ${y2} ${dur}`);
       } else if (req.action === "type" && req.text) {
         const escaped = req.text.replace(/ /g, "%s").replace(/"/g, '\\"');
-        await execAsync(`adb -s "${id}" shell input text "${escaped}"`);
+        await execAsync(`"${adb}" -s "${id}" shell input text "${escaped}"`);
       } else if (req.action === "home") {
-        await execAsync(`adb -s "${id}" shell input keyevent 3`);
+        await execAsync(`"${adb}" -s "${id}" shell input keyevent 3`);
       } else if (req.action === "back") {
-        await execAsync(`adb -s "${id}" shell input keyevent 4`);
+        await execAsync(`"${adb}" -s "${id}" shell input keyevent 4`);
       } else if (req.action === "volume_up") {
-        await execAsync(`adb -s "${id}" shell input keyevent 24`);
+        await execAsync(`"${adb}" -s "${id}" shell input keyevent 24`);
       } else if (req.action === "volume_down") {
-        await execAsync(`adb -s "${id}" shell input keyevent 25`);
+        await execAsync(`"${adb}" -s "${id}" shell input keyevent 25`);
       } else if (req.action === "power") {
-        await execAsync(`adb -s "${id}" shell input keyevent 26`);
+        await execAsync(`"${adb}" -s "${id}" shell input keyevent 26`);
       } else if (req.action === "appearance" && req.appearance) {
         const mode = req.appearance === "dark" ? "yes" : "no";
-        await execAsync(`adb -s "${id}" shell cmd uimode night ${mode}`);
+        await execAsync(`"${adb}" -s "${id}" shell cmd uimode night ${mode}`);
       }
     }
   }
@@ -236,7 +290,7 @@ export class DeviceService {
               stderr: "ignore",
             });
           } else {
-            proc = Bun.spawn(["adb", "-s", id, "exec-out", "screenrecord", "--output-format=h264", "-"], {
+            proc = Bun.spawn([resolveAdbPath(), "-s", id, "exec-out", "screenrecord", "--output-format=h264", "-"], {
               stdout: "pipe",
               stderr: "ignore",
             });
@@ -294,7 +348,7 @@ export class DeviceService {
       if (platform === "ios") {
         await execAsync(`xcrun simctl io "${id}" screenshot "${tmpFile}"`);
       } else {
-        await execAsync(`adb -s "${id}" exec-out screencap -p > "${tmpFile}"`);
+        await execAsync(`"${resolveAdbPath()}" -s "${id}" exec-out screencap -p > "${tmpFile}"`);
       }
       const data = await import("node:fs/promises").then((f) => f.readFile(tmpFile));
       await import("node:fs/promises").then((f) => f.unlink(tmpFile).catch(() => {}));
