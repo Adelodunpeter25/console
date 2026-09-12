@@ -90,13 +90,38 @@ impl ConsoleDesktopApp {
         let Some(project_id) = self.active_scripts_project_id() else {
             return;
         };
+        let loaded = self
+            .project_scripts_by_project
+            .get(&project_id)
+            .is_some_and(|state| state.loading || state.loaded);
+        if loaded {
+            return;
+        }
+        self.fetch_project_scripts(project_id, cx);
+    }
+
+    /// Re-read `console.toml` even when already loaded, so edits never need
+    /// an app restart. Runs and expanded rows merge by script id, so a
+    /// refresh never collapses open output or drops a live tail.
+    pub fn refresh_project_scripts(&mut self, cx: &mut Context<Self>) {
+        let Some(project_id) = self.active_scripts_project_id() else {
+            return;
+        };
+        let loading = self
+            .project_scripts_by_project
+            .get(&project_id)
+            .is_some_and(|state| state.loading);
+        if loading {
+            return;
+        }
+        self.fetch_project_scripts(project_id, cx);
+    }
+
+    fn fetch_project_scripts(&mut self, project_id: String, cx: &mut Context<Self>) {
         let state = self
             .project_scripts_by_project
             .entry(project_id.clone())
             .or_default();
-        if state.loading || state.loaded {
-            return;
-        }
         state.loading = true;
         state.generation += 1;
         let generation = state.generation;
@@ -320,6 +345,9 @@ impl ConsoleDesktopApp {
             self.persist_layout();
         }
         self.right_sidebar_bottom_run_selected = true;
+        // Selecting the tab re-reads console.toml, so edits show up without
+        // an app restart. Merge-by-id keeps open output and live tails.
+        self.refresh_project_scripts(cx);
         cx.notify();
     }
 

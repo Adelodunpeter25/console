@@ -456,6 +456,16 @@ impl Render for ConsoleDesktopApp {
                 }
             })
         };
+        let on_refresh_project_scripts: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.refresh_project_scripts(cx);
+                    });
+                }
+            })
+        };
 
         div()
             .id("app-root")
@@ -1006,6 +1016,7 @@ impl Render for ConsoleDesktopApp {
                                 on_run: on_run_project_script,
                                 on_stop: on_stop_project_script,
                                 on_toggle_expand: on_toggle_project_script,
+                                on_refresh: on_refresh_project_scripts,
                             }
                             .into_any_element()
                         };
