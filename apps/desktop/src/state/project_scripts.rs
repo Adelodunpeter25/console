@@ -307,6 +307,14 @@ impl ConsoleDesktopApp {
         let Some(run_id) = run_id else {
             return;
         };
+        // A stopped run restarts fresh: drop the old output now so the next
+        // start never shows stale logs beneath the new ones.
+        if let Some(state) = self.project_scripts_by_project.get_mut(&project_id)
+            && let Some(view) = state.runs.get_mut(script_id)
+        {
+            view.output.clear();
+        }
+        cx.notify();
 
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
