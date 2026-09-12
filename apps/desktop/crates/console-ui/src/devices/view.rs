@@ -289,9 +289,55 @@ impl DeviceViewer {
                     let y = value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                     self.send_tap(x, y, cx);
                 }
+                Some("swipe") => {
+                    let start_x = value.get("startX").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                    let start_y = value.get("startY").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                    let end_x = value.get("endX").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                    let end_y = value.get("endY").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                    let duration_ms = value.get("durationMs").and_then(|v| v.as_u64()).map(|d| d as u32);
+                    self.send_swipe(start_x, start_y, end_x, end_y, duration_ms, cx);
+                }
                 _ => {}
             }
         }
+    }
+
+    fn send_swipe(
+        &mut self,
+        start_x: f32,
+        start_y: f32,
+        end_x: f32,
+        end_y: f32,
+        duration_ms: Option<u32>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(device) = self.selected() else {
+            return;
+        };
+        let client = self.client.clone();
+        let platform = device.platform_kind().as_str().to_string();
+        let id = device.id.clone();
+        cx.spawn(async move |_, _| {
+            let _ = client
+                .devices
+                .interact(
+                    &id,
+                    &platform,
+                    DeviceActionRequest {
+                        action: "swipe".to_string(),
+                        x: Some(start_x),
+                        y: Some(start_y),
+                        end_x: Some(end_x),
+                        end_y: Some(end_y),
+                        duration_ms,
+                        text: None,
+                        key: None,
+                        appearance: None,
+                    },
+                )
+                .await;
+        })
+        .detach();
     }
 
     fn send_tap(&mut self, x: f32, y: f32, cx: &mut Context<Self>) {

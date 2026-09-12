@@ -9,3 +9,4 @@ export * from "./run.service.js";
 export * from "./project-scripts/service.js";
 export * from "./project-scripts/types.js";
 export * from "./session.service.js";
+export * from "./device/index.js";

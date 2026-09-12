@@ -19,17 +19,17 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-  html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: #0c0c0e; overflow: hidden; }
-  #stage { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
-  #screen, #still { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: #0c0c0e; overflow: hidden; user-select: none; -webkit-user-select: none; }
+  #stage { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; user-select: none; -webkit-user-select: none; }
+  #screen, #still { max-width: 100%; max-height: 100%; object-fit: contain; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; touch-action: none; }
   #still { display: none; }
   #status { position: absolute; left: 8px; bottom: 8px; font: 11px/1.4 -apple-system, system-ui, sans-serif; color: rgba(255,255,255,.75); background: rgba(0,0,0,.45); padding: 4px 8px; border-radius: 6px; pointer-events: none; }
 </style>
 </head>
 <body>
 <div id="stage">
-  <img id="screen" alt="device screen" />
-  <img id="still" alt="device screen still" />
+  <img id="screen" draggable="false" alt="device screen" />
+  <img id="still" draggable="false" alt="device screen still" />
   <div id="status">idle</div>
 </div>
 <script>
@@ -126,21 +126,61 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
     },
   };
 
-  screen.addEventListener('pointerdown', (ev) => {
-    const rect = screen.getBoundingClientRect();
-    const x = (ev.clientX - rect.left) / Math.max(1, rect.width);
-    const y = (ev.clientY - rect.top) / Math.max(1, rect.height);
-    report({ type: 'tap', x, y });
-    try { window.__consoleDevice.tap(x, y); } catch (e) {}
-  });
+  function setupGestures(el) {
+    let startX = 0;
+    let startY = 0;
+    let startTime = 0;
+    let isDown = false;
 
-  still.addEventListener('pointerdown', (ev) => {
-    const rect = still.getBoundingClientRect();
-    const x = (ev.clientX - rect.left) / Math.max(1, rect.width);
-    const y = (ev.clientY - rect.top) / Math.max(1, rect.height);
-    report({ type: 'tap', x, y });
-    try { window.__consoleDevice.tap(x, y); } catch (e) {}
-  });
+    el.addEventListener('dragstart', (ev) => ev.preventDefault());
+
+    el.addEventListener('pointerdown', (ev) => {
+      ev.preventDefault();
+      const rect = el.getBoundingClientRect();
+      startX = (ev.clientX - rect.left) / Math.max(1, rect.width);
+      startY = (ev.clientY - rect.top) / Math.max(1, rect.height);
+      startTime = performance.now();
+      isDown = true;
+      try { el.setPointerCapture(ev.pointerId); } catch (e) {}
+    });
+
+    el.addEventListener('pointerup', (ev) => {
+      if (!isDown) return;
+      isDown = false;
+      const rect = el.getBoundingClientRect();
+      const endX = (ev.clientX - rect.left) / Math.max(1, rect.width);
+      const endY = (ev.clientY - rect.top) / Math.max(1, rect.height);
+      const elapsed = Math.round(performance.now() - startTime);
+      const dx = endX - startX;
+      const dy = endY - startY;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist > 0.03) {
+        // Drag/swipe gesture (scrolling, swiping)
+        report({
+          type: 'swipe',
+          startX: Math.max(0, Math.min(1, startX)),
+          startY: Math.max(0, Math.min(1, startY)),
+          endX: Math.max(0, Math.min(1, endX)),
+          endY: Math.max(0, Math.min(1, endY)),
+          durationMs: Math.max(150, Math.min(elapsed, 1000)),
+        });
+      } else {
+        // Tap gesture
+        report({ type: 'tap', x: endX, y: endY });
+        try { window.__consoleDevice.tap(endX, endY); } catch (e) {}
+      }
+      try { el.releasePointerCapture(ev.pointerId); } catch (e) {}
+    });
+
+    el.addEventListener('pointercancel', (ev) => {
+      isDown = false;
+      try { el.releasePointerCapture(ev.pointerId); } catch (e) {}
+    });
+  }
+
+  setupGestures(screen);
+  setupGestures(still);
 
   setStatus('ready');
 })();
