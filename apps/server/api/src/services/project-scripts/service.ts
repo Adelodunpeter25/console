@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSharedSessionStorage } from "@/agent/src/session/storage.js";
+import { portRegistry } from "@/api/src/services/port-registry.service.js";
 import { loadProjectScripts } from "./config.js";
 import type { ProjectScript, ProjectScriptsResult, ScriptRun, ScriptRunEvent, ScriptRunStatus } from "./types.js";
 
@@ -23,6 +24,9 @@ async function readOutput(stream: ReadableStream<Uint8Array>, streamName: "stdou
       if (streamName === "stdout") run.stdout = (run.stdout + text).slice(-MAX_OUTPUT);
       else run.stderr = (run.stderr + text).slice(-MAX_OUTPUT);
       run.subscribers.forEach((subscriber) => subscriber({ type: "output", stream: streamName, text }));
+      // Feed the port registry like terminal output: localhost URLs printed
+      // by the script register its ports for preview/proxying.
+      void portRegistry.observeOutput({ kind: "job", id: run.runId }, text);
     }
   } finally {
     reader.releaseLock();
@@ -73,6 +77,7 @@ export class ProjectScriptsService {
       run.status = exitCode === 0 ? "succeeded" : "failed";
       run.subscribers.forEach((subscriber) => subscriber({ type: "exit", status: run.status as Exclude<ScriptRunStatus, "running">, exitCode }));
       run.subscribers.clear();
+      void portRegistry.removeOwner({ kind: "job", id: run.runId });
     });
     return this.snapshot(run);
   }
@@ -99,6 +104,7 @@ export class ProjectScriptsService {
     run.endedAt = new Date().toISOString();
     run.subscribers.forEach((subscriber) => subscriber({ type: "exit", status: "stopped", exitCode: null }));
     run.subscribers.clear();
+    void portRegistry.removeOwner({ kind: "job", id: run.runId });
     return true;
   }
 

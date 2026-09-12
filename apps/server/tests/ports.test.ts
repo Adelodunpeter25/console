@@ -92,6 +92,38 @@ try {
   }
 
   console.log("  ✅ stopped target is reaped with a change event");
+
+  // Script-run ("job") owners: project script output must feed port
+  // detection exactly like terminal output, and run exit/stop must drop
+  // the run's ports via removeOwner.
+  const jobTarget = Bun.serve({
+    port: 0,
+    fetch() {
+      return new Response("job");
+    },
+  });
+  try {
+    await portRegistry.observeOutput(
+      { kind: "job", id: "test-run-1" },
+      `ready on http://127.0.0.1:${jobTarget.port}/\n`,
+    );
+    const detected = await portRegistry.list("localhost");
+    assert.ok(
+      detected.some((entry) => entry.port === jobTarget.port),
+      "job owner output should register its port",
+    );
+    await portRegistry.removeOwner({ kind: "job", id: "test-run-1" });
+    const afterRemoveOwner = await portRegistry.list("localhost");
+    assert.ok(
+      afterRemoveOwner.every((entry) => entry.port !== jobTarget.port),
+      "removeOwner should drop the job's ports",
+    );
+  } finally {
+    jobTarget.stop(true);
+    await portRegistry.removeOwner({ kind: "job", id: "test-run-1" });
+  }
+
+  console.log("  ✅ job-owner output detects ports and cleans up on removeOwner");
 } finally {
   portRegistry.stopReaper();
   await portRegistry.closeAll();
