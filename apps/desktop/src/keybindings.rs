@@ -89,7 +89,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-o", AddProject, None),
         KeyBinding::new("secondary-p", QuickOpenFile, None),
         KeyBinding::new("secondary-k", ToggleCommandPalette, None),
-        KeyBinding::new("secondary-shift-p", ToggleTabPalette, None),
+        KeyBinding::new("secondary-t", ToggleTabPalette, None),
         KeyBinding::new("secondary-l", FocusComposer, None),
         KeyBinding::new("secondary-/", ToggleModelPicker, None),
         // Plain `/` refocuses the open picker's search box. Scoped to the
