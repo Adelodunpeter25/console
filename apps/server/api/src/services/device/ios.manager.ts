@@ -26,13 +26,18 @@ export class IosDeviceManager {
 
     if (process.platform === "darwin") {
       try {
+        if (fs.existsSync("/Applications/Xcode.app")) {
+          xcodeInstalled = true;
+          try {
+            const versionPlist = fs.readFileSync("/Applications/Xcode.app/Contents/version.plist", "utf-8");
+            const match = versionPlist.match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/);
+            if (match) {
+              xcodeVersion = `Xcode ${match[1]}`;
+            }
+          } catch {}
+        }
         const { stdout } = await execAsync("xcrun simctl help");
         if (stdout) simctlAvailable = true;
-        const xcodeVer = await execAsync("xcodebuild -version");
-        if (xcodeVer.stdout) {
-          xcodeInstalled = true;
-          xcodeVersion = xcodeVer.stdout.trim().split("\n")[0];
-        }
       } catch {}
     }
 
@@ -154,6 +159,69 @@ export class IosDeviceManager {
     } else if (req.action === "appearance" && req.appearance) {
       await execAsync(`xcrun simctl ui "${id}" appearance "${req.appearance}"`);
     }
+  }
+
+  private activeStreams = new Map<string, { streamUrl: string }>();
+
+  async ensureServeSim(id: string): Promise<string | undefined> {
+    const existing = this.activeStreams.get(id);
+    if (existing) {
+      try {
+        const probe = await fetch(existing.streamUrl, { method: "HEAD", signal: AbortSignal.timeout(1000) });
+        if (probe.ok) return existing.streamUrl;
+      } catch {}
+    }
+
+    try {
+      const serveSim = resolveServeSimCmd();
+      const { stdout } = await execAsync(`${serveSim} --detach -q "${id}"`);
+      const info = JSON.parse(stdout.trim()) as { streamUrl?: string };
+      if (info.streamUrl) {
+        this.activeStreams.set(id, { streamUrl: info.streamUrl });
+        return info.streamUrl;
+      }
+    } catch {}
+
+    return undefined;
+  }
+
+  async createIosStream(id: string, signal?: AbortSignal): Promise<ReadableStream<Uint8Array>> {
+    const streamUrl = await this.ensureServeSim(id);
+    if (streamUrl) {
+      try {
+        const res = await fetch(streamUrl, { signal });
+        if (res.ok && res.body) {
+          return res.body as ReadableStream<Uint8Array>;
+        }
+      } catch {}
+    }
+
+    // Fallback: fast continuous in-memory streaming
+    return new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const boundary = "frame";
+        const encoder = new TextEncoder();
+        while (!signal?.aborted) {
+          try {
+            const proc = Bun.spawn(["xcrun", "simctl", "io", id, "screenshot", "--type=jpeg", "-"], {
+              stdout: "pipe",
+              stderr: "ignore",
+            });
+            const data = new Uint8Array(await new Response(proc.stdout).arrayBuffer());
+            if (signal?.aborted) break;
+            if (data.length > 0) {
+              const header = `--${boundary}\r\nContent-Type: image/jpeg\r\nContent-Length: ${data.length}\r\n\r\n`;
+              controller.enqueue(encoder.encode(header));
+              controller.enqueue(data);
+              controller.enqueue(encoder.encode("\r\n"));
+            }
+          } catch {
+            break;
+          }
+        }
+        try { controller.close(); } catch {}
+      },
+    });
   }
 
   async captureStreamFrame(id: string): Promise<{ data: Buffer; mimeType: string }> {

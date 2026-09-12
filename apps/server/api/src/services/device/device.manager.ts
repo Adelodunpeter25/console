@@ -172,6 +172,10 @@ export class DeviceManager {
     return androidDeviceManager.createH264Stream(id, signal);
   }
 
+  async createIosStream(id: string, signal?: AbortSignal): Promise<ReadableStream<Uint8Array>> {
+    return iosDeviceManager.createIosStream(id, signal);
+  }
+
   async captureStreamFrame(id: string, platform: "ios" | "android"): Promise<{ data: Buffer; mimeType: string }> {
     if (platform === "ios") {
       return iosDeviceManager.captureStreamFrame(id);

@@ -85,29 +85,7 @@ deviceRoutes.get("/devices/:id/stream", async (c) => {
     });
   }
 
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const boundary = "frame";
-      const encoder = new TextEncoder();
-
-      while (!signal.aborted) {
-        try {
-          const { data, mimeType } = await deviceManager.captureStreamFrame(id, platform);
-          if (signal.aborted) break;
-          if (data && data.length > 0) {
-            const header = `--${boundary}\r\nContent-Type: ${mimeType}\r\nContent-Length: ${data.length}\r\n\r\n`;
-            controller.enqueue(encoder.encode(header));
-            controller.enqueue(new Uint8Array(data));
-            controller.enqueue(encoder.encode("\r\n"));
-          }
-        } catch {
-          break;
-        }
-      }
-      try { controller.close(); } catch {}
-    },
-  });
-
+  const stream = await deviceManager.createIosStream(id, signal);
   return new Response(stream, {
     headers: {
       "Content-Type": "multipart/x-mixed-replace; boundary=frame",
