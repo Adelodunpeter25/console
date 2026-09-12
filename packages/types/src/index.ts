@@ -9,3 +9,4 @@ export * from "./terminal";
 export * from "./tool";
 export * from "./todo";
 export * from "./usage";
+export * from "./device";
