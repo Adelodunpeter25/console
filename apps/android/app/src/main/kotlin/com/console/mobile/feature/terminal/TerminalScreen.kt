@@ -1,7 +1,5 @@
 package com.console.mobile.feature.terminal
 
-import android.view.KeyEvent
-import android.widget.EditText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,17 +24,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,14 +44,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
-import com.console.mobile.data.store.TerminalStatus
 import com.console.mobile.data.model.ProjectInfo
+import com.console.mobile.data.store.TerminalStatus
+import com.console.mobile.feature.terminal.native.NativeTerminalView
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -70,9 +69,9 @@ private val EXTRA_KEYS = listOf(
 
 /**
  * Port of screens/terminal/terminal-screen.tsx + useTerminalScreen + extra-keys-bar.
- * Ghostty native surface is a Phase-5 follow-up (reuses modules/console-terminal
- * JNI verbatim); meanwhile: PTY-backed scrollback + hidden EditText IME input +
- * extra-keys strip. Leaving the screen keeps the PTY alive (no kill on dispose).
+ * Ghostty native surface reuses modules/console-terminal's JNI (libghostty-vt +
+ * TerminalCanvasView) verbatim via NativeTerminalView, hosted through AndroidView.
+ * Leaving the screen keeps the PTY alive (no kill on dispose).
  */
 @Composable
 fun TerminalScreen(onBack: () -> Unit) {
@@ -86,9 +85,6 @@ fun TerminalScreen(onBack: () -> Unit) {
     val needsProjectPick = project == null && projectState.projects.isNotEmpty()
     var terminalId by remember(project?.id, project?.path) { mutableStateOf<String?>(null) }
     var spawnError by remember(project?.id, project?.path) { mutableStateOf<String?>(null) }
-    var resizeJob by remember { mutableStateOf<Job?>(null) }
-    val vScroll = rememberScrollState()
-    val hScroll = rememberScrollState()
 
     // Spawn or reuse on entry (80×24 default; resize follows surface — PTY reflows).
     LaunchedEffect(project?.id, project?.path) {
@@ -115,11 +111,6 @@ fun TerminalScreen(onBack: () -> Unit) {
     val term = terminalId?.let { terminals[it] }
     val buffer = terminalId?.let { buffers[it] } ?: ""
     val isRunning = term?.status == TerminalStatus.Running || term?.status == TerminalStatus.Spawning
-
-    // Follow tail on new output.
-    LaunchedEffect(buffer.length) {
-        try { vScroll.animateScrollTo(vScroll.maxValue) } catch (_: Exception) {}
-    }
 
     fun killAndRespawn() {
         val p = project ?: return
@@ -171,35 +162,22 @@ fun TerminalScreen(onBack: () -> Unit) {
             )
             project == null -> EmptyState(title = "No projects yet", description = "Add a project folder in Settings → Projects to open a shell.")
             else -> {
-                Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp)) {
-                    // Scrollback (read) + hidden IME input (write).
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        Box(modifier = Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color.Black).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(8.dp)).padding(8.dp)) {
-                            if (terminalId == null && spawnError == null) {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                                        Text("Starting shell…", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-                                    }
+                Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
+                    Box(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)).background(Color.Black).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(8.dp))) {
+                        if (terminalId == null && spawnError == null) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                                    Text("Starting shell…", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
                                 }
-                            } else {
-                                Text(
-                                    terminalTail(buffer),
-                                    color = Color(0xFFE4E4E7),
-                                    fontSize = 13.sp,
-                                    fontFamily = ConsoleMonoFamily,
-                                    lineHeight = 19.sp,
-                                    modifier = Modifier.fillMaxSize().verticalScroll(vScroll).horizontalScroll(hScroll),
-                                )
                             }
+                        } else {
+                            GhosttyTerminalSurface(
+                                terminalId = terminalId,
+                                buffer = buffer,
+                                isRunning = isRunning,
+                            )
                         }
-                        TerminalInputRow(
-                            enabled = isRunning && terminalId != null,
-                            onInput = { data ->
-                                val id = terminalId ?: return@TerminalInputRow
-                                scope.launch { withContext(Dispatchers.IO) { AppContainer.terminalRepository.write(id, data) } }
-                            },
-                        )
                     }
                 }
                 ExtraKeysBar(
@@ -211,15 +189,35 @@ fun TerminalScreen(onBack: () -> Unit) {
             }
         }
     }
-    @Suppress("UNUSED_EXPRESSION")
-    resizeJob
 }
 
-private fun terminalTail(buffer: String, maxChars: Int = 60_000): String {
-    if (buffer.length <= maxChars) return buffer.ifBlank { "" }
-    val cut = buffer.length - maxChars
-    val nl = buffer.indexOf('\n', cut)
-    return buffer.substring(if (nl == -1) cut else nl + 1)
+/** Hosts NativeTerminalView (Ghostty JNI renderer) inside Compose. */
+@Composable
+private fun GhosttyTerminalSurface(terminalId: String?, buffer: String, isRunning: Boolean) {
+    val scope = rememberCoroutineScope()
+    val terminalIdState = rememberUpdatedState(terminalId)
+    AndroidView(
+        factory = { ctx ->
+            NativeTerminalView(ctx).apply {
+                onInput = onInput@{ data ->
+                    val id = terminalIdState.value ?: return@onInput
+                    scope.launch { withContext(Dispatchers.IO) { AppContainer.terminalRepository.write(id, data) } }
+                }
+                onResize = onResize@{ cols, rows ->
+                    val id = terminalIdState.value ?: return@onResize
+                    scope.launch { withContext(Dispatchers.IO) { AppContainer.terminalRepository.resize(id, cols, rows) } }
+                }
+            }
+        },
+        update = { view ->
+            view.initialBuffer = buffer
+        },
+        onRelease = { view -> view.cleanup() },
+        modifier = Modifier.fillMaxSize(),
+    )
+    DisposableEffect(Unit) {
+        onDispose {}
+    }
 }
 
 @Composable
@@ -237,51 +235,6 @@ private fun ProjectPicker(projects: List<ProjectInfo>, onSelect: (String) -> Uni
                     Text(p.path, color = ConsoleColors.TextSecondary, fontSize = 11.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-        }
-    }
-}
-
-/** Hidden EditText bridged via AndroidView for IME input; echoes bytes to the PTY. */
-@Composable
-private fun TerminalInputRow(enabled: Boolean, onInput: (String) -> Unit) {
-    val keyboard = LocalSoftwareKeyboardController.current
-    Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        AndroidView(
-            factory = { ctx ->
-                EditText(ctx).apply {
-                    hint = "Type here…"
-                    setHintTextColor(android.graphics.Color.parseColor("#71717a"))
-                    setTextColor(android.graphics.Color.WHITE)
-                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                    textSize = 14f
-                    isSingleLine = false
-                    imeOptions = android.view.inputmethod.EditorInfo.IME_FLAG_NO_FULLSCREEN
-                    inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
-                    setOnKeyListener { _, keyCode, event ->
-                        if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DEL && text.isNullOrEmpty()) {
-                            onInput("\u007F")
-                            true
-                        } else false
-                    }
-                    addTextChangedListener(object : android.text.TextWatcher {
-                        override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                        override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {
-                            if (s == null) return
-                            if (c > 0) {
-                                val inserted = s.substring(a, a + c).toString()
-                                onInput(inserted)
-                            }
-                        }
-                        override fun afterTextChanged(s: android.text.Editable?) {
-                            s?.clear()
-                        }
-                    })
-                }
-            },
-            modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(ConsoleColors.Card).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 4.dp),
-        )
-        IconButton(onClick = { keyboard?.show() }, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Filled.Keyboard, contentDescription = "Show keyboard", tint = ConsoleColors.TextSecondary)
         }
     }
 }

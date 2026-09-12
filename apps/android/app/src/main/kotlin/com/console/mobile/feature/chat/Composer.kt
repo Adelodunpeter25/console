@@ -122,7 +122,7 @@ fun Composer(
         Row(
             modifier = Modifier.fillMaxWidth().clip(if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
                 .background(ConsoleColors.Card)
-                .border(1.dp, ConsoleColors.Border.copy(alpha = 0.8f), if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
+                .border(1.dp, ConsoleColors.Border, if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
                 .padding(start = 4.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
