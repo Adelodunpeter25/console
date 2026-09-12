@@ -11,6 +11,7 @@ fn test_workspace_node_serialization_roundtrip() {
             session_id: "session-123".into(),
             title: "First Chat".into(),
             project_id: Some("proj-abc".into()),
+            last_active_at_ms: None,
         },
     );
     ops::open_tab(
@@ -20,6 +21,7 @@ fn test_workspace_node_serialization_roundtrip() {
             path: "/path/to/file.rs".into(),
             title: "file.rs".into(),
             project_id: Some("proj-abc".into()),
+            last_active_at_ms: None,
         },
     );
 
@@ -46,6 +48,7 @@ fn test_split_and_deduplication_across_panes() {
             session_id: "chat-alpha".into(),
             title: "Alpha".into(),
             project_id: None,
+            last_active_at_ms: None,
         },
     );
 
@@ -58,6 +61,7 @@ fn test_split_and_deduplication_across_panes() {
             session_id: "chat-beta".into(),
             title: "Beta".into(),
             project_id: None,
+            last_active_at_ms: None,
         },
         false,
     )
@@ -95,6 +99,7 @@ fn test_set_tab_project_updates_stored_folder() {
             session_id: "chat-b".into(),
             title: "B".into(),
             project_id: Some("ndi".into()),
+            last_active_at_ms: None,
         },
     );
     assert!(ops::set_tab_project(
@@ -116,6 +121,7 @@ fn test_take_tab_leaves_old_workspace() {
                 session_id: id.into(),
                 title: id.into(),
                 project_id: Some(proj.into()),
+                last_active_at_ms: None,
             },
         );
     }
@@ -145,12 +151,14 @@ fn test_retain_project_tabs_drops_foreign_folder() {
                 session_id: id.into(),
                 title: id.into(),
                 project_id: Some(proj.into()),
+                last_active_at_ms: None,
             }
         } else {
             WorkspaceTabConfig::Terminal {
                 terminal_id: id.into(),
                 title: id.into(),
                 project_id: Some(proj.into()),
+                last_active_at_ms: None,
             }
         };
         ops::open_tab(&mut root, "pane-main", tab);
@@ -171,6 +179,7 @@ fn test_find_tab_returns_clone() {
             terminal_id: "term-1".into(),
             title: "Terminal".into(),
             project_id: None,
+            last_active_at_ms: None,
         },
     );
     let found = ops::find_tab(&root, "term:term-1").expect("tab found");
@@ -188,6 +197,7 @@ fn test_open_file_paths_collects_only_file_tabs() {
             session_id: "s".into(),
             title: "Chat".into(),
             project_id: None,
+            last_active_at_ms: None,
         },
     );
     ops::open_tab(
@@ -197,6 +207,7 @@ fn test_open_file_paths_collects_only_file_tabs() {
             path: "/a/b.rs".into(),
             title: "b.rs".into(),
             project_id: None,
+            last_active_at_ms: None,
         },
     );
     ops::open_tab(
@@ -206,6 +217,7 @@ fn test_open_file_paths_collects_only_file_tabs() {
             path: "/a/c.rs".into(),
             title: "Diff: c.rs".into(),
             project_id: None,
+            last_active_at_ms: None,
         },
     );
     let mut paths = ops::open_file_paths(&root);
@@ -223,6 +235,7 @@ fn test_preview_replace_stays_within_kind() {
             path: "/a/b.rs".into(),
             title: "Diff: b.rs".into(),
             project_id: None,
+            last_active_at_ms: None,
         },
     );
 
@@ -235,6 +248,7 @@ fn test_preview_replace_stays_within_kind() {
             path: "/a/c.rs".into(),
             title: "c.rs".into(),
             project_id: None,
+            last_active_at_ms: None,
         },
     );
     assert_eq!(file_id, "file:/a/c.rs");
@@ -249,6 +263,7 @@ fn test_preview_replace_stays_within_kind() {
             path: "/a/d.rs".into(),
             title: "d.rs".into(),
             project_id: None,
+            last_active_at_ms: None,
         },
     );
     assert_eq!(replaced, "file:/a/d.rs");

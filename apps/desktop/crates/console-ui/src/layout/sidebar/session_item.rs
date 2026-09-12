@@ -122,6 +122,7 @@ impl RenderOnce for SidebarSessionItem {
                 session_id: session.id.clone(),
                 title: display_title.clone(),
                 project_id: session.project_id.clone(),
+                last_active_at_ms: None,
             },
             None,
         );

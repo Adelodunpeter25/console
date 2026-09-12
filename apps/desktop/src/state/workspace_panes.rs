@@ -578,6 +578,7 @@ impl ConsoleDesktopApp {
             session_id: session_id.clone(),
             title: title.into(),
             project_id,
+            last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
         workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
         self.active_pane_id = Some(pane_id.to_string());
@@ -623,6 +624,7 @@ impl ConsoleDesktopApp {
             terminal_id: terminal_id.clone(),
             title: "Terminal".into(),
             project_id: self.pane_project_id(pane_id),
+            last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
         workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
         self.active_pane_id = Some(pane_id.to_string());
@@ -684,6 +686,7 @@ impl ConsoleDesktopApp {
             path: path.clone(),
             title,
             project_id: self.pane_project_id(pane_id),
+            last_active_at_ms: None,
         };
 
         let new_tab_id = workspace_ops::replace_or_open_tab(
@@ -944,6 +947,7 @@ impl ConsoleDesktopApp {
             path: path.clone(),
             title,
             project_id: self.pane_project_id(pane_id),
+            last_active_at_ms: None,
         };
 
         let new_tab_id = workspace_ops::replace_or_open_tab(
@@ -1236,6 +1240,14 @@ impl ConsoleDesktopApp {
     /// Activate a tab in a pane.
     pub fn select_workspace_tab(&mut self, pane_id: &str, tab_id: &str) {
         workspace_ops::select_tab(&mut self.workspace_root, pane_id, tab_id);
+        // Refresh the recency timestamp on the freshly-selected tab so the
+        // ⌘⇧P palette can sort open tabs by recent activity. Skipped when the
+        // tab is unknown (e.g. id collision or stale persisted state).
+        if let Some(leaf) = self.workspace_root.leaf_mut(pane_id) {
+            if let Some(tab) = leaf.tabs.iter_mut().find(|tab| tab.id() == tab_id) {
+                tab.set_last_active_at_ms(Some(chrono::Utc::now().timestamp_millis()));
+            }
+        }
         self.active_pane_id = Some(pane_id.to_string());
         self.persist_workspaces();
     }

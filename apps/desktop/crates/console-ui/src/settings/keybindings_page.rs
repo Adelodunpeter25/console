@@ -37,6 +37,13 @@ pub fn keybinding_categories() -> Vec<KeybindingCategory> {
                     context: "Global",
                 },
                 KeybindingEntry {
+                    action_name: "ToggleTabPalette",
+                    description: "Switch open chat or terminal tab",
+                    macos_keys: &["⇧", "⌘", "P"],
+                    other_keys: &["Ctrl", "Shift", "P"],
+                    context: "Global",
+                },
+                KeybindingEntry {
                     action_name: "QuickOpenFile",
                     description: "Quick open file",
                     macos_keys: &["⌘", "P"],

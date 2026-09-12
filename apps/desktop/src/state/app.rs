@@ -300,6 +300,8 @@ pub struct ConsoleDesktopApp {
     pub(crate) last_window_poll: Option<std::time::Instant>,
     /// ⌘K-style command palette (New Chat, New Terminal, …).
     pub command_palette: Entity<CommandPalette>,
+    /// ⌘⇧P palette for switching between open chat and terminal tabs.
+    pub tab_palette: Entity<CommandPalette>,
     /// ⌘P quick file open palette, scoped to the active pane's project root.
     pub quick_open_palette: Entity<QuickOpenPalette>,
     /// ⌘O remote directory browser / project picker.
@@ -869,6 +871,7 @@ impl ConsoleDesktopApp {
             pending_window_state: None,
             last_window_poll: None,
             command_palette: cx.new(|cx| CommandPalette::new(window, cx)),
+            tab_palette: cx.new(|cx| CommandPalette::new(window, cx)),
             quick_open_palette: cx
                 .new(|cx| QuickOpenPalette::new(client_for_palettes.clone(), window, cx)),
             project_browse_palette: cx

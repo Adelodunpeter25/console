@@ -1012,6 +1012,7 @@ impl Render for ConsoleDesktopApp {
             })
             // Palette overlays (each renders nothing while closed).
             .child(self.command_palette.clone())
+            .child(self.tab_palette.clone())
             .child(self.quick_open_palette.clone())
             .child(self.project_browse_palette.clone())
     }

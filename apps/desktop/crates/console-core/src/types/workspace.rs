@@ -19,6 +19,9 @@ pub enum WorkspaceTabConfig {
         title: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         project_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "lastActiveAtMs")]
+        last_active_at_ms: Option<i64>,
     },
     #[serde(rename = "terminal")]
     Terminal {
@@ -27,6 +30,9 @@ pub enum WorkspaceTabConfig {
         title: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         project_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "lastActiveAtMs")]
+        last_active_at_ms: Option<i64>,
     },
     #[serde(rename = "file")]
     File {
@@ -34,6 +40,9 @@ pub enum WorkspaceTabConfig {
         title: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         project_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "lastActiveAtMs")]
+        last_active_at_ms: Option<i64>,
     },
     #[serde(rename = "diff")]
     Diff {
@@ -41,6 +50,9 @@ pub enum WorkspaceTabConfig {
         title: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         project_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "lastActiveAtMs")]
+        last_active_at_ms: Option<i64>,
     },
 }
 
@@ -89,6 +101,24 @@ impl WorkspaceTabConfig {
             | Self::Terminal { project_id: p, .. }
             | Self::File { project_id: p, .. }
             | Self::Diff { project_id: p, .. } => *p = project_id,
+        }
+    }
+
+    pub fn last_active_at_ms(&self) -> Option<i64> {
+        match self {
+            Self::Chat { last_active_at_ms, .. }
+            | Self::Terminal { last_active_at_ms, .. }
+            | Self::File { last_active_at_ms, .. }
+            | Self::Diff { last_active_at_ms, .. } => *last_active_at_ms,
+        }
+    }
+
+    pub fn set_last_active_at_ms(&mut self, ts_ms: Option<i64>) {
+        match self {
+            Self::Chat { last_active_at_ms, .. }
+            | Self::Terminal { last_active_at_ms, .. }
+            | Self::File { last_active_at_ms, .. }
+            | Self::Diff { last_active_at_ms, .. } => *last_active_at_ms = ts_ms,
         }
     }
 }

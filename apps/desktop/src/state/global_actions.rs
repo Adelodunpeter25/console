@@ -5,16 +5,20 @@
 
 use std::rc::Rc;
 
-use console_core::CreateSessionDto;
+use console_core::{CreateSessionDto, WorkspaceNode, WorkspaceTabConfig};
 use console_ui::{IconName, MenuAlign, PaletteEntry, toggle_popover};
 use gpui::{Context, Focusable as _, WeakEntity, Window};
 
 use super::ConsoleDesktopApp;
 
-/// Static ⌘K entries shared by toggle and open paths, including chat sessions.
+/// Static ⌘K entries shared by toggle and open paths. Lists commands
+/// (New Chat / New Terminal) plus one row per saved server.
+///
+/// Chat and terminal *tab* switching lives behind ⌘⇧P — see
+/// [`tab_palette_entries`]. This palette is for creating and routing, not
+/// for jumping between tabs that are already open.
 fn command_palette_entries(
     entity: WeakEntity<ConsoleDesktopApp>,
-    sessions: &[console_core::SessionHeader],
     environments: &[super::environments::Environment],
 ) -> Vec<PaletteEntry> {
     let mut entries = vec![
@@ -58,24 +62,92 @@ fn command_palette_entries(
         );
     }
 
-    for session in sessions {
-        let sid = session.id.clone();
-        let entity = entity.clone();
-        let title = session.display_title().to_string();
-        let label = format!("Chat: {}", title);
-        entries.push(
-            PaletteEntry::new(format!("session-{}", sid), label, move |_window, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.select_and_open_session(sid.clone(), cx);
-                    });
+    entries
+}
+
+/// ⌘⇧P entries: open tabs in two visual groups — terminals first (always
+/// fewer, top of the list), then chat tabs sorted by recently-updated. Each
+/// entry routes to that tab via [`ConsoleDesktopApp::activate_workspace_tab`].
+fn tab_palette_entries(
+    entity: WeakEntity<ConsoleDesktopApp>,
+    workspace_root: &WorkspaceNode,
+) -> Vec<PaletteEntry> {
+    // Collect every open tab in layout order, tagged with its pane id and the
+    // pane's index for the visible label suffix.
+    let leaves: Vec<&console_core::LeafPaneNode> = workspace_root.leaves();
+    let pane_count = leaves.len();
+    let mut chat_entries: Vec<(i64, PaletteEntry)> = Vec::new();
+    let mut terminal_entries: Vec<PaletteEntry> = Vec::new();
+
+    for (pane_index, leaf) in leaves.iter().enumerate() {
+        for tab in &leaf.tabs {
+            match tab {
+                WorkspaceTabConfig::Terminal { .. } => {
+                    terminal_entries.push(tab_palette_entry(
+                        entity.clone(),
+                        &leaf.id,
+                        pane_index,
+                        pane_count,
+                        tab,
+                    ));
                 }
-            })
-            .icon(IconName::ChatRoundLine),
-        );
+                WorkspaceTabConfig::Chat { .. } => {
+                    let recency = tab.last_active_at_ms().unwrap_or(i64::MIN);
+                    chat_entries.push((
+                        recency,
+                        tab_palette_entry(
+                            entity.clone(),
+                            &leaf.id,
+                            pane_index,
+                            pane_count,
+                            tab,
+                        ),
+                    ));
+                }
+                // File and Diff tabs are out of scope for the ⌘⇧P palette;
+                // they're reachable via the tab bar and ⌘P file search.
+                WorkspaceTabConfig::File { .. } | WorkspaceTabConfig::Diff { .. } => {}
+            }
+        }
     }
 
+    // Chat sorted by recency: most-recently updated first. Tabs without a
+    // timestamp share the bottom of the list in insertion order.
+    chat_entries.sort_by(|(a, _), (b, _)| b.cmp(a));
+    let mut entries = terminal_entries;
+    entries.extend(chat_entries.into_iter().map(|(_, entry)| entry));
     entries
+}
+
+fn tab_palette_entry(
+    entity: WeakEntity<ConsoleDesktopApp>,
+    pane_id: &str,
+    pane_index: usize,
+    pane_count: usize,
+    tab: &WorkspaceTabConfig,
+) -> PaletteEntry {
+    let tab_id = tab.id();
+    let title = tab.title().to_string();
+    let pane_suffix = if pane_count > 1 {
+        format!(" · P{}", pane_index + 1)
+    } else {
+        String::new()
+    };
+    let label = format!("{}{}", title, pane_suffix);
+    let icon = match tab {
+        WorkspaceTabConfig::Chat { .. } => IconName::ChatRoundLine,
+        _ => IconName::Terminal,
+    };
+    let pane_id_for_handler = pane_id.to_string();
+    let tab_id_for_handler = tab_id.clone();
+    PaletteEntry::new(format!("tab-{}", tab_id), label, move |_window, cx| {
+        if let Some(app) = entity.upgrade() {
+            app.update(cx, |this, cx| {
+                this.activate_workspace_tab(&pane_id_for_handler, &tab_id_for_handler, cx);
+            });
+        }
+    })
+    .icon(icon)
 }
 
 impl ConsoleDesktopApp {
@@ -194,11 +266,10 @@ impl ConsoleDesktopApp {
     /// closures; async modes replace them via their own wrappers.
     pub fn toggle_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let entity = cx.entity().downgrade();
-        let sessions = self.sessions.clone();
         let environments = self.environments.clone();
         self.command_palette.update(cx, |palette, cx| {
             palette.set_entries(
-                command_palette_entries(entity, &sessions, &environments),
+                command_palette_entries(entity, &environments),
                 cx,
             );
             palette.toggle(window, cx);
@@ -237,14 +308,25 @@ impl ConsoleDesktopApp {
             return;
         }
         let entity = cx.entity().downgrade();
-        let sessions = self.sessions.clone();
         let environments = self.environments.clone();
         self.command_palette.update(cx, |palette, cx| {
             palette.set_entries(
-                command_palette_entries(entity, &sessions, &environments),
+                command_palette_entries(entity, &environments),
                 cx,
             );
             palette.show(window, cx);
+        });
+        cx.notify();
+    }
+
+    /// ⌘⇧P — toggle the open-tab palette. Terminal tabs appear first (always
+    /// the smaller group), then chat tabs sorted by recency.
+    pub fn toggle_tab_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let entity = cx.entity().downgrade();
+        let workspace_root = self.workspace_root.clone();
+        self.tab_palette.update(cx, |palette, cx| {
+            palette.set_entries(tab_palette_entries(entity, &workspace_root), cx);
+            palette.toggle(window, cx);
         });
         cx.notify();
     }
@@ -253,6 +335,7 @@ impl ConsoleDesktopApp {
     pub fn focus_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Don't fight any palette for focus while it is open.
         if self.command_palette.read(cx).is_open(cx)
+            || self.tab_palette.read(cx).is_open(cx)
             || self.quick_open_palette.read(cx).is_open(cx)
             || self.project_browse_palette.read(cx).is_open(cx)
         {
@@ -270,6 +353,7 @@ impl ConsoleDesktopApp {
     pub fn toggle_model_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Don't fight any palette for focus while it is open.
         if self.command_palette.read(cx).is_open(cx)
+            || self.tab_palette.read(cx).is_open(cx)
             || self.quick_open_palette.read(cx).is_open(cx)
             || self.project_browse_palette.read(cx).is_open(cx)
         {
