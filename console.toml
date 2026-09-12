@@ -1,0 +1,18 @@
+# Project run scripts for the Console monorepo.
+# Listed in the desktop Run tab; run with the repo root as working directory.
+
+[scripts.dev-server]
+label = "Dev Server :3001"
+command = "PORT=3001 bun --watch apps/server/index.ts"
+shortcut = "cmd-r"
+persistent = true
+
+[scripts.dev-desktop]
+label = "Dev Desktop"
+command = "bash apps/desktop/scripts/dev.sh"
+persistent = true
+
+[scripts.package-desktop]
+label = "Package Desktop"
+command = "bash apps/desktop/scripts/package.sh"
+persistent = false
