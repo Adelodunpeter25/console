@@ -421,6 +421,9 @@ impl RenderOnce for RunPanel {
                         .bg(theme.inset)
                         .max_h(px(220.0))
                         .overflow_y_scroll()
+                        // Own the wheel while hovering output: without this
+                        // the event bubbles and the script list scrolls too.
+                        .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
                         .child(body),
                 );
             }
