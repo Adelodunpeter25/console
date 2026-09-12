@@ -122,6 +122,9 @@ impl ConsoleDesktopApp {
         if let Some(state) = self.right_sidebar_terminals_by_cwd.get_mut(&cwd) {
             if index < state.terminals.len() {
                 state.active_idx = index;
+                // Leaving the Run tab: the body renders the Run panel while
+                // this flag is set, so it must clear on every terminal select.
+                self.right_sidebar_bottom_run_selected = false;
                 self.persist_workspaces();
                 cx.notify();
             }
