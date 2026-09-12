@@ -211,7 +211,7 @@ pub fn keybinding_categories() -> Vec<KeybindingCategory> {
                 },
                 KeybindingEntry {
                     action_name: "Word / Line edit",
-                    description: "Word jumps and deletes (Opt), line deletes (⌘⌫ macOS, Emacs Ctrl keys)",
+                    description: "Word jumps and deletes (Opt), line deletes (⌘⌫)",
                     macos_keys: &["⌥", "←/→/⌫"],
                     other_keys: &["Ctrl", "←/→"],
                     context: "Composer",
@@ -571,6 +571,7 @@ impl RenderOnce for KeybindingsPage {
                                     div()
                                         .text_size(px(13.0))
                                         .text_color(theme.text)
+                                        .truncate()
                                         .child(entry.description.to_string()),
                                 )
                                 .child(
