@@ -262,7 +262,6 @@ impl ConsoleDesktopApp {
                 .entry(script_id.to_string())
                 .or_default()
                 .starting = true;
-            state.expanded.insert(script_id.to_string());
             state.error = None;
         }
         cx.notify();
