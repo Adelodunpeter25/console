@@ -118,11 +118,30 @@ function renderWorkspaceTree(tree: DiscoveredContext["workspaceTree"], enabled: 
   ].join("\n");
 }
 
-function renderWorkstation(env: DiscoveredContext["environment"]): string {
+function renderWorkstation(env: DiscoveredContext["environment"], approvalMode?: ApprovalMode): string {
   const lines = [`Date: ${env.date}`, `CWD: ${env.cwd}`, `OS: ${env.os}`, `Arch: ${env.arch}`];
   if (env.node) lines.push(`Node: ${env.node}`);
   if (env.gitBranch) lines.push(`Git branch: ${env.gitBranch}`);
   if (env.model) lines.push(`Model: ${env.model}`);
+
+  const critical =
+    approvalMode === "plan-mode"
+      ? [
+          "<critical>",
+          "- Each response MUST advance the task.",
+          "- Default to discussion and questions; do not run commands or write files.",
+          "- Verify significant behavioral changes before yielding when tools allow.",
+          "- Never search code/files via bash (grep, rg, find). Use the dedicated `grep` and `glob` tools — they run on an indexed engine and are faster.",
+          "</critical>",
+        ]
+      : [
+          "<critical>",
+          "- Each response MUST advance the task.",
+          "- Default to informed action; do not ask for confirmation when tools or repo context can answer.",
+          "- Verify significant behavioral changes before yielding when tools allow.",
+          "- Never search code/files via bash (grep, rg, find). Use the dedicated `grep` and `glob` tools — they run on an indexed engine and are faster.",
+          "</critical>",
+        ];
 
   return [
     "# Workstation",
@@ -131,12 +150,7 @@ function renderWorkstation(env: DiscoveredContext["environment"]): string {
     "</workstation>",
     `Today is ${env.date}. Working directory is '${env.cwd}'.`,
     "",
-    "<critical>",
-    "- Each response MUST advance the task.",
-    "- Default to informed action; do not ask for confirmation when tools or repo context can answer.",
-    "- Verify significant behavioral changes before yielding when tools allow.",
-    "- Never search code/files via bash (grep, rg, find). Use the dedicated `grep` and `glob` tools — they run on an indexed engine and are faster.",
-    "</critical>",
+    ...critical,
   ].join("\n");
 }
 
@@ -225,11 +239,11 @@ function renderApprovalModeInstruction(mode?: ApprovalMode): string {
       return [
         heading,
         tag,
-        "Plan mode is ACTIVE. You have FULL permissions to explore and act:",
-        "- Freely explore the codebase, read files, run diagnostic commands, and use subagents.",
-        "- You MAY write, edit, and execute commands as needed to verify your plan.",
-        "- Formulate a detailed, step-by-step implementation plan artifact.",
-        "- Present your proposed implementation plan for user review without implementing.",
+        "Plan mode is ACTIVE. Read-only by default:",
+        "- You may read files, search the codebase, and ask clarifying questions to shape the design.",
+        "- You MUST NOT create, edit, or delete files; run build/install/migration/test commands; commit, push, or spawn implementation subagents.",
+        "- Plans live in chat. Only write a plan file (under /Users/adelodunpeter/.opencode/plan) when the user explicitly asks.",
+        "- If the user asks you to implement, tell them to switch agents. Do not silently start implementing.",
         "</approval-mode-instructions>",
       ].join("\n");
 
@@ -270,7 +284,7 @@ export async function buildSystemPrompt(
     section("commands", renderCommands(context.commands)),
     section("repo-rules", renderContextFiles(context.contextFiles)),
     section("workspace-tree", renderWorkspaceTree(context.workspaceTree, includeTree)),
-    section("workstation", renderWorkstation(context.environment)),
+    section("workstation", renderWorkstation(context.environment, options.approvalMode)),
     section("append", options.appendPrompt),
   ].filter((s): s is { name: string; content: string } => s !== null);
 
