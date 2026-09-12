@@ -4,7 +4,7 @@
 [scripts.dev-server]
 label = "Dev Server :3001"
 command = "PORT=3001 bun --watch apps/server/index.ts"
-shortcut = "cmd-r"
+shortcut = "cmd-shift-r"
 persistent = true
 
 [scripts.dev-desktop]
@@ -15,4 +15,5 @@ persistent = true
 [scripts.package-desktop]
 label = "Package Desktop"
 command = "bash apps/desktop/scripts/package.sh"
+shortcut = "cmd-shift-p"
 persistent = false
