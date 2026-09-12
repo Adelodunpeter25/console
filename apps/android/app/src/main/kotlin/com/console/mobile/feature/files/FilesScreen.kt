@@ -3,6 +3,8 @@ package com.console.mobile.feature.files
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -379,5 +381,7 @@ private fun CodePreview(content: String) {
     }
 }
 
-private fun Modifier.verticalScroll2(): Modifier = this.then(androidx.compose.foundation.verticalScroll(androidx.compose.foundation.rememberScrollState()))
-private fun Modifier.hScroll2(): Modifier = this.then(androidx.compose.foundation.horizontalScroll(androidx.compose.foundation.rememberScrollState()))
+@Composable
+private fun Modifier.verticalScroll2(): Modifier = this.verticalScroll(androidx.compose.foundation.rememberScrollState())
+@Composable
+private fun Modifier.hScroll2(): Modifier = this.horizontalScroll(androidx.compose.foundation.rememberScrollState())

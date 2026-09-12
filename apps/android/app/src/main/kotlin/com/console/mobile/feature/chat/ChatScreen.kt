@@ -15,9 +15,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.GitHub
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Difference
 import androidx.compose.material3.Icon
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.IconButton
@@ -169,7 +169,7 @@ fun ChatScreen(
                     Icon(Icons.Filled.Folder, contentDescription = "Open file explorer", tint = Color.White)
                 }
                 IconButton(onClick = { jumpToProjectTab(MobileTab.Changes) }, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Filled.GitHub, contentDescription = "Open changes", tint = Color.White)
+                    Icon(Icons.Filled.Difference, contentDescription = "Open changes", tint = Color.White)
                 }
                 IconButton(onClick = { jumpToProjectTab(MobileTab.Terminal) }, modifier = Modifier.size(40.dp)) {
                     Icon(Icons.Filled.Terminal, contentDescription = "Open terminal", tint = Color.White)
@@ -263,4 +263,6 @@ fun ChatScreen(
     }
 
     // Consume streaming errors surfaced as messages — scroll already follows.
-    @Suppress(\"UNUSED_EXPRESSION\")\n    LaunchedEffect(sessionStatuses[sessionId]) { }\n}
+    @Suppress("UNUSED_EXPRESSION")
+    LaunchedEffect(sessionStatuses[sessionId]) { }
+}

@@ -8,19 +8,25 @@ import com.console.mobile.data.model.SubagentInfo
 import com.console.mobile.data.model.TodoItem
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
+import kotlinx.serialization.Serializable
 
 data class PendingQuestion(val request: AskQuestionRequest)
 data class PendingPermission(val request: PermissionRequest)
 
 enum class RunStatus { Working, Completed, Aborted, Failed }
 
+@Serializable
 sealed interface ActivityEvent {
     val id: String
+    @Serializable
     data class Text(override val id: String, val text: String) : ActivityEvent
+    @Serializable
     data class Thinking(override val id: String, val text: String) : ActivityEvent
+    @Serializable
     data class ToolCallEvent(override val id: String, val call: ToolCall, val result: ToolResult? = null) : ActivityEvent
 }
 
+@Serializable
 data class RunActivityState(
     val runId: String,
     val startedAt: Long? = null,

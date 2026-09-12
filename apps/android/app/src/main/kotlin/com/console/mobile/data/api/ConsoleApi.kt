@@ -84,6 +84,9 @@ interface ConsoleApi {
     suspend fun setFavorite(favorite: ModelFavorite, isFavorite: Boolean)
 }
 
+@kotlinx.serialization.Serializable
 data class FsBrowseResult(val currentPath: String, val parentPath: String?, val entries: List<FsTreeEntry>)
+@kotlinx.serialization.Serializable
 data class FsFileContent(val content: String, val path: String)
+@kotlinx.serialization.Serializable
 data class LoginUrlResult(val authUrl: String, val state: String, val redirectUri: String)

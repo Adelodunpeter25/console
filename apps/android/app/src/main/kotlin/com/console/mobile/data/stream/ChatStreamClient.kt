@@ -1,7 +1,7 @@
 package com.console.mobile.data.stream
 
+import com.console.mobile.data.api.ConsoleJson
 import com.console.mobile.data.model.AgentSessionEvent
-import com.console.mobile.data.model.ConsoleJson
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

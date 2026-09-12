@@ -49,9 +49,10 @@ class RunStreamController(
     }
 
     /** Attach to the server-side active run, replaying events newer than since. */
-    fun attach(since: Long? = null, client: ChatStreamClient = stream ?: return) {
-        stream = client
-        open { client.attach(deps.baseUrl(), sessionId, since, deps.authToken()) }
+    fun attach(since: Long? = null, client: ChatStreamClient? = stream) {
+        val c = client ?: return
+        stream = c
+        open { c.attach(deps.baseUrl(), sessionId, since, deps.authToken()) }
     }
 
     /** User-initiated stop. */

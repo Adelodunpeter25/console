@@ -74,8 +74,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Port of components/chat/composer/* (composer, composer-input, composer-bottom-strip,
- * attachment-strip, selectors/*). Multiline input + send/stop + image attach +
+ * Port of components/chat/composer (composer, composer-input, composer-bottom-strip,
+ * attachment-strip, selectors). Multiline input + send/stop + image attach +
  * project/model/approval pickers.
  */
 @Composable

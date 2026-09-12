@@ -14,8 +14,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AlertTriangle
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -137,7 +139,7 @@ private fun UsageProviderCard(displayName: String, report: UsageReport?, loggedI
             }
         } else if (report == null) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 12.dp)) {
-                Icon(Icons.Filled.AlertTriangle, contentDescription = null, tint = Color(0xFFFBBF24), modifier = Modifier.size(14.dp))
+                Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFFBBF24), modifier = Modifier.size(14.dp))
                 Text("Quota unavailable — token expired, project missing, or billing disabled. Re-login in Account.", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
             }
         } else if (report.limits.isEmpty()) {
@@ -179,4 +181,15 @@ private fun UsageLimitRow(limit: UsageLimit) {
             }
         }
         Box(modifier = Modifier.fillMaxWidth().padding(top = 6.dp).height(6.dp).clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.1f))) {
-            Box(modifier = Modifier.fillMaxWidth(barPct).height(6.dp).clip(RoundedCornerShape(999.dp)).background(colo                                                                                                                                                                                                                     
+            Box(modifier = Modifier.fillMaxWidth(barPct).height(6.dp).clip(RoundedCornerShape(999.dp)).background(color))
+        }
+    }
+}
+
+private fun parseUsageColor(hex: String): Color {
+    return try {
+        Color(android.graphics.Color.parseColor(hex))
+    } catch (_: Exception) {
+        ConsoleColors.TextMuted
+    }
+}
