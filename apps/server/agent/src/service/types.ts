@@ -3,11 +3,14 @@ import type {
   AgentSessionEvent,
   AgentTool,
   ApprovalMode,
+  CacheIdentity,
+  CacheRetention,
   Model,
   ThinkingLevel,
   PermissionRequest,
   ToolCall,
   ToolResult,
+  TurnUsage,
 } from "@/agent/src/types/index.js";
 import type { CompactionOptions } from "@/agent/src/compaction/index.js";
 
@@ -20,7 +23,13 @@ export type LLMDelta =
       name: string;
       argumentsJson: string;
       thoughtSignature?: string;
-    };
+    }
+  /**
+   * Final cumulative usage for the turn. Providers should yield exactly one of
+   * these per request — emitted as the last delta so callers can attach it to
+   * the resulting AssistantMessage without parsing intermediate chunks.
+   */
+  | { type: "usage"; usage: TurnUsage };
 
 export type StreamFn = (params: {
   model: Model;
@@ -29,6 +38,10 @@ export type StreamFn = (params: {
   tools: AgentTool[];
   signal?: AbortSignal;
   thinkingLevel?: ThinkingLevel;
+  /** Provider-neutral cache retention hint. Providers decide whether/how to honor it. */
+  cacheRetention?: CacheRetention;
+  /** Stable cache identity for this logical conversation. Omit when the provider cannot honor a stable key. */
+  cacheIdentity?: CacheIdentity;
 }) => AsyncIterable<LLMDelta>;
 
 export type CompactionSummaryFn = (messages: AgentMessage[], signal?: AbortSignal) => Promise<string>;
@@ -63,6 +76,17 @@ export interface AgentLoopConfig {
   onToolCall?: (call: ToolCall) => Promise<void> | void;
   /** Hook called after a tool finishes executing. */
   onToolResult?: (call: ToolCall, result: ToolResult) => Promise<void> | void;
+  /**
+   * Provider-neutral cache retention hint passed through to `streamFn`.
+   * Defaults to "short" when not set; providers decide whether to honor it.
+   */
+  cacheRetention?: CacheRetention;
+  /**
+   * Stable cache identity passed through to `streamFn`. Should be stable for
+   * the lifetime of one logical conversation (rotated when provider/model
+   * changes).
+   */
+  cacheIdentity?: CacheIdentity;
 }
 
 export interface StreamParams {
@@ -72,4 +96,6 @@ export interface StreamParams {
   tools: AgentTool[];
   signal?: AbortSignal;
   thinkingLevel?: ThinkingLevel;
+  cacheRetention?: CacheRetention;
+  cacheIdentity?: CacheIdentity;
 }

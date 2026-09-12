@@ -1,4 +1,5 @@
 import type { ToolCall } from "./tool";
+import type { TurnUsage } from "./cache";
 
 export interface TextPart {
   type: "text";
@@ -41,6 +42,8 @@ export interface AssistantMessage {
   id?: string;
   content: AssistantMessageContent[];
   stopReason?: "stop" | "toolUse" | "maxTokens" | "aborted";
+  /** Normalized per-turn usage with cache breakdown (when the provider reports it). */
+  usage?: TurnUsage;
 }
 
 export interface ToolResultMessage {

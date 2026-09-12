@@ -3,6 +3,8 @@ import type {
   AgentSessionEvent,
   AgentTool,
   ApprovalMode,
+  CacheIdentity,
+  CacheRetention,
   ImagePart,
   Model,
   PermissionRequest,
@@ -10,6 +12,7 @@ import type {
 } from "@/agent/src/types/index.js";
 import { createSubagentTool } from "@/agent/src/tools/subagent.js";
 import { bindToolCwd } from "@console/types";
+import { randomUUID } from "node:crypto";
 import type { CompactionOptions } from "../compaction/index.js";
 import type { CompactionSummaryFn } from "./types.js";
 import { hasConfiguredRole, resolveModelRole } from "./role-resolver.js";
@@ -52,6 +55,18 @@ export interface AgentOptions {
   summarizeCompaction?: CompactionSummaryFn;
   /** Called for every event emitted during a run. */
   onEvent?: (event: AgentSessionEvent) => void;
+  /**
+   * Provider-neutral cache retention hint. Defaults to "short" so providers
+   * that auto-cache keep a warm prefix across turns of one conversation.
+   * Set to "none" to disable cache controls even on supporting providers.
+   */
+  cacheRetention?: CacheRetention;
+  /**
+   * Optional pre-existing stable cache identity. When omitted, one is
+   * generated on construction. The identity rotates when `setModel` changes
+   * provider or model id.
+   */
+  cacheIdentity?: CacheIdentity;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,6 +88,8 @@ export class Agent {
   private _onApproval?: AgentOptions["onApproval"];
   private _onEvent?: (event: AgentSessionEvent) => void;
   private summarizeCompaction?: CompactionSummaryFn;
+  private _cacheRetention: CacheRetention;
+  private _cacheIdentity: CacheIdentity;
 
   private _messages: AgentMessage[] = [];
   private _abortController?: AbortController;
@@ -88,6 +105,16 @@ export class Agent {
     this._approvalMode = options.approvalMode ?? "always-ask";
     this._onApproval = options.onApproval;
     this._onEvent = options.onEvent;
+    this._cacheRetention = options.cacheRetention ?? "short";
+    // Stable per-conversation identity. Cached prefixes are not portable
+    // across providers or models, so we bind the identity to (provider, model)
+    // at construction time. setModel() rotates it when either changes.
+    this._cacheIdentity =
+      options.cacheIdentity ?? {
+        conversationId: randomUUID(),
+        provider: options.model.provider,
+        modelId: options.model.id,
+      };
     this.summarizeCompaction = options.summarizeCompaction;
     if (!this.summarizeCompaction && this._compaction?.summaryStrategy === "llm") {
       this.summarizeCompaction = async (messages, signal) => {
@@ -154,12 +181,36 @@ export class Agent {
     return this._approvalMode;
   }
 
+  /** Current cache retention hint. */
+  get cacheRetention(): CacheRetention {
+    return this._cacheRetention;
+  }
+
+  /**
+   * Stable cache identity for this Agent. The conversation id is reused
+   * across turns and safe retries; it rotates when the provider or model
+   * changes (see setModel).
+   */
+  get cacheIdentity(): CacheIdentity {
+    return this._cacheIdentity;
+  }
+
 
   // -------------------------------------------------------------------------
   // Configuration setters (can be changed between runs)
   // -------------------------------------------------------------------------
 
   setModel(model: Model): void {
+    // Cached prefixes are not portable across providers or models. Rotating
+    // the conversation id here ensures providers treat this as a fresh cache
+    // namespace rather than attempting (and failing) to reuse a stale one.
+    if (model.provider !== this._model.provider || model.id !== this._model.id) {
+      this._cacheIdentity = {
+        conversationId: randomUUID(),
+        provider: model.provider,
+        modelId: model.id,
+      };
+    }
     this._model = model;
   }
 
@@ -177,6 +228,10 @@ export class Agent {
 
   setApprovalMode(mode: ApprovalMode): void {
     this._approvalMode = mode;
+  }
+
+  setCacheRetention(retention: CacheRetention): void {
+    this._cacheRetention = retention;
   }
 
   setOnApproval(onApproval?: AgentOptions["onApproval"]): void {
@@ -245,6 +300,8 @@ export class Agent {
       summarizeCompaction: this.summarizeCompaction,
       signal: this._abortController.signal,
       onEvent: this._onEvent,
+      cacheRetention: this._cacheRetention,
+      cacheIdentity: this._cacheIdentity,
     };
 
     // First run: use agentLoop (adds the prompt as a UserMessage internally)

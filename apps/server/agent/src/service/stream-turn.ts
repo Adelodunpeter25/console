@@ -1,10 +1,15 @@
 import { extractThinkingFromText } from "./thinking.js";
 import { parseToolCallArguments } from "@/agent/src/utils/model-turn.js";
-import type { AgentSessionEvent, AssistantMessage, ToolCall } from "@/agent/src/types/index.js";
+import type { AgentSessionEvent, AssistantMessage, ToolCall, TurnUsage } from "@/agent/src/types/index.js";
 import type { StreamFn, StreamParams } from "./types.js";
 
 /**
  * Stream one turn from the LLM, collecting all text, thinking, and tool-call deltas.
+ *
+ * If the provider yields a final `usage` delta, it is attached to the returned
+ * `AssistantMessage.usage` so it flows through persistence and the rest of the
+ * pipeline. Providers that report cumulative usage per chunk should only yield
+ * one `usage` delta (the final cumulative record is authoritative).
  */
 export async function streamOneTurn(
   params: StreamParams,
@@ -36,6 +41,9 @@ export async function streamOneTurn(
     }
   >();
   const toolCallOrder: string[] = [];
+  // Final cumulative usage for the turn. Providers should yield exactly one
+  // `usage` delta; later ones overwrite earlier ones so the final value wins.
+  let usage: TurnUsage | undefined;
 
   const stream = streamFn(params);
   for await (const delta of stream) {
@@ -79,6 +87,9 @@ export async function streamOneTurn(
           part: { toolCall: { id: delta.id, name: delta.name } },
         });
       }
+    } else if (delta.type === "usage") {
+      // Final cumulative usage wins; overwrite any earlier (partial) values.
+      usage = delta.usage;
     }
   }
 
@@ -145,5 +156,6 @@ export async function streamOneTurn(
     id: turnId,
     content,
     stopReason,
+    ...(usage ? { usage } : {}),
   };
 }

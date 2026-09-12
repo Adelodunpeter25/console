@@ -82,6 +82,8 @@ function runAgentLoop(
     onToolCall,
     onToolResult,
     summarizeCompaction,
+    cacheRetention,
+    cacheIdentity,
   } = config;
 
   const stream = new EventStream<AgentSessionEvent, AgentMessage[]>(
@@ -147,7 +149,7 @@ function runAgentLoop(
         const turnId = randomUUID();
 
         const assistantMessage = await streamOneTurn(
-          { model, systemPrompt, messages: [...messages], tools, signal, thinkingLevel },
+          { model, systemPrompt, messages: [...messages], tools, signal, thinkingLevel, cacheRetention, cacheIdentity },
           streamFn,
           turnId,
           emit,

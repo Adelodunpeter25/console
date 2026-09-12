@@ -1,5 +1,6 @@
 export * from "./agent";
 export * from "./api";
+export * from "./cache";
 export * from "./events";
 export * from "./fs";
 export * from "./model";
