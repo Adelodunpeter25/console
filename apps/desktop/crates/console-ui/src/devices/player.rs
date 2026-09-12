@@ -21,8 +21,8 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
 <style>
   html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: #0c0c0e; overflow: hidden; user-select: none; -webkit-user-select: none; }
   #stage { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; user-select: none; -webkit-user-select: none; }
-  canvas, #stream-img, #still { max-width: 100%; max-height: 100%; object-fit: contain; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; touch-action: none; }
-  #stream-img, #still { display: none; }
+  canvas, #stream-img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; touch-action: none; }
+  #stream-img { display: none; }
   #status { position: absolute; left: 8px; bottom: 8px; font: 11px/1.4 -apple-system, system-ui, sans-serif; color: rgba(255,255,255,.75); background: rgba(0,0,0,.45); padding: 4px 8px; border-radius: 6px; pointer-events: none; }
 </style>
 </head>
@@ -30,7 +30,6 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
 <div id="stage">
   <canvas id="screen"></canvas>
   <img id="stream-img" draggable="false" alt="device screen stream" />
-  <img id="still" draggable="false" alt="device screen still" />
   <div id="status">idle</div>
 </div>
 <script>
@@ -38,12 +37,10 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
   const status = document.getElementById('status');
   const canvas = document.getElementById('screen');
   const streamImg = document.getElementById('stream-img');
-  const still = document.getElementById('still');
   const ctx = canvas.getContext('2d');
   let cfg = null;
   let ws = null;
   let decoder = null;
-  let pollTimer = null;
   let frameCount = 0;
 
   const setStatus = (s) => { status.textContent = s; report({ type: 'status', status: s }); };
@@ -54,35 +51,12 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
     ws = null;
     try { if (decoder && decoder.state !== 'closed') decoder.close(); } catch (e) {}
     decoder = null;
-    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     try { streamImg.src = ''; } catch (e) {}
-  }
-
-  function startStills() {
-    setStatus('stills');
-    canvas.style.display = 'none';
-    streamImg.style.display = 'none';
-    still.style.display = 'block';
-    const tick = async () => {
-      try {
-        const res = await fetch(cfg.screenshotUrl, { cache: 'no-store' });
-        if (!res.ok) throw new Error('http ' + res.status);
-        const blob = await res.blob();
-        still.src = URL.createObjectURL(blob);
-        frameCount++;
-        report({ type: 'frame', count: frameCount });
-      } catch (e) {
-        setStatus('stills error: ' + (e && e.message || e));
-      }
-    };
-    tick();
-    pollTimer = setInterval(tick, 1500);
   }
 
   function startMjpegStream() {
     setStatus('connecting');
     canvas.style.display = 'none';
-    still.style.display = 'none';
     streamImg.style.display = 'block';
     streamImg.src = cfg.streamUrl;
     streamImg.onload = () => {
@@ -91,16 +65,45 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
       report({ type: 'frame', count: frameCount });
     };
     streamImg.onerror = () => {
-      if (cfg && cfg.screenshotUrl) {
-        setStatus('stream error, stills fallback');
-        startStills();
-      }
+      setStatus('stream error');
     };
   }
 
-  async function ensureDecoder() {
-    if (decoder && decoder.state !== 'closed') return decoder;
-    if (!('VideoDecoder' in window)) throw new Error('WebCodecs not supported');
+  function buildAvcc(spsNal, ppsNal) {
+    const spsLen = spsNal.length;
+    const ppsLen = ppsNal.length;
+    const avcc = new Uint8Array(11 + spsLen + ppsLen);
+    avcc[0] = 1;
+    avcc[1] = spsNal[1];
+    avcc[2] = spsNal[2];
+    avcc[3] = spsNal[3];
+    avcc[4] = 0xff;
+    avcc[5] = 0xe1;
+    avcc[6] = (spsLen >> 8) & 0xff;
+    avcc[7] = spsLen & 0xff;
+    avcc.set(spsNal, 8);
+    const ppsOffset = 8 + spsLen;
+    avcc[ppsOffset] = 1;
+    avcc[ppsOffset + 1] = (ppsLen >> 8) & 0xff;
+    avcc[ppsOffset + 2] = ppsLen & 0xff;
+    avcc.set(ppsNal, ppsOffset + 3);
+    return avcc;
+  }
+
+  async function startH264Stream() {
+    setStatus('connecting');
+    streamImg.style.display = 'none';
+    canvas.style.display = 'block';
+
+    let sps = null;
+    let pps = null;
+    let configured = false;
+
+    if (!('VideoDecoder' in window)) {
+      setStatus('WebCodecs not supported in webview');
+      return;
+    }
+
     decoder = new VideoDecoder({
       output: (frame) => {
         if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
@@ -110,24 +113,15 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
         ctx.drawImage(frame, 0, 0);
         frame.close();
         frameCount++;
+        if (frameCount === 1) setStatus('streaming');
         report({ type: 'frame', count: frameCount });
       },
       error: (e) => setStatus('decoder error: ' + (e && e.message || e)),
     });
-    decoder.configure({ codec: cfg.codec || 'avc1.42E01E', optimizeForLatency: true });
-    return decoder;
-  }
 
-  async function startH264Stream() {
-    setStatus('connecting');
-    streamImg.style.display = 'none';
-    still.style.display = 'none';
-    canvas.style.display = 'block';
     try {
-      const dec = await ensureDecoder();
       const res = await fetch(cfg.streamUrl, { cache: 'no-store' });
       if (!res.ok || !res.body) throw new Error('http ' + res.status);
-      setStatus('streaming');
       const reader = res.body.getReader();
       let buf = new Uint8Array(0);
       const append = (chunk) => {
@@ -145,51 +139,85 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
         while (buf.length > 4) {
           let start = -1;
           let prefixLen = 0;
-          for (let i = 0; i < buf.length - 3; i++) {
-            if (buf[i] === 0 && buf[i+1] === 0 && buf[i+2] === 1) {
-              start = i;
-              prefixLen = 3;
-              break;
-            }
+          for (let i = 0; i <= buf.length - 4; i++) {
             if (buf[i] === 0 && buf[i+1] === 0 && buf[i+2] === 0 && buf[i+3] === 1) {
               start = i;
               prefixLen = 4;
+              break;
+            } else if (buf[i] === 0 && buf[i+1] === 0 && buf[i+2] === 1) {
+              start = i;
+              prefixLen = 3;
               break;
             }
           }
           if (start === -1) break;
 
           let nextStart = -1;
-          for (let i = start + prefixLen; i < buf.length - 3; i++) {
-            if ((buf[i] === 0 && buf[i+1] === 0 && buf[i+2] === 1) ||
-                (buf[i] === 0 && buf[i+1] === 0 && buf[i+2] === 0 && buf[i+3] === 1)) {
+          for (let i = start + prefixLen; i <= buf.length - 4; i++) {
+            if ((buf[i] === 0 && buf[i+1] === 0 && buf[i+2] === 0 && buf[i+3] === 1) ||
+                (buf[i] === 0 && buf[i+1] === 0 && buf[i+2] === 1)) {
               nextStart = i;
               break;
             }
           }
+
           if (nextStart === -1) {
             if (start > 0) buf = buf.slice(start);
             break;
           }
 
-          const nal = buf.slice(start, nextStart);
+          const rawNal = buf.slice(start + prefixLen, nextStart);
           buf = buf.slice(nextStart);
 
-          const nalType = nal[prefixLen] & 0x1f;
-          const isKey = nalType === 5 || nalType === 7;
+          const nalType = rawNal[0] & 0x1f;
+          if (nalType === 7) {
+            sps = rawNal;
+            continue;
+          }
+          if (nalType === 8) {
+            pps = rawNal;
+            continue;
+          }
+
+          if (!configured) {
+            if (sps && pps) {
+              const profile = sps[1].toString(16).padStart(2, '0');
+              const compat = sps[2].toString(16).padStart(2, '0');
+              const level = sps[3].toString(16).padStart(2, '0');
+              const codec = `avc1.${profile}${compat}${level}`;
+              const avcc = buildAvcc(sps, pps);
+              decoder.configure({
+                codec: codec,
+                description: avcc.buffer,
+                optimizeForLatency: true,
+              });
+              configured = true;
+            } else {
+              continue;
+            }
+          }
+
+          if (!configured || decoder.state !== 'configured') continue;
+
+          const isKey = nalType === 5;
+          const frameData = new Uint8Array(4 + rawNal.length);
+          frameData[0] = (rawNal.length >> 24) & 0xff;
+          frameData[1] = (rawNal.length >> 16) & 0xff;
+          frameData[2] = (rawNal.length >> 8) & 0xff;
+          frameData[3] = rawNal.length & 0xff;
+          frameData.set(rawNal, 4);
+
           try {
-            dec.decode(new EncodedVideoChunk({
+            decoder.decode(new EncodedVideoChunk({
               type: isKey ? 'key' : 'delta',
               timestamp: performance.now() * 1000,
-              data: nal.buffer,
+              data: frameData.buffer,
             }));
           } catch (e) {}
         }
       }
     } catch (e) {
-      setStatus('stream error, stills fallback');
-      stopAll();
-      startStills();
+      setStatus('stream error: ' + (e && e.message || e));
     }
   }
 
@@ -199,7 +227,6 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
       frameCount = 0;
       try { cfg = JSON.parse(json); } catch (e) { setStatus('bad config'); return; }
       if (!cfg || !cfg.platform) { setStatus('no device'); return; }
-      if (cfg.mode === 'stills' || !cfg.streamUrl) { startStills(); return; }
       if (cfg.platform === 'android') startH264Stream(); else startMjpegStream();
     },
     stop: () => { cfg = null; stopAll(); setStatus('idle'); },
@@ -282,7 +309,6 @@ pub const PLAYER_HTML: &str = r#"<!doctype html>
 
   setupGestures(canvas);
   setupGestures(streamImg);
-  setupGestures(still);
 
   setStatus('ready');
 })();
