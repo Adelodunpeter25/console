@@ -15,6 +15,7 @@
     "@console/utils": "*",
     "@ff-labs/fff-node": "^0.10.0",
     "@iarna/toml": "^2.2.5",
+    "agent-device": "^0.21.1",
     "ai": "^7.0.55",
     "hono": "^4.4.12",
     "zod": "^3.23.8",
