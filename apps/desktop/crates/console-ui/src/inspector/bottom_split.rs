@@ -29,6 +29,7 @@ pub struct RightSidebarBottomSplit {
     on_close_tab: Option<Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>>,
     on_begin_resize: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static>,
     on_new_terminal: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+    on_refresh_run: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     on_toggle_collapsed: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
 }
 
@@ -55,6 +56,7 @@ impl RightSidebarBottomSplit {
             on_close_tab: None,
             on_begin_resize,
             on_new_terminal: None,
+            on_refresh_run: None,
             on_toggle_collapsed: None,
         }
     }
@@ -81,6 +83,16 @@ impl RightSidebarBottomSplit {
         callback: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     ) -> Self {
         self.on_new_terminal = Some(callback);
+        self
+    }
+
+    /// Refresh action for the Run tab header (re-reads console.toml).
+    /// Only rendered while the Run tab is active.
+    pub fn with_refresh_run(
+        mut self,
+        callback: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    ) -> Self {
+        self.on_refresh_run = Some(callback);
         self
     }
 
@@ -328,7 +340,33 @@ impl RenderOnce for RightSidebarBottomSplit {
                                         })
                                         .child(app_icon(IconName::Plus, 11.0, theme.text_tertiary)),
                                 )
-                            }),
+                            })
+                            .when_some(
+                                self.on_refresh_run.filter(|_| run_tab_active),
+                                |el, on_refresh| {
+                                    el.child(
+                                        div()
+                                            .id("bottom-refresh-run-btn")
+                                            .size(px(20.0))
+                                            .flex_none()
+                                            .flex_shrink(0.0)
+                                            .rounded(px(4.0))
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .cursor_pointer()
+                                            .hover(|s| s.bg(theme.overlay))
+                                            .on_click(move |_, window, cx| {
+                                                (on_refresh)(window, cx);
+                                            })
+                                            .child(app_icon(
+                                                IconName::Refresh,
+                                                11.0,
+                                                theme.text_tertiary,
+                                            )),
+                                    )
+                                },
+                            ),
                     ),
             )
             // Bottom Content Body (only shown when expanded)

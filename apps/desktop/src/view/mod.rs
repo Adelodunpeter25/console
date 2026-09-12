@@ -1016,7 +1016,6 @@ impl Render for ConsoleDesktopApp {
                                 on_run: on_run_project_script,
                                 on_stop: on_stop_project_script,
                                 on_toggle_expand: on_toggle_project_script,
-                                on_refresh: on_refresh_project_scripts,
                             }
                             .into_any_element()
                         };
@@ -1031,6 +1030,7 @@ impl Render for ConsoleDesktopApp {
                             on_begin_right_sidebar_bottom_resize,
                         )
                         .with_run_tab(self.right_sidebar_bottom_run_selected, run_panel_element)
+                        .with_refresh_run(on_refresh_project_scripts)
                         .with_close_tab(on_close_right_sidebar_bottom_tab)
                         .with_new_terminal(on_new_right_sidebar_terminal)
                         .with_toggle_collapsed(on_toggle_right_sidebar_bottom_collapsed);

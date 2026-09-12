@@ -120,7 +120,6 @@ pub struct RunPanel {
     pub on_run: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     pub on_stop: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     pub on_toggle_expand: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    pub on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
 
 fn empty_state(icon: IconName, title: &str, hint: &str, theme: &Theme) -> impl IntoElement {
@@ -153,42 +152,6 @@ impl RenderOnce for RunPanel {
         let theme = Theme::current(cx);
 
         let mut content = div().size_full().flex().flex_col().min_h_0();
-
-        if self.has_project {
-            let on_refresh = self.on_refresh.clone();
-            content = content.child(
-                div()
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px(px(8.0))
-                    .pt(px(6.0))
-                    .child(
-                        div()
-                            .text_size(px(11.0))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(theme.text_tertiary)
-                            .child("Scripts"),
-                    )
-                    .child(
-                        div()
-                            .id("run-scripts-refresh-btn")
-                            .size(px(22.0))
-                            .rounded(px(4.0))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_pointer()
-                            .hover(|s| s.bg(theme.overlay))
-                            .on_click(move |_, window, cx| {
-                                cx.stop_propagation();
-                                (on_refresh)(window, cx);
-                            })
-                            .child(app_icon(IconName::Refresh, 12.0, theme.text_tertiary)),
-                    ),
-            );
-        }
 
         if let Some(error) = self.error {
             content = content.child(
