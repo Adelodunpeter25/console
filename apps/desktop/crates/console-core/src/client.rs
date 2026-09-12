@@ -18,6 +18,7 @@ pub struct ConsoleClient {
     pub usage: UsageService,
     pub settings: SettingsService,
     pub ports: PortService,
+    pub scripts: ProjectScriptsService,
 }
 
 impl ConsoleClient {
@@ -38,6 +39,7 @@ impl ConsoleClient {
             usage: UsageService::new(transport.clone()),
             settings: SettingsService::new(transport.clone()),
             ports: PortService::new(transport.clone()),
+            scripts: ProjectScriptsService::new(transport.clone()),
             transport: transport.clone(),
         }
     }
