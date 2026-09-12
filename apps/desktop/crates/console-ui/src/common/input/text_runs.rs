@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use gpui::{px, Hsla, TextRun, UnderlineStyle};
+use gpui::{Hsla, TextRun, UnderlineStyle, px};
 
 use super::mentions::ComposerMention;
 use crate::markdown::highlight::TokenClass;
@@ -88,7 +88,8 @@ pub fn input_text_runs(
             let end = boundary[1];
             let token_index = highlight.partition_point(|(range, _)| range.end <= start);
             let is_in_mention = covering_mention(start, end);
-            let is_selected = selected_range.is_some_and(|range| range.start < end && range.end > start);
+            let is_selected =
+                selected_range.is_some_and(|range| range.start < end && range.end > start);
             let color = if is_selected {
                 gpui::white()
             } else if is_in_mention {

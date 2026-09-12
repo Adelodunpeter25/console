@@ -10,9 +10,9 @@ pub mod model_picker;
 pub mod notice_banner;
 pub mod palette;
 pub mod project_browse_palette;
+pub mod queued_prompt_card;
 pub mod quick_open_palette;
 pub mod stripe;
-pub mod queued_prompt_card;
 pub mod todo_card;
 pub mod workspace_footer;
 
@@ -34,8 +34,8 @@ pub use model_picker::{
 pub use notice_banner::notice_banner;
 pub use palette::{CommandPalette, CommandPaletteModal, PaletteEntry};
 pub use project_browse_palette::ProjectBrowsePalette;
-pub use quick_open_palette::QuickOpenPalette;
 pub use queued_prompt_card::{queued_prompt_card, queued_prompt_row, queued_prompts_stack};
+pub use quick_open_palette::QuickOpenPalette;
 pub use stripe::centered_stripe;
 pub use todo_card::todo_card;
 pub use workspace_footer::WorkspaceFooter;

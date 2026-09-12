@@ -157,10 +157,7 @@ fn drop_zone(
             };
             match action {
                 WorkspaceDropAction::SplitTop | WorkspaceDropAction::SplitBottom => {
-                    matches!(
-                        drag.tab,
-                        console_core::WorkspaceTabConfig::Terminal { .. }
-                    )
+                    matches!(drag.tab, console_core::WorkspaceTabConfig::Terminal { .. })
                 }
                 _ => true,
             }

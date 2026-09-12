@@ -1,16 +1,14 @@
 //! Unit tests for FileKind classification and parity with TypeScript definitions.
 
 use console_core::utils::file_kind::{
-    file_kind_for_path, is_lock_file, FileKind, BLOCKED_FILE_EXTENSIONS, MARKDOWN_EXTENSIONS,
-    RASTER_IMAGE_EXTENSIONS,
+    BLOCKED_FILE_EXTENSIONS, FileKind, MARKDOWN_EXTENSIONS, RASTER_IMAGE_EXTENSIONS,
+    file_kind_for_path, is_lock_file,
 };
 
 #[test]
 fn test_raster_image_extensions_parity_with_typescript() {
     // Exact list from packages/types/src/fs.ts (IMAGE_PREVIEW_EXTENSIONS)
-    let ts_expected = [
-        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico",
-    ];
+    let ts_expected = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico"];
     assert_eq!(RASTER_IMAGE_EXTENSIONS, ts_expected);
 }
 

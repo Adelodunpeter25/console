@@ -43,11 +43,17 @@ fn command_palette_entries(
         let entity = entity.clone();
         let label = format!("Switch Server: {}", environment.name);
         entries.push(
-            PaletteEntry::new(format!("environment-{}", environment_id), label, move |_window, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| this.activate_environment(environment_id.clone(), cx));
-                }
-            })
+            PaletteEntry::new(
+                format!("environment-{}", environment_id),
+                label,
+                move |_window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.activate_environment(environment_id.clone(), cx)
+                        });
+                    }
+                },
+            )
             .icon(IconName::Server),
         );
     }
@@ -128,8 +134,7 @@ impl ConsoleDesktopApp {
                                     new_session.id.clone(),
                                     "New Chat",
                                 );
-                                let new_chat_draft =
-                                    this.get_draft_with_mentions(None);
+                                let new_chat_draft = this.get_draft_with_mentions(None);
                                 this.composer_for_pane(&pane_id).update(cx, |input, cx| {
                                     input.set_prompt_history(Vec::new(), cx);
                                     if let Some((draft_text, mentions)) = &new_chat_draft {
@@ -192,7 +197,10 @@ impl ConsoleDesktopApp {
         let sessions = self.sessions.clone();
         let environments = self.environments.clone();
         self.command_palette.update(cx, |palette, cx| {
-            palette.set_entries(command_palette_entries(entity, &sessions, &environments), cx);
+            palette.set_entries(
+                command_palette_entries(entity, &sessions, &environments),
+                cx,
+            );
             palette.toggle(window, cx);
         });
         cx.notify();
@@ -232,7 +240,10 @@ impl ConsoleDesktopApp {
         let sessions = self.sessions.clone();
         let environments = self.environments.clone();
         self.command_palette.update(cx, |palette, cx| {
-            palette.set_entries(command_palette_entries(entity, &sessions, &environments), cx);
+            palette.set_entries(
+                command_palette_entries(entity, &sessions, &environments),
+                cx,
+            );
             palette.show(window, cx);
         });
         cx.notify();

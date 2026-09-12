@@ -49,7 +49,8 @@ impl GitService {
     pub async fn watch_status(
         &self,
         path: &str,
-    ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<GitStatusSummary>> + Send>>> {
+    ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<GitStatusSummary>> + Send>>>
+    {
         use eventsource_stream::Eventsource;
         use futures_util::StreamExt;
 
@@ -70,7 +71,9 @@ impl GitService {
         let stream = resp.bytes_stream().eventsource().filter_map(|item| async {
             match item {
                 Ok(event) if event.event == "gitStatus" => {
-                    serde_json::from_str::<GitStatusSummary>(&event.data).ok().map(Ok)
+                    serde_json::from_str::<GitStatusSummary>(&event.data)
+                        .ok()
+                        .map(Ok)
                 }
                 _ => None,
             }

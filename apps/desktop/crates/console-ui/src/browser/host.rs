@@ -7,9 +7,9 @@
 use std::path::PathBuf;
 
 #[cfg(not(target_os = "macos"))]
-use std::cell::Cell;
-#[cfg(not(target_os = "macos"))]
 use gpui::{Bounds, Pixels};
+#[cfg(not(target_os = "macos"))]
+use std::cell::Cell;
 
 #[cfg(target_os = "macos")]
 mod macos_host {
@@ -20,15 +20,16 @@ mod macos_host {
     use gpui::{Bounds, Pixels};
     use objc2::rc::Retained;
     use objc2::runtime::AnyObject;
-    use objc2::{define_class, msg_send, AllocAnyThread, DefinedClass};
+    use objc2::{AllocAnyThread, DefinedClass, define_class, msg_send};
     use objc2_app_kit::{NSApplication, NSEventType, NSView, NSWindow};
     use objc2_foundation::{
-        ns_string, MainThreadMarker, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions,
+        MainThreadMarker, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions,
         NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSProcessInfo, NSString,
+        ns_string,
     };
     use objc2_web_kit::WKWebView;
-    use wry::dpi::{LogicalPosition, LogicalSize};
     use wry::WebViewExtMacOS;
+    use wry::dpi::{LogicalPosition, LogicalSize};
 
     fn recent_user_gesture() -> bool {
         let Some(mtm) = MainThreadMarker::new() else {
@@ -147,7 +148,11 @@ mod macos_host {
             self.last_bounds.set(Some((left, top, right, bottom)));
             let _ = self.webview.set_bounds(wry::Rect {
                 position: LogicalPosition::new(f64::from(left), f64::from(top)).into(),
-                size: LogicalSize::new(f64::from((right - left).max(0)), f64::from((bottom - top).max(0))).into(),
+                size: LogicalSize::new(
+                    f64::from((right - left).max(0)),
+                    f64::from((bottom - top).max(0)),
+                )
+                .into(),
             });
         }
 
@@ -312,9 +317,15 @@ impl WebviewHost {
     }
     pub fn sync_bounds(&self, _bounds: Bounds<Pixels>, _scale: f32) {}
     pub fn set_visible(&self, _visible: bool) {}
-    pub fn native_focus_within(&self) -> bool { false }
-    pub fn can_go_back(&self) -> bool { false }
-    pub fn can_go_forward(&self) -> bool { false }
+    pub fn native_focus_within(&self) -> bool {
+        false
+    }
+    pub fn can_go_back(&self) -> bool {
+        false
+    }
+    pub fn can_go_forward(&self) -> bool {
+        false
+    }
     pub fn go_back(&self) {}
     pub fn go_forward(&self) {}
     pub fn reload(&self) {}
@@ -324,10 +335,14 @@ impl WebviewHost {
     pub fn evaluate_script(&self, _script: &str) {}
     pub fn open_devtools(&self) {}
     pub fn close_devtools(&self) {}
-    pub fn is_devtools_open(&self) -> bool { false }
+    pub fn is_devtools_open(&self) -> bool {
+        false
+    }
     pub fn focus(&self) {}
     pub fn focus_parent(&self) {}
-    pub fn estimated_progress(&self) -> f64 { 0.0 }
+    pub fn estimated_progress(&self) -> f64 {
+        0.0
+    }
 }
 
 /// Repack an `NSBitmapImageRep` pixel buffer as tight BGRA rows for `gpui::RenderImage`.

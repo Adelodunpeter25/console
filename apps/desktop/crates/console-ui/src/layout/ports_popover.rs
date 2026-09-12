@@ -4,12 +4,12 @@ use std::rc::Rc;
 
 use console_core::ForwardedPort;
 use gpui::{
-    div, prelude::*, px, App, IntoElement,
-    ParentElement, RenderOnce, StatefulInteractiveElement, Styled, Window,
+    App, IntoElement, ParentElement, RenderOnce, StatefulInteractiveElement, Styled, Window, div,
+    prelude::*, px,
 };
 
-use crate::primitives::menu::{popover, MenuAlign};
-use crate::primitives::{app_icon, ContextMenuHandle, IconName};
+use crate::primitives::menu::{MenuAlign, popover};
+use crate::primitives::{ContextMenuHandle, IconName, app_icon};
 use crate::theme::Theme;
 
 #[derive(IntoElement)]
@@ -168,7 +168,11 @@ impl RenderOnce for PortsPopover {
                                                             (on_open)(port_url.clone(), window, cx);
                                                         }
                                                     })
-                                                    .child(app_icon(IconName::Globe, 12.0, theme.text_secondary)),
+                                                    .child(app_icon(
+                                                        IconName::Globe,
+                                                        12.0,
+                                                        theme.text_secondary,
+                                                    )),
                                             )
                                             // X icon button -> unforward
                                             .child(
@@ -189,7 +193,11 @@ impl RenderOnce for PortsPopover {
                                                             (on_unforward)(port_num, window, cx);
                                                         }
                                                     })
-                                                    .child(app_icon(IconName::X, 11.0, theme.text_tertiary)),
+                                                    .child(app_icon(
+                                                        IconName::X,
+                                                        11.0,
+                                                        theme.text_tertiary,
+                                                    )),
                                             ),
                                     )
                             }))

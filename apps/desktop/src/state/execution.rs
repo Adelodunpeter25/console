@@ -209,13 +209,24 @@ impl ConsoleDesktopApp {
         out
     }
 
-    pub(crate) fn queued_prompts_for_session(&self, session_id: &str) -> Vec<console_core::QueuedPrompt> {
-        self.queued_prompts.get(session_id).cloned().unwrap_or_default()
+    pub(crate) fn queued_prompts_for_session(
+        &self,
+        session_id: &str,
+    ) -> Vec<console_core::QueuedPrompt> {
+        self.queued_prompts
+            .get(session_id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     #[allow(dead_code)]
-    pub(crate) fn queued_prompt_for_session(&self, session_id: &str) -> Option<console_core::QueuedPrompt> {
-        self.queued_prompts.get(session_id).and_then(|v| v.first().cloned())
+    pub(crate) fn queued_prompt_for_session(
+        &self,
+        session_id: &str,
+    ) -> Option<console_core::QueuedPrompt> {
+        self.queued_prompts
+            .get(session_id)
+            .and_then(|v| v.first().cloned())
     }
 
     pub(crate) fn set_queued_prompt_for_session(
@@ -224,7 +235,10 @@ impl ConsoleDesktopApp {
         queued: Option<console_core::QueuedPrompt>,
     ) {
         if let Some(q) = queued {
-            let list = self.queued_prompts.entry(session_id.to_string()).or_default();
+            let list = self
+                .queued_prompts
+                .entry(session_id.to_string())
+                .or_default();
             if let Some(existing) = list.iter_mut().find(|p| p.id == q.id) {
                 *existing = q;
             } else if list.is_empty() {
@@ -240,10 +254,16 @@ impl ConsoleDesktopApp {
         session_id: &str,
         queued: console_core::QueuedPrompt,
     ) {
-        let list = self.queued_prompts.entry(session_id.to_string()).or_default();
+        let list = self
+            .queued_prompts
+            .entry(session_id.to_string())
+            .or_default();
         if let Some(existing) = list.iter_mut().find(|p| p.id == queued.id) {
             *existing = queued;
-        } else if let Some(existing) = list.iter_mut().find(|p| p.prompt == queued.prompt && p.id.starts_with("queued-")) {
+        } else if let Some(existing) = list
+            .iter_mut()
+            .find(|p| p.prompt == queued.prompt && p.id.starts_with("queued-"))
+        {
             *existing = queued;
         } else {
             list.push(queued);
@@ -273,9 +293,15 @@ impl ConsoleDesktopApp {
             .unwrap_or_default()
     }
 
-    pub(crate) fn queued_prompt_for_pane(&self, pane_id: &str) -> Option<console_core::QueuedPrompt> {
-        self.active_session_for_pane(pane_id)
-            .and_then(|sid| self.queued_prompts.get(&sid).and_then(|v| v.first().cloned()))
+    pub(crate) fn queued_prompt_for_pane(
+        &self,
+        pane_id: &str,
+    ) -> Option<console_core::QueuedPrompt> {
+        self.active_session_for_pane(pane_id).and_then(|sid| {
+            self.queued_prompts
+                .get(&sid)
+                .and_then(|v| v.first().cloned())
+        })
     }
 
     pub(crate) fn has_queued_prompt_for_pane(&self, pane_id: &str) -> bool {

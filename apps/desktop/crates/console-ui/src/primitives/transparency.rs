@@ -59,10 +59,7 @@ pub fn transparency_grid() -> impl IntoElement {
                         continue;
                     }
                     window.paint_quad(quad(
-                        Bounds::new(
-                            gpui::point(px(x), px(y)),
-                            gpui::size(px(w), px(h)),
-                        ),
+                        Bounds::new(gpui::point(px(x), px(y)), gpui::size(px(w), px(h))),
                         px(0.0),
                         light,
                         px(0.0),

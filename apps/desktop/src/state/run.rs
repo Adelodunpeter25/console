@@ -103,8 +103,8 @@ impl ConsoleDesktopApp {
         if is_first {
             let client = self.client.clone();
             let entity = cx.entity().downgrade();
-            cx.spawn(async move |_, cx| {
-                match client.runs.queue_prompt(&session_id, dq).await {
+            cx.spawn(
+                async move |_, cx| match client.runs.queue_prompt(&session_id, dq).await {
                     Ok(queued) => {
                         let sid = queued.session_id.clone();
                         let _ = cx.update(|cx| {
@@ -126,14 +126,19 @@ impl ConsoleDesktopApp {
                             }
                         });
                     }
-                }
-            })
+                },
+            )
             .detach();
         }
         cx.notify();
     }
 
-    pub fn delete_queued_prompt_for_pane(&mut self, pane_id: String, prompt_id: String, cx: &mut Context<Self>) {
+    pub fn delete_queued_prompt_for_pane(
+        &mut self,
+        pane_id: String,
+        prompt_id: String,
+        cx: &mut Context<Self>,
+    ) {
         let Some(session_id) = self.active_session_for_pane(&pane_id) else {
             return;
         };
@@ -162,7 +167,12 @@ impl ConsoleDesktopApp {
         }
     }
 
-    pub fn edit_queued_prompt_for_pane(&mut self, pane_id: String, prompt_id: String, cx: &mut Context<Self>) {
+    pub fn edit_queued_prompt_for_pane(
+        &mut self,
+        pane_id: String,
+        prompt_id: String,
+        cx: &mut Context<Self>,
+    ) {
         let Some(session_id) = self.active_session_for_pane(&pane_id) else {
             return;
         };
@@ -201,7 +211,12 @@ impl ConsoleDesktopApp {
         }
     }
 
-    pub fn steer_queued_prompt_for_pane(&mut self, pane_id: String, prompt_id: String, cx: &mut Context<Self>) {
+    pub fn steer_queued_prompt_for_pane(
+        &mut self,
+        pane_id: String,
+        prompt_id: String,
+        cx: &mut Context<Self>,
+    ) {
         let Some(session_id) = self.active_session_for_pane(&pane_id) else {
             return;
         };
@@ -896,8 +911,7 @@ impl ConsoleDesktopApp {
                         let client = self.client.clone();
                         let sid = run_session_id.to_string();
                         let pane = run_pane_id.to_string();
-                        let current_token =
-                            self.current_run_token_for_session(run_session_id);
+                        let current_token = self.current_run_token_for_session(run_session_id);
                         cx.spawn(async move |entity, cx| {
                             if let Ok(detail) = client.sessions.get(&sid).await {
                                 let _ = cx.update(|cx| {
@@ -917,14 +931,8 @@ impl ConsoleDesktopApp {
                                                         if detail.messages.len()
                                                             >= t.message_count()
                                                         {
-                                                            t.set_messages(
-                                                                detail.messages,
-                                                                cx,
-                                                            );
-                                                            t.resume_streaming(
-                                                                started_at,
-                                                                cx,
-                                                            );
+                                                            t.set_messages(detail.messages, cx);
+                                                            t.resume_streaming(started_at, cx);
                                                         }
                                                     },
                                                 );

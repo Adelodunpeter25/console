@@ -32,9 +32,7 @@ pub fn is_file_link(link: &str) -> bool {
     match file.rfind('.') {
         Some(dot) if dot + 1 < file.len() => {
             let ext = &file[dot + 1..];
-            !ext.is_empty()
-                && ext.len() <= 10
-                && ext.chars().all(|c| c.is_ascii_alphanumeric())
+            !ext.is_empty() && ext.len() <= 10 && ext.chars().all(|c| c.is_ascii_alphanumeric())
         }
         _ => false,
     }
@@ -156,7 +154,10 @@ mod tests {
             resolve_file_link("apps/a.ts", Some("/proj"), None),
             "/proj/apps/a.ts"
         );
-        assert_eq!(resolve_file_link("/abs/a.ts", Some("/proj"), None), "/abs/a.ts");
+        assert_eq!(
+            resolve_file_link("/abs/a.ts", Some("/proj"), None),
+            "/abs/a.ts"
+        );
         assert_eq!(
             resolve_file_link("a.ts:12", Some("/proj"), None),
             "/proj/a.ts"

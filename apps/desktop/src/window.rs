@@ -1,8 +1,8 @@
-use std::cell::RefCell;
 use gpui::{
     AnyWindowHandle, App, AppContext, Bounds, Pixels, TitlebarOptions, WeakEntity, WindowBounds,
     WindowOptions, point, px,
 };
+use std::cell::RefCell;
 
 use crate::persistence;
 use crate::state::ConsoleDesktopApp;
@@ -11,7 +11,9 @@ use crate::state::ConsoleDesktopApp;
 pub enum WindowLaunchTarget {
     /// Startup restore of the single persisted main window.
     RestorePersisted,
-    Fresh { environment_id: Option<String> },
+    Fresh {
+        environment_id: Option<String>,
+    },
     Session(String),
 }
 
@@ -71,9 +73,7 @@ pub fn get_active_window(
     WORKSPACE_WINDOWS.with(|windows| {
         let mut list = windows.borrow_mut();
         let live_handles = cx.windows();
-        list.retain(|(handle, app)| {
-            app.upgrade().is_some() && live_handles.contains(handle)
-        });
+        list.retain(|(handle, app)| app.upgrade().is_some() && live_handles.contains(handle));
 
         // 1. Ask GPUI's platform layer which window is currently focused.
         if let Some(active_handle) = cx.active_window() {
@@ -96,16 +96,19 @@ pub fn get_active_window(
 }
 
 pub fn compute_new_window_bounds(cx: &mut App) -> WindowBounds {
-    let current_bounds = LAST_WINDOW_BOUNDS
-        .with(|b| *b.borrow())
-        .unwrap_or_else(|| match persistence::window::load_window_bounds(cx) {
+    let current_bounds = LAST_WINDOW_BOUNDS.with(|b| *b.borrow()).unwrap_or_else(|| {
+        match persistence::window::load_window_bounds(cx) {
             WindowBounds::Windowed(b) | WindowBounds::Maximized(b) => b,
             WindowBounds::Fullscreen(b) => b,
-        });
+        }
+    });
 
     let offset = px(30.0);
     let cascaded = Bounds::new(
-        point(current_bounds.origin.x + offset, current_bounds.origin.y + offset),
+        point(
+            current_bounds.origin.x + offset,
+            current_bounds.origin.y + offset,
+        ),
         current_bounds.size,
     );
 
@@ -124,7 +127,9 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
             update_active_window_bounds(bounds);
             b
         }
-        WindowLaunchTarget::Fresh { .. } | WindowLaunchTarget::Session(_) => compute_new_window_bounds(cx),
+        WindowLaunchTarget::Fresh { .. } | WindowLaunchTarget::Session(_) => {
+            compute_new_window_bounds(cx)
+        }
     };
 
     let options = WindowOptions {

@@ -17,7 +17,10 @@ fn test_rasterize_valid_svg() {
     assert_eq!(height, 100);
     // Valid PNG signature: \x89PNG\r\n\x1a\n
     assert!(png_bytes.len() > 8);
-    assert_eq!(&png_bytes[0..8], &[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    assert_eq!(
+        &png_bytes[0..8],
+        &[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+    );
 }
 
 #[test]
@@ -44,8 +47,18 @@ fn test_rasterize_scaling_bounds() {
     assert!(result.is_some());
 
     let (_, width, height) = result.unwrap();
-    assert!(width <= max_dim, "width {} exceeds max_dim {}", width, max_dim);
-    assert!(height <= max_dim, "height {} exceeds max_dim {}", height, max_dim);
+    assert!(
+        width <= max_dim,
+        "width {} exceeds max_dim {}",
+        width,
+        max_dim
+    );
+    assert!(
+        height <= max_dim,
+        "height {} exceeds max_dim {}",
+        height,
+        max_dim
+    );
     assert_eq!(width, 200);
     assert_eq!(height, 100);
 }

@@ -5,8 +5,8 @@
 //! title fallback, and the viewing-suppression decision.
 
 use console_core::types::notification::{
-    decide_notification, normalize_notification_title, notification_ident,
-    parse_session_id_from_ident, NotificationDecision, NOTIFICATION_THREAD_ID,
+    NOTIFICATION_THREAD_ID, NotificationDecision, decide_notification,
+    normalize_notification_title, notification_ident, parse_session_id_from_ident,
 };
 
 #[test]
@@ -37,7 +37,10 @@ fn test_parse_rejects_bad_idents() {
 #[test]
 fn test_title_fallback() {
     assert_eq!(normalize_notification_title(""), "Console");
-    assert_eq!(normalize_notification_title("Console · Task Complete"), "Console · Task Complete");
+    assert_eq!(
+        normalize_notification_title("Console · Task Complete"),
+        "Console · Task Complete"
+    );
 }
 
 #[test]
@@ -50,7 +53,10 @@ fn test_decide_viewing_suppresses() {
 
 #[test]
 fn test_decide_background_notifies() {
-    assert_eq!(decide_notification(None, "s1"), NotificationDecision::Notify);
+    assert_eq!(
+        decide_notification(None, "s1"),
+        NotificationDecision::Notify
+    );
     assert_eq!(
         decide_notification(Some("other"), "s1"),
         NotificationDecision::Notify
@@ -59,7 +65,10 @@ fn test_decide_background_notifies() {
 
 #[test]
 fn test_decide_empty_skips() {
-    assert_eq!(decide_notification(None, ""), NotificationDecision::SkipEmpty);
+    assert_eq!(
+        decide_notification(None, ""),
+        NotificationDecision::SkipEmpty
+    );
     assert_eq!(
         decide_notification(Some("s1"), ""),
         NotificationDecision::SkipEmpty

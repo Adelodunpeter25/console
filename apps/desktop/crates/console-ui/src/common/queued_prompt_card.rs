@@ -6,8 +6,8 @@ use std::rc::Rc;
 
 use console_core::QueuedPrompt;
 use gpui::{
-    App, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled, Window,
-    div, prelude::FluentBuilder, px,
+    App, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled,
+    Window, div, prelude::FluentBuilder, px,
 };
 
 use crate::common::centered_stripe;
@@ -93,11 +93,11 @@ pub fn queued_prompt_row(
                         .child(display_text),
                 )
                 .when(has_attachments, |el| {
-                    el.child(
-                        div()
-                            .flex_shrink_0()
-                            .child(app_icon(IconName::Paperclip, 11.0, theme.text_tertiary)),
-                    )
+                    el.child(div().flex_shrink_0().child(app_icon(
+                        IconName::Paperclip,
+                        11.0,
+                        theme.text_tertiary,
+                    )))
                 }),
         )
         // Right: Inline Action Buttons (Edit, Delete, Steer/Send)
@@ -145,7 +145,11 @@ pub fn queued_prompt_row(
                                     (handler)(window, cx);
                                 })
                         })
-                        .child(app_icon(IconName::TrashBinMinimalistic, 12.0, theme.text_secondary)),
+                        .child(app_icon(
+                            IconName::TrashBinMinimalistic,
+                            12.0,
+                            theme.text_secondary,
+                        )),
                 )
                 // Steer / Send Now (Arrow Up)
                 .child(

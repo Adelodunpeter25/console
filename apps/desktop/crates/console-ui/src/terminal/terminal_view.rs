@@ -6,16 +6,16 @@ use gpui::{
     ParentElement, Pixels, Render, ScrollWheelEvent, SharedString, Styled, UTF16Selection, Window,
     div, prelude::*, px,
 };
-use termy_core::{
-    TerminalKeyEventKind, TerminalKeyboardMode, TermyKeystroke, TermyModifiers, keystroke_to_input,
-    TerminalMouseButton, TerminalMouseEventKind, TerminalMouseModifiers, TerminalMousePosition,
-    encode_mouse_report,
-};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
+use termy_core::{
+    TerminalKeyEventKind, TerminalKeyboardMode, TerminalMouseButton, TerminalMouseEventKind,
+    TerminalMouseModifiers, TerminalMousePosition, TermyKeystroke, TermyModifiers,
+    encode_mouse_report, keystroke_to_input,
+};
 
 use super::actions::{TerminalShiftTab, TerminalTab};
 use super::theme::TerminalTheme;
@@ -52,8 +52,7 @@ fn hash_cell_runs(runs: &[CellRun]) -> u64 {
         run.text.hash(&mut h);
         run.count.hash(&mut h);
         for f in [
-            run.fg.h, run.fg.s, run.fg.l, run.fg.a, run.bg.h, run.bg.s, run.bg.l,
-            run.bg.a,
+            run.fg.h, run.fg.s, run.fg.l, run.fg.a, run.bg.h, run.bg.s, run.bg.l, run.bg.a,
         ] {
             f.to_bits().hash(&mut h);
         }
@@ -685,8 +684,8 @@ impl Render for TerminalView {
                     }
                 },
             )
-            .on_scroll_wheel(cx.listener(
-                move |this, event: &ScrollWheelEvent, _window, cx| {
+            .on_scroll_wheel(
+                cx.listener(move |this, event: &ScrollWheelEvent, _window, cx| {
                     let delta = match event.delta {
                         gpui::ScrollDelta::Lines(lines) => lines.y.round() as i32,
                         gpui::ScrollDelta::Pixels(pixels) => {
@@ -718,8 +717,8 @@ impl Render for TerminalView {
                         this.scrollback_offset = (this.scrollback_offset + delta).max(0);
                         cx.stop_propagation();
                     }
-                },
-            ))
+                }),
+            )
             .when_some(status_banner, |el, (msg, color)| {
                 el.child(
                     div()
@@ -802,46 +801,48 @@ impl Render for TerminalView {
                             cx.notify();
                         }),
                     )
-                    .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _window, cx| {
-                        // TUI mouse reporting: drag (1002) or full motion
-                        // (1003) reports instead of local selection drags.
-                        if this.mouse_mode().enabled {
-                            let pos = this.cell_at_point(event.position.x, event.position.y);
-                            match this.mouse_down {
-                                Some(button) => {
-                                    if !this.forward_mouse_report(
-                                        TerminalMouseEventKind::Drag(button),
-                                        pos,
-                                        event.modifiers,
-                                    ) && this.mouse_mode().report_motion
-                                    {
-                                        this.forward_mouse_report(
-                                            TerminalMouseEventKind::Move,
+                    .on_mouse_move(
+                        cx.listener(move |this, event: &MouseMoveEvent, _window, cx| {
+                            // TUI mouse reporting: drag (1002) or full motion
+                            // (1003) reports instead of local selection drags.
+                            if this.mouse_mode().enabled {
+                                let pos = this.cell_at_point(event.position.x, event.position.y);
+                                match this.mouse_down {
+                                    Some(button) => {
+                                        if !this.forward_mouse_report(
+                                            TerminalMouseEventKind::Drag(button),
                                             pos,
                                             event.modifiers,
-                                        );
+                                        ) && this.mouse_mode().report_motion
+                                        {
+                                            this.forward_mouse_report(
+                                                TerminalMouseEventKind::Move,
+                                                pos,
+                                                event.modifiers,
+                                            );
+                                        }
+                                    }
+                                    None => {
+                                        if this.mouse_mode().report_motion {
+                                            this.forward_mouse_report(
+                                                TerminalMouseEventKind::Move,
+                                                pos,
+                                                event.modifiers,
+                                            );
+                                        }
                                     }
                                 }
-                                None => {
-                                    if this.mouse_mode().report_motion {
-                                        this.forward_mouse_report(
-                                            TerminalMouseEventKind::Move,
-                                            pos,
-                                            event.modifiers,
-                                        );
-                                    }
+                                return;
+                            }
+                            if this.selection_dragging {
+                                let pos = this.cell_at_point(event.position.x, event.position.y);
+                                if this.selection_head != Some(pos) {
+                                    this.selection_head = Some(pos);
+                                    cx.notify();
                                 }
                             }
-                            return;
-                        }
-                        if this.selection_dragging {
-                            let pos = this.cell_at_point(event.position.x, event.position.y);
-                            if this.selection_head != Some(pos) {
-                                this.selection_head = Some(pos);
-                                cx.notify();
-                            }
-                        }
-                    }))
+                        }),
+                    )
                     .on_mouse_up(
                         MouseButton::Left,
                         cx.listener(move |this, event: &MouseUpEvent, _window, cx| {
@@ -1109,7 +1110,11 @@ fn render_canvas_grid(
             None => false,
         };
         let cacheable = !cursor_here && !selection_here;
-        let row_hash: Option<u64> = if cacheable { Some(hash_cell_runs(&runs)) } else { None };
+        let row_hash: Option<u64> = if cacheable {
+            Some(hash_cell_runs(&runs))
+        } else {
+            None
+        };
         if let Some(hash) = row_hash {
             let hit = paint_cache
                 .borrow()

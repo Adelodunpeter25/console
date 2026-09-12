@@ -1,11 +1,11 @@
 use gpui::{
-    fill, point, px, quad, size, App, BorderStyle, Bounds, DispatchPhase,
-    Element, ElementId, ElementInputHandler, Entity, GlobalElementId, InspectorElementId,
-    IntoElement, LayoutId, MouseMoveEvent, PaintQuad, ParentElement, Pixels, Point, ScrollHandle,
-    Styled, StyledText, TextLayout, TextRun, TextStyleRefinement, WhiteSpace, Window,
+    App, BorderStyle, Bounds, DispatchPhase, Element, ElementId, ElementInputHandler, Entity,
+    GlobalElementId, InspectorElementId, IntoElement, LayoutId, MouseMoveEvent, PaintQuad,
+    ParentElement, Pixels, Point, ScrollHandle, Styled, StyledText, TextLayout, TextRun,
+    TextStyleRefinement, WhiteSpace, Window, fill, point, px, quad, size,
 };
 
-use super::text_runs::{input_text_runs, SearchPaint};
+use super::text_runs::{SearchPaint, input_text_runs};
 use super::{ComposerInput, FieldMode};
 use crate::theme::Theme;
 
@@ -321,16 +321,17 @@ impl Element for InputElement {
                 theme.accent,
                 theme.accent.opacity(0.12),
             );
-            let mentions_to_layout = if input.mode == FieldMode::Composer && !input.mentions.is_empty() {
-                input
-                    .mentions
-                    .iter()
-                    .filter(|m| m.range.end <= input.content.len())
-                    .cloned()
-                    .collect::<Vec<_>>()
-            } else {
-                Vec::new()
-            };
+            let mentions_to_layout =
+                if input.mode == FieldMode::Composer && !input.mentions.is_empty() {
+                    input
+                        .mentions
+                        .iter()
+                        .filter(|m| m.range.end <= input.content.len())
+                        .cloned()
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
             (display_text, runs, mentions_to_layout)
         };
 
@@ -388,14 +389,8 @@ impl Element for InputElement {
         let layout_id = window.request_layout(
             gpui::Style {
                 display: gpui::Display::Block,
-                size: gpui::size(
-                    gpui::Length::Definite(gpui::relative(1.0)),
-                    gpui::auto(),
-                ),
-                min_size: gpui::size(
-                    gpui::Length::Definite(gpui::relative(0.0)),
-                    gpui::auto(),
-                ),
+                size: gpui::size(gpui::Length::Definite(gpui::relative(1.0)), gpui::auto()),
+                min_size: gpui::size(gpui::Length::Definite(gpui::relative(0.0)), gpui::auto()),
                 ..Default::default()
             },
             child_layout_ids,
@@ -503,9 +498,12 @@ impl Element for InputElement {
                 );
                 let child_origin = window.layout_bounds(mention_icon._layout_id).origin;
                 let offset = icon_origin - child_origin;
-                window.with_element_offset(Point::new(offset.x.round(), offset.y.round()), |window| {
-                    mention_icon.icon.prepaint(window, cx);
-                });
+                window.with_element_offset(
+                    Point::new(offset.x.round(), offset.y.round()),
+                    |window| {
+                        mention_icon.icon.prepaint(window, cx);
+                    },
+                );
             }
         }
         PrepaintState { cursor }
@@ -546,7 +544,8 @@ impl Element for InputElement {
         let theme = Theme::current(cx);
         let layout = layout_state.text.layout();
         if !input.selected_range.is_empty() {
-            let selection_rects = crate::markdown::render::range_rects(layout, &input.selected_range, 0.0, 3.5);
+            let selection_rects =
+                crate::markdown::render::range_rects(layout, &input.selected_range, 0.0, 3.5);
             for rect in selection_rects {
                 window.paint_quad(quad(
                     rect,
@@ -563,7 +562,8 @@ impl Element for InputElement {
 
             for mention in &input.mentions {
                 if mention.range.end <= input.content.len() {
-                    let rects = crate::markdown::render::range_rects(layout, &mention.range, 3.0, 1.0);
+                    let rects =
+                        crate::markdown::render::range_rects(layout, &mention.range, 3.0, 1.0);
                     for (idx, rect) in rects.iter().enumerate() {
                         let mut quad_rect = *rect;
                         if idx == 0 {

@@ -48,11 +48,9 @@ impl ConsoleDesktopApp {
             // Move the pane's active tab into the new folder's workspace so a
             // workspace never holds tabs from another folder. Immediate switch
             // to the new workspace keeps the moved chat visible.
-            let mut moved_tab =
-                active_tab_id.and_then(|tid| console_ui::workspace::ops::take_tab(
-                    &mut self.workspace_root,
-                    &tid,
-                ));
+            let mut moved_tab = active_tab_id.and_then(|tid| {
+                console_ui::workspace::ops::take_tab(&mut self.workspace_root, &tid)
+            });
             if let Some(tab) = moved_tab.as_mut() {
                 tab.set_project_id(new_workspace_id.clone());
             }
@@ -126,10 +124,7 @@ impl ConsoleDesktopApp {
             .active_pane_id
             .clone()
             .unwrap_or_else(|| pane_id.clone());
-        let Some(project) = self
-            .selected_project_for_pane(&effective_pane)
-            .cloned()
-        else {
+        let Some(project) = self.selected_project_for_pane(&effective_pane).cloned() else {
             return;
         };
 
@@ -148,9 +143,10 @@ impl ConsoleDesktopApp {
         }
 
         let path = project.path.clone();
-        self.transcript_for_pane(&effective_pane).update(cx, |transcript, _| {
-            transcript.set_session_cwd(Some(path.clone()));
-        });
+        self.transcript_for_pane(&effective_pane)
+            .update(cx, |transcript, _| {
+                transcript.set_session_cwd(Some(path.clone()));
+            });
         self.maybe_refresh_inspector(cx);
 
         let client = self.client.clone();
@@ -251,11 +247,9 @@ impl ConsoleDesktopApp {
             .and_then(|leaf| leaf.active_tab_id.clone());
 
         if old_workspace_id != new_workspace_id {
-            let mut moved_tab =
-                active_tab_id.and_then(|tid| console_ui::workspace::ops::take_tab(
-                    &mut self.workspace_root,
-                    &tid,
-                ));
+            let mut moved_tab = active_tab_id.and_then(|tid| {
+                console_ui::workspace::ops::take_tab(&mut self.workspace_root, &tid)
+            });
             if let Some(tab) = moved_tab.as_mut() {
                 tab.set_project_id(None);
             }
@@ -309,11 +303,7 @@ impl ConsoleDesktopApp {
                 state.branch_is_git_repository = false;
             }
             if let Some(tid) = active_tab_id {
-                console_ui::workspace::ops::set_tab_project(
-                    &mut self.workspace_root,
-                    &tid,
-                    None,
-                );
+                console_ui::workspace::ops::set_tab_project(&mut self.workspace_root, &tid, None);
             }
             self.persist_workspaces();
         }
@@ -344,9 +334,10 @@ impl ConsoleDesktopApp {
             session.cwd = fallback_cwd.clone();
         }
 
-        self.transcript_for_pane(&effective_pane).update(cx, |transcript, _| {
-            transcript.set_session_cwd(Some(fallback_cwd.clone()));
-        });
+        self.transcript_for_pane(&effective_pane)
+            .update(cx, |transcript, _| {
+                transcript.set_session_cwd(Some(fallback_cwd.clone()));
+            });
         self.maybe_refresh_inspector(cx);
 
         let client = self.client.clone();
@@ -373,9 +364,7 @@ impl ConsoleDesktopApp {
                     let sid = session_id.clone();
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, _| {
-                                this.confirm_project_override(&sid, &header)
-                            });
+                            app.update(cx, |this, _| this.confirm_project_override(&sid, &header));
                         }
                     });
                 }
@@ -505,7 +494,8 @@ impl ConsoleDesktopApp {
         if self.selected_project_id.as_deref() == Some(&project_id) {
             self.selected_project_id = None;
         }
-        self.project_workspace_roots.remove(&Some(project_id.clone()));
+        self.project_workspace_roots
+            .remove(&Some(project_id.clone()));
         for state in self.workspace_pane_states.values_mut() {
             if state.selected_project_id.as_deref() == Some(&project_id) {
                 state.selected_project_id = None;

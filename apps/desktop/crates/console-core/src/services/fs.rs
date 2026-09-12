@@ -297,4 +297,3 @@ impl std::fmt::Display for RawFileError {
 }
 
 impl std::error::Error for RawFileError {}
-

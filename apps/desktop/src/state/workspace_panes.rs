@@ -50,7 +50,9 @@ impl ConsoleDesktopApp {
                                 let _ = window.update(cx, |_, window, cx| {
                                     app.update(cx, |this, cx| {
                                         this.approval_menu.close(window, cx);
-                                        if let PickerTab::Provider(name) = this.pane_picker_tab(&pane_id) {
+                                        if let PickerTab::Provider(name) =
+                                            this.pane_picker_tab(&pane_id)
+                                        {
                                             this.load_models_for_provider(&name, cx);
                                         }
                                     });
@@ -541,7 +543,12 @@ impl ConsoleDesktopApp {
         let session_id = session_id.into();
         let tab_id = format!("chat:{session_id}");
 
-        if let Some(leaf) = self.workspace_root.leaves().iter().find(|l| l.id == pane_id) {
+        if let Some(leaf) = self
+            .workspace_root
+            .leaves()
+            .iter()
+            .find(|l| l.id == pane_id)
+        {
             if leaf.tabs.iter().any(|t| t.id() == tab_id) {
                 workspace_ops::select_tab(&mut self.workspace_root, pane_id, &tab_id);
                 self.active_pane_id = Some(pane_id.to_string());
@@ -712,21 +719,23 @@ impl ConsoleDesktopApp {
             console_core::FileKind::Markdown | console_core::FileKind::Text => {
                 let client = self.client.clone();
                 let file_path = path;
-                cx.spawn(async move |entity, cx| match client.fs.read_file(&file_path).await {
-                    Ok(resp) => {
-                        cx.update(|cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.open_file_contents.insert(file_path, resp.content);
-                                    cx.notify();
-                                });
-                            }
-                        });
-                    }
-                    Err(err) => {
-                        log::warn!("Failed to read file for tab {}: {}", file_path, err);
-                    }
-                })
+                cx.spawn(
+                    async move |entity, cx| match client.fs.read_file(&file_path).await {
+                        Ok(resp) => {
+                            cx.update(|cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.open_file_contents.insert(file_path, resp.content);
+                                        cx.notify();
+                                    });
+                                }
+                            });
+                        }
+                        Err(err) => {
+                            log::warn!("Failed to read file for tab {}: {}", file_path, err);
+                        }
+                    },
+                )
                 .detach();
             }
             console_core::FileKind::RasterImage | console_core::FileKind::Svg => {
@@ -1001,12 +1010,7 @@ impl ConsoleDesktopApp {
     /// Close a tab and synchronize the pane's selected session, composer, and
     /// transcript. All close entry points use this so the tab-bar button and
     /// keyboard shortcut cannot drift apart.
-    pub fn close_tab_and_sync_pane(
-        &mut self,
-        pane_id: &str,
-        tab_id: &str,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn close_tab_and_sync_pane(&mut self, pane_id: &str, tab_id: &str, cx: &mut Context<Self>) {
         let previous_session = self.active_session_for_pane(pane_id);
 
         if let Some(session_id) = previous_session.as_deref() {
@@ -1157,10 +1161,13 @@ impl ConsoleDesktopApp {
             return;
         }
         let open = self.open_file_paths_everywhere();
-        self.open_file_contents.retain(|path, _| open.contains(path));
-        self.open_image_contents.retain(|path, _| open.contains(path));
+        self.open_file_contents
+            .retain(|path, _| open.contains(path));
+        self.open_image_contents
+            .retain(|path, _| open.contains(path));
         self.svg_preview_mode.retain(|path, _| open.contains(path));
-        self.open_diff_contents.retain(|path, _| open.contains(path));
+        self.open_diff_contents
+            .retain(|path, _| open.contains(path));
         self.viewer_cached_file_lines
             .retain(|path, _| open.contains(path));
         self.viewer_cached_diff_lines
@@ -1213,7 +1220,11 @@ impl ConsoleDesktopApp {
         self.viewer_cached_file_lines.remove(path);
         self.viewer_cached_diff_lines.remove(path);
         self.viewer_cached_markdown_views.remove(path);
-        for key in [format!("file:{path}"), format!("diff:{path}"), format!("md:{path}")] {
+        for key in [
+            format!("file:{path}"),
+            format!("diff:{path}"),
+            format!("md:{path}"),
+        ] {
             self.viewer_list_states.remove(&key);
             self.viewer_selection_states.remove(&key);
             self.viewer_focus_handles.remove(&key);
@@ -1233,15 +1244,8 @@ impl ConsoleDesktopApp {
     /// project picker, transcript/composer, inspector. Shared by mouse clicks
     /// and the Option+1–9 shortcuts so both switch content, not just the tab
     /// highlight.
-    pub fn activate_workspace_tab(
-        &mut self,
-        pane_id: &str,
-        tab_id: &str,
-        cx: &mut Context<Self>,
-    ) {
-        let prev_sid = self
-            .active_session_for_pane(pane_id)
-            .map(|s| s.to_string());
+    pub fn activate_workspace_tab(&mut self, pane_id: &str, tab_id: &str, cx: &mut Context<Self>) {
+        let prev_sid = self.active_session_for_pane(pane_id).map(|s| s.to_string());
         self.select_workspace_tab(pane_id, tab_id);
         if let Some(sid) = tab_id.strip_prefix("chat:") {
             super::macos_notifications::clear_for_session(sid);
@@ -1253,19 +1257,14 @@ impl ConsoleDesktopApp {
                     }
                 }
             }
-            let transcript_has_messages = self
-                .transcript_for_pane(pane_id)
-                .read(cx)
-                .message_count()
-                > 0;
+            let transcript_has_messages =
+                self.transcript_for_pane(pane_id).read(cx).message_count() > 0;
             let already_loaded = self
                 .workspace_pane_states
                 .get(pane_id)
                 .and_then(|state| state.loaded_session_id.as_deref())
                 == Some(sid);
-            if transcript_has_messages
-                && (already_loaded || prev_sid.as_deref() == Some(sid))
-            {
+            if transcript_has_messages && (already_loaded || prev_sid.as_deref() == Some(sid)) {
                 self.maybe_refresh_inspector(cx);
                 cx.notify();
                 return;
@@ -1423,16 +1422,18 @@ impl ConsoleDesktopApp {
     /// session belongs to another folder, switch workspaces (like clicking it)
     /// instead of dropping a foreign tab into this workspace's split tree.
     /// Returns true when the drop was diverted this way.
-    fn divert_foreign_sidebar_drag(&mut self, drag: &WorkspaceDrag, cx: &mut Context<Self>) -> bool {
+    fn divert_foreign_sidebar_drag(
+        &mut self,
+        drag: &WorkspaceDrag,
+        cx: &mut Context<Self>,
+    ) -> bool {
         if drag.source_pane_id.is_some() {
             return false;
         }
         let WorkspaceTabConfig::Chat { session_id, .. } = &drag.tab else {
             return false;
         };
-        let target_project_id = self
-            .target_project_for_session(session_id)
-            .map(|p| p.id);
+        let target_project_id = self.target_project_for_session(session_id).map(|p| p.id);
         if target_project_id != self.selected_project_id {
             self.select_and_open_session(session_id.clone(), cx);
             return true;

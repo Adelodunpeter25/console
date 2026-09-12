@@ -2,9 +2,7 @@ use crate::types::terminal::{
     CursorPosition, TerminalBackend, TerminalCell, TerminalCellFlags, TerminalColor,
     TerminalGridSnapshot, TerminalLink, TerminalSize,
 };
-use termy_core::{
-    Terminal, TerminalClipboardTarget, TerminalReplyHost, TerminalSize as TermySize,
-};
+use termy_core::{Terminal, TerminalClipboardTarget, TerminalReplyHost, TerminalSize as TermySize};
 
 pub struct TermyBackend {
     term: Terminal,
@@ -45,7 +43,11 @@ fn termycolor_to_terminal(c: termy_core::TermyColor) -> Option<TerminalColor> {
     if c.a == 0 {
         return None;
     }
-    Some(TerminalColor { r: c.r, g: c.g, b: c.b })
+    Some(TerminalColor {
+        r: c.r,
+        g: c.g,
+        b: c.b,
+    })
 }
 
 impl TerminalBackend for TermyBackend {
@@ -84,7 +86,9 @@ impl TerminalBackend for TermyBackend {
                         italic: cell.italic,
                         underline: cell.underline,
                         inverse: false,
-                        hidden: !cell.render_text && cell.char == ' ' && !cell.wide_character_spacer,
+                        hidden: !cell.render_text
+                            && cell.char == ' '
+                            && !cell.wide_character_spacer,
                         strike: cell.strikethrough,
                         blink: false,
                         wrapline: cell.line_wrapped,
@@ -196,7 +200,9 @@ impl TermyBackend {
     /// be split across frames, so no string round-trip is allowed here.
     pub fn advance_and_collect_replies_bytes(&mut self, data: &[u8]) -> Vec<u8> {
         self.term.feed_output(data);
-        let mut collector = ReplyCollector { replies: Vec::new() };
+        let mut collector = ReplyCollector {
+            replies: Vec::new(),
+        };
         let _ = self.term.drain_events(&mut collector);
         collector.replies
     }
@@ -248,9 +254,7 @@ fn detect_url_links(row: &[TerminalCell], row_idx: usize, links: &mut Vec<Termin
             end += 1;
         }
         // Trim punctuation commonly glued to URLs in prose/shell output.
-        while end > c + scheme_len
-            && matches!(chars[end - 1], '.' | ',' | ';' | ':' | '!' | '?')
-        {
+        while end > c + scheme_len && matches!(chars[end - 1], '.' | ',' | ';' | ':' | '!' | '?') {
             end -= 1;
         }
 

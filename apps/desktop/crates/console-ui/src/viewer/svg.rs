@@ -37,10 +37,7 @@ pub fn rasterize_svg(bytes: &[u8], max_dim: u32) -> Option<(Vec<u8>, u32, u32)> 
     let out_h = ((orig_h * scale).round() as u32).clamp(1, max_dim);
 
     let mut pixmap = tiny_skia::Pixmap::new(out_w, out_h)?;
-    let transform = tiny_skia::Transform::from_scale(
-        out_w as f32 / orig_w,
-        out_h as f32 / orig_h,
-    );
+    let transform = tiny_skia::Transform::from_scale(out_w as f32 / orig_w, out_h as f32 / orig_h);
 
     resvg::render(&tree, transform, &mut pixmap.as_mut());
 

@@ -470,22 +470,23 @@ impl ConsoleDesktopApp {
     /// workspace's remembered pane when still present, else the current pane
     /// when present, else the first leaf.
     pub(crate) fn restore_active_pane(&mut self, project_id: &Option<String>) {
-        let remembered = self.project_active_panes.get(project_id).cloned().filter(|id| {
-            self.workspace_root
-                .leaves()
-                .iter()
-                .any(|leaf| &leaf.id == id)
-        });
+        let remembered = self
+            .project_active_panes
+            .get(project_id)
+            .cloned()
+            .filter(|id| {
+                self.workspace_root
+                    .leaves()
+                    .iter()
+                    .any(|leaf| &leaf.id == id)
+            });
         let current = self.active_pane_id.clone().filter(|id| {
             self.workspace_root
                 .leaves()
                 .iter()
                 .any(|leaf| &leaf.id == id)
         });
-        let first = self
-            .workspace_root
-            .first_leaf()
-            .map(|leaf| leaf.id.clone());
+        let first = self.workspace_root.first_leaf().map(|leaf| leaf.id.clone());
         self.active_pane_id = remembered.or(current).or(first);
     }
 
@@ -510,12 +511,11 @@ impl ConsoleDesktopApp {
         let is_different_project = match (&self.selected_project_id, &target_project_id) {
             (Some(current), Some(target)) => current != target,
             (Some(_), None) => true,
-            (None, Some(_)) => {
-                self.workspace_root
-                    .leaves()
-                    .iter()
-                    .any(|l| !l.tabs.is_empty())
-            }
+            (None, Some(_)) => self
+                .workspace_root
+                .leaves()
+                .iter()
+                .any(|l| !l.tabs.is_empty()),
             (None, None) => false,
         };
 
@@ -529,16 +529,16 @@ impl ConsoleDesktopApp {
             });
             for (key, root) in self.project_workspace_roots.iter_mut() {
                 if key != &target_project_id {
-                    console_ui::workspace::ops::close_matching_tabs(root, |t| {
-                        t.id() == tab_id
-                    });
+                    console_ui::workspace::ops::close_matching_tabs(root, |t| t.id() == tab_id);
                 }
             }
             // Remember this workspace's focused pane before leaving it.
             self.remember_active_pane();
             // Save current project's workspace tabs
-            self.project_workspace_roots
-                .insert(self.selected_project_id.clone(), self.workspace_root.clone());
+            self.project_workspace_roots.insert(
+                self.selected_project_id.clone(),
+                self.workspace_root.clone(),
+            );
 
             // Switch active project
             self.selected_project_id = target_project_id.clone();
@@ -550,7 +550,11 @@ impl ConsoleDesktopApp {
             }
 
             // Restore previously opened tabs for this project, or start a clean leaf
-            if let Some(saved_root) = self.project_workspace_roots.get(&target_project_id).cloned() {
+            if let Some(saved_root) = self
+                .project_workspace_roots
+                .get(&target_project_id)
+                .cloned()
+            {
                 self.workspace_root = saved_root;
             } else {
                 self.workspace_root = console_core::WorkspaceNode::leaf(&active_pane_id);
@@ -579,7 +583,9 @@ impl ConsoleDesktopApp {
                         Ok(branches) => cx.update(|cx| {
                             if let Some(app) = entity.upgrade() {
                                 app.update(cx, |this, cx| {
-                                    if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
+                                    if let Some(state) =
+                                        this.workspace_pane_states.get_mut(&pane_id)
+                                    {
                                         state.branches = Rc::new(branches.branches);
                                         state.branch_loaded = true;
                                         state.branch_is_git_repository = branches.is_git_repository;
@@ -591,7 +597,9 @@ impl ConsoleDesktopApp {
                         Err(_) => cx.update(|cx| {
                             if let Some(app) = entity.upgrade() {
                                 app.update(cx, |this, cx| {
-                                    if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
+                                    if let Some(state) =
+                                        this.workspace_pane_states.get_mut(&pane_id)
+                                    {
                                         Rc::make_mut(&mut state.branches).clear();
                                         state.branch_loaded = true;
                                         state.branch_is_git_repository = false;
@@ -902,10 +910,8 @@ impl ConsoleDesktopApp {
                                 let queue_pane_id = pane_id.clone();
                                 let queue_session_id = session_id.clone();
                                 cx.spawn(async move |entity, cx| {
-                                    if let Ok(q) = queue_client
-                                        .runs
-                                        .get_queued_prompt(&queue_session_id)
-                                        .await
+                                    if let Ok(q) =
+                                        queue_client.runs.get_queued_prompt(&queue_session_id).await
                                     {
                                         let _ = cx.update(|cx| {
                                             if let Some(app) = entity.upgrade() {

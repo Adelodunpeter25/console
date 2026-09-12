@@ -87,11 +87,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-p", QuickOpenFile, None),
         KeyBinding::new("secondary-k", ToggleCommandPalette, None),
         KeyBinding::new("secondary-l", FocusComposer, None),
-        KeyBinding::new(
-            "secondary-/",
-            ToggleModelPicker,
-            None,
-        ),
+        KeyBinding::new("secondary-/", ToggleModelPicker, None),
         // Plain `/` refocuses the open picker's search box. Scoped to the
         // menu context so it can only fire while a menu/popover card is
         // open — everywhere else `/` types normally. `ConsoleMenu` matches

@@ -228,16 +228,12 @@ pub fn build_diff_lines(
             };
 
             let (gutter, gutter_color, bg_color) = match line.kind {
-                console_core::DiffLineKind::Added => (
-                    "+",
-                    theme.success,
-                    Some(theme.diff_added_bg),
-                ),
-                console_core::DiffLineKind::Removed => (
-                    "-",
-                    theme.danger,
-                    Some(theme.diff_removed_bg),
-                ),
+                console_core::DiffLineKind::Added => {
+                    ("+", theme.success, Some(theme.diff_added_bg))
+                }
+                console_core::DiffLineKind::Removed => {
+                    ("-", theme.danger, Some(theme.diff_removed_bg))
+                }
                 console_core::DiffLineKind::Context => (" ", theme.text_tertiary, None),
             };
 
@@ -392,24 +388,25 @@ impl RenderOnce for CodeViewer {
                                     return;
                                 };
                                 let viewport = list_state.viewport_bounds();
-                                let scroll_offset =
-                                    -list_state.scroll_px_offset_for_scrollbar().y;
-                                let rel_y =
-                                    event.position.y - viewport.origin.y + scroll_offset;
+                                let scroll_offset = -list_state.scroll_px_offset_for_scrollbar().y;
+                                let rel_y = event.position.y - viewport.origin.y + scroll_offset;
                                 let line_idx = if rel_y > px(0.0) {
                                     ((rel_y / px(CODE_LINE_HEIGHT)).floor() as usize)
                                         .min(lines_len.saturating_sub(1))
                                 } else {
                                     0
                                 };
-                                let rel_x = f32::from(event.position.x - viewport.origin.x)
-                                    - gutter_offset;
+                                let rel_x =
+                                    f32::from(event.position.x - viewport.origin.x) - gutter_offset;
                                 let col = if rel_x > 0.0 {
                                     (rel_x / CHAR_WIDTH).round() as usize
                                 } else {
                                     0
                                 };
-                                let target_pos = CodePosition { line: line_idx, col };
+                                let target_pos = CodePosition {
+                                    line: line_idx,
+                                    col,
+                                };
                                 if sel.head != target_pos {
                                     sel.head = target_pos;
                                     s.selection = Some(sel);
@@ -598,14 +595,11 @@ impl RenderOnce for CodeViewer {
                                     line.text.as_str()
                                 };
 
-                                let line_sel_range = selection_rc
-                                    .as_ref()
-                                    .and_then(|state| {
-                                        let selection = state.read(_cx).selection;
-                                        selection.and_then(|sel| {
-                                            sel.line_col_range(index, line.text.len())
-                                        })
-                                    });
+                                let line_sel_range = selection_rc.as_ref().and_then(|state| {
+                                    let selection = state.read(_cx).selection;
+                                    selection
+                                        .and_then(|sel| sel.line_col_range(index, line.text.len()))
+                                });
 
                                 let runs = code_runs_for_tokens(
                                     display_str,

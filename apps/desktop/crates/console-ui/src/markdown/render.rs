@@ -26,8 +26,8 @@ use gpui::{
     AnyElement, BorderStyle, Bounds, ClipboardItem, CursorStyle, DispatchPhase, Font, FontStyle,
     FontWeight, Hsla, InteractiveText, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent,
     MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point, SharedString, StrikethroughStyle,
-    StyledText, TextLayout, TextRun, Window, canvas, div, font, img, point,
-    prelude::*, px, quad, relative, size,
+    StyledText, TextLayout, TextRun, Window, canvas, div, font, img, point, prelude::*, px, quad,
+    relative, size,
 };
 
 use super::highlight::{self, Lang, TokenClass};

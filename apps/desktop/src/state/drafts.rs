@@ -123,7 +123,9 @@ impl ConsoleDesktopApp {
                 })
                 .collect::<Vec<_>>();
             let changed = match self.drafts.get(&key) {
-                Some(existing) => existing.prompt != text || existing.mentions != persisted_mentions,
+                Some(existing) => {
+                    existing.prompt != text || existing.mentions != persisted_mentions
+                }
                 None => true,
             };
             if changed {

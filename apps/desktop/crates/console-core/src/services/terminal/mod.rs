@@ -167,7 +167,11 @@ impl TerminalHandle {
     }
 
     /// Full link metadata (OSC 8, file paths, URLs) at a viewport cell.
-    pub async fn link_at(&self, row: usize, col: usize) -> Option<termy_core::DetectedViewportLink> {
+    pub async fn link_at(
+        &self,
+        row: usize,
+        col: usize,
+    ) -> Option<termy_core::DetectedViewportLink> {
         let b = self.backend.lock().await;
         b.link_at(row, col)
     }
@@ -226,8 +230,7 @@ impl TerminalService {
                     // [0x01, ...bytes]; control messages stay JSON text.
                     let wire = match &msg {
                         TerminalClientMessage::Input { data } => {
-                            let mut frame =
-                                Vec::with_capacity(data.len() + 1);
+                            let mut frame = Vec::with_capacity(data.len() + 1);
                             frame.push(TERMINAL_INPUT_FRAME_TAG);
                             frame.extend_from_slice(data.as_bytes());
                             tokio_tungstenite::tungstenite::Message::Binary(frame.into())

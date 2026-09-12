@@ -1,8 +1,8 @@
 use console_core::{
     ApprovalMode, ApproveToolPermissionDto, ModelFavorite, SelectedModel, UpdateSessionDto,
 };
-use console_ui::workspace::EmptyChatState;
 use console_ui::terminal::TerminalView;
+use console_ui::workspace::EmptyChatState;
 use console_ui::{
     ApprovalModeDropdown, ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
     QuestionInteractionCard, Theme, WorkspaceFooter, centered_stripe, error_banner, notice_banner,
@@ -52,7 +52,8 @@ impl ConsoleDesktopApp {
                         .child("Select a project to open a terminal")
                         .into_any_element();
                 };
-                let view = cx.new(|cx| TerminalView::with_cwd(cwd, self.client.clone(), window, cx));
+                let view =
+                    cx.new(|cx| TerminalView::with_cwd(cwd, self.client.clone(), window, cx));
                 self.terminals.insert(terminal_id.clone(), view);
             }
             let theme = Theme::current(cx);

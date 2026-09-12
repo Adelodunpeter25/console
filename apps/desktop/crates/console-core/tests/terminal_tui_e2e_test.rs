@@ -13,9 +13,7 @@ use std::time::Duration;
 const FIXTURE_PORT: u16 = 47631;
 
 /// True once the grid shows any non-space text.
-async fn grid_has_content(
-    handle: &console_core::services::terminal::TerminalHandle,
-) -> bool {
+async fn grid_has_content(handle: &console_core::services::terminal::TerminalHandle) -> bool {
     let b = handle.backend.lock().await;
     let snap = b.snapshot();
     snap.rows.iter().any(|row| row.iter().any(|c| c.c != ' '))
@@ -99,11 +97,17 @@ async fn real_tui_launches_and_draws_through_the_full_stack() {
     }
     handle.kill();
 
-    assert!(started, "vx did not reach the alternate screen within 6s — TUI startup is hanging");
+    assert!(
+        started,
+        "vx did not reach the alternate screen within 6s — TUI startup is hanging"
+    );
 }
 
 /// Poll until the terminal enters the alternate screen or the budget runs out.
-async fn for_secs(budget: Duration, handle: &console_core::services::terminal::TerminalHandle) -> bool {
+async fn for_secs(
+    budget: Duration,
+    handle: &console_core::services::terminal::TerminalHandle,
+) -> bool {
     let mut elapsed = Duration::ZERO;
     while elapsed < budget {
         let alt = {

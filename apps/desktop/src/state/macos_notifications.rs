@@ -11,16 +11,16 @@
 #[cfg(target_os = "macos")]
 mod imp {
     use block2::StackBlock;
-    use objc2::{define_class, ClassType};
-    use objc2::runtime::{Bool, NSObject, NSObjectProtocol};
-    use objc2_foundation::{NSArray, NSDictionary, NSError, NSString};
-    use objc2_user_notifications::{
-        UNMutableNotificationContent, UNNotificationRequest, UNNotificationResponse,
-        UNNotificationSound, UNAuthorizationOptions, UNUserNotificationCenter,
-        UNUserNotificationCenterDelegate,
-    };
     use console_core::types::notification::{
         NOTIFICATION_THREAD_ID, notification_ident, parse_session_id_from_ident,
+    };
+    use objc2::runtime::{Bool, NSObject, NSObjectProtocol};
+    use objc2::{ClassType, define_class};
+    use objc2_foundation::{NSArray, NSDictionary, NSError, NSString};
+    use objc2_user_notifications::{
+        UNAuthorizationOptions, UNMutableNotificationContent, UNNotificationRequest,
+        UNNotificationResponse, UNNotificationSound, UNUserNotificationCenter,
+        UNUserNotificationCenterDelegate,
     };
     use std::sync::OnceLock;
     use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -64,11 +64,9 @@ mod imp {
                 >,
             ) {
                 use objc2_user_notifications::UNNotificationPresentationOptions;
-                completion_handler.call((
-                    UNNotificationPresentationOptions::Banner
-                        | UNNotificationPresentationOptions::List
-                        | UNNotificationPresentationOptions::Sound,
-                ));
+                completion_handler.call((UNNotificationPresentationOptions::Banner
+                    | UNNotificationPresentationOptions::List
+                    | UNNotificationPresentationOptions::Sound,));
             }
         }
     );
@@ -87,7 +85,8 @@ mod imp {
         let key = NSString::from_str("sessionId");
         // userInfo is NSDictionary<NSString, AnyObject>-shaped; read via objectForKey.
         let obj: Option<objc2::rc::Retained<NSObject>> = unsafe {
-            let dict: &NSDictionary<NSString, NSObject> = &*(&*info as *const _ as *const NSDictionary<NSString, NSObject>);
+            let dict: &NSDictionary<NSString, NSObject> =
+                &*(&*info as *const _ as *const NSDictionary<NSString, NSObject>);
             dict.objectForKey(&key)
         };
         obj.map(|o| {
@@ -114,8 +113,9 @@ mod imp {
         center.setDelegate(Some(objc2::runtime::ProtocolObject::from_ref(&*delegate)));
         let _ = DELEGATE.set(delegate);
 
-        let options =
-            UNAuthorizationOptions::Alert | UNAuthorizationOptions::Badge | UNAuthorizationOptions::Sound;
+        let options = UNAuthorizationOptions::Alert
+            | UNAuthorizationOptions::Badge
+            | UNAuthorizationOptions::Sound;
         let block = StackBlock::new(move |granted: Bool, _err: *mut NSError| {
             if !granted.as_bool() {
                 log::warn!("macOS notifications not authorized; banners will not appear");
@@ -137,7 +137,8 @@ mod imp {
         let info: objc2::rc::Retained<NSDictionary<NSString, NSString>> =
             NSDictionary::from_slices(&[&*key], &[&*val]);
         unsafe {
-            let dict: &objc2_foundation::NSDictionary = &*(&*info as *const _ as *const objc2_foundation::NSDictionary);
+            let dict: &objc2_foundation::NSDictionary =
+                &*(&*info as *const _ as *const objc2_foundation::NSDictionary);
             content.setUserInfo(dict);
         }
         let ident = notification_ident(session_id);
@@ -163,9 +164,7 @@ mod imp {
         center.removeAllDeliveredNotifications();
         center.removeAllPendingNotificationRequests();
     }
-
 }
-
 
 #[cfg(target_os = "macos")]
 pub(crate) use imp::{clear_all, clear_for_session, ensure_initialized, notify_session};

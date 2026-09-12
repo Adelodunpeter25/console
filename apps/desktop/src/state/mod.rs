@@ -24,11 +24,11 @@ mod projects;
 mod providers;
 mod right_sidebar;
 mod run;
-mod sessions;
 mod session_titles;
+mod sessions;
 mod settings;
-mod transcript_wiring;
 mod transcript_scroll;
+mod transcript_wiring;
 mod usage;
 mod workspace_panes;
 

@@ -35,7 +35,10 @@ fn device_attributes_query_produces_a_reply() {
     let replies = backend.advance_and_collect_replies("\x1b[c");
     assert!(!replies.is_empty(), "DA1 must be answered");
     let text = String::from_utf8_lossy(&replies).into_owned();
-    assert!(text.starts_with("\x1b[?"), "expected a DA1 reply, got {text:?}");
+    assert!(
+        text.starts_with("\x1b[?"),
+        "expected a DA1 reply, got {text:?}"
+    );
 }
 
 #[test]

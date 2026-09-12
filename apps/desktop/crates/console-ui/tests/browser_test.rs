@@ -118,12 +118,17 @@ fn test_bitmap_repacking_honors_row_padding_and_rejects_bad_layouts() {
 
 #[test]
 fn test_download_names_do_not_overwrite() {
-    let temp_dir = std::env::temp_dir().join(format!("console-download-test-{}", std::process::id()));
+    let temp_dir =
+        std::env::temp_dir().join(format!("console-download-test-{}", std::process::id()));
     let _ = std::fs::create_dir_all(&temp_dir);
     let initial_file = temp_dir.join("report.pdf");
     std::fs::write(&initial_file, "content").unwrap();
 
-    let dest = download_destination("https://example.com/report.pdf", initial_file, Some(temp_dir.clone()));
+    let dest = download_destination(
+        "https://example.com/report.pdf",
+        initial_file,
+        Some(temp_dir.clone()),
+    );
     assert!(dest.is_some());
     assert_eq!(dest.unwrap().file_name().unwrap(), "report (2).pdf");
 

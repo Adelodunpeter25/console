@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use gpui::{point, Bounds, Context, EntityInputHandler, Pixels, Point, UTF16Selection, Window};
+use gpui::{Bounds, Context, EntityInputHandler, Pixels, Point, UTF16Selection, Window, point};
 
 use super::{ComposerEvent, ComposerInput};
 

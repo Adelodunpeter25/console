@@ -44,7 +44,11 @@ pub fn init_browser_keybindings(cx: &mut App) {
         KeyBinding::new("cmd-l", FocusBrowserAddress, Some(BROWSER_KEY_CONTEXT)),
         KeyBinding::new("ctrl-l", FocusBrowserAddress, Some(BROWSER_KEY_CONTEXT)),
         // Address bar escape cancels editing and reverts to current URL
-        KeyBinding::new("escape", BrowserAddressCancel, Some(BROWSER_ADDRESS_KEY_CONTEXT)),
+        KeyBinding::new(
+            "escape",
+            BrowserAddressCancel,
+            Some(BROWSER_ADDRESS_KEY_CONTEXT),
+        ),
         // In-webview editing bindings when Browser context has precedence
         KeyBinding::new("cmd-c", WebviewCopy, Some(BROWSER_KEY_CONTEXT)),
         KeyBinding::new("ctrl-c", WebviewCopy, Some(BROWSER_KEY_CONTEXT)),

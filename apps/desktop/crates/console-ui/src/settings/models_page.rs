@@ -34,7 +34,7 @@ impl RenderOnce for ModelsPage {
                       description: &'static str,
                       input: Entity<ComposerInput>,
                       menu: crate::primitives::ContextMenuHandle,
-                       search: Entity<ComposerInput>| {
+                      search: Entity<ComposerInput>| {
             let value = input.read(cx).content().trim().to_string();
             let selected = value
                 .split_once('/')

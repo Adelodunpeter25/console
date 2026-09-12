@@ -141,20 +141,14 @@ impl TranscriptView {
     /// panes, the shell owns resolution + opening. File-like destinations
     /// forward their raw link text; `http(s)` goes to `on_open_url_raw` when
     /// set, otherwise the external browser.
-    pub fn set_on_open_file(
-        &mut self,
-        handler: impl Fn(String, &mut Window, &mut App) + 'static,
-    ) {
+    pub fn set_on_open_file(&mut self, handler: impl Fn(String, &mut Window, &mut App) + 'static) {
         self.on_open_file_raw = Some(Rc::new(handler));
         self.rebuild_link_handler();
     }
 
     /// Wire web-link clicks (the app opens its embedded browser). When unset,
     /// `http(s)` falls back to the external browser.
-    pub fn set_on_open_url(
-        &mut self,
-        handler: impl Fn(String, &mut Window, &mut App) + 'static,
-    ) {
+    pub fn set_on_open_url(&mut self, handler: impl Fn(String, &mut Window, &mut App) + 'static) {
         self.on_open_url_raw = Some(Rc::new(handler));
         self.rebuild_link_handler();
     }
@@ -162,21 +156,23 @@ impl TranscriptView {
     fn rebuild_link_handler(&mut self) {
         let open_file = self.on_open_file_raw.clone();
         let open_url = self.on_open_url_raw.clone();
-        self.link_handler = Some(Rc::new(move |url: &str, window: &mut Window, cx: &mut App| {
-            if is_http_url(url) {
-                if let Some(open_url) = &open_url {
-                    open_url(url.to_owned(), window, cx);
+        self.link_handler = Some(Rc::new(
+            move |url: &str, window: &mut Window, cx: &mut App| {
+                if is_http_url(url) {
+                    if let Some(open_url) = &open_url {
+                        open_url(url.to_owned(), window, cx);
+                    } else {
+                        cx.open_url(url);
+                    }
+                } else if is_file_link(url) {
+                    if let Some(open_file) = &open_file {
+                        open_file(url.to_owned(), window, cx);
+                    }
                 } else {
                     cx.open_url(url);
                 }
-            } else if is_file_link(url) {
-                if let Some(open_file) = &open_file {
-                    open_file(url.to_owned(), window, cx);
-                }
-            } else {
-                cx.open_url(url);
-            }
-        }));
+            },
+        ));
     }
 
     pub fn session_cwd(&self) -> Option<String> {

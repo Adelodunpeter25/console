@@ -411,9 +411,23 @@ fn test_edit_history_coalescing_and_undo_redo() {
     // 1. Coalesced typing: "h", "e", "l", "l", "o"
     history.record(&content, &(0..0), "h", 0..0, false, t0);
     content.push('h');
-    history.record(&content, &(1..1), "e", 1..1, false, t0 + Duration::from_millis(50));
+    history.record(
+        &content,
+        &(1..1),
+        "e",
+        1..1,
+        false,
+        t0 + Duration::from_millis(50),
+    );
     content.push('e');
-    history.record(&content, &(2..2), "llo", 2..2, false, t0 + Duration::from_millis(100));
+    history.record(
+        &content,
+        &(2..2),
+        "llo",
+        2..2,
+        false,
+        t0 + Duration::from_millis(100),
+    );
     content.push_str("llo");
 
     assert_eq!(content, "hello");
@@ -431,12 +445,26 @@ fn test_edit_history_coalescing_and_undo_redo() {
 
     // 2. Sealed edit (e.g. paste): does NOT coalesce with subsequent typing
     history.seal();
-    history.record(&redone, &(5..5), " world", 5..5, false, t0 + Duration::from_millis(150));
+    history.record(
+        &redone,
+        &(5..5),
+        " world",
+        5..5,
+        false,
+        t0 + Duration::from_millis(150),
+    );
     let mut content2 = format!("{} world", redone);
     assert_eq!(history.undo.len(), 2);
 
     history.seal();
-    history.record(&content2, &(11..11), "!", 11..11, false, t0 + Duration::from_millis(200));
+    history.record(
+        &content2,
+        &(11..11),
+        "!",
+        11..11,
+        false,
+        t0 + Duration::from_millis(200),
+    );
     content2.push('!');
     assert_eq!(history.undo.len(), 3);
 

@@ -14,22 +14,11 @@ pub enum FileKind {
 
 /// Raster image extensions that can be previewed as images.
 /// Kept in sync with `@console/types` `IMAGE_PREVIEW_EXTENSIONS`.
-pub const RASTER_IMAGE_EXTENSIONS: &[&str] = &[
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".gif",
-    ".webp",
-    ".bmp",
-    ".ico",
-];
+pub const RASTER_IMAGE_EXTENSIONS: &[&str] =
+    &[".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico"];
 
 /// Markdown extensions matching `workspace_content.rs`.
-pub const MARKDOWN_EXTENSIONS: &[&str] = &[
-    ".md",
-    ".markdown",
-    ".mdx",
-];
+pub const MARKDOWN_EXTENSIONS: &[&str] = &[".md", ".markdown", ".mdx"];
 
 /// Non-image binary formats that cannot be rendered as text or images.
 pub const BLOCKED_FILE_EXTENSIONS: &[&str] = &[
@@ -38,13 +27,11 @@ pub const BLOCKED_FILE_EXTENSIONS: &[&str] = &[
     // Archives
     ".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z", ".rar", ".jar", ".war",
     // Executables / objects
-    ".exe", ".dll", ".so", ".dylib", ".a", ".o", ".obj", ".bin", ".iso", ".dmg",
-    ".pkg", ".deb", ".rpm", ".apk", ".ipa", ".node",
-    // Fonts
-    ".ttf", ".otf", ".woff", ".woff2", ".eot",
-    // Documents / other opaque formats
-    ".pdf", ".wasm", ".psd", ".sketch", ".class", ".pyc", ".db", ".sqlite", ".sqlite3",
-    ".icns", ".tiff",
+    ".exe", ".dll", ".so", ".dylib", ".a", ".o", ".obj", ".bin", ".iso", ".dmg", ".pkg", ".deb",
+    ".rpm", ".apk", ".ipa", ".node", // Fonts
+    ".ttf", ".otf", ".woff", ".woff2", ".eot", // Documents / other opaque formats
+    ".pdf", ".wasm", ".psd", ".sketch", ".class", ".pyc", ".db", ".sqlite", ".sqlite3", ".icns",
+    ".tiff",
 ];
 
 const LOCK_FILE_BASENAMES: &[&str] = &[
@@ -54,10 +41,7 @@ const LOCK_FILE_BASENAMES: &[&str] = &[
     "composer.lock",
 ];
 
-const LOCK_FILE_SUFFIXES: &[&str] = &[
-    ".lock",
-    ".lockb",
-];
+const LOCK_FILE_SUFFIXES: &[&str] = &[".lock", ".lockb"];
 
 /// Check if a filename represents a generated lockfile.
 pub fn is_lock_file(file_name: &str) -> bool {
@@ -65,7 +49,9 @@ pub fn is_lock_file(file_name: &str) -> bool {
     if LOCK_FILE_BASENAMES.iter().any(|&b| lower == b) {
         return true;
     }
-    LOCK_FILE_SUFFIXES.iter().any(|&suffix| lower.ends_with(suffix))
+    LOCK_FILE_SUFFIXES
+        .iter()
+        .any(|&suffix| lower.ends_with(suffix))
 }
 
 /// Classify a file path by extension / filename into a `FileKind`.
@@ -85,7 +71,10 @@ pub fn file_kind_for_path(path: &str) -> FileKind {
         return FileKind::Svg;
     }
 
-    if RASTER_IMAGE_EXTENSIONS.iter().any(|&ext| lower.ends_with(ext)) {
+    if RASTER_IMAGE_EXTENSIONS
+        .iter()
+        .any(|&ext| lower.ends_with(ext))
+    {
         return FileKind::RasterImage;
     }
 
@@ -93,7 +82,10 @@ pub fn file_kind_for_path(path: &str) -> FileKind {
         return FileKind::Markdown;
     }
 
-    if BLOCKED_FILE_EXTENSIONS.iter().any(|&ext| lower.ends_with(ext)) {
+    if BLOCKED_FILE_EXTENSIONS
+        .iter()
+        .any(|&ext| lower.ends_with(ext))
+    {
         return FileKind::Blocked;
     }
 

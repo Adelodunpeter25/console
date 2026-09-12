@@ -15,8 +15,8 @@ use std::sync::Arc;
 
 use gpui::{
     App, Context, Div, Entity, FocusHandle, Focusable, HitboxBehavior, IntoElement, MouseButton,
-    ObjectFit, ParentElement, Render, SharedString, Stateful, Styled, Subscription, Window,
-    canvas, div, img, prelude::*, px,
+    ObjectFit, ParentElement, Render, SharedString, Stateful, Styled, Subscription, Window, canvas,
+    div, img, prelude::*, px,
 };
 
 use super::actions::*;
@@ -372,7 +372,8 @@ impl BrowserView {
         self.snapshot = None;
         self.snapshot_pending = false;
         self.snapshot_epoch = self.snapshot_epoch.wrapping_add(1);
-        self.address.update(cx, |address, cx| address.set_content(String::new(), cx));
+        self.address
+            .update(cx, |address, cx| address.set_content(String::new(), cx));
         cx.notify();
     }
 
@@ -734,10 +735,7 @@ impl BrowserView {
     }
 
     fn render_start_page(&self, theme: Theme) -> Div {
-        div()
-            .flex_1()
-            .min_h_0()
-            .bg(theme.canvas)
+        div().flex_1().min_h_0().bg(theme.canvas)
     }
 
     fn render_host_error(&self, message: SharedString, theme: Theme) -> Div {

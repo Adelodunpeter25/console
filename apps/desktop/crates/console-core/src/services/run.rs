@@ -315,8 +315,7 @@ impl RunService {
             Ok(())
         } else {
             Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to steer run".into())
+                body.error.unwrap_or_else(|| "Failed to steer run".into())
             ))
         }
     }

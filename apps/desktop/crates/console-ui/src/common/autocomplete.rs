@@ -108,14 +108,15 @@ pub fn detect_trigger(value: &str, cursor: usize) -> Option<AutocompleteTrigger>
     // whitespace anywhere in the prompt, not only at the beginning of a line.
     // Searching backwards also makes multiple commands in one prompt behave
     // naturally: only the command currently being typed is replaced.
-    if let Some(slash) = before
-        .char_indices()
-        .rev()
-        .find_map(|(index, character)| {
-            (character == '/' && (index == 0 || before[..index].chars().next_back().is_some_and(char::is_whitespace)))
-                .then_some(index)
-        })
-    {
+    if let Some(slash) = before.char_indices().rev().find_map(|(index, character)| {
+        (character == '/'
+            && (index == 0
+                || before[..index]
+                    .chars()
+                    .next_back()
+                    .is_some_and(char::is_whitespace)))
+        .then_some(index)
+    }) {
         let query_start = slash + 1;
         if value.is_char_boundary(query_start) {
             let query = &value[query_start..cursor];

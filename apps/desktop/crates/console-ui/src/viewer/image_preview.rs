@@ -169,14 +169,11 @@ impl RenderOnce for ImagePreview {
                                         })
                                         .cursor_default()
                                         .when(preview_active, |s| {
-                                            s.bg(theme.surface)
-                                                .text_color(theme.text)
-                                                .shadow_sm()
+                                            s.bg(theme.surface).text_color(theme.text).shadow_sm()
                                         })
                                         .when(!preview_active, |s| {
-                                            s.text_color(theme.text_tertiary).hover(|h| {
-                                                h.text_color(theme.text)
-                                            })
+                                            s.text_color(theme.text_tertiary)
+                                                .hover(|h| h.text_color(theme.text))
                                         })
                                         .on_click(move |_, window, cx| {
                                             if let Some(on_toggle) = &on_toggle_preview {
@@ -199,14 +196,11 @@ impl RenderOnce for ImagePreview {
                                         })
                                         .cursor_default()
                                         .when(!preview_active, |s| {
-                                            s.bg(theme.surface)
-                                                .text_color(theme.text)
-                                                .shadow_sm()
+                                            s.bg(theme.surface).text_color(theme.text).shadow_sm()
                                         })
                                         .when(preview_active, |s| {
-                                            s.text_color(theme.text_tertiary).hover(|h| {
-                                                h.text_color(theme.text)
-                                            })
+                                            s.text_color(theme.text_tertiary)
+                                                .hover(|h| h.text_color(theme.text))
                                         })
                                         .on_click(move |_, window, cx| {
                                             if let Some(on_toggle) = &on_toggle_source {

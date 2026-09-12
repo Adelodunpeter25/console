@@ -212,7 +212,8 @@ impl RenderOnce for WorkspaceTabBar {
                             .gap_x(px(6.0))
                             .group(group_name.clone())
                             .when(is_active, |s| {
-                                let s = s.bg(theme.surface)
+                                let s = s
+                                    .bg(theme.surface)
                                     .text_color(theme.text)
                                     // Only the focused pane shows the orange
                                     // underline; other panes show none.

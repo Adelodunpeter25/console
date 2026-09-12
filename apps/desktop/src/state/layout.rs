@@ -110,9 +110,10 @@ impl ConsoleDesktopApp {
         // Coalesce bursts (rapid tab switching): at most one write per
         // interval, with a trailing flush from the render loop.
         let now = std::time::Instant::now();
-        let too_soon = self.last_workspaces_persist.get().is_some_and(|last| {
-            now.duration_since(last) < WORKSPACES_SAVE_DEBOUNCE
-        });
+        let too_soon = self
+            .last_workspaces_persist
+            .get()
+            .is_some_and(|last| now.duration_since(last) < WORKSPACES_SAVE_DEBOUNCE);
         if too_soon {
             self.workspaces_dirty.set(true);
             return;
@@ -202,11 +203,7 @@ impl ConsoleDesktopApp {
             .active_pane_id
             .clone()
             .filter(|pid| clean_cur_root.leaves().iter().any(|l| &l.id == pid))
-            .or_else(|| {
-                clean_cur_root
-                    .first_leaf()
-                    .map(|leaf| leaf.id.clone())
-            });
+            .or_else(|| clean_cur_root.first_leaf().map(|leaf| leaf.id.clone()));
         let cur_active_tab = cur_pane_id.as_deref().and_then(|pid| {
             clean_cur_root
                 .leaves()

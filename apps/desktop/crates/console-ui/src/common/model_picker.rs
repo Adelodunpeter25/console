@@ -507,7 +507,17 @@ impl RenderOnce for ModelRolePicker {
                 .flex()
                 .flex_col()
                 .gap(px(6.0))
-                .child(div().h(px(30.0)).px(px(6.0)).border_1().border_color(theme.border_strong).bg(theme.inset).flex().items_center().child(search.clone()));
+                .child(
+                    div()
+                        .h(px(30.0))
+                        .px(px(6.0))
+                        .border_1()
+                        .border_color(theme.border_strong)
+                        .bg(theme.inset)
+                        .flex()
+                        .items_center()
+                        .child(search.clone()),
+                );
             for provider in providers.iter() {
                 let models = models_by_provider
                     .get(&provider.name)
@@ -522,7 +532,10 @@ impl RenderOnce for ModelRolePicker {
                         .text_color(theme.text_secondary)
                         .child(provider.display_name.clone()),
                 );
-                for model in models.iter().filter(|model| query.is_empty() || model.id.to_lowercase().contains(&query)) {
+                for model in models
+                    .iter()
+                    .filter(|model| query.is_empty() || model.id.to_lowercase().contains(&query))
+                {
                     let provider_id = provider.name.clone();
                     let model_id = model.id.clone();
                     let callback = on_select.clone();

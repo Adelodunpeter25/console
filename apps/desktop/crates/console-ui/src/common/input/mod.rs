@@ -12,20 +12,20 @@ use std::time::{Duration, Instant};
 
 pub use actions::*;
 pub use boundaries::*;
-use element::{visual_row_count, visual_row_offset_for_x, InputElement};
+use element::{InputElement, visual_row_count, visual_row_offset_for_x};
 pub use history::*;
 pub use mentions::*;
 pub use text_runs::*;
 
 use crate::markdown::highlight::{self, Lang, TokenClass};
-use crate::primitives::menu::{context_menu, ContextMenuHandle, MenuItem};
+use crate::primitives::menu::{ContextMenuHandle, MenuItem, context_menu};
 use crate::primitives::scrollbar::{self, ScrollbarState};
 use crate::theme::Theme;
 use gpui::{
-    div, prelude::*, px, App, ClipboardEntry, ClipboardItem, Context, CursorStyle, Entity,
-    EntityInputHandler, EventEmitter, FocusHandle, Focusable, IntoElement, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, Render, ScrollHandle,
-    SharedString, Subscription, Task, TextLayout, Window,
+    App, ClipboardEntry, ClipboardItem, Context, CursorStyle, Entity, EntityInputHandler,
+    EventEmitter, FocusHandle, Focusable, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, Pixels, Point, Render, ScrollHandle, SharedString, Subscription, Task,
+    TextLayout, Window, div, prelude::*, px,
 };
 
 const CURSOR_BLINK_INTERVAL: Duration = Duration::from_millis(500);
@@ -461,7 +461,8 @@ impl ComposerInput {
         let start = range.start.min(self.content.len());
         self.replace_range(range, &insert_text, cx);
         let mention_range = (start + 3)..(start + 3 + mention_len);
-        self.mentions.retain(|m| m.range.end <= start || m.range.start >= start + insert_text.len());
+        self.mentions
+            .retain(|m| m.range.end <= start || m.range.start >= start + insert_text.len());
         self.mentions.push(ComposerMention {
             range: mention_range,
             path: path.to_string(),
@@ -947,7 +948,12 @@ impl ComposerInput {
         }
         if matches!(self.mode, FieldMode::Composer) && self.selected_range.is_empty() {
             let cursor = self.cursor_offset();
-            if let Some(mention) = self.mentions.iter().find(|m| m.range.end == cursor).cloned() {
+            if let Some(mention) = self
+                .mentions
+                .iter()
+                .find(|m| m.range.end == cursor)
+                .cloned()
+            {
                 self.selected_range = mention.range;
                 self.replace_text_in_range(None, "", window, cx);
                 return;
@@ -962,7 +968,12 @@ impl ComposerInput {
     fn delete(&mut self, _: &Delete, window: &mut Window, cx: &mut Context<Self>) {
         if matches!(self.mode, FieldMode::Composer) && self.selected_range.is_empty() {
             let cursor = self.cursor_offset();
-            if let Some(mention) = self.mentions.iter().find(|m| m.range.start == cursor).cloned() {
+            if let Some(mention) = self
+                .mentions
+                .iter()
+                .find(|m| m.range.start == cursor)
+                .cloned()
+            {
                 self.selected_range = mention.range;
                 self.replace_text_in_range(None, "", window, cx);
                 return;
@@ -1118,7 +1129,12 @@ impl ComposerInput {
     /// Route a splice into the history before it is applied: composition
     /// splices amend the open composition step, everything else records —
     /// and possibly coalesces — normally.
-    pub(crate) fn record_edit_history(&mut self, range: &Range<usize>, new_text: &str, composing: bool) {
+    pub(crate) fn record_edit_history(
+        &mut self,
+        range: &Range<usize>,
+        new_text: &str,
+        composing: bool,
+    ) {
         if composing {
             self.history.record_composition(
                 &self.content,
@@ -1246,7 +1262,12 @@ impl ComposerInput {
         }
     }
 
-    pub(crate) fn on_mouse_move(&mut self, event: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn on_mouse_move(
+        &mut self,
+        event: &MouseMoveEvent,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.is_selecting {
             self.select_to(self.index_for_mouse_position(event.position), cx);
             // Growing a real drag-selection turns the focusing click into a
@@ -1322,7 +1343,11 @@ impl ComposerInput {
         boundaries::range_from_utf16(&self.content, range)
     }
 
-    pub(crate) fn range_from_relative_utf16(&self, base: usize, range: &Range<usize>) -> Range<usize> {
+    pub(crate) fn range_from_relative_utf16(
+        &self,
+        base: usize,
+        range: &Range<usize>,
+    ) -> Range<usize> {
         boundaries::range_from_relative_utf16(&self.content, base, range)
     }
 

@@ -51,8 +51,14 @@ fn snapshot_links_http_and_https_urls() {
     let snapshot = snapshot_bounded(&backend);
 
     let targets: Vec<&str> = snapshot.links.iter().map(|l| l.target.as_str()).collect();
-    assert!(targets.contains(&"https://example.com/docs"), "got {targets:?}");
-    assert!(targets.contains(&"http://a.co"), "trailing comma must be trimmed, got {targets:?}");
+    assert!(
+        targets.contains(&"https://example.com/docs"),
+        "got {targets:?}"
+    );
+    assert!(
+        targets.contains(&"http://a.co"),
+        "trailing comma must be trimmed, got {targets:?}"
+    );
     assert!(targets.contains(&"https://www.zed.dev"), "got {targets:?}");
 }
 
@@ -62,8 +68,12 @@ fn snapshot_ignores_file_paths_from_git_init_output() {
     // the absolute path soft-wraps at 80 columns. It must NOT become a link,
     // and the snapshot must complete (this output used to hang the scan).
     let mut backend = TermyBackend::new(TerminalSize::new(80, 24));
-    backend.advance("Initialized empty Git repository in /Users/someone/Developer/Projects/console/.git/\r\n");
-    backend.advance("\x1b[32m➜\x1b[0m \x1b[36mconsole\x1b[0m \x1b[33mgit:(\x1b[31mmaster\x1b[33m)\x1b[0m \r\n");
+    backend.advance(
+        "Initialized empty Git repository in /Users/someone/Developer/Projects/console/.git/\r\n",
+    );
+    backend.advance(
+        "\x1b[32m➜\x1b[0m \x1b[36mconsole\x1b[0m \x1b[33mgit:(\x1b[31mmaster\x1b[33m)\x1b[0m \r\n",
+    );
     let snapshot = snapshot_bounded(&backend);
 
     assert!(
@@ -82,7 +92,9 @@ fn snapshot_ignores_osc8_hyperlinks_even_when_wrapped() {
     let long_target = "file:///Users/someone/Developer/Projects/console/repo";
     let link_text = "/Users/someone/Developer/Projects/console/repo/very/deeply/nested/directory/structure/that/well/past/one/line";
     for _ in 0..6 {
-        backend.advance(&format!("\x1b]8;;{long_target}\x1b\\{link_text}\x1b]8;;\x1b\\\r\n"));
+        backend.advance(&format!(
+            "\x1b]8;;{long_target}\x1b\\{link_text}\x1b]8;;\x1b\\\r\n"
+        ));
     }
     let snapshot = snapshot_bounded(&backend);
     assert!(

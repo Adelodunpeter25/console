@@ -31,15 +31,16 @@ impl PortService {
             .await
             .context("Failed to fetch forwarded ports")?;
 
-        let body: ApiResponse<Vec<ForwardedPort>> =
-            response.json().await.context("Failed to parse ports list")?;
+        let body: ApiResponse<Vec<ForwardedPort>> = response
+            .json()
+            .await
+            .context("Failed to parse ports list")?;
         if body.success {
             Ok(body.data.unwrap_or_default())
         } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to fetch forwarded ports".into())
-            ))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to fetch forwarded ports".into()
+            })))
         }
     }
 
@@ -60,8 +61,10 @@ impl PortService {
             .await
             .context("Failed to forward port")?;
 
-        let body: ApiResponse<ForwardedPort> =
-            response.json().await.context("Failed to parse forward port response")?;
+        let body: ApiResponse<ForwardedPort> = response
+            .json()
+            .await
+            .context("Failed to parse forward port response")?;
         if body.success {
             body.data
                 .ok_or_else(|| anyhow!("Port forward response contained no data"))
@@ -90,8 +93,10 @@ impl PortService {
             .await
             .context("Failed to unforward port")?;
 
-        let body: ApiResponse<serde_json::Value> =
-            response.json().await.context("Failed to parse unforward response")?;
+        let body: ApiResponse<serde_json::Value> = response
+            .json()
+            .await
+            .context("Failed to parse unforward response")?;
         if body.success {
             Ok(())
         } else {

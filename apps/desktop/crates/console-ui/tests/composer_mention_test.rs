@@ -1,6 +1,6 @@
 use console_ui::ComposerMention;
-use console_ui::{adjust_mentions as real_adjust_mentions, reconcile_mentions as real_reconcile};
 use console_ui::{AutocompleteKind, detect_trigger};
+use console_ui::{adjust_mentions as real_adjust_mentions, reconcile_mentions as real_reconcile};
 use std::ops::Range;
 
 fn adjust_mentions(
@@ -126,7 +126,12 @@ fn test_mention_atomic_backspace_range_matching() {
 
     // Caret at index 17 (after trailing space): NOT at chip end
     let caret_after_space = 17;
-    assert!(mentions.iter().find(|m| m.range.end == caret_after_space).is_none());
+    assert!(
+        mentions
+            .iter()
+            .find(|m| m.range.end == caret_after_space)
+            .is_none()
+    );
 
     // Caret at index 16 (immediately after chip): matches chip end!
     let caret_at_chip_end = 16;
@@ -144,7 +149,9 @@ fn test_mention_atomic_delete_range_matching() {
 
     // Caret at index 6 (immediately before chip): matches chip start!
     let caret_at_chip_start = 6;
-    let target = mentions.iter().find(|m| m.range.start == caret_at_chip_start);
+    let target = mentions
+        .iter()
+        .find(|m| m.range.start == caret_at_chip_start);
     assert!(target.is_some());
     assert_eq!(target.unwrap().range, 6..16);
 

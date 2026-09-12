@@ -202,7 +202,10 @@ impl ToolCalls {
             return Some(truncate(&to_relative_path(path, cwd), 72));
         }
         if call.name == "bashJob" || call.name == "bash_job" {
-            let action = object.get("action").and_then(|v| v.as_str()).unwrap_or("status");
+            let action = object
+                .get("action")
+                .and_then(|v| v.as_str())
+                .unwrap_or("status");
             if let Some(job_id) = object.get("jobId").and_then(|v| v.as_str()) {
                 return Some(truncate(&format!("{action} {job_id}"), 72));
             }
@@ -322,7 +325,8 @@ impl ToolCalls {
         // than falling back to the JSON arguments section.
         let diff = if is_edit || is_write {
             let mut cache = self.state.borrow_mut();
-            let computed = if let Some((cached_args, cached_diff)) = cache.diff_cache.get(&call_id) {
+            let computed = if let Some((cached_args, cached_diff)) = cache.diff_cache.get(&call_id)
+            {
                 if cached_args == &entry.call.arguments {
                     cached_diff.clone()
                 } else {
@@ -603,7 +607,11 @@ impl ToolCalls {
                             .flex()
                             .items_center()
                             .gap(px(6.0))
-                            .child(Self::status_element(status.0, status.1, !complete && !failed))
+                            .child(Self::status_element(
+                                status.0,
+                                status.1,
+                                !complete && !failed,
+                            ))
                             .child(app_icon(
                                 if open {
                                     IconName::ChevronUp
@@ -908,12 +916,7 @@ impl ToolCalls {
     /// A `MarkdownView` is stored in `state.markdown_views` keyed by call id so
     /// the rendered AST survives transcript virtualisation without re-parsing on
     /// every frame.
-    fn subagent_result_section(
-        &self,
-        call_id: &str,
-        raw: String,
-        theme: Theme,
-    ) -> AnyElement {
+    fn subagent_result_section(&self, call_id: &str, raw: String, theme: Theme) -> AnyElement {
         let palette = Palette::from_theme(&theme);
         let ctx = compact_ctx(
             format!("tool-{call_id}-subagent-result"),
@@ -955,7 +958,12 @@ impl ToolCalls {
                     .bg(theme.inset)
                     .px(px(8.0))
                     .py(px(6.0))
-                    .child(render_selectable_markdown(&raw, Some(&md_view), &ctx, false)),
+                    .child(render_selectable_markdown(
+                        &raw,
+                        Some(&md_view),
+                        &ctx,
+                        false,
+                    )),
             )
             .into_any_element()
     }
@@ -973,12 +981,8 @@ impl ToolCalls {
     ) -> impl IntoElement {
         let row = format!("tool-{call_id}-{label}");
         let palette = Palette::from_theme(&theme);
-        let ctx = crate::chat::markdown_helpers::compact_ctx(
-            row,
-            &palette,
-            self.selection.clone(),
-            None,
-        );
+        let ctx =
+            crate::chat::markdown_helpers::compact_ctx(row, &palette, self.selection.clone(), None);
         div()
             .flex()
             .flex_col()
@@ -1024,7 +1028,10 @@ fn is_edit_file(name: &str) -> bool {
 
 /// Whether a tool-call name writes complete file content.
 fn is_write_file(name: &str) -> bool {
-    matches!(name, "writeFile" | "write_file" | "batchWrite" | "batch_write")
+    matches!(
+        name,
+        "writeFile" | "write_file" | "batchWrite" | "batch_write"
+    )
 }
 
 /// Build the visual diff for a file transition. A write starts with an empty

@@ -110,10 +110,26 @@ impl SettingsWindow {
             console_ui::ContextMenuHandle::new(cx),
         ];
         let model_searches = [
-            cx.new(|cx| ComposerInput::new(window, cx).search_field().placeholder("Search models...")),
-            cx.new(|cx| ComposerInput::new(window, cx).search_field().placeholder("Search models...")),
-            cx.new(|cx| ComposerInput::new(window, cx).search_field().placeholder("Search models...")),
-            cx.new(|cx| ComposerInput::new(window, cx).search_field().placeholder("Search models...")),
+            cx.new(|cx| {
+                ComposerInput::new(window, cx)
+                    .search_field()
+                    .placeholder("Search models...")
+            }),
+            cx.new(|cx| {
+                ComposerInput::new(window, cx)
+                    .search_field()
+                    .placeholder("Search models...")
+            }),
+            cx.new(|cx| {
+                ComposerInput::new(window, cx)
+                    .search_field()
+                    .placeholder("Search models...")
+            }),
+            cx.new(|cx| {
+                ComposerInput::new(window, cx)
+                    .search_field()
+                    .placeholder("Search models...")
+            }),
         ];
         let focus_handle = cx.focus_handle();
         window.focus(&focus_handle, cx);

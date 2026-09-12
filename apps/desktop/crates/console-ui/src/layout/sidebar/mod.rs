@@ -461,34 +461,33 @@ impl RenderOnce for SidebarView {
 
         // Scrollable rows:
         let mut list_rows = Vec::new();
-        let push_section_rows =
-            |list_rows: &mut Vec<SidebarRow>,
-             sections: Vec<(SessionDateGroup, Vec<usize>)>,
-             has_drafts: bool| {
-                if has_drafts {
-                    for (group, positions) in sections {
-                        let collapsed = collapsed_groups.contains(&group);
-                        list_rows.push(SidebarRow::GroupHeader { group, collapsed });
-                        if !collapsed {
-                            list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                        }
-                    }
-                } else {
-                    let mut sections_iter = sections.into_iter();
-                    if let Some((group, positions)) = sections_iter.next() {
-                        if !collapsed_groups.contains(&group) {
-                            list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                        }
-                    }
-                    for (group, positions) in sections_iter {
-                        let collapsed = collapsed_groups.contains(&group);
-                        list_rows.push(SidebarRow::GroupHeader { group, collapsed });
-                        if !collapsed {
-                            list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                        }
+        let push_section_rows = |list_rows: &mut Vec<SidebarRow>,
+                                 sections: Vec<(SessionDateGroup, Vec<usize>)>,
+                                 has_drafts: bool| {
+            if has_drafts {
+                for (group, positions) in sections {
+                    let collapsed = collapsed_groups.contains(&group);
+                    list_rows.push(SidebarRow::GroupHeader { group, collapsed });
+                    if !collapsed {
+                        list_rows.extend(positions.into_iter().map(SidebarRow::Session));
                     }
                 }
-            };
+            } else {
+                let mut sections_iter = sections.into_iter();
+                if let Some((group, positions)) = sections_iter.next() {
+                    if !collapsed_groups.contains(&group) {
+                        list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+                    }
+                }
+                for (group, positions) in sections_iter {
+                    let collapsed = collapsed_groups.contains(&group);
+                    list_rows.push(SidebarRow::GroupHeader { group, collapsed });
+                    if !collapsed {
+                        list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+                    }
+                }
+            }
+        };
         if has_drafts {
             if !self.drafts_collapsed {
                 for i in 0..draft_summaries.len() {

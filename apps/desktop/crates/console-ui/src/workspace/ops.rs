@@ -162,11 +162,7 @@ pub fn select_tab(root: &mut WorkspaceNode, pane_id: &str, tab_id: &str) {
 
 /// Update the stored project of every tab with `tab_id` across the tree.
 /// Keeps open tabs in step when a tab's folder is changed.
-pub fn set_tab_project(
-    root: &mut WorkspaceNode,
-    tab_id: &str,
-    project_id: Option<String>,
-) -> bool {
+pub fn set_tab_project(root: &mut WorkspaceNode, tab_id: &str, project_id: Option<String>) -> bool {
     let mut updated = false;
     for leaf in root.leaves_mut() {
         for tab in &mut leaf.tabs {

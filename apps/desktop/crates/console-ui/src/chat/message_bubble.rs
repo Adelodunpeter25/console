@@ -3,13 +3,13 @@ use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::common::{attachment_image, copy_button};
 use super::markdown_helpers::assistant_ctx;
+pub(crate) use super::markdown_helpers::render_selectable_markdown;
+use crate::common::{attachment_image, copy_button};
 use crate::markdown::render::{
     self as markdown, Ctx as MarkdownCtx, LinkHandler, MarkdownView, Metrics, Palette,
     TranscriptSelection,
 };
-pub(crate) use super::markdown_helpers::render_selectable_markdown;
 use crate::theme::Theme;
 use crate::utils::format_message_time;
 

@@ -57,12 +57,21 @@ impl ConsoleDesktopApp {
                                             } else {
                                                 None
                                             };
-                                            match decide_notification(viewing.as_deref(), &session_id) {
+                                            match decide_notification(
+                                                viewing.as_deref(),
+                                                &session_id,
+                                            ) {
                                                 NotificationDecision::SuppressViewing => {
-                                                    macos_notifications::clear_for_session(&session_id);
+                                                    macos_notifications::clear_for_session(
+                                                        &session_id,
+                                                    );
                                                 }
                                                 NotificationDecision::Notify => {
-                                                    macos_notifications::notify_session(&session_id, &title, &body);
+                                                    macos_notifications::notify_session(
+                                                        &session_id,
+                                                        &title,
+                                                        &body,
+                                                    );
                                                 }
                                                 NotificationDecision::SkipEmpty => {}
                                             }

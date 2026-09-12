@@ -62,24 +62,22 @@ impl ConsoleDesktopApp {
 
         cx.spawn(async move |_, cx| {
             let result = client.settings.update(&settings).await;
-            cx.update(|cx| {
-                match result {
-                    Ok(saved_settings) => {
-                        settings_view.update(cx, |view, cx| {
-                            view.model_saving = false;
-                            view.apply_model_settings(&saved_settings, cx);
-                            view.model_error = None;
-                            cx.notify();
-                        });
-                        crate::window::broadcast_settings_refresh(cx);
-                    }
-                    Err(error) => {
-                        settings_view.update(cx, |view, cx| {
-                            view.model_saving = false;
-                            view.model_error = Some(error.to_string());
-                            cx.notify();
-                        });
-                    }
+            cx.update(|cx| match result {
+                Ok(saved_settings) => {
+                    settings_view.update(cx, |view, cx| {
+                        view.model_saving = false;
+                        view.apply_model_settings(&saved_settings, cx);
+                        view.model_error = None;
+                        cx.notify();
+                    });
+                    crate::window::broadcast_settings_refresh(cx);
+                }
+                Err(error) => {
+                    settings_view.update(cx, |view, cx| {
+                        view.model_saving = false;
+                        view.model_error = Some(error.to_string());
+                        cx.notify();
+                    });
                 }
             });
         })

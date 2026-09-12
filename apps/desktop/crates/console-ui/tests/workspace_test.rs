@@ -24,7 +24,8 @@ fn test_workspace_node_serialization_roundtrip() {
     );
 
     let json = serde_json::to_string_pretty(&root).expect("serialize workspace node");
-    let deserialized: WorkspaceNode = serde_json::from_str(&json).expect("deserialize workspace node");
+    let deserialized: WorkspaceNode =
+        serde_json::from_str(&json).expect("deserialize workspace node");
 
     assert_eq!(root, deserialized);
     assert_eq!(deserialized.leaves().len(), 1);
@@ -101,10 +102,7 @@ fn test_set_tab_project_updates_stored_folder() {
         "chat:chat-b",
         Some("viewer".into())
     ));
-    assert_eq!(
-        root.leaves()[0].tabs[0].project_id(),
-        Some("viewer")
-    );
+    assert_eq!(root.leaves()[0].tabs[0].project_id(), Some("viewer"));
 }
 
 #[test]
@@ -255,7 +253,12 @@ fn test_preview_replace_stays_within_kind() {
     );
     assert_eq!(replaced, "file:/a/d.rs");
     assert_eq!(root.leaves()[0].tabs.len(), 2);
-    assert!(root.leaves()[0].tabs.iter().any(|t| t.id() == "diff:/a/b.rs"));
+    assert!(
+        root.leaves()[0]
+            .tabs
+            .iter()
+            .any(|t| t.id() == "diff:/a/b.rs")
+    );
 }
 
 #[test]
