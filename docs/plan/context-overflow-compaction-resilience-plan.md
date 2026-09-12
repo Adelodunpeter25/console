@@ -215,3 +215,69 @@ export interface CompactionConfig {
 
 4. **Integration Run**:
    - Execute `bun apps/server/tests/compaction-lifecycle.test.ts` and `bun apps/server/tests/agent-loop.test.ts`.
+
+---
+
+## 6. Harness Compaction Incident: Repeated Reads After Context Loss
+
+The following incident is part of the resilience scope and must be treated as a harness failure mode, not as normal agent behavior:
+
+> Yes — part of it is the harness, not just me.
+>
+> What happened: after the conversation got compacted, I kept the list of files we touched but lost their actual contents. So I tried to re-read the same 4 files to rebuild context.
+>
+> Each read came back truncated, so I assumed it failed and retried the same read again — that's the loop you saw.
+>
+> I'm stopping that now. I have enough from the SSE plan doc and the registry code I did get to move forward, I won't re-read anything unless it's new.
+
+### Root cause
+
+Compaction preserved references to touched files but did not preserve enough usable content, summaries, or read results. The agent then treated a truncated tool response as a transient read failure. Because there was no retry budget, duplicate-request detection, or truncation-aware state, it repeated the same reads indefinitely.
+
+This is distinct from provider context overflow:
+
+- **Provider overflow** means the outgoing model payload is too large.
+- **Harness read looping** means the agent repeatedly requests the same resource after context reconstruction failed.
+
+Both need explicit recovery controls.
+
+### Required fixes
+
+1. **Persist compact file facts, not only file names**
+   - During compaction, retain a bounded per-file record containing path, relevant line ranges, definitions/signatures, the latest successful read result, and a short summary.
+   - Mark each record as `complete`, `truncated`, or `unread`.
+   - Keep this recovery manifest outside the conversational message history so compaction cannot discard it.
+
+2. **Make truncation an explicit tool result**
+   - A `readFile`/search result must include metadata such as `truncated`, `startLine`, `endLine`, `totalLines`, and a stable content fingerprint when available.
+   - The model should be told that truncation is expected and how to request the next range; a truncated response must not look like a failed request.
+
+3. **Add duplicate-read loop protection**
+   - Track a request key made from tool name, normalized path, range, and relevant search parameters.
+   - Allow at most one automatic retry for the same key.
+   - If the same key is requested again after a truncated response, return a structured diagnostic explaining that the response was already received and recommend a narrower or adjacent range.
+   - Cap repeated reads per file and per turn, with a clear stop reason when the cap is reached.
+
+4. **Use continuation reads instead of whole-file retries**
+   - When a result is truncated, automatically suggest or schedule the next non-overlapping range.
+   - Never retry the original full-file request merely because the response was truncated.
+   - Preserve the already received lines and request only the missing range.
+
+5. **Add compaction recovery state**
+   - Store `contextRecovery` state with the compaction checkpoint: touched files, preserved facts, pending ranges, completed tool keys, and retry counts.
+   - On resumed execution, consult this state before issuing a read.
+   - If enough evidence exists to continue safely, proceed without rereading; if not, ask for a targeted range rather than starting a read loop.
+
+6. **Add tests and observability**
+   - Test that a truncated read produces a continuation request rather than the same request.
+   - Test that two identical reads are deduplicated after compaction.
+   - Test that the retry budget terminates a loop with a structured diagnostic.
+   - Log a compact recovery event containing the tool key, truncation state, retry count, and decision (`continue`, `narrow`, `skip`, or `stop`). Do not log file contents or secrets.
+
+### Acceptance criteria
+
+- A compacted session can continue from preserved file facts without blindly rereading every touched file.
+- A truncated tool response is never interpreted as an unknown or failed response.
+- The same read request cannot repeat indefinitely within a turn or recovery cycle.
+- Continuation reads are range-based and non-overlapping.
+- When recovery cannot proceed, the harness stops with an actionable diagnostic instead of consuming the remaining context window.
