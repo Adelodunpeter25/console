@@ -85,6 +85,57 @@ export class IosDeviceManager {
   }
 
   async interact(id: string, req: DeviceActionRequest): Promise<void> {
+    if (req.action === "tap" && req.x !== undefined && req.y !== undefined) {
+      try {
+        await execAsync(`bunx serve-sim tap -d "${id}" ${req.x} ${req.y}`);
+        return;
+      } catch {}
+    } else if (
+      req.action === "swipe" &&
+      req.x !== undefined &&
+      req.y !== undefined &&
+      req.endX !== undefined &&
+      req.endY !== undefined
+    ) {
+      try {
+        const payload = JSON.stringify({
+          type: "swipe",
+          x: req.x,
+          y: req.y,
+          endX: req.endX,
+          endY: req.endY,
+        });
+        await execAsync(`bunx serve-sim gesture -d "${id}" '${payload}'`);
+        return;
+      } catch {}
+    } else if (req.action === "type" && req.text) {
+      try {
+        await execAsync(`bunx serve-sim type -d "${id}" "${req.text.replace(/"/g, '\\"')}"`);
+        return;
+      } catch {}
+    } else if (req.action === "home") {
+      try {
+        await execAsync(`bunx serve-sim button home -d "${id}"`);
+        return;
+      } catch {}
+    } else if (req.action === "lock" || req.action === "power") {
+      try {
+        await execAsync(`bunx serve-sim button lock -d "${id}"`);
+        return;
+      } catch {}
+    } else if (req.action === "volume_up") {
+      try {
+        await execAsync(`bunx serve-sim button volume_up -d "${id}"`);
+        return;
+      } catch {}
+    } else if (req.action === "volume_down") {
+      try {
+        await execAsync(`bunx serve-sim button volume_down -d "${id}"`);
+        return;
+      } catch {}
+    }
+
+    // Fallbacks
     if (req.action === "home") {
       await execAsync(`xcrun simctl io "${id}" sendkey home`);
     } else if (req.action === "type" && req.text) {
