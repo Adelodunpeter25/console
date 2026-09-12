@@ -2,7 +2,8 @@ package com.console.mobile.feature.settings
 
 import android.content.Context
 import android.net.Uri
-import androidx.browser.customtabs.CustomTabsIntentimport com.console.mobile.data.repo.AuthRepository
+import androidx.browser.customtabs.CustomTabsIntent
+import com.console.mobile.data.repo.AuthRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

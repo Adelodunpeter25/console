@@ -20,11 +20,13 @@ import com.console.mobile.core.chat.trimDraftAttachments
 import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.AgentSessionEvent
 import com.console.mobile.data.model.AskQuestionRequest
+import com.console.mobile.data.model.AssistantMessage
 import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.PermissionRequest
 import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.model.SubagentInfo
+import com.console.mobile.data.model.TextPart
 import com.console.mobile.data.model.TodoItem
 import com.console.mobile.data.model.UserMessage
 import com.console.mobile.data.store.ChatStateHolder
@@ -38,6 +40,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 

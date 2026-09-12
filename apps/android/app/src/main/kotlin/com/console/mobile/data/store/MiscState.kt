@@ -7,6 +7,7 @@ import com.console.mobile.data.model.UsageReport
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.Serializable
 
 data class AuthState(
     val status: Map<String, ProviderAuthStatus>? = null,
@@ -102,6 +103,7 @@ class TerminalStateHolder {
     fun clear() { _terminals.value = emptyMap(); _buffers.value = emptyMap() }
 }
 
+@Serializable
 data class Environment(val id: String, val name: String, val url: String)
 
 data class EnvironmentsState(

@@ -1,4 +1,4 @@
-package com.console.mobile.ui.components
+package com.console.mobile.feature.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

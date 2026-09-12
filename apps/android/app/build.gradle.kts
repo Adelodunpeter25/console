@@ -141,9 +141,9 @@ dependencies {
     implementation("com.mikepenz:multiplatform-markdown-renderer-code:$markdownRenderer")
 
     // Code viewer — sora-editor read-only (Phase 4). Added now so viewer spike can compile.
-    implementation("io.github.Rosemoe:sora-editor:0.21.1")
+    implementation("io.github.Rosemoe.sora-editor:editor:0.21.1")
     // language-textmate artifact coordinates vary by publish; keep commented until Phase 4 spike
-    // implementation("io.github.Rosemoe:sora-editor:language-textmate:0.21.1")
+    // implementation("io.github.Rosemoe.sora-editor:language-textmate:0.21.1")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
