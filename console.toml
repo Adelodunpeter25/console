@@ -11,6 +11,7 @@ persistent = true
 label = "Dev Desktop"
 command = "bash apps/desktop/scripts/dev.sh"
 persistent = true
+shortcut = "cmd-shift-d"
 
 [scripts.package-desktop]
 label = "Package Desktop"
