@@ -219,6 +219,8 @@ pub struct ConsoleDesktopApp {
     pub(crate) inspector_fs_watch: Option<(String, gpui::Task<()>)>,
     /// Same as `inspector_fs_watch` for the git-status watch stream.
     pub(crate) inspector_git_watch: Option<(String, gpui::Task<()>)>,
+    /// One live forwarded-port SSE stream for the active backend environment.
+    pub(crate) port_stream: Option<gpui::Task<()>>,
     /// Trailing-debounce latch so bursts of fs events fetch the tree once.
     pub(crate) fs_tree_fetch_pending: bool,
     pub inspector_session_changes: Rc<Vec<console_core::types::SessionFileChange>>,
@@ -839,6 +841,7 @@ impl ConsoleDesktopApp {
             inspector_working_changes: Rc::new(Vec::new()),
             inspector_fs_watch: None,
             inspector_git_watch: None,
+            port_stream: None,
             fs_tree_fetch_pending: false,
             inspector_session_changes: Rc::new(Vec::new()),
             inspector_expanded_folders: Rc::new(std::collections::HashSet::new()),
@@ -1255,21 +1258,9 @@ impl ConsoleDesktopApp {
         })
         .detach();
 
-        // Port forwards can be created by the agent or another client, so keep
-        // the title-bar popover synchronized even when the inspector is closed.
-        cx.spawn(async move |entity, cx| {
-            loop {
-                cx.background_executor()
-                    .timer(std::time::Duration::from_secs(2))
-                    .await;
-
-                let Some(app) = entity.upgrade() else {
-                    break;
-                };
-                app.update(cx, |this, cx| this.fetch_forwarded_ports(cx));
-            }
-        })
-        .detach();
+        // Port forwards can be created by the agent or another client. Keep the
+        // title-bar popover synchronized without repeatedly probing the server.
+        app.init_port_stream(cx);
 
         app
     }

@@ -28,6 +28,16 @@ try {
   assert.equal(preview.status, 200);
   assert.equal(await preview.text(), "target:/hello");
 
+  const streamResponse = await app.request("/api/ports/stream", {
+    headers: { host: "example.test:3000" },
+  });
+  assert.equal(streamResponse.status, 200);
+  const reader = streamResponse.body!.getReader();
+  const decoder = new TextDecoder();
+  const firstChunk = decoder.decode((await reader.read()).value);
+  assert.match(firstChunk, /event: ports/);
+  assert.match(firstChunk, new RegExp(`\\"port\\":${target.port}`));
+
   const list = await app.request("/api/ports", { headers: { host: "example.test:3000" } });
   assert.equal(list.status, 200);
   const listed = await list.json() as { success: boolean; data: Array<{ port: number; url: string }> };
@@ -36,6 +46,7 @@ try {
 
   const removed = await app.request(`/api/ports/${target.port}`, { method: "DELETE" });
   assert.equal(removed.status, 200);
+  await reader.cancel();
   const afterRemove = await app.request("/api/ports");
   assert.deepEqual((await afterRemove.json()).data, []);
 

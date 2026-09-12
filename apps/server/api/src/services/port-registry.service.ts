@@ -59,6 +59,9 @@ export class PortRegistry extends EventEmitter {
   private readonly proxyStart = parseRange(process.env.PROXY_PORT_START, DEFAULT_PROXY_START);
   private readonly proxyEnd = parseRange(process.env.PROXY_PORT_END, DEFAULT_PROXY_END);
   private nextProxyPort = this.proxyStart;
+  // Rebuilt only when entries mutate. The stream path must never call list(),
+  // since list() performs liveness probes.
+  private cachedSnapshot: ClientPort[] = [];
 
   async observeOutput(owner: Owner, chunk: Uint8Array | string): Promise<void> {
     const key = `${owner.kind}:${owner.id}`;
@@ -113,7 +116,9 @@ export class PortRegistry extends EventEmitter {
     const entry = this.entries.get(port);
     if (!entry) return false;
     this.entries.delete(port);
+    this.rebuildSnapshot();
     await entry.server.stop(true);
+    this.emit("change", this.cachedSnapshot);
     return true;
   }
 
@@ -173,7 +178,9 @@ export class PortRegistry extends EventEmitter {
     });
     const entry: PortEntry = { port, proxyPort, owner: options.owner, manual: options.manual, server };
     this.entries.set(port, entry);
+    this.rebuildSnapshot();
     this.emit("opened", port);
+    this.emit("change", this.cachedSnapshot);
     return this.clientEntry(entry, "localhost");
   }
 
@@ -225,6 +232,17 @@ export class PortRegistry extends EventEmitter {
 
   private clientEntry(entry: PortEntry, host: string): ClientPort {
     return { port: entry.port, url: `http://${host}:${entry.proxyPort}/` };
+  }
+
+  /** Return the mutation-time snapshot without probing forwarded ports. */
+  snapshot(host = "localhost"): ClientPort[] {
+    return this.cachedSnapshot.map((entry) => this.clientEntry(this.entries.get(entry.port)!, host));
+  }
+
+  private rebuildSnapshot(): void {
+    this.cachedSnapshot = [...this.entries.values()]
+      .sort((a, b) => a.port - b.port)
+      .map((entry) => this.clientEntry(entry, "localhost"));
   }
 
   private validatePort(port: number): void {

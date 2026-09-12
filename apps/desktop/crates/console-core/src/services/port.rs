@@ -44,6 +44,38 @@ impl PortService {
         }
     }
 
+    /// Subscribe to server-pushed forwarded-port snapshots.
+    /// Heartbeats and unrelated SSE events are ignored instead of being parsed.
+    pub async fn watch(
+        &self,
+    ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<Vec<ForwardedPort>>> + Send>>>
+    {
+        use eventsource_stream::Eventsource;
+        use futures_util::StreamExt;
+
+        let url = self.transport.url("/api/ports/stream").await;
+        let response = self
+            .transport
+            .client()
+            .get(url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to connect to forwarded ports SSE stream")?
+            .error_for_status()
+            .context("Forwarded ports SSE endpoint returned an error")?;
+
+        let stream = response.bytes_stream().eventsource().filter_map(|item| async {
+            match item {
+                Ok(event) if event.event == "ports" => {
+                    serde_json::from_str::<Vec<ForwardedPort>>(&event.data).ok().map(Ok)
+                }
+                _ => None,
+            }
+        });
+        Ok(Box::pin(stream))
+    }
+
     /// Manually forward a port on the server.
     pub async fn forward(&self, port: u16, project_id: Option<&str>) -> Result<ForwardedPort> {
         let url = self.transport.url("/api/ports/forward").await;

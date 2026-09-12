@@ -251,6 +251,8 @@ impl ConsoleDesktopApp {
             return;
         };
         self.active_env_id = Some(env_id);
+        // Drop the old backend's stream before switching its shared transport.
+        self.port_stream = None;
         // Persist immediately (main window writes `active_id`; secondaries
         // preserve it) so a restart boots this server instead of the stale
         // one from the previous `state.json`.
@@ -300,6 +302,7 @@ impl ConsoleDesktopApp {
                         this.load_projects(cx);
                         this.refresh_auth_status(cx);
                         this.fetch_usage(cx);
+                        this.init_port_stream(cx);
                         cx.notify();
                     });
                 }

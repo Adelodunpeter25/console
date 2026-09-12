@@ -1,7 +1,31 @@
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import { portRegistry } from "@/api/src/services/port-registry.service.js";
 
 export const portRoutes = new Hono();
+
+portRoutes.get("/ports/stream", (c) => {
+  const host = (c.req.header("host") ?? "localhost").replace(/:\d+$/, "");
+  return streamSSE(c, async (stream) => {
+    const sendSnapshot = async (ports = portRegistry.snapshot(host)) => {
+      await stream.writeSSE({ event: "ports", data: JSON.stringify(ports) });
+    };
+    const handler = () => {
+      void sendSnapshot(portRegistry.snapshot(host));
+    };
+
+    portRegistry.on("change", handler);
+    await sendSnapshot();
+    stream.onAbort(() => {
+      portRegistry.off("change", handler);
+    });
+
+    while (!stream.aborted) {
+      await stream.sleep(15000);
+      await stream.writeSSE({ event: "ping", data: "" });
+    }
+  });
+});
 
 portRoutes.get("/ports", async (c) => {
   const host = (c.req.header("host") ?? "localhost").replace(/:\d+$/, "");
