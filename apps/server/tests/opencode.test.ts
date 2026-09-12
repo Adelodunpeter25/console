@@ -11,7 +11,7 @@
  *  6. real-API round trip (OPENCODE_REAL_API=1) — live big-pickle tool call
  */
 import assert from "node:assert/strict";
-import type { AgentMessage, AgentTool } from "@console/types";
+import type { AgentMessage, AgentTool, Model } from "@console/types";
 import { z } from "zod";
 import { asSchema } from "@ai-sdk/provider-utils";
 import { listProviders, listModelsForProvider } from "@/agent/src/commands/provider-registry.js";
@@ -248,7 +248,185 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
   console.log("  ✅ isOpencodeResponsesModel routes Muse models to /v1/responses");
 }
 
-// 6. Real-API round trip — calls the live OpenCode Zen endpoint via our own
+// 6. Prompt-cache observability — Responses-API models. We mock the wire
+// response (SSE) so the AI SDK's `result.usage` resolves to a controlled
+// value, then assert the emitted `usage` delta has the right `cacheStatus`.
+// This is Step 4b of docs/plan/prompt-cache-implementation-plan.md.
+{
+  // Use the Responses-API model id so `isOpencodeResponsesModel` returns true.
+  const model = { id: "muse-spark-1.3-contributor-free", provider: "opencode", contextWindow: 200_000 };
+
+  /**
+   * Build an OpenAI Responses-API SSE stream with a controlled usage block.
+   * Mirrors the format the AI SDK's openai-native provider parses via
+   * convertOpenAIResponsesUsage: input_tokens, input_tokens_details.cached_tokens,
+   * output_tokens, output_tokens_details.reasoning_tokens, total_tokens.
+   */
+  function responsesSse(usage: Record<string, unknown>, modelId: string): string {
+    const events = [
+      {
+        type: "response.created",
+        response: { id: "resp_test", created_at: 1700000000, model: modelId },
+      },
+      { type: "response.completed", response: { usage } },
+    ];
+    return events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("") + "data: [DONE]\n\n";
+  }
+
+  async function collectOpencodeDeltas(
+    sseBody: string,
+    overrides: {
+      cacheRetention?: "short" | "long" | "none";
+      cacheIdentity?: { conversationId: string; provider: string; modelId: string };
+      model?: { id: string; provider: string; contextWindow: number };
+    } = {},
+  ): Promise<{ deltas: any[]; captured: { url: string; init: RequestInit | undefined }[] }> {
+    const originalFetch = globalThis.fetch;
+    const captured: { url: string; init: RequestInit | undefined }[] = [];
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      captured.push({ url: String(url), init });
+      return new Response(sseBody, { headers: { "Content-Type": "text/event-stream" } });
+    }) as unknown as typeof fetch;
+    try {
+      const deltas: any[] = [];
+      for await (const delta of opencodeStreamFn({
+        model: (overrides.model ?? model) as Model,
+        systemPrompt: "You are terse.",
+        messages: [{ role: "user", content: "hi" }],
+        tools: [],
+        ...(overrides.cacheRetention !== undefined ? { cacheRetention: overrides.cacheRetention } : {}),
+        ...(overrides.cacheIdentity !== undefined ? { cacheIdentity: overrides.cacheIdentity } : {}),
+      })) {
+        deltas.push(delta);
+      }
+      return { deltas, captured };
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  }
+
+  const identity = { conversationId: "conv-opencode-1", provider: "opencode", modelId: model.id };
+
+  // Cache hit: SDK reports cacheReadTokens > 0 → cacheStatus "hit".
+  {
+    const { deltas, captured } = await collectOpencodeDeltas(
+      responsesSse(
+        {
+          input_tokens: 500,
+          input_tokens_details: { cached_tokens: 400 },
+          output_tokens: 50,
+          output_tokens_details: { reasoning_tokens: 10 },
+          total_tokens: 550,
+        },
+        model.id,
+      ),
+      { cacheIdentity: identity, cacheRetention: "short" },
+    );
+    const usage = deltas.find((d) => d.type === "usage")?.usage;
+    assert.ok(usage, "expected final usage delta");
+    assert.equal(usage.cacheStatus, "hit");
+    assert.equal(usage.cacheRead, 400);
+    assert.equal(usage.input, 100);
+    assert.equal(usage.reasoningTokens, 10);
+    assert.equal(usage.output, 50);
+    assert.equal(usage.totalTokens, 550);
+    // Confirm the request URL points at /v1/responses for Responses-API models.
+    assert.match(captured[0]!.url, /\/v1\/responses/);
+    console.log("  ✅ opencodeStreamFn Responses-API cache hit reports cacheRead + uncached");
+  }
+
+  // Cache miss: SDK reports cacheReadTokens === 0 → cacheStatus "miss".
+  {
+    const { deltas } = await collectOpencodeDeltas(
+      responsesSse(
+        {
+          input_tokens: 500,
+          input_tokens_details: { cached_tokens: 0 },
+          output_tokens: 50,
+          total_tokens: 550,
+        },
+        model.id,
+      ),
+      { cacheIdentity: identity, cacheRetention: "short" },
+    );
+    const usage = deltas.find((d) => d.type === "usage")?.usage;
+    assert.equal(usage.cacheStatus, "miss");
+    assert.equal(usage.cacheRead, 0);
+    assert.equal(usage.input, 500);
+    console.log("  ✅ opencodeStreamFn Responses-API cache miss reports cacheRead=0");
+  }
+
+  // When the OpenAI Responses endpoint omits input_tokens_details entirely,
+  // the AI SDK coerces cached_tokens to 0 (per convertOpenAIResponsesUsage).
+  // We can't distinguish "missing field" from "explicit zero" through the SDK,
+  // so we surface cacheStatus "miss" — the caller asked for cache and the
+  // endpoint reported zero reads. To get "unsupported" the caller must opt
+  // out with cacheRetention: "none" (covered by the test below).
+  {
+    const { deltas } = await collectOpencodeDeltas(
+      responsesSse(
+        {
+          input_tokens: 500,
+          output_tokens: 50,
+          total_tokens: 550,
+        },
+        model.id,
+      ),
+      { cacheIdentity: identity, cacheRetention: "short" },
+    );
+    const usage = deltas.find((d) => d.type === "usage")?.usage;
+    assert.equal(usage.cacheStatus, "miss");
+    console.log("  ✅ opencodeStreamFn Responses-API zero cache reads reports miss");
+  }
+
+  // Chat completions model (no cache support) → cacheStatus "unsupported".
+  {
+    const chatModel = { id: "big-pickle", provider: "opencode", contextWindow: 200_000 };
+    // Use chat-completions-shaped SSE so the openai-compatible provider parses
+    // it (the openai-compatible provider parses chat.completion.chunk events).
+    const chatSse = [
+      'data: {"id":"x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}',
+      "",
+      'data: {"id":"x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}',
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    const { deltas } = await collectOpencodeDeltas(chatSse, {
+      cacheIdentity: { ...identity, modelId: chatModel.id },
+      cacheRetention: "short",
+      model: chatModel,
+    });
+    const usage = deltas.find((d) => d.type === "usage")?.usage;
+    assert.equal(usage.cacheStatus, "unsupported", "chat completions models do not expose cache");
+    console.log("  ✅ opencodeStreamFn chat-completions model reports cacheStatus unsupported");
+  }
+
+  // cacheRetention: "none" on a Responses-API model — the caller opted out
+  // of cache controls, but the endpoint still reports cache stats. We surface
+  // what the endpoint actually said (here: zero cache reads = miss) rather
+  // than override with "unsupported". "Unsupported" is reserved for
+  // providers/endpoints that don't expose cache at all.
+  {
+    const { deltas } = await collectOpencodeDeltas(
+      responsesSse(
+        {
+          input_tokens: 500,
+          input_tokens_details: { cached_tokens: 0 },
+          output_tokens: 50,
+          total_tokens: 550,
+        },
+        model.id,
+      ),
+      { cacheIdentity: identity, cacheRetention: "none" },
+    );
+    const usage = deltas.find((d) => d.type === "usage")?.usage;
+    assert.equal(usage.cacheStatus, "miss");
+    console.log("  ✅ opencodeStreamFn cacheRetention=none still surfaces endpoint-reported miss");
+  }
+}
+
+// 7. Real-API round trip — calls the live OpenCode Zen endpoint via our own
 // opencodeStreamFn (which runs convertOpencodeMessages + convertOpencodeTools
 // + streamText). Asks the model to use the bash tool; asserts the emitted
 // tool-call deltas assemble into valid JSON args for a real command.

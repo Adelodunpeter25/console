@@ -131,6 +131,195 @@ async function collectDeltas(body: string) {
   console.log("  ✅ Codex out-of-order argument buffering");
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// Prompt-cache tests (Step 4a of docs/plan/prompt-cache-implementation-plan.md)
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Capture the most recent request body the Codex streamFn sent. Mirrors
+ * collectDeltas() but also records what the provider streamed so we can
+ * assert on `prompt_cache_key`, headers, and the emitted `usage` delta.
+ */
+async function captureRequestAndDeltas(
+  body: string,
+  overrides: {
+    cacheRetention?: "short" | "long" | "none";
+    cacheIdentity?: { conversationId: string; provider: string; modelId: string };
+  } = {},
+) {
+  const originalFetch = globalThis.fetch;
+  const originalToken = process.env.OPENAI_CODEX_OAUTH_TOKEN;
+  const payload = Buffer.from(
+    JSON.stringify({
+      "https://api.openai.com/auth": { chatgpt_account_id: "test-account" },
+    }),
+  ).toString("base64url");
+  process.env.OPENAI_CODEX_OAUTH_TOKEN = `header.${payload}.signature`;
+
+  let captured: { url: string; init: RequestInit | undefined } | undefined;
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    captured = { url: String(url), init };
+    return new Response(body, { headers: { "Content-Type": "text/event-stream" } });
+  }) as unknown as typeof fetch;
+
+  try {
+    const model: Model = { id: "gpt-5.6-luna", provider: "codex", contextWindow: 272_000 };
+    const deltas: any[] = [];
+    for await (const delta of codexStreamFn({
+      model,
+      systemPrompt: "Use tools when requested.",
+      messages: [{ role: "user", content: "hi" }],
+      tools: [],
+      ...(overrides.cacheRetention !== undefined ? { cacheRetention: overrides.cacheRetention } : {}),
+      ...(overrides.cacheIdentity !== undefined ? { cacheIdentity: overrides.cacheIdentity } : {}),
+    })) {
+      deltas.push(delta);
+    }
+    return { captured, deltas };
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalToken === undefined) delete process.env.OPENAI_CODEX_OAUTH_TOKEN;
+    else process.env.OPENAI_CODEX_OAUTH_TOKEN = originalToken;
+  }
+}
+
+function parseCapturedBody(captured: { init: RequestInit | undefined }): Record<string, unknown> {
+  const raw = captured.init?.body;
+  assert.ok(typeof raw === "string", "expected string body");
+  return JSON.parse(raw as string);
+}
+
+// Stable conversation id from cacheIdentity flows into the Codex headers and
+// request body so the provider's automatic prompt cache can warm across turns.
+{
+  const identity = {
+    conversationId: "conv-stable-1",
+    provider: "codex",
+    modelId: "gpt-5.6-luna",
+  };
+  const { captured, deltas } = await captureRequestAndDeltas(
+    sse([
+      { type: "response.output_text.delta", delta: "hi" },
+      {
+        type: "response.completed",
+        response: {
+          usage: { input_tokens: 100, input_tokens_details: { cached_tokens: 80 }, output_tokens: 5, total_tokens: 105 },
+        },
+      },
+    ]),
+    { cacheIdentity: identity, cacheRetention: "short" },
+  );
+  assert.ok(captured, "expected fetch to be called");
+  const headers = captured.init!.headers as Record<string, string>;
+  assert.equal(headers["session_id"], identity.conversationId);
+  assert.equal(headers["conversation_id"], identity.conversationId);
+  assert.equal(headers["x-client-request-id"], identity.conversationId);
+  const body = parseCapturedBody(captured);
+  assert.equal(body.prompt_cache_key, identity.conversationId);
+  assert.equal(body.prompt_cache_retention, undefined, "short retention omits 24h field");
+  const usage = deltas.find((d) => d.type === "usage")?.usage;
+  assert.ok(usage);
+  assert.equal(usage.cacheStatus, "hit");
+  assert.equal(usage.cacheRead, 80);
+  assert.equal(usage.input, 20);
+  console.log("  ✅ Codex stable conversation id, prompt_cache_key, hit usage");
+}
+
+// cacheRetention: "long" opts into the Codex 24h retention tier.
+{
+  const identity = {
+    conversationId: "conv-long-1",
+    provider: "codex",
+    modelId: "gpt-5.6-luna",
+  };
+  const { captured } = await captureRequestAndDeltas(
+    sse([
+      { type: "response.output_text.delta", delta: "hi" },
+      {
+        type: "response.completed",
+        response: {
+          usage: { input_tokens: 50, input_tokens_details: { cached_tokens: 50 }, output_tokens: 5, total_tokens: 55 },
+        },
+      },
+    ]),
+    { cacheIdentity: identity, cacheRetention: "long" },
+  );
+  const body = parseCapturedBody(captured!);
+  assert.equal(body.prompt_cache_key, identity.conversationId);
+  assert.equal(body.prompt_cache_retention, "24h");
+  console.log("  ✅ Codex cacheRetention=long opts into 24h retention");
+}
+
+// cacheRetention: "none" omits both cache fields even when an identity exists.
+{
+  const identity = {
+    conversationId: "conv-none-1",
+    provider: "codex",
+    modelId: "gpt-5.6-luna",
+  };
+  const { captured, deltas } = await captureRequestAndDeltas(
+    sse([
+      { type: "response.output_text.delta", delta: "hi" },
+      {
+        type: "response.completed",
+        // Endpoint returns no cache breakdown at all.
+        response: { usage: { input_tokens: 50, output_tokens: 5, total_tokens: 55 } },
+      },
+    ]),
+    { cacheIdentity: identity, cacheRetention: "none" },
+  );
+  const body = parseCapturedBody(captured!);
+  assert.equal(body.prompt_cache_key, undefined);
+  assert.equal(body.prompt_cache_retention, undefined);
+  const usage = deltas.find((d) => d.type === "usage")?.usage;
+  assert.equal(usage.cacheStatus, "unsupported");
+  console.log("  ✅ Codex cacheRetention=none suppresses cache controls + reports unsupported");
+}
+
+// Missing usage block in response.completed → cacheStatus "unknown", not miss.
+{
+  const { deltas } = await captureRequestAndDeltas(
+    sse([
+      { type: "response.output_text.delta", delta: "hi" },
+      { type: "response.completed", response: {} },
+    ]),
+    { cacheIdentity: { conversationId: "conv-x", provider: "codex", modelId: "gpt-5.6-luna" } },
+  );
+  const usage = deltas.find((d) => d.type === "usage")?.usage;
+  assert.ok(usage);
+  assert.equal(usage.cacheStatus, "unknown");
+  assert.equal(usage.cacheRead, 0);
+  assert.equal(usage.input, 0);
+  console.log("  ✅ Codex missing usage reports cacheStatus unknown");
+}
+
+// Reasoning tokens are preserved as a separate field on the usage delta.
+{
+  const { deltas } = await captureRequestAndDeltas(
+    sse([
+      { type: "response.reasoning_text.delta", delta: "thinking..." },
+      {
+        type: "response.completed",
+        response: {
+          usage: {
+            input_tokens: 100,
+            input_tokens_details: { cached_tokens: 0 },
+            output_tokens: 80,
+            output_tokens_details: { reasoning_tokens: 60 },
+            total_tokens: 180,
+          },
+        },
+      },
+    ]),
+    { cacheIdentity: { conversationId: "conv-reason", provider: "codex", modelId: "gpt-5.6-luna" } },
+  );
+  const usage = deltas.find((d) => d.type === "usage")?.usage;
+  assert.equal(usage.reasoningTokens, 60);
+  assert.equal(usage.output, 80);
+  assert.equal(usage.cacheStatus, "miss");
+  console.log("  ✅ Codex reasoning tokens preserved + cache miss");
+}
+
 // Opt-in live round trip through the actual Agent loop and logged-in Codex
 // subscription. This intentionally makes one real request and does not retry.
 if (process.env.CODEX_REAL_API === "1") {
