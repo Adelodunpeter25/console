@@ -894,7 +894,6 @@ impl ToolCalls {
                     ))
                     .max_h(px(240.0))
                     .overflow_y_scroll()
-                    // Own the wheel: without this the transcript scrolls too.
                     .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
                     .rounded(px(5.0))
                     .bg(theme.inset)
@@ -956,7 +955,6 @@ impl ToolCalls {
                     ))
                     .max_h(px(320.0))
                     .overflow_y_scroll()
-                    // Own the wheel: without this the transcript scrolls too.
                     .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
                     .rounded(px(5.0))
                     .bg(theme.inset)
@@ -1005,7 +1003,6 @@ impl ToolCalls {
                     ))
                     .max_h(px(160.0))
                     .overflow_y_scroll()
-                    // Own the wheel: without this the transcript scrolls too.
                     .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
                     .rounded(px(5.0))
                     .bg(theme.inset)
