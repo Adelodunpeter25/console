@@ -238,6 +238,26 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    /// Toggle a script from its keyboard shortcut: stop the latest run
+    /// while it is running, start a fresh run otherwise. Mirrors the row
+    /// play/stop button, so both triggers always agree.
+    pub fn toggle_project_script(&mut self, script_id: &str, cx: &mut Context<Self>) {
+        let Some(project_id) = self.active_scripts_project_id() else {
+            return;
+        };
+        let running = self
+            .project_scripts_by_project
+            .get(&project_id)
+            .and_then(|state| state.runs.get(script_id))
+            .and_then(|view| view.run.as_ref())
+            .is_some_and(|run| run.status == ScriptRunStatus::Running);
+        if running {
+            self.stop_project_script(script_id, cx);
+        } else {
+            self.run_project_script(script_id, cx);
+        }
+    }
+
     /// Start a script by id and follow its run. The command comes from the
     /// server's `console.toml` — only the id travels over the wire.
     pub fn run_project_script(&mut self, script_id: &str, cx: &mut Context<Self>) {

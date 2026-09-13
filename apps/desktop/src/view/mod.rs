@@ -528,7 +528,7 @@ impl Render for ConsoleDesktopApp {
                             }
                             cx.stop_propagation();
                             app.update(cx, |this, cx| {
-                                this.run_project_script(&script_id, cx);
+                                this.toggle_project_script(&script_id, cx);
                             });
                         }
                     }
