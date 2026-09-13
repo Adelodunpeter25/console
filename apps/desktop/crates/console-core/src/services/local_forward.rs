@@ -111,10 +111,11 @@ impl LocalForwardManager {
             }
             match self.bind_local(remote).await {
                 Some((local_port, task)) => {
+                    log::info!("Forwarding localhost:{local_port} to remote port {remote}");
                     active.insert(remote, ActiveForward { local_port, task });
                 }
                 None => {
-                    log::debug!("Local forward: no free localhost port for {remote}");
+                    log::warn!("No free localhost port for remote {remote}");
                 }
             }
         }
@@ -176,7 +177,9 @@ async fn accept_loop(listener: TcpListener, transport: HttpTransport, remote_por
         tokio::spawn(async move {
             let ws_url = manager.tunnel_url(remote_port).await;
             if let Err(error) = pipe_connection(stream, &ws_url).await {
-                log::debug!("Local forward {remote_port} connection ended: {error:#}");
+                // Warn (not debug): a failing tunnel is the difference between
+                // a working preview and about:blank. The URL carries no secret.
+                log::warn!("Tunnel localhost -> remote {remote_port} via {ws_url} failed: {error:#}");
             }
         });
     }

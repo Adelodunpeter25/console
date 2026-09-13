@@ -100,7 +100,8 @@ export const portTunnelWebsocketHandlers = {
         // getBufferedAmount can throw after close — ignore.
       }
     });
-    socket.on("error", () => {
+    socket.on("error", (error: Error) => {
+      console.error(`Port tunnel ${port}: upstream connection failed: ${error.message}`);
       try {
         ws.close(1011, "Upstream connection failed");
       } catch {
