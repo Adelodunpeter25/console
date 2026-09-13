@@ -10,6 +10,12 @@ import {
   terminalWebsocketHandlers,
   type TerminalSocketData,
 } from "./api/src/terminal/socket.route.js";
+import {
+  isPortTunnelUpgradeRequest,
+  parseTunnelPort,
+  portTunnelWebsocketHandlers,
+  type PortTunnelSocketData,
+} from "./api/src/services/port-tunnel.socket.js";
 import { terminalPtyManager } from "./api/src/terminal/pty.manager.js";
 import { portRegistry } from "./api/src/services/port-registry.service.js";
 import { SessionService } from "./api/src/services/session.service.js";
@@ -121,16 +127,25 @@ async function startServer(): Promise<void> {
   // Permanently removes soft-deleted chats older than 7 days.
   startDeletedChatSweep();
 
-  Bun.serve<TerminalSocketData>({
+  Bun.serve<TerminalSocketData | PortTunnelSocketData>({
     port,
     hostname: host,
     // SSE agent-run streams can sit silent for minutes while a tool executes.
     // Bun's default idle timeout (10s) kills such connections mid-run — the
     // client then sees "SSE stream error" while the server keeps running the
     // agent (sidebar stays "Working"). 0 disables the timeout, matching the
-    // old node:http bridging behavior.
+    // old node:http bridging behavior. Tunnels are also long-lived.
     idleTimeout: 0,
     fetch(req, server) {
+      if (isPortTunnelUpgradeRequest(req)) {
+        const port = parseTunnelPort(req.url);
+        if (port === null) return new Response("Invalid tunnel port", { status: 400 });
+        const upgraded = server.upgrade(req, {
+          data: { kind: "tunnel", port, url: req.url } as PortTunnelSocketData,
+        });
+        if (upgraded) return undefined;
+        return new Response("Port tunnel upgrade failed", { status: 400 });
+      }
       if (isTerminalUpgradeRequest(req)) {
         // Hijack the socket; handlers take over once the upgrade completes.
         const upgraded = server.upgrade(req, { data: { url: req.url, sessionId: null, paused: false, binary: false } });
@@ -139,7 +154,43 @@ async function startServer(): Promise<void> {
       }
       return app.fetch(req);
     },
-    websocket: terminalWebsocketHandlers.websocket,
+    websocket: {
+      // Single Bun.serve multiplexes terminal + port-tunnel sockets.
+      // Dispatch on the `kind` attached at upgrade time.
+      data: {} as TerminalSocketData | PortTunnelSocketData,
+      open(ws) {
+        if ((ws.data as { kind?: string }).kind === "tunnel") {
+          return portTunnelWebsocketHandlers.open(
+            ws as import("bun").ServerWebSocket<PortTunnelSocketData>,
+          );
+        }
+        return terminalWebsocketHandlers.websocket.open(
+          ws as import("bun").ServerWebSocket<TerminalSocketData>,
+        );
+      },
+      message(ws, data) {
+        if ((ws.data as { kind?: string }).kind === "tunnel") {
+          return portTunnelWebsocketHandlers.message(
+            ws as import("bun").ServerWebSocket<PortTunnelSocketData>,
+            data,
+          );
+        }
+        return terminalWebsocketHandlers.websocket.message(
+          ws as import("bun").ServerWebSocket<TerminalSocketData>,
+          data,
+        );
+      },
+      close(ws) {
+        if ((ws.data as { kind?: string }).kind === "tunnel") {
+          return portTunnelWebsocketHandlers.close(
+            ws as import("bun").ServerWebSocket<PortTunnelSocketData>,
+          );
+        }
+        return terminalWebsocketHandlers.websocket.close(
+          ws as import("bun").ServerWebSocket<TerminalSocketData>,
+        );
+      },
+    },
   });
 
   log(`Console Agent Server running on http://${host}:${port}`);
