@@ -251,8 +251,14 @@ impl ConsoleDesktopApp {
             return;
         };
         self.active_env_id = Some(env_id);
-        // Drop the old backend's stream before switching its shared transport.
+        // Drop the old backend's stream and localhost listeners before
+        // switching its shared transport.
         self.port_stream = None;
+        let old_client = self.client.clone();
+        cx.spawn(async move |_, _| {
+            old_client.local_forwards.clear().await;
+        })
+        .detach();
         // Persist immediately (main window writes `active_id`; secondaries
         // preserve it) so a restart boots this server instead of the stale
         // one from the previous `state.json`.

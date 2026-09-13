@@ -18,6 +18,19 @@ impl ConsoleDesktopApp {
                 match client.ports.watch().await {
                     Ok(mut stream) => {
                         while let Some(Ok(ports)) = stream.next().await {
+                            // Server reports remote ports; expose each one as a
+                            // real localhost URL owned by LocalForwardManager.
+                            let remotes: Vec<u16> =
+                                ports.iter().map(|port| port.port).collect();
+                            let locals =
+                                client.local_forwards.ensure(&remotes).await;
+                            let mapped: Vec<console_core::ForwardedPort> = locals
+                                .into_iter()
+                                .map(|forward| console_core::ForwardedPort {
+                                    port: forward.remote_port,
+                                    url: forward.local_url,
+                                })
+                                .collect();
                             let _ = cx.update(|cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
@@ -25,10 +38,10 @@ impl ConsoleDesktopApp {
                                         let changed = this
                                             .forwarded_ports_by_project
                                             .get(&key)
-                                            .is_none_or(|current| current.as_ref() != &ports);
+                                            .is_none_or(|current| current.as_ref() != &mapped);
                                         if changed {
                                             this.forwarded_ports_by_project
-                                                .insert(key, Rc::new(ports));
+                                                .insert(key, Rc::new(mapped));
                                             cx.notify();
                                         }
                                     });
@@ -73,16 +86,25 @@ impl ConsoleDesktopApp {
                 Some(pid_clone.as_str())
             };
             if let Ok(ports) = client.ports.list(pid_opt).await {
+                let remotes: Vec<u16> = ports.iter().map(|port| port.port).collect();
+                let locals = client.local_forwards.ensure(&remotes).await;
+                let mapped: Vec<console_core::ForwardedPort> = locals
+                    .into_iter()
+                    .map(|forward| console_core::ForwardedPort {
+                        port: forward.remote_port,
+                        url: forward.local_url,
+                    })
+                    .collect();
                 let _ = cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
                             let changed = this
                                 .forwarded_ports_by_project
                                 .get(&pid_clone)
-                                .is_none_or(|current| current.as_ref() != &ports);
+                                .is_none_or(|current| current.as_ref() != &mapped);
                             if changed {
                                 this.forwarded_ports_by_project
-                                    .insert(pid_clone, Rc::new(ports));
+                                    .insert(pid_clone, Rc::new(mapped));
                                 cx.notify();
                             }
                         });
@@ -106,6 +128,9 @@ impl ConsoleDesktopApp {
                 Some(pid_clone.as_str())
             };
             if let Ok(()) = client.ports.unforward(port, pid_opt).await {
+                // Drop the local listener immediately; the next stream/list
+                // reconciles anything left.
+                client.local_forwards.remove(port).await;
                 let _ = cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {

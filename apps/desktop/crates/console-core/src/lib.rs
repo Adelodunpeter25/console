@@ -5,8 +5,9 @@ pub mod utils;
 
 pub use client::ConsoleClient;
 pub use services::{
-    AssistService, AuthService, DeviceService, FsService, GitService, PortService, ProjectService,
-    ProviderService, RawFileError, RunService, SessionService, UsageService,
+    AssistService, AuthService, DeviceService, FsService, GitService, LocalForward,
+    LocalForwardManager, PortService, ProjectService, ProviderService, RawFileError, RunService,
+    SessionService, UsageService,
 };
 pub use types::*;
 pub use utils::*;
