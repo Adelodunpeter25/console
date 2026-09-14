@@ -18,3 +18,35 @@ urlencoding = { workspace = true }
 eventsource-stream = { workspace = true }
 similar = { workspace = true }
 termy_core = { git = "https://github.com/lassejlv/termy", rev = "f5ddada41eab55c26b582140b5ef4eb4c9d696d8" }
+
+[[test]]
+name = "terminal_query_replies_test"
+path = "tests/terminal/terminal_query_replies_test.rs"
+
+[[test]]
+name = "terminal_snapshot_test"
+path = "tests/terminal/terminal_snapshot_test.rs"
+
+[[test]]
+name = "terminal_tui_e2e_test"
+path = "tests/terminal/terminal_tui_e2e_test.rs"
+
+[[test]]
+name = "local_forward_test"
+path = "tests/network/local_forward_test.rs"
+
+[[test]]
+name = "local_forward_pipe_test"
+path = "tests/network/local_forward_pipe_test.rs"
+
+[[test]]
+name = "ports_test"
+path = "tests/network/ports_test.rs"
+
+[[test]]
+name = "types_test"
+path = "tests/types/types_test.rs"
+
+[[test]]
+name = "file_kind_test"
+path = "tests/types/file_kind_test.rs"

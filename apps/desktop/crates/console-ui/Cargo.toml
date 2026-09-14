@@ -33,3 +33,39 @@ objc2 = { workspace = true }
 objc2-foundation = { workspace = true, features = ["NSDictionary", "NSKeyValueObserving", "NSValue", "NSProcessInfo", "NSString", "NSURL", "NSURLRequest"] }
 objc2-app-kit = { workspace = true, features = ["NSView", "NSWindow", "NSApplication", "NSEvent", "NSAppearance"] }
 objc2-web-kit = { workspace = true, features = ["WKWebView", "WKWebViewConfiguration", "WKNavigation", "WKNavigationDelegate"] }
+
+[[test]]
+name = "composer_mention_test"
+path = "tests/composer/composer_mention_test.rs"
+
+[[test]]
+name = "input_test"
+path = "tests/composer/input_test.rs"
+
+[[test]]
+name = "model_picker_test"
+path = "tests/composer/model_picker_test.rs"
+
+[[test]]
+name = "keybindings_page_test"
+path = "tests/settings/keybindings_page_test.rs"
+
+[[test]]
+name = "workspace_test"
+path = "tests/workspace/workspace_test.rs"
+
+[[test]]
+name = "run_panel_test"
+path = "tests/workspace/run_panel_test.rs"
+
+[[test]]
+name = "browser_test"
+path = "tests/viewer/browser_test.rs"
+
+[[test]]
+name = "code_viewer_test"
+path = "tests/viewer/code_viewer_test.rs"
+
+[[test]]
+name = "svg_test"
+path = "tests/viewer/svg_test.rs"
