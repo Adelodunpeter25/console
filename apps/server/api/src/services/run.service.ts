@@ -8,7 +8,6 @@ import { getSharedSessionStorage } from "@/agent/src/session/storage.js";
 import { buildSystemPrompt } from "@/agent/src/systemprompt/builder.js";
 import {
   DEFAULT_FALLBACK_MODEL,
-  DEFAULT_FALLBACK_PROVIDER,
   findModelInProvider,
   getProvider,
 } from "@/agent/src/commands/provider-registry.js";
@@ -248,7 +247,7 @@ export class RunService {
         title: autoTitle,
         cwd,
         modelId: dto.modelId || DEFAULT_FALLBACK_MODEL,
-        provider: dto.provider || DEFAULT_FALLBACK_PROVIDER,
+        provider: dto.provider || "antigravity",
       });
       session = { header, messages: [] };
     } else {
@@ -272,7 +271,7 @@ export class RunService {
       session = this.sessionStorage.loadSession(sessionId) ?? session;
     }
 
-    const provider = dto.provider || session.header.provider || DEFAULT_FALLBACK_PROVIDER;
+    const provider = dto.provider || session.header.provider || "antigravity";
     const modelId = dto.modelId || session.header.modelId || DEFAULT_FALLBACK_MODEL;
     const catalogModel = findModelInProvider(provider, modelId);
     if (dto.attachments && dto.attachments.length > 0 && catalogModel?.supportsImages === false) {

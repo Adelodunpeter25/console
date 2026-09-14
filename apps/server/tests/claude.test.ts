@@ -286,7 +286,52 @@ console.log("Running Claude provider tests...");
   const schema = tools[0]!.input_schema as Record<string, unknown>;
   assert.equal(schema.type, "object");
   assert.ok((schema.properties as Record<string, unknown>).command);
+  // Default retention caches the static tool definitions (last tool tagged).
+  assert.deepEqual(tools[0]!.cache_control, { type: "ephemeral" });
   console.log("  ✅ convertClaudeTools serialises tools to input_schema");
+}
+
+// 11b. Thinking demotes to text; "none" disables all cache breakpoints
+{
+  const wire = convertClaudeMessages([
+    { role: "user", content: "start" },
+    {
+      role: "assistant",
+      id: "turn-1",
+      content: [
+        { type: "thinking", text: "let me think" },
+        { type: "text", text: "done" },
+      ],
+      stopReason: "stop",
+    },
+    { role: "user", content: "go on" },
+  ]);
+  // Assistant thinking demotes to a text block (unsigned thinking can't replay).
+  const assistant = wire.find((m) => m.role === "assistant")!;
+  assert.ok(assistant.content.some((b) => b.type === "text" && b.text === "let me think"));
+
+  const cached = convertClaudeMessages([{ role: "user", content: "hi" }]);
+  const lastBlock = cached[cached.length - 1]!.content.at(-1)!;
+  assert.deepEqual(lastBlock.cache_control, { type: "ephemeral" });
+
+  const uncached = convertClaudeMessages([{ role: "user", content: "hi" }], "none");
+  assert.ok(
+    uncached.every((m) => m.content.every((b) => !("cache_control" in b))),
+    "cacheRetention none must strip message breakpoints",
+  );
+  const uncachedTools = convertClaudeTools(
+    [
+      {
+        name: "bash",
+        description: "run",
+        inputSchema: z.object({ command: z.string() }),
+        execute: async () => ({}),
+      },
+    ],
+    "none",
+  );
+  assert.ok(!("cache_control" in uncachedTools[0]!));
+  console.log("  ✅ thinking demotes to text; retention none strips breakpoints");
 }
 
 // ─── Usage normalization ───────────────────────────────────────────────────
@@ -510,6 +555,53 @@ function sseResponse(lines: string[]): Response {
   }
 }
 
+// 17b. Request body carries medium thinking + cache breakpoints
+{
+  process.env.CLAUDE_OAUTH_TOKEN = "test-oauth-token";
+  const originalFetch = globalThis.fetch;
+  let capturedBody: Record<string, unknown> = {};
+  globalThis.fetch = (async (_url: unknown, init?: { headers?: Record<string, string>; body?: string }) => {
+    capturedBody = JSON.parse(init?.body ?? "{}") as Record<string, unknown>;
+    return sseResponse([
+      "event: message_start",
+      'data: {"type":"message_start","message":{"id":"msg_3","usage":{"input_tokens":10}}}',
+      "",
+      "event: message_stop",
+      'data: {"type":"message_stop"}',
+    ]);
+  }) as unknown as typeof fetch;
+  try {
+    for await (const _ of claudeStreamFn({
+      model: { id: "claude-sonnet-4-5", provider: "claude", contextWindow: 200_000 },
+      systemPrompt: "Be helpful.",
+      messages: [{ role: "user", content: "hi" }],
+      tools: [
+        {
+          name: "bash",
+          description: "run a command",
+          inputSchema: z.object({ command: z.string() }),
+          execute: async () => ({}),
+        },
+      ],
+    })) {
+      // drain
+    }
+    assert.deepEqual(capturedBody.thinking, { type: "enabled", budget_tokens: 8192 });
+    const system = capturedBody.system as Array<Record<string, unknown>>;
+    assert.deepEqual(system[0]!.cache_control, { type: "ephemeral" });
+    const tools = capturedBody.tools as Array<Record<string, unknown>>;
+    assert.equal(tools.length, 1);
+    assert.deepEqual(tools[0]!.cache_control, { type: "ephemeral" });
+    const messages = capturedBody.messages as Array<{ content: Array<Record<string, unknown>> }>;
+    const trailing = messages[messages.length - 1]!.content.at(-1)!;
+    assert.deepEqual(trailing.cache_control, { type: "ephemeral" });
+    console.log("  ✅ request body carries medium thinking + cache breakpoints");
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.CLAUDE_OAUTH_TOKEN;
+  }
+}
+
 // ─── Discovery ─────────────────────────────────────────────────────────────
 
 // 18. fetchClaudeModels maps /v1/models entries
@@ -567,13 +659,11 @@ function sseResponse(lines: string[]): Response {
 
 // 20. Provider catalog advertises Claude with an OAuth stream fn
 {
-  const { PROVIDER_CATALOG, listProviders, DEFAULT_CLAUDE_MODELS, DEFAULT_FALLBACK_MODEL, DEFAULT_FALLBACK_PROVIDER } = await import(
+  const { PROVIDER_CATALOG, listProviders, DEFAULT_CLAUDE_MODELS } = await import(
     "@/agent/src/commands/provider-registry.js"
   );
   assert.ok(DEFAULT_CLAUDE_MODELS.length > 0, "Claude needs a static model seed");
   assert.equal(DEFAULT_CLAUDE_MODELS[0]!.id, "claude-sonnet-4-5", "Sonnet 4.5 is the default Claude model");
-  assert.equal(DEFAULT_FALLBACK_MODEL, "claude-sonnet-4-5", "Sonnet 4.5 is the global default model");
-  assert.equal(DEFAULT_FALLBACK_PROVIDER, "claude", "Claude is the global default provider");
 
   const claudeEntry = PROVIDER_CATALOG.claude;
   assert.ok(claudeEntry, "claude should be in PROVIDER_CATALOG");

@@ -13,6 +13,7 @@ import {
   CLAUDE_MAX_OUTPUT_TOKENS,
   CLAUDE_OAUTH_BETAS,
   CLAUDE_SDK_VERSION,
+  CLAUDE_THINKING_BUDGET_TOKENS,
   CLAUDE_USER_AGENT,
   claudeMessagesUrl,
 } from "./constants.js";
@@ -177,6 +178,10 @@ function buildRequestBody(
   return {
     model: model.id,
     max_tokens: CLAUDE_MAX_OUTPUT_TOKENS,
+    // Extended thinking, always on at medium budget (8192). The
+    // interleaved-thinking beta (sent in headers) keeps tool use working
+    // alongside thinking.
+    thinking: { type: "enabled", budget_tokens: CLAUDE_THINKING_BUDGET_TOKENS },
     ...(trimmedSystem
       ? {
           system:
@@ -209,8 +214,8 @@ export const claudeStreamFn: StreamFn = async function* ({
   cacheRetention,
 }) {
   const credential = await refreshClaudeIfNeeded(await loadClaudeCredential());
-  const convertedMessages = convertClaudeMessages(messages);
-  const convertedTools = convertClaudeTools(tools);
+  const convertedMessages = convertClaudeMessages(messages, cacheRetention);
+  const convertedTools = convertClaudeTools(tools, cacheRetention);
   const body = buildRequestBody(
     model,
     systemPrompt,

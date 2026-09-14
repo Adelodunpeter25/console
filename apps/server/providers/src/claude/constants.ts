@@ -33,6 +33,13 @@ export const CLAUDE_OAUTH_BETAS = [
 /** Per-request output-token ceiling, mirroring Claude Code. */
 export const CLAUDE_MAX_OUTPUT_TOKENS = 32_000;
 
+/**
+ * Extended-thinking token budget, always enabled. "Medium" level per pi's
+ * `thinkingBudgetForLevel` (minimal 1024 / low 2048 / medium 8192 / high
+ * 16384). Must stay below `CLAUDE_MAX_OUTPUT_TOKENS`.
+ */
+export const CLAUDE_THINKING_BUDGET_TOKENS = 8192;
+
 export function claudeRedirectUri(): string {
   return `http://localhost:${CLAUDE_CALLBACK_PORT}${CLAUDE_CALLBACK_PATH}`;
 }

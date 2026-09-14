@@ -8,7 +8,7 @@
  *   ToolResultMessage → role: "user", content blocks (tool_result)
  */
 import { zodToJsonSchema } from "zod-to-json-schema";
-import type { AgentMessage, AgentTool } from "@console/types";
+import type { AgentMessage, AgentTool, CacheRetention } from "@console/types";
 
 export interface ClaudeMessage {
   role: "user" | "assistant";
@@ -19,6 +19,7 @@ export interface ClaudeTool {
   name: string;
   description?: string;
   input_schema: Record<string, unknown>;
+  cache_control?: { type: "ephemeral" };
 }
 
 function toolResultText(content: unknown): string {
@@ -56,7 +57,7 @@ function normalizeImageMime(mimeType: string): "image/jpeg" | "image/png" | "ima
   return undefined;
 }
 
-export function convertClaudeMessages(messages: AgentMessage[]): ClaudeMessage[] {
+export function convertClaudeMessages(messages: AgentMessage[], cacheRetention?: CacheRetention): ClaudeMessage[] {
   const turns: ClaudeMessage[] = [];
 
   for (const msg of messages) {
@@ -90,6 +91,11 @@ export function convertClaudeMessages(messages: AgentMessage[]): ClaudeMessage[]
       for (const part of msg.content) {
         if (part.type === "text" && part.text) {
           content.push({ type: "text", text: part.text });
+        } else if (part.type === "thinking" && part.text) {
+          // Prior thinking is replayed unsigned, which the signing endpoint
+          // rejects — demote it to text (mirrors oh-my-pi's demotion path)
+          // instead of dropping the reasoning context entirely.
+          content.push({ type: "text", text: part.text });
         } else if (part.type === "toolCall") {
           content.push({
             type: "tool_use",
@@ -98,8 +104,6 @@ export function convertClaudeMessages(messages: AgentMessage[]): ClaudeMessage[]
             input: parseToolInput(part.call.arguments),
           });
         }
-        // Thinking parts are ephemeral — Anthropic replays them only with
-        // signatures, so they are dropped from history like other providers.
       }
       if (content.length > 0) {
         turns.push({ role: "assistant", content });
@@ -140,6 +144,16 @@ export function convertClaudeMessages(messages: AgentMessage[]): ClaudeMessage[]
     merged.push({ role: "user", content: [{ type: "text", text: "(continue)" }] });
   }
 
+  // Trailing prompt-cache breakpoint over the conversation prefix, so the
+  // stable history caches across turns. Skipped when the caller opts out.
+  if (cacheRetention !== "none") {
+    const lastMessage = merged[merged.length - 1]!;
+    const lastBlock = lastMessage.content[lastMessage.content.length - 1];
+    if (lastBlock) {
+      lastBlock.cache_control = { type: "ephemeral" };
+    }
+  }
+
   return merged;
 }
 
@@ -172,8 +186,8 @@ export function normalizeClaudeSchema(value: unknown): unknown {
   return normalized;
 }
 
-export function convertClaudeTools(tools: AgentTool[]): ClaudeTool[] {
-  return tools.map((tool) => {
+export function convertClaudeTools(tools: AgentTool[], cacheRetention?: CacheRetention): ClaudeTool[] {
+  return tools.map((tool, index) => {
     const rawSchema = zodToJsonSchema(tool.inputSchema, {
       target: "openApi3",
       $refStrategy: "none",
@@ -186,6 +200,11 @@ export function convertClaudeTools(tools: AgentTool[]): ClaudeTool[] {
       name: tool.name,
       ...(tool.description ? { description: tool.description } : {}),
       input_schema,
+      // Cache the (static) tool definitions with a breakpoint on the last
+      // tool. Skipped when the caller opts out of caching.
+      ...(cacheRetention !== "none" && index === tools.length - 1
+        ? { cache_control: { type: "ephemeral" } }
+        : {}),
     };
   });
 }

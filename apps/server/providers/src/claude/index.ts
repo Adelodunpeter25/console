@@ -12,6 +12,7 @@ export {
   CLAUDE_USER_AGENT,
   CLAUDE_OAUTH_BETAS,
   CLAUDE_MAX_OUTPUT_TOKENS,
+  CLAUDE_THINKING_BUDGET_TOKENS,
   claudeRedirectUri,
   claudeMessagesUrl,
   claudeModelsUrl,
