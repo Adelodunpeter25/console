@@ -246,6 +246,31 @@ console.log("Running Claude provider tests...");
   console.log("  ✅ convertClaudeMessages maps Console → Anthropic roles");
 }
 
+// 9b. Empty tool results get a placeholder (Anthropic rejects empty content)
+{
+  const wire = convertClaudeMessages([
+    { role: "user", content: "run it" },
+    {
+      role: "assistant",
+      id: "turn-1",
+      content: [
+        { type: "toolCall", call: { id: "toolu_9", name: "bash", arguments: {} } },
+      ],
+      stopReason: "toolUse",
+    },
+    {
+      role: "toolResult",
+      results: [
+        { toolCallId: "toolu_9", content: "" },
+        { toolCallId: "toolu_9b", content: "   " },
+      ],
+    },
+  ]);
+  const results = wire[wire.length - 1]!.content as Array<Record<string, unknown>>;
+  assert.ok(results.every((b) => typeof b.content === "string" && (b.content as string).length > 0));
+  console.log("  ✅ empty tool results replaced with placeholder text");
+}
+
 // 10. convertClaudeMessages merges same-role turns and keeps image attachments
 {
   const wire = convertClaudeMessages([

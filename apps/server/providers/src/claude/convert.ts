@@ -22,8 +22,12 @@ export interface ClaudeTool {
   cache_control?: { type: "ephemeral" };
 }
 
+/** Placeholder for empty tool results — the Messages API rejects empty content. */
+export const EMPTY_TOOL_RESULT_TEXT = "Tool failed with no output.";
+
 function toolResultText(content: unknown): string {
-  return typeof content === "string" ? content : JSON.stringify(content);
+  const text = typeof content === "string" ? content : JSON.stringify(content);
+  return text.trim() === "" ? EMPTY_TOOL_RESULT_TEXT : text;
 }
 
 function parseToolInput(input: unknown): Record<string, unknown> {
