@@ -1,7 +1,7 @@
 /**
  * LLM compaction summaries via the configured smol model.
  *
- * This is the default summary path (`summaryStrategy: "llm"`). The hook
+ * Opt-in via `summaryStrategy: "llm"` (structural is the default). The hook
  * resolves the smol role, feeds it a bounded plain-text transcript of the
  * discarded turns, and returns the narrative summary. Single attempt, no
  * retries, no nested compaction. When no smol model is configured (or the

@@ -127,7 +127,7 @@ export class Agent {
         keepRecentTokens: 40_000,
         minimumRecentTurns: 3,
         maxToolResultChars: 8_000,
-        summaryStrategy: "llm",
+        summaryStrategy: "structural",
         ...(options.compaction ?? {}),
       };
     }

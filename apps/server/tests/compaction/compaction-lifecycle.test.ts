@@ -49,8 +49,8 @@ const testModel: Model = {
   });
   assert.equal((agentDisabled as any)._compaction, undefined);
 
-  // LLM summaries are the default strategy; structural is the fallback.
-  assert.equal((agentDefault as any)._compaction?.summaryStrategy, "llm");
+  // Structural summaries are the default strategy; LLM needs explicit opt-in.
+  assert.equal((agentDefault as any)._compaction?.summaryStrategy, "structural");
 
   console.log("  ✅ Agent initializes default compaction and supports explicit opt-out");
 }
@@ -337,7 +337,7 @@ const testModel: Model = {
       model: testModel,
       tools: [],
       streamFn: mockStreamFn,
-      compaction: { enabled: true, tokenThreshold: 100, keepRecentTokens: 50 },
+      compaction: { enabled: true, summaryStrategy: "llm", tokenThreshold: 100, keepRecentTokens: 50 },
     });
 
     const priorHistory: AgentMessage[] = [];
