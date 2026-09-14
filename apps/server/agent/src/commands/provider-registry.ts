@@ -92,12 +92,19 @@ export const DEFAULT_CLINE_MODELS: Model[] = [...CLINE_FREE_MODEL_IDS]
 // auth the picker shows zero Devin models, on first auth it gets the full list.
 export const DEFAULT_DEVIN_MODELS: Model[] = [];
 
+// Offline seed — context windows measured from GET /v1/models
+// (max_input_tokens). Refreshed from the live list after login.
 export const DEFAULT_CLAUDE_MODELS: Model[] = [
-  "claude-sonnet-4-5",
-  "claude-opus-4-6",
-  "claude-sonnet-4-6",
-  "claude-haiku-4-5",
-].map((id) => ({ id, provider: "claude" as const, contextWindow: 200_000, supportsImages: true }));
+  { id: "claude-sonnet-4-5", contextWindow: 1_000_000 },
+  { id: "claude-opus-4-6", contextWindow: 1_000_000 },
+  { id: "claude-sonnet-4-6", contextWindow: 1_000_000 },
+  { id: "claude-haiku-4-5", contextWindow: 200_000 },
+].map(({ id, contextWindow }) => ({
+  id,
+  provider: "claude" as const,
+  contextWindow,
+  supportsImages: true,
+}));
 
 /** Providers that are temporarily disabled (kept in code but hidden from catalog). */
 const DISABLED_PROVIDERS = new Set<ProviderId>(["cline", "devin"]);

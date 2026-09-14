@@ -664,6 +664,11 @@ function sseResponse(lines: string[]): Response {
   );
   assert.ok(DEFAULT_CLAUDE_MODELS.length > 0, "Claude needs a static model seed");
   assert.equal(DEFAULT_CLAUDE_MODELS[0]!.id, "claude-sonnet-4-5", "Sonnet 4.5 is the default Claude model");
+  assert.equal(
+    DEFAULT_CLAUDE_MODELS[0]!.contextWindow,
+    1_000_000,
+    "seed context matches GET /v1/models max_input_tokens",
+  );
 
   const claudeEntry = PROVIDER_CATALOG.claude;
   assert.ok(claudeEntry, "claude should be in PROVIDER_CATALOG");
