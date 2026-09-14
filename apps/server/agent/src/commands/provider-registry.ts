@@ -56,7 +56,9 @@ const GEMINI_THINKING_LEVELS: ThinkingLevel[] = ["minimal", "low", "medium", "hi
 export const DEFAULT_ANTIGRAVITY_MODELS: Model[] = AVAILABLE_MODELS.map((id) => ({
   id,
   provider: "antigravity",
-  contextWindow: id.startsWith("claude-") ? 250_000 : 1_048_576,
+  // Offline seed mirrors measured fetchAvailableModels maxTokens:
+  // claude-* 250k, gpt-oss-120b 128k, gemini-* 1M. Live discovery overwrites.
+  contextWindow: id.startsWith("claude-") ? 250_000 : id.startsWith("gpt-oss-") ? 131_072 : 1_048_576,
   ...(id.startsWith("gemini-")
     ? {
         supportedThinkingLevels: GEMINI_THINKING_LEVELS,
