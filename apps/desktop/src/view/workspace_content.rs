@@ -814,6 +814,8 @@ impl ConsoleDesktopApp {
                                         },
                                         cx,
                                     );
+
+                                    this.save_default_model_role(format!("{prov}/{m_id}"), cx);
                                     cx.notify();
                                 });
                             }

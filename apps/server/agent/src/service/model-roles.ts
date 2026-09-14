@@ -33,8 +33,27 @@ export async function loadSettings(): Promise<ConsoleSettings> {
   }
 }
 
-export async function saveSettings(settings: ConsoleSettings): Promise<ConsoleSettings> {
-  const normalized = { modelRoles: sanitizeRoles(settings.modelRoles ?? {}) };
+/**
+ * Merges a patch onto the currently saved roles rather than replacing the
+ * whole mapping, so a caller that only knows about one role (e.g. the
+ * composer's model picker, which only manages "default") can't clobber
+ * roles it never saw (e.g. plan/vision/smol set from the settings page).
+ * A role present in the patch with an empty/null value clears that role;
+ * a role absent from the patch is left untouched.
+ */
+export async function saveSettings(patch: Partial<Record<ConsoleModelRole, string | null>>): Promise<ConsoleSettings> {
+  const current = await loadSettings();
+  const merged: ModelRoleMapping = { ...current.modelRoles };
+  for (const role of ROLES) {
+    if (!Object.hasOwn(patch, role)) continue;
+    const value = patch[role];
+    if (typeof value === "string" && value.trim()) {
+      merged[role] = value.trim();
+    } else {
+      delete merged[role];
+    }
+  }
+  const normalized = { modelRoles: merged };
   const file = getSettingsPath();
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");

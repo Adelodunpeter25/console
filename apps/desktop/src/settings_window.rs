@@ -461,13 +461,13 @@ impl Render for SettingsWindow {
                 .into_any_element()
             }
             SettingsTab::Models => {
-                let on_save: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                let do_save = {
                     let app_handle = self.app.clone();
                     let default_input = self.model_default_input.clone();
                     let plan_input = self.model_plan_input.clone();
                     let vision_input = self.model_vision_input.clone();
                     let smol_input = self.model_smol_input.clone();
-                    Rc::new(move |_window: &mut Window, cx: &mut App| {
+                    Rc::new(move |cx: &mut App| {
                         let Some(app) = app_handle.upgrade() else {
                             return;
                         };
@@ -488,6 +488,12 @@ impl Render for SettingsWindow {
                         });
                     })
                 };
+                let on_save: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let do_save = do_save.clone();
+                    Rc::new(move |_window: &mut Window, cx: &mut App| {
+                        do_save(cx);
+                    })
+                };
                 let on_select: Rc<
                     dyn Fn(String, String, String, Entity<ComposerInput>, &mut Window, &mut App)
                         + 'static,
@@ -495,6 +501,7 @@ impl Render for SettingsWindow {
                     input.update(cx, |input, cx| {
                         input.set_content(format!("{provider}/{model}"), cx)
                     });
+                    do_save(cx);
                 });
                 let on_clear: Rc<dyn Fn(Entity<ComposerInput>, &mut Window, &mut App) + 'static> =
                     Rc::new(move |input, _window, cx| {

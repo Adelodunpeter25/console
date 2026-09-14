@@ -144,6 +144,15 @@ export function convertClaudeMessages(messages: AgentMessage[], cacheRetention?:
   while (merged.length > 0 && merged[0]!.role !== "user") {
     merged.shift();
   }
+
+  // Claude rejects a conversation that ends on an assistant turn ("does not
+  // support assistant message prefill"). This can happen when the agent loop
+  // persists an assistant turn before its matching tool-result turn (e.g. an
+  // aborted run or a restored session) — drop trailing assistant turns.
+  while (merged.length > 0 && merged[merged.length - 1]!.role !== "user") {
+    merged.pop();
+  }
+
   if (merged.length === 0) {
     merged.push({ role: "user", content: [{ type: "text", text: "(continue)" }] });
   }

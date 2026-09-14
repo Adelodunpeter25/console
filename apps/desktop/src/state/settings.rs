@@ -84,6 +84,32 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    /// Patches the `default` model role to `model_reference` (`"provider/model_id"`),
+    /// leaving other roles untouched. Used by the composer's model picker so
+    /// picking a model there also becomes the default for new sessions.
+    pub fn save_default_model_role(&mut self, model_reference: String, cx: &mut Context<Self>) {
+        let client = self.client.clone();
+        let settings_view = self
+            .settings_window_view
+            .as_ref()
+            .and_then(|view| view.upgrade());
+
+        cx.spawn(async move |_, cx| {
+            let result = client.settings.patch_default_model(&model_reference).await;
+            if let Ok(saved_settings) = result {
+                let _ = cx.update(|cx| {
+                    if let Some(settings_view) = &settings_view {
+                        settings_view.update(cx, |view, cx| {
+                            view.apply_model_settings(&saved_settings, cx);
+                        });
+                    }
+                    crate::window::broadcast_settings_refresh(cx);
+                });
+            }
+        })
+        .detach();
+    }
+
     pub fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.open_settings_tab(console_ui::settings::SettingsTab::Accounts, window, cx);
     }
