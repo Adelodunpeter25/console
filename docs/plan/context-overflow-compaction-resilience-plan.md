@@ -18,7 +18,7 @@
 
 **Decisions (locked):**
 
-- **No local tokenizer packages** (no tiktoken, `gpt-tokenizer`, etc.). They add dependency/bundle cost, need per-provider calibration anyway, and can never match server-side counting (system instructions, tool schemas, cache blocks). Estimation = payload-complete heuristic + provider-native count endpoints near thresholds.
+- **P0 uses no local tokenizer packages.** Fixes ship on the payload-complete heuristic + provider count endpoints. Tokenizer packages land in Phase 1, after the crash fixes (see T0) — sequenced, not dropped.
 - **No manual `/compact` command.** All triggers automatic.
 - **No snapcompact/visual archival.** Parked as out of scope (see §5).
 - **No durable restart-recovery workflow yet.** Overflow recovery is in-memory per turn (retry-once guard); persisted workflow orchestration is deferred to Phase 2.
@@ -68,7 +68,19 @@
 - Compaction preserves bounded per-file facts (path, ranges, latest read result, `complete`|`truncated`|`unread`) outside the message history so checkpoints stay usable.
 **Acceptance:** truncated read → continuation range request (never the same full read); identical repeat → diagnostic + stop; compacted session continues from preserved file facts without rereading everything.
 
-## 2. Hardening (P1) — after P0 lands
+## 2. Phase 1 — exact local counting with tokenizer packages (after P0)
+
+Once the crash fixes are in, replace the density heuristic with provider-family tokenizers, calibrated against real payloads.
+
+### T0. Adopt tokenizer packages per provider family
+- **OpenAI-family (Codex, OpenCode):** tiktoken (or dependency-free `gpt-tokenizer`) — BPE-exact for these models. Scope strictly to OpenAI-compatible payloads.
+- **Anthropic:** prefer the `messages.countTokens` endpoint as primary (B3); evaluate `@anthropic-ai/tokenizer` as an offline fallback only, labeled as approximate — the published package is beta-era and not a substitute for the provider count.
+- **Antigravity/Gemini:** prefer `models.countTokens` where the credential permits; no credible local Gemini tokenizer exists, so the calibrated heuristic + margin remains the offline path.
+- **Calibration:** for each provider, record heuristic-vs-actual deltas on golden payloads (system + tools + history + images) and bake the observed margin into the fast-path estimator, so the local count stays conservative without a package where none is credible.
+- **Dependency vetting before adding:** Bun compatibility, bundle size/startup cost, license, model coverage. Fail open to the P0 heuristic on any counting error.
+**Acceptance:** estimator tests assert per-family golden payloads within the calibrated margin; no provider silently uses another family's tokenizer (the old plan's explicit anti-goal).
+
+## 3. Hardening (P2) — after Phase 1
 
 ### H0. Per-model safety thresholds
 Replace the flat `contextWindow * 0.85` in `shouldCompact` with explicit ceilings:
@@ -87,31 +99,30 @@ After a compaction pass, require usage to re-cross a higher threshold (0.85→0.
 ### H3. Telemetry enrichment
 Extend the existing `compaction` session event with `tier` (`shake` | `summarize` | `emergency_recovery`), `trigger` (`pre_turn` | `mid_turn` | `overflow_retry`), `tokensBefore/After`, `tokenCountSource`, `recoveryAttempt`. No prompt contents in logs.
 
-## 3. Deferred (P2)
+## 4. Deferred (P3)
 
 - Persisted overflow-recovery workflow (resume across restarts; needs storage design first).
 - Interrupted-stream recovery (partial assistant frames on abort).
 - Server-side Anthropic `context_management` compaction edits (opt-in beta; revisit once P0 is stable).
 
-## 4. Test Plan
+## 5. Test Plan
 
 Map to existing files; run with `cd apps/server && bun tests/<name>.test.ts`:
 
-- `compaction-estimator.test.ts` (new): payload completeness (system+tools+history), code density, provider-count fail-open, threshold triggers per H0 values.
+- `compaction-estimator.test.ts` (new): payload completeness (system+tools+history), code density, provider-count fail-open, threshold triggers per H0 values. Phase 1 adds per-family golden-payload accuracy tests (T0).
 - `compaction-short-session.test.ts` (new): B0 acceptance (2-message + 1.5MB result).
 - `compaction-lifecycle.test.ts` (extend): B1 mid-turn shake, B2 overflow→retry-once→terminal-error.
 - `compaction-truncation.test.ts` (extend): truncation metadata shape, continuation-range behavior, duplicate-read diagnostic (B5).
 - Claude converter tests (`claude.test.ts`, extend): B4 empty-`tool_result` guard.
 
-## 5. Out of Scope (explicitly parked)
+## 6. Out of Scope (explicitly parked)
 
 - Snapcompact / visual PNG archival of tool outputs.
 - Manual `/compact` command.
-- Local tokenizer dependencies (tiktoken, `gpt-tokenizer`, `@anthropic-ai/tokenizer`).
 - Devin/Cline provider support.
-- Persisted cross-restart recovery workflow (see P2).
+- Persisted cross-restart recovery workflow (see P3).
 
-## Appendix: reference implementations (relative paths)
+## 7. Appendix: reference implementations (relative paths)
 
 - `apps/server/agent/src/compaction/` — current engine (`index.ts`, `cut-point.ts`, `shake.ts`, `structural-summary.ts`, `file-tracker.ts`, `token-estimator.ts`)
 - `apps/server/agent/src/service/agent-loop.ts` — turn loop, compaction hook at line ~123
