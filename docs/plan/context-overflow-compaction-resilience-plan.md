@@ -14,7 +14,7 @@
 - [x] Boundary-safe cut points (`cut-point.ts` — `isToolCallSafe`, never orphans toolResult)
 - [x] Structural summaries + file tracker (`structural-summary.ts`, `file-tracker.ts`)
 - [x] Basic tests (`compaction-cutpoint/lifecycle/summary/truncation.test.ts`)
-- [ ] Everything below
+- [x] P0 bugs B0–B5 (implemented; see items below)
 
 **Decisions (locked):**
 
@@ -26,6 +26,7 @@
 ## 1. Bugs First (P0) — fix before any new features
 
 ### B0. Shake bypasses short sessions and recent turns
+**Status: done.**
 **Problem:** `shakeConversation` spares the last 3 user turns via `protectedRecentStart`, and `compactHistory` (`index.ts:84`) returns early for `messages.length <= 4`. A 150KB tool result on turn 1 sails through untouched and overflows.
 **Fix:**
 - `shakeConversation(messages, maxChars, { emergency })`: `emergency: true` ignores the protected suffix and truncates oversized tool outputs everywhere down to `emergencyToolResultChars` (2,000).
@@ -33,11 +34,13 @@
 **Acceptance:** 2-message history with a 1.5MB tool result compacts without throwing and without "History too short" aborting the pipeline.
 
 ### B1. No mid-turn budget check
+**Status: done.**
 **Problem:** compaction is evaluated once at turn start (`agent-loop.ts:123`). A large tool result mid-turn overflows the very next model call.
 **Fix:** after each `toolExecutionEnd`, re-estimate payload tokens; if over the safety ceiling, run mechanical shake (non-emergency) before the next stream. Cheap path: fast local estimate only (see B3).
 **Acceptance:** a turn whose tool outputs push context over threshold shakes before the follow-up request instead of 400ing.
 
 ### B2. Overflow 400 crashes the session
+**Status: done.**
 **Problem:** provider context errors (`input token count exceeds`, `context_length_exceeded`, `prompt_too_long`, `maximum context length`, HTTP 400/413 token errors) propagate as fatal session errors.
 **Fix:**
 - `isContextOverflowError(err)` matching overflow signatures across Antigravity/CCA, Anthropic, OpenAI/Codex, OpenCode.
@@ -45,10 +48,11 @@
 **Acceptance:** mocked `400 input token count exceeds 1048576` triggers emergency compaction and exactly one retry; a second overflow ends the turn with a clear error, not a crash or loop.
 
 ### B3. Estimator undercounts the wire payload
+**Status: done.**
 **Problem:** `estimateMessageTokens` counts messages only at `chars/4`. Missing: system prompt + instructions (15k–45k tokens), tool schemas (5k–15k), denser code tokenization (~3 chars/token), image parts.
 **Fix (no tokenizer deps):**
 - `estimatePayloadTokens({ messages, systemPrompt, tools })`: prose ≈ 4 chars/token, code/JSON/tool output ≈ 3 chars/token, plus a per-provider wire-overhead margin. Counts system, tools, and history together.
-- Near-threshold escalation only: use provider-native count endpoints, fail open to the heuristic —
+- Near-threshold escalation (deferred to Phase 1, see T0): provider-native count endpoints, fail open to the heuristic —
   - Anthropic: `POST /v1/messages/count_tokens` (same OAuth bearer + headers; verify against subscription tokens during implementation),
   - Antigravity/Gemini: `models.countTokens` REST where the credential permits; CCA has no count endpoint, so heuristic + margin is the primary path,
   - Codex/OpenCode: heuristic + larger margin (no count endpoint on those APIs).
@@ -56,11 +60,13 @@
 **Acceptance:** a payload with 30k system tokens + 10k tool schemas + 800k history estimates ≥ 840k (old code reports ~800k); provider-count failure never blocks a turn.
 
 ### B4. Anthropic rejects empty `tool_result` blocks
+**Status: done.**
 **Problem:** after shake truncation, a `tool_result` can reach the Claude provider with empty content, which the Messages API rejects with 400. (oh-my-pi carries the same guard: `EMPTY_ERROR_TOOL_RESULT_TEXT`.)
 **Fix:** in the Claude converter, replace empty `tool_result` content with `"Tool failed with no output."`; skip empty text blocks (already done for assistant parts — audit user parts too).
 **Acceptance:** unit test sends empty/error tool results through `convertClaudeMessages` and asserts no empty content blocks on the wire.
 
 ### B5. Read-looping after compaction (harness bug, not provider overflow)
+**Status: done.**
 **Problem (observed incident):** after compaction the agent kept file *names* but lost contents, treated truncated re-reads as failures, and re-read the same files in a loop — no retry budget, no truncation awareness.
 **Fix:**
 - Truncation becomes explicit metadata on tool results (`truncated`, `startLine`/`endLine`/`totalLines`, content fingerprint), never shaped like a failure.
