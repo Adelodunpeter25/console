@@ -567,10 +567,13 @@ function sseResponse(lines: string[]): Response {
 
 // 20. Provider catalog advertises Claude with an OAuth stream fn
 {
-  const { PROVIDER_CATALOG, listProviders, DEFAULT_CLAUDE_MODELS } = await import(
+  const { PROVIDER_CATALOG, listProviders, DEFAULT_CLAUDE_MODELS, DEFAULT_FALLBACK_MODEL, DEFAULT_FALLBACK_PROVIDER } = await import(
     "@/agent/src/commands/provider-registry.js"
   );
   assert.ok(DEFAULT_CLAUDE_MODELS.length > 0, "Claude needs a static model seed");
+  assert.equal(DEFAULT_CLAUDE_MODELS[0]!.id, "claude-sonnet-4-5", "Sonnet 4.5 is the default Claude model");
+  assert.equal(DEFAULT_FALLBACK_MODEL, "claude-sonnet-4-5", "Sonnet 4.5 is the global default model");
+  assert.equal(DEFAULT_FALLBACK_PROVIDER, "claude", "Claude is the global default provider");
 
   const claudeEntry = PROVIDER_CATALOG.claude;
   assert.ok(claudeEntry, "claude should be in PROVIDER_CATALOG");

@@ -3,6 +3,10 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { AgentMessage, SessionHeader } from "@/agent/src/types/index.js";
+import {
+  DEFAULT_FALLBACK_MODEL,
+  DEFAULT_FALLBACK_PROVIDER,
+} from "@/agent/src/commands/provider-registry.js";
 import { repairToolCallHistory } from "@/agent/src/utils/tool-history.js";
 import { replaceMessages } from "./session-messages.js";
 import {
@@ -189,8 +193,8 @@ export function loadSession(
   const title = meta?.title ?? indexRow?.title ?? "New Session";
   const cwd = meta?.cwd ?? indexRow?.cwd ?? process.cwd();
   const resolvedProjectId = meta?.project_id ?? projectId ?? indexRow?.project_id ?? null;
-  const modelId = meta?.model_id ?? indexRow?.model_id ?? "claude-opus-4-6-thinking";
-  const provider = meta?.provider ?? indexRow?.provider ?? "antigravity";
+  const modelId = meta?.model_id ?? indexRow?.model_id ?? DEFAULT_FALLBACK_MODEL;
+  const provider = meta?.provider ?? indexRow?.provider ?? DEFAULT_FALLBACK_PROVIDER;
   const approvalMode = meta?.approval_mode ?? indexRow?.approval_mode ?? "always-ask";
   const createdAt = meta?.created_at ?? indexRow?.created_at ?? Date.now();
   const updatedAt = meta?.updated_at ?? indexRow?.updated_at ?? createdAt;

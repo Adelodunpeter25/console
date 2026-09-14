@@ -38,7 +38,10 @@ export interface ProviderEntry extends ProviderCatalogEntry {
 
 export type { ProviderCatalogEntry } from "@/agent/src/types/index.js";
 
-export const DEFAULT_FALLBACK_MODEL = "claude-opus-4-6-thinking";
+export const DEFAULT_FALLBACK_MODEL = "claude-sonnet-4-5";
+
+/** Default provider used when the client doesn't specify one. */
+export const DEFAULT_FALLBACK_PROVIDER: ProviderId = "claude";
 
 export const AVAILABLE_MODELS = [
   "claude-opus-4-6-thinking",
@@ -93,6 +96,7 @@ export const DEFAULT_CLINE_MODELS: Model[] = [...CLINE_FREE_MODEL_IDS]
 export const DEFAULT_DEVIN_MODELS: Model[] = [];
 
 export const DEFAULT_CLAUDE_MODELS: Model[] = [
+  "claude-sonnet-4-5",
   "claude-opus-4-6",
   "claude-sonnet-4-6",
   "claude-haiku-4-5",

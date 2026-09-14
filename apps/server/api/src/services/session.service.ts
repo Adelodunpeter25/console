@@ -4,7 +4,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { getSharedSessionStorage, SqliteSessionStorage } from "@/agent/src/session/storage.js";
-import { DEFAULT_FALLBACK_MODEL } from "@/agent/src/commands/provider-registry.js";
+import { DEFAULT_FALLBACK_MODEL, DEFAULT_FALLBACK_PROVIDER } from "@/agent/src/commands/provider-registry.js";
 import { getSessionScratchDir } from "@/agent/src/session/apppaths.js";
 import type { SessionHeader } from "@console/types";
 import type { CreateSessionDto, SessionDetailResponse, UpdateSessionDto } from "@/api/src/types/index.js";
@@ -23,7 +23,7 @@ export class SessionService {
 
   createSession(dto: CreateSessionDto): SessionHeader {
     const modelId = dto.modelId || DEFAULT_FALLBACK_MODEL;
-    const provider = dto.provider || "antigravity";
+    const provider = dto.provider || DEFAULT_FALLBACK_PROVIDER;
     const title = dto.title || "New Session";
 
     // Explicit null => scratchpad session: sandboxed cwd, no project link.
@@ -107,7 +107,7 @@ export class SessionService {
     }
     if (dto.modelId) {
       const current = this.storage.loadSession(sessionId);
-      const provider = dto.provider || current?.header.provider || "antigravity";
+      const provider = dto.provider || current?.header.provider || DEFAULT_FALLBACK_PROVIDER;
       this.storage.updateModel(sessionId, dto.modelId, provider);
     }
     if (dto.approvalMode) {
