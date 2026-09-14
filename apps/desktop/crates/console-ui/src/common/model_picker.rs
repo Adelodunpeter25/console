@@ -29,6 +29,15 @@ pub fn provider_svg_path(provider: &str) -> &'static str {
     }
 }
 
+/// Human-size context window: 1_000_000 -> "1M", 272_000 -> "272k".
+pub fn format_context_window(context_window: usize) -> String {
+    if context_window >= 1_000_000 {
+        format!("{}M", context_window / 1_000_000)
+    } else {
+        format!("{}k", context_window / 1000)
+    }
+}
+
 pub fn format_model_name(model_id: &str) -> String {
     model_id
         .split(['-', '_'])
@@ -384,9 +393,9 @@ impl RenderOnce for ModelDropdownMenu {
                                                                 .text_size(px(11.0))
                                                                 .text_color(theme.text_tertiary)
                                                                 .child(format!(
-                                                                    "{} · {}k context",
+                                                                    "{} · {} context",
                                                                     prov_display,
-                                                                    m.context_window / 1000
+                                                                    format_context_window(m.context_window)
                                                                 )),
                                                         ),
                                                 ),
@@ -767,11 +776,7 @@ impl RenderOnce for ModelRolePicker {
                                                 div()
                                                     .text_size(px(10.5))
                                                     .text_color(theme.text_ghost)
-                                                    .child(if model.context_window >= 1_000_000 {
-                                                        format!("{}M", model.context_window / 1_000_000)
-                                                    } else {
-                                                        format!("{}k", model.context_window / 1000)
-                                                    }),
+                                                    .child(format_context_window(model.context_window)),
                                             )
                                             .child({
                                                 let p = prov_id.clone();
