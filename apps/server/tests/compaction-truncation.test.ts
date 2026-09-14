@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   truncateHeadTail,
   truncateToolResultContent,
+  truncateToolResultWithMeta,
   truncateMessageToolResults,
 } from "@/agent/src/utils/text-truncate.js";
 import { estimateMessageTokens } from "@/agent/src/compaction/token-estimator.js";
@@ -74,6 +75,20 @@ console.log("Running compaction truncation tests...");
   assert.equal(tokensAfter < 1_000, true);
 
   console.log("  ✅ truncateMessageToolResults bounds oversized tool results in AgentMessage");
+}
+
+// 4. truncateToolResultWithMeta marks shortened content (P0-B5)
+{
+  const big = truncateToolResultWithMeta("z".repeat(10_000), 8_000);
+  assert.ok(typeof big.content === "string" && (big.content as string).length < 10_000);
+  assert.equal(big.truncation?.truncated, true);
+  assert.equal(big.truncation?.originalChars, 10_000);
+  assert.ok(big.truncation!.outputChars < 10_000);
+
+  const small = truncateToolResultWithMeta("tiny", 8_000);
+  assert.equal(small.content, "tiny");
+  assert.equal(small.truncation, undefined);
+  console.log("  ✅ truncation metadata distinguishes partial from failed results");
 }
 
 console.log("All compaction truncation tests passed! ✨");

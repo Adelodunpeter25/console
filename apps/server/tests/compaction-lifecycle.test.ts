@@ -208,4 +208,105 @@ const testModel: Model = {
   console.log("  ✅ Repeated overflow terminates with a structured error");
 }
 
+// 6. Repeat read after truncation returns a diagnostic without re-executing (P0-B5)
+{
+  let executions = 0;
+  let calls = 0;
+  const mockStreamFn: StreamFn = async function* () {
+    calls++;
+    if (calls <= 2) {
+      yield { type: "toolCall", id: `c${calls}`, name: "read", argumentsJson: "" };
+      yield {
+        type: "toolCall",
+        id: `c${calls}`,
+        name: "read",
+        argumentsJson: '{"path":"same.txt"}',
+      };
+    } else {
+      yield { type: "text", text: "moving on" };
+    }
+  };
+
+  const agent = new Agent({
+    model: testModel,
+    tools: [
+      {
+        name: "read",
+        description: "read a file",
+        inputSchema: z.object({ path: z.string() }),
+        execute: async () => {
+          executions++;
+          return "y".repeat(50_000);
+        },
+      },
+    ],
+    streamFn: mockStreamFn,
+    approvalMode: "full-access",
+    compaction: { enabled: true, tokenThreshold: 1_000_000 },
+  });
+
+  const stream = agent.run("read the same file twice");
+  for await (const _ of stream) {
+    // drain
+  }
+
+  assert.equal(executions, 1, "truncated repeat must not re-execute");
+  const toolResults = agent.messages.filter((m) => m.role === "toolResult");
+  assert.equal(toolResults.length, 2);
+  const second = toolResults[1]!;
+  assert.ok(second.role === "toolResult");
+  assert.ok((second.results[0]!.content as string).includes("already returned a truncated result"));
+  console.log("  ✅ Truncated repeat returns a diagnostic instead of re-reading");
+}
+
+// 7. Identical requests are capped per run with a stop diagnostic (P0-B5)
+{
+  let executions = 0;
+  let calls = 0;
+  const mockStreamFn: StreamFn = async function* () {
+    calls++;
+    if (calls <= 4) {
+      yield { type: "toolCall", id: `d${calls}`, name: "read", argumentsJson: "" };
+      yield {
+        type: "toolCall",
+        id: `d${calls}`,
+        name: "read",
+        argumentsJson: '{"path":"other.txt"}',
+      };
+    } else {
+      yield { type: "text", text: "fine" };
+    }
+  };
+
+  const agent = new Agent({
+    model: testModel,
+    tools: [
+      {
+        name: "read",
+        description: "read a file",
+        inputSchema: z.object({ path: z.string() }),
+        execute: async () => {
+          executions++;
+          return "small result";
+        },
+      },
+    ],
+    streamFn: mockStreamFn,
+    approvalMode: "full-access",
+    compaction: { enabled: true, tokenThreshold: 1_000_000 },
+  });
+
+  const stream = agent.run("read in a loop");
+  for await (const _ of stream) {
+    // drain
+  }
+
+  assert.equal(executions, 3, "identical requests stop after 3 executions");
+  const toolResults = agent.messages.filter((m) => m.role === "toolResult");
+  const last = toolResults[toolResults.length - 1]!;
+  assert.ok(last.role === "toolResult");
+  assert.ok((last.results[0]!.content as string).includes("Stopping:"));
+  console.log("  ✅ Per-run repeat cap terminates loops with a diagnostic");
+}
+
 console.log("All compaction lifecycle integration tests passed! ✨");

@@ -7,6 +7,10 @@ const MAX_PROMPT_CHARS = 300;
 const MAX_ARG_CHARS = 100;
 /** Overall cap on the highlights section of the structural summary. */
 const MAX_HIGHLIGHTS_CHARS = 3_000;
+/** Max files with preserved content snippets in the file-facts section. */
+const MAX_FILE_FACTS = 5;
+/** Max characters kept per file fact snippet. */
+const MAX_FILE_FACT_CHARS = 400;
 
 function formatToolArgs(args: unknown): string {
   if (!args || typeof args !== "object") return "";
@@ -30,6 +34,55 @@ function formatToolArgs(args: unknown): string {
     return s.length > MAX_ARG_CHARS ? s.slice(0, MAX_ARG_CHARS) + "…" : s;
   }
   return "";
+}
+
+/**
+ * Bounded per-file content facts for reads in the discarded turns: path +
+ * opening snippet of the latest successful result. Lets a resumed session
+ * continue from preserved facts instead of blindly rereading every file.
+ */
+function formatFileFacts(messages: AgentMessage[]): string {
+  const pathByCallId = new Map<string, string>();
+  for (const msg of messages) {
+    if (msg.role !== "assistant") continue;
+    for (const part of msg.content) {
+      if (part.type !== "toolCall" || !part.call.name.toLowerCase().includes("read")) continue;
+      const args = (part.call.arguments ?? {}) as Record<string, unknown>;
+      const rawPath = args.path ?? args.filePath ?? args.targetFile;
+      if (typeof rawPath === "string" && rawPath.trim()) {
+        pathByCallId.set(part.call.id, rawPath.trim());
+      }
+    }
+  }
+
+  const facts: string[] = [];
+  const seen = new Set<string>();
+  for (const msg of messages) {
+    if (msg.role !== "toolResult") continue;
+    for (const res of msg.results) {
+      if (facts.length >= MAX_FILE_FACTS) break;
+      const path = pathByCallId.get(res.toolCallId);
+      if (!path || seen.has(path) || res.isError) continue;
+      seen.add(path);
+      const text =
+        typeof res.content === "string"
+          ? res.content
+          : (() => {
+              try {
+                return JSON.stringify(res.content) ?? "";
+              } catch {
+                return "";
+              }
+            })();
+      if (!text.trim()) continue;
+      const snippet =
+        text.length > MAX_FILE_FACT_CHARS ? text.slice(0, MAX_FILE_FACT_CHARS) + "…" : text;
+      facts.push(`## ${path}\n${snippet}`);
+    }
+  }
+
+  if (facts.length === 0) return "";
+  return `<file-facts>\n${facts.join("\n\n")}\n</file-facts>`;
 }
 
 /**
@@ -109,6 +162,11 @@ export function buildStructuralSummary(messages: AgentMessage[]): string {
 
   if (fileTree) {
     parts.push(``, fileTree);
+  }
+
+  const fileFacts = formatFileFacts(messages);
+  if (fileFacts) {
+    parts.push(``, fileFacts);
   }
 
   return parts.join("\n");

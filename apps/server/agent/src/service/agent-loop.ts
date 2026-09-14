@@ -17,10 +17,10 @@ import { estimatePayloadTokens } from "@/agent/src/compaction/token-estimator.js
 import {
   DEFAULT_TOOL_RESULT_MAX_CHARS,
   truncateMessageToolResults,
-  truncateToolResultContent,
+  truncateToolResultWithMeta,
 } from "../utils/text-truncate.js";
 import { EventStream } from "./event-stream.js";
-import { executeTool } from "./tool-executor.js";
+import { executeTool, toolCallKey } from "./tool-executor.js";
 import { streamOneTurn } from "./stream-turn.js";
 import { extractErrorMessage, isContextOverflowError } from "@/agent/src/utils/error.js";
 import type {
@@ -97,6 +97,11 @@ function runAgentLoop(
   const messages: AgentMessage[] = initialMessages.map((m) =>
     truncateMessageToolResults(m, maxToolChars),
   );
+  // Per-run duplicate-request ledger: key → last truncation state + issue count.
+  const seenRequests = new Map<
+    string,
+    { truncated: boolean; count: number; originalChars?: number; outputChars?: number }
+  >();
 
   const emit = (event: AgentSessionEvent) => {
     onEvent?.(event);
@@ -210,9 +215,42 @@ function runAgentLoop(
 
         emit({ type: "toolExecutionStart", calls: toolCalls });
 
-        const results = await Promise.all(
-          toolCalls.map((call) =>
-            executeTool(
+        // Duplicate-request protection: an identical request whose previous
+        // result was truncated is answered with a diagnostic (pointing at a
+        // narrower range) instead of re-executing and looping. Any single
+        // request key is also capped per run with a clear stop reason.
+        const callsWithResults = await Promise.all(
+          toolCalls.map(async (call) => {
+            const key = toolCallKey(call);
+            const seen = seenRequests.get(key);
+            if (seen?.truncated) {
+              const diagnostic = {
+                toolCallId: call.id,
+                toolName: call.name,
+                content:
+                  `This exact request already returned a truncated result ` +
+                  `(${seen.originalChars ?? 0} chars → ${seen.outputChars ?? 0} chars kept). ` +
+                  `Do not repeat it. Request a narrower or adjacent range instead ` +
+                  `(e.g. read specific line ranges), or continue with what you have.`,
+              };
+              await onToolResult?.(call, diagnostic);
+              emit({ type: "toolExecutionResult", result: diagnostic });
+              return { key, result: diagnostic };
+            }
+            if ((seen?.count ?? 0) >= 3) {
+              const diagnostic = {
+                toolCallId: call.id,
+                toolName: call.name,
+                content:
+                  `Stopping: the identical "${call.name}" request was already issued ` +
+                  `3 times this run. Continue with the results you have instead of ` +
+                  `repeating it.`,
+              };
+              await onToolResult?.(call, diagnostic);
+              emit({ type: "toolExecutionResult", result: diagnostic });
+              return { key, result: diagnostic };
+            }
+            const result = await executeTool(
               call,
               tools,
               approvalMode,
@@ -224,14 +262,22 @@ function runAgentLoop(
             ).then((result) => {
               emit({ type: "toolExecutionResult", result });
               return result;
-            }),
-          ),
+            });
+            return { key, result };
+          }),
         );
 
-        const boundedResults = results.map((r) => ({
-          ...r,
-          content: truncateToolResultContent(r.content, maxToolChars),
-        }));
+        const boundedResults = callsWithResults.map(({ key, result: r }) => {
+          const { content, truncation } = truncateToolResultWithMeta(r.content, maxToolChars);
+          const prior = seenRequests.get(key);
+          seenRequests.set(key, {
+            truncated: Boolean(truncation),
+            count: (prior?.count ?? 0) + 1,
+            originalChars: truncation?.originalChars,
+            outputChars: truncation?.outputChars,
+          });
+          return truncation ? { ...r, content, truncation } : { ...r, content };
+        });
 
         const toolResultMessage: ToolResultMessage = {
           role: "toolResult",

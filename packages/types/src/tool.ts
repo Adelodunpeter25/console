@@ -46,6 +46,16 @@ export interface ToolResult {
   toolName?: string;
   content: unknown;
   isError?: boolean;
+  /**
+   * Set when the content was mechanically truncated for context space.
+   * Marks the result as complete-but-partial so callers never mistake it
+   * for a failed read — request the next range instead of retrying.
+   */
+  truncation?: {
+    truncated: true;
+    originalChars: number;
+    outputChars: number;
+  };
 }
 
 export interface AgentTool<T extends z.ZodTypeAny = z.ZodTypeAny> {

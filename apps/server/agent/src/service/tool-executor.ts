@@ -5,6 +5,28 @@ import { validateToolInput } from "./tool-input.js";
 import type { AgentTool, AgentSessionEvent, ApprovalMode, PermissionRequest, ToolCall, ToolResult } from "@/agent/src/types/index.js";
 import type { AgentLoopConfig } from "./types.js";
 
+/** Stable JSON serialization with sorted keys for request deduplication. */
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`);
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+/**
+ * Duplicate-detection key for a tool call: tool name + normalized arguments.
+ * Used to stop re-issuing an identical request after a truncated result.
+ */
+export function toolCallKey(call: Pick<ToolCall, "name" | "arguments">): string {
+  return `${call.name}:${stableStringify(call.arguments ?? {})}`;
+}
+
 /**
  * Execute a single tool call with Zod parsing, Permission resolution, & error handling.
  */

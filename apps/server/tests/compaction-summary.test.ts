@@ -126,4 +126,38 @@ console.log("Running compaction summary tests...");
   console.log("  ✅ compactHistory reduces history and guarantees strict provider role alternation");
 }
 
+// File facts preserve bounded read content for resumed sessions (P0-B5)
+{
+  const messages: AgentMessage[] = [
+    { role: "user", content: "inspect the auth module" },
+    {
+      role: "assistant",
+      id: "a1",
+      content: [
+        {
+          type: "toolCall",
+          call: { id: "r1", name: "read", arguments: { path: "src/auth.ts" } },
+        },
+      ],
+      stopReason: "toolUse",
+    },
+    {
+      role: "toolResult",
+      results: [{ toolCallId: "r1", content: "export const SECRET = 1;\n".repeat(100) }],
+    },
+    { role: "user", content: "next" },
+    {
+      role: "assistant",
+      id: "a2",
+      content: [{ type: "text", text: "ok" }],
+      stopReason: "stop",
+    },
+  ];
+  const summary = buildStructuralSummary(messages);
+  assert.ok(summary.includes("<file-facts>"), "summary must carry a file-facts section");
+  assert.ok(summary.includes("## src/auth.ts"), "summary must name the read file");
+  assert.ok(summary.includes("export const SECRET"), "summary must preserve content head");
+  console.log("  ✅ structural summary preserves bounded per-file facts");
+}
+
 console.log("All compaction summary tests passed! ✨");

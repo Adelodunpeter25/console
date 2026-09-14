@@ -38,6 +38,47 @@ export function truncateToolResultContent(
   content: unknown,
   maxChars = DEFAULT_TOOL_RESULT_MAX_CHARS,
 ): unknown {
+  return truncateToolResultWithMeta(content, maxChars).content;
+}
+
+function contentChars(content: unknown): number {
+  if (typeof content === "string") return content.length;
+  if (content == null) return 0;
+  if (Array.isArray(content)) {
+    let total = 0;
+    for (const item of content) {
+      if (item && typeof item === "object" && "text" in item && typeof item.text === "string") {
+        total += item.text.length;
+      }
+    }
+    return total;
+  }
+  try {
+    return JSON.stringify(content)?.length ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Truncate tool result content, reporting whether truncation happened with
+ * before/after sizes. Metadata lets the agent loop distinguish a complete
+ * partial result from a failed read.
+ */
+export function truncateToolResultWithMeta(
+  content: unknown,
+  maxChars = DEFAULT_TOOL_RESULT_MAX_CHARS,
+): { content: unknown; truncation?: { truncated: true; originalChars: number; outputChars: number } } {
+  const originalChars = contentChars(content);
+  const truncated = truncateToolResultContentInner(content, maxChars);
+  const outputChars = contentChars(truncated);
+  if (outputChars >= originalChars) {
+    return { content: truncated };
+  }
+  return { content: truncated, truncation: { truncated: true, originalChars, outputChars } };
+}
+
+function truncateToolResultContentInner(content: unknown, maxChars: number): unknown {
   if (maxChars <= 0 || content == null) {
     return content;
   }
