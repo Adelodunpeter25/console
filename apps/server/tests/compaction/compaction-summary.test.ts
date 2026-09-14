@@ -160,4 +160,61 @@ console.log("Running compaction summary tests...");
   console.log("  ✅ structural summary preserves bounded per-file facts");
 }
 
+// Structural upgrades: request rollup, longer original goal, error filtering
+{
+  const samePrompt = "Do the auth refactor work items now";
+  const longGoal = `Goal: ${"migrate every endpoint to the new auth middleware ".repeat(12)}`;
+  const messages: AgentMessage[] = [
+    { role: "user", content: longGoal },
+    {
+      role: "assistant",
+      id: "a0",
+      content: [{ type: "text", text: "Error: Our servers are currently overloaded. Please try again later." }],
+      stopReason: "stop",
+    },
+    { role: "user", content: samePrompt },
+    {
+      role: "assistant",
+      id: "a1",
+      content: [{ type: "text", text: "Starting on it." }],
+      stopReason: "stop",
+    },
+    { role: "user", content: samePrompt },
+    {
+      role: "assistant",
+      id: "a2",
+      content: [{ type: "text", text: "Continuing." }],
+      stopReason: "stop",
+    },
+    { role: "user", content: samePrompt },
+    {
+      role: "assistant",
+      id: "a3",
+      content: [{ type: "text", text: "Done." }],
+      stopReason: "stop",
+    },
+  ];
+  const summary = buildStructuralSummary(messages);
+
+  // Repeated identical prompts collapse to one counted line.
+  const requestLines = summary.split("\n").filter((l) => l.startsWith("- User requested"));
+  assert.ok(
+    requestLines.some((l) => l.includes("(3x)") && l.includes(samePrompt)),
+    "repeats must roll up with a count",
+  );
+  assert.equal(
+    requestLines.filter((l) => l.includes(samePrompt)).length,
+    1,
+    "repeated prompt must appear once",
+  );
+
+  // Original goal keeps a longer budget than follow-ups.
+  assert.ok(summary.includes(longGoal.slice(0, 500)), "first prompt must keep its detail");
+
+  // Provider error boilerplate is not a conclusion.
+  assert.ok(!summary.includes("currently overloaded"), "error text must not pose as a conclusion");
+  assert.ok(summary.includes("Starting on it."), "real conclusions are kept");
+  console.log("  ✅ structural summary rolls up repeats, keeps the goal, drops error noise");
+}
+
 console.log("All compaction summary tests passed! ✨");

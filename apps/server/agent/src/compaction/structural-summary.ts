@@ -3,6 +3,8 @@ import { extractFileOps, formatFileTree } from "./file-tracker.js";
 
 /** Max characters for user prompts in structural summary. */
 const MAX_PROMPT_CHARS = 300;
+/** Longer budget for the very first user prompt — it states the original goal. */
+const MAX_FIRST_PROMPT_CHARS = 600;
 /** Max characters for tool arg summaries in structural summary. */
 const MAX_ARG_CHARS = 100;
 /** Overall cap on the highlights section of the structural summary. */
@@ -93,14 +95,34 @@ export function buildStructuralSummary(messages: AgentMessage[]): string {
   let userTurnsCount = 0;
   let toolCallsCount = 0;
 
+  // Pre-pass: frequency of each normalized user request, so retries of the
+  // same prompt collapse to one line with a count instead of spamming the log.
+  const requestFrequency = new Map<string, number>();
+  for (const msg of messages) {
+    if (msg.role !== "user") continue;
+    const text = (msg.content?.trim() || "").replace(/\n+/g, " ");
+    if (text) requestFrequency.set(text, (requestFrequency.get(text) ?? 0) + 1);
+  }
+  const reportedRequests = new Set<string>();
+  let firstUserSeen = false;
+
   for (const msg of messages) {
     if (msg.role === "user") {
       userTurnsCount++;
       const text = msg.content?.trim() || "";
       if (text) {
-        const truncated = text.length > MAX_PROMPT_CHARS ? text.slice(0, MAX_PROMPT_CHARS) + "…" : text;
-        highlights.push(`- User requested: "${truncated.replace(/\n+/g, " ")}"`);
+        const flat = text.replace(/\n+/g, " ");
+        if (reportedRequests.has(flat)) continue;
+        reportedRequests.add(flat);
+        const repeats = requestFrequency.get(flat) ?? 1;
+        // The original goal gets a longer budget; repeats get a count suffix.
+        const budget = !firstUserSeen ? MAX_FIRST_PROMPT_CHARS : MAX_PROMPT_CHARS;
+        const truncated = flat.length > budget ? flat.slice(0, budget) + "…" : flat;
+        highlights.push(
+          `- User requested${repeats > 1 ? ` (${repeats}x)` : ""}: "${truncated}"`,
+        );
       }
+      firstUserSeen = true;
     } else if (msg.role === "assistant") {
       const calls: string[] = [];
       for (const part of msg.content) {
@@ -117,6 +139,9 @@ export function buildStructuralSummary(messages: AgentMessage[]): string {
         .filter((part): part is Extract<typeof part, { type: "text" | "thinking" }> => part.type === "text" || part.type === "thinking")
         .map((part) => part.text.trim())
         .filter(Boolean)
+        // Provider failure boilerplate ("Error: ... overloaded ...") is not a
+        // conclusion — drop it so retries don't read as decisions.
+        .filter((t) => !/^\s*error:/i.test(t))
         .join(" ");
       if (text) {
         const truncated = text.length > MAX_PROMPT_CHARS ? text.slice(0, MAX_PROMPT_CHARS) + "…" : text;
