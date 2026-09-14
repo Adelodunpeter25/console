@@ -53,6 +53,11 @@ console.log("Running Claude provider tests...");
   assert.ok(authUrl.startsWith("https://claude.ai/oauth/authorize?"));
   const params = new URL(authUrl).searchParams;
   assert.equal(params.get("client_id"), CLAUDE_CLIENT_ID);
+  assert.match(
+    CLAUDE_CLIENT_ID,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    "client_id must be a valid UUID",
+  );
   assert.equal(params.get("response_type"), "code");
   assert.equal(params.get("code_challenge"), "challenge-xyz");
   assert.equal(params.get("code_challenge_method"), "S256");
