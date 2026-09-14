@@ -241,30 +241,14 @@ export class RunService {
     const prompt = expandPromptRefs(dto.prompt.trim(), session?.header.cwd ?? process.cwd());
     if (!session) {
       const cwd = process.cwd();
-      const autoTitle = prompt.length > 35 ? `${prompt.slice(0, 35)}...` : prompt;
       const header = this.sessionStorage.createSession({
         id: sessionId,
-        title: autoTitle,
+        title: "New Session",
         cwd,
         modelId: dto.modelId || DEFAULT_FALLBACK_MODEL,
         provider: dto.provider || "antigravity",
       });
       session = { header, messages: [] };
-    } else {
-      const currentTitle = session.header.title?.trim();
-      const isGenericTitle =
-        !currentTitle ||
-        currentTitle === "New Session" ||
-        currentTitle === "New mobile session" ||
-        currentTitle === "New Chat" ||
-        currentTitle === "New chat" ||
-        currentTitle === "Untitled";
-
-      if (isGenericTitle) {
-        const autoTitle = prompt.length > 35 ? `${prompt.slice(0, 35)}...` : prompt;
-        this.sessionStorage.updateTitle(sessionId, autoTitle);
-        session.header.title = autoTitle;
-      }
     }
 
     if (session.messages.length > 0 && this.sessionStorage.repairSession(sessionId)) {
@@ -351,14 +335,25 @@ export class RunService {
     if (shouldGenerateTitle) {
       void generateSessionTitle(prompt, model, streamFn)
         .then((title) => {
-          if (!title) return;
+          if (!title) {
+            // Fallback to truncated prompt if LLM returns empty
+            const fallbackTitle = prompt.length > 35 ? `${prompt.slice(0, 35)}...` : prompt;
+            this.sessionStorage.updateTitle(sessionId, fallbackTitle);
+            hub.broadcast({ type: "sessionTitleUpdated", title: fallbackTitle });
+            return;
+          }
           const latest = this.sessionStorage.loadSession(sessionId);
           if (latest && isGenericSessionTitle(latest.header.title)) {
             this.sessionStorage.updateTitle(sessionId, title);
             hub.broadcast({ type: "sessionTitleUpdated", title });
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          // Fallback to truncated prompt if LLM generation fails
+          const fallbackTitle = prompt.length > 35 ? `${prompt.slice(0, 35)}...` : prompt;
+          this.sessionStorage.updateTitle(sessionId, fallbackTitle);
+          hub.broadcast({ type: "sessionTitleUpdated", title: fallbackTitle });
+        });
     }
     agent.loadHistory(session.messages);
 
