@@ -13,8 +13,9 @@
 - [x] Mechanical shake, 8k cap, spares recent turns (`agent/src/compaction/shake.ts`)
 - [x] Boundary-safe cut points (`cut-point.ts` — `isToolCallSafe`, never orphans toolResult)
 - [x] Structural summaries + file tracker (`structural-summary.ts`, `file-tracker.ts`)
-- [x] Basic tests (`compaction-cutpoint/lifecycle/summary/truncation.test.ts`)
+- [x] Basic tests (`compaction/cutpoint/lifecycle/summary/truncation.test.ts`)
 - [x] P0 bugs B0–B5 (implemented; see items below)
+- [x] Smol-model summarizer module (`llm-compaction.ts`) — used only with `summaryStrategy: "llm"`; structural stays the default
 
 **Decisions (locked):**
 
@@ -29,7 +30,7 @@
 **Status: done.**
 **Problem:** `shakeConversation` spares the last 3 user turns via `protectedRecentStart`, and `compactHistory` (`index.ts:84`) returns early for `messages.length <= 4`. A 150KB tool result on turn 1 sails through untouched and overflows.
 **Fix:**
-- `shakeConversation(messages, maxChars, { emergency })`: `emergency: true` ignores the protected suffix and truncates oversized tool outputs everywhere down to `emergencyToolResultChars` (2,000).
+- `shakeConversation(messages, maxChars, protectedFromIndex, emergency = false)`: `emergency: true` ignores the protected suffix and truncates oversized tool outputs everywhere down to `emergencyToolResultChars` (2,000).
 - `compactHistory`: always shake first (already does); when `messages.length <= 4`, still return shaken messages **and** report whether shaking alone got under threshold so the caller can escalate.
 **Acceptance:** 2-message history with a 1.5MB tool result compacts without throwing and without "History too short" aborting the pipeline.
 
@@ -69,9 +70,9 @@
 **Status: done.**
 **Problem (observed incident):** after compaction the agent kept file *names* but lost contents, treated truncated re-reads as failures, and re-read the same files in a loop — no retry budget, no truncation awareness.
 **Fix:**
-- Truncation becomes explicit metadata on tool results (`truncated`, `startLine`/`endLine`/`totalLines`, content fingerprint), never shaped like a failure.
-- Duplicate-request protection: key = tool + normalized path + range; at most one automatic retry per key; repeat after truncation returns a diagnostic pointing at the next non-overlapping range.
-- Compaction preserves bounded per-file facts (path, ranges, latest read result, `complete`|`truncated`|`unread`) outside the message history so checkpoints stay usable.
+- Truncation becomes explicit metadata on tool results (`truncation: { truncated, originalChars, outputChars }`), never shaped like a failure.
+- Duplicate-request protection: key = tool name + stable-serialized arguments; a repeat after a truncated result returns a diagnostic pointing at a narrower range instead of re-executing; any identical key is capped at 3 executions per run with a stop diagnostic.
+- Compaction preserves bounded per-file facts (path + opening content snippet, max 5 files) in a `<file-facts>` summary section so checkpoints stay usable.
 **Acceptance:** truncated read → continuation range request (never the same full read); identical repeat → diagnostic + stop; compacted session continues from preserved file facts without rereading everything.
 
 ## 2. Phase 1 — exact local counting with tokenizer packages (after P0)
@@ -103,6 +104,7 @@ Use the latest provider-reported usage block as the measured prefix; estimate on
 After a compaction pass, require usage to re-cross a higher threshold (0.85→0.90 band) before compacting again. Emergency mid-turn shake stays exempt — avoiding a 400 beats cache preservation.
 
 ### H3. Telemetry enrichment
+**Status: partial** — `tier`, `trigger`, and `tokenCountSource` already ship on the `compaction` session event. Remaining: `recoveryAttempt`.
 Extend the existing `compaction` session event with `tier` (`shake` | `summarize` | `emergency_recovery`), `trigger` (`pre_turn` | `mid_turn` | `overflow_retry`), `tokensBefore/After`, `tokenCountSource`, `recoveryAttempt`. No prompt contents in logs.
 
 ## 4. Deferred (P3)
@@ -111,15 +113,15 @@ Extend the existing `compaction` session event with `tier` (`shake` | `summarize
 - Interrupted-stream recovery (partial assistant frames on abort).
 - Server-side Anthropic `context_management` compaction edits (opt-in beta; revisit once P0 is stable).
 
-## 5. Test Plan
+## 5. Test Plan — done
 
 Map to existing files; run with `cd apps/server && bun tests/<area>/<name>.test.ts`:
 
-- `compaction/compaction-estimator.test.ts` (new): payload completeness (system+tools+history), code density, provider-count fail-open, threshold triggers per H0 values. Phase 1 adds per-family golden-payload accuracy tests (T0).
-- `compaction/compaction-short-session.test.ts` (new): B0 acceptance (2-message + 1.5MB result).
-- `compaction/compaction-lifecycle.test.ts` (extend): B1 mid-turn shake, B2 overflow→retry-once→terminal-error.
-- `compaction/compaction-truncation.test.ts` (extend): truncation metadata shape, continuation-range behavior, duplicate-read diagnostic (B5).
-- Claude converter tests (`providers/claude.test.ts`, extend): B4 empty-`tool_result` guard.
+- [x] `compaction/compaction-estimator.test.ts`: payload completeness (system+tools+history), code density, provider-count fail-open, threshold triggers per H0 values. Phase 1 adds per-family golden-payload accuracy tests (T0).
+- [x] `compaction/compaction-short-session.test.ts`: B0 acceptance (2-message + 1.5MB result).
+- [x] `compaction/compaction-lifecycle.test.ts`: B1 mid-turn shake, B2 overflow→retry-once→terminal-error, B5 repeat diagnostics + cap.
+- [x] `compaction/compaction-truncation.test.ts`: truncation metadata shape (B5).
+- [x] Claude converter tests (`providers/claude.test.ts`): B4 empty-`tool_result` guard.
 
 ## 6. Out of Scope (explicitly parked)
 
