@@ -14,6 +14,7 @@ import { createSubagentTool } from "@/agent/src/tools/subagent.js";
 import { bindToolCwd } from "@console/types";
 import { randomUUID } from "node:crypto";
 import type { CompactionOptions } from "../compaction/index.js";
+import { createSmolSummarizer } from "../compaction/index.js";
 import type { CompactionSummaryFn } from "./types.js";
 import { hasConfiguredRole, resolveModelRole } from "./role-resolver.js";
 import { agentLoop, agentLoopContinue, type AgentLoopConfig, type StreamFn } from "./agent-loop.js";
@@ -117,23 +118,9 @@ export class Agent {
       };
     this.summarizeCompaction = options.summarizeCompaction;
     if (!this.summarizeCompaction && this._compaction?.summaryStrategy === "llm") {
-      this.summarizeCompaction = async (messages, signal) => {
-        if (!(await hasConfiguredRole("smol"))) throw new Error("No smol model configured");
-        const smolModel = await resolveModelRole("smol", this._model);
-        let summary = "";
-        const summaryStreamFn = this._getStreamFnForModel?.(smolModel) ?? this._streamFn;
-        for await (const delta of summaryStreamFn({
-          model: smolModel,
-          systemPrompt: "Summarize the prior coding conversation for future continuation. Preserve decisions, files, changes, unresolved work, and important constraints. Return only the summary.",
-          messages,
-          tools: [],
-          signal,
-        })) {
-          if (delta.type === "text") summary += delta.text;
-        }
-        if (!summary.trim()) throw new Error("Empty compaction summary");
-        return summary.trim();
-      };
+      const getFallbackModel = () => this._model;
+      const getStreamFn = (model: Model) => this._getStreamFnForModel?.(model) ?? this._streamFn;
+      this.summarizeCompaction = createSmolSummarizer({ getFallbackModel, getStreamFn });
     }
 
     if (options.compaction === false) {

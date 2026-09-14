@@ -13,6 +13,7 @@ import { buildStructuralSummary } from "./structural-summary.js";
 import { protectedRecentStart, shakeConversation } from "./shake.js";
 
 export { protectedRecentStart, shakeConversation } from "./shake.js";
+export { createSmolSummarizer, packSummaryInput, buildSummaryTranscript } from "./llm-compaction.js";
 
 export * from "./token-estimator.js";
 export * from "./cut-point.js";
