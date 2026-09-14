@@ -60,6 +60,7 @@ impl RenderOnce for AccountsPage {
                             {
                                 "antigravity" => Some(&st.antigravity),
                                 "codex" | "openai" => Some(&st.codex),
+                                "claude" | "anthropic" => Some(&st.claude),
                                 _ => None,
                             });
 

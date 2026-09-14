@@ -99,7 +99,7 @@ export const DEFAULT_CLAUDE_MODELS: Model[] = [
 ].map((id) => ({ id, provider: "claude" as const, contextWindow: 200_000, supportsImages: true }));
 
 /** Providers that are temporarily disabled (kept in code but hidden from catalog). */
-const DISABLED_PROVIDERS = new Set<ProviderId>(["cline"]);
+const DISABLED_PROVIDERS = new Set<ProviderId>(["cline", "devin"]);
 
 export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
   antigravity: {

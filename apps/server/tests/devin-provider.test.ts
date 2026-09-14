@@ -588,23 +588,27 @@ function fetchMockWithAuth(chatResponder: (url: string) => Response | Promise<Re
   }
 }
 
-// 22. Provider catalog advertises Devin (no static model seed — discovery-driven)
+// 22. Devin is temporarily disabled — kept in code but hidden from the catalog
 {
-  const { PROVIDER_CATALOG, listProviders, DEFAULT_DEVIN_MODELS } = await import(
+  const { PROVIDER_CATALOG, listProviders, getProvider, DEFAULT_DEVIN_MODELS } = await import(
     "@/agent/src/commands/provider-registry.js"
   );
   assert.deepEqual(DEFAULT_DEVIN_MODELS, [], "Devin has no static model seed");
 
   const devinEntry = PROVIDER_CATALOG.devin;
-  assert.ok(devinEntry, "devin should be in PROVIDER_CATALOG");
+  assert.ok(devinEntry, "devin should stay in PROVIDER_CATALOG");
   assert.equal(devinEntry!.name, "devin");
   assert.equal(devinEntry!.authMethod, "oauth");
   assert.ok(typeof devinEntry!.getStreamFn === "function");
   assert.deepEqual(devinEntry!.models, [], "Devin catalog starts empty until discovery runs");
 
-  const listed = listProviders().find((p) => p.name === "devin");
-  assert.ok(listed, "devin should be returned by listProviders()");
-  console.log("  ✅ PROVIDER_CATALOG and listProviders include devin (no static seed)");
+  assert.equal(getProvider("devin"), undefined, "devin should be hidden by getProvider()");
+  assert.equal(
+    listProviders().find((p) => p.name === "devin"),
+    undefined,
+    "devin should be hidden from listProviders()",
+  );
+  console.log("  ✅ devin is disabled: kept in code, hidden from catalog");
 }
 
 console.log("Devin provider tests passed!\n");

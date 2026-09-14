@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 pub enum OAuthProviderId {
     Antigravity,
     Codex,
+    Claude,
 }
 
 impl OAuthProviderId {
@@ -15,6 +16,7 @@ impl OAuthProviderId {
         match self {
             Self::Antigravity => "antigravity",
             Self::Codex => "codex",
+            Self::Claude => "claude",
         }
     }
 }
@@ -39,6 +41,7 @@ pub struct ProviderAuthStatus {
 pub struct AuthStatusResponse {
     pub antigravity: ProviderAuthStatus,
     pub codex: ProviderAuthStatus,
+    pub claude: ProviderAuthStatus,
 }
 
 /// Response of `POST /api/auth/login/url`.
