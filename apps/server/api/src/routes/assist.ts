@@ -5,6 +5,7 @@
  * Both resolve the session's working directory as the search root.
  */
 import { Hono, type Context } from "hono";
+import { INIT_COMMAND_DESCRIPTION, INIT_COMMAND_NAME } from "@/agent/src/commands/init.js";
 import { discoverSkills } from "@/agent/src/systemprompt/discover-skills.js";
 import { getSharedSessionStorage } from "@/agent/src/session/storage.js";
 import { searchFiles } from "@/api/src/services/assist.service.js";
@@ -20,13 +21,16 @@ async function handleCommands(c: Context) {
 
   const skills = await discoverSkills({ cwd });
 
-  const commands: SlashCommandInfo[] = skills
-    .filter((s) => !s.hide)
-    .map((skill) => ({
-      name: skill.name,
-      description: skill.description ?? "",
-      builtin: false,
-    }));
+  const commands: SlashCommandInfo[] = [
+    { name: INIT_COMMAND_NAME, description: INIT_COMMAND_DESCRIPTION, builtin: true },
+    ...skills
+      .filter((s) => !s.hide)
+      .map((skill) => ({
+        name: skill.name,
+        description: skill.description ?? "",
+        builtin: false,
+      })),
+  ];
 
   return c.json({ success: true, data: commands });
 }

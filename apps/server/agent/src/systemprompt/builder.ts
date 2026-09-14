@@ -18,6 +18,7 @@ import type {
   Rule,
   Skill,
 } from "@/agent/src/types/index.js";
+import { INIT_COMMAND_DESCRIPTION, INIT_COMMAND_DETAILS, INIT_COMMAND_NAME } from "@/agent/src/commands/init.js";
 import { DEFAULT_IDENTITY, DEFAULT_TOOL_NAMES } from "./defaults.js";
 import { discoverContextFiles } from "./discover-agents-md.js";
 import { discoverCommands } from "./discover-commands.js";
@@ -152,14 +153,14 @@ function renderWorkstation(env: DiscoveredContext["environment"], approvalMode?:
 }
 
 function renderCommands(commands: DiscoveredContext["commands"]): string {
-  if (commands.length === 0) return "";
-  const lines = commands.map((c) => {
-    const desc = c.description?.trim() || "user-defined command";
-    return `- /${c.name}: ${desc}`;
-  });
-  return ["# Available slash commands (user-defined; may be invoked by the user)", ...lines].join(
-    "\n",
-  );
+  const lines = [
+    `- /${INIT_COMMAND_NAME}: ${INIT_COMMAND_DESCRIPTION}. ${INIT_COMMAND_DETAILS}`,
+    ...commands.map((c) => {
+      const desc = c.description?.trim() || "user-defined command";
+      return `- /${c.name}: ${desc}`;
+    }),
+  ];
+  return ["# Available slash commands (may be invoked by the user)", ...lines].join("\n");
 }
 
 /**
