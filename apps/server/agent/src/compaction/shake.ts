@@ -1,17 +1,24 @@
 import type { AgentMessage } from "@/agent/src/types/index.js";
 
+/** Character budget per tool result during emergency shaking. */
+export const EMERGENCY_TOOL_RESULT_MAX_CHARS = 2_000;
+
 /**
  * Mechanically reduce old tool output before throwing away whole conversation turns.
- * The protected suffix is intentionally left byte-for-byte unchanged.
+ * The protected suffix is intentionally left byte-for-byte unchanged — unless
+ * `emergency` is set, in which case oversized outputs are truncated everywhere
+ * (overflow prevention/recovery takes priority over recency).
  */
 export function shakeConversation(
   messages: AgentMessage[],
   maxToolResultChars = 8_000,
   protectedFromIndex = messages.length,
+  emergency = false,
 ): AgentMessage[] {
   let changed = false;
   const shaken = messages.map((message, index) => {
-    if (index >= protectedFromIndex || message.role !== "toolResult") return message;
+    if (!emergency && (index >= protectedFromIndex || message.role !== "toolResult")) return message;
+    if (message.role !== "toolResult") return message;
 
     const results = message.results.map((result) => {
       if (result.isError || typeof result.content !== "string" || result.content.length <= maxToolResultChars) {

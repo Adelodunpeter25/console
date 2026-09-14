@@ -6,9 +6,9 @@
  * Inspired by oh-my-pi/packages/agent/src/compaction/.
  */
 import crypto from "node:crypto";
-import type { AgentMessage, Model } from "@/agent/src/types/index.js";
+import type { AgentMessage, AgentTool, Model } from "@/agent/src/types/index.js";
 import { findCutPoint } from "./cut-point.js";
-import { estimateMessageTokens } from "./token-estimator.js";
+import { estimateMessageTokens, estimatePayloadTokens } from "./token-estimator.js";
 import { buildStructuralSummary } from "./structural-summary.js";
 import { protectedRecentStart, shakeConversation } from "./shake.js";
 
@@ -32,6 +32,8 @@ export interface CompactionOptions {
   minimumRecentTurns?: number;
   /** Max characters allowed per tool result before truncation. Default: 8,000 */
   maxToolResultChars?: number;
+  /** Max characters per tool result during emergency shaking. Default: 2,000 */
+  emergencyToolResultChars?: number;
   /** Strategy for generating summary text. Default: "structural" */
   summaryStrategy?: "structural" | "llm";
 }
@@ -46,18 +48,25 @@ export interface CompactionResult {
 
 /**
  * Determine if conversation history requires compaction.
+ *
+ * Pass full payload context (system prompt + tools) so the estimate covers
+ * the actual wire payload instead of messages alone. Falls back to the
+ * message-only heuristic when omitted.
  */
 export function shouldCompact(
   messages: AgentMessage[],
   model: Model,
   options: CompactionOptions = {},
+  payload?: { systemPrompt?: string; tools?: Pick<AgentTool, "name" | "description">[] },
 ): boolean {
   if (options.enabled === false) {
     return false;
   }
 
   const { maxThresholdRatio = 0.85, tokenThreshold } = options;
-  const tokens = estimateMessageTokens(messages);
+  const tokens = payload
+    ? estimatePayloadTokens({ messages, ...payload }).tokens
+    : estimateMessageTokens(messages);
   const limit = tokenThreshold ?? Math.floor(model.contextWindow * maxThresholdRatio);
 
   return tokens >= limit;
@@ -73,11 +82,18 @@ export function compactHistory(
   const tokensBefore = estimateMessageTokens(messages);
   const keepRecent = options.keepRecentTokens ?? 40_000;
   const minimumRecentTurns = options.minimumRecentTurns ?? 3;
-  const shakenMessages = shakeConversation(
-    messages,
-    options.maxToolResultChars ?? 8_000,
-    protectedRecentStart(messages, minimumRecentTurns),
-  );
+  const maxToolResultChars = options.maxToolResultChars ?? 8_000;
+  // Short sessions have no summarizable history, but their tool outputs still
+  // need ceilings — shake the whole history unprotected instead of sparing
+  // every turn via the protected suffix.
+  const isShortSession = messages.length <= 4;
+  const shakenMessages = isShortSession
+    ? shakeConversation(messages, maxToolResultChars, messages.length, true)
+    : shakeConversation(
+        messages,
+        maxToolResultChars,
+        protectedRecentStart(messages, minimumRecentTurns),
+      );
 
   const { firstKeptIndex, isUserBoundary } = findCutPoint(shakenMessages, keepRecent, minimumRecentTurns);
 
