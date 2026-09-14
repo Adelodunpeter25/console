@@ -517,14 +517,31 @@ function sseResponse(lines: string[]): Response {
   process.env.CLAUDE_OAUTH_TOKEN = "test-oauth-token";
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () =>
-    new Response(JSON.stringify({ data: [{ id: "claude-opus-4-6" }, { id: "claude-sonnet-4-6" }] }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    })) as unknown as typeof fetch;
+    new Response(
+      JSON.stringify({
+        data: [
+          {
+            id: "claude-opus-4-6",
+            display_name: "Claude Opus 4.6",
+            max_input_tokens: 200000,
+            capabilities: { image_input: { supported: true } },
+          },
+          { id: "claude-sonnet-4-6" },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    )) as unknown as typeof fetch;
   try {
     const models = await fetchClaudeModels();
     assert.ok(models);
     assert.deepEqual(models!.map((m) => m.id), ["claude-opus-4-6", "claude-sonnet-4-6"]);
+    assert.equal(models![0]!.contextWindow, 200000);
+    assert.equal(models![0]!.supportsImages, true);
+    // Nullable fields fall back to registry defaults downstream.
+    assert.equal(models![1]!.contextWindow, undefined);
     console.log("  ✅ fetchClaudeModels maps /v1/models entries");
   } finally {
     globalThis.fetch = originalFetch;

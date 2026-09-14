@@ -237,8 +237,8 @@ export async function fetchModelsForProvider(
         discovered = discoveredClaude.map((m) => ({
           id: m.id,
           provider: "claude" as const,
-          contextWindow: 200_000,
-          supportsImages: true,
+          contextWindow: m.contextWindow ?? 200_000,
+          ...(m.supportsImages ? { supportsImages: true } : {}),
         }));
       }
     } else {

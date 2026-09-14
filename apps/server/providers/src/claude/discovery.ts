@@ -8,6 +8,17 @@ import { loadClaudeCredential, refreshClaudeIfNeeded } from "./oauth.js";
 
 export interface ClaudeDiscoveredModel {
   id: string;
+  contextWindow?: number;
+  supportsImages?: boolean;
+}
+
+interface ClaudeModelsApiEntry {
+  id?: string;
+  /** Maximum input context window — nullable, often omitted. */
+  max_input_tokens?: number | null;
+  capabilities?: {
+    image_input?: { supported?: boolean };
+  } | null;
 }
 
 export async function fetchClaudeModels(signal?: AbortSignal): Promise<ClaudeDiscoveredModel[] | null> {
@@ -22,10 +33,15 @@ export async function fetchClaudeModels(signal?: AbortSignal): Promise<ClaudeDis
     signal,
   });
   if (!response.ok) return null;
-  const payload = (await response.json()) as { data?: Array<{ id?: string }> };
+  const payload = (await response.json()) as { data?: ClaudeModelsApiEntry[] };
   const models = (payload.data ?? []).flatMap((entry) => {
     if (!entry.id) return [];
-    return [{ id: entry.id }];
+    const contextWindow =
+      typeof entry.max_input_tokens === "number" && entry.max_input_tokens > 0
+        ? entry.max_input_tokens
+        : undefined;
+    const supportsImages = entry.capabilities?.image_input?.supported;
+    return [{ id: entry.id, ...(contextWindow !== undefined ? { contextWindow } : {}), ...(supportsImages !== undefined ? { supportsImages } : {}) }];
   });
   return models.length > 0 ? models : null;
 }
