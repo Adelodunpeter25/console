@@ -160,6 +160,52 @@ console.log("Running compaction summary tests...");
   console.log("  ✅ structural summary preserves bounded per-file facts");
 }
 
+// File facts unwrap text envelopes and prefer newest reads
+{
+  const readMsg = (id: string, path: string, content: unknown): AgentMessage => ({
+    role: "assistant",
+    id: `a-${id}`,
+    content: [{ type: "toolCall", call: { id, name: "read", arguments: { path } } }],
+    stopReason: "toolUse",
+  });
+  const resultMsg = (id: string, content: unknown): AgentMessage => ({
+    role: "toolResult",
+    results: [{ toolCallId: id, content }],
+  });
+
+  const messages: AgentMessage[] = [
+    { role: "user", content: "inspect" },
+    readMsg("r1", "old.ts", [{ type: "text", text: "v1 body" }]),
+    resultMsg("r1", [{ type: "text", text: "v1 body" }]),
+    readMsg("r2", "a.ts", "a body"),
+    resultMsg("r2", "a body"),
+    readMsg("r3", "b.ts", "b body"),
+    resultMsg("r3", "b body"),
+    readMsg("r4", "c.ts", "c body"),
+    resultMsg("r4", "c body"),
+    readMsg("r5", "d.ts", "d body"),
+    resultMsg("r5", "d body"),
+    readMsg("r6", "e.ts", "e body"),
+    resultMsg("r6", "e body"),
+    readMsg("r7", "old.ts", "v2 body"),
+    resultMsg("r7", "old.ts v2 body"),
+  ];
+  const summary = buildStructuralSummary(messages);
+
+  // Envelope framing is unwrapped to raw text.
+  assert.ok(!summary.includes('"type":"text"'), "envelope framing must not leak into facts");
+  assert.ok(summary.includes("v1 body") || summary.includes("v2 body"));
+
+  // Newest 5 files kept; oldest evicted; re-read keeps latest content.
+  for (const f of ["b.ts", "c.ts", "d.ts", "e.ts"]) {
+    assert.ok(summary.includes(`## ${f}`), `facts must keep newest file ${f}`);
+  }
+  assert.ok(!summary.includes("## a.ts"), "oldest file must fall off past the cap");
+  assert.ok(summary.includes("old.ts v2 body"), "re-read must keep the latest content");
+  assert.ok(!summary.includes("v1 body"), "stale content must not survive a re-read");
+  console.log("  ✅ file facts unwrap envelopes and prefer newest reads");
+}
+
 // Structural upgrades: request rollup, longer original goal, error filtering
 {
   const samePrompt = "Do the auth refactor work items now";

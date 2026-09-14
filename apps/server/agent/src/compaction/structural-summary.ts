@@ -39,9 +39,34 @@ function formatToolArgs(args: unknown): string {
 }
 
 /**
+ * Extract plain text from a tool result, unwrapping single/pure
+ * `{type: "text", text}` content envelopes instead of stringifying the
+ * framing around them.
+ */
+function resultText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const texts = content
+      .filter(
+        (item): item is { type: string; text: string } =>
+          !!item && typeof item === "object" && (item as { type?: unknown }).type === "text" &&
+          typeof (item as { text?: unknown }).text === "string",
+      )
+      .map((item) => item.text);
+    if (texts.length > 0) return texts.join("\n");
+  }
+  try {
+    return JSON.stringify(content) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/**
  * Bounded per-file content facts for reads in the discarded turns: path +
- * opening snippet of the latest successful result. Lets a resumed session
- * continue from preserved facts instead of blindly rereading every file.
+ * opening snippet of the latest successful result. Newest reads win — a
+ * resumed session needs current file state, not the opening sweep. Lets a
+ * resumed session continue from preserved facts instead of blindly rereading.
  */
 function formatFileFacts(messages: AgentMessage[]): string {
   const pathByCallId = new Map<string, string>();
@@ -57,34 +82,37 @@ function formatFileFacts(messages: AgentMessage[]): string {
     }
   }
 
-  const facts: string[] = [];
-  const seen = new Set<string>();
+  const toolResults: Array<{ path: string; text: string }> = [];
   for (const msg of messages) {
     if (msg.role !== "toolResult") continue;
     for (const res of msg.results) {
-      if (facts.length >= MAX_FILE_FACTS) break;
       const path = pathByCallId.get(res.toolCallId);
-      if (!path || seen.has(path) || res.isError) continue;
-      seen.add(path);
-      const text =
-        typeof res.content === "string"
-          ? res.content
-          : (() => {
-              try {
-                return JSON.stringify(res.content) ?? "";
-              } catch {
-                return "";
-              }
-            })();
+      if (!path || res.isError) continue;
+      const text = resultText(res.content);
       if (!text.trim()) continue;
-      const snippet =
-        text.length > MAX_FILE_FACT_CHARS ? text.slice(0, MAX_FILE_FACT_CHARS) + "…" : text;
-      facts.push(`## ${path}\n${snippet}`);
+      toolResults.push({ path, text });
     }
   }
 
-  if (facts.length === 0) return "";
-  return `<file-facts>\n${facts.join("\n\n")}\n</file-facts>`;
+  // Newest first, one entry per path — the latest read of a file is its
+  // current state. Output stays chronological for stable reading.
+  const seen = new Set<string>();
+  const picked: Array<{ path: string; text: string }> = [];
+  for (let i = toolResults.length - 1; i >= 0 && picked.length < MAX_FILE_FACTS; i--) {
+    const entry = toolResults[i]!;
+    if (seen.has(entry.path)) continue;
+    seen.add(entry.path);
+    picked.unshift(entry);
+  }
+
+  const rendered = picked.map(({ path, text }) => {
+    const snippet =
+      text.length > MAX_FILE_FACT_CHARS ? text.slice(0, MAX_FILE_FACT_CHARS) + "…" : text;
+    return `## ${path}\n${snippet}`;
+  });
+
+  if (rendered.length === 0) return "";
+  return `<file-facts>\n${rendered.join("\n\n")}\n</file-facts>`;
 }
 
 /**
