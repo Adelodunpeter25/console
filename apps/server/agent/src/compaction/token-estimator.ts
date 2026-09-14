@@ -69,8 +69,8 @@ export interface EstimatePayloadOptions {
  * Conservative wire-payload estimate: messages + system prompt + tool
  * definitions. Prose counts at ~4 chars/token; code, JSON, and tool output
  * tokenize denser (~3 chars/token). Deliberately no tokenizer dependency —
- * provider-native counting endpoints plug in as `source: "provider"` in
- * Phase 1; this heuristic stays as the fail-open fallback.
+ * provider-native counting endpoints can plug in as `source: "provider"`
+ * later; this heuristic stays as the fail-open fallback.
  */
 const CHARS_PER_PROSE_TOKEN = 4;
 const CHARS_PER_CODE_TOKEN = 3;

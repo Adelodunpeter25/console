@@ -109,7 +109,7 @@ const testModel: Model = {
   console.log("  ✅ Compaction triggers during run(), emits enriched event, and syncs agent.messages");
 }
 
-// 3. Mid-turn shake fires after a bloated tool result (P0-B1)
+// 3. Mid-turn shake fires after a bloated tool result
 {
   let calls = 0;
   const mockStreamFn: StreamFn = async function* () {
@@ -154,7 +154,7 @@ const testModel: Model = {
   console.log("  ✅ Mid-turn shake truncates bloated tool output before the next request");
 }
 
-// 4. Overflow error triggers emergency recovery + exactly one retry (P0-B2)
+// 4. Overflow error triggers emergency recovery + exactly one retry
 {
   let calls = 0;
   const mockStreamFn: StreamFn = async function* (): AsyncGenerator<any> {
@@ -186,7 +186,7 @@ const testModel: Model = {
   console.log("  ✅ Overflow error recovers with emergency compaction + one retry");
 }
 
-// 5. A second overflow ends the turn with a structured error, never a loop (P0-B2)
+// 5. A second overflow ends the turn with a structured error, never a loop
 {
   let calls = 0;
   const mockStreamFn: StreamFn = async function* (): AsyncGenerator<any> {
@@ -208,7 +208,7 @@ const testModel: Model = {
   console.log("  ✅ Repeated overflow terminates with a structured error");
 }
 
-// 6. Repeat read after truncation returns a diagnostic without re-executing (P0-B5)
+// 6. Repeat read after truncation returns a diagnostic without re-executing
 {
   let executions = 0;
   let calls = 0;
@@ -259,7 +259,7 @@ const testModel: Model = {
   console.log("  ✅ Truncated repeat returns a diagnostic instead of re-reading");
 }
 
-// 7. Identical requests are capped per run with a stop diagnostic (P0-B5)
+// 7. Identical requests are capped per run with a stop diagnostic
 {
   let executions = 0;
   let calls = 0;

@@ -126,7 +126,7 @@ console.log("Running compaction summary tests...");
   console.log("  ✅ compactHistory reduces history and guarantees strict provider role alternation");
 }
 
-// File facts preserve bounded read content for resumed sessions (P0-B5)
+// File facts preserve bounded read content for resumed sessions
 {
   const messages: AgentMessage[] = [
     { role: "user", content: "inspect the auth module" },

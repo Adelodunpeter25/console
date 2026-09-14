@@ -1,5 +1,5 @@
 /**
- * Payload token estimator tests (P0-B3).
+ * Payload token estimator tests.
  * Verifies the wire-payload estimate covers system prompt, tool schemas, and
  * dense tool output — the gaps in the old message-only heuristic.
  */

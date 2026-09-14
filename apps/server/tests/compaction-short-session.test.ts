@@ -1,5 +1,5 @@
 /**
- * Short-session shake tests (P0-B0).
+ * Short-session shake tests.
  * Oversized tool output on turn 1 must be shaken even though there is no
  * history to summarize — and emergency mode must reach protected turns.
  */

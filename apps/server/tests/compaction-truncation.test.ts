@@ -77,7 +77,7 @@ console.log("Running compaction truncation tests...");
   console.log("  ✅ truncateMessageToolResults bounds oversized tool results in AgentMessage");
 }
 
-// 4. truncateToolResultWithMeta marks shortened content (P0-B5)
+// 4. truncateToolResultWithMeta marks shortened content
 {
   const big = truncateToolResultWithMeta("z".repeat(10_000), 8_000);
   assert.ok(typeof big.content === "string" && (big.content as string).length < 10_000);
