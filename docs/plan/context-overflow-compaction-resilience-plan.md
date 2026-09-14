@@ -113,13 +113,13 @@ Extend the existing `compaction` session event with `tier` (`shake` | `summarize
 
 ## 5. Test Plan
 
-Map to existing files; run with `cd apps/server && bun tests/<name>.test.ts`:
+Map to existing files; run with `cd apps/server && bun tests/<area>/<name>.test.ts`:
 
-- `compaction-estimator.test.ts` (new): payload completeness (system+tools+history), code density, provider-count fail-open, threshold triggers per H0 values. Phase 1 adds per-family golden-payload accuracy tests (T0).
-- `compaction-short-session.test.ts` (new): B0 acceptance (2-message + 1.5MB result).
-- `compaction-lifecycle.test.ts` (extend): B1 mid-turn shake, B2 overflow→retry-once→terminal-error.
-- `compaction-truncation.test.ts` (extend): truncation metadata shape, continuation-range behavior, duplicate-read diagnostic (B5).
-- Claude converter tests (`claude.test.ts`, extend): B4 empty-`tool_result` guard.
+- `compaction/compaction-estimator.test.ts` (new): payload completeness (system+tools+history), code density, provider-count fail-open, threshold triggers per H0 values. Phase 1 adds per-family golden-payload accuracy tests (T0).
+- `compaction/compaction-short-session.test.ts` (new): B0 acceptance (2-message + 1.5MB result).
+- `compaction/compaction-lifecycle.test.ts` (extend): B1 mid-turn shake, B2 overflow→retry-once→terminal-error.
+- `compaction/compaction-truncation.test.ts` (extend): truncation metadata shape, continuation-range behavior, duplicate-read diagnostic (B5).
+- Claude converter tests (`providers/claude.test.ts`, extend): B4 empty-`tool_result` guard.
 
 ## 6. Out of Scope (explicitly parked)
 

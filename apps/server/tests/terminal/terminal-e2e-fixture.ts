@@ -1,7 +1,7 @@
 /**
  * Minimal terminal WS fixture for desktop end-to-end tests: boots the real
  * PTY manager + WebSocket handlers on a fixed port, no auth, nothing else.
- * Usage: bun tests/terminal-e2e-fixture.ts <port>
+ * Usage: bun tests/terminal/terminal-e2e-fixture.ts <port>
  */
 import { isTerminalUpgradeRequest, terminalWebsocketHandlers } from "../api/src/terminal/socket.route.js";
 import type { TerminalSocketData } from "../api/src/terminal/socket.route.js";

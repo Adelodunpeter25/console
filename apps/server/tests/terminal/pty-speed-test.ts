@@ -3,7 +3,7 @@ import { TerminalPtyManager } from "@/api/src/terminal/pty.manager.js";
 
 /**
  * PTY speed baseline (run before + after each optimization phase):
- *   cd apps/server && bun tests/pty-speed-test.ts
+ *   cd apps/server && bun tests/terminal/pty-speed-test.ts
  *
  * Prints [pty-speed] lines to copy into notes. Fails non-zero when the
  * terminal pipeline itself is broken (no spawn / no echo / no flood bytes).
