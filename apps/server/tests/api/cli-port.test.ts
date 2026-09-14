@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { resolvePortHost } from "../../cli/daemon-manager.js";
+import { resolvePortHost } from "../../../cli/daemon-manager.js";
 
 console.log("Running CLI saved port/host resolution tests...");
 

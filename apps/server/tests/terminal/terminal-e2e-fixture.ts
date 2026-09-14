@@ -3,8 +3,8 @@
  * PTY manager + WebSocket handlers on a fixed port, no auth, nothing else.
  * Usage: bun tests/terminal/terminal-e2e-fixture.ts <port>
  */
-import { isTerminalUpgradeRequest, terminalWebsocketHandlers } from "../api/src/terminal/socket.route.js";
-import type { TerminalSocketData } from "../api/src/terminal/socket.route.js";
+import { isTerminalUpgradeRequest, terminalWebsocketHandlers } from "../../api/src/terminal/socket.route.js";
+import type { TerminalSocketData } from "../../api/src/terminal/socket.route.js";
 
 const port = Number(process.argv[2] ?? 0);
 

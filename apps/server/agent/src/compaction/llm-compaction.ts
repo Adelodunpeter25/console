@@ -1,11 +1,11 @@
 /**
  * LLM compaction summaries via the configured smol model.
  *
- * Structural summaries stay the default path. When `summaryStrategy: "llm"`,
- * the Agent builds a summarizer here instead: it resolves the smol role,
- * feeds it a bounded plain-text transcript of the discarded turns, and
- * returns the narrative summary. Single attempt, no retries, no nested
- * compaction — any failure throws so the caller falls back to structural.
+ * This is the default summary path (`summaryStrategy: "llm"`). The hook
+ * resolves the smol role, feeds it a bounded plain-text transcript of the
+ * discarded turns, and returns the narrative summary. Single attempt, no
+ * retries, no nested compaction. When no smol model is configured (or the
+ * call fails), it throws so the agent loop falls back to structural.
  */
 import type { AgentMessage, Model } from "@/agent/src/types/index.js";
 import type { StreamFn } from "@/agent/src/service/types.js";

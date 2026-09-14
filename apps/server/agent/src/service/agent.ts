@@ -117,11 +117,6 @@ export class Agent {
         modelId: options.model.id,
       };
     this.summarizeCompaction = options.summarizeCompaction;
-    if (!this.summarizeCompaction && this._compaction?.summaryStrategy === "llm") {
-      const getFallbackModel = () => this._model;
-      const getStreamFn = (model: Model) => this._getStreamFnForModel?.(model) ?? this._streamFn;
-      this.summarizeCompaction = createSmolSummarizer({ getFallbackModel, getStreamFn });
-    }
 
     if (options.compaction === false) {
       this._compaction = undefined;
@@ -132,9 +127,17 @@ export class Agent {
         keepRecentTokens: 40_000,
         minimumRecentTurns: 3,
         maxToolResultChars: 8_000,
-        summaryStrategy: "structural",
+        summaryStrategy: "llm",
         ...(options.compaction ?? {}),
       };
+    }
+
+    // Built after _compaction so the default strategy is visible here. Falls
+    // back to structural at call time when no smol model is configured.
+    if (!this.summarizeCompaction && this._compaction?.summaryStrategy === "llm") {
+      const getFallbackModel = () => this._model;
+      const getStreamFn = (model: Model) => this._getStreamFnForModel?.(model) ?? this._streamFn;
+      this.summarizeCompaction = createSmolSummarizer({ getFallbackModel, getStreamFn });
     }
   }
 

@@ -1,9 +1,19 @@
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { writeFile } from "node:fs/promises";
 import { z } from "zod";
 import { Agent, type Model, type StreamFn } from "@/agent/src/index.js";
 import type { AgentMessage } from "@console/types";
 
 console.log("Running compaction lifecycle integration tests...");
+
+// Isolate role settings: ambient machine config (e.g. a smol role) must not
+// change which summary path these tests exercise.
+const settingsDir = mkdtempSync(join(tmpdir(), "compaction-settings-"));
+process.env.CONSOLE_SETTINGS_PATH = join(settingsDir, "settings.json");
+await writeFile(process.env.CONSOLE_SETTINGS_PATH, JSON.stringify({ modelRoles: {} }));
 
 const testModel: Model = {
   id: "test-model",
@@ -38,6 +48,9 @@ const testModel: Model = {
     compaction: false,
   });
   assert.equal((agentDisabled as any)._compaction, undefined);
+
+  // LLM summaries are the default strategy; structural is the fallback.
+  assert.equal((agentDefault as any)._compaction?.summaryStrategy, "llm");
 
   console.log("  ✅ Agent initializes default compaction and supports explicit opt-out");
 }
@@ -307,6 +320,57 @@ const testModel: Model = {
   assert.ok(last.role === "toolResult");
   assert.ok((last.results[0]!.content as string).includes("Stopping:"));
   console.log("  ✅ Per-run repeat cap terminates loops with a diagnostic");
+}
+
+// 8. Configured smol role takes the LLM summary path
+{
+  await writeFile(
+    process.env.CONSOLE_SETTINGS_PATH!,
+    JSON.stringify({ modelRoles: { smol: "antigravity/claude-opus-4-6-thinking" } }),
+  );
+  try {
+    const mockStreamFn: StreamFn = async function* () {
+      yield { type: "text", text: "smol condensed history" };
+    };
+
+    const agent = new Agent({
+      model: testModel,
+      tools: [],
+      streamFn: mockStreamFn,
+      compaction: { enabled: true, tokenThreshold: 100, keepRecentTokens: 50 },
+    });
+
+    const priorHistory: AgentMessage[] = [];
+    for (let i = 1; i <= 5; i++) {
+      priorHistory.push({ role: "user", content: `User request ${i}: refactor the auth module.` });
+      priorHistory.push({
+        role: "assistant",
+        id: `s_${i}`,
+        content: [{ type: "text", text: `Assistant response ${i}: done. `.repeat(10) }],
+        stopReason: "stop",
+      });
+    }
+    agent.loadHistory(priorHistory);
+
+    let compactionEvent: any = null;
+    const stream = agent.run("next turn");
+    for await (const event of stream) {
+      if (event.type === "compaction") compactionEvent = event;
+    }
+
+    assert.notEqual(compactionEvent, null);
+    assert.ok(
+      (compactionEvent.summary as string).includes("smol condensed history"),
+      "smol summary must replace the structural checkpoint",
+    );
+    assert.ok(
+      !(compactionEvent.summary as string).includes("<summary>"),
+      "structural checkpoint must not win when smol is configured",
+    );
+    console.log("  ✅ Configured smol role produces LLM compaction summaries");
+  } finally {
+    await writeFile(process.env.CONSOLE_SETTINGS_PATH!, JSON.stringify({ modelRoles: {} }));
+  }
 }
 
 console.log("All compaction lifecycle integration tests passed! ✨");

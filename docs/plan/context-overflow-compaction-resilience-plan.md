@@ -15,7 +15,7 @@
 - [x] Structural summaries + file tracker (`structural-summary.ts`, `file-tracker.ts`)
 - [x] Basic tests (`compaction/cutpoint/lifecycle/summary/truncation.test.ts`)
 - [x] P0 bugs B0–B5 (implemented; see items below)
-- [x] Smol-model summarizer module (`llm-compaction.ts`) — used only with `summaryStrategy: "llm"`; structural stays the default
+- [x] Smol-model summarizer module (`llm-compaction.ts`) — default summary path; falls back to structural when no smol role is configured
 
 **Decisions (locked):**
 

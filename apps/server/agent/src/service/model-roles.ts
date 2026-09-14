@@ -15,7 +15,8 @@ const SETTINGS_FILE = "settings.json";
 const ROLES: ConsoleModelRole[] = ["default", "plan", "vision", "smol"];
 
 export function getSettingsPath(): string {
-  return path.join(getConsoleStorageDir(), SETTINGS_FILE);
+  // Overridable for test isolation (mirrors the *_CREDENTIALS_PATH pattern).
+  return process.env.CONSOLE_SETTINGS_PATH ?? path.join(getConsoleStorageDir(), SETTINGS_FILE);
 }
 
 export function defaultSettings(): ConsoleSettings {
