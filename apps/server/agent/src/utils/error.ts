@@ -84,3 +84,32 @@ export function isNotGitRepositoryError(error: unknown): boolean {
     message.includes("no git repository")
   );
 }
+
+const OVERFLOW_MESSAGE_PATTERNS = [
+  "input token count exceeds",
+  "context_length_exceeded",
+  "prompt_too_long",
+  "maximum context length",
+  "context window",
+  "context limit",
+  "too many tokens",
+];
+
+/**
+ * Whether a provider failure means the request exceeded the model's context
+ * window (agent-loop recovers with emergency compaction + one retry).
+ * Matches overflow signatures across Antigravity/CCA, Anthropic, OpenAI/Codex,
+ * and OpenCode error shapes.
+ */
+export function isContextOverflowError(error: unknown): boolean {
+  const message = errorText(error);
+  if (OVERFLOW_MESSAGE_PATTERNS.some((pattern) => message.includes(pattern))) {
+    return true;
+  }
+  // Bare HTTP 400/413 only counts with a size-related keyword — a 400 from a
+  // schema or auth problem must not trigger destructive recovery.
+  return (
+    /\b(400|413)\b/.test(message) &&
+    /token|context|exceed|too long|too large|maximum|length|large|big/.test(message)
+  );
+}

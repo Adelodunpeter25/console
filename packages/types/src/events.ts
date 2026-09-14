@@ -97,6 +97,12 @@ export type AgentSessionEvent =
       tokensBefore?: number;
       tokensAfter?: number;
       compactedMessages?: AgentMessage[];
+      /** Which pipeline tier fired. */
+      tier?: "shake" | "summarize" | "emergency_recovery";
+      /** Where in the turn lifecycle it fired. */
+      trigger?: "pre_turn" | "mid_turn" | "overflow_retry";
+      /** How the token counts were produced. */
+      tokenCountSource?: "local" | "provider";
     }
   | { type: "sessionEnd" }
   | { type: "sessionTitleUpdated"; title: string }

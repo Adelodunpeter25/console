@@ -12,6 +12,8 @@
  */
 import { randomUUID } from "node:crypto";
 import { compactHistory, estimateMessageTokens, shouldCompact } from "@/agent/src/compaction/index.js";
+import { shakeConversation, EMERGENCY_TOOL_RESULT_MAX_CHARS } from "@/agent/src/compaction/shake.js";
+import { estimatePayloadTokens } from "@/agent/src/compaction/token-estimator.js";
 import {
   DEFAULT_TOOL_RESULT_MAX_CHARS,
   truncateMessageToolResults,
@@ -20,7 +22,7 @@ import {
 import { EventStream } from "./event-stream.js";
 import { executeTool } from "./tool-executor.js";
 import { streamOneTurn } from "./stream-turn.js";
-import { extractErrorMessage } from "@/agent/src/utils/error.js";
+import { extractErrorMessage, isContextOverflowError } from "@/agent/src/utils/error.js";
 import type {
   AgentMessage,
   AgentSessionEvent,
@@ -119,8 +121,8 @@ function runAgentLoop(
           break;
         }
 
-        // Auto-compaction check
-        if (compaction && shouldCompact(messages, model, compaction)) {
+        // Auto-compaction check (payload-aware: system + tools + history)
+        if (compaction && shouldCompact(messages, model, compaction, { systemPrompt, tools })) {
           let compactionResult = compactHistory(messages, compaction);
           if (compaction.summaryStrategy === "llm" && summarizeCompaction) {
             try {
@@ -143,17 +145,56 @@ function runAgentLoop(
             tokensBefore,
             tokensAfter,
             compactedMessages: [...compactedMessages],
+            tier: "summarize",
+            trigger: "pre_turn",
           });
         }
 
         const turnId = randomUUID();
 
-        const assistantMessage = await streamOneTurn(
-          { model, systemPrompt, messages: [...messages], tools, signal, thinkingLevel, cacheRetention, cacheIdentity },
-          streamFn,
-          turnId,
-          emit,
-        );
+        // Stream the turn with overflow recovery: a context-overflow 400
+        // triggers emergency compaction and exactly one retry of the turn.
+        // A second overflow (or any other error) propagates to the session
+        // error handler below.
+        let assistantMessage;
+        let overflowRetried = false;
+        for (;;) {
+          try {
+            assistantMessage = await streamOneTurn(
+              { model, systemPrompt, messages: [...messages], tools, signal, thinkingLevel, cacheRetention, cacheIdentity },
+              streamFn,
+              turnId,
+              emit,
+            );
+            break;
+          } catch (err) {
+            if (overflowRetried || signal?.aborted || !compaction || !isContextOverflowError(err)) {
+              throw err;
+            }
+            overflowRetried = true;
+            const emergencyChars = compaction.emergencyToolResultChars ?? EMERGENCY_TOOL_RESULT_MAX_CHARS;
+            const before = estimatePayloadTokens({ messages, systemPrompt, tools });
+            const shaken = shakeConversation(messages, emergencyChars, messages.length, true);
+            messages.length = 0;
+            messages.push(...shaken);
+            const recovery = compactHistory(messages, { ...compaction, keepRecentTokens: 20_000 });
+            messages.length = 0;
+            messages.push(...recovery.compactedMessages);
+            const after = estimatePayloadTokens({ messages, systemPrompt, tools });
+            emit({
+              type: "compaction",
+              summary: `Emergency overflow recovery (${extractErrorMessage(err)})`,
+              originalMessageCount: recovery.originalCount,
+              compactedMessageCount: messages.length,
+              tokensBefore: before.tokens,
+              tokensAfter: after.tokens,
+              compactedMessages: [...messages],
+              tier: "emergency_recovery",
+              trigger: "overflow_retry",
+              tokenCountSource: before.source,
+            });
+          }
+        }
 
         emit({ type: "modelStreamEnd", turnId, turn: assistantMessage });
         messages.push(assistantMessage);
@@ -198,6 +239,29 @@ function runAgentLoop(
         };
         messages.push(toolResultMessage);
         emit({ type: "toolExecutionEnd", results: boundedResults });
+
+        // Mid-turn budget check: bloated tool outputs can overflow the very
+        // next model call, so shake before continuing the turn.
+        if (compaction && shouldCompact(messages, model, compaction, { systemPrompt, tools })) {
+          const before = estimatePayloadTokens({ messages, systemPrompt, tools });
+          const shaken = shakeConversation(messages, maxToolChars);
+          messages.length = 0;
+          messages.push(...shaken);
+          const after = estimatePayloadTokens({ messages, systemPrompt, tools });
+          emit({
+            type: "compaction",
+            summary: "Mechanical mid-turn shake of bloated tool outputs.",
+            originalMessageCount: messages.length,
+            compactedMessageCount: messages.length,
+            tokensBefore: before.tokens,
+            tokensAfter: after.tokens,
+            compactedMessages: [...messages],
+            tier: "shake",
+            trigger: "mid_turn",
+            tokenCountSource: before.source,
+          });
+        }
+
         emit({ type: "turnEnd", turnId });
       }
     } catch (err) {

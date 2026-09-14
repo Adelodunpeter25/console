@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { z } from "zod";
 import { Agent, type Model, type StreamFn } from "@/agent/src/index.js";
 import type { AgentMessage } from "@console/types";
 
@@ -106,6 +107,105 @@ const testModel: Model = {
   assert.equal(agent.messages[1].role, "assistant");
 
   console.log("  ✅ Compaction triggers during run(), emits enriched event, and syncs agent.messages");
+}
+
+// 3. Mid-turn shake fires after a bloated tool result (P0-B1)
+{
+  let calls = 0;
+  const mockStreamFn: StreamFn = async function* () {
+    calls++;
+    if (calls === 1) {
+      yield { type: "toolCall", id: "c1", name: "read", argumentsJson: "" };
+      yield { type: "toolCall", id: "c1", name: "read", argumentsJson: '{"path":"big.txt"}' };
+    } else {
+      yield { type: "text", text: "done" };
+    }
+  };
+
+  const agent = new Agent({
+    model: testModel,
+    tools: [
+      {
+        name: "read",
+        description: "read a file",
+        inputSchema: z.object({ path: z.string() }),
+        execute: async () => "x".repeat(100_000),
+      },
+    ],
+    streamFn: mockStreamFn,
+    approvalMode: "full-access",
+    compaction: { enabled: true, tokenThreshold: 1_000 },
+  });
+
+  let midTurnEvent: any = null;
+  const stream = agent.run("read the file");
+  for await (const event of stream) {
+    if (event.type === "compaction" && (event as any).trigger === "mid_turn") {
+      midTurnEvent = event;
+    }
+  }
+
+  assert.notEqual(midTurnEvent, null, "expected a mid_turn compaction event");
+  assert.equal(midTurnEvent.tier, "shake");
+  const stored = agent.messages.find((m) => m.role === "toolResult");
+  assert.ok(stored && stored.role === "toolResult");
+  const content = stored.results[0]!.content;
+  assert.ok(typeof content === "string" && content.length < 20_000, "bloated result must be shaken mid-turn");
+  console.log("  ✅ Mid-turn shake truncates bloated tool output before the next request");
+}
+
+// 4. Overflow error triggers emergency recovery + exactly one retry (P0-B2)
+{
+  let calls = 0;
+  const mockStreamFn: StreamFn = async function* (): AsyncGenerator<any> {
+    calls++;
+    if (calls === 1) {
+      throw new Error("400 Bad Request: input token count exceeds 1048576");
+    }
+    yield { type: "text", text: "recovered" };
+  };
+
+  const agent = new Agent({ model: testModel, tools: [], streamFn: mockStreamFn });
+
+  let recoveryEvent: any = null;
+  let text = "";
+  const stream = agent.run("hello");
+  for await (const event of stream) {
+    if (event.type === "compaction" && (event as any).trigger === "overflow_retry") {
+      recoveryEvent = event;
+    }
+    if (event.type === "modelStreamPart" && typeof (event as any).part?.text === "string") {
+      text += (event as any).part.text;
+    }
+  }
+
+  assert.equal(calls, 2, "overflow must retry the turn exactly once");
+  assert.notEqual(recoveryEvent, null, "expected an overflow_retry compaction event");
+  assert.equal(recoveryEvent.tier, "emergency_recovery");
+  assert.ok(text.includes("recovered"));
+  console.log("  ✅ Overflow error recovers with emergency compaction + one retry");
+}
+
+// 5. A second overflow ends the turn with a structured error, never a loop (P0-B2)
+{
+  let calls = 0;
+  const mockStreamFn: StreamFn = async function* (): AsyncGenerator<any> {
+    calls++;
+    throw new Error("context_length_exceeded: maximum context length reached");
+  };
+
+  const agent = new Agent({ model: testModel, tools: [], streamFn: mockStreamFn });
+
+  let errorEvent: any = null;
+  const stream = agent.run("hello");
+  for await (const event of stream) {
+    if (event.type === "error") errorEvent = event;
+  }
+
+  assert.equal(calls, 2, "must not retry more than once");
+  assert.notEqual(errorEvent, null, "expected a terminal error event");
+  assert.ok(/context_length_exceeded/.test(errorEvent.error.message));
+  console.log("  ✅ Repeated overflow terminates with a structured error");
 }
 
 console.log("All compaction lifecycle integration tests passed! ✨");
