@@ -8,6 +8,8 @@ export interface DaemonStatus {
   uptime?: string;
   port?: string;
   host?: string;
+  /** Storage mode of the running daemon (`~/.console` vs `~/.console-dev`). */
+  mode?: "dev" | "production";
 }
 
 export interface DaemonConfig {
@@ -20,11 +22,15 @@ export interface StartOptions {
   port?: string;
   host?: string;
   daemon: boolean;
+  /** Use dev storage (~/.console-dev) instead of production (~/.console). */
+  dev?: boolean;
 }
 
 export interface RestartOptions {
   port?: string;
   host?: string;
+  /** Use dev storage (~/.console-dev) instead of production (~/.console). */
+  dev?: boolean;
 }
 
 export interface LogsOptions {

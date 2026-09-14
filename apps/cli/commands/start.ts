@@ -3,7 +3,7 @@
  */
 import { spawn } from "node:child_process";
 import * as path from "node:path";
-import { ensureConsoleDir, writePidFile, saveConfig, loadConfig, resolvePortHost, getDaemonStatus, loadEnvFile, getEnvFilePath } from "../daemon-manager.js";
+import { ensureConsoleDir, writePidFile, saveConfig, loadConfig, resolvePortHost, getDaemonStatus, loadEnvFile, getConsoleDir, resolveConsoleMode } from "../daemon-manager.js";
 import type { StartOptions } from "../types.js";
 
 interface ServerLaunch {
@@ -34,6 +34,17 @@ function resolveServerLaunch(): ServerLaunch & { serveEnv?: boolean } {
 }
 
 export async function startDaemon(options: StartOptions): Promise<void> {
+  // Pin the storage mode explicitly: `--dev` wins, then an explicit
+  // CONSOLE_ENV, otherwise production. Never sniff ambient NODE_ENV here —
+  // compiled binaries default it to "development", which used to send every
+  // production `console start` to dev storage. Set before any dir resolution
+  // so pid/config paths and the spawned server agree.
+  if (options.dev) {
+    process.env.CONSOLE_ENV = "dev";
+  } else if (!process.env.CONSOLE_ENV) {
+    process.env.CONSOLE_ENV = "production";
+  }
+
   const status = await getDaemonStatus();
 
   if (status.running) {
@@ -72,6 +83,7 @@ export async function startDaemon(options: StartOptions): Promise<void> {
   if (options.daemon) {
     // Start as background daemon
     console.log(`Starting console agent daemon...`);
+    console.log(`Mode: ${resolveConsoleMode()} (storage: ${getConsoleDir()})`);
     console.log(`Port: ${port}`);
     console.log(`Host: ${host}`);
     console.log(firecrawlStatus);

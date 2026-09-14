@@ -65,7 +65,7 @@ export async function upgradeDaemon(): Promise<void> {
         console.log(`Could not stop old daemon: ${error}`);
       }
     }
-    await startDaemon({ port, host, daemon: true });
+    await startDaemon({ port, host, daemon: true, ...(before.mode === "dev" ? { dev: true } : {}) });
   } else {
     console.log("Daemon was not running. Run 'console start' to launch the new binary.");
   }

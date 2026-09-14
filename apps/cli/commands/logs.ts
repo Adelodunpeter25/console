@@ -4,11 +4,11 @@
 import * as path from "node:path";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
-import { LOGS_DIR } from "../daemon-manager.js";
+import { getLogsDir } from "../daemon-manager.js";
 import type { LogsOptions } from "../types.js";
 
 export async function logsDaemon(options: LogsOptions): Promise<void> {
-  const logsDir = LOGS_DIR;
+  const logsDir = getLogsDir();
   const logFile = path.join(logsDir, "daemon.log");
 
   if (!existsSync(logFile)) {

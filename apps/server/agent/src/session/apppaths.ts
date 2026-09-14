@@ -1,14 +1,33 @@
 import path from "node:path";
 import os from "node:os";
 
+export type ConsoleMode = "dev" | "production";
+
+function isCompiledBinary(): boolean {
+  const execBase = path.basename(process.execPath);
+  return !["bun", "bun-debug", "node"].includes(execBase);
+}
+
+/**
+ * Explicit storage mode. CONSOLE_ENV wins authoritatively; NODE_ENV only
+ * counts for non-compiled runtimes — compiled Bun binaries default NODE_ENV
+ * to "development", so trusting it there sends production installs to dev
+ * storage. Uses ~/.console-dev in development and ~/.console in production.
+ * Mirrors cli daemon-manager.resolveConsoleMode — keep in sync.
+ */
+export function resolveConsoleMode(env: NodeJS.ProcessEnv = process.env): ConsoleMode {
+  if (env.CONSOLE_ENV === "dev") return "dev";
+  if (env.CONSOLE_ENV === "production") return "production";
+  if (!isCompiledBinary() && env.NODE_ENV === "development") return "dev";
+  return "production";
+}
+
 /**
  * Returns the root directory path for Console storage based on the environment.
- * Uses ~/.console-dev in development and ~/.console in production.
  */
 export function getConsoleStorageDir(): string {
-  const isDev = process.env.NODE_ENV === "development" || process.env.CONSOLE_ENV === "dev";
   const homeDir = os.homedir();
-  const folderName = isDev ? ".console-dev" : ".console";
+  const folderName = resolveConsoleMode() === "dev" ? ".console-dev" : ".console";
   return path.join(homeDir, folderName);
 }
 

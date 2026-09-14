@@ -12,13 +12,45 @@ import type { DaemonStatus, DaemonConfig } from "./types.js";
 const execAsync = promisify(exec);
 
 // Directory structure
-const isDev = process.env.NODE_ENV === "development" || process.env.CONSOLE_ENV === "dev";
-const homeDir = os.homedir();
-const folderName = isDev ? ".console-dev" : ".console";
-export const CONSOLE_DIR = path.join(homeDir, folderName);
-const PID_FILE = path.join(CONSOLE_DIR, "daemon.pid");
-export const LOGS_DIR = path.join(CONSOLE_DIR, "logs");
-const CONFIG_FILE = path.join(CONSOLE_DIR, "config.json");
+function isCompiledBinary(): boolean {
+  const execBase = path.basename(process.execPath);
+  return !["bun", "bun-debug", "node"].includes(execBase);
+}
+
+export type ConsoleMode = "dev" | "production";
+
+/**
+ * Explicit storage mode. CONSOLE_ENV wins authoritatively; NODE_ENV only
+ * counts for non-compiled runtimes — compiled Bun binaries default NODE_ENV
+ * to "development", so trusting it there sends production installs to dev
+ * storage. Mirrors server apppaths.resolveConsoleMode — keep in sync.
+ */
+export function resolveConsoleMode(env: NodeJS.ProcessEnv = process.env): ConsoleMode {
+  if (env.CONSOLE_ENV === "dev") return "dev";
+  if (env.CONSOLE_ENV === "production") return "production";
+  if (!isCompiledBinary() && env.NODE_ENV === "development") return "dev";
+  return "production";
+}
+
+export function getConsoleDir(): string {
+  return path.join(os.homedir(), resolveConsoleMode() === "dev" ? ".console-dev" : ".console");
+}
+
+export function getLogsDir(): string {
+  return path.join(getConsoleDir(), "logs");
+}
+
+function pidFilePath(dir: string = getConsoleDir()): string {
+  return path.join(dir, "daemon.pid");
+}
+
+function configFilePath(dir: string = getConsoleDir()): string {
+  return path.join(dir, "config.json");
+}
+
+function alternateConsoleDir(): string {
+  return path.join(os.homedir(), resolveConsoleMode() === "dev" ? ".console" : ".console-dev");
+}
 
 /**
  * Per-machine secret env file (~/.console/env, ~/.console-dev/env in dev).
@@ -28,7 +60,7 @@ const CONFIG_FILE = path.join(CONSOLE_DIR, "config.json");
  * always wins over the file. Managed by `console env`, mode 0600.
  */
 export function getEnvFilePath(): string {
-  return path.join(CONSOLE_DIR, "env");
+  return path.join(getConsoleDir(), "env");
 }
 
 export function parseEnvFile(contents: string): Record<string, string> {
@@ -98,8 +130,8 @@ export async function upsertEnvValues(values: Record<string, string>): Promise<v
  */
 export async function ensureConsoleDir(): Promise<void> {
   try {
-    await fs.mkdir(CONSOLE_DIR, { recursive: true });
-    await fs.mkdir(LOGS_DIR, { recursive: true });
+    await fs.mkdir(getConsoleDir(), { recursive: true });
+    await fs.mkdir(getLogsDir(), { recursive: true });
   } catch (error) {
     throw new Error(`Failed to create console directory: ${error}`);
   }
@@ -138,16 +170,16 @@ export async function saveConfig(config: Partial<DaemonConfig>): Promise<void> {
   await ensureConsoleDir();
   const currentConfig = getDefaultConfig();
   const mergedConfig = { ...currentConfig, ...config };
-  await fs.writeFile(CONFIG_FILE, JSON.stringify(mergedConfig, null, 2));
+  await fs.writeFile(configFilePath(), JSON.stringify(mergedConfig, null, 2));
 }
 
 /**
  * Load daemon config
  */
-export async function loadConfig(): Promise<DaemonConfig> {
+export async function loadConfig(dir: string = getConsoleDir()): Promise<DaemonConfig> {
   try {
-    if (existsSync(CONFIG_FILE)) {
-      const content = await fs.readFile(CONFIG_FILE, "utf-8");
+    if (existsSync(configFilePath(dir))) {
+      const content = await fs.readFile(configFilePath(dir), "utf-8");
       return JSON.parse(content) as DaemonConfig;
     }
   } catch (error) {
@@ -161,16 +193,16 @@ export async function loadConfig(): Promise<DaemonConfig> {
  */
 export async function writePidFile(pid: number): Promise<void> {
   await ensureConsoleDir();
-  await fs.writeFile(PID_FILE, pid.toString());
+  await fs.writeFile(pidFilePath(), pid.toString());
 }
 
 /**
  * Read PID file
  */
-export async function readPidFile(): Promise<number | null> {
+export async function readPidFile(dir: string = getConsoleDir()): Promise<number | null> {
   try {
-    if (existsSync(PID_FILE)) {
-      const content = await fs.readFile(PID_FILE, "utf-8");
+    if (existsSync(pidFilePath(dir))) {
+      const content = await fs.readFile(pidFilePath(dir), "utf-8");
       return parseInt(content.trim(), 10);
     }
   } catch (error) {
@@ -182,10 +214,10 @@ export async function readPidFile(): Promise<number | null> {
 /**
  * Remove PID file
  */
-export async function removePidFile(): Promise<void> {
+export async function removePidFile(dir: string = getConsoleDir()): Promise<void> {
   try {
-    if (existsSync(PID_FILE)) {
-      await fs.unlink(PID_FILE);
+    if (existsSync(pidFilePath(dir))) {
+      await fs.unlink(pidFilePath(dir));
     }
   } catch (error) {
     console.warn(`Failed to remove PID file: ${error}`);
@@ -207,23 +239,25 @@ export async function isProcessRunning(pid: number): Promise<boolean> {
 }
 
 /**
- * Get daemon status
+ * Get daemon status. When no pid exists in the resolved dir, falls back to
+ * the alternate dir so `stop`/`status` keep working regardless of which mode
+ * the running daemon was started with.
  */
 export async function getDaemonStatus(): Promise<DaemonStatus> {
-  const pid = await readPidFile();
-
-  if (!pid) {
-    return { running: false };
+  for (const dir of [getConsoleDir(), alternateConsoleDir()]) {
+    const pid = await readPidFile(dir);
+    if (!pid) continue;
+    if (!(await isProcessRunning(pid))) {
+      // Stale pid here — clear just this dir and keep looking.
+      await removePidFile(dir);
+      continue;
+    }
+    return await buildRunningStatus(pid, dir);
   }
+  return { running: false };
+}
 
-  const running = await isProcessRunning(pid);
-
-  if (!running) {
-    // Clean up stale PID file
-    await removePidFile();
-    return { running: false };
-  }
-
+async function buildRunningStatus(pid: number, dir: string): Promise<DaemonStatus> {
   // Get process info (uptime)
   let uptime: string | undefined;
   try {
@@ -234,7 +268,8 @@ export async function getDaemonStatus(): Promise<DaemonStatus> {
     return { running: false };
   }
 
-  const config = await loadConfig();
+  const config = await loadConfig(dir);
+  const mode: ConsoleMode = dir === getConsoleDir() ? resolveConsoleMode() : alternateMode();
 
   return {
     running: true,
@@ -242,7 +277,30 @@ export async function getDaemonStatus(): Promise<DaemonStatus> {
     uptime,
     port: config.port,
     host: config.host,
+    mode,
   };
+}
+
+function alternateMode(): ConsoleMode {
+  return resolveConsoleMode() === "dev" ? "production" : "dev";
+}
+
+/**
+ * Remove the PID file holding `pid`, whichever storage dir it lives in.
+ */
+async function removePidFileFor(pid: number): Promise<void> {
+  for (const dir of [getConsoleDir(), alternateConsoleDir()]) {
+    try {
+      if (existsSync(pidFilePath(dir))) {
+        const content = await fs.readFile(pidFilePath(dir), "utf-8");
+        if (parseInt(content.trim(), 10) === pid) {
+          await fs.unlink(pidFilePath(dir));
+        }
+      }
+    } catch (error) {
+      console.warn(`Failed to remove PID file: ${error}`);
+    }
+  }
 }
 
 /**
@@ -256,14 +314,14 @@ export async function killDaemon(pid: number): Promise<void> {
     for (let i = 0; i < 50; i++) {
       await new Promise((resolve) => setTimeout(resolve, 100));
       if (!(await isProcessRunning(pid))) {
-        await removePidFile();
+        await removePidFileFor(pid);
         return;
       }
     }
 
     // Force kill if still running
     process.kill(pid, "SIGKILL");
-    await removePidFile();
+    await removePidFileFor(pid);
   } catch (error) {
     console.error(`Failed to kill daemon: ${error}`);
     throw error;
