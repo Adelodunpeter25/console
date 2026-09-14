@@ -3,12 +3,12 @@
  * `ProviderId` is the single source of truth for valid provider names.
  */
 
-export type ProviderId = "antigravity" | "opencode" | "codex" | "cline" | "devin";
+export type ProviderId = "antigravity" | "opencode" | "codex" | "cline" | "devin" | "claude";
 
 export type ThinkingLevel = "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 /** Providers that authenticate via OAuth (login-only providers). */
-export type OAuthProviderId = "antigravity" | "codex" | "devin";
+export type OAuthProviderId = "antigravity" | "codex" | "devin" | "claude";
 
 export interface Model {
   id: string;

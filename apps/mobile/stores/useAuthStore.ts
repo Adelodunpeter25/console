@@ -7,6 +7,8 @@ export type { OAuthProviderId, ProviderId } from "@console/types";
 const INITIAL_STATUS: AuthStatusResponse = {
   antigravity: { loggedIn: false },
   codex: { loggedIn: false },
+  devin: { loggedIn: false },
+  claude: { loggedIn: false },
 };
 
 /**

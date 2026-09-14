@@ -25,6 +25,13 @@ import {
   saveDevinCredential,
   DEVIN_CALLBACK_PATH,
   DEVIN_CALLBACK_PORT,
+  claudeCredentialExists,
+  createClaudeAuthorizationUrl,
+  exchangeClaudeCode,
+  generateClaudePkce,
+  loadClaudeCredential,
+  saveClaudeCredential,
+  claudeRedirectUri,
 } from "@/providers/src/index.js";
 import * as crypto from "node:crypto";
 import type { AuthStatusResponse } from "@/api/src/types/index.js";
@@ -49,6 +56,8 @@ export class AuthService {
   private readonly oauthPending = new Map<string, { provider: OAuthProviderId; expiresAt: number }>();
   /** Pending state tokens for Devin PKCE OAuth flows. */
   private readonly devinPending = new Map<string, { verifier: string; expiresAt: number }>();
+  /** Pending state tokens for Claude PKCE OAuth flows. */
+  private readonly claudePending = new Map<string, { verifier: string; expiresAt: number }>();
 
   async getAuthStatus(): Promise<AuthStatusResponse> {
     const antigravityCred = await tryLoadCredential("antigravity");
@@ -60,6 +69,13 @@ export class AuthService {
       }
     })();
     const devinLoggedIn = await devinCredentialExists();
+    const claudeCred = await (async () => {
+      try {
+        return await loadClaudeCredential();
+      } catch {
+        return null;
+      }
+    })();
 
     const antigravityConfigured = await getConfiguredProjectId("antigravity");
 
@@ -76,6 +92,10 @@ export class AuthService {
       },
       devin: {
         loggedIn: devinLoggedIn,
+      },
+      claude: {
+        loggedIn: Boolean(claudeCred?.accessToken) || (await claudeCredentialExists()),
+        email: claudeCred?.email,
       },
     };
   }
@@ -99,6 +119,14 @@ export class AuthService {
       const { verifier, challenge } = generateDevinPkce();
       const result = createDevinAuthorizationUrl({ state, verifierChallenge: challenge });
       this.devinPending.set(state, { verifier, expiresAt: Date.now() + 10 * 60_000 });
+      return { provider, authUrl: result.authUrl, state, redirectUri: result.redirectUri };
+    }
+
+    if (provider === "claude") {
+      const state = crypto.randomBytes(24).toString("hex");
+      const { verifier, challenge } = generateClaudePkce();
+      const result = createClaudeAuthorizationUrl({ state, verifierChallenge: challenge });
+      this.claudePending.set(state, { verifier, expiresAt: Date.now() + 10 * 60_000 });
       return { provider, authUrl: result.authUrl, state, redirectUri: result.redirectUri };
     }
 
@@ -148,6 +176,16 @@ export class AuthService {
       const credential = await exchangeDevinCode(code, pending.verifier, redirectUri);
       await saveDevinCredential(credential);
       return { provider };
+    }
+
+    if (provider === "claude") {
+      if (!state) throw new Error("Claude OAuth callback is missing state.");
+      const pending = this.claudePending.get(state);
+      this.claudePending.delete(state);
+      if (!pending || pending.expiresAt < Date.now()) throw new Error("Claude OAuth state is invalid or expired.");
+      const credential = await exchangeClaudeCode(code, state, pending.verifier, claudeRedirectUri());
+      await saveClaudeCredential(credential);
+      return { provider, userEmail: credential.email };
     }
 
     // Validate the state token for antigravity.

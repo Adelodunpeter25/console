@@ -38,6 +38,7 @@ export type ProviderIconName = keyof typeof PROVIDER_ICONS;
 /** Aliases: providers without dedicated artwork reuse another icon. */
 const PROVIDER_ALIASES: Record<string, ProviderIconName> = {
   codex: "openai",
+  claude: "openai",
 };
 
 /** Resolves a provider name to its SVG XML, or null when unknown. */

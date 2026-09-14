@@ -62,6 +62,28 @@ export {
 export type { DevinOAuthCredential, ParsedDevinCredential } from "./devin/oauth.js";
 export { DEVIN_CALLBACK_PATH, DEVIN_CALLBACK_PORT } from "./devin/index.js";
 
+/** Claude (Anthropic subscription) provider — Pro/Max OAuth + Messages API. */
+export {
+  claudeCredentialExists,
+  createClaudeAuthorizationUrl,
+  exchangeClaudeCode,
+  generateClaudePkce,
+  loadClaudeCredential,
+  refreshClaudeIfNeeded,
+  saveClaudeCredential,
+  CLAUDE_CALLBACK_PATH,
+  CLAUDE_CALLBACK_PORT,
+  claudeRedirectUri,
+  claudeStreamFn,
+  fetchClaudeModels,
+  type ClaudeDiscoveredModel,
+  convertClaudeMessages,
+  convertClaudeTools,
+  normalizeClaudeUsage,
+  type ClaudeOAuthCredential,
+  type ParsedClaudeCredential,
+} from "./claude/index.js";
+
 /** Model discovery */
 export { fetchAvailableModels } from "./discovery/fetch-models.js";
 export type { FetchAvailableModelsOptions, DiscoveredApiModel } from "./discovery/fetch-models.js";

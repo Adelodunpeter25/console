@@ -1,6 +1,6 @@
 /**
  * Provider Registry & Hybrid Model Catalog.
- * Registers supported providers ("antigravity", "opencode", "codex", "cline") with dynamic
+ * Registers supported providers ("antigravity", "opencode", "codex", "cline", "devin", "claude") with dynamic
  * endpoint discovery via /v1internal:fetchAvailableModels (mirroring oh-my-pi).
  */
 
@@ -23,6 +23,9 @@ import {
   getClineContextWindow,
   getClineSupportsImages,
   devinStreamFn,
+  claudeStreamFn,
+  claudeCredentialExists,
+  fetchClaudeModels,
 } from "@/providers/src/index.js";
 import { codexModelsUrl } from "@/providers/src/codex/constants.js";
 import type { StreamFn } from "@/agent/src/service/agent-loop.js";
@@ -89,6 +92,12 @@ export const DEFAULT_CLINE_MODELS: Model[] = [...CLINE_FREE_MODEL_IDS]
 // auth the picker shows zero Devin models, on first auth it gets the full list.
 export const DEFAULT_DEVIN_MODELS: Model[] = [];
 
+export const DEFAULT_CLAUDE_MODELS: Model[] = [
+  "claude-opus-4-6",
+  "claude-sonnet-4-6",
+  "claude-haiku-4-5",
+].map((id) => ({ id, provider: "claude" as const, contextWindow: 200_000, supportsImages: true }));
+
 /** Providers that are temporarily disabled (kept in code but hidden from catalog). */
 const DISABLED_PROVIDERS = new Set<ProviderId>(["cline"]);
 
@@ -132,6 +141,14 @@ export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
     authMethod: "oauth",
     models: DEFAULT_DEVIN_MODELS,
     getStreamFn: () => devinStreamFn,
+  },
+  claude: {
+    name: "claude",
+    displayName: "Claude",
+    description: "Claude Pro/Max subscription models through the Anthropic Messages API",
+    authMethod: "oauth",
+    models: DEFAULT_CLAUDE_MODELS,
+    getStreamFn: () => claudeStreamFn,
   },
 };
 
@@ -213,6 +230,17 @@ export async function fetchModelsForProvider(
       }
     } else if (providerName === "cline") {
       discovered = await fetchClineFreeModels(signal);
+    } else if (providerName === "claude") {
+      if (!(await claudeCredentialExists())) throw new Error("Claude is not logged in");
+      const discoveredClaude = await fetchClaudeModels(signal);
+      if (discoveredClaude) {
+        discovered = discoveredClaude.map((m) => ({
+          id: m.id,
+          provider: "claude" as const,
+          contextWindow: 200_000,
+          supportsImages: true,
+        }));
+      }
     } else {
       const rawCred = await loadCredential(providerName);
       const cred = await refreshIfNeeded(rawCred, providerName, signal);
@@ -242,7 +270,9 @@ export async function fetchModelsForProvider(
         ? DEFAULT_CODEX_MODELS
         : providerName === "cline"
           ? DEFAULT_CLINE_MODELS
-          : DEFAULT_ANTIGRAVITY_MODELS;
+          : providerName === "claude"
+            ? DEFAULT_CLAUDE_MODELS
+            : DEFAULT_ANTIGRAVITY_MODELS;
   if (!provider.models || provider.models.length === 0) {
     provider.models = staticFallback;
   }
