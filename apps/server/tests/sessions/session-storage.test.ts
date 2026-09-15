@@ -3,6 +3,9 @@
  * Uses in-memory SQLite database (`:memory:`).
  */
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { SqliteSessionStorage } from "@/agent/src/session/index.js";
 import type { AgentMessage } from "@console/types";
 
@@ -210,6 +213,53 @@ assert.ok(!remainingDeleted.includes(expired.id), "expired delete must be purged
 assert.equal(storage.loadSession(expired.id), null);
 assert.ok(storage.loadSession(fresh.id) === null, "fresh delete stays soft-deleted");
 console.log("  ✅ Expired deleted chats purged after 7 days; fresh and active survive");
+
+// 10. A project/cwd change moves the session DB file; a session whose file
+// was stranded under a different project is relocated on load instead of
+// returning an empty history.
+{
+  const fileStorageDir = fs.mkdtempSync(path.join(os.tmpdir(), "console-session-move-"));
+  const fileStorage = new SqliteSessionStorage({ storageDir: fileStorageDir });
+  const moved = fileStorage.createSession({
+    cwd: "/projects/alpha",
+    projectId: "proj-alpha",
+    modelId: "gemini-3.1-pro",
+    provider: "antigravity",
+    title: "Move Test",
+  });
+  fileStorage.appendMessage(moved.id, userMsg);
+  assert.equal(fileStorage.loadSession(moved.id)?.messages.length, 1);
+
+  // Project change must move the file, not just the index row.
+  assert.equal(fileStorage.updateCwd(moved.id, "/projects/beta", "proj-beta"), true);
+  const betaPath = path.join(fileStorageDir, "projects", "proj-beta", "sessions", `${moved.id}.db`);
+  const alphaPath = path.join(fileStorageDir, "projects", "proj-alpha", "sessions", `${moved.id}.db`);
+  assert.ok(fs.existsSync(betaPath), "session DB must move with the project change");
+  assert.ok(!fs.existsSync(alphaPath), "stale copy must not remain at the old project path");
+  assert.equal(fileStorage.loadSession(moved.id)?.messages.length, 1);
+
+  // Simulate a session stranded by an older build (index moved, file left
+  // behind): load must self-heal by relocating the orphaned file. Release
+  // cached handles first (close, then reopen the same storage) so the raw
+  // rename isn't racing an open WAL file.
+  fileStorage.releaseSession(moved.id);
+  const staleSidecars = [`${betaPath}-wal`, `${betaPath}-shm`].filter((p) => fs.existsSync(p));
+  fileStorage.close();
+  for (const p of staleSidecars) {
+    try {
+      fs.rmSync(p, { force: true });
+    } catch {}
+  }
+  fs.renameSync(betaPath, alphaPath);
+  const reopened = new SqliteSessionStorage({ storageDir: fileStorageDir });
+  const healed = reopened.loadSession(moved.id);
+  assert.ok(healed);
+  assert.equal(healed.messages.length, 1, "orphaned session file must load its real history");
+  assert.ok(fs.existsSync(betaPath), "orphaned file must be relocated to the indexed path");
+  reopened.close();
+  fs.rmSync(fileStorageDir, { recursive: true, force: true });
+  console.log("  ✅ Session DB moves with project change; orphaned files self-heal on load");
+}
 
 storage.close();
 console.log("SqliteSessionStorage tests passed!\n");

@@ -119,6 +119,78 @@ export function getSessionDb(
 }
 
 /**
+ * Move a session's SQLite file (plus WAL sidecars) from one path to another.
+ * Used when a session's project changes (the file location records project
+ * ownership) and to self-heal orphaned files found by `findSessionDbPath`.
+ * Never clobbers an existing file at the destination. Returns true when a
+ * move happened.
+ */
+export function relocateSessionDb(
+  state: StorageState,
+  sessionId: string,
+  fromPath: string,
+  toPath: string,
+): boolean {
+  if (fromPath === toPath) return false;
+  if (!fs.existsSync(fromPath)) return false;
+  // Never overwrite: a file already at the destination may hold newer turns
+  // (e.g. written before an older build moved the index entry).
+  if (fs.existsSync(toPath)) return false;
+  // Checkpoint the cached handle so WAL frames are folded into the main
+  // DB before the copy; without this the copy is a stale empty image (the
+  // message rows only exist in the -wal). Keep the handle open during the
+  // copy (safer than evict-then-copy: a fresh open can hit SQLITE_IOERR on
+  // macOS when the file was just renamed), then evict it so later accesses
+  // open the new path.
+  const cached = state.sessionDbs.get(sessionId);
+  if (cached) {
+    try {
+      cached.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+    } catch {
+      try {
+        cached.exec("PRAGMA wal_checkpoint(PASSIVE)");
+      } catch {
+        // Best-effort — the copy below still proceeds.
+      }
+    }
+  }
+  try {
+    ensureDir(toPath);
+    fs.copyFileSync(fromPath, toPath);
+    for (const ext of ["-wal", "-shm"]) {
+      try {
+        fs.rmSync(`${toPath}${ext}`, { force: true });
+      } catch {
+        // Absent sidecars are the normal case; ignore.
+      }
+    }
+    // Evict AFTER the copy so the handle can't write to the source inode
+    // mid-copy; later accesses reopen at the new path via `getSessionDb`.
+    evictSessionDb(state, sessionId);
+    try {
+      fs.rmSync(fromPath, { force: true });
+      for (const ext of ["-wal", "-shm"]) {
+        try {
+          fs.rmSync(`${fromPath}${ext}`, { force: true });
+        } catch {
+          // Sidecars are recoverable; the main DB copy already succeeded.
+        }
+      }
+    } catch {
+      // The destination copy is complete even if stale source cleanup fails.
+    }
+    return true;
+  } catch {
+    try {
+      fs.rmSync(toPath, { force: true });
+    } catch {
+      // Partial copy cleanup is best-effort.
+    }
+    return false;
+  }
+}
+
+/**
  * Close and drop one cached per-session DB handle.
  * Safe to call for sessions with no cached handle (no-op).
  */

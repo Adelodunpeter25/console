@@ -13,6 +13,7 @@ import {
   getScratchSessionDbPath,
   getSessionDb,
   getSessionDbPath,
+  relocateSessionDb,
   removeDbFile,
 } from "./session-helpers.js";
 import { getScratchDir, getSessionScratchDir } from "./apppaths.js";
@@ -109,6 +110,16 @@ export function loadSession(
     dbPath = undefined;
   } else if (projectId) {
     dbPath = getSessionDbPath(storageDir, projectId, sessionId);
+    // The file location records project ownership, but a past project/cwd
+    // change may have updated the index without moving the file. Fall back
+    // to the orphan scan and self-heal by relocating the file to the
+    // indexed path (never clobbers an existing file).
+    if (!fs.existsSync(dbPath) && !state.sessionDbs.has(sessionId)) {
+      const found = findSessionDbPath(storageDir, sessionId);
+      if (found && found !== dbPath) {
+        relocateSessionDb(state, sessionId, found, dbPath);
+      }
+    }
   } else {
     dbPath = getScratchSessionDbPath(storageDir, sessionId);
     if (!fs.existsSync(dbPath)) {
@@ -491,6 +502,26 @@ export function updateCwd(
   const info = globalDb
     .prepare(`UPDATE sessions SET cwd = ?, project_id = ?, updated_at = ? WHERE id = ?`)
     .run(trimmed, targetProjectId, now, sessionId);
+
+  // Keep the file location in step with the index: without the move, later
+  // loads read from the new indexed path and see an empty history.
+  if (storageDir !== ":memory:") {
+    const norm = (p: string | null) => (p == null || p === "" || p === "scratch" ? null : p);
+    const from = norm(oldProjectId);
+    const to = norm(targetProjectId);
+    if (from !== to) {
+      const fromPath =
+        from == null
+          ? getScratchSessionDbPath(storageDir, sessionId)
+          : getSessionDbPath(storageDir, from, sessionId);
+      const toPath =
+        to == null
+          ? getScratchSessionDbPath(storageDir, sessionId)
+          : getSessionDbPath(storageDir, to, sessionId);
+      relocateSessionDb(state, sessionId, fromPath, toPath);
+    }
+  }
+
   return info.changes > 0;
 }
 
