@@ -102,6 +102,16 @@ console.log("Running OpenCode Zen (opencode) Provider tests...");
     value: "File contents here\nline 2",
   });
 
+  // Empty prompts and thinking-only assistant turns must never produce an
+  // empty request, because OpenCode rejects `messages: []`.
+  const emptyPromptWire = convertOpencodeMessages([{ role: "user", content: "   " }]);
+  assert.deepEqual(emptyPromptWire, [{ role: "user", content: "(continue)" }]);
+
+  const thinkingOnlyWire = convertOpencodeMessages([
+    { role: "assistant", id: "thinking-only", content: [{ type: "thinking", text: "internal" }] },
+  ]);
+  assert.deepEqual(thinkingOnlyWire, [{ role: "user", content: "(continue)" }]);
+
   console.log("  ✅ convertOpencodeMessages → UIMessage[] wire transformation");
 }
 

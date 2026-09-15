@@ -63,7 +63,12 @@ export function convertOpencodeMessages(messages: AgentMessage[]): ModelMessage[
         (part) => part.type !== "reasoning",
       );
 
-      out.push({ role: "assistant", content: wireContent });
+      // A thinking-only assistant turn becomes empty after reasoning is
+      // stripped. OpenCode rejects empty message content, so omit it rather
+      // than sending an invalid assistant message.
+      if (wireContent.length > 0) {
+        out.push({ role: "assistant", content: wireContent });
+      }
       continue;
     }
 
@@ -83,6 +88,12 @@ export function convertOpencodeMessages(messages: AgentMessage[]): ModelMessage[
         } as any);
       }
     }
+  }
+
+  // OpenCode requires at least one message. This can happen when a restored
+  // history contains only empty user messages or thinking-only assistant turns.
+  if (out.length === 0) {
+    out.push({ role: "user", content: "(continue)" });
   }
 
   return out;
