@@ -1,14 +1,13 @@
-# Builds the native Kotlin/Compose Android app (apps/android) debug APK on
-# each push to main, then uploads it to a rolling GitHub Release tagged
-# `console-android` (latest always wins), mirroring console-server.yml /
+# Builds the native Kotlin/Compose Android app (apps/android) debug APK
+# manually via workflow_dispatch, then uploads it to a rolling GitHub Release
+# tagged `console-android` (latest always wins), mirroring console-server.yml /
 # console-desktop.yml.
 #
 # Assets: app-debug.apk (unsigned debug build — see apps/android/app/build.gradle.kts).
 name: Build console-android
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
