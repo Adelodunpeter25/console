@@ -13,6 +13,25 @@ type ManagedRun = ScriptRun & {
 
 const MAX_OUTPUT = 256 * 1024;
 
+/**
+ * Env for Run-tab child processes.
+ *
+ * Bun.spawn inherits process.env by default, which leaks the daemon's own
+ * PORT/HOST (e.g. `console start --port 9090`) into project dev servers that
+ * honor `$PORT` and would otherwise use their own default (e.g. 3000).
+ * Strip daemon-specific keys; an explicit `PORT=...` prefix in the script
+ * command itself still applies because the shell sets it after spawn.
+ */
+export function buildScriptEnv(base: NodeJS.ProcessEnv = process.env): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(base)) {
+    if (value === undefined) continue;
+    if (key === "PORT" || key === "HOST" || key === "CONSOLE_DAEMON") continue;
+    out[key] = value;
+  }
+  return out;
+}
+
 async function readOutput(stream: ReadableStream<Uint8Array>, streamName: "stdout" | "stderr", run: ManagedRun) {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -58,6 +77,7 @@ export class ProjectScriptsService {
       stdout: "pipe",
       stderr: "pipe",
       detached: process.platform !== "win32",
+      env: buildScriptEnv(),
     });
     const run: ManagedRun = {
       runId: randomUUID(), projectId, scriptId, label: script.label, persistent: script.persistent,
