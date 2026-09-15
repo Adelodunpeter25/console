@@ -116,6 +116,10 @@ pub struct ConsoleDesktopApp {
     /// re-firing on every render/tab-switch.
     pub(crate) loading_models: std::collections::HashSet<String>,
     pub selected_model: Option<SelectedModel>,
+    /// The server `plan` model role (`"provider/model"`), shown by the
+    /// composer picker while a pane is in plan mode. Picking a model in
+    /// plan mode writes this role; the chat's own model is left untouched.
+    pub plan_role_model: Option<SelectedModel>,
     pub active_picker_tab: PickerTab,
     pub favorites: Rc<std::collections::HashSet<String>>,
     pub approval_mode: ApprovalMode,
@@ -794,6 +798,7 @@ impl ConsoleDesktopApp {
             models_by_provider: Rc::new(std::collections::HashMap::new()),
             loading_models: std::collections::HashSet::new(),
             selected_model: None,
+            plan_role_model: None,
             active_picker_tab: PickerTab::Provider("antigravity".to_string()),
             favorites: Rc::new(std::collections::HashSet::new()),
             approval_mode: ApprovalMode::AlwaysAsk,

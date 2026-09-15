@@ -60,19 +60,19 @@ impl SettingsService {
         }
     }
 
-    /// Patches only the `default` model role, leaving other roles (plan,
-    /// vision, smol) untouched server-side.
-    pub async fn patch_default_model(&self, model_reference: &str) -> Result<ConsoleSettings> {
+    /// Patches only the `plan` model role, leaving other roles (vision,
+    /// smol) untouched server-side.
+    pub async fn patch_plan_model(&self, model_reference: &str) -> Result<ConsoleSettings> {
         let url = self.transport.url("/api/settings").await;
         let response = self
             .transport
             .client()
             .patch(url)
             .headers(self.transport.build_headers().await)
-            .json(&json!({ "modelRoles": { "default": model_reference } }))
+            .json(&json!({ "modelRoles": { "plan": model_reference } }))
             .send()
             .await
-            .context("Failed to save default model")?;
+            .context("Failed to save plan model")?;
         let body: ApiResponse<ConsoleSettings> = response
             .json()
             .await
@@ -82,7 +82,7 @@ impl SettingsService {
         } else {
             Err(anyhow!(
                 body.error
-                    .unwrap_or_else(|| "Failed to save default model".into())
+                    .unwrap_or_else(|| "Failed to save plan model".into())
             ))
         }
     }

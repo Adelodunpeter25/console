@@ -4,8 +4,6 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct ModelRoleMapping {
     #[serde(default)]
-    pub default: Option<String>,
-    #[serde(default)]
     pub plan: Option<String>,
     #[serde(default)]
     pub vision: Option<String>,

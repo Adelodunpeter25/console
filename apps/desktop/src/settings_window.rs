@@ -20,13 +20,12 @@ pub struct SettingsWindow {
     new_env_name_input: Entity<ComposerInput>,
     new_env_url_input: Entity<ComposerInput>,
     new_env_probe: ProbeState,
-    model_default_input: Entity<ComposerInput>,
     model_plan_input: Entity<ComposerInput>,
     model_vision_input: Entity<ComposerInput>,
     model_smol_input: Entity<ComposerInput>,
-    model_menus: [console_ui::ContextMenuHandle; 4],
-    model_searches: [Entity<ComposerInput>; 4],
-    model_tabs: [console_ui::PickerTab; 4],
+    model_menus: [console_ui::ContextMenuHandle; 3],
+    model_searches: [Entity<ComposerInput>; 3],
+    model_tabs: [console_ui::PickerTab; 3],
     keybindings_search: Entity<ComposerInput>,
     pub(crate) model_saving: bool,
     pub(crate) model_error: Option<String>,
@@ -64,22 +63,17 @@ impl SettingsWindow {
             input
         });
 
-        let model_default_input = cx.new(|cx| {
-            ComposerInput::new(window, cx)
-                .placeholder("provider/model, e.g. antigravity/claude-sonnet-4-6")
-        });
         let model_plan_input = cx.new(|cx| {
-            ComposerInput::new(window, cx).placeholder("provider/model or leave blank for default")
+            ComposerInput::new(window, cx).placeholder("provider/model or leave blank for chat model")
         });
         let model_vision_input = cx.new(|cx| {
-            ComposerInput::new(window, cx).placeholder("provider/model or leave blank for default")
+            ComposerInput::new(window, cx).placeholder("provider/model or leave blank for chat model")
         });
         let model_smol_input = cx.new(|cx| {
-            ComposerInput::new(window, cx).placeholder("provider/model or leave blank for default")
+            ComposerInput::new(window, cx).placeholder("provider/model or leave blank for chat model")
         });
 
         let settings_client = app.upgrade().map(|entity| entity.read(cx).client.clone());
-        let default_for_load = model_default_input.clone();
         let plan_for_load = model_plan_input.clone();
         let vision_for_load = model_vision_input.clone();
         let smol_for_load = model_smol_input.clone();
@@ -87,9 +81,6 @@ impl SettingsWindow {
             cx.spawn(async move |_, cx| {
                 if let Ok(settings) = client.settings.get().await {
                     cx.update(|cx| {
-                        default_for_load.update(cx, |input, cx| {
-                            input.set_content(settings.model_roles.default.unwrap_or_default(), cx)
-                        });
                         plan_for_load.update(cx, |input, cx| {
                             input.set_content(settings.model_roles.plan.unwrap_or_default(), cx)
                         });
@@ -109,14 +100,8 @@ impl SettingsWindow {
             console_ui::ContextMenuHandle::new(cx),
             console_ui::ContextMenuHandle::new(cx),
             console_ui::ContextMenuHandle::new(cx),
-            console_ui::ContextMenuHandle::new(cx),
         ];
         let model_searches = [
-            cx.new(|cx| {
-                ComposerInput::new(window, cx)
-                    .search_field()
-                    .placeholder("Search models...")
-            }),
             cx.new(|cx| {
                 ComposerInput::new(window, cx)
                     .search_field()
@@ -164,14 +149,12 @@ impl SettingsWindow {
             new_env_name_input,
             new_env_url_input,
             new_env_probe: ProbeState::Unknown,
-            model_default_input,
             model_plan_input,
             model_vision_input,
             model_smol_input,
             model_menus,
             model_searches,
             model_tabs: [
-                console_ui::PickerTab::Favorites,
                 console_ui::PickerTab::Favorites,
                 console_ui::PickerTab::Favorites,
                 console_ui::PickerTab::Favorites,
@@ -188,9 +171,6 @@ impl SettingsWindow {
         settings: &console_core::ConsoleSettings,
         cx: &mut Context<Self>,
     ) {
-        self.model_default_input.update(cx, |input, cx| {
-            input.set_content(settings.model_roles.default.clone().unwrap_or_default(), cx);
-        });
         self.model_plan_input.update(cx, |input, cx| {
             input.set_content(settings.model_roles.plan.clone().unwrap_or_default(), cx);
         });
@@ -463,7 +443,6 @@ impl Render for SettingsWindow {
             SettingsTab::Models => {
                 let do_save = {
                     let app_handle = self.app.clone();
-                    let default_input = self.model_default_input.clone();
                     let plan_input = self.model_plan_input.clone();
                     let vision_input = self.model_vision_input.clone();
                     let smol_input = self.model_smol_input.clone();
@@ -473,8 +452,6 @@ impl Render for SettingsWindow {
                         };
                         let settings = console_core::ConsoleSettings {
                             model_roles: console_core::ModelRoleMapping {
-                                default: Some(default_input.read(cx).content().trim().to_string())
-                                    .filter(|v| !v.is_empty()),
                                 plan: Some(plan_input.read(cx).content().trim().to_string())
                                     .filter(|v| !v.is_empty()),
                                 vision: Some(vision_input.read(cx).content().trim().to_string())
@@ -514,7 +491,7 @@ impl Render for SettingsWindow {
                     Rc::new(move |idx, tab, _window, cx| {
                     if let Some(settings) = self_entity.upgrade() {
                         settings.update(cx, |this, cx| {
-                            if idx < 4 {
+                            if idx < 3 {
                                 this.model_tabs[idx] = tab;
                                 cx.notify();
                             }
@@ -535,7 +512,6 @@ impl Render for SettingsWindow {
                     models_by_provider: app.models_by_provider.clone(),
                     tabs: self.model_tabs.clone(),
                     favorites: app.favorites.clone(),
-                    default_input: self.model_default_input.clone(),
                     plan_input: self.model_plan_input.clone(),
                     vision_input: self.model_vision_input.clone(),
                     smol_input: self.model_smol_input.clone(),

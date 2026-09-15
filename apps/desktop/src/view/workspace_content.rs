@@ -458,7 +458,7 @@ impl ConsoleDesktopApp {
         self.ensure_workspace_pane_state(&pane_id, window, cx);
         let pane_transcript = self.transcript_for_pane(&pane_id);
         let pane_composer = self.composer_for_pane(&pane_id);
-        let pane_selected_model = self.pane_selected_model(&pane_id);
+        let pane_selected_model = self.effective_model_for_pane(&pane_id);
         let pane_picker_tab = self.pane_picker_tab(&pane_id);
         let pane_approval_mode = self.pane_approval_mode(&pane_id);
         let pane_project_id = self.pane_project_id(&pane_id);
@@ -794,28 +794,41 @@ impl ConsoleDesktopApp {
                             model_handle_for_select.close(window, cx);
                             if let Some(app) = entity.upgrade() {
                                 app.update(cx, |this, cx| {
-                                    this.set_pane_model(
-                                        &model_pane_id,
-                                        Some(SelectedModel {
-                                            provider: prov.clone(),
-                                            model_id: m_id.clone(),
-                                        }),
-                                    );
+                                    let model = SelectedModel {
+                                        provider: prov.clone(),
+                                        model_id: m_id.clone(),
+                                    };
+                                    if this.pane_approval_mode(&model_pane_id)
+                                        == ApprovalMode::PlanMode
+                                    {
+                                        // Plan mode runs the plan role: show and
+                                        // persist it, leaving the chat's own
+                                        // model untouched.
+                                        this.plan_role_model = Some(model);
+                                        this.save_plan_model_role(
+                                            format!("{prov}/{m_id}"),
+                                            cx,
+                                        );
+                                    } else {
+                                        this.set_pane_model(
+                                            &model_pane_id,
+                                            Some(model),
+                                        );
 
-                                    this.update_session_settings_for_pane(
-                                        model_pane_id.clone(),
-                                        UpdateSessionDto {
-                                            title: None,
-                                            cwd: None,
-                                            project_id: None,
-                                            model_id: Some(m_id.clone()),
-                                            provider: Some(prov.clone()),
-                                            approval_mode: None,
-                                        },
-                                        cx,
-                                    );
+                                        this.update_session_settings_for_pane(
+                                            model_pane_id.clone(),
+                                            UpdateSessionDto {
+                                                title: None,
+                                                cwd: None,
+                                                project_id: None,
+                                                model_id: Some(m_id.clone()),
+                                                provider: Some(prov.clone()),
+                                                approval_mode: None,
+                                            },
+                                            cx,
+                                        );
+                                    }
 
-                                    this.save_default_model_role(format!("{prov}/{m_id}"), cx);
                                     cx.notify();
                                 });
                             }
@@ -875,6 +888,13 @@ impl ConsoleDesktopApp {
                                     },
                                     cx,
                                 );
+                                if mode == ApprovalMode::PlanMode {
+                                    // The picker shows the plan role in
+                                    // plan mode; reload it so a role set
+                                    // in Settings (or another window)
+                                    // shows up immediately.
+                                    this.refresh_plan_role_model(cx);
+                                }
                                 cx.notify();
                             });
                         }

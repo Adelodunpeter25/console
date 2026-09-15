@@ -3,10 +3,18 @@
  * Runs 100% offline using Hono's app.request() in-memory testing — 0 LLM credits used.
  */
 import assert from "node:assert/strict";
+import * as os from "node:os";
+import * as fs from "node:fs";
 import path from "node:path";
 import { createApiApp } from "@/api/src/index.js";
 
 console.log("Running Hono API Layer & Service tests...");
+
+// Isolate settings-file writes (the model-roles PATCH test) from real storage.
+process.env.CONSOLE_SETTINGS_PATH = path.join(
+  fs.mkdtempSync(path.join(os.tmpdir(), "console-api-test-")),
+  "settings.json",
+);
 
 const app = createApiApp();
 
@@ -262,23 +270,31 @@ const app = createApiApp();
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       modelRoles: {
-        default: "antigravity/claude-sonnet-4-6",
-        plan: null,
-        vision: "",
-        smol: undefined,
+        plan: "antigravity/claude-sonnet-4-6",
+        vision: null,
+        smol: "",
       },
     }),
   });
   assert.equal(patchRes.status, 200);
   const patchJson = await patchRes.json();
   assert.equal(patchJson.success, true);
-  assert.equal(patchJson.data.modelRoles.default, "antigravity/claude-sonnet-4-6");
-  assert.equal(patchJson.data.modelRoles.plan, undefined);
+  assert.equal(patchJson.data.modelRoles.plan, "antigravity/claude-sonnet-4-6");
+  assert.equal(patchJson.data.modelRoles.vision, undefined);
+  assert.equal(patchJson.data.modelRoles.smol, undefined);
 
   const getRes = await app.request("/api/settings");
   assert.equal(getRes.status, 200);
   const getJson = await getRes.json();
-  assert.equal(getJson.data.modelRoles.default, "antigravity/claude-sonnet-4-6");
+  assert.equal(getJson.data.modelRoles.plan, "antigravity/claude-sonnet-4-6");
+
+  // The removed "default" role is rejected.
+  const defaultRes = await app.request("/api/settings", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ modelRoles: { default: "antigravity/claude-sonnet-4-6" } }),
+  });
+  assert.equal(defaultRes.status, 400);
 
   console.log("  ✅ Settings Model Roles (/api/settings)");
 }

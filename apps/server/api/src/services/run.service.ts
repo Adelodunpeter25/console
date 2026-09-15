@@ -266,7 +266,13 @@ export class RunService {
       session.header.approvalMode ||
       "always-ask") as ApprovalMode;
 
-    this.sessionStorage.updateModel(sessionId, modelId, provider);
+    const isPlanMode = approvalMode === "plan-mode";
+    // Plan-mode runs must not rewrite the chat's own model: the picker shows
+    // the plan role there while the DTO carries the chat's normal model, so
+    // the header keeps it. Only the approval mode persists.
+    if (!isPlanMode) {
+      this.sessionStorage.updateModel(sessionId, modelId, provider);
+    }
     this.sessionStorage.updateApprovalMode(sessionId, approvalMode);
 
     let model = buildRunModel(provider, modelId);
@@ -276,11 +282,12 @@ export class RunService {
       throw new Error(`Unknown provider '${provider}'.`);
     }
 
-    const role = approvalMode === "plan-mode" ? "plan" : "default";
-    model = await resolveModelRole(role, model);
-    if (model.provider !== provider) {
-      const roleProvider = getProvider(model.provider);
-      if (roleProvider) streamFn = roleProvider.getStreamFn();
+    if (isPlanMode) {
+      model = await resolveModelRole("plan", model);
+      if (model.provider !== provider) {
+        const roleProvider = getProvider(model.provider);
+        if (roleProvider) streamFn = roleProvider.getStreamFn();
+      }
     }
 
     if (dto.attachments && dto.attachments.length > 0 && model.supportsImages === false) {
