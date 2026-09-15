@@ -5,6 +5,7 @@ fn test_forwarded_port_serialization() {
     let port = ForwardedPort {
         port: 5173,
         url: "http://192.168.1.10:45173/".to_string(),
+        project_id: None,
     };
 
     let json = serde_json::to_string(&port).expect("serialize port");

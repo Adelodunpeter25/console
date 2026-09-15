@@ -17,6 +17,7 @@ interface PortEntry {
   proxyPort: number;
   owner?: Owner;
   manual: boolean;
+  projectId?: string;
   server: Bun.Server<ProxySocketData>;
 }
 
@@ -28,6 +29,7 @@ interface ProxySocketData {
 export interface ClientPort {
   port: number;
   url: string;
+  projectId?: string;
 }
 
 function parseRange(value: string | undefined, fallback: number): number {
@@ -57,6 +59,22 @@ function stripHopByHopHeaders(headers: Headers): Headers {
   return result;
 }
 
+function normalizeProjectId(projectId?: string | null): string | undefined {
+  if (!projectId) return undefined;
+  const trimmed = projectId.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/**
+ * Workspace gating predicate: no filter matches everything (back-compat);
+ * entries without a project are global and visible to every workspace.
+ */
+function matchesProject(entryProjectId: string | undefined, filter: string | undefined): boolean {
+  if (!filter) return true;
+  if (!entryProjectId) return true;
+  return entryProjectId === filter;
+}
+
 export class PortRegistry extends EventEmitter {
   private readonly entries = new Map<number, PortEntry>();
   private readonly ownerBuffers = new Map<string, string>();
@@ -70,7 +88,7 @@ export class PortRegistry extends EventEmitter {
   // since list() performs liveness probes.
   private cachedSnapshot: ClientPort[] = [];
 
-  async observeOutput(owner: Owner, chunk: Uint8Array | string): Promise<void> {
+  async observeOutput(owner: Owner, chunk: Uint8Array | string, projectId?: string | null): Promise<void> {
     const key = `${owner.kind}:${owner.id}`;
     const text = typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk);
     const combined = (this.ownerBuffers.get(key) ?? "") + text.replace(ANSI_PATTERN, "");
@@ -86,20 +104,30 @@ export class PortRegistry extends EventEmitter {
         if (port >= 1_024 && port <= 65_535) candidates.add(port);
       }
     }
-    await Promise.all([...candidates].map((port) => this.registerDetected(port, owner)));
+    const resolvedProjectId = normalizeProjectId(projectId ?? undefined);
+    await Promise.all([...candidates].map((port) => this.registerDetected(port, owner, resolvedProjectId)));
   }
 
-  async forward(port: number): Promise<ClientPort> {
+  async forward(port: number, projectId?: string | null): Promise<ClientPort> {
     this.validatePort(port);
     if (!(await this.isListening(port))) {
       throw new Error(`Port ${port} is not listening on 127.0.0.1.`);
     }
+    const resolvedProjectId = normalizeProjectId(projectId ?? undefined);
     const existing = this.entries.get(port);
-    if (existing) return this.clientEntry(existing, "localhost");
-    return this.createEntry(port, { manual: true });
+    if (existing) {
+      if (!existing.projectId && resolvedProjectId) {
+        existing.projectId = resolvedProjectId;
+        this.rebuildSnapshot();
+        this.emit("change", this.cachedSnapshot);
+      }
+      return this.clientEntry(existing, "localhost");
+    }
+    return this.createEntry(port, { manual: true, projectId: resolvedProjectId });
   }
 
-  async list(host: string): Promise<ClientPort[]> {
+  async list(host: string, projectId?: string | null): Promise<ClientPort[]> {
+    const filter = normalizeProjectId(projectId ?? undefined);
     const entries = [...this.entries.values()];
     const availability = await Promise.all(
       entries.map(async (entry) => ({
@@ -115,13 +143,16 @@ export class PortRegistry extends EventEmitter {
     }
 
     return [...this.entries.values()]
+      .filter((entry) => matchesProject(entry.projectId, filter))
       .sort((a, b) => a.port - b.port)
       .map((entry) => this.clientEntry(entry, host));
   }
 
-  async remove(port: number): Promise<boolean> {
+  async remove(port: number, projectId?: string | null): Promise<boolean> {
     const entry = this.entries.get(port);
     if (!entry) return false;
+    const filter = normalizeProjectId(projectId ?? undefined);
+    if (filter && entry.projectId && entry.projectId !== filter) return false;
     this.entries.delete(port);
     this.rebuildSnapshot();
     await entry.server.stop(true);
@@ -191,7 +222,7 @@ export class PortRegistry extends EventEmitter {
     }
   }
 
-  private async registerDetected(port: number, owner: Owner): Promise<void> {
+  private async registerDetected(port: number, owner: Owner, projectId?: string): Promise<void> {
     this.validatePort(port);
     const key = `${owner.kind}:${owner.id}`;
     const epoch = this.ownerEpochs.get(key) ?? 0;
@@ -203,10 +234,10 @@ export class PortRegistry extends EventEmitter {
     // that removeOwner() just cleaned up.
     if ((this.ownerEpochs.get(key) ?? 0) !== epoch) return;
     if (this.entries.get(port)) return;
-    await this.createEntry(port, { owner, manual: false });
+    await this.createEntry(port, { owner, manual: false, projectId: normalizeProjectId(projectId) });
   }
 
-  private async createEntry(port: number, options: { owner?: Owner; manual: boolean }): Promise<ClientPort> {
+  private async createEntry(port: number, options: { owner?: Owner; manual: boolean; projectId?: string }): Promise<ClientPort> {
     const proxyPort = this.allocateProxyPort();
     const targetUrl = `http://127.0.0.1:${port}`;
     const server = Bun.serve<ProxySocketData>({
@@ -240,7 +271,7 @@ export class PortRegistry extends EventEmitter {
         },
       },
     });
-    const entry: PortEntry = { port, proxyPort, owner: options.owner, manual: options.manual, server };
+    const entry: PortEntry = { port, proxyPort, owner: options.owner, manual: options.manual, projectId: normalizeProjectId(options.projectId), server };
     this.entries.set(port, entry);
     this.rebuildSnapshot();
     this.emit("opened", port);
@@ -295,12 +326,18 @@ export class PortRegistry extends EventEmitter {
   }
 
   private clientEntry(entry: PortEntry, host: string): ClientPort {
-    return { port: entry.port, url: `http://${host}:${entry.proxyPort}/` };
+    const out: ClientPort = { port: entry.port, url: `http://${host}:${entry.proxyPort}/` };
+    if (entry.projectId) out.projectId = entry.projectId;
+    return out;
   }
 
   /** Return the mutation-time snapshot without probing forwarded ports. */
-  snapshot(host = "localhost"): ClientPort[] {
-    return this.cachedSnapshot.map((entry) => this.clientEntry(this.entries.get(entry.port)!, host));
+  snapshot(host = "localhost", projectId?: string | null): ClientPort[] {
+    const filter = normalizeProjectId(projectId ?? undefined);
+    return [...this.entries.values()]
+      .filter((entry) => matchesProject(entry.projectId, filter))
+      .sort((a, b) => a.port - b.port)
+      .map((entry) => this.clientEntry(entry, host));
   }
 
   private rebuildSnapshot(): void {

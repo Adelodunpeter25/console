@@ -45,7 +45,7 @@ async function readOutput(stream: ReadableStream<Uint8Array>, streamName: "stdou
       run.subscribers.forEach((subscriber) => subscriber({ type: "output", stream: streamName, text }));
       // Feed the port registry like terminal output: localhost URLs printed
       // by the script register its ports for preview/proxying.
-      void portRegistry.observeOutput({ kind: "job", id: run.runId }, text);
+      void portRegistry.observeOutput({ kind: "job", id: run.runId }, text, run.projectId);
     }
   } finally {
     reader.releaseLock();

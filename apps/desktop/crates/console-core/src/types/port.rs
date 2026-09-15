@@ -9,6 +9,9 @@ pub struct ForwardedPort {
     pub port: u16,
     /// Fully-qualified URL to open in a browser or WebView.
     pub url: String,
+    /// Owning workspace project, when the backend attributed it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
 }
 
 /// Request to manually forward a specific port.

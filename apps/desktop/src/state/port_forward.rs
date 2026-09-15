@@ -15,7 +15,7 @@ impl ConsoleDesktopApp {
         self.port_stream = Some(cx.spawn(async move |_, cx| {
             use futures_util::StreamExt;
             loop {
-                match client.ports.watch().await {
+                match client.ports.watch(None).await {
                     Ok(mut stream) => {
                         while let Some(Ok(ports)) = stream.next().await {
                             // Server reports remote ports; expose each one as a
@@ -29,6 +29,7 @@ impl ConsoleDesktopApp {
                                 .map(|forward| console_core::ForwardedPort {
                                     port: forward.remote_port,
                                     url: forward.local_url,
+                                    project_id: None,
                                 })
                                 .collect();
                             let _ = cx.update(|cx| {
@@ -93,6 +94,7 @@ impl ConsoleDesktopApp {
                     .map(|forward| console_core::ForwardedPort {
                         port: forward.remote_port,
                         url: forward.local_url,
+                        project_id: None,
                     })
                     .collect();
                 let _ = cx.update(|cx| {

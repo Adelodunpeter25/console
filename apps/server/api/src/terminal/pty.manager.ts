@@ -19,6 +19,7 @@ import type {
   TerminalSpawnedEvent,
 } from "@console/types";
 import { portRegistry } from "@/api/src/services/port-registry.service.js";
+import { getSharedSessionStorage } from "@/agent/src/session/storage.js";
 
 /** Callback the route registers to receive pty events for a session. */
 export interface PtyCallbacks {
@@ -52,6 +53,7 @@ interface PtySession {
   proc: PtyProcess | null;
   shell: string;
   cwd: string;
+  projectId?: string;
   cols: number;
   rows: number;
   callbacks?: PtyCallbacks;
@@ -167,6 +169,12 @@ export class TerminalPtyManager {
     const rows = params.rows ?? 24;
 
     const id: TerminalId = randomUUID();
+    let projectId: string | undefined;
+    try {
+      projectId = getSharedSessionStorage().getProjectByDir(cwd)?.id;
+    } catch {
+      projectId = undefined;
+    }
     const session: PtySession = {
       id,
       // Assigned in startShell(); null until then.
@@ -175,6 +183,7 @@ export class TerminalPtyManager {
       proc: null,
       shell,
       cwd,
+      projectId,
       cols,
       rows,
       pending: [],
@@ -266,7 +275,7 @@ export class TerminalPtyManager {
   /** Route PTY output to callbacks, coalescing bursts into fewer frames. */
   private handleOutput(session: PtySession, data: Uint8Array): void {
     if (session.killed) return;
-    void portRegistry.observeOutput({ kind: "terminal", id: session.id }, data);
+    void portRegistry.observeOutput({ kind: "terminal", id: session.id }, data, session.projectId);
     if (session.paused) {
       // Client send buffer saturated: hold output until resume().
       session.pausedBuffer.push(data);

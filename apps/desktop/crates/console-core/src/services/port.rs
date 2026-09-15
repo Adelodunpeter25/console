@@ -46,14 +46,22 @@ impl PortService {
 
     /// Subscribe to server-pushed forwarded-port snapshots.
     /// Heartbeats and unrelated SSE events are ignored instead of being parsed.
+    /// When `project_id` is set, the backend filters to that workspace plus
+    /// global (unattributed) ports; `None` streams everything (back-compat).
     pub async fn watch(
         &self,
+        project_id: Option<&str>,
     ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<Vec<ForwardedPort>>> + Send>>>
     {
         use eventsource_stream::Eventsource;
         use futures_util::StreamExt;
 
-        let url = self.transport.url("/api/ports/stream").await;
+        let endpoint = if let Some(pid) = project_id {
+            format!("/api/ports/stream?projectId={}", urlencoding::encode(pid))
+        } else {
+            "/api/ports/stream".to_string()
+        };
+        let url = self.transport.url(&endpoint).await;
         let response = self
             .transport
             .client()
