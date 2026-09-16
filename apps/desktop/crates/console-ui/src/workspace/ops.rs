@@ -236,7 +236,9 @@ pub fn open_file_paths(root: &WorkspaceNode) -> Vec<String> {
                 WorkspaceTabConfig::File { path, .. } | WorkspaceTabConfig::Diff { path, .. } => {
                     out.push(path.clone())
                 }
-                WorkspaceTabConfig::Chat { .. } | WorkspaceTabConfig::Terminal { .. } => {}
+                WorkspaceTabConfig::Chat { .. }
+                | WorkspaceTabConfig::Terminal { .. }
+                | WorkspaceTabConfig::Browser { .. } => {}
             }
         }
     }

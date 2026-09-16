@@ -279,6 +279,16 @@ impl RenderOnce for WorkspaceTabBar {
                                         .unwrap_or(path);
                                     file_icon(file_icon_for_name(name), 13.0).into_any_element()
                                 }
+                                console_core::WorkspaceTabConfig::Browser { .. } => app_icon(
+                                    IconName::Globe,
+                                    11.0,
+                                    if is_active {
+                                        theme.text
+                                    } else {
+                                        theme.text_tertiary
+                                    },
+                                )
+                                .into_any_element(),
                             })
                             // Tab Title
                             .child(
