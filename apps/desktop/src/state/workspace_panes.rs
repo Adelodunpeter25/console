@@ -1454,6 +1454,7 @@ impl ConsoleDesktopApp {
     pub fn activate_workspace_tab(&mut self, pane_id: &str, tab_id: &str, cx: &mut Context<Self>) {
         let prev_sid = self.active_session_for_pane(pane_id).map(|s| s.to_string());
         self.select_workspace_tab(pane_id, tab_id);
+        self.sync_workspace_webviews(cx);
         if let Some(sid) = tab_id.strip_prefix("chat:") {
             super::macos_notifications::clear_for_session(sid);
             self.selected_session_id = Some(sid.to_string());

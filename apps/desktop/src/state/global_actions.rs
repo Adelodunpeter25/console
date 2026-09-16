@@ -237,6 +237,7 @@ impl ConsoleDesktopApp {
                                     new_session.id.clone(),
                                     "New Chat",
                                 );
+                                this.sync_workspace_webviews(cx);
                                 let new_chat_draft = this.get_draft_with_mentions(None);
                                 this.composer_for_pane(&pane_id).update(cx, |input, cx| {
                                     input.set_prompt_history(Vec::new(), cx);
