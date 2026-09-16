@@ -20,8 +20,10 @@ use gpui::{
 };
 
 use super::actions::*;
-use super::address::{AddressTarget, display_url, is_secure_url, resolve_address, search_url};
-use super::host::WebviewHost;
+use super::address::{
+    AddressTarget, display_url, is_secure_url, resolve_address, search_url, url_host,
+};
+use super::host::{NativeNavigationError, WebviewHost};
 use crate::common::input::{ComposerEvent, ComposerInput};
 use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon};
@@ -32,12 +34,6 @@ const TOOLBAR_HEIGHT: f32 = 42.0;
 #[cfg(target_os = "macos")]
 const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
      AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36";
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PageLoad {
-    Started,
-    Finished,
-}
 
 #[derive(Clone)]
 #[cfg(target_os = "macos")]
@@ -65,8 +61,7 @@ pub struct BrowserView {
     address: Entity<ComposerInput>,
     host: Option<Rc<WebviewHost>>,
     host_error: Option<String>,
-    navigation_error: Option<String>,
-    navigation_generation: u64,
+    navigation_error: Option<NativeNavigationError>,
     navigation_requested: bool,
     current_url: Option<String>,
     page_title: Option<String>,
@@ -154,7 +149,6 @@ impl BrowserView {
             host: None,
             host_error: None,
             navigation_error: None,
-            navigation_generation: 0,
             navigation_requested: false,
             current_url: None,
             page_title: None,
@@ -184,7 +178,6 @@ impl BrowserView {
             view: cx.entity().downgrade(),
         };
 
-        let on_page_load = deferred.clone();
         let on_title = deferred.clone();
         let on_new_window = deferred.clone();
 
@@ -208,6 +201,50 @@ impl BrowserView {
             })
         };
 
+        let on_nav_start: Box<dyn Fn()> = {
+            let deferred = deferred.clone();
+            Box::new(move || {
+                deferred.update(move |this, cx| {
+                    this.loading = true;
+                    this.navigation_error = None;
+                    cx.notify();
+                });
+            })
+        };
+
+        let on_nav_finish: Box<dyn Fn()> = {
+            let deferred = deferred.clone();
+            Box::new(move || {
+                deferred.update(move |this, cx| {
+                    this.loading = false;
+                    this.navigation_error = None;
+                    if let Some(host) = &this.host {
+                        if !this.occluded {
+                            host.set_visible(true);
+                        }
+                    }
+                    this.refresh_navigation_state();
+                    this.echo_page_url(cx);
+                    cx.notify();
+                });
+            })
+        };
+
+        let on_nav_error: Box<dyn Fn(NativeNavigationError)> = {
+            let deferred = deferred.clone();
+            Box::new(move |err| {
+                deferred.update(move |this, cx| {
+                    this.loading = false;
+                    this.navigation_error = Some(err);
+                    if let Some(host) = &this.host {
+                        host.set_visible(false);
+                    }
+                    this.refresh_navigation_state();
+                    cx.notify();
+                });
+            })
+        };
+
         let built = wry::WebViewBuilder::new()
             .with_bounds(wry::Rect {
                 position: LogicalPosition::new(0.0, 0.0).into(),
@@ -219,13 +256,6 @@ impl BrowserView {
             .with_devtools(true)
             .with_user_agent(USER_AGENT)
             .with_navigation_handler(|_| true)
-            .with_on_page_load_handler(move |event, url| {
-                let event = match event {
-                    wry::PageLoadEvent::Started => PageLoad::Started,
-                    wry::PageLoadEvent::Finished => PageLoad::Finished,
-                };
-                on_page_load.update(move |this, cx| this.page_load_changed(event, url, cx));
-            })
             .with_document_title_changed_handler(move |title| {
                 on_title.update(move |this, cx| this.title_changed(title, cx));
             })
@@ -237,7 +267,13 @@ impl BrowserView {
 
         match built {
             Ok(webview) => {
-                self.host = Some(Rc::new(WebviewHost::new(webview, on_responder_change)));
+                self.host = Some(Rc::new(WebviewHost::with_navigation_callbacks(
+                    webview,
+                    on_responder_change,
+                    on_nav_start,
+                    on_nav_finish,
+                    on_nav_error,
+                )));
             }
             Err(error) => {
                 self.host_error = Some(error.to_string());
@@ -270,32 +306,6 @@ impl BrowserView {
             }
         }
         self.was_natively_focused = natively_focused;
-    }
-
-    fn page_load_changed(&mut self, event: PageLoad, url: String, cx: &mut Context<Self>) {
-        match event {
-            PageLoad::Started => {
-                self.loading = true;
-                self.navigation_error = None;
-                self.page_title = None;
-                self.snapshot = None;
-            }
-            PageLoad::Finished => {
-                self.loading = false;
-                self.navigation_error = None;
-                if let Some(host) = &self.host {
-                    if !self.occluded {
-                        host.set_visible(true);
-                    }
-                }
-            }
-        }
-        if !url.is_empty() {
-            self.current_url = Some(url);
-        }
-        self.refresh_navigation_state();
-        self.echo_page_url(cx);
-        cx.notify();
     }
 
     fn title_changed(&mut self, title: String, cx: &mut Context<Self>) {
@@ -421,72 +431,10 @@ impl BrowserView {
         self.navigation_requested = true;
         self.loading = true;
         self.navigation_error = None;
-        self.navigation_generation = self.navigation_generation.wrapping_add(1);
-        let nav_gen = self.navigation_generation;
-        self.current_url = Some(url.clone());
+        self.current_url = Some(url);
         self.address_dirty = false;
         self.echo_page_url(cx);
         self.focus_page(cx);
-
-        let is_http = url.starts_with("http://") || url.starts_with("https://");
-        if is_http {
-            let probe_url = url.clone();
-            let weak_view = cx.entity().downgrade();
-            cx.spawn(async move |_, cx| {
-                let host = super::address::url_host(&probe_url);
-                let is_local = host.eq_ignore_ascii_case("localhost")
-                    || host.starts_with("127.")
-                    || host.starts_with("0.0.0.0");
-
-                if is_local {
-                    let reachable = console_core::fetch_url_bytes(
-                        &probe_url,
-                        std::time::Duration::from_millis(2500),
-                    )
-                    .await;
-                    if reachable.is_none() {
-                        let _ = cx.update(|cx| {
-                            if let Some(view) = weak_view.upgrade() {
-                                view.update(cx, |this, cx| {
-                                    if this.navigation_generation == nav_gen && this.loading {
-                                        this.loading = false;
-                                        this.navigation_error = Some(format!(
-                                            "\"{}\" is not responding. Make sure the local server is running.",
-                                            host
-                                        ));
-                                        if let Some(host_view) = &this.host {
-                                            host_view.set_visible(false);
-                                        }
-                                        cx.notify();
-                                    }
-                                });
-                            }
-                        });
-                    }
-                } else {
-                    tokio::time::sleep(std::time::Duration::from_secs(8)).await;
-                    let _ = cx.update(|cx| {
-                        if let Some(view) = weak_view.upgrade() {
-                            view.update(cx, |this, cx| {
-                                if this.navigation_generation == nav_gen && this.loading {
-                                    this.loading = false;
-                                    this.navigation_error = Some(format!(
-                                        "Could not reach \"{}\". The request timed out or connection was refused.",
-                                        host
-                                    ));
-                                    if let Some(host_view) = &this.host {
-                                        host_view.set_visible(false);
-                                    }
-                                    cx.notify();
-                                }
-                            });
-                        }
-                    });
-                }
-            })
-            .detach();
-        }
-
         cx.notify();
     }
 
@@ -867,11 +815,19 @@ impl BrowserView {
 
     fn render_navigation_error(
         &self,
-        message: SharedString,
+        error: &NativeNavigationError,
         theme: Theme,
         cx: &mut Context<Self>,
     ) -> Div {
         let entity = cx.entity().downgrade();
+        let host = self.current_url.as_deref().map(url_host).unwrap_or("");
+        let title = error.title();
+        let hint = error.hint(host);
+        let error_detail = format!(
+            "{} ({} error {})",
+            error.localized_description, error.domain, error.code
+        );
+
         div()
             .flex_1()
             .min_h_0()
@@ -882,44 +838,60 @@ impl BrowserView {
             .px(px(48.0))
             .pb(px(40.0))
             .bg(theme.canvas)
-            .child(app_icon(IconName::Globe, 32.0, theme.text_tertiary))
+            .child(app_icon(IconName::Globe, 36.0, theme.text_tertiary))
             .child(
                 div()
                     .mt(px(14.0))
-                    .text_size(px(15.0))
+                    .text_size(px(16.0))
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .text_color(theme.text)
-                    .child("This site can’t be reached"),
+                    .child(title),
             )
             .child(
                 div()
                     .mt(px(8.0))
-                    .max_w(px(380.0))
+                    .max_w(px(420.0))
                     .text_center()
-                    .text_size(px(12.0))
+                    .text_size(px(13.0))
                     .line_height(px(18.0))
-                    .text_color(theme.text_tertiary)
-                    .child(message),
+                    .text_color(theme.text_secondary)
+                    .child(hint),
             )
             .child(
                 div()
-                    .mt(px(16.0))
-                    .px(px(14.0))
-                    .py(px(6.0))
-                    .rounded(px(6.0))
-                    .bg(theme.surface)
-                    .border_1()
-                    .border_color(theme.border)
-                    .text_size(px(12.0))
-                    .text_color(theme.text)
-                    .cursor_default()
-                    .hover(|s| s.bg(theme.overlay))
-                    .on_mouse_down(gpui::MouseButton::Left, move |_, _, cx| {
-                        if let Some(view) = entity.upgrade() {
-                            view.update(cx, |this, cx| this.reload(cx));
-                        }
-                    })
-                    .child("Try Reloading"),
+                    .mt(px(6.0))
+                    .max_w(px(420.0))
+                    .text_center()
+                    .text_size(px(11.0))
+                    .line_height(px(16.0))
+                    .text_color(theme.text_ghost)
+                    .child(error_detail),
+            )
+            .child(
+                div()
+                    .mt(px(18.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .px(px(14.0))
+                            .py(px(6.0))
+                            .rounded(px(6.0))
+                            .bg(theme.surface)
+                            .border_1()
+                            .border_color(theme.border)
+                            .text_size(px(12.0))
+                            .text_color(theme.text)
+                            .cursor_default()
+                            .hover(|s| s.bg(theme.overlay))
+                            .on_mouse_down(gpui::MouseButton::Left, move |_, _, cx| {
+                                if let Some(view) = entity.upgrade() {
+                                    view.update(cx, |this, cx| this.reload(cx));
+                                }
+                            })
+                            .child("Try Reloading (⌘R)"),
+                    ),
             )
     }
 
@@ -980,8 +952,8 @@ impl Render for BrowserView {
         let body = if let Some(error) = self.host_error.clone() {
             self.render_host_error(error.into(), theme)
                 .into_any_element()
-        } else if let Some(error) = self.navigation_error.clone() {
-            self.render_navigation_error(error.into(), theme, cx)
+        } else if let Some(ref error) = self.navigation_error {
+            self.render_navigation_error(error, theme, cx)
                 .into_any_element()
         } else if self.navigation_requested {
             self.render_page_area(theme).into_any_element()

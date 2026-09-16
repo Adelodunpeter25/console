@@ -4,12 +4,113 @@
 //! Manages native view geometry synchronization, visibility toggling, focus reconciliation,
 //! and fallback snapshot pixel repacking.
 
-use std::path::PathBuf;
-
 #[cfg(not(target_os = "macos"))]
 use gpui::{Bounds, Pixels};
 #[cfg(not(target_os = "macos"))]
 use std::cell::Cell;
+
+/// Categorized native navigation failure reason.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NavigationErrorCategory {
+    ConnectionRefused,      // -1004 (NSURLErrorCannotConnectToHost)
+    CannotFindHost,         // -1003 (NSURLErrorCannotFindHost)
+    TimedOut,               // -1001 (NSURLErrorTimedOut)
+    NotConnectedToInternet, // -1009 (NSURLErrorNotConnectedToInternet)
+    SecureConnectionFailed, // -1200..=-1206 (SSL certificate error)
+    ProcessTerminated,      // Web process crash / OOM
+    Generic,
+}
+
+/// Rich error information returned directly by the native WebKit engine.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeNavigationError {
+    pub code: isize,
+    pub domain: String,
+    pub localized_description: String,
+    pub category: NavigationErrorCategory,
+}
+
+impl NativeNavigationError {
+    pub fn new(code: isize, domain: String, localized_description: String) -> Self {
+        let category = match code {
+            -1004 => NavigationErrorCategory::ConnectionRefused,
+            -1003 => NavigationErrorCategory::CannotFindHost,
+            -1001 => NavigationErrorCategory::TimedOut,
+            -1009 => NavigationErrorCategory::NotConnectedToInternet,
+            -1206..=-1200 => NavigationErrorCategory::SecureConnectionFailed,
+            _ => NavigationErrorCategory::Generic,
+        };
+        Self {
+            code,
+            domain,
+            localized_description,
+            category,
+        }
+    }
+
+    pub fn process_crashed() -> Self {
+        Self {
+            code: -1,
+            domain: "WKErrorDomain".to_string(),
+            localized_description: "The web content process crashed or ran out of memory."
+                .to_string(),
+            category: NavigationErrorCategory::ProcessTerminated,
+        }
+    }
+
+    pub fn title(&self) -> &'static str {
+        match self.category {
+            NavigationErrorCategory::ConnectionRefused => "This site can’t be reached",
+            NavigationErrorCategory::CannotFindHost => "Server not found",
+            NavigationErrorCategory::TimedOut => "Connection timed out",
+            NavigationErrorCategory::NotConnectedToInternet => "You’re offline",
+            NavigationErrorCategory::SecureConnectionFailed => "Your connection is not private",
+            NavigationErrorCategory::ProcessTerminated => "Web page crashed",
+            NavigationErrorCategory::Generic => "Unable to load page",
+        }
+    }
+
+    pub fn hint(&self, host: &str) -> String {
+        match self.category {
+            NavigationErrorCategory::ConnectionRefused => {
+                if host.eq_ignore_ascii_case("localhost")
+                    || host.starts_with("127.")
+                    || host.starts_with("0.0.0.0")
+                {
+                    format!(
+                        "\"{}\" refused to connect. Make sure your local dev server is running on this port.",
+                        host
+                    )
+                } else {
+                    format!("\"{}\" refused to connect.", host)
+                }
+            }
+            NavigationErrorCategory::CannotFindHost => {
+                format!(
+                    "DNS address for \"{}\" could not be found. Check your spelling and network connection.",
+                    host
+                )
+            }
+            NavigationErrorCategory::TimedOut => {
+                format!("\"{}\" took too long to respond.", host)
+            }
+            NavigationErrorCategory::NotConnectedToInternet => {
+                "Check your internet connection and network settings.".to_string()
+            }
+            NavigationErrorCategory::SecureConnectionFailed => {
+                format!(
+                    "The security certificate for \"{}\" is invalid, self-signed, or untrusted.",
+                    host
+                )
+            }
+            NavigationErrorCategory::ProcessTerminated => {
+                "Something went wrong while displaying this webpage. Reload to restore it."
+                    .to_string()
+            }
+            NavigationErrorCategory::Generic => self.localized_description.clone(),
+        }
+    }
+}
 
 #[cfg(target_os = "macos")]
 mod macos_host {
@@ -19,17 +120,19 @@ mod macos_host {
 
     use gpui::{Bounds, Pixels};
     use objc2::rc::Retained;
-    use objc2::runtime::AnyObject;
-    use objc2::{AllocAnyThread, DefinedClass, define_class, msg_send};
+    use objc2::runtime::{AnyObject, ProtocolObject};
+    use objc2::{AnyThread, DefinedClass, MainThreadOnly, define_class, msg_send};
     use objc2_app_kit::{NSApplication, NSEventType, NSView, NSWindow};
     use objc2_foundation::{
-        MainThreadMarker, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions,
+        MainThreadMarker, NSDictionary, NSError, NSKeyValueChangeKey, NSKeyValueObservingOptions,
         NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSProcessInfo, NSString,
         ns_string,
     };
-    use objc2_web_kit::WKWebView;
+    use objc2_web_kit::{WKNavigationDelegate, WKWebView};
     use wry::WebViewExtMacOS;
     use wry::dpi::{LogicalPosition, LogicalSize};
+
+    use super::NativeNavigationError;
 
     fn recent_user_gesture() -> bool {
         let Some(mtm) = MainThreadMarker::new() else {
@@ -105,27 +208,125 @@ mod macos_host {
         }
     }
 
+    pub(super) struct NavigationDelegateIvars {
+        on_start: Box<dyn Fn()>,
+        on_finish: Box<dyn Fn()>,
+        on_error: Box<dyn Fn(NativeNavigationError)>,
+    }
+
+    define_class!(
+        #[unsafe(super(objc2::runtime::NSObject))]
+        #[thread_kind = MainThreadOnly]
+        #[ivars = NavigationDelegateIvars]
+        pub(super) struct ConsoleNavigationDelegate;
+
+        impl ConsoleNavigationDelegate {
+            #[unsafe(method(webView:didStartProvisionalNavigation:))]
+            fn did_start(&self, _webview: &WKWebView, _nav: *mut AnyObject) {
+                (self.ivars().on_start)();
+            }
+
+            #[unsafe(method(webView:didFinishNavigation:))]
+            fn did_finish(&self, _webview: &WKWebView, _nav: *mut AnyObject) {
+                (self.ivars().on_finish)();
+            }
+
+            #[unsafe(method(webView:didFailProvisionalNavigation:withError:))]
+            fn did_fail_provisional(
+                &self,
+                _webview: &WKWebView,
+                _nav: *mut AnyObject,
+                error: &NSError,
+            ) {
+                let code = error.code();
+                let domain = error.domain().to_string();
+                let desc = error.localizedDescription().to_string();
+                let err = NativeNavigationError::new(code, domain, desc);
+                (self.ivars().on_error)(err);
+            }
+
+            #[unsafe(method(webView:didFailNavigation:withError:))]
+            fn did_fail(&self, _webview: &WKWebView, _nav: *mut AnyObject, error: &NSError) {
+                let code = error.code();
+                let domain = error.domain().to_string();
+                let desc = error.localizedDescription().to_string();
+                let err = NativeNavigationError::new(code, domain, desc);
+                (self.ivars().on_error)(err);
+            }
+
+            #[unsafe(method(webViewWebContentProcessDidTerminate:))]
+            fn process_crashed(&self, _webview: &WKWebView) {
+                (self.ivars().on_error)(NativeNavigationError::process_crashed());
+            }
+        }
+
+        unsafe impl NSObjectProtocol for ConsoleNavigationDelegate {}
+        unsafe impl WKNavigationDelegate for ConsoleNavigationDelegate {}
+    );
+
+    impl ConsoleNavigationDelegate {
+        fn new(
+            wk: &WKWebView,
+            on_start: Box<dyn Fn()>,
+            on_finish: Box<dyn Fn()>,
+            on_error: Box<dyn Fn(NativeNavigationError)>,
+        ) -> Retained<Self> {
+            let mtm = MainThreadMarker::new()
+                .expect("ConsoleNavigationDelegate must be created on main thread");
+            let delegate = Self::alloc(mtm).set_ivars(NavigationDelegateIvars {
+                on_start,
+                on_finish,
+                on_error,
+            });
+            let delegate: Retained<Self> = unsafe { msg_send![super(delegate), init] };
+            unsafe {
+                wk.setNavigationDelegate(Some(ProtocolObject::from_ref(&*delegate)));
+            }
+            delegate
+        }
+    }
+
     pub struct WebviewHost {
         pub webview: wry::WebView,
         wk: Retained<WKWebView>,
         last_bounds: Cell<Option<(i32, i32, i32, i32)>>,
         visible: Cell<bool>,
         _responder_observer: Option<Retained<ResponderObserver>>,
+        _navigation_delegate: Option<Retained<ConsoleNavigationDelegate>>,
     }
 
     impl WebviewHost {
         pub fn new(webview: wry::WebView, on_responder_change: Box<dyn Fn(bool)>) -> Self {
+            Self::with_navigation_callbacks(
+                webview,
+                on_responder_change,
+                Box::new(|| {}),
+                Box::new(|| {}),
+                Box::new(|_| {}),
+            )
+        }
+
+        pub fn with_navigation_callbacks(
+            webview: wry::WebView,
+            on_responder_change: Box<dyn Fn(bool)>,
+            on_nav_start: Box<dyn Fn()>,
+            on_nav_finish: Box<dyn Fn()>,
+            on_nav_error: Box<dyn Fn(NativeNavigationError)>,
+        ) -> Self {
             let wk: Retained<WKWebView> = Retained::into_super(webview.webview());
             lower_below_scene_overlay(&wk);
             let responder_observer = wk
                 .window()
                 .map(|window| ResponderObserver::new(window, on_responder_change));
+            let navigation_delegate =
+                ConsoleNavigationDelegate::new(&wk, on_nav_start, on_nav_finish, on_nav_error);
             Self {
                 webview,
                 wk,
                 last_bounds: Cell::new(None),
                 visible: Cell::new(false),
                 _responder_observer: responder_observer,
+                _navigation_delegate: Some(navigation_delegate),
             }
         }
 
@@ -274,6 +475,7 @@ mod macos_host {
         fn drop(&mut self) {
             unsafe {
                 self.wk.stopLoading();
+                self.wk.setNavigationDelegate(None);
                 self.ns_view().removeFromSuperview();
             }
         }
@@ -399,13 +601,13 @@ pub fn bgra_from_bitmap(
 /// Compute a collision-free download destination path.
 pub fn download_destination(
     url: &str,
-    suggested: PathBuf,
-    base_dir: Option<PathBuf>,
-) -> Option<PathBuf> {
+    suggested: std::path::PathBuf,
+    base_dir: Option<std::path::PathBuf>,
+) -> Option<std::path::PathBuf> {
     let base = base_dir.or_else(|| {
         std::env::var("HOME")
             .ok()
-            .map(|h| PathBuf::from(h).join("Downloads"))
+            .map(|h| std::path::PathBuf::from(h).join("Downloads"))
     })?;
 
     let name = suggested
