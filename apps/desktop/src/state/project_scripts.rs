@@ -435,6 +435,7 @@ impl ConsoleDesktopApp {
     /// never steal a keystroke from under them.
     pub fn any_palette_open(&self, cx: &gpui::App) -> bool {
         self.command_palette.read(cx).is_open(cx)
+            || self.tab_palette.read(cx).is_open(cx)
             || self.quick_open_palette.read(cx).is_open(cx)
             || self.project_browse_palette.read(cx).is_open(cx)
     }

@@ -1080,9 +1080,7 @@ impl Render for ConsoleDesktopApp {
                                 );
                         let browser_element = if browser_visible {
                             let browser = self.browser_view_for_inspector(window, cx);
-                            let is_overlay_open = self.command_palette.read(cx).is_open(cx)
-                                || self.quick_open_palette.read(cx).is_open(cx)
-                                || self.project_browse_palette.read(cx).is_open(cx);
+                            let is_overlay_open = self.any_palette_open(cx);
                             browser.update(cx, |view, cx| {
                                 view.sync_native_state(true, is_overlay_open, cx);
                             });
@@ -1102,9 +1100,7 @@ impl Render for ConsoleDesktopApp {
                                 );
                         let device_element = if device_visible {
                             let device = self.device_view_for_inspector(window, cx);
-                            let is_overlay_open = self.command_palette.read(cx).is_open(cx)
-                                || self.quick_open_palette.read(cx).is_open(cx)
-                                || self.project_browse_palette.read(cx).is_open(cx);
+                            let is_overlay_open = self.any_palette_open(cx);
                             device.update(cx, |view, cx| {
                                 view.sync_native_state(true, is_overlay_open, cx);
                             });
