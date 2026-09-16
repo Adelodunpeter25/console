@@ -8,9 +8,47 @@ use gpui::{
     Styled, Window, div, prelude::FluentBuilder, px,
 };
 
+use crate::markdown::render::MONO_FAMILY;
 use crate::primitives::file_icon;
 use crate::primitives::file_icons::file_icon_for_name;
+use crate::primitives::tooltip::Tooltip;
 use crate::theme::Theme;
+
+/// Parent directory of a path, handling both separator styles.
+/// Returns `""` for bare filenames.
+fn parent_dir(path: &str) -> &str {
+    match path.rsplit_once(['/', '\\']) {
+        Some((parent, _)) => parent,
+        None => "",
+    }
+}
+
+/// Shorten a parent dir for narrow rows: strip a shared workspace prefix and
+/// keep the trailing segments that actually disambiguate same-name files.
+/// `apps/desktop/crates/console-ui/src/markdown` → `…/console-ui/src/markdown`.
+fn short_parent_dir(path: &str) -> String {
+    let parent = parent_dir(path);
+    if parent.is_empty() {
+        return String::new();
+    }
+    const SKIP_PREFIXES: [&str; 2] = ["apps/", "packages/"];
+    let mut rest = parent;
+    for prefix in SKIP_PREFIXES {
+        if let Some(stripped) = rest.strip_prefix(prefix) {
+            rest = stripped;
+            break;
+        }
+    }
+    const KEEP_SEGMENTS: usize = 3;
+    let segments: Vec<&str> = rest.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
+    if segments.len() <= KEEP_SEGMENTS || rest.len() <= 28 {
+        return rest.replace('\\', "/");
+    }
+    format!(
+        "…/{}",
+        segments[segments.len() - KEEP_SEGMENTS..].join("/")
+    )
+}
 
 #[derive(IntoElement)]
 pub struct ChangesListView {
@@ -86,6 +124,8 @@ impl RenderOnce for ChangesListView {
                             .and_then(|n| n.to_str())
                             .unwrap_or(&entry.path)
                             .to_string();
+                        let short_dir = short_parent_dir(&entry.path);
+                        let tooltip_path = entry.path.clone();
 
                         div()
                             .id(format!("change-row-{}", entry.path))
@@ -99,6 +139,7 @@ impl RenderOnce for ChangesListView {
                             .cursor_pointer()
                             .hover(|s| s.bg(theme.overlay))
                             .when(is_selected, |s| s.bg(theme.overlay_strong))
+                            .tooltip(Tooltip::text(tooltip_path))
                             .on_click(move |_, window, cx| {
                                 (on_select)(path.clone(), window, cx);
                             })
@@ -121,14 +162,34 @@ impl RenderOnce for ChangesListView {
                                     .child(file_icon(file_icon_for_name(&file_name), 14.0))
                                     .child(
                                         div()
-                                            .truncate()
-                                            .text_size(px(12.0))
-                                            .text_color(if is_selected {
-                                                theme.text
-                                            } else {
-                                                theme.text_secondary
-                                            })
-                                            .child(file_name),
+                                            .flex()
+                                            .items_baseline()
+                                            .gap(px(6.0))
+                                            .min_w_0()
+                                            .flex_1()
+                                            .child(
+                                                div()
+                                                    .flex_none()
+                                                    .text_size(px(12.0))
+                                                    .text_color(if is_selected {
+                                                        theme.text
+                                                    } else {
+                                                        theme.text_secondary
+                                                    })
+                                                    .child(file_name),
+                                            )
+                                            .when(!short_dir.is_empty(), |el| {
+                                                el.child(
+                                                    div()
+                                                        .truncate()
+                                                        .min_w_0()
+                                                        .flex_1()
+                                                        .text_size(px(10.5))
+                                                        .font_family(MONO_FAMILY)
+                                                        .text_color(theme.text_ghost)
+                                                        .child(short_dir.clone()),
+                                                )
+                                            }),
                                     ),
                             )
                             .child(
