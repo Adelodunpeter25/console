@@ -766,7 +766,7 @@ impl BrowserView {
                                 .h(px(2.0))
                                 .w(gpui::relative(prog))
                                 .rounded_full()
-                                .bg(theme.accent),
+                                .bg(gpui::rgb(0x007AFF)),
                         )
                     }),
             )
