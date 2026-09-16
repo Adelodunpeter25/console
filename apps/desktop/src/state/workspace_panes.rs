@@ -670,12 +670,10 @@ impl ConsoleDesktopApp {
         }
 
         let view = cx.new(|cx| {
-            let view = BrowserView::new(window, cx);
+            let mut view = BrowserView::new(window, cx);
             if let Some(url) = initial_url {
                 if !url.is_empty() {
-                    let _ = cx.entity().update(cx, |this: &mut BrowserView, cx| {
-                        this.navigate_to_url(url, cx);
-                    });
+                    view.navigate_to_url(url, cx);
                 }
             }
             view
