@@ -643,6 +643,7 @@ impl ConsoleDesktopApp {
         };
         workspace_ops::open_tab(&mut self.workspace_root, pane_id, tab);
         self.active_pane_id = Some(pane_id.to_string());
+        self.sync_workspace_webviews(cx);
         self.persist_workspaces();
         cx.notify();
     }
@@ -880,6 +881,7 @@ impl ConsoleDesktopApp {
         self.active_pane_id = Some(pane_id.to_string());
         self.inspector_selected_path = Some(path.clone());
         self.trim_file_caches();
+        self.sync_workspace_webviews(cx);
         self.persist_workspaces();
 
         // Fetch file content or image preview

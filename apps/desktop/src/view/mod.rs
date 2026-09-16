@@ -22,7 +22,6 @@ impl Render for ConsoleDesktopApp {
         // Keep script-shortcut dispatch aimed at the active project even when
         // the sidebar (and its panel) is hidden.
         self.sync_active_shortcuts_to_active_project();
-        self.sync_workspace_webviews(cx);
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
         let client = self.client.clone();
