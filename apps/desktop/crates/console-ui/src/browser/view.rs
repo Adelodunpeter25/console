@@ -65,6 +65,8 @@ pub struct BrowserView {
     address: Entity<ComposerInput>,
     host: Option<Rc<WebviewHost>>,
     host_error: Option<String>,
+    navigation_error: Option<String>,
+    navigation_generation: u64,
     navigation_requested: bool,
     current_url: Option<String>,
     page_title: Option<String>,
@@ -151,6 +153,8 @@ impl BrowserView {
             address,
             host: None,
             host_error: None,
+            navigation_error: None,
+            navigation_generation: 0,
             navigation_requested: false,
             current_url: None,
             page_title: None,
@@ -272,11 +276,18 @@ impl BrowserView {
         match event {
             PageLoad::Started => {
                 self.loading = true;
+                self.navigation_error = None;
                 self.page_title = None;
                 self.snapshot = None;
             }
             PageLoad::Finished => {
                 self.loading = false;
+                self.navigation_error = None;
+                if let Some(host) = &self.host {
+                    if !self.occluded {
+                        host.set_visible(true);
+                    }
+                }
             }
         }
         if !url.is_empty() {
@@ -409,10 +420,73 @@ impl BrowserView {
         }
         self.navigation_requested = true;
         self.loading = true;
-        self.current_url = Some(url);
+        self.navigation_error = None;
+        self.navigation_generation = self.navigation_generation.wrapping_add(1);
+        let nav_gen = self.navigation_generation;
+        self.current_url = Some(url.clone());
         self.address_dirty = false;
         self.echo_page_url(cx);
         self.focus_page(cx);
+
+        let is_http = url.starts_with("http://") || url.starts_with("https://");
+        if is_http {
+            let probe_url = url.clone();
+            let weak_view = cx.entity().downgrade();
+            cx.spawn(async move |_, cx| {
+                let host = super::address::url_host(&probe_url);
+                let is_local = host.eq_ignore_ascii_case("localhost")
+                    || host.starts_with("127.")
+                    || host.starts_with("0.0.0.0");
+
+                if is_local {
+                    let reachable = console_core::fetch_url_bytes(
+                        &probe_url,
+                        std::time::Duration::from_millis(2500),
+                    )
+                    .await;
+                    if reachable.is_none() {
+                        let _ = cx.update(|cx| {
+                            if let Some(view) = weak_view.upgrade() {
+                                view.update(cx, |this, cx| {
+                                    if this.navigation_generation == nav_gen && this.loading {
+                                        this.loading = false;
+                                        this.navigation_error = Some(format!(
+                                            "\"{}\" is not responding. Make sure the local server is running.",
+                                            host
+                                        ));
+                                        if let Some(host_view) = &this.host {
+                                            host_view.set_visible(false);
+                                        }
+                                        cx.notify();
+                                    }
+                                });
+                            }
+                        });
+                    }
+                } else {
+                    tokio::time::sleep(std::time::Duration::from_secs(8)).await;
+                    let _ = cx.update(|cx| {
+                        if let Some(view) = weak_view.upgrade() {
+                            view.update(cx, |this, cx| {
+                                if this.navigation_generation == nav_gen && this.loading {
+                                    this.loading = false;
+                                    this.navigation_error = Some(format!(
+                                        "Could not reach \"{}\". The request timed out or connection was refused.",
+                                        host
+                                    ));
+                                    if let Some(host_view) = &this.host {
+                                        host_view.set_visible(false);
+                                    }
+                                    cx.notify();
+                                }
+                            });
+                        }
+                    });
+                }
+            })
+            .detach();
+        }
+
         cx.notify();
     }
 
@@ -531,7 +605,9 @@ impl BrowserView {
     }
 
     pub fn reload(&mut self, cx: &mut Context<Self>) {
-        if let Some(host) = &self.host {
+        if let Some(url) = self.current_url.clone() {
+            self.navigate_to_url(url, cx);
+        } else if let Some(host) = &self.host {
             if self.navigation_requested {
                 host.reload();
                 self.loading = true;
@@ -789,6 +865,64 @@ impl BrowserView {
             )
     }
 
+    fn render_navigation_error(
+        &self,
+        message: SharedString,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let entity = cx.entity().downgrade();
+        div()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .px(px(48.0))
+            .pb(px(40.0))
+            .bg(theme.canvas)
+            .child(app_icon(IconName::Globe, 32.0, theme.text_tertiary))
+            .child(
+                div()
+                    .mt(px(14.0))
+                    .text_size(px(15.0))
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(theme.text)
+                    .child("This site can’t be reached"),
+            )
+            .child(
+                div()
+                    .mt(px(8.0))
+                    .max_w(px(380.0))
+                    .text_center()
+                    .text_size(px(12.0))
+                    .line_height(px(18.0))
+                    .text_color(theme.text_tertiary)
+                    .child(message),
+            )
+            .child(
+                div()
+                    .mt(px(16.0))
+                    .px(px(14.0))
+                    .py(px(6.0))
+                    .rounded(px(6.0))
+                    .bg(theme.surface)
+                    .border_1()
+                    .border_color(theme.border)
+                    .text_size(px(12.0))
+                    .text_color(theme.text)
+                    .cursor_default()
+                    .hover(|s| s.bg(theme.overlay))
+                    .on_mouse_down(gpui::MouseButton::Left, move |_, _, cx| {
+                        if let Some(view) = entity.upgrade() {
+                            view.update(cx, |this, cx| this.reload(cx));
+                        }
+                    })
+                    .child("Try Reloading"),
+            )
+    }
+
     fn render_page_area(&self, theme: Theme) -> Div {
         let host = self.host.clone();
         let occluded = self.occluded;
@@ -845,6 +979,9 @@ impl Render for BrowserView {
 
         let body = if let Some(error) = self.host_error.clone() {
             self.render_host_error(error.into(), theme)
+                .into_any_element()
+        } else if let Some(error) = self.navigation_error.clone() {
+            self.render_navigation_error(error.into(), theme, cx)
                 .into_any_element()
         } else if self.navigation_requested {
             self.render_page_area(theme).into_any_element()
