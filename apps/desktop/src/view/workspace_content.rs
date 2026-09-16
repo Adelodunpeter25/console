@@ -88,6 +88,10 @@ impl ConsoleDesktopApp {
                 window,
                 cx,
             );
+            let is_overlay_open = self.any_palette_open(cx);
+            view.update(cx, |v, cx| {
+                v.sync_native_state(true, is_overlay_open, cx);
+            });
             return div().size_full().child(view).into_any_element();
         }
 

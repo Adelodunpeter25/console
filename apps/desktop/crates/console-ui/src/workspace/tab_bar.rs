@@ -279,16 +279,33 @@ impl RenderOnce for WorkspaceTabBar {
                                         .unwrap_or(path);
                                     file_icon(file_icon_for_name(name), 13.0).into_any_element()
                                 }
-                                console_core::WorkspaceTabConfig::Browser { .. } => app_icon(
-                                    IconName::Globe,
-                                    11.0,
-                                    if is_active {
-                                        theme.text
+                                console_core::WorkspaceTabConfig::Browser { url, .. } => {
+                                    let host = crate::browser::url_host(url);
+                                    if !url.is_empty()
+                                        && !url.starts_with("about:")
+                                        && !host.is_empty()
+                                        && !host.eq_ignore_ascii_case("localhost")
+                                        && !host.starts_with("127.")
+                                    {
+                                        let fav = crate::browser::favicon_url(url, 32);
+                                        gpui::img(fav)
+                                            .size(px(12.0))
+                                            .rounded(px(2.0))
+                                            .flex_none()
+                                            .into_any_element()
                                     } else {
-                                        theme.text_tertiary
-                                    },
-                                )
-                                .into_any_element(),
+                                        app_icon(
+                                            IconName::Globe,
+                                            11.0,
+                                            if is_active {
+                                                theme.text
+                                            } else {
+                                                theme.text_tertiary
+                                            },
+                                        )
+                                        .into_any_element()
+                                    }
+                                }
                             })
                             // Tab Title
                             .child(
