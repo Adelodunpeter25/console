@@ -48,35 +48,27 @@ pub fn get_or_fetch_favicon(url_or_host: &str) -> Option<Arc<gpui::Image>> {
             host
         );
         tokio::spawn(async move {
-            let client = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(4))
-                .build();
-            if let Ok(client) = client {
-                if let Ok(resp) = client.get(&fav_url).send().await {
-                    if resp.status().is_success() {
-                        if let Ok(bytes) = resp.bytes().await {
-                            let bytes_vec = bytes.to_vec();
-                            let format = if bytes_vec.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
-                                Some(gpui::ImageFormat::Png)
-                            } else if bytes_vec.starts_with(&[0xFF, 0xD8, 0xFF]) {
-                                Some(gpui::ImageFormat::Jpeg)
-                            } else if bytes_vec.starts_with(&[0x00, 0x00, 0x01, 0x00]) {
-                                Some(gpui::ImageFormat::Ico)
-                            } else if bytes_vec.starts_with(b"RIFF")
-                                && bytes_vec.len() > 12
-                                && &bytes_vec[8..12] == b"WEBP"
-                            {
-                                Some(gpui::ImageFormat::Webp)
-                            } else {
-                                gpui::ImageFormat::from_mime_type("image/png")
-                            };
-                            if let Some(format) = format {
-                                let image = Arc::new(gpui::Image::from_bytes(format, bytes_vec));
-                                if let Ok(mut cache) = favicon_cache().lock() {
-                                    cache.insert(host_for_task.clone(), image);
-                                }
-                            }
-                        }
+            if let Some(bytes_vec) =
+                console_core::fetch_url_bytes(&fav_url, std::time::Duration::from_secs(4)).await
+            {
+                let format = if bytes_vec.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+                    Some(gpui::ImageFormat::Png)
+                } else if bytes_vec.starts_with(&[0xFF, 0xD8, 0xFF]) {
+                    Some(gpui::ImageFormat::Jpeg)
+                } else if bytes_vec.starts_with(&[0x00, 0x00, 0x01, 0x00]) {
+                    Some(gpui::ImageFormat::Ico)
+                } else if bytes_vec.starts_with(b"RIFF")
+                    && bytes_vec.len() > 12
+                    && &bytes_vec[8..12] == b"WEBP"
+                {
+                    Some(gpui::ImageFormat::Webp)
+                } else {
+                    gpui::ImageFormat::from_mime_type("image/png")
+                };
+                if let Some(format) = format {
+                    let image = Arc::new(gpui::Image::from_bytes(format, bytes_vec));
+                    if let Ok(mut cache) = favicon_cache().lock() {
+                        cache.insert(host_for_task.clone(), image);
                     }
                 }
             }

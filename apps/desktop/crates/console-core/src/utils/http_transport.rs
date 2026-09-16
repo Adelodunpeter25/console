@@ -85,3 +85,14 @@ pub async fn probe_backend(url: &str, timeout: std::time::Duration) -> Result<()
     );
     Ok(())
 }
+
+/// Fetch raw bytes from a URL with a timeout.
+pub async fn fetch_url_bytes(url: &str, timeout: std::time::Duration) -> Option<Vec<u8>> {
+    let client = reqwest::Client::builder().timeout(timeout).build().ok()?;
+    let response = client.get(url).send().await.ok()?;
+    if response.status().is_success() {
+        response.bytes().await.ok().map(|b| b.to_vec())
+    } else {
+        None
+    }
+}
