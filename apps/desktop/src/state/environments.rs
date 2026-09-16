@@ -309,6 +309,14 @@ impl ConsoleDesktopApp {
                         this.refresh_auth_status(cx);
                         this.fetch_usage(cx);
                         this.init_port_stream(cx);
+                        // Point the device viewer at the new backend origin so
+                        // stream/screenshot URLs follow the active server.
+                        if let Some(ref device) = this.device_view {
+                            let url = url.clone();
+                            device.update(cx, |view, cx| {
+                                view.set_base_url(url, cx);
+                            });
+                        }
                         cx.notify();
                     });
                 }

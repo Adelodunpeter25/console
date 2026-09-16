@@ -188,7 +188,8 @@ impl DeviceViewer {
                 if let Some(view) = view.upgrade() {
                     view.update(cx, |this, cx| {
                         this.loading = false;
-                        this.base_url = Some(base_url);
+                        let trimmed = base_url.trim_end_matches('/').to_string();
+                        this.base_url = (!trimmed.is_empty()).then_some(trimmed);
                         match result {
                             Ok(devices) => {
                                 if this.selected_id.is_none() {
@@ -233,18 +234,25 @@ impl DeviceViewer {
         }
     }
 
-    fn stream_base(&self, cx: &App) -> String {
-        // The hub proxy lives under the server origin; the transport base URL
-        // is read from the client at call time in the app shell, so here we
-        // reuse the configured backend URL via a blocking snapshot is avoided
-        // by deriving from the client's known base through cx globals is not
-        // possible — instead the shell passes base URL through start config.
-        // Fallback to localhost for tests.
-        let _ = cx;
-        "http://localhost:3000".to_string()
+    fn stream_base(&self) -> Option<String> {
+        // The hub proxy lives under the server origin; use the backend URL
+        // captured from the client in `refresh` / `set_base_url`. No
+        // localhost fallback: a missing base means we are not connected.
+        let base = self.base_url.clone()?;
+        let trimmed = base.trim_end_matches('/').to_string();
+        (!trimmed.is_empty()).then_some(trimmed)
     }
 
-    fn start_selected_stream(&mut self, cx: &mut Context<Self>) {
+    /// Update the backend origin (e.g. after a Server Environment switch)
+    /// and restart the selected stream against it.
+    pub fn set_base_url(&mut self, url: String, cx: &mut Context<Self>) {
+        let trimmed = url.trim_end_matches('/').to_string();
+        self.base_url = (!trimmed.is_empty()).then_some(trimmed);
+        self.start_selected_stream(cx);
+        cx.notify();
+    }
+
+    fn start_selected_stream(&mut self, _cx: &mut Context<Self>) {
         let Some(host) = self.host.clone() else {
             return;
         };
@@ -252,8 +260,11 @@ impl DeviceViewer {
             host.evaluate_script(PlayerConfig::stop_script());
             return;
         };
+        let Some(base) = self.stream_base() else {
+            self.stream_status = Some("not connected".to_string());
+            return;
+        };
         let platform = device.platform_kind().as_str().to_string();
-        let base = self.stream_base(cx);
         let stream_url = format!(
             "{}/api/devices/{}/stream?platform={}",
             base, device.id, platform
@@ -432,10 +443,15 @@ impl DeviceViewer {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(1500))
                 .await;
+            let base_url = client.base_url().await;
             let result = client.devices.list().await;
             cx.update(|cx| {
                 if let Some(view) = view.upgrade() {
                     view.update(cx, |this, cx| {
+                        // Keep the stream origin in sync in case the backend
+                        // changed while booting.
+                        let trimmed = base_url.trim_end_matches('/').to_string();
+                        this.base_url = (!trimmed.is_empty()).then_some(trimmed);
                         if let Ok(devices) = result {
                             this.devices = Rc::new(devices);
                             this.start_selected_stream(cx);
