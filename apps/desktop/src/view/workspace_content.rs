@@ -78,27 +78,17 @@ impl ConsoleDesktopApp {
             browser_id, url, ..
         }) = active_tab
         {
-            if !self.browser_views.contains_key(browser_id) {
-                let view = cx.new(|cx| console_ui::browser::BrowserView::new(window, cx));
-                if !url.is_empty() {
-                    let url = url.clone();
-                    view.update(cx, |this, cx| this.navigate_to_url(url, cx));
-                }
-                self.browser_views.insert(browser_id.clone(), view);
-            }
-            let theme = Theme::current(cx);
-            return match self.browser_views.get(browser_id) {
-                Some(view) => div().size_full().child(view.clone()).into_any_element(),
-                None => div()
-                    .size_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_color(theme.text_ghost)
-                    .text_size(px(12.0))
-                    .child("Browser session ended")
-                    .into_any_element(),
-            };
+            let view = self.get_or_create_browser_view(
+                browser_id,
+                if url.is_empty() {
+                    None
+                } else {
+                    Some(url.clone())
+                },
+                window,
+                cx,
+            );
+            return div().size_full().child(view).into_any_element();
         }
 
         // File tab: render full-page MarkdownViewer, FileViewer, ImagePreview, or BlockedFilePanel
