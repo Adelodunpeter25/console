@@ -1,5 +1,6 @@
 use console_core::types::git::GitBranchInfo;
 use console_core::{ApprovalMode, SelectedModel, TodoItem, UpdateSessionDto, WorkspaceTabConfig};
+use console_ui::browser::{BrowserView, default_browser_title};
 use console_ui::chat::TranscriptView;
 use console_ui::input::{ComposerAttachmentPaste, ComposerEvent, ComposerInput};
 use console_ui::model_picker::PickerTab;
@@ -646,6 +647,60 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    /// Open a new Browser tab in the active pane. No URL yet: the view shows
+    /// its start page until the user submits an address or a port-open /
+    /// chat-link navigates it via `open_browser_smart`.
+    pub fn open_browser_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_browser_tab_with_url(None, window, cx);
+    }
+
+    /// Open a Browser tab in the active pane, optionally seeded with a URL.
+    /// Title defaults to host + port and updates from the page title when the
+    /// view reports one.
+    pub fn open_browser_tab_with_url(
+        &mut self,
+        url: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".into());
+        let browser_id = format!(
+            "browser-{}-{}",
+            chrono::Utc::now().timestamp_millis(),
+            self.browser_views.len(),
+        );
+        let title = url
+            .as_deref()
+            .map(default_browser_title)
+            .unwrap_or_else(|| "New Tab".into());
+        let view = cx.new(|cx| {
+            let view = BrowserView::new(window, cx);
+            if let Some(url) = url.clone() {
+                // Seed after mount: navigate once the native host exists.
+                // `BrowserView::new` already builds the host, so this applies.
+                let _ = cx.entity().update(cx, |this: &mut BrowserView, cx| {
+                    this.navigate_to_url(url, cx);
+                });
+            }
+            view
+        });
+        self.browser_views.insert(browser_id.clone(), view);
+        let tab = WorkspaceTabConfig::Browser {
+            browser_id: browser_id.clone(),
+            url: url.unwrap_or_default(),
+            title,
+            project_id: self.pane_project_id(&pane_id),
+            last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
+        };
+        workspace_ops::open_tab(&mut self.workspace_root, &pane_id, tab);
+        self.active_pane_id = Some(pane_id);
+        self.persist_workspaces();
+        cx.notify();
+    }
+
     /// Resolve a clicked transcript file link against the session cwd with a
     /// pane project-path fallback, then open it as a workspace tab. Phase 1
     /// opens the file only; `:line:col` suffixes are stripped by the resolver.
@@ -1160,6 +1215,27 @@ impl ConsoleDesktopApp {
             }
             WorkspaceTabConfig::File { path, .. } | WorkspaceTabConfig::Diff { path, .. } => {
                 self.evict_file_caches_for_path(path);
+            }
+            WorkspaceTabConfig::Browser { browser_id, .. } => {
+                let still_referenced = self
+                    .workspace_root
+                    .leaves()
+                    .iter()
+                    .flat_map(|leaf| leaf.tabs.iter())
+                    .any(|open_tab| {
+                        matches!(
+                            open_tab,
+                            WorkspaceTabConfig::Browser {
+                                browser_id: open_id,
+                                ..
+                            } if open_id == browser_id
+                        )
+                    });
+                if !still_referenced {
+                    if let Some(view) = self.browser_views.remove(browser_id) {
+                        view.update(cx, |browser, cx| browser.close(cx));
+                    }
+                }
             }
             WorkspaceTabConfig::Chat { .. } => {}
         }

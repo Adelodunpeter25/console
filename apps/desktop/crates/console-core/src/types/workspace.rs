@@ -54,6 +54,18 @@ pub enum WorkspaceTabConfig {
         #[serde(rename = "lastActiveAtMs")]
         last_active_at_ms: Option<i64>,
     },
+    #[serde(rename = "browser")]
+    Browser {
+        #[serde(rename = "browserId")]
+        browser_id: String,
+        url: String,
+        title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        project_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "lastActiveAtMs")]
+        last_active_at_ms: Option<i64>,
+    },
 }
 
 impl WorkspaceTabConfig {
@@ -64,6 +76,7 @@ impl WorkspaceTabConfig {
             Self::Terminal { terminal_id, .. } => format!("term:{terminal_id}"),
             Self::File { path, .. } => format!("file:{path}"),
             Self::Diff { path, .. } => format!("diff:{path}"),
+            Self::Browser { browser_id, .. } => format!("browser:{browser_id}"),
         }
     }
 
@@ -72,7 +85,8 @@ impl WorkspaceTabConfig {
             Self::Chat { title, .. }
             | Self::Terminal { title, .. }
             | Self::File { title, .. }
-            | Self::Diff { title, .. } => title,
+            | Self::Diff { title, .. }
+            | Self::Browser { title, .. } => title,
         }
     }
 
@@ -82,7 +96,8 @@ impl WorkspaceTabConfig {
             Self::Chat { title: t, .. }
             | Self::Terminal { title: t, .. }
             | Self::File { title: t, .. }
-            | Self::Diff { title: t, .. } => *t = title,
+            | Self::Diff { title: t, .. }
+            | Self::Browser { title: t, .. } => *t = title,
         }
     }
 
@@ -91,7 +106,8 @@ impl WorkspaceTabConfig {
             Self::Chat { project_id, .. }
             | Self::Terminal { project_id, .. }
             | Self::File { project_id, .. }
-            | Self::Diff { project_id, .. } => project_id.as_deref(),
+            | Self::Diff { project_id, .. }
+            | Self::Browser { project_id, .. } => project_id.as_deref(),
         }
     }
 
@@ -100,7 +116,8 @@ impl WorkspaceTabConfig {
             Self::Chat { project_id: p, .. }
             | Self::Terminal { project_id: p, .. }
             | Self::File { project_id: p, .. }
-            | Self::Diff { project_id: p, .. } => *p = project_id,
+            | Self::Diff { project_id: p, .. }
+            | Self::Browser { project_id: p, .. } => *p = project_id,
         }
     }
 
@@ -109,7 +126,8 @@ impl WorkspaceTabConfig {
             Self::Chat { last_active_at_ms, .. }
             | Self::Terminal { last_active_at_ms, .. }
             | Self::File { last_active_at_ms, .. }
-            | Self::Diff { last_active_at_ms, .. } => *last_active_at_ms,
+            | Self::Diff { last_active_at_ms, .. }
+            | Self::Browser { last_active_at_ms, .. } => *last_active_at_ms,
         }
     }
 
@@ -118,7 +136,8 @@ impl WorkspaceTabConfig {
             Self::Chat { last_active_at_ms, .. }
             | Self::Terminal { last_active_at_ms, .. }
             | Self::File { last_active_at_ms, .. }
-            | Self::Diff { last_active_at_ms, .. } => *last_active_at_ms = ts_ms,
+            | Self::Diff { last_active_at_ms, .. }
+            | Self::Browser { last_active_at_ms, .. } => *last_active_at_ms = ts_ms,
         }
     }
 }

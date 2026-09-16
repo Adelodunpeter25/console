@@ -65,9 +65,11 @@ fn command_palette_entries(
     entries
 }
 
-/// ⌘⇧P entries: open tabs in two visual groups — terminals first (always
-/// fewer, top of the list), then chat tabs sorted by recently-updated. Each
-/// entry routes to that tab via [`ConsoleDesktopApp::activate_workspace_tab`].
+/// ⌘⇧P entries: open tabs in three visual groups — browsers first, then
+/// terminals (both always the smaller groups), then chat tabs sorted by
+/// recently-updated. Labels are the workspace tab titles so search matches
+/// them. Each entry routes to that tab via
+/// [`ConsoleDesktopApp::activate_workspace_tab`].
 fn tab_palette_entries(
     entity: WeakEntity<ConsoleDesktopApp>,
     workspace_root: &WorkspaceNode,
@@ -76,12 +78,26 @@ fn tab_palette_entries(
     // pane's index for the visible label suffix.
     let leaves: Vec<&console_core::LeafPaneNode> = workspace_root.leaves();
     let pane_count = leaves.len();
+    let mut browser_entries: Vec<(i64, PaletteEntry)> = Vec::new();
     let mut chat_entries: Vec<(i64, PaletteEntry)> = Vec::new();
     let mut terminal_entries: Vec<PaletteEntry> = Vec::new();
 
     for (pane_index, leaf) in leaves.iter().enumerate() {
         for tab in &leaf.tabs {
             match tab {
+                WorkspaceTabConfig::Browser { .. } => {
+                    let recency = tab.last_active_at_ms().unwrap_or(i64::MIN);
+                    browser_entries.push((
+                        recency,
+                        tab_palette_entry(
+                            entity.clone(),
+                            &leaf.id,
+                            pane_index,
+                            pane_count,
+                            tab,
+                        ),
+                    ));
+                }
                 WorkspaceTabConfig::Terminal { .. } => {
                     terminal_entries.push(tab_palette_entry(
                         entity.clone(),
@@ -111,10 +127,13 @@ fn tab_palette_entries(
         }
     }
 
-    // Chat sorted by recency: most-recently updated first. Tabs without a
-    // timestamp share the bottom of the list in insertion order.
+    // Browsers and chats sorted by recency: most-recently updated first.
+    // Tabs without a timestamp share the bottom of the list in insertion order.
+    browser_entries.sort_by(|(a, _), (b, _)| b.cmp(a));
     chat_entries.sort_by(|(a, _), (b, _)| b.cmp(a));
-    let mut entries = terminal_entries;
+    let mut entries: Vec<PaletteEntry> =
+        browser_entries.into_iter().map(|(_, entry)| entry).collect();
+    entries.extend(terminal_entries);
     entries.extend(chat_entries.into_iter().map(|(_, entry)| entry));
     entries
 }
@@ -136,6 +155,7 @@ fn tab_palette_entry(
     let label = format!("{}{}", title, pane_suffix);
     let icon = match tab {
         WorkspaceTabConfig::Chat { .. } => IconName::ChatRoundLine,
+        WorkspaceTabConfig::Browser { .. } => IconName::Globe,
         _ => IconName::Terminal,
     };
     let pane_id_for_handler = pane_id.to_string();
@@ -319,8 +339,8 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// ⌘⇧P — toggle the open-tab palette. Terminal tabs appear first (always
-    /// the smaller group), then chat tabs sorted by recency.
+    /// ⌘⇧P — toggle the open-tab palette. Browser tabs appear first, then
+    /// terminals, then chat tabs sorted by recency.
     pub fn toggle_tab_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let entity = cx.entity().downgrade();
         let workspace_root = self.workspace_root.clone();

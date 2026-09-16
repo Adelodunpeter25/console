@@ -324,6 +324,10 @@ pub struct ConsoleDesktopApp {
     /// Live terminal surfaces keyed by terminal id. Tabs reference these via
     /// `WorkspaceTabConfig::Terminal { terminal_id }`.
     pub terminals: std::collections::HashMap<String, Entity<TerminalView>>,
+    /// Live browser surfaces keyed by browser id. Tabs reference these via
+    /// `WorkspaceTabConfig::Browser { browser_id }`. Separate from the
+    /// inspector's singleton `browser_view`.
+    pub browser_views: std::collections::HashMap<String, Entity<console_ui::BrowserView>>,
     pub auth_status: Option<console_core::types::AuthStatusResponse>,
     pub auth_logging_in: std::collections::HashSet<String>,
     pub usage_reports:
@@ -898,6 +902,7 @@ impl ConsoleDesktopApp {
             project_browse_palette: cx
                 .new(|cx| ProjectBrowsePalette::new(client_for_palettes.clone(), window, cx)),
             terminals: std::collections::HashMap::new(),
+            browser_views: std::collections::HashMap::new(),
             auth_status: None,
             auth_logging_in: std::collections::HashSet::new(),
             usage_reports: None,

@@ -330,6 +330,13 @@ impl BrowserView {
         self.page_title.as_deref()
     }
 
+    /// Google favicon service URL for the current page, if a URL is loaded.
+    pub fn favicon_url(&self, size: u32) -> Option<String> {
+        self.current_url
+            .as_deref()
+            .map(|url| super::address::favicon_url(url, size))
+    }
+
     pub fn is_loading(&self) -> bool {
         self.loading
     }

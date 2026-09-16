@@ -86,6 +86,47 @@ pub fn is_secure_url(url: &str) -> bool {
     url.starts_with("https://")
 }
 
+/// Host (domain) portion of a URL, without scheme, port, path, or query.
+/// Used for tab titles and the Google favicon lookup.
+pub fn url_host(url: &str) -> &str {
+    let without_scheme = url.split_once("://").map(|(_, rest)| rest).unwrap_or(url);
+    let authority = without_scheme
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or(without_scheme);
+    // Strip userinfo and port.
+    let host = authority.rsplit('@').next().unwrap_or(authority);
+    host.rsplit_once(':')
+        .map(|(h, _)| h)
+        .unwrap_or(host)
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+}
+
+/// Google favicon service URL for the given page URL (size 32, with fallback).
+/// Pure string builder — no network — so views can use it directly in `img()`.
+pub fn favicon_url(page_url: &str, size: u32) -> String {
+    format!(
+        "https://www.google.com/s2/favicons?domain={}&sz={}",
+        url_host(page_url),
+        size
+    )
+}
+
+/// Default tab title for a URL: host + port (e.g. `localhost:3000`).
+pub fn default_browser_title(url: &str) -> String {
+    let without_scheme = url.split_once("://").map(|(_, rest)| rest).unwrap_or(url);
+    let title = without_scheme
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or(without_scheme);
+    if title.is_empty() {
+        url.to_owned()
+    } else {
+        title.to_owned()
+    }
+}
+
 /// The address bar hides `https://` the way Safari does; everything else —
 /// including `http://` — stays visible because it is information.
 pub fn display_url(url: &str) -> &str {
