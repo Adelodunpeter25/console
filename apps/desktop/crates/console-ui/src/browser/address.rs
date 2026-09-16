@@ -1,5 +1,94 @@
 //! Address bar input resolution, display URL formatting, and search routing.
 
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex, OnceLock};
+
+static FAVICON_CACHE: OnceLock<Mutex<HashMap<String, Arc<gpui::Image>>>> = OnceLock::new();
+static FAVICON_IN_FLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+
+fn favicon_cache() -> &'static Mutex<HashMap<String, Arc<gpui::Image>>> {
+    FAVICON_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn favicon_in_flight() -> &'static Mutex<HashSet<String>> {
+    FAVICON_IN_FLIGHT.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+/// Retrieve a cached favicon `gpui::Image` for the given host or URL.
+/// If not yet cached, initiates an asynchronous background fetch and returns `None`
+/// until the image is decoded and ready in memory.
+pub fn get_or_fetch_favicon(url_or_host: &str) -> Option<Arc<gpui::Image>> {
+    let host = url_host(url_or_host).to_string();
+    if host.is_empty()
+        || host.eq_ignore_ascii_case("localhost")
+        || host.starts_with("127.")
+        || host.starts_with("0.0.0.0")
+    {
+        return None;
+    }
+
+    if let Ok(cache) = favicon_cache().lock() {
+        if let Some(img) = cache.get(&host) {
+            return Some(img.clone());
+        }
+    }
+
+    let should_fetch = {
+        if let Ok(mut in_flight) = favicon_in_flight().lock() {
+            in_flight.insert(host.clone())
+        } else {
+            false
+        }
+    };
+
+    if should_fetch {
+        let host_for_task = host.clone();
+        let fav_url = format!(
+            "https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://{}&size=32",
+            host
+        );
+        tokio::spawn(async move {
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(4))
+                .build();
+            if let Ok(client) = client {
+                if let Ok(resp) = client.get(&fav_url).send().await {
+                    if resp.status().is_success() {
+                        if let Ok(bytes) = resp.bytes().await {
+                            let bytes_vec = bytes.to_vec();
+                            let format = if bytes_vec.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+                                Some(gpui::ImageFormat::Png)
+                            } else if bytes_vec.starts_with(&[0xFF, 0xD8, 0xFF]) {
+                                Some(gpui::ImageFormat::Jpeg)
+                            } else if bytes_vec.starts_with(&[0x00, 0x00, 0x01, 0x00]) {
+                                Some(gpui::ImageFormat::Ico)
+                            } else if bytes_vec.starts_with(b"RIFF")
+                                && bytes_vec.len() > 12
+                                && &bytes_vec[8..12] == b"WEBP"
+                            {
+                                Some(gpui::ImageFormat::Webp)
+                            } else {
+                                gpui::ImageFormat::from_mime_type("image/png")
+                            };
+                            if let Some(format) = format {
+                                let image = Arc::new(gpui::Image::from_bytes(format, bytes_vec));
+                                if let Ok(mut cache) = favicon_cache().lock() {
+                                    cache.insert(host_for_task.clone(), image);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if let Ok(mut in_flight) = favicon_in_flight().lock() {
+                in_flight.remove(&host_for_task);
+            }
+        });
+    }
+
+    None
+}
+
 /// What the address input resolves to when the user submits it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AddressTarget {
