@@ -9,11 +9,11 @@ use gpui::{
 };
 
 use crate::markdown::render::MONO_FAMILY;
-use crate::primitives::file_icon;
 use crate::primitives::file_icons::file_icon_for_name;
+use crate::primitives::{base_name, file_icon};
 use crate::primitives::tooltip::Tooltip;
 use crate::theme::Theme;
-use crate::utils::{base_name, short_parent_dir};
+use crate::utils::short_parent_dir;
 
 #[derive(IntoElement)]
 pub struct ChangesListView {

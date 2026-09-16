@@ -1,9 +1,7 @@
 //! Path and folder display utilities.
 
-/// Basename of a path, handling both separator styles.
-pub fn base_name(path: &str) -> &str {
-    path.rsplit(['/', '\\']).next().unwrap_or(path)
-}
+// NOTE: there is deliberately no `base_name` here — use
+// `crate::primitives::base_name`, the single shared implementation.
 
 /// Parent directory of a path, handling both separator styles.
 /// Returns `""` for bare filenames.
@@ -14,31 +12,45 @@ pub fn parent_dir(path: &str) -> &str {
     }
 }
 
-/// Shorten a parent dir for narrow rows: strip a shared workspace prefix and
-/// keep the trailing segments that actually disambiguate same-name files.
+/// How aggressively `short_parent_dir` shortens a parent directory.
+pub struct ParentDirDisplay {
+    /// Trailing segments kept when shortening (`…/a/b/c`).
+    pub keep_segments: usize,
+    /// Parents at or below this length are returned whole.
+    pub max_len: usize,
+}
+
+impl Default for ParentDirDisplay {
+    fn default() -> Self {
+        Self {
+            keep_segments: 3,
+            max_len: 28,
+        }
+    }
+}
+
+/// Shorten a parent dir for narrow rows: keep the trailing segments that
+/// actually disambiguate same-name files.
 /// `apps/desktop/crates/console-ui/src/markdown` → `…/console-ui/src/markdown`.
 pub fn short_parent_dir(path: &str) -> String {
+    short_parent_dir_with(path, &ParentDirDisplay::default())
+}
+
+/// [`short_parent_dir`] with explicit tuning. `keep_segments` is at least 1.
+pub fn short_parent_dir_with(path: &str, display: &ParentDirDisplay) -> String {
     let parent = parent_dir(path);
     if parent.is_empty() {
         return String::new();
     }
-    const SKIP_PREFIXES: [&str; 2] = ["apps/", "packages/"];
-    let mut rest = parent;
-    for prefix in SKIP_PREFIXES {
-        if let Some(stripped) = rest.strip_prefix(prefix) {
-            rest = stripped;
-            break;
-        }
+    let keep = display.keep_segments.max(1);
+    let segments: Vec<&str> = parent
+        .split(['/', '\\'])
+        .filter(|s| !s.is_empty())
+        .collect();
+    if segments.len() <= keep || parent.len() <= display.max_len {
+        return parent.replace('\\', "/");
     }
-    const KEEP_SEGMENTS: usize = 3;
-    let segments: Vec<&str> = rest.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
-    if segments.len() <= KEEP_SEGMENTS || rest.len() <= 28 {
-        return rest.replace('\\', "/");
-    }
-    format!(
-        "…/{}",
-        segments[segments.len() - KEEP_SEGMENTS..].join("/")
-    )
+    format!("…/{}", segments[segments.len() - keep..].join("/"))
 }
 
 /// Lexically join `base` + `relative`, resolving `.` / `..` without touching

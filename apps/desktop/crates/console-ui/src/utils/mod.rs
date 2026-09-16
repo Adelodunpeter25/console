@@ -4,7 +4,10 @@ pub mod path;
 pub mod session_groups;
 pub mod time;
 
-pub use path::{base_name, format_folder_display_name, join_path_lexical, short_parent_dir};
+pub use path::{
+    ParentDirDisplay, format_folder_display_name, join_path_lexical, parent_dir, short_parent_dir,
+    short_parent_dir_with,
+};
 pub use session_groups::{
     ProjectSectionKey, SessionDateGroup, SidebarSortMode, group_by_date, group_indices_by_date,
     group_indices_by_project, session_date_group,
