@@ -35,7 +35,8 @@ File: `apps/desktop/crates/console-core/src/types/workspace.rs`
 
 - Add variant: `Browser { browser_id: String, url: String, title: String, project_id: Option<String>, last_active_at_ms: Option<i64> }` with `#[serde(rename = "browser")]`.
 - Extend `id()` → `browser:{browser_id}`, `title()`, `set_title()`, `project_id()`, `set_project_id()`, `last_active_at_ms()` / setter.
-- URL is persisted verbatim; title defaults to host + port (e.g. `localhost:3000`) at open time and updates on page title if cheap, else stays static.
+- URL is persisted verbatim; title defaults to host + port (e.g. `localhost:3000`) at open time and updates from the live page title (`BrowserView::title_changed`) when available.
+- Favicon + title come from the current page URL: `url_host()`, `favicon_url()` (Google favicon service, `https://www.google.com/s2/favicons?domain={host}&sz={size}`), and `default_browser_title()` in `crates/console-ui/src/browser/address.rs`. No network in the helpers — views use the URL directly in `img()`. `BrowserView::favicon_url(size)` exposes it per surface.
 
 ### 2. Tab ops + persistence migration
 
@@ -75,12 +76,13 @@ Files: `apps/desktop/src/state/port_forward.rs`, `apps/desktop/src/state/workspa
 - `open_chat_url_in_browser` already delegates to `open_port_in_browser`, so it inherits reuse for free.
 - `active_inspector_target` match gains a `Browser { project_id, .. }` arm identical to File / Diff / Terminal (resolve cwd from `project_id` → pane project). This keeps inspector files/changes/terminals in sync when a browser tab is active.
 
-### 6. Tab strip + inputs
+### 6. Tab strip + inputs + tab palette + shortcuts
 
-Files: `apps/desktop/crates/console-ui/src/workspace/tab_bar.rs`, `tab strip`, `apps/desktop/src/keybindings.rs`, `apps/desktop/src/picker.rs` (if command palette lists tab kinds)
+Files: `apps/desktop/crates/console-ui/src/workspace/tab_bar.rs`, `apps/desktop/src/keybindings.rs`, `apps/desktop/src/state/global_actions.rs`
 
 - Browser tab icon (globe), title = host or page title, close button + drag reuse existing machinery.
-- Optional: `Cmd+T` → new browser tab? Out of scope unless trivial; at minimum ensure `Cmd+W` close path routes through `close_tab_and_sync_pane` so drafts/transcript sync stay correct (browser tabs carry no session, so close just disposes + persists).
+- `Cmd+T` → new browser tab in the active pane (`NewBrowserTab` → `open_browser_tab`, start page until an address is submitted). The tab palette moves to `Cmd+Shift+P`.
+- Tab palette (`toggle_tab_palette`) lists browser tabs with globe icons: Browsers first (by recency), then Terminals, then Chats (by recency). Search matches workspace tab titles via the palette label. File / Diff tabs stay out of scope.
 - Address bar lives inside `BrowserView` already — no new input needed.
 
 ## Verification
