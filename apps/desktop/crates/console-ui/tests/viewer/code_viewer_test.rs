@@ -1,4 +1,4 @@
-use console_ui::{CodePosition, CodeSelection, build_file_lines};
+use console_ui::{CodePosition, CodeSelection, build_file_lines, floor_selection_range};
 
 #[test]
 fn test_build_file_lines_empty() {
@@ -56,4 +56,30 @@ fn test_code_selection_reversed_drag() {
     assert_eq!(start, CodePosition { line: 1, col: 2 });
     assert_eq!(end, CodePosition { line: 3, col: 5 });
     assert_eq!(sel.line_col_range(1, 10), Some((2, 10)));
+}
+
+#[test]
+fn test_floor_selection_range_snaps_mid_char_offsets() {
+    // ✔ is 3 bytes (0..3), then " ok" — display columns land inside it.
+    let text = "✔ ok";
+    assert_eq!(floor_selection_range(text, (1, 4)), Some((0, 4)));
+    assert_eq!(floor_selection_range(text, (0, 5)), Some((0, 5)));
+    assert_eq!(floor_selection_range(text, (3, 4)), Some((3, 4)));
+    // Fully inside one char collapses to nothing highlightable.
+    assert_eq!(floor_selection_range(text, (1, 2)), None);
+    assert_eq!(floor_selection_range(text, (0, 2)), None);
+}
+
+#[test]
+fn test_floor_selection_range_rejects_empty_and_out_of_range() {
+    assert_eq!(floor_selection_range("✔ ok", (2, 2)), None);
+    assert_eq!(floor_selection_range("✔ ok", (9, 9)), None);
+    assert_eq!(floor_selection_range("✔ ok", (4, 2)), None);
+    assert_eq!(floor_selection_range("", (0, 1)), None);
+}
+
+#[test]
+fn test_floor_selection_range_ascii_passthrough() {
+    assert_eq!(floor_selection_range("hello", (1, 4)), Some((1, 4)));
+    assert_eq!(floor_selection_range("hello", (0, 5)), Some((0, 5)));
 }

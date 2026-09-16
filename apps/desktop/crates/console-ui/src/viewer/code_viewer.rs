@@ -693,6 +693,27 @@ impl RenderOnce for CodeViewer {
     }
 }
 
+/// Floor a selection byte range to UTF-8 char boundaries.
+///
+/// Selection columns are display columns (`x / CHAR_WIDTH`), which land
+/// mid-char on any multi-byte text (emoji, checkmarks, CJK — all over dev
+/// logs). GPUI `StyledText::with_runs` panics on runs that don't tile char
+/// boundaries, so every consumer must pass ranges through here before
+/// splitting runs. Returns `None` when nothing highlightable remains.
+pub fn floor_selection_range(text: &str, range: (usize, usize)) -> Option<(usize, usize)> {
+    let (start, end) = range;
+    if start >= end || start >= text.len() {
+        return None;
+    }
+    let start = text.floor_char_boundary(start.min(text.len()));
+    let end = text.floor_char_boundary(end.min(text.len()));
+    if start < end {
+        Some((start, end))
+    } else {
+        None
+    }
+}
+
 fn code_runs_for_tokens(
     text: &str,
     tokens: &[highlight::Token],
@@ -753,50 +774,53 @@ fn code_runs_for_tokens(
         "code_viewer run lengths don't tile the line — highlighter bug",
     );
 
-    // Apply selection highlighting if this line overlaps active selection
-    if let Some((sel_start, sel_end)) = selection_range {
-        if sel_start < sel_end && sel_start < text.len() {
-            let mut highlighted_runs = Vec::new();
-            let mut current_offset = 0;
+    // Apply selection highlighting if this line overlaps active selection.
+    // The range is floored to char boundaries first: selection columns are
+    // display columns and land mid-char on multi-byte text, which would make
+    // `with_runs` panic on a non-tiling split.
+    if let Some((sel_start, sel_end)) = selection_range
+        && let Some((sel_start, sel_end)) = floor_selection_range(text, (sel_start, sel_end))
+    {
+        let mut highlighted_runs = Vec::new();
+        let mut current_offset = 0;
 
-            for run in runs {
-                let run_start = current_offset;
-                let run_end = current_offset + run.len;
-                current_offset = run_end;
+        for run in runs {
+            let run_start = current_offset;
+            let run_end = current_offset + run.len;
+            current_offset = run_end;
 
-                if run_end <= sel_start || run_start >= sel_end {
-                    // Entirely outside selection
-                    highlighted_runs.push(run);
-                } else if run_start >= sel_start && run_end <= sel_end {
-                    // Entirely inside selection
-                    let mut sel_run = run;
-                    sel_run.background_color = Some(selection_bg);
-                    highlighted_runs.push(sel_run);
-                } else {
-                    // Partially overlapping selection - split run
-                    let overlap_start = max(run_start, sel_start);
-                    let overlap_end = min(run_end, sel_end);
+            if run_end <= sel_start || run_start >= sel_end {
+                // Entirely outside selection
+                highlighted_runs.push(run);
+            } else if run_start >= sel_start && run_end <= sel_end {
+                // Entirely inside selection
+                let mut sel_run = run;
+                sel_run.background_color = Some(selection_bg);
+                highlighted_runs.push(sel_run);
+            } else {
+                // Partially overlapping selection - split run
+                let overlap_start = max(run_start, sel_start);
+                let overlap_end = min(run_end, sel_end);
 
-                    if run_start < overlap_start {
-                        let mut before = run.clone();
-                        before.len = overlap_start - run_start;
-                        highlighted_runs.push(before);
-                    }
+                if run_start < overlap_start {
+                    let mut before = run.clone();
+                    before.len = overlap_start - run_start;
+                    highlighted_runs.push(before);
+                }
 
-                    let mut inside = run.clone();
-                    inside.len = overlap_end - overlap_start;
-                    inside.background_color = Some(selection_bg);
-                    highlighted_runs.push(inside);
+                let mut inside = run.clone();
+                inside.len = overlap_end - overlap_start;
+                inside.background_color = Some(selection_bg);
+                highlighted_runs.push(inside);
 
-                    if overlap_end < run_end {
-                        let mut after = run;
-                        after.len = run_end - overlap_end;
-                        highlighted_runs.push(after);
-                    }
+                if overlap_end < run_end {
+                    let mut after = run;
+                    after.len = run_end - overlap_end;
+                    highlighted_runs.push(after);
                 }
             }
-            return highlighted_runs;
         }
+        return highlighted_runs;
     }
 
     runs

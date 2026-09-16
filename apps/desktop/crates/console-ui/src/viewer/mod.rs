@@ -9,7 +9,7 @@ pub mod svg;
 pub use blocked_panel::BlockedFilePanel;
 pub use code_viewer::{
     CODE_LINE_HEIGHT, CODE_VIEWER_CONTEXT, CodePosition, CodeSelection, CodeViewer, CodeViewerLine,
-    SelectionState, build_diff_lines, build_file_lines, build_log_lines,
+    SelectionState, build_diff_lines, build_file_lines, build_log_lines, floor_selection_range,
     init_code_viewer_keybindings,
 };
 pub use diff_viewer::DiffViewer;
