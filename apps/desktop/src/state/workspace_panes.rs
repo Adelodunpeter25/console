@@ -1355,11 +1355,13 @@ impl ConsoleDesktopApp {
             || self.open_diff_contents.len() > MAX_CACHED_FILES
             || self.viewer_cached_file_lines.len() > MAX_CACHED_FILES
             || self.viewer_cached_diff_lines.len() > MAX_CACHED_FILES
+            || self.viewer_cached_run_lines.len() > MAX_CACHED_FILES
             || self.viewer_cached_markdown_views.len() > MAX_CACHED_FILES;
         if !over {
             return;
         }
         let open = self.open_file_paths_everywhere();
+        let live_run_ids = self.live_run_script_ids();
         self.open_file_contents
             .retain(|path, _| open.contains(path));
         self.open_image_contents
@@ -1373,16 +1375,34 @@ impl ConsoleDesktopApp {
             .retain(|path, _| open.contains(path));
         self.viewer_cached_markdown_views
             .retain(|path, _| open.contains(path));
+        self.viewer_cached_run_lines
+            .retain(|script_id, _| live_run_ids.contains(script_id));
         self.viewer_list_states
-            .retain(|key, _| Self::viewer_key_is_open(key, &open));
+            .retain(|key, _| Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids));
         self.viewer_selection_states
-            .retain(|key, _| Self::viewer_key_is_open(key, &open));
+            .retain(|key, _| Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids));
         self.viewer_focus_handles
-            .retain(|key, _| Self::viewer_key_is_open(key, &open));
+            .retain(|key, _| Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids));
         self.viewer_scrollbar_states
-            .retain(|key, _| Self::viewer_key_is_open(key, &open));
+            .retain(|key, _| Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids));
         self.viewer_markdown_selections
             .retain(|key, _| Self::viewer_key_is_open(key, &open));
+    }
+
+    /// Script ids still defined in any project's scripts. Bounds the retained
+    /// run-output viewer state; scripts are few, so liveness is by existence,
+    /// not expansion.
+    fn live_run_script_ids(&self) -> std::collections::HashSet<String> {
+        self.project_scripts_by_project
+            .values()
+            .flat_map(|state| state.scripts.iter().map(|script| script.id.clone()))
+            .collect()
+    }
+
+    /// Viewer state keys for run output are `run:`-prefixed script ids.
+    fn run_key_is_live(key: &str, live: &std::collections::HashSet<String>) -> bool {
+        key.strip_prefix("run:")
+            .is_some_and(|script_id| live.contains(script_id))
     }
 
     /// File paths with a tab open in any workspace (current + cached).

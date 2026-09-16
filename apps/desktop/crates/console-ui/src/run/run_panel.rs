@@ -9,13 +9,15 @@ use std::rc::Rc;
 
 use console_core::ScriptRunStatus;
 use gpui::{
-    App, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
+    App, ElementId, Entity, FocusHandle, InteractiveElement, IntoElement, ListState, ParentElement,
+    RenderOnce, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
 use crate::markdown::render::MONO_FAMILY;
 use crate::primitives::icons::{IconName, app_icon};
+use crate::primitives::scrollbar::ScrollbarState;
 use crate::theme::Theme;
+use crate::viewer::{CodeViewer, CodeViewerLine, SelectionState};
 
 /// Retained output cap per run, in bytes. The server keeps full logs; the
 /// desktop renders a tail so a chatty dev server can't grow memory.
@@ -108,10 +110,46 @@ pub struct RunScriptRow {
     pub starting: bool,
     pub output: String,
     pub expanded: bool,
+    /// Selectable output view, present when the row is expanded with output.
+    /// Built by the app layer (which owns the list/selection entities);
+    /// `None` renders the legacy static text.
+    pub output_view: Option<RunOutputView>,
     /// `Some(shortcut)` when another script in the same project claims the
     /// same keystroke — both bindings are blocked at the app layer and the
     /// conflict surfaces here as a warning.
     pub shortcut_conflict: Option<String>,
+}
+
+/// Retained viewer state for one expanded run-output log. All handles are
+/// app-owned entities so selection survives re-renders and live appends.
+#[derive(Clone)]
+pub struct RunOutputView {
+    pub lines: Rc<Vec<CodeViewerLine>>,
+    pub list_state: ListState,
+    pub selection_state: Entity<SelectionState>,
+    pub scrollbar_state: Rc<ScrollbarState>,
+    pub focus_handle: FocusHandle,
+}
+
+impl RunScriptRow {
+    /// Attach a selectable output view built from [`build_log_lines`].
+    pub fn with_output_view(
+        mut self,
+        lines: Rc<Vec<CodeViewerLine>>,
+        list_state: ListState,
+        selection_state: Entity<SelectionState>,
+        scrollbar_state: Rc<ScrollbarState>,
+        focus_handle: FocusHandle,
+    ) -> Self {
+        self.output_view = Some(RunOutputView {
+            lines,
+            list_state,
+            selection_state,
+            scrollbar_state,
+            focus_handle,
+        });
+        self
+    }
 }
 
 #[derive(IntoElement)]
@@ -124,6 +162,7 @@ pub struct RunPanel {
     pub on_run: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     pub on_stop: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     pub on_toggle_expand: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    pub on_copy: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
 }
 
 fn empty_state(icon: IconName, title: &str, hint: &str, theme: &Theme) -> impl IntoElement {
@@ -382,6 +421,68 @@ impl RenderOnce for RunPanel {
                             .child("(no output yet)")
                             .into_any_element()
                     }
+                } else if let Some(view) = row.output_view.clone() {
+                    let copy_id = row.script_id.clone();
+                    let on_copy = self.on_copy.clone();
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(6.0))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_end()
+                                .child(
+                                    div()
+                                        .id(ElementId::from(format!("run-copy-{copy_id}")))
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(4.0))
+                                        .px(px(6.0))
+                                        .py(px(2.0))
+                                        .rounded(px(4.0))
+                                        .border_1()
+                                        .border_color(theme.border)
+                                        .bg(theme.surface)
+                                        .cursor_pointer()
+                                        .hover(|s| s.bg(theme.overlay))
+                                        .on_click(move |_, window, cx| {
+                                            cx.stop_propagation();
+                                            (on_copy)(copy_id.clone(), window, cx);
+                                        })
+                                        .child(app_icon(
+                                            IconName::Copy,
+                                            11.0,
+                                            theme.text_secondary,
+                                        ))
+                                        .child(
+                                            div()
+                                                .text_size(px(10.5))
+                                                .text_color(theme.text_secondary)
+                                                .child("Copy"),
+                                        ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .h(px(220.0))
+                                .rounded(px(6.0))
+                                .border_1()
+                                .border_color(theme.border)
+                                .overflow_hidden()
+                                .child(
+                                    CodeViewer::new(
+                                        format!("run-output-{}", row.script_id),
+                                        view.list_state,
+                                    )
+                                    .rc_lines(view.lines)
+                                    .selection_state(view.selection_state)
+                                    .scrollbar_state(view.scrollbar_state)
+                                    .focus_handle(view.focus_handle),
+                                ),
+                        )
+                        .into_any_element()
                 } else {
                     div()
                         .text_size(px(11.0))

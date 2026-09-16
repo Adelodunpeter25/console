@@ -2,6 +2,7 @@
 //! dispatch state, shortcut display, status labels, and the output cap.
 
 use console_core::{ProjectScript, ScriptRunStatus, canonicalize_shortcut, compute_shortcut_state};
+use console_ui::build_log_lines;
 use console_ui::run::{
     MAX_RUN_OUTPUT_BYTES, cap_run_output, display_script_shortcut, push_run_output,
     script_row_status_label,
@@ -173,4 +174,20 @@ fn test_output_cap_respects_utf8_boundaries() {
     assert!(output.len() > MAX_RUN_OUTPUT_BYTES - 4);
     assert!(output.ends_with('!'));
     assert!(output.is_char_boundary(0));
+}
+
+#[test]
+fn test_log_lines_number_each_row_without_tokens() {
+    let lines = build_log_lines("first\nsecond\n");
+    assert_eq!(lines.len(), 2);
+    assert_eq!(lines[0].line_no, Some(1));
+    assert_eq!(lines[1].line_no, Some(2));
+    assert_eq!(lines[0].text, "first");
+    assert_eq!(lines[1].text, "second");
+    assert!(lines.iter().all(|line| line.tokens.is_empty()));
+}
+
+#[test]
+fn test_log_lines_empty_content_yields_no_rows() {
+    assert!(build_log_lines("").is_empty());
 }

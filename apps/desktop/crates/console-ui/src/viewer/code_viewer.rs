@@ -207,6 +207,26 @@ pub fn build_file_lines(path: &str, content: &str) -> Vec<CodeViewerLine> {
         .collect()
 }
 
+/// Helper to build plain log lines (run output) with no syntax tokens.
+/// Line numbers are kept so log rows can be referenced like file rows.
+pub fn build_log_lines(content: &str) -> Vec<CodeViewerLine> {
+    content
+        .lines()
+        .enumerate()
+        .map(|(idx, line)| CodeViewerLine {
+            line_no: Some(idx + 1),
+            old_line_no: None,
+            new_line_no: None,
+            gutter: None,
+            gutter_color: None,
+            bg_color: None,
+            text_color: None,
+            text: line.to_string(),
+            tokens: Vec::new(),
+        })
+        .collect()
+}
+
 /// Helper to tokenize diff lines once for a given file path.
 pub fn build_diff_lines(
     path: &str,
