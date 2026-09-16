@@ -21,7 +21,8 @@ use gpui::{
 
 use super::actions::*;
 use super::address::{
-    AddressTarget, display_url, is_secure_url, resolve_address, search_url, url_host,
+    AddressTarget, default_browser_title, display_url, is_secure_url, resolve_address, search_url,
+    url_host,
 };
 use super::host::{NativeNavigationError, WebviewHost};
 use crate::common::input::{ComposerEvent, ComposerInput};
@@ -338,9 +339,12 @@ impl BrowserView {
         if let Some(title) = self.page_title.as_deref().filter(|t| !t.trim().is_empty()) {
             return Some(title.to_owned());
         }
-        self.current_url
-            .as_deref()
-            .map(|url| display_url(url).to_owned())
+        if let Some(url) = self.current_url.as_deref() {
+            if !url.is_empty() {
+                return Some(default_browser_title(url));
+            }
+        }
+        None
     }
 
     pub fn current_url(&self) -> Option<&str> {
@@ -950,14 +954,23 @@ impl Render for BrowserView {
         }
 
         let body = if let Some(error) = self.host_error.clone() {
+            if let Some(host) = &self.host {
+                host.set_visible(false);
+            }
             self.render_host_error(error.into(), theme)
                 .into_any_element()
         } else if let Some(ref error) = self.navigation_error {
+            if let Some(host) = &self.host {
+                host.set_visible(false);
+            }
             self.render_navigation_error(error, theme, cx)
                 .into_any_element()
         } else if self.navigation_requested {
             self.render_page_area(theme).into_any_element()
         } else {
+            if let Some(host) = &self.host {
+                host.set_visible(false);
+            }
             self.render_start_page(theme).into_any_element()
         };
 
