@@ -104,12 +104,12 @@ pub fn url_host(url: &str) -> &str {
 }
 
 /// Google favicon service URL for the given page URL (size 32, with fallback).
-/// Pure string builder — no network — so views can use it directly in `img()`.
+/// Uses the direct gstatic endpoint so clients receive HTTP 200 PNG bytes directly without redirects.
 pub fn favicon_url(page_url: &str, size: u32) -> String {
+    let host = url_host(page_url);
     format!(
-        "https://www.google.com/s2/favicons?domain={}&sz={}",
-        url_host(page_url),
-        size
+        "https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://{}&size={}",
+        host, size
     )
 }
 

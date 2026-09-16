@@ -3,8 +3,8 @@
 //! Mirrors the test specifications from `waku/src/browser.rs`.
 
 use console_ui::browser::{
-    AddressTarget, bgra_from_bitmap, display_url, download_destination, is_secure_url,
-    resolve_address, search_url,
+    AddressTarget, bgra_from_bitmap, display_url, download_destination, favicon_url,
+    is_secure_url, resolve_address, search_url,
 };
 
 #[test]
@@ -65,6 +65,18 @@ fn test_address_bar_hides_only_the_https_scheme() {
     );
     assert!(is_secure_url("https://example.com"));
     assert!(!is_secure_url("http://localhost:3000"));
+}
+
+#[test]
+fn test_favicon_url_generation() {
+    assert_eq!(
+        favicon_url("git-scm.com/", 32),
+        "https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://git-scm.com&size=32"
+    );
+    assert_eq!(
+        favicon_url("https://github.com/rust-lang", 32),
+        "https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://github.com&size=32"
+    );
 }
 
 #[test]
