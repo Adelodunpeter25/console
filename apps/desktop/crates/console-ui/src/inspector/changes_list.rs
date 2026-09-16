@@ -13,42 +13,7 @@ use crate::primitives::file_icon;
 use crate::primitives::file_icons::file_icon_for_name;
 use crate::primitives::tooltip::Tooltip;
 use crate::theme::Theme;
-
-/// Parent directory of a path, handling both separator styles.
-/// Returns `""` for bare filenames.
-fn parent_dir(path: &str) -> &str {
-    match path.rsplit_once(['/', '\\']) {
-        Some((parent, _)) => parent,
-        None => "",
-    }
-}
-
-/// Shorten a parent dir for narrow rows: strip a shared workspace prefix and
-/// keep the trailing segments that actually disambiguate same-name files.
-/// `apps/desktop/crates/console-ui/src/markdown` → `…/console-ui/src/markdown`.
-fn short_parent_dir(path: &str) -> String {
-    let parent = parent_dir(path);
-    if parent.is_empty() {
-        return String::new();
-    }
-    const SKIP_PREFIXES: [&str; 2] = ["apps/", "packages/"];
-    let mut rest = parent;
-    for prefix in SKIP_PREFIXES {
-        if let Some(stripped) = rest.strip_prefix(prefix) {
-            rest = stripped;
-            break;
-        }
-    }
-    const KEEP_SEGMENTS: usize = 3;
-    let segments: Vec<&str> = rest.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
-    if segments.len() <= KEEP_SEGMENTS || rest.len() <= 28 {
-        return rest.replace('\\', "/");
-    }
-    format!(
-        "…/{}",
-        segments[segments.len() - KEEP_SEGMENTS..].join("/")
-    )
-}
+use crate::utils::{base_name, short_parent_dir};
 
 #[derive(IntoElement)]
 pub struct ChangesListView {
@@ -119,11 +84,7 @@ impl RenderOnce for ChangesListView {
                             _ => ("?", theme.text_tertiary),
                         };
 
-                        let file_name = std::path::Path::new(&entry.path)
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or(&entry.path)
-                            .to_string();
+                        let file_name = base_name(&entry.path).to_string();
                         let short_dir = short_parent_dir(&entry.path);
                         let tooltip_path = entry.path.clone();
 
