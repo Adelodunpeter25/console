@@ -41,6 +41,17 @@ fn command_palette_entries(
         })
         .icon(IconName::Terminal),
     ];
+    entries.push(
+        PaletteEntry::new("new-browser", "New Browser Tab", {
+            let entity = entity.clone();
+            move |window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.open_browser_tab(window, cx));
+                }
+            }
+        })
+        .icon(IconName::Globe),
+    );
 
     for environment in environments {
         let environment_id = environment.id.clone();

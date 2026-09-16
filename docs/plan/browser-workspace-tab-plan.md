@@ -81,7 +81,7 @@ Files: `apps/desktop/src/state/port_forward.rs`, `apps/desktop/src/state/workspa
 Files: `apps/desktop/crates/console-ui/src/workspace/tab_bar.rs`, `apps/desktop/src/keybindings.rs`, `apps/desktop/src/state/global_actions.rs`
 
 - Browser tab icon (globe), title = host or page title, close button + drag reuse existing machinery.
-- `Cmd+T` → new browser tab in the active pane (`NewBrowserTab` → `open_browser_tab`, start page until an address is submitted). The tab palette moves to `Cmd+Shift+P`.
+- `Cmd+T` stays the tab palette (`toggle_tab_palette`): Browsers first (by recency), then Terminals, then Chats (by recency). No dedicated new-browser-tab shortcut — creation lives in the `Cmd+K` palette as "New Browser Tab".
 - Tab palette (`toggle_tab_palette`) lists browser tabs with globe icons: Browsers first (by recency), then Terminals, then Chats (by recency). Search matches workspace tab titles via the palette label. File / Diff tabs stay out of scope.
 - Address bar lives inside `BrowserView` already — no new input needed.
 
