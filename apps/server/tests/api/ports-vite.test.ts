@@ -26,9 +26,8 @@ try {
   await portRegistry.removeOwner({ kind: "job", id: "test-vite-plain" });
 }
 
-// Hypothesis A: OSC-8 hyperlink framing around the URL (vite in a piped,
-// non-TTY process wraps the localhost URL in ESC ]8;; ... sequences that
-// the ANSI stripper does not remove).
+// Real vite shape: OSC-8 hyperlink where the URL appears as the link target
+// (terminated by BEL) and again as the visible label.
 const oscTarget = Bun.serve({
   port: 0,
   fetch() {
@@ -37,11 +36,12 @@ const oscTarget = Bun.serve({
 });
 try {
   const e = String.fromCharCode(27);
-  const open = `${e}]8;;http://localhost:${oscTarget.port}/`;
-  const close = `${e}]8;;`;
+  const bel = String.fromCharCode(7);
+  const open = `${e}]8;;http://localhost:${oscTarget.port}/${bel}`;
+  const close = `${e}]8;;${bel}`;
   const output =
     "  VITE v7.3.6  ready in 652 ms\n\n" +
-    `  Local:   ${open}X http://localhost:${oscTarget.port}/ ${close}Y\n` +
+    `  Local:   ${open}http://localhost:${oscTarget.port}/${close}\n` +
     "  Network: use --host to expose\n";
   await portRegistry.observeOutput({ kind: "job", id: "test-vite-osc8" }, output);
   const detected = await portRegistry.list("localhost");
@@ -55,9 +55,8 @@ try {
   await portRegistry.removeOwner({ kind: "job", id: "test-vite-osc8" });
 }
 
-// Hypothesis B: the dev server listens on the IPv6 loopback only ([::1]),
-// as newer Node/Vite builds do on macOS, while the liveness probe only
-// tries 127.0.0.1.
+// Vite on newer Node/macOS binds the IPv6 loopback only ([::1]); the old
+// liveness probe tried 127.0.0.1 alone and dropped the port.
 let v6Target: ReturnType<typeof Bun.serve> | undefined;
 try {
   v6Target = Bun.serve({

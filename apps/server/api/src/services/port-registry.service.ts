@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 
 const DEFAULT_PROXY_START = 45_000;
 const DEFAULT_PROXY_END = 45_999;
-const CANDIDATE_PATTERN = /(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?::|\s*:\s*)(\d{1,5})/gi;
+const CANDIDATE_PATTERN = /(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::|\s*:\s*)(\d{1,5})/gi;
 const ANSI_PATTERN = /\u001b\[[0-?]*[ -/]*[@-~]/g;
 const PROBE_TIMEOUT_MS = 2_000;
 const REAPER_INTERVAL_MS = (() => {
@@ -66,6 +66,32 @@ function normalizeProjectId(projectId?: string | null): string | undefined {
 }
 
 /**
+ * Strip terminal escape sequences from captured PTY/script output before
+ * port matching. CSI sequences (colors, cursor moves) are deleted; OSC-8
+ * hyperlinks (vite wraps its localhost URL in `ESC ]8;;<url> ST <label>
+ * ESC ]8;; ST` when piped) are replaced with the link target plus label so
+ * the URL survives even when it appears only inside the link target.
+ */
+function sanitizeTerminalOutput(text: string): string {
+  // Expand OSC-8 hyperlinks to "<target> <label>": an opening sequence
+  // carries the URL as its single param, the visible label follows, and a
+  // bare `ESC ]8;; ST` closes it. Either BEL or ESC \ may terminate.
+  const expanded = text.replace(
+    /\]8;[^]*?(?:|\\)([\s\S]*?)\]8;[^]*?(?:|\\)/g,
+    (_match, label: string, offset: number, whole: string) => {
+      const open = whole.slice(Math.max(0, offset - 512), offset);
+      const raw = /\]8;[^;]*;([^\s]+)(?:|\\)?$/.exec(open)?.[1] ?? "";
+      // The capture can include a leading ";" when params are empty
+      // (`ESC ]8;;<url>`); the URI itself always starts with alphanumerics.
+      const target = raw.replace(/^[^a-zA-Z0-9]+/, "");
+      return `${target} ${label}`;
+    },
+  );
+  // Drop any leftover OSC sequences plus all CSI sequences.
+  return expanded.replace(/\][^\]*(?:|\\)/g, "").replace(ANSI_PATTERN, "");
+}
+
+/**
  * Workspace gating predicate: no filter matches everything (back-compat);
  * entries without a project are global and visible to every workspace.
  */
@@ -91,7 +117,7 @@ export class PortRegistry extends EventEmitter {
   async observeOutput(owner: Owner, chunk: Uint8Array | string, projectId?: string | null): Promise<void> {
     const key = `${owner.kind}:${owner.id}`;
     const text = typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk);
-    const combined = (this.ownerBuffers.get(key) ?? "") + text.replace(ANSI_PATTERN, "");
+    const combined = (this.ownerBuffers.get(key) ?? "") + sanitizeTerminalOutput(text);
     const lines = combined.split(/\r?\n/);
     this.ownerBuffers.set(key, lines.pop() ?? "");
 
@@ -302,6 +328,15 @@ export class PortRegistry extends EventEmitter {
     }
   }
 
+  private async probeHost(host: string, port: number, signal: AbortSignal): Promise<boolean> {
+    try {
+      await fetch(`http://${host}:${port}/`, { signal });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private isListening(port: number): Promise<boolean> {
     return new Promise((resolve) => {
       const controller = new AbortController();
@@ -309,10 +344,19 @@ export class PortRegistry extends EventEmitter {
         controller.abort();
         resolve(false);
       }, PROBE_TIMEOUT_MS);
-      fetch(`http://127.0.0.1:${port}/`, { signal: controller.signal })
-        .then(() => resolve(true))
-        .catch(() => resolve(false))
-        .finally(() => clearTimeout(timer));
+      // Newer Node/Vite builds bind the IPv6 loopback ([::1]) on macOS while
+      // older ones bind 127.0.0.1 — probe both before declaring the port dead.
+      void (async () => {
+        try {
+          if (await this.probeHost("127.0.0.1", port, controller.signal)) {
+            resolve(true);
+            return;
+          }
+          resolve(await this.probeHost("[::1]", port, controller.signal));
+        } finally {
+          clearTimeout(timer);
+        }
+      })();
     });
   }
 
