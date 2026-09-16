@@ -462,25 +462,6 @@ impl Render for ConsoleDesktopApp {
                 }
             })
         };
-        let on_copy_project_script: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
-            let entity = entity.clone();
-            Rc::new(move |script_id, _window, cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        let output = this
-                            .project_scripts_by_project
-                            .values()
-                            .filter_map(|state| state.runs.get(&script_id))
-                            .map(|view| view.output.clone())
-                            .next()
-                            .unwrap_or_default();
-                        if !output.is_empty() {
-                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(output));
-                        }
-                    });
-                }
-            })
-        };
         let on_refresh_project_scripts: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
             let entity = entity.clone();
             Rc::new(move |_window, cx| {
@@ -1124,7 +1105,6 @@ impl Render for ConsoleDesktopApp {
                                 on_run: on_run_project_script,
                                 on_stop: on_stop_project_script,
                                 on_toggle_expand: on_toggle_project_script,
-                                on_copy: on_copy_project_script,
                             }
                             .into_any_element()
                         };

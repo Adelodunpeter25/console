@@ -13,6 +13,7 @@ use gpui::{
     RenderOnce, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
+use crate::common::copy_button;
 use crate::markdown::render::MONO_FAMILY;
 use crate::primitives::icons::{IconName, app_icon};
 use crate::primitives::scrollbar::ScrollbarState;
@@ -162,7 +163,6 @@ pub struct RunPanel {
     pub on_run: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     pub on_stop: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     pub on_toggle_expand: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    pub on_copy: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
 }
 
 fn empty_state(icon: IconName, title: &str, hint: &str, theme: &Theme) -> impl IntoElement {
@@ -422,8 +422,6 @@ impl RenderOnce for RunPanel {
                             .into_any_element()
                     }
                 } else if let Some(view) = row.output_view.clone() {
-                    let copy_id = row.script_id.clone();
-                    let on_copy = self.on_copy.clone();
                     div()
                         .flex()
                         .flex_col()
@@ -433,36 +431,12 @@ impl RenderOnce for RunPanel {
                                 .flex()
                                 .items_center()
                                 .justify_end()
-                                .child(
-                                    div()
-                                        .id(ElementId::from(format!("run-copy-{copy_id}")))
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(4.0))
-                                        .px(px(6.0))
-                                        .py(px(2.0))
-                                        .rounded(px(4.0))
-                                        .border_1()
-                                        .border_color(theme.border)
-                                        .bg(theme.surface)
-                                        .cursor_pointer()
-                                        .hover(|s| s.bg(theme.overlay))
-                                        .on_click(move |_, window, cx| {
-                                            cx.stop_propagation();
-                                            (on_copy)(copy_id.clone(), window, cx);
-                                        })
-                                        .child(app_icon(
-                                            IconName::Copy,
-                                            11.0,
-                                            theme.text_secondary,
-                                        ))
-                                        .child(
-                                            div()
-                                                .text_size(px(10.5))
-                                                .text_color(theme.text_secondary)
-                                                .child("Copy"),
-                                        ),
-                                ),
+                                .child(copy_button(
+                                    format!("run-copy-{}", row.script_id),
+                                    row.output.clone(),
+                                    theme,
+                                    &mut *cx,
+                                )),
                         )
                         .child(
                             div()
