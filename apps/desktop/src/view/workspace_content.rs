@@ -71,6 +71,36 @@ impl ConsoleDesktopApp {
             };
         }
 
+        // Browser tab: render the native browser surface for its id.
+        // Rehydrated tabs (persisted across launches) have no live view
+        // yet: recreate it and re-navigate to the stored url.
+        if let Some(console_core::WorkspaceTabConfig::Browser {
+            browser_id, url, ..
+        }) = active_tab
+        {
+            if !self.browser_views.contains_key(browser_id) {
+                let view = cx.new(|cx| console_ui::browser::BrowserView::new(window, cx));
+                if !url.is_empty() {
+                    let url = url.clone();
+                    view.update(cx, |this, cx| this.navigate_to_url(url, cx));
+                }
+                self.browser_views.insert(browser_id.clone(), view);
+            }
+            let theme = Theme::current(cx);
+            return match self.browser_views.get(browser_id) {
+                Some(view) => div().size_full().child(view.clone()).into_any_element(),
+                None => div()
+                    .size_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_color(theme.text_ghost)
+                    .text_size(px(12.0))
+                    .child("Browser session ended")
+                    .into_any_element(),
+            };
+        }
+
         // File tab: render full-page MarkdownViewer, FileViewer, ImagePreview, or BlockedFilePanel
         if let Some(console_core::WorkspaceTabConfig::File { path, .. }) = active_tab {
             let theme = Theme::current(cx);
