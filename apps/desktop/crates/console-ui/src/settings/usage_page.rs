@@ -127,13 +127,14 @@ impl RenderOnce for UsagePage {
                     .flex_col()
                     .gap(px(12.0))
                     .children(self.providers.iter().filter(|p| {
-                        matches!(p.name.as_str(), "antigravity" | "codex")
+                        matches!(p.name.as_str(), "antigravity" | "codex" | "claude")
                     }).map(|provider| {
                         let provider_id = provider.name.clone();
                         let prov_status = auth_status.as_ref().and_then(|st| {
                             match provider_id.as_str() {
                                 "antigravity" => Some(&st.antigravity),
                                 "codex" | "openai" => Some(&st.codex),
+                                "claude" => Some(&st.claude),
                                 _ => None,
                             }
                         });

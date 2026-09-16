@@ -7,8 +7,10 @@ import type { UsageReport } from "@console/types";
 import { loadCredential } from "@/providers/src/auth/token-store.js";
 import { refreshIfNeeded } from "@/providers/src/auth/token-refresh.js";
 import { loadCodexCredential, refreshCodexIfNeeded } from "@/providers/src/codex/oauth.js";
+import { loadClaudeCredential, refreshClaudeIfNeeded } from "@/providers/src/claude/oauth.js";
 import {
   antigravityUsageProvider,
+  claudeUsageProvider,
   openaiCodexUsageProvider,
 } from "@/providers/src/usage/index.js";
 import type { UsageFetchParams } from "@console/types";
@@ -38,13 +40,15 @@ export class UsageService {
         return antigravityUsageProvider;
       case "codex":
         return openaiCodexUsageProvider;
+      case "claude":
+        return claudeUsageProvider;
       default:
         return null;
     }
   }
 
   async getUsage(provider: ProviderId, signal?: AbortSignal): Promise<UsageReport | null> {
-    if (provider !== "antigravity" && provider !== "codex") {
+    if (provider !== "antigravity" && provider !== "codex" && provider !== "claude") {
       return null;
     }
 
@@ -79,6 +83,15 @@ export class UsageService {
           accessToken: cred.accessToken,
           expiresAt: cred.expiresAtMs,
           accountId: cred.accountId,
+          email: cred.email,
+        };
+      } else if (provider === "claude") {
+        const raw = await loadClaudeCredential();
+        const cred = await refreshClaudeIfNeeded(raw);
+        credential = {
+          type: "oauth",
+          accessToken: cred.accessToken,
+          expiresAt: cred.expiresAtMs,
           email: cred.email,
         };
       } else {
@@ -137,7 +150,7 @@ export class UsageService {
   }
 
   async getAllUsage(signal?: AbortSignal): Promise<Record<string, UsageReport | null>> {
-    const providers: ProviderId[] = ["antigravity", "codex"];
+    const providers: ProviderId[] = ["antigravity", "codex", "claude"];
     const results = await Promise.all(
       providers.map(async (p) => {
         const report = await this.getUsage(p, signal);
