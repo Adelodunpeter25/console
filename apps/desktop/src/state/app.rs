@@ -271,10 +271,6 @@ pub struct ConsoleDesktopApp {
         String,
         (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>),
     >,
-    pub viewer_cached_run_lines: std::collections::HashMap<
-        String,
-        (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>),
-    >,
     pub viewer_cached_markdown_views: std::collections::HashMap<
         String,
         (
@@ -891,7 +887,6 @@ impl ConsoleDesktopApp {
             viewer_scrollbar_states: std::collections::HashMap::new(),
             viewer_cached_file_lines: std::collections::HashMap::new(),
             viewer_cached_diff_lines: std::collections::HashMap::new(),
-            viewer_cached_run_lines: std::collections::HashMap::new(),
             viewer_cached_markdown_views: std::collections::HashMap::new(),
             viewer_markdown_selections: std::collections::HashMap::new(),
             sidebar_list_state: ListState::new(0, ListAlignment::Top, px(55.0)),
@@ -1439,31 +1434,6 @@ impl ConsoleDesktopApp {
         let lines = std::rc::Rc::new(console_ui::build_diff_lines(path, diff, theme));
         self.viewer_cached_diff_lines
             .insert(path.to_string(), (len, hash, lines.clone()));
-        lines
-    }
-
-    pub fn get_or_build_run_lines(
-        &mut self,
-        script_id: &str,
-        content: &str,
-    ) -> std::rc::Rc<Vec<console_ui::CodeViewerLine>> {
-        use std::hash::{Hash, Hasher};
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        content.hash(&mut hasher);
-        let hash = hasher.finish();
-        let len = content.len();
-
-        if let Some((cached_len, cached_hash, cached_lines)) =
-            self.viewer_cached_run_lines.get(script_id)
-        {
-            if *cached_len == len && *cached_hash == hash {
-                return cached_lines.clone();
-            }
-        }
-
-        let lines = std::rc::Rc::new(console_ui::build_log_lines(content));
-        self.viewer_cached_run_lines
-            .insert(script_id.to_string(), (len, hash, lines.clone()));
         lines
     }
 

@@ -9,16 +9,17 @@ use std::rc::Rc;
 
 use console_core::ScriptRunStatus;
 use gpui::{
-    App, ElementId, Entity, FocusHandle, InteractiveElement, IntoElement, ListState, ParentElement,
-    RenderOnce, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
+    App, ElementId, InteractiveElement, IntoElement, ListState, ParentElement, RenderOnce,
+    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
 use crate::common::copy_button;
 use crate::markdown::render::MONO_FAMILY;
+use crate::markdown::render::TranscriptSelection;
 use crate::primitives::icons::{IconName, app_icon};
 use crate::primitives::scrollbar::ScrollbarState;
 use crate::theme::Theme;
-use crate::viewer::{CodeViewer, CodeViewerLine, SelectionState};
+use crate::viewer::LogsViewer;
 
 /// Retained output cap per run, in bytes. The server keeps full logs; the
 /// desktop renders a tail so a chatty dev server can't grow memory.
@@ -121,33 +122,31 @@ pub struct RunScriptRow {
     pub shortcut_conflict: Option<String>,
 }
 
-/// Retained viewer state for one expanded run-output log. All handles are
-/// app-owned entities so selection survives re-renders and live appends.
+/// Retained viewer state for one expanded run-output log. The list and
+/// scrollbar entities are app-owned so scroll position survives re-renders;
+/// the selection is transcript machinery shared with chat bubbles.
 #[derive(Clone)]
 pub struct RunOutputView {
-    pub lines: Rc<Vec<CodeViewerLine>>,
+    pub lines: Rc<Vec<String>>,
     pub list_state: ListState,
-    pub selection_state: Entity<SelectionState>,
+    pub selection: TranscriptSelection,
     pub scrollbar_state: Rc<ScrollbarState>,
-    pub focus_handle: FocusHandle,
 }
 
 impl RunScriptRow {
-    /// Attach a selectable output view built from [`build_log_lines`].
+    /// Attach a selectable output view.
     pub fn with_output_view(
         mut self,
-        lines: Rc<Vec<CodeViewerLine>>,
+        lines: Rc<Vec<String>>,
         list_state: ListState,
-        selection_state: Entity<SelectionState>,
+        selection: TranscriptSelection,
         scrollbar_state: Rc<ScrollbarState>,
-        focus_handle: FocusHandle,
     ) -> Self {
         self.output_view = Some(RunOutputView {
             lines,
             list_state,
-            selection_state,
+            selection,
             scrollbar_state,
-            focus_handle,
         });
         self
     }
@@ -446,14 +445,13 @@ impl RenderOnce for RunPanel {
                                 .border_color(theme.border)
                                 .overflow_hidden()
                                 .child(
-                                    CodeViewer::new(
-                                        format!("run-output-{}", row.script_id),
-                                        view.list_state,
+                                    LogsViewer::new(
+                                        row.script_id.clone(),
+                                        view.lines.clone(),
+                                        view.list_state.clone(),
                                     )
-                                    .rc_lines(view.lines)
-                                    .selection_state(view.selection_state)
-                                    .scrollbar_state(view.scrollbar_state)
-                                    .focus_handle(view.focus_handle),
+                                    .selection(view.selection.clone())
+                                    .scrollbar_state(view.scrollbar_state.clone()),
                                 ),
                         )
                         .into_any_element()

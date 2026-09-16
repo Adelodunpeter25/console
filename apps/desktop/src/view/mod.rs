@@ -1046,43 +1046,58 @@ impl Render for ConsoleDesktopApp {
                                     ),
                                 };
                             // Attach selectable output views to expanded rows
-                            // with output. List/selection entities are
-                            // app-owned so selection survives re-renders and
-                            // live appends; lines are content-hashed like file
-                            // tabs so streaming only rebuilds on change.
+                            // with output. State is app-owned so selection and
+                            // scroll survive re-renders and live appends.
                             let rows = rows
                                 .into_iter()
                                 .map(|row| {
                                     if !row.expanded || row.output.is_empty() {
                                         return row;
                                     }
-                                    let lines =
-                                        self.get_or_build_run_lines(&row.script_id, &row.output);
+                                    let lines: Rc<Vec<String>> = Rc::new(
+                                        row.output.lines().map(|line| line.to_string()).collect(),
+                                    );
                                     let count = lines.len().max(1);
                                     let key = format!("run:{}", row.script_id);
                                     let prev_count = self
                                         .viewer_list_states
                                         .get(&key)
                                         .map(|state| state.item_count());
-                                    let list_state = self.viewer_list_state(
-                                        &key,
-                                        count,
-                                        console_ui::CODE_LINE_HEIGHT,
-                                    );
-                                    let selection_state =
-                                        self.viewer_selection_state(&key, cx);
-                                    let focus_handle =
-                                        self.viewer_focus_handle(&key, cx);
-                                    let scrollbar_state = self.viewer_scrollbar_state(&key);
+                                    // Measured (non-uniform) list: rows wrap,
+                                    // so heights vary. Reset only on count
+                                    // change, mirroring the transcript list.
+                                    let list_state = self
+                                        .viewer_list_states
+                                        .entry(key.clone())
+                                        .or_insert_with(|| {
+                                            gpui::ListState::new(
+                                                count,
+                                                gpui::ListAlignment::Top,
+                                                gpui::px(
+                                                    console_ui::ESTIMATED_LOG_ROW_HEIGHT,
+                                                ),
+                                            )
+                                        });
+                                    if list_state.item_count() != count {
+                                        list_state.reset(count);
+                                    }
+                                    let list_state = list_state.clone();
+                                    let selection = self
+                                        .viewer_markdown_selections
+                                        .entry(key.clone())
+                                        .or_default()
+                                        .clone();
+                                    let scrollbar_state =
+                                        self.viewer_scrollbar_state(&key);
                                     if prev_count != Some(count) {
                                         // New or changed content: reveal the
                                         // tail unless the user is mid-select,
                                         // so live logs follow without yanking
                                         // an active selection.
-                                        let selecting = selection_state
-                                            .read(cx)
+                                        let selecting = !selection
                                             .selection
-                                            .is_some();
+                                            .borrow()
+                                            .is_empty();
                                         if !selecting {
                                             list_state.scroll_to_end();
                                         }
@@ -1090,9 +1105,8 @@ impl Render for ConsoleDesktopApp {
                                     row.with_output_view(
                                         lines,
                                         list_state,
-                                        selection_state,
+                                        selection,
                                         scrollbar_state,
-                                        focus_handle,
                                     )
                                 })
                                 .collect();

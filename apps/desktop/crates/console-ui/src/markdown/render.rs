@@ -778,6 +778,26 @@ pub fn plain_text(
     text_element(&flat, key, ctx)
 }
 
+/// A selectable plain-text log line: mono, transcript-selected, but never a
+/// block start, so multi-line log copies join with single newlines instead of
+/// paragraph breaks.
+pub fn plain_log_line(text: impl Into<SharedString>, color: Hsla, ctx: &Ctx) -> AnyElement {
+    let key = ctx.next_key();
+    let flat = ctx.flat(key.index, || {
+        flatten_plain(text, MONO_FAMILY, FontWeight::NORMAL, color)
+    });
+    text_element_with_selection(
+        &flat,
+        flat.runs.clone(),
+        key,
+        ctx.selection.clone(),
+        None,
+        ctx.palette.code_wash,
+        ctx.palette.selection,
+        false,
+    )
+}
+
 /// A zero-size canvas that clears the frame's registry. Paint it *before* any
 /// transcript text so the registry holds exactly this frame's visible elements.
 pub fn frame_reset(selection: TranscriptSelection) -> impl IntoElement {

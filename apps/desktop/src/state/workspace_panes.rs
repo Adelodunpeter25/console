@@ -1355,7 +1355,6 @@ impl ConsoleDesktopApp {
             || self.open_diff_contents.len() > MAX_CACHED_FILES
             || self.viewer_cached_file_lines.len() > MAX_CACHED_FILES
             || self.viewer_cached_diff_lines.len() > MAX_CACHED_FILES
-            || self.viewer_cached_run_lines.len() > MAX_CACHED_FILES
             || self.viewer_cached_markdown_views.len() > MAX_CACHED_FILES;
         if !over {
             return;
@@ -1375,8 +1374,6 @@ impl ConsoleDesktopApp {
             .retain(|path, _| open.contains(path));
         self.viewer_cached_markdown_views
             .retain(|path, _| open.contains(path));
-        self.viewer_cached_run_lines
-            .retain(|script_id, _| live_run_ids.contains(script_id));
         self.viewer_list_states
             .retain(|key, _| Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids));
         self.viewer_selection_states
@@ -1386,7 +1383,7 @@ impl ConsoleDesktopApp {
         self.viewer_scrollbar_states
             .retain(|key, _| Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids));
         self.viewer_markdown_selections
-            .retain(|key, _| Self::viewer_key_is_open(key, &open));
+            .retain(|key, _| Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids));
     }
 
     /// Script ids still defined in any project's scripts. Bounds the retained
