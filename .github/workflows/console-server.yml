@@ -84,7 +84,35 @@ jobs:
             --target=${{ matrix.bun-target }} \
             --outfile console-${{ matrix.os-suffix }}
 
-      - name: "Upload binaries to rolling release"
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: console-${{ matrix.os-suffix }}
+          path: |
+            console-${{ matrix.os-suffix }}
+            ${{ matrix.lib-asset }}
+          if-no-files-found: error
+
+  # Single publisher: the matrix jobs previously uploaded to the same
+  # rolling release in parallel, racing inside action-gh-release. Builds
+  # stay parallel; only this job mutates the release.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+
+    # Prevent overlapping pushes from modifying the rolling release together.
+    concurrency:
+      group: console-server-release
+      cancel-in-progress: true
+
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish rolling release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: console-server
@@ -92,5 +120,9 @@ jobs:
           prerelease: false
           make_latest: true
           files: |
-            console-${{ matrix.os-suffix }}
-            ${{ matrix.lib-asset }}
+            dist/console-linux-x64
+            dist/libfff_c-linux-x64.so
+            dist/console-macos-x64
+            dist/libfff_c-macos-x64.dylib
+            dist/console-macos-arm64
+            dist/libfff_c-macos-arm64.dylib
