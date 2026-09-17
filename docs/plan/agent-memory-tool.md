@@ -32,19 +32,22 @@ Target layout: `apps/server/agent/src/memory/`
 
 ## 1. Design Principles
 
-1. **One tool, not four.** A single `memory` tool with
-   `op: store | recall | edit | delete`, matching `todo`'s `op` enum shape.
-   Keeps the per-request tool-list token cost down and matches convention.
+1. **One tool, not five.** A single `memory` tool with
+   `op: store | recall | list | edit | delete`, matching `todo`'s `op` enum
+   shape. Keeps the per-request tool-list token cost down and matches
+   convention.
 2. **Persisted, not session-scoped.** Unlike `todo` (in-memory, cleared per
    session), memory must survive process restarts. Backed by SQLite, not a
    closure.
-3. **One `memory.db` file per project.** Reuse the existing `projects` table's
-   `id` to locate `<storage>/projects/<projectId>/memory.db`, mirroring how
-   session messages already get one file per session under that same project
-   directory. No global memory store, no shared table across projects. A
-   `scope: "global"` field still exists on rows within a project's own file
-   for facts that aren't tied to *that project's code* (e.g., user identity),
-   but it does not mean the data leaves the project's file — see §6.
+3. **One `memory.db` file per project, plus one real global store.** Reuse the
+   existing `projects` table's `id` to locate
+   `<storage>/projects/<projectId>/memory.db`, mirroring how session messages
+   already get one file per session under that same project directory. A
+   separate `<storage>/memory-global.db` (added in the last phase, §5 Phase 6)
+   holds facts that are genuinely cross-project (e.g., user identity,
+   general preferences) — not project-code-specific. Both `recall` and `list`
+   accept a `scope` filter (`"project" | "global"`) so the model can query
+   either store explicitly.
 4. **Isolated module boundary.** All memory logic lives under
    `agent/src/memory/`; the only external touchpoint is one import line in
    `agent/src/tools/index.ts`. No other module reaches into memory internals.
@@ -62,8 +65,7 @@ export type MemoryScope = "project" | "global";
 
 export interface MemoryEntry {
   id: string;            // crypto.randomUUID()
-  projectId: string | null; // null when scope === "global"
-  scope: MemoryScope;
+  scope: MemoryScope;     // which DB file this row lives in (see §3.1)
   content: string;
   tags: string[];
   createdAt: number;
@@ -95,25 +97,23 @@ apps/server/agent/src/memory/
 ```
 
 ### 3.1 `schema.ts`
-- **Per-project file**, not the global DB: one `memory.db` per project,
-  mirroring the existing per-project session layout
-  (`<storage>/projects/<projectId>/sessions/<sessionId>.db`):
+- **Per-project file** for `scope: "project"` rows, mirroring the existing
+  per-project session layout (`<storage>/projects/<projectId>/sessions/<sessionId>.db`):
   ```
-  <storage>/projects/<projectId>/memory.db
+  <storage>/projects/<projectId>/memory.db     # project-scoped (Phase 1)
+  <storage>/memory-global.db                   # cross-project (Phase 6)
   ```
-  Each project's memories live in their own SQLite file. This keeps the
-  global DB (`console-global.db`) untouched — it stays index-only
-  (`projects` + `sessions` tables) — and means deleting a project's directory
-  (existing behavior when a project is removed) automatically deletes its
-  memories with zero extra cleanup code.
-- `scope` still exists on the row (`project` | `global`), but "global" now
-  means *not tied to this specific project's code*, not *stored outside the
-  project DB* — see §6 for how cross-project global recall is handled given
-  this per-file layout.
+  Each project's memories live in their own SQLite file, so deleting a
+  project's directory (existing behavior when a project is removed)
+  automatically deletes its memories with zero extra cleanup code. The
+  global file lives at the storage root, alongside `console-global.db`, and
+  is untouched by project deletion.
+- Same table shape in both files — the schema doesn't need to know which
+  file it's in:
   ```sql
   CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
-    scope TEXT NOT NULL,        -- 'project' | 'global'
+    scope TEXT NOT NULL,        -- 'project' | 'global' (matches the file, kept for clarity/filtering)
     content TEXT NOT NULL,
     tags TEXT NOT NULL,         -- JSON array, e.g. '["auth","preference"]'
     created_at INTEGER NOT NULL,
@@ -125,20 +125,28 @@ apps/server/agent/src/memory/
   same principle `session/storage.ts` already uses for session DBs.
 
 ### 3.2 `storage.ts`
-- `class SqliteMemoryStorage`, one instance per project, opening
-  `<storage>/projects/<projectId>/memory.db` directly (`bun:sqlite`,
-  `mkdirSync(..., { recursive: true })` for the project dir first) — separate
-  connection from the global DB and from any session DB, matching how
-  `SqliteSessionStorage` already opens one file per session.
+- `class SqliteMemoryStorage`, constructed against a single file path — the
+  caller decides which file (`<project>/memory.db` or the root
+  `memory-global.db`) rather than the class knowing about scoping itself.
+  Opens via `bun:sqlite`, `mkdirSync(..., { recursive: true })` for the
+  parent dir first — separate connection from the global index DB and from
+  any session DB, matching how `SqliteSessionStorage` already opens one file
+  per session.
 - Lazily created/opened on first use per project (same lazy-open + eviction
   pattern `session-helpers.ts` uses for cached session DBs), not eagerly for
-  every project at startup.
-- Methods:
+  every project at startup. The global instance is a single long-lived
+  singleton (only one file, no eviction needed).
+- Methods (identical regardless of which file the instance targets):
   - `store(input: { content: string; tags: string[]; scope: MemoryScope }): MemoryEntry`
   - `get(id: string): MemoryEntry | null`
   - `list(filter?: { scope?: MemoryScope }): MemoryEntry[]`
   - `update(id: string, patch: { content?: string; tags?: string[] }): MemoryEntry | null`
   - `remove(id: string): boolean`
+- A thin `memory/registry.ts` (added in Phase 6) resolves `scope` to the
+  right `SqliteMemoryStorage` instance for a given `projectId`, so
+  `tools/memory.ts` never opens files directly — it asks the registry for
+  "the store for scope X on project Y" and calls methods on whatever it
+  returns.
 
 ### 3.3 `search.ts`
 - `recallMemories(entries: MemoryEntry[], query: { text?: string; tags?: string[] }, limit = 10): RecallMatch[]`
@@ -158,14 +166,18 @@ or raw SQL directly.
 
 ```ts
 const inputSchema = z.object({
-  op: z.enum(["store", "recall", "edit", "delete"])
-    .describe("Operation: 'store', 'recall', 'edit', or 'delete'"),
+  op: z.enum(["store", "recall", "list", "edit", "delete"])
+    .describe("Operation: 'store', 'recall', 'list', 'edit', or 'delete'"),
   content: z.string().optional()
     .describe("Memory content (required for 'store'; new content for 'edit')"),
   tags: z.array(z.string()).optional()
-    .describe("Tags for filtering (used with 'store', 'edit', or 'recall')"),
+    .describe("Tags for filtering (used with 'store', 'edit', 'recall', or 'list')"),
   scope: z.enum(["project", "global"]).optional()
-    .describe("Defaults to 'project'. Use 'global' only for facts not tied to this project."),
+    .describe(
+      "Defaults to 'project'. 'project' = this project's own memory.db; " +
+      "'global' = cross-project memory.db shared by every project. " +
+      "Applies to 'store', 'recall', and 'list'.",
+    ),
   query: z.string().optional()
     .describe("Free-text search term (used with 'recall')"),
   id: z.string().optional()
@@ -178,15 +190,25 @@ pattern):
 
 | op | required fields | behavior |
 |---|---|---|
-| `store` | `content` | Inserts a row, defaults `scope` to `"project"`, returns the new `id` |
-| `recall` | `query` and/or `tags` | Runs `search.ts` scoring over the relevant scope(s), returns matched entries with ids and content |
+| `store` | `content` | Inserts a row into the store for `scope` (default `"project"`), returns the new `id` |
+| `recall` | `query` and/or `tags` | Runs `search.ts` scoring over the store for `scope` (default `"project"`), returns matched entries with ids and content |
+| `list` | — | Returns all entries in the store for `scope` (default `"project"`), optionally filtered by `tags`; no scoring, just a plain listing (mirrors `todo`'s `view` op) |
 | `edit` | `id`, plus `content` and/or `tags` | Patches the row, bumps `updatedAt` |
 | `delete` | `id` | Removes the row |
 
+`edit`/`delete` take `scope` too (default `"project"`) since an `id` alone
+doesn't say which file it lives in — the model must know (or the tool
+searches both stores) since ids are only unique within a single file, not
+globally. Simplest: require `scope` to already be known from a prior
+`recall`/`list` call in the same turn; document this in the tool description
+rather than adding cross-file id lookup.
+
 The tool needs the current `projectId` at construction time (passed in by
 whatever wires up the agent's tool list per session, same as how `todoTool`'s
-controller is constructed per-session with `initialItems`) so `store`/`recall`
-know which project to scope to without the model having to pass it explicitly.
+controller is constructed per-session with `initialItems`) so project-scoped
+ops know which project's `memory.db` to use without the model having to pass
+it explicitly. The global store needs no such construction-time argument —
+it's the same file for every session.
 
 Tool description text should explicitly instruct the model on **when** to use
 `store` — e.g. "Use when the user explicitly asks you to remember something,
@@ -244,22 +266,39 @@ on it based on observed over/under-triggering.
 - Add a short section to any relevant internal docs describing the `memory`
   tool for future contributors (not user-facing docs unless requested).
 
+### Phase 6 — Global Memory (last)
+Deliberately last: ship project-scoped memory first, prove the tool/recall
+loop works, then extend to a second store rather than building both at once.
+
+- Implement `memory/registry.ts`: resolves `scope` + `projectId` to the right
+  `SqliteMemoryStorage` instance —
+  - `scope: "project"` → lazily opened `<storage>/projects/<projectId>/memory.db`
+    (same instance Phase 1 already built).
+  - `scope: "global"` → a single lazily-opened singleton at
+    `<storage>/memory-global.db`, reusing the same `schema.ts`/`storage.ts`
+    with no code changes, just a different path.
+- Update `tools/memory.ts` to route `store`/`recall`/`list`/`edit`/`delete`
+  through the registry instead of a single hardcoded project store.
+- Update the tool description to explain the project/global distinction
+  clearly enough that the model defaults to `"project"` and only reaches for
+  `"global"` for genuinely cross-project facts (mirrors the user-memory vs.
+  project-memory distinction Claude Code's own memory docs draw).
+- **Verification**: `apps/server/tests/memory-registry.test.ts` — resolves to
+  distinct storage instances per scope, global instance is shared across
+  different `projectId`s, global file is unaffected by project deletion.
+  Extend `memory-tool.test.ts` with `scope: "global"` cases for each op.
+
 ---
 
 ## 6. Open Questions (resolve before/at Phase 1)
 
 - **Recall result cap**: is 10 the right default limit, or should it be
   tunable per call via the tool input?
-- **Cross-project global recall**: since each project now has its own
-  `memory.db`, a `scope: "global"` row is still physically stored inside one
-  specific project's file. If the intent of "global" is genuinely
-  cross-project (e.g., a user fact that should surface in *any* project),
-  per-project files alone can't satisfy that — either accept that "global"
-  only means "not code-specific, but still scoped to this project", or add a
-  second small store outside any project dir purely for the few truly
-  cross-project facts. Recommend the former for v1 (simpler, matches "per
-  project memory.db" requirement) and revisit only if a real cross-project
-  use case shows up.
+- **Cross-scope `edit`/`delete`**: per §4, `id`s are only unique within a
+  single file. Is "the model must know/pass the correct `scope`" acceptable,
+  or should `edit`/`delete` fall back to checking both stores when `scope` is
+  omitted (slightly friendlier, slightly more code)? Recommend requiring
+  explicit `scope` for v1 (simpler) and revisit if this causes real friction.
 - **Tag vocabulary**: freeform tags (per §2) vs. a constrained enum — freeform
   is simpler now but may fragment (`"auth"` vs `"authentication"`) over time.
 
@@ -273,6 +312,9 @@ on it based on observed over/under-triggering.
 - Always-on memory summary injected into every system prompt.
 - A memory taxonomy (`user`/`feedback`/`project`/`reference` types).
 - Any UI for browsing/editing memories outside of the agent tool itself.
+- Blending project + global results into a single `recall`/`list` call —
+  each call targets exactly one scope (§4); the model issues two calls if it
+  needs both.
 
 ---
 
@@ -280,10 +322,13 @@ on it based on observed over/under-triggering.
 
 | Test Case | Method | Expected Outcome |
 | :--- | :--- | :--- |
-| **Storage CRUD** | `bun tests/memory-storage.test.ts` | store/get/update/delete round-trip correctly against `:memory:` DB |
-| **Cascade delete** | same file | deleting a project removes its memories |
+| **Storage CRUD** | `bun tests/memory-storage.test.ts` | store/get/update/delete round-trip correctly against a temp-dir instance |
+| **Cascade delete** | same file | deleting a project removes its `memory.db` |
 | **Recall scoring** | `bun tests/memory-search.test.ts` | tag/substring/combined scoring ranks and caps correctly |
 | **Tool validation** | `bun tests/memory-tool.test.ts` | each `op` errors cleanly on missing required fields |
-| **Tool success paths** | same file | `store` returns id; `recall` returns matches; `edit`/`delete` mutate correctly |
+| **Tool success paths** | same file | `store` returns id; `recall`/`list` return matches; `edit`/`delete` mutate correctly |
 | **Cross-session recall** | manual | fact stored in session A is recalled in session B, same project |
 | **Store-trigger discipline** | manual | agent does not call `store` for routine, non-memorable requests |
+| **Registry resolution** | `bun tests/memory-registry.test.ts` | `scope: "project"` and `scope: "global"` resolve to distinct, correctly-pathed stores |
+| **Global persistence** | manual | fact stored with `scope: "global"` in project A is recalled with `scope: "global"` in project B |
+| **Global survives project deletion** | manual | deleting project A does not remove global memories |
