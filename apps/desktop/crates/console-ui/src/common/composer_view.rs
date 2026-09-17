@@ -267,8 +267,10 @@ impl ComposerView {
                     .unwrap_or(&path)
                     .to_string();
                 let on_remove = on_remove.clone();
+                let group = format!("ctx-chip-{index}");
                 div()
                     .id(ElementId::Name(format!("ctx-file-chip-{index}").into()))
+                    .group(group.clone())
                     .flex()
                     .items_center()
                     .gap(px(4.0))
@@ -278,35 +280,53 @@ impl ComposerView {
                     .border_1()
                     .border_color(theme.border)
                     .bg(theme.overlay)
-                    .child(crate::primitives::file_type_icon(&path, 11.0))
+                    .hover(|s| s.border_color(theme.accent.opacity(0.4)))
+                    .cursor_default()
+                    .on_click(move |_, window, cx| {
+                        (on_remove)(index, window, cx);
+                        cx.stop_propagation();
+                    })
+                    // Icon area: file icon normally, X on hover
+                    .child(
+                        div()
+                            .relative()
+                            .size(px(14.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            // File icon — hidden when chip is hovered
+                            .child(
+                                div()
+                                    .absolute()
+                                    .inset_0()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .group_hover(group.clone(), |s| s.invisible())
+                                    .child(crate::primitives::file_type_icon(&path, 11.0)),
+                            )
+                            // X icon — visible only when chip is hovered
+                            .child(
+                                div()
+                                    .absolute()
+                                    .inset_0()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .invisible()
+                                    .group_hover(group.clone(), |s| s.visible())
+                                    .child(crate::primitives::app_icon(
+                                        crate::primitives::IconName::X,
+                                        10.0,
+                                        theme.text,
+                                    )),
+                            ),
+                    )
                     .child(
                         div()
                             .text_size(px(12.0))
                             .text_color(theme.text_secondary)
                             .child(filename),
-                    )
-                    .child(
-                        div()
-                            .id(ElementId::Name(
-                                format!("ctx-file-remove-{index}").into(),
-                            ))
-                            .ml(px(2.0))
-                            .size(px(14.0))
-                            .rounded_full()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_default()
-                            .hover(|s| s.bg(theme.danger.opacity(0.15)))
-                            .on_click(move |_, window, cx| {
-                                (on_remove)(index, window, cx);
-                                cx.stop_propagation();
-                            })
-                            .child(crate::primitives::app_icon(
-                                crate::primitives::IconName::X,
-                                8.0,
-                                theme.text_tertiary,
-                            )),
                     )
             }))
     }
