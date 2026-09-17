@@ -3,7 +3,10 @@ use std::ops::Range;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ComposerMention {
     pub range: Range<usize>,
+    /// Full path sent to the agent.
     pub path: String,
+    /// Filename shown in the chip (may differ from path).
+    pub label: String,
 }
 
 pub fn adjust_mentions(
@@ -36,7 +39,7 @@ pub fn reconcile_mentions(mentions: &mut Vec<ComposerMention>, content: &str) {
         if !content.is_char_boundary(m.range.start) || !content.is_char_boundary(m.range.end) {
             return false;
         }
-        content.get(m.range.clone()) == Some(m.path.as_str())
+        content.get(m.range.clone()) == Some(m.label.as_str())
     });
     mentions.sort_by_key(|m| m.range.start);
     mentions.dedup_by(|a, b| a.range == b.range);

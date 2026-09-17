@@ -96,7 +96,12 @@ impl ConsoleDesktopApp {
             &composer_input,
             move |this, input, event: &ComposerEvent, cx| match event {
                 ComposerEvent::Submit(prompt) => {
-                    let context_files = input.read(cx).context_files().to_vec();
+                    let context_files = input
+                        .read(cx)
+                        .mentions()
+                        .iter()
+                        .map(|m| m.path.clone())
+                        .collect::<Vec<_>>();
                     if this.is_active_session_running_for_pane(&submit_pane_id) {
                         let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
                         this.queue_prompt_for_pane(

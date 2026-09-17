@@ -48,7 +48,6 @@ pub struct ComposerView {
     pub selected_model: Option<SelectedModel>,
     pub approval_mode: ApprovalMode,
     pub attachments: Rc<Vec<ImageAttachment>>,
-    pub context_files: Vec<String>,
     /// Whether the active session already has a staged prompt (server's `queueUpdated` not null).
     /// Rendered independently of `run_state` so a replace does not need a new state variant.
     pub has_queued_prompt: bool,
@@ -61,7 +60,6 @@ pub struct ComposerView {
     on_pick_image: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_remove_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     on_preview_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
-    on_remove_context_file: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     on_drop_files: Rc<dyn Fn(&ExternalPaths, &mut Window, &mut App) + 'static>,
     on_autocomplete_next: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_autocomplete_previous: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -83,7 +81,6 @@ impl ComposerView {
             selected_model: None,
             approval_mode: ApprovalMode::AlwaysAsk,
             attachments: Rc::new(Vec::new()),
-            context_files: Vec::new(),
             has_queued_prompt: false,
             model_menu: None,
             approval_menu: None,
@@ -94,7 +91,6 @@ impl ComposerView {
             on_pick_image: Rc::new(on_pick_image),
             on_remove_attachment: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
             on_preview_attachment: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
-            on_remove_context_file: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
             on_drop_files: Rc::new(|_: &ExternalPaths, _: &mut Window, _: &mut App| {}),
             on_autocomplete_next: Rc::new(|_, _| {}),
             on_autocomplete_previous: Rc::new(|_, _| {}),
@@ -175,19 +171,6 @@ impl ComposerView {
         self
     }
 
-    pub fn context_files(mut self, files: Vec<String>) -> Self {
-        self.context_files = files;
-        self
-    }
-
-    pub fn on_remove_context_file(
-        mut self,
-        handler: impl Fn(usize, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        self.on_remove_context_file = Rc::new(handler);
-        self
-    }
-
     pub fn on_remove_attachment(
         mut self,
         handler: impl Fn(usize, &mut Window, &mut App) + 'static,
@@ -247,88 +230,6 @@ impl ComposerView {
     ) -> Self {
         self.on_autocomplete_dismiss = Rc::new(handler);
         self
-    }
-
-    fn render_file_chips(
-        context_files: Vec<String>,
-        on_remove: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
-        theme: crate::theme::Theme,
-    ) -> impl IntoElement {
-        div()
-            .flex()
-            .flex_wrap()
-            .gap(px(6.0))
-            .px(px(12.0))
-            .pb(px(6.0))
-            .children(context_files.into_iter().enumerate().map(|(index, path)| {
-                let filename = Path::new(&path)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or(&path)
-                    .to_string();
-                let on_remove = on_remove.clone();
-                let group = format!("ctx-chip-{index}");
-                div()
-                    .id(ElementId::Name(format!("ctx-file-chip-{index}").into()))
-                    .group(group.clone())
-                    .flex()
-                    .items_center()
-                    .gap(px(4.0))
-                    .px(px(8.0))
-                    .h(px(24.0))
-                    .rounded(px(6.0))
-                    .border_1()
-                    .border_color(theme.border)
-                    .bg(theme.overlay)
-                    .hover(|s| s.border_color(theme.accent.opacity(0.4)))
-                    .cursor_default()
-                    .on_click(move |_, window, cx| {
-                        (on_remove)(index, window, cx);
-                        cx.stop_propagation();
-                    })
-                    // Icon area: file icon normally, X on hover
-                    .child(
-                        div()
-                            .relative()
-                            .size(px(14.0))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            // File icon — hidden when chip is hovered
-                            .child(
-                                div()
-                                    .absolute()
-                                    .inset_0()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .group_hover(group.clone(), |s| s.invisible())
-                                    .child(crate::primitives::file_type_icon(&path, 11.0)),
-                            )
-                            // X icon — visible only when chip is hovered
-                            .child(
-                                div()
-                                    .absolute()
-                                    .inset_0()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .invisible()
-                                    .group_hover(group.clone(), |s| s.visible())
-                                    .child(crate::primitives::app_icon(
-                                        crate::primitives::IconName::X,
-                                        10.0,
-                                        theme.text,
-                                    )),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .text_color(theme.text_secondary)
-                            .child(filename),
-                    )
-            }))
     }
 
     fn render_attachments(
@@ -463,8 +364,7 @@ impl RenderOnce for ComposerView {
         };
 
         let has_draft = !self.composer_input.read(cx).content().trim().is_empty()
-            || !self.attachments.is_empty()
-            || !self.context_files.is_empty();
+            || !self.attachments.is_empty();
         let attachment_data = self.attachments.clone();
         let attachment_on_remove = self.on_remove_attachment.clone();
         let attachment_on_preview = self.on_preview_attachment.clone();
@@ -475,9 +375,6 @@ impl RenderOnce for ComposerView {
                 attachment_on_preview,
                 theme,
             )
-        });
-        let file_chips = (!self.context_files.is_empty()).then(|| {
-            Self::render_file_chips(self.context_files, self.on_remove_context_file.clone(), theme)
         });
         let autocomplete = self.autocomplete;
         let autocomplete_anchor = autocomplete.as_ref().map(AutocompleteView::anchor_cell);
@@ -561,9 +458,6 @@ impl RenderOnce for ComposerView {
                             })
                             .on_drop(move |paths: &ExternalPaths, window, cx| {
                                 (on_drop_files)(paths, window, cx);
-                            })
-                            .when_some(file_chips, |element, chips| {
-                                element.child(chips)
                             })
                             .when_some(attachments, |element, attachments| {
                                 element.child(attachments)

@@ -95,6 +95,13 @@ impl ConsoleDesktopApp {
                     .map(|mention| ComposerMention {
                         range: mention.start..mention.end,
                         path: mention.path.clone(),
+                        label: mention.label.clone().unwrap_or_else(|| {
+                            std::path::Path::new(&mention.path)
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or(&mention.path)
+                                .to_string()
+                        }),
                     })
                     .collect(),
             )
@@ -139,6 +146,7 @@ impl ConsoleDesktopApp {
                     start: mention.range.start,
                     end: mention.range.end,
                     path: mention.path.clone(),
+                    label: Some(mention.label.clone()),
                 })
                 .collect::<Vec<_>>();
             let changed = match self.drafts.get(&key) {
