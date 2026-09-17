@@ -488,14 +488,17 @@ impl ComposerInput {
         // the text. The normal @ flow already leaves one preceding space
         // (the trigger requires whitespace before @), so add 5 more; when
         // inserting directly after non-whitespace add 6. At the start of the
-        // line no gap is needed, just the icon reservation.
+        // line there is no preceding word, but the pill still overhangs ~17px
+        // left of the label for its icon — with only a 3-space reservation
+        // the pill pokes past the text origin and gets clipped by the card's
+        // rounded border, so reserve 5 spaces there as well.
         let prev_is_whitespace = start > 0
             && self.content[..start]
                 .chars()
                 .next_back()
                 .is_some_and(|c| c.is_whitespace());
         let prefix = if start == 0 {
-            "   "
+            "     "
         } else if prev_is_whitespace {
             "     "
         } else {

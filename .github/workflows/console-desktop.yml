@@ -61,7 +61,33 @@ jobs:
             "$RUNNER_TEMP/dist/Console.app" \
             "Console-${{ matrix.os-suffix }}.zip"
 
-      - name: Upload to rolling release
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Console-${{ matrix.os-suffix }}
+          path: Console-${{ matrix.os-suffix }}.zip
+          if-no-files-found: error
+
+  # Single publisher: both matrix jobs previously uploaded to the same
+  # rolling release in parallel, racing inside action-gh-release. Builds
+  # stay parallel; only this job mutates the release.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+
+    # Prevent overlapping pushes from modifying the rolling release together.
+    concurrency:
+      group: console-desktop-release
+      cancel-in-progress: true
+
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish rolling release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: console-desktop
@@ -70,4 +96,5 @@ jobs:
           # console-server owns the repo's "latest" pointer; don't flap it.
           make_latest: false
           files: |
-            Console-${{ matrix.os-suffix }}.zip
+            dist/Console-macos-x64.zip
+            dist/Console-macos-arm64.zip
