@@ -5,7 +5,7 @@
 //! title fallback, and the viewing-suppression decision.
 
 use console_core::types::notification::{
-    NOTIFICATION_THREAD_ID, NotificationDecision, decide_notification,
+    NOTIFICATION_THREAD_ID, NotificationDecision, decide_notification, dock_badge_label,
     normalize_notification_title, notification_ident, parse_session_id_from_ident,
 };
 
@@ -79,4 +79,12 @@ fn test_decide_empty_skips() {
 fn test_thread_groups_sessions() {
     // Single group keeps all session banners together in Notification Center.
     assert_eq!(NOTIFICATION_THREAD_ID, "console-sessions");
+}
+
+#[test]
+fn test_dock_badge_label() {
+    // Zero clears the badge; otherwise the outstanding-banner count.
+    assert_eq!(dock_badge_label(0), None);
+    assert_eq!(dock_badge_label(1).as_deref(), Some("1"));
+    assert_eq!(dock_badge_label(12).as_deref(), Some("12"));
 }
