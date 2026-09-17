@@ -140,17 +140,19 @@ export function convertClaudeMessages(messages: AgentMessage[], cacheRetention?:
     }
   }
 
-  // Drop leading assistant turns; never send an empty conversation.
-  while (merged.length > 0 && merged[0]!.role !== "user") {
-    merged.shift();
-  }
-
-  // Claude rejects a conversation that ends on an assistant turn ("does not
-  // support assistant message prefill"). This can happen when the agent loop
-  // persists an assistant turn before its matching tool-result turn (e.g. an
-  // aborted run or a restored session) — drop trailing assistant turns.
-  while (merged.length > 0 && merged[merged.length - 1]!.role !== "user") {
-    merged.pop();
+  // Anthropic requires conversations to start and end with a user turn.
+  // Prepend a user turn if the history begins with an assistant turn, and
+  // append a user turn if it ends on an assistant turn, so prior turns are
+  // preserved with full context instead of being erased.
+  if (merged.length === 0) {
+    merged.push({ role: "user", content: [{ type: "text", text: "(continue)" }] });
+  } else {
+    if (merged[0]!.role !== "user") {
+      merged.unshift({ role: "user", content: [{ type: "text", text: "(session started)" }] });
+    }
+    if (merged[merged.length - 1]!.role !== "user") {
+      merged.push({ role: "user", content: [{ type: "text", text: "(continue)" }] });
+    }
   }
 
   // Sanitize tool results: every tool_result block in a user turn must have a
@@ -186,10 +188,6 @@ export function convertClaudeMessages(messages: AgentMessage[], cacheRetention?:
       }
     }
     turn.content = sanitizedContent;
-  }
-
-  if (merged.length === 0) {
-    merged.push({ role: "user", content: [{ type: "text", text: "(continue)" }] });
   }
 
   // Trailing prompt-cache breakpoint over the conversation prefix, so the

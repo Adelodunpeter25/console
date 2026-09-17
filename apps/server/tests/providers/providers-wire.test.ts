@@ -120,11 +120,12 @@ console.log("Running Provider Wire Converter tests...");
     ],
     { requireUserTerminator: true },
   );
-  // Assistant-only history trims to empty, so Claude gets a neutral
-  // continuator instead of a guaranteed-400 empty conversation.
-  assert.equal(assistantOnlyWire.length, 1);
+  // Assistant-only history prepends/appends user boundaries without dropping the model context.
+  assert.equal(assistantOnlyWire.length, 3);
   assert.equal(assistantOnlyWire[0]?.role, "user");
-  console.log("  ✅ Assistant-only history becomes a continuator for Claude requests");
+  assert.equal(assistantOnlyWire[1]?.role, "model");
+  assert.equal(assistantOnlyWire[2]?.role, "user");
+  console.log("  ✅ Assistant-only history preserves model turn with user boundaries");
 
   // An image-only user message (empty text + attachments) must survive
   // conversion — dropping it can strand a trailing assistant turn.
@@ -165,15 +166,16 @@ console.log("Running Provider Wire Converter tests...");
     },
   ]);
 
-  assert.equal((wireContent[0]!.parts[0] as any).thoughtSignature, LEGACY_THOUGHT_SIGNATURE);
+  const modelTurn = wireContent.find((t) => t.role === "model")!;
+  assert.equal((modelTurn.parts[0] as any).thoughtSignature, LEGACY_THOUGHT_SIGNATURE);
   console.log("  ✅ Legacy thought-signature fallback");
 }
 
 // 1c. Orphaned tool results (e.g. at conversation start or severed from assistant turn)
 // are converted to user text parts so CCA/Claude models do not reject unexpected tool_use_ids.
 {
-  // History starts with assistant tool call + tool result. Leading assistant turn is dropped,
-  // leaving the tool result at index 0. The orphaned functionResponse must become a text part.
+  // History starts with assistant tool call + tool result. Leading user starter is prepended,
+  // preserving the tool call and result.
   const leadingToolUseMessages: AgentMessage[] = [
     {
       role: "assistant",
@@ -197,12 +199,11 @@ console.log("Running Provider Wire Converter tests...");
   ];
 
   const wire = convertMessages(leadingToolUseMessages, { requireUserTerminator: true });
-  assert.equal(wire.length, 1);
+  assert.equal(wire.length, 3);
   assert.equal(wire[0]?.role, "user");
-  // There should be NO functionResponse parts in wire[0] since it has no preceding model turn
-  const hasFunctionResponse = wire[0]?.parts.some((p) => "functionResponse" in p);
-  assert.equal(hasFunctionResponse, false, "Orphaned functionResponse must be converted to text part");
-  console.log("  ✅ Orphaned toolResult at index 0 converted to safe text part");
+  assert.equal(wire[1]?.role, "model");
+  assert.equal(wire[2]?.role, "user");
+  console.log("  ✅ Leading toolCall and toolResult preserved with user starter");
 
   // Orphaned tool result alone
   const orphanedAlone = convertMessages([

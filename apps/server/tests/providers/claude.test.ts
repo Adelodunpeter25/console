@@ -288,6 +288,24 @@ console.log("Running Claude provider tests...");
   console.log("  ✅ orphaned tool results converted to safe text blocks for Claude");
 }
 
+// 9d. Assistant-only history preserves model response with user boundaries
+{
+  const wire = convertClaudeMessages([
+    {
+      role: "assistant",
+      id: "turn-1",
+      content: [{ type: "text", text: "I have completed step 1." }],
+      stopReason: "stop",
+    },
+  ]);
+  assert.equal(wire.length, 3);
+  assert.equal(wire[0]!.role, "user");
+  assert.equal(wire[1]!.role, "assistant");
+  assert.equal((wire[1]!.content[0] as any).text, "I have completed step 1.");
+  assert.equal(wire[2]!.role, "user");
+  console.log("  ✅ assistant-only history preserves prior assistant response");
+}
+
 // 10. convertClaudeMessages merges same-role turns and keeps image attachments
 {
   const wire = convertClaudeMessages([

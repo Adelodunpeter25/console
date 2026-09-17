@@ -116,6 +116,10 @@ export function convertMessages(
       for (const part of msg.content) {
         if (part.type === "text" && (part.text || part.thoughtSignature)) {
           parts.push(makeTextPart(part.text, part.thoughtSignature));
+        } else if (part.type === "thinking" && part.text) {
+          // Prior thinking is replayed unsigned, which strict signing endpoints
+          // reject — demote it to text instead of losing reasoning context.
+          parts.push(makeTextPart(part.text));
         } else if (part.type === "toolCall") {
           const args = (part.call.arguments ?? {}) as Record<string, unknown>;
           const normalizedId = normalizeToolCallId(part.call.id);
@@ -165,15 +169,18 @@ export function convertMessages(
     }
   }
 
-  // 3. Enforce conversation begins and ends with user when user turns exist
-  // (prevents "This model does not support assistant message prefill")
-  const hasUserTurn = mergedTurns.some((t) => t.role === "user");
-  if (hasUserTurn || options.requireUserTerminator) {
-    while (mergedTurns.length > 0 && mergedTurns[0]!.role !== "user") {
-      mergedTurns.shift();
+  // 3. Enforce conversation begins and ends with user when required by provider or history.
+  // Prepend or append user turns so prior context is never deleted.
+  if (mergedTurns.length === 0) {
+    if (options.requireUserTerminator) {
+      mergedTurns.push({ role: "user", parts: [makeTextPart("(continue)")] });
     }
-    while (mergedTurns.length > 0 && mergedTurns[mergedTurns.length - 1]!.role !== "user") {
-      mergedTurns.pop();
+  } else {
+    if (mergedTurns[0]!.role !== "user") {
+      mergedTurns.unshift({ role: "user", parts: [makeTextPart("(session started)")] });
+    }
+    if (mergedTurns[mergedTurns.length - 1]!.role !== "user") {
+      mergedTurns.push({ role: "user", parts: [makeTextPart("(continue)")] });
     }
   }
 
@@ -213,14 +220,6 @@ export function convertMessages(
       }
     }
     turn.parts = sanitizedParts;
-  }
-
-  // 5. Claude hard-fails on an empty conversation ("must end with a user
-  // message"), which is what an assistant-only history trims down to above
-  // (e.g. a restored session whose only turns are stale assistant text).
-  // A neutral continuator is strictly better than a 400.
-  if (options.requireUserTerminator && mergedTurns.length === 0) {
-    mergedTurns.push({ role: "user", parts: [makeTextPart("(continue)")] });
   }
 
   return mergedTurns;
