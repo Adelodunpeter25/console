@@ -116,16 +116,6 @@ impl ConsoleDesktopApp {
             .unwrap_or_default()
     }
 
-    pub fn save_draft_for_session(
-        &mut self,
-        session_id: Option<&str>,
-        text: &str,
-        mentions: &[ComposerMention],
-        cx: &mut Context<Self>,
-    ) {
-        self.save_draft_for_session_with_context(session_id, text, mentions, &[], cx);
-    }
-
     pub fn save_draft_for_session_with_context(
         &mut self,
         session_id: Option<&str>,
@@ -203,16 +193,6 @@ impl ConsoleDesktopApp {
     /// Called when a tab closes — commits the current draft state to the sidebar.
     /// If `text` is non-empty, the session appears in the draft sidebar.
     /// If empty, it is removed from the sidebar.
-    pub fn commit_draft_to_sidebar(
-        &mut self,
-        session_id: &str,
-        text: &str,
-        mentions: &[ComposerMention],
-        cx: &mut Context<Self>,
-    ) {
-        self.commit_draft_to_sidebar_with_context(session_id, text, mentions, &[], cx);
-    }
-
     pub fn commit_draft_to_sidebar_with_context(
         &mut self,
         session_id: &str,

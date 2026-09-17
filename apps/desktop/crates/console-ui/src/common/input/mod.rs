@@ -461,6 +461,10 @@ impl ComposerInput {
         &self.context_files
     }
 
+    pub fn set_context_files(&mut self, context_files: Vec<String>) {
+        self.context_files = context_files;
+    }
+
     pub fn remove_context_file(&mut self, index: usize, cx: &mut Context<Self>) {
         if index < self.context_files.len() {
             self.context_files.remove(index);

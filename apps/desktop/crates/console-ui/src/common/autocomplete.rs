@@ -327,13 +327,13 @@ impl RenderOnce for AutocompleteView {
                 .id(ElementId::Name(
                     format!("composer-autocomplete-{index}").into(),
                 ))
-                .min_h(px(30.0))
+                .min_h(px(28.0))
                 .px(px(8.0))
                 .py(px(4.0))
                 .rounded(px(6.0))
                 .flex()
                 .items_center()
-                .gap(px(7.0))
+                .gap(px(8.0))
                 .cursor_default()
                 .when(selected, |element| element.bg(theme.overlay_strong))
                 .when(!selected, |element| {
@@ -346,27 +346,37 @@ impl RenderOnce for AutocompleteView {
 
             popup = popup.child(match item {
                 AutocompleteItem::Command(command) => row
-                    .child(app_icon(IconName::Sparkle, 13.0, theme.accent))
                     .child(
                         div()
-                            .min_w(px(0.0))
-                            .flex_1()
-                            .truncate()
-                            .child(
-                                div()
-                                    .text_size(px(12.0))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme.text)
-                                    .child(format!("/{}", command.name)),
-                            )
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_size(px(10.5))
-                                    .text_color(theme.text_tertiary)
-                                    .child(command.description),
-                            ),
+                            .text_size(px(13.0))
+                            .font_weight(FontWeight::NORMAL)
+                            .text_color(theme.text_tertiary)
+                            .flex_none()
+                            .child("/"),
                     )
+                    .child(
+                        div()
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(if selected {
+                                theme.text
+                            } else {
+                                theme.text_secondary
+                            })
+                            .flex_none()
+                            .child(command.name),
+                    )
+                    .when(!command.description.is_empty(), |el| {
+                        el.child(
+                            div()
+                                .min_w(px(0.0))
+                                .flex_1()
+                                .truncate()
+                                .text_size(px(12.0))
+                                .text_color(theme.text_tertiary)
+                                .child(command.description),
+                        )
+                    })
                     .into_any_element(),
                 AutocompleteItem::File(file) => row
                     .child(if file.is_dir {
@@ -379,8 +389,12 @@ impl RenderOnce for AutocompleteView {
                             .min_w(px(0.0))
                             .flex_1()
                             .truncate()
-                            .text_size(px(12.0))
-                            .text_color(theme.text)
+                            .text_size(px(12.5))
+                            .text_color(if selected {
+                                theme.text
+                            } else {
+                                theme.text_secondary
+                            })
                             .child(file.relative_path),
                     )
                     .into_any_element(),

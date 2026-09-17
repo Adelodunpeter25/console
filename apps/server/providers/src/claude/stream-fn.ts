@@ -205,6 +205,83 @@ type ToolCallState = {
   emittedStart: boolean;
 };
 
+async function fetchClaudeWithRetry(
+  url: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+  signal?: AbortSignal,
+  maxAttempts = 3,
+): Promise<Response> {
+  let attempt = 0;
+  while (attempt < maxAttempts) {
+    if (signal?.aborted) throw new Error("Aborted");
+    attempt++;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal,
+    });
+
+    if (response.ok) {
+      return response;
+    }
+
+    const isRetryable =
+      response.status === 429 ||
+      response.status === 529 ||
+      response.headers.get("x-should-retry") === "true";
+
+    if (isRetryable && attempt < maxAttempts) {
+      const retryAfterHeader = response.headers.get("retry-after");
+      const retryAfterSec = retryAfterHeader ? Number.parseFloat(retryAfterHeader) : NaN;
+      const delayMs =
+        !Number.isNaN(retryAfterSec) && retryAfterSec > 0
+          ? Math.min(retryAfterSec * 1000, 10000)
+          : Math.min(1000 * Math.pow(2, attempt - 1), 6000);
+
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, delayMs);
+        if (signal) {
+          signal.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timer);
+              reject(new Error("Aborted"));
+            },
+            { once: true },
+          );
+        }
+      });
+      continue;
+    }
+
+    // If still 429 after retries on a Sonnet/Opus model, fallback to Haiku
+    const modelId = String(body.model ?? "");
+    const isHighTier =
+      modelId.includes("sonnet") || modelId.includes("opus") || modelId.includes("fable");
+    if (response.status === 429 && isHighTier && !modelId.includes("haiku")) {
+      const fallbackBody = { ...body, model: "claude-haiku-4-5-20251001" };
+      const fallbackResponse = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(fallbackBody),
+        signal,
+      });
+      if (fallbackResponse.ok) {
+        return fallbackResponse;
+      }
+    }
+
+    throw new Error(
+      `Claude request failed (${response.status} ${response.statusText}): ${await response.text().catch(() => "")}`,
+    );
+  }
+
+  throw new Error("Claude request exceeded retry limit");
+}
+
 export const claudeStreamFn: StreamFn = async function* ({
   model,
   systemPrompt,
@@ -225,15 +302,12 @@ export const claudeStreamFn: StreamFn = async function* ({
   );
 
   const baseUrl = (model as { baseUrl?: string }).baseUrl ?? CLAUDE_BASE_URL;
-  const response = await fetch(claudeMessagesUrl(baseUrl), {
-    method: "POST",
-    headers: buildHeaders(credential.accessToken),
-    body: JSON.stringify(body),
+  const response = await fetchClaudeWithRetry(
+    claudeMessagesUrl(baseUrl),
+    buildHeaders(credential.accessToken),
+    body,
     signal,
-  });
-  if (!response.ok) {
-    throw new Error(`Claude request failed (${response.status} ${response.statusText}): ${await response.text().catch(() => "")}`);
-  }
+  );
 
   const callsByIndex = new Map<number, ToolCallState>();
   let inputUsage: ClaudeUsageWire | undefined;

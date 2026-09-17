@@ -157,7 +157,7 @@ mod imp {
         let center = UNUserNotificationCenter::currentNotificationCenter();
         let content = UNMutableNotificationContent::new();
         content.setTitle(&NSString::from_str(title));
-        if (!subtitle.is_empty()) {
+        if !subtitle.is_empty() {
             content.setSubtitle(&NSString::from_str(subtitle));
         }
         content.setBody(&NSString::from_str(body));

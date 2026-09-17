@@ -891,6 +891,7 @@ impl ConsoleDesktopApp {
                         let user_msg = console_core::AgentMessage::User {
                             content: popped.prompt,
                             attachments: popped.attachments,
+                            context_files: None,
                             created_at: Some(chrono::Utc::now().timestamp()),
                         };
                         if pane_shows_run {

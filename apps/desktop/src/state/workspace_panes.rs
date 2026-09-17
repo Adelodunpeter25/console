@@ -1231,7 +1231,7 @@ impl ConsoleDesktopApp {
                     } else {
                         input.clear(cx);
                     }
-                    input.context_files = draft_context_files;
+                    input.set_context_files(draft_context_files);
                     cx.notify();
                 });
                 // Keep the previous transcript visible until the new load
@@ -1248,7 +1248,7 @@ impl ConsoleDesktopApp {
                     } else {
                         input.clear(cx);
                     }
-                    input.context_files = draft_context_files;
+                    input.set_context_files(draft_context_files);
                     cx.notify();
                 });
                 transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
@@ -1517,7 +1517,7 @@ impl ConsoleDesktopApp {
                 } else {
                     input.clear(cx);
                 }
-                input.context_files = draft_ctx_files;
+                input.set_context_files(draft_ctx_files);
                 cx.notify();
             });
             // Switching tabs: clear synchronously so the old session's
@@ -1815,7 +1815,7 @@ impl ConsoleDesktopApp {
                     } else {
                         input.clear(cx);
                     }
-                    input.context_files = draft_ctx_files2;
+                    input.set_context_files(draft_ctx_files2);
                     cx.notify();
                 });
             self.transcript_for_pane(&new_pane_id)

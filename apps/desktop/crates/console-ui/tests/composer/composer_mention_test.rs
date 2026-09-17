@@ -68,6 +68,7 @@ fn test_mention_creation_and_separator_outside_range() {
     mentions.push(ComposerMention {
         range: mention_range.clone(),
         path: path.to_string(),
+        label: path.to_string(),
     });
 
     assert_eq!(content, "Hello roadmap.md ");
@@ -84,10 +85,12 @@ fn test_multiple_mentions_shifting_on_edits() {
         ComposerMention {
             range: 0..6, // "foo.rs"
             path: "foo.rs".to_string(),
+            label: "foo.rs".to_string(),
         },
         ComposerMention {
             range: 7..13, // "bar.rs"
             path: "bar.rs".to_string(),
+            label: "bar.rs".to_string(),
         },
     ];
     let mut content = String::from("foo.rs bar.rs ");
@@ -122,6 +125,7 @@ fn test_mention_atomic_backspace_range_matching() {
     let mentions = vec![ComposerMention {
         range: 6..16, // "roadmap.md"
         path: "roadmap.md".to_string(),
+        label: "roadmap.md".to_string(),
     }];
 
     // Caret at index 17 (after trailing space): NOT at chip end
@@ -145,6 +149,7 @@ fn test_mention_atomic_delete_range_matching() {
     let mentions = vec![ComposerMention {
         range: 6..16, // "roadmap.md"
         path: "roadmap.md".to_string(),
+        label: "roadmap.md".to_string(),
     }];
 
     // Caret at index 6 (immediately before chip): matches chip start!
@@ -164,6 +169,7 @@ fn test_mention_invalidation_on_interior_edit() {
     let mut mentions = vec![ComposerMention {
         range: 0..6, // "foo.rs"
         path: "foo.rs".to_string(),
+        label: "foo.rs".to_string(),
     }];
     let mut content = String::from("foo.rs ");
 
@@ -195,6 +201,7 @@ fn test_deleted_chip_leaves_no_stale_mention_for_typed_text() {
     let mut mentions = vec![ComposerMention {
         range: 0..path.len(),
         path: path.to_string(),
+        label: "main.rs".to_string(),
     }];
 
     // The user deletes the pill (backspace with the caret at the chip end

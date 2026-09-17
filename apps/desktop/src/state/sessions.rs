@@ -678,7 +678,7 @@ impl ConsoleDesktopApp {
             } else {
                 input.clear(cx);
             }
-            input.context_files = draft_ctx_files;
+            input.set_context_files(draft_ctx_files);
             cx.notify();
         });
         self.active_transcript_view().update(cx, |t, cx| {

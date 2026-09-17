@@ -52,7 +52,8 @@ class SessionRepository(
                 val detail: SessionDetailResponse = withContext(Dispatchers.IO) { api.getSession(sessionId, limit, null) }
                 applyHeader(sessionId, detail.header)
                 chatRepo.loadMessages(sessionId, detail.messages)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                android.util.Log.w("SessionRepository", "loadDetail($sessionId) failed; chat keeps empty state", e)
             }
         }
     }

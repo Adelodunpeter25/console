@@ -120,6 +120,8 @@ impl RenderOnce for LogsViewer {
                     div()
                         .w_full()
                         .px(px(8.0))
+                        .text_size(px(ctx.metrics.code_text_size))
+                        .line_height(px(ctx.metrics.code_line_height))
                         .child(plain_log_line(
                             shown,
                             theme.text_secondary,
