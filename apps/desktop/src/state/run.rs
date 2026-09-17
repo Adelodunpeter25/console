@@ -287,6 +287,16 @@ impl ConsoleDesktopApp {
         attachments: Vec<ImageAttachment>,
         cx: &mut Context<Self>,
     ) {
+        self.submit_prompt_with_context(prompt, attachments, Vec::new(), cx);
+    }
+
+    pub fn submit_prompt_with_context(
+        &mut self,
+        prompt: String,
+        attachments: Vec<ImageAttachment>,
+        context_files: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
         if prompt.trim().is_empty() {
             return;
         }
@@ -309,13 +319,29 @@ impl ConsoleDesktopApp {
                 input.record_prompt_history(prompt.clone(), cx);
             });
 
+        // Append context file references to the prompt so the server sees them
+        let full_prompt = if context_files.is_empty() {
+            prompt.clone()
+        } else {
+            let refs = context_files
+                .iter()
+                .map(|p| format!("   {p} "))
+                .collect::<String>();
+            format!("{prompt}\n{refs}")
+        };
+
         // Push user message bubble
         let user_msg = AgentMessage::User {
-            content: prompt.clone(),
+            content: full_prompt.clone(),
             attachments: if attachments.is_empty() {
                 None
             } else {
                 Some(attachments.clone())
+            },
+            context_files: if context_files.is_empty() {
+                None
+            } else {
+                Some(context_files.clone())
             },
             created_at: Some(chrono::Utc::now().timestamp()),
         };
@@ -366,7 +392,7 @@ impl ConsoleDesktopApp {
                         project_id: session_project_id,
                         model_id: model_id.clone(),
                         provider: provider.clone(),
-                        title: Some(prompt.chars().take(30).collect()),
+                        title: Some(full_prompt.chars().take(30).collect()),
                         approval_mode: approval_mode.clone(),
                     }).await {
                         Ok(s) => {
@@ -416,7 +442,7 @@ impl ConsoleDesktopApp {
             let run_session_id = session_id.clone();
 
             let run_dto = RunPromptDto {
-                prompt,
+                prompt: full_prompt,
                 model_id,
                 provider,
                 approval_mode,

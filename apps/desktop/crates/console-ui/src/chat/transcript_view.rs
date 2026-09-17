@@ -1072,6 +1072,7 @@ fn transcript_row(
         AgentMessage::User {
             content,
             attachments,
+            context_files,
             created_at,
         } => {
             let mut bubble = UserMessageBubble::new(content.clone())
@@ -1079,6 +1080,9 @@ fn transcript_row(
                 .selection(view_ref.selection.clone(), format!("message-{index}"));
             if let Some(attachments) = attachments {
                 bubble = bubble.attachments(attachments.clone());
+            }
+            if let Some(files) = context_files {
+                bubble = bubble.context_files(files.clone());
             }
             if let Some(handler) = &preview_handler {
                 bubble = bubble.on_preview_image(handler.clone());

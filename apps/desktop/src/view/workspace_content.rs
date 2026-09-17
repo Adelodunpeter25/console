@@ -1106,6 +1106,17 @@ impl ConsoleDesktopApp {
                                     }
                                 })
                                 .attachments(self.attachments_for_pane(&composer_pane_id))
+                                .context_files(
+                                    pane_composer.read(cx).context_files().to_vec(),
+                                )
+                                .on_remove_context_file({
+                                    let pane_composer = pane_composer.clone();
+                                    move |index, _w, cx| {
+                                        pane_composer.update(cx, |input, cx| {
+                                            input.remove_context_file(index, cx);
+                                        });
+                                    }
+                                })
                                 .on_remove_attachment({
                                     let entity = entity.clone();
                                     let pane_id = composer_pane_id.clone();

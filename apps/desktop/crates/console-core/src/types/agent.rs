@@ -23,6 +23,8 @@ pub enum AgentMessage {
     User {
         content: String,
         attachments: Option<Vec<ImageAttachment>>,
+        #[serde(default, skip_serializing_if = "Option::is_none", rename = "contextFiles")]
+        context_files: Option<Vec<String>>,
         #[serde(rename = "createdAt")]
         created_at: Option<i64>,
     },

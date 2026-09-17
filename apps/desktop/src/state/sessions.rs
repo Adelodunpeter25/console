@@ -670,6 +670,7 @@ impl ConsoleDesktopApp {
         }
 
         let draft = self.get_draft_with_mentions(Some(&id));
+        let draft_ctx_files = self.get_draft_context_files(Some(&id));
         self.active_composer_input().update(cx, |input, cx| {
             input.set_prompt_history(Vec::new(), cx);
             if let Some((draft_text, mentions)) = draft {
@@ -677,6 +678,8 @@ impl ConsoleDesktopApp {
             } else {
                 input.clear(cx);
             }
+            input.context_files = draft_ctx_files;
+            cx.notify();
         });
         self.active_transcript_view().update(cx, |t, cx| {
             t.set_messages(Vec::new(), cx);

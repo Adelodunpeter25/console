@@ -101,6 +101,14 @@ impl ConsoleDesktopApp {
         })
     }
 
+    pub fn get_draft_context_files(&self, session_id: Option<&str>) -> Vec<String> {
+        let key = session_id.unwrap_or("new_chat");
+        self.drafts
+            .get(key)
+            .map(|draft| draft.context_files.clone())
+            .unwrap_or_default()
+    }
+
     pub fn save_draft_for_session(
         &mut self,
         session_id: Option<&str>,
@@ -108,8 +116,19 @@ impl ConsoleDesktopApp {
         mentions: &[ComposerMention],
         cx: &mut Context<Self>,
     ) {
+        self.save_draft_for_session_with_context(session_id, text, mentions, &[], cx);
+    }
+
+    pub fn save_draft_for_session_with_context(
+        &mut self,
+        session_id: Option<&str>,
+        text: &str,
+        mentions: &[ComposerMention],
+        context_files: &[String],
+        cx: &mut Context<Self>,
+    ) {
         let key = session_id.unwrap_or("new_chat").to_string();
-        if text.trim().is_empty() {
+        if text.trim().is_empty() && context_files.is_empty() {
             if self.drafts.remove(&key).is_some() {
                 self.schedule_drafts_save(cx);
             }
@@ -124,7 +143,9 @@ impl ConsoleDesktopApp {
                 .collect::<Vec<_>>();
             let changed = match self.drafts.get(&key) {
                 Some(existing) => {
-                    existing.prompt != text || existing.mentions != persisted_mentions
+                    existing.prompt != text
+                        || existing.mentions != persisted_mentions
+                        || existing.context_files != context_files
                 }
                 None => true,
             };
@@ -135,6 +156,7 @@ impl ConsoleDesktopApp {
                         prompt: text.to_string(),
                         updated_at: chrono::Utc::now().timestamp(),
                         mentions: persisted_mentions,
+                        context_files: context_files.to_vec(),
                     },
                 );
                 self.schedule_drafts_save(cx);
@@ -180,7 +202,18 @@ impl ConsoleDesktopApp {
         mentions: &[ComposerMention],
         cx: &mut Context<Self>,
     ) {
-        self.save_draft_for_session(Some(session_id), text, mentions, cx);
+        self.commit_draft_to_sidebar_with_context(session_id, text, mentions, &[], cx);
+    }
+
+    pub fn commit_draft_to_sidebar_with_context(
+        &mut self,
+        session_id: &str,
+        text: &str,
+        mentions: &[ComposerMention],
+        context_files: &[String],
+        cx: &mut Context<Self>,
+    ) {
+        self.save_draft_for_session_with_context(Some(session_id), text, mentions, context_files, cx);
         if text.trim().is_empty() {
             self.sidebar_draft_ids.remove(session_id);
         } else {

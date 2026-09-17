@@ -659,7 +659,7 @@ impl ConsoleDesktopApp {
             .cloned()
             .collect();
         if let Some(initial_draft) = drafts.get("new_chat") {
-            if !initial_draft.prompt.trim().is_empty() {
+            if !initial_draft.prompt.trim().is_empty() || !initial_draft.context_files.is_empty() {
                 let mentions = initial_draft
                     .mentions
                     .iter()
@@ -668,8 +668,11 @@ impl ConsoleDesktopApp {
                         path: mention.path.clone(),
                     })
                     .collect();
+                let context_files = initial_draft.context_files.clone();
                 composer_input.update(cx, |input, cx| {
                     input.set_content_with_mentions(initial_draft.prompt.clone(), mentions, cx);
+                    input.context_files = context_files;
+                    cx.notify();
                 });
             }
         }
@@ -689,6 +692,7 @@ impl ConsoleDesktopApp {
                         // another split holds focus; pin the pane before
                         // submitting so attachments and run state resolve
                         // against the chat this input is mounted in.
+                        let context_files = input.read(cx).context_files().to_vec();
                         this.active_pane_id = Some("pane-main".to_string());
                         this.selected_session_id = this.active_session_for_pane("pane-main");
                         let pane_id = "pane-main".to_string();
@@ -701,7 +705,7 @@ impl ConsoleDesktopApp {
                         // Deep-copy only at the submit boundary; the Rc
                         // keeps per-frame renders cheap.
                         let attachments = (*this.attachments_for_pane("pane-main")).clone();
-                        this.submit_prompt(prompt.clone(), attachments, cx);
+                        this.submit_prompt_with_context(prompt.clone(), attachments, context_files, cx);
                     }
                     ComposerEvent::SubmitSteer(prompt) => {
                         this.active_pane_id = Some("pane-main".to_string());
@@ -713,8 +717,15 @@ impl ConsoleDesktopApp {
                         let input = input.read(cx);
                         let text = input.content().to_string();
                         let mentions = input.mentions().to_vec();
+                        let context_files = input.context_files().to_vec();
                         let session_id = this.active_session_for_pane("pane-main");
-                        this.save_draft_for_session(session_id.as_deref(), &text, &mentions, cx);
+                        this.save_draft_for_session_with_context(
+                            session_id.as_deref(),
+                            &text,
+                            &mentions,
+                            &context_files,
+                            cx,
+                        );
                     }
                     ComposerEvent::Focus => cx.notify(),
                     // Backspace on an empty composer removes the last staged

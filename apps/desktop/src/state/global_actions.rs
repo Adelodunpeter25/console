@@ -239,6 +239,7 @@ impl ConsoleDesktopApp {
                                 );
                                 this.sync_workspace_webviews(cx);
                                 let new_chat_draft = this.get_draft_with_mentions(None);
+                                let new_chat_ctx_files = this.get_draft_context_files(None);
                                 this.composer_for_pane(&pane_id).update(cx, |input, cx| {
                                     input.set_prompt_history(Vec::new(), cx);
                                     if let Some((draft_text, mentions)) = &new_chat_draft {
@@ -250,12 +251,15 @@ impl ConsoleDesktopApp {
                                     } else {
                                         input.clear(cx);
                                     }
+                                    input.context_files = new_chat_ctx_files.clone();
+                                    cx.notify();
                                 });
                                 if let Some((draft_text, mentions)) = new_chat_draft {
-                                    this.save_draft_for_session(
+                                    this.save_draft_for_session_with_context(
                                         Some(&new_session.id),
                                         &draft_text,
                                         &mentions,
+                                        &new_chat_ctx_files,
                                         cx,
                                     );
                                     this.clear_draft_for_session(None, cx);

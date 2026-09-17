@@ -237,6 +237,7 @@ pub struct ComposerInput {
     pub(crate) external_context_menu_focus_holds: usize,
     pub(crate) context_menu: ContextMenuHandle,
     pub(crate) mentions: Vec<ComposerMention>,
+    pub(crate) context_files: Vec<String>,
     pub(crate) blink_cursor: Entity<BlinkCursor>,
     pub(crate) _subscriptions: Vec<Subscription>,
 }
@@ -303,6 +304,7 @@ impl ComposerInput {
                 })
             },
             mentions: Vec::new(),
+            context_files: Vec::new(),
             blink_cursor,
             _subscriptions,
         }
@@ -453,21 +455,28 @@ impl ComposerInput {
         &self.mentions
     }
 
-    /// Insert an accepted file mention chip into the composer.
-    /// Inserts `<path> ` into the underlying text buffer and tracks the `<path>` range as a chip.
+    pub fn context_files(&self) -> &[String] {
+        &self.context_files
+    }
+
+    pub fn remove_context_file(&mut self, index: usize, cx: &mut Context<Self>) {
+        if index < self.context_files.len() {
+            self.context_files.remove(index);
+            cx.notify();
+        }
+    }
+
+    /// Insert an accepted file mention: deletes the @query trigger from the text
+    /// and adds the path to context_files (deduplicated).
     pub fn insert_file_mention(&mut self, range: Range<usize>, path: &str, cx: &mut Context<Self>) {
-        let insert_text = format!("   {} ", path);
-        let mention_len = path.len();
-        let start = range.start.min(self.content.len());
-        self.replace_range(range, &insert_text, cx);
-        let mention_range = (start + 3)..(start + 3 + mention_len);
-        self.mentions
-            .retain(|m| m.range.end <= start || m.range.start >= start + insert_text.len());
-        self.mentions.push(ComposerMention {
-            range: mention_range,
-            path: path.to_string(),
-        });
-        self.reconcile_mentions();
+        // Delete the @query trigger from the text
+        let range = range.start.min(self.content.len())..range.end.min(self.content.len());
+        self.replace_range(range, "", cx);
+        // Add path to context_files (deduplicate)
+        let path = path.to_string();
+        if !self.context_files.contains(&path) {
+            self.context_files.push(path);
+        }
         cx.notify();
     }
 
@@ -618,6 +627,7 @@ impl ComposerInput {
         self.vertical_navigation = None;
         self.highlight.clear();
         self.mentions.clear();
+        self.context_files.clear();
         // A programmatic clear is a new baseline, not an edit to step back
         // over — a submitted prompt should not resurface via the undo shortcut.
         if changed {
