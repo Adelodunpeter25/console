@@ -307,6 +307,7 @@ export class RunService {
 
     const boundTools = assembleAgentTools({
       cwd: session.header.cwd,
+      projectId: session.header.projectId ?? null,
       initialTodos: this.todoLists.get(sessionId) ?? this.sessionStorage.getSessionTodos(sessionId) ?? [],
       askHandler: this.decisions.createAskHandler(sessionId, hub),
       onTodoUpdate: (items, action) => {

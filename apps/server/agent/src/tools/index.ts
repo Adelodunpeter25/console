@@ -6,6 +6,7 @@ export * from "./fetch.js";
 export * from "./glob.js";
 export * from "./grep.js";
 export * from "./list-dir.js";
+export * from "./memory.js";
 export * from "./read/index.js";
 export * from "./read-skill.js";
 export * from "./subagent.js";
@@ -21,6 +22,7 @@ import { fetchTool } from "./fetch.js";
 import { globTool } from "./glob.js";
 import { grepTool } from "./grep.js";
 import { listDirTool } from "./list-dir.js";
+import { memoryTool } from "./memory.js";
 import { readFileTool } from "./read/index.js";
 import { readSkillTool } from "./read-skill.js";
 import { subagentTool } from "./subagent.js";
@@ -52,6 +54,8 @@ export const allTools = [
   // Task management & subagents
   todoTool,
   subagentTool,
+  // Persistent memory
+  memoryTool,
   // Interactive UI
   askTool,
   askManyTool,
