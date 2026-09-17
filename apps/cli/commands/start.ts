@@ -4,6 +4,7 @@
 import { spawn } from "node:child_process";
 import * as path from "node:path";
 import { ensureConsoleDir, writePidFile, saveConfig, loadConfig, resolvePortHost, getDaemonStatus, loadEnvFile, getConsoleDir, resolveConsoleMode } from "../daemon-manager.js";
+import { ensureOpencodeServe } from "../opencode-sidecar.js";
 import type { StartOptions } from "../types.js";
 
 interface ServerLaunch {
@@ -79,6 +80,20 @@ export async function startDaemon(options: StartOptions): Promise<void> {
 
   // Resolve how to launch the server (binary install or dev source tree)
   const launch = resolveServerLaunch();
+
+  // Local opencode sidecar for the opencode provider (free models via the
+  // user's own CLI credentials). Non-fatal: the provider reports guidance
+  // when the sidecar is unreachable.
+  try {
+    const sidecar = await ensureOpencodeServe();
+    console.log(
+      sidecar.reused
+        ? `OpenCode serve: already running on 127.0.0.1:${sidecar.port}`
+        : `OpenCode serve: ready on 127.0.0.1:${sidecar.port}`,
+    );
+  } catch (error) {
+    console.log(`OpenCode serve: unavailable (${error}). The opencode provider will not work until this is fixed.`);
+  }
 
   if (options.daemon) {
     // Start as background daemon

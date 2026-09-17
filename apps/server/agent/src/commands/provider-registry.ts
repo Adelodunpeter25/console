@@ -11,7 +11,7 @@ import {
   fetchClineFreeModels,
   fetchDevinModels,
   loadCredential,
-  opencodeStreamFn,
+  opencodeServeStreamFn,
   refreshIfNeeded,
   codexStreamFn,
   codexCredentialExists,
@@ -123,10 +123,10 @@ export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
   opencode: {
     name: "opencode",
     displayName: "OpenCode Zen",
-    description: "Free OpenAI-compatible endpoint (opencode.ai/zen)",
+    description: "Free models via the local opencode serve sidecar (falls back to opencode.ai/zen)",
     authMethod: "none",
     models: DEFAULT_OPENCODE_MODELS,
-    getStreamFn: () => opencodeStreamFn,
+    getStreamFn: () => opencodeServeStreamFn,
   },
   codex: {
     name: "codex",
