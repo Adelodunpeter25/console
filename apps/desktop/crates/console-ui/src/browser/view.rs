@@ -92,7 +92,7 @@ impl BrowserView {
         let submit_subscription = cx.subscribe(
             &address,
             move |this: &mut Self, address, event: &ComposerEvent, cx| match event {
-                ComposerEvent::Submit(text) => {
+                ComposerEvent::Submit(text, _) => {
                     this.navigate_to_input(text.clone(), cx);
                     let focus = this.focus_handle.clone();
                     let _ = window_handle.update(cx, |_, window, cx| {

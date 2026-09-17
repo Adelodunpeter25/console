@@ -330,9 +330,10 @@ impl ConsoleDesktopApp {
             format!("{prompt}\n{refs}")
         };
 
-        // Push user message bubble
+        // Push user message bubble — show the raw prompt (filename chips inline)
+        // without the server-facing path footnotes that full_prompt carries.
         let user_msg = AgentMessage::User {
-            content: full_prompt.clone(),
+            content: prompt.clone(),
             attachments: if attachments.is_empty() {
                 None
             } else {
