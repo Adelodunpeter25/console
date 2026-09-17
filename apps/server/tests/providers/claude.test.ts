@@ -615,6 +615,93 @@ function sseResponse(lines: string[]): Response {
   }
 }
 
+// 17c. claudeStreamFn retries on 429 with retry-after header and recovers
+{
+  process.env.CLAUDE_OAUTH_TOKEN = "test-oauth-token";
+  const originalFetch = globalThis.fetch;
+  let attempts = 0;
+  globalThis.fetch = (async () => {
+    attempts++;
+    if (attempts === 1) {
+      return new Response(JSON.stringify({ error: { type: "rate_limit_error" } }), {
+        status: 429,
+        headers: { "retry-after": "0.01", "x-should-retry": "true" },
+      });
+    }
+    return sseResponse([
+      "event: message_start",
+      'data: {"type":"message_start","message":{"id":"msg_retry","usage":{"input_tokens":10}}}',
+      "",
+      "event: content_block_delta",
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"recovered"}}',
+      "",
+      "event: message_stop",
+      'data: {"type":"message_stop"}',
+    ]);
+  }) as unknown as typeof fetch;
+  try {
+    const textDeltas: string[] = [];
+    for await (const d of claudeStreamFn({
+      model: { id: "claude-sonnet-4-6", provider: "claude", contextWindow: 200_000 },
+      systemPrompt: "",
+      messages: [{ role: "user", content: "hi" }],
+      tools: [],
+    })) {
+      if (d.type === "text") textDeltas.push(d.text);
+    }
+    assert.equal(attempts, 2);
+    assert.equal(textDeltas.join(""), "recovered");
+    console.log("  ✅ claudeStreamFn retries on 429 and recovers");
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.CLAUDE_OAUTH_TOKEN;
+  }
+}
+
+// 17d. claudeStreamFn falls back to Haiku when Sonnet is rate-limited
+{
+  process.env.CLAUDE_OAUTH_TOKEN = "test-oauth-token";
+  const originalFetch = globalThis.fetch;
+  let fallbackCapturedModel = "";
+  globalThis.fetch = (async (_url: unknown, init?: { body?: string }) => {
+    const body = JSON.parse(init?.body ?? "{}") as { model?: string };
+    if (body.model?.includes("sonnet")) {
+      return new Response(JSON.stringify({ error: { type: "rate_limit_error" } }), {
+        status: 429,
+        headers: { "x-should-retry": "true", "retry-after": "0.01" },
+      });
+    }
+    fallbackCapturedModel = body.model ?? "";
+    return sseResponse([
+      "event: message_start",
+      'data: {"type":"message_start","message":{"id":"msg_fb","usage":{"input_tokens":10}}}',
+      "",
+      "event: content_block_delta",
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"haiku response"}}',
+      "",
+      "event: message_stop",
+      'data: {"type":"message_stop"}',
+    ]);
+  }) as unknown as typeof fetch;
+  try {
+    const textDeltas: string[] = [];
+    for await (const d of claudeStreamFn({
+      model: { id: "claude-sonnet-4-6", provider: "claude", contextWindow: 200_000 },
+      systemPrompt: "",
+      messages: [{ role: "user", content: "hi" }],
+      tools: [],
+    })) {
+      if (d.type === "text") textDeltas.push(d.text);
+    }
+    assert.match(fallbackCapturedModel, /haiku/);
+    assert.equal(textDeltas.join(""), "haiku response");
+    console.log("  ✅ claudeStreamFn automatically falls back to Haiku on 429");
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.CLAUDE_OAUTH_TOKEN;
+  }
+}
+
 // 17b. Request body carries medium thinking + cache breakpoints
 {
   process.env.CLAUDE_OAUTH_TOKEN = "test-oauth-token";
