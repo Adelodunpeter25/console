@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::rc::Rc;
 
 use console_core::{ApprovalMode, ImageAttachment, SelectedModel};
