@@ -153,6 +153,41 @@ export function convertClaudeMessages(messages: AgentMessage[], cacheRetention?:
     merged.pop();
   }
 
+  // Sanitize tool results: every tool_result block in a user turn must have a
+  // corresponding tool_use block in the immediately preceding assistant turn.
+  // Orphaned results (e.g. at conversation start or after pruned assistant turns)
+  // are converted to text blocks so Anthropic does not reject the request.
+  for (let i = 0; i < merged.length; i++) {
+    const turn = merged[i]!;
+    if (turn.role !== "user") continue;
+
+    const prevTurn = i > 0 ? merged[i - 1] : undefined;
+    const validUseIds = new Set<string>();
+    if (prevTurn && prevTurn.role === "assistant") {
+      for (const block of prevTurn.content) {
+        if (block.type === "tool_use" && typeof block.id === "string") {
+          validUseIds.add(block.id);
+        }
+      }
+    }
+
+    const sanitizedContent: Array<Record<string, unknown>> = [];
+    for (const block of turn.content) {
+      if (block.type === "tool_result" && typeof block.tool_use_id === "string") {
+        if (validUseIds.has(block.tool_use_id)) {
+          sanitizedContent.push(block);
+        } else {
+          const text =
+            typeof block.content === "string" ? block.content : JSON.stringify(block.content ?? "");
+          sanitizedContent.push({ type: "text", text: `[Tool result: ${text}]` });
+        }
+      } else {
+        sanitizedContent.push(block);
+      }
+    }
+    turn.content = sanitizedContent;
+  }
+
   if (merged.length === 0) {
     merged.push({ role: "user", content: [{ type: "text", text: "(continue)" }] });
   }

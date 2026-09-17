@@ -33,6 +33,24 @@ export function repairToolCallHistory(messages: AgentMessage[]): {
 
   for (let index = 0; index < messages.length; index++) {
     const message = messages[index]!;
+
+    if (message.role === "toolResult") {
+      // Orphaned toolResult not preceded by an assistant tool-call turn.
+      const text = message.results
+        .map((r) => {
+          const content =
+            typeof r.content === "string" ? r.content : JSON.stringify(r.content ?? "");
+          return `[Tool result for ${r.toolName || r.toolCallId}: ${content}]`;
+        })
+        .join("\n");
+      repairedMessages.push({
+        role: "user",
+        content: text.trim() === "" ? "[Tool result with no output]" : text,
+      });
+      repaired = true;
+      continue;
+    }
+
     repairedMessages.push(message);
 
     const calls = toolCalls(message);
@@ -57,8 +75,10 @@ export function repairToolCallHistory(messages: AgentMessage[]): {
       };
       repairedMessages.push(repairedResult);
       repaired = true;
-      index++;
+    } else {
+      repairedMessages.push(next);
     }
+    index++;
   }
 
   return { messages: repaired ? repairedMessages : messages, repaired };

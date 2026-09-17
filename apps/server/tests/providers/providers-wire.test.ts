@@ -169,6 +169,54 @@ console.log("Running Provider Wire Converter tests...");
   console.log("  ✅ Legacy thought-signature fallback");
 }
 
+// 1c. Orphaned tool results (e.g. at conversation start or severed from assistant turn)
+// are converted to user text parts so CCA/Claude models do not reject unexpected tool_use_ids.
+{
+  // History starts with assistant tool call + tool result. Leading assistant turn is dropped,
+  // leaving the tool result at index 0. The orphaned functionResponse must become a text part.
+  const leadingToolUseMessages: AgentMessage[] = [
+    {
+      role: "assistant",
+      id: "turn-leading",
+      content: [
+        {
+          type: "toolCall",
+          call: { id: "toolu_vrtx_123", name: "readFile", arguments: { path: "a.ts" } },
+        },
+      ],
+      stopReason: "toolUse",
+    },
+    {
+      role: "toolResult",
+      results: [{ toolCallId: "toolu_vrtx_123", toolName: "readFile", content: "file content" }],
+    },
+    {
+      role: "user",
+      content: "continue working",
+    },
+  ];
+
+  const wire = convertMessages(leadingToolUseMessages, { requireUserTerminator: true });
+  assert.equal(wire.length, 1);
+  assert.equal(wire[0]?.role, "user");
+  // There should be NO functionResponse parts in wire[0] since it has no preceding model turn
+  const hasFunctionResponse = wire[0]?.parts.some((p) => "functionResponse" in p);
+  assert.equal(hasFunctionResponse, false, "Orphaned functionResponse must be converted to text part");
+  console.log("  ✅ Orphaned toolResult at index 0 converted to safe text part");
+
+  // Orphaned tool result alone
+  const orphanedAlone = convertMessages([
+    {
+      role: "toolResult",
+      results: [{ toolCallId: "orphan_call_999", toolName: "bash", content: "cmd output" }],
+    },
+  ]);
+  assert.equal(orphanedAlone.length, 1);
+  assert.equal(orphanedAlone[0]?.role, "user");
+  assert.equal("functionResponse" in (orphanedAlone[0]?.parts[0] ?? {}), false);
+  console.log("  ✅ Standalone toolResult converted to safe user text part");
+}
+
 // 2. Tool converter (convertTools)
 {
   const sampleTool: AgentTool = {

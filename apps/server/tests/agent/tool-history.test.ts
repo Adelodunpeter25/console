@@ -63,4 +63,17 @@ assert.equal(valid.repaired, false);
 assert.equal(valid.messages.length, 2);
 assert.equal(valid.messages[0], assistantWithTwoCalls);
 
+// Orphaned tool result with no preceding assistant turn is converted to user message.
+const orphaned = repairToolCallHistory([
+  {
+    role: "toolResult",
+    results: [{ toolCallId: "orphan-1", toolName: "readFile", content: "file content" }],
+  },
+  { role: "user", content: "next request" },
+]);
+assert.equal(orphaned.repaired, true);
+assert.equal(orphaned.messages.length, 2);
+assert.equal(orphaned.messages[0]?.role, "user");
+assert.match(String(orphaned.messages[0]?.content), /readFile/);
+
 console.log("Tool history repair tests passed!\n");

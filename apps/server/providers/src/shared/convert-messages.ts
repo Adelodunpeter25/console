@@ -177,7 +177,45 @@ export function convertMessages(
     }
   }
 
-  // 4. Claude hard-fails on an empty conversation ("must end with a user
+  // 4. Sanitize function responses: every functionResponse part must have a
+  // matching functionCall in the immediately preceding model turn. Orphaned
+  // function responses (e.g. at conversation start or after pruned model turns)
+  // are converted to text parts so strict providers (Anthropic / Claude on CCA)
+  // do not reject them as unexpected tool_use_ids.
+  for (let i = 0; i < mergedTurns.length; i++) {
+    const turn = mergedTurns[i]!;
+    if (turn.role !== "user") continue;
+
+    const prevTurn = i > 0 ? mergedTurns[i - 1] : undefined;
+    const validCallIds = new Set<string>();
+    if (prevTurn && prevTurn.role === "model") {
+      for (const part of prevTurn.parts) {
+        if ("functionCall" in part && part.functionCall?.id) {
+          validCallIds.add(part.functionCall.id);
+        }
+      }
+    }
+
+    const sanitizedParts: GeminiOutgoingPart[] = [];
+    for (const part of turn.parts) {
+      if ("functionResponse" in part && part.functionResponse) {
+        const res = part.functionResponse;
+        if (validCallIds.has(res.id)) {
+          sanitizedParts.push(part);
+        } else {
+          // Orphaned tool response -> convert to text part
+          const content = res.response?.content;
+          const text = typeof content === "string" ? content : JSON.stringify(content ?? "");
+          sanitizedParts.push(makeTextPart(`[Tool result for ${res.name || "tool"}: ${text}]`));
+        }
+      } else {
+        sanitizedParts.push(part);
+      }
+    }
+    turn.parts = sanitizedParts;
+  }
+
+  // 5. Claude hard-fails on an empty conversation ("must end with a user
   // message"), which is what an assistant-only history trims down to above
   // (e.g. a restored session whose only turns are stale assistant text).
   // A neutral continuator is strictly better than a 400.

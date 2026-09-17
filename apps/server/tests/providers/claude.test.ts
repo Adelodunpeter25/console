@@ -255,6 +255,7 @@ console.log("Running Claude provider tests...");
       id: "turn-1",
       content: [
         { type: "toolCall", call: { id: "toolu_9", name: "bash", arguments: {} } },
+        { type: "toolCall", call: { id: "toolu_9b", name: "bash", arguments: {} } },
       ],
       stopReason: "toolUse",
     },
@@ -269,6 +270,22 @@ console.log("Running Claude provider tests...");
   const results = wire[wire.length - 1]!.content as Array<Record<string, unknown>>;
   assert.ok(results.every((b) => typeof b.content === "string" && (b.content as string).length > 0));
   console.log("  ✅ empty tool results replaced with placeholder text");
+}
+
+// 9c. Orphaned tool results are converted to text blocks so Anthropic does not reject unexpected tool_use_id
+{
+  const wire = convertClaudeMessages([
+    {
+      role: "toolResult",
+      results: [{ toolCallId: "toolu_orphaned", content: "orphan output" }],
+    },
+  ]);
+  assert.equal(wire.length, 1);
+  assert.equal(wire[0]!.role, "user");
+  const block = wire[0]!.content[0] as Record<string, unknown>;
+  assert.equal(block.type, "text");
+  assert.match(String(block.text), /orphan output/);
+  console.log("  ✅ orphaned tool results converted to safe text blocks for Claude");
 }
 
 // 10. convertClaudeMessages merges same-role turns and keeps image attachments
