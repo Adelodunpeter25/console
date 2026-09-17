@@ -480,11 +480,21 @@ impl ComposerInput {
             .and_then(|n| n.to_str())
             .unwrap_or(path)
             .to_string();
-        let insert_text = format!("   {} ", label);
-        let mention_len = label.len();
         let start = range.start.min(self.content.len());
+        // Add an extra leading space when inserting after non-whitespace so the
+        // pill never visually abuts the preceding word.
+        let needs_gap = start > 0
+            && self.content[..start]
+                .chars()
+                .last()
+                .map(|c| !c.is_whitespace())
+                .unwrap_or(false);
+        let prefix = if needs_gap { "    " } else { "   " };
+        let insert_text = format!("{prefix}{label} ");
+        let lead = prefix.len();
+        let mention_len = label.len();
         self.replace_range(range, &insert_text, cx);
-        let mention_range = (start + 3)..(start + 3 + mention_len);
+        let mention_range = (start + lead)..(start + lead + mention_len);
         self.mentions
             .retain(|m| m.range.end <= start || m.range.start >= start + insert_text.len());
         self.mentions.push(ComposerMention {
