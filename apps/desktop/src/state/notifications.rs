@@ -41,6 +41,7 @@ impl ConsoleDesktopApp {
                             if let Ok(event) = event_res {
                                 let session_id = event.session_id.clone();
                                 let title = normalize_notification_title(&event.title);
+                                let subtitle = event.subtitle.clone();
                                 let body = event.body.clone();
                                 let _ = cx.update(|cx| {
                                     if let Some(app) = entity.upgrade() {
@@ -70,6 +71,7 @@ impl ConsoleDesktopApp {
                                                     macos_notifications::notify_session(
                                                         &session_id,
                                                         &title,
+                                                        &subtitle,
                                                         &body,
                                                     );
                                                 }

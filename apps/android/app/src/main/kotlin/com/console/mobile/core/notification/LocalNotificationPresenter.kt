@@ -25,7 +25,7 @@ object LocalNotificationPresenter {
         nm.createNotificationChannel(channel)
     }
 
-    fun showNotification(context: Context, title: String, body: String, sessionId: String) {
+    fun showNotification(context: Context, title: String, body: String, sessionId: String, subtitle: String = "") {
         ensureChannelCreated(context)
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val intent = Intent(context, MainActivity::class.java).apply {
@@ -38,14 +38,18 @@ object LocalNotificationPresenter {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val notif = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .build()
+        if (subtitle.isNotEmpty()) {
+            builder.setSubText(subtitle)
+        }
+        val notif = builder.build()
         nm.notify(sessionId.hashCode(), notif)
     }
 

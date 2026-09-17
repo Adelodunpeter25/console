@@ -284,6 +284,7 @@ object AppContainer {
                             event.title,
                             event.body,
                             event.sessionId,
+                            event.subtitle,
                         )
                     }
                 }

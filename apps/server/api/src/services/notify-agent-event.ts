@@ -6,6 +6,32 @@
  */
 import type { AgentSessionEvent, NotificationEvent } from "@console/types";
 
+/** Max banner body length: raw questions / error stacks can be thousands of chars. */
+export const NOTIFICATION_BODY_MAX = 180;
+/** Max subtitle length: session titles stay single-line. */
+export const NOTIFICATION_SUBTITLE_MAX = 80;
+
+/** Collapse whitespace and truncate with an ellipsis. */
+export function truncateNotificationText(value: string, max: number): string {
+  const singleLine = value.replace(/\s+/g, " ").trim();
+  if (singleLine.length <= max) return singleLine;
+  return `${singleLine.slice(0, max - 1).trimEnd()}…`;
+}
+
+/** Optional context callers attach so banners identify *which* session fired. */
+export interface NotificationContext {
+  sessionTitle?: string;
+  /** Short preview for done banners (e.g. last assistant text). */
+  summary?: string;
+}
+
+function cleanSubtitle(sessionTitle?: string): string | undefined {
+  if (!sessionTitle) return undefined;
+  const trimmed = sessionTitle.replace(/\s+/g, " ").trim();
+  if (!trimmed) return undefined;
+  return truncateNotificationText(trimmed, NOTIFICATION_SUBTITLE_MAX);
+}
+
 /** True when an event should produce a "needs attention" notification. */
 export function isAttentionEvent(
   event: AgentSessionEvent,
@@ -31,7 +57,9 @@ export function isDoneEvent(event: AgentSessionEvent): event is { type: "session
 export function attentionNotification(
   sessionId: string,
   event: Extract<AgentSessionEvent, { type: "askQuestion" | "permissionRequest" | "error" }>,
+  ctx?: NotificationContext,
 ): NotificationEvent {
+  const subtitle = cleanSubtitle(ctx?.sessionTitle);
   switch (event.type) {
     case "askQuestion":
       return {
@@ -39,7 +67,8 @@ export function attentionNotification(
         kind: "needs_attention",
         sessionId,
         title: "Needs Attention",
-        body: event.request.question,
+        ...(subtitle ? { subtitle } : {}),
+        body: truncateNotificationText(event.request.question, NOTIFICATION_BODY_MAX),
       };
     case "permissionRequest":
       return {
@@ -47,7 +76,11 @@ export function attentionNotification(
         kind: "needs_attention",
         sessionId,
         title: "Needs Attention",
-        body: `${event.request.toolName} is requesting permission`,
+        ...(subtitle ? { subtitle } : {}),
+        body: truncateNotificationText(
+          `${event.request.toolName} is requesting permission`,
+          NOTIFICATION_BODY_MAX,
+        ),
       };
     case "error":
       return {
@@ -55,7 +88,8 @@ export function attentionNotification(
         kind: "needs_attention",
         sessionId,
         title: "Agent Error",
-        body: event.error.message,
+        ...(subtitle ? { subtitle } : {}),
+        body: truncateNotificationText(event.error.message, NOTIFICATION_BODY_MAX),
       };
   }
 }
@@ -63,12 +97,20 @@ export function attentionNotification(
 /**
  * Build the notification for a clean run completion.
  */
-export function doneNotification(sessionId: string): NotificationEvent {
+export function doneNotification(
+  sessionId: string,
+  ctx?: NotificationContext,
+): NotificationEvent {
+  const subtitle = cleanSubtitle(ctx?.sessionTitle);
+  const summary = ctx?.summary?.replace(/\s+/g, " ").trim();
   return {
     type: "notification",
     kind: "done",
     sessionId,
     title: "Done",
-    body: "Agent finished",
+    ...(subtitle ? { subtitle } : {}),
+    body: summary
+      ? truncateNotificationText(summary, NOTIFICATION_BODY_MAX)
+      : "Agent finished",
   };
 }
