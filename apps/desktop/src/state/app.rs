@@ -671,7 +671,7 @@ impl ConsoleDesktopApp {
                 let context_files = initial_draft.context_files.clone();
                 composer_input.update(cx, |input, cx| {
                     input.set_content_with_mentions(initial_draft.prompt.clone(), mentions, cx);
-                    input.context_files = context_files;
+                    input.set_context_files(context_files);
                     cx.notify();
                 });
             }

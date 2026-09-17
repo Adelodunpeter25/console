@@ -251,7 +251,7 @@ impl ConsoleDesktopApp {
                                     } else {
                                         input.clear(cx);
                                     }
-                                    input.context_files = new_chat_ctx_files.clone();
+                                    input.set_context_files(new_chat_ctx_files.clone());
                                     cx.notify();
                                 });
                                 if let Some((draft_text, mentions)) = new_chat_draft {
