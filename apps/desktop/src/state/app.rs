@@ -694,17 +694,12 @@ impl ConsoleDesktopApp {
             }),
             cx.subscribe(&composer_input, |this, input, event: &ComposerEvent, cx| {
                 match event {
-                    ComposerEvent::Submit(prompt) => {
+                    ComposerEvent::Submit(prompt, context_files) => {
                         // The main composer belongs to "pane-main" even when
                         // another split holds focus; pin the pane before
                         // submitting so attachments and run state resolve
                         // against the chat this input is mounted in.
-                        let context_files = input
-                            .read(cx)
-                            .mentions()
-                            .iter()
-                            .map(|m| m.path.clone())
-                            .collect::<Vec<_>>();
+                        let context_files = context_files.clone();
                         this.active_pane_id = Some("pane-main".to_string());
                         this.selected_session_id = this.active_session_for_pane("pane-main");
                         let pane_id = "pane-main".to_string();
@@ -729,13 +724,12 @@ impl ConsoleDesktopApp {
                         let input = input.read(cx);
                         let text = input.content().to_string();
                         let mentions = input.mentions().to_vec();
-                        let context_files = input.context_files().to_vec();
                         let session_id = this.active_session_for_pane("pane-main");
                         this.save_draft_for_session_with_context(
                             session_id.as_deref(),
                             &text,
                             &mentions,
-                            &context_files,
+                            &[],
                             cx,
                         );
                     }
@@ -781,7 +775,7 @@ impl ConsoleDesktopApp {
                     // app render per keystroke only adds lag.
                     ComposerEvent::Edited => {}
                     ComposerEvent::Focus => cx.notify(),
-                    ComposerEvent::Submit(answer) if !answer.trim().is_empty() => {
+                    ComposerEvent::Submit(answer, _) if !answer.trim().is_empty() => {
                         if let Some(session_id) = this.active_session_for_pane("pane-main") {
                             this.answer_pending_question_for_session(
                                 session_id,

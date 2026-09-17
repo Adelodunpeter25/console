@@ -109,7 +109,9 @@ impl BlinkCursor {
 
 #[derive(Clone)]
 pub enum ComposerEvent {
-    Submit(String),
+    /// Prompt text plus the full paths of any inline file mentions,
+    /// captured before the composer clears so subscribers always see them.
+    Submit(String, Vec<String>),
     /// Primary modifier + Enter: deliver the message into the running turn instead of queueing
     /// it behind the turn. Only composer-mode fields emit this.
     SubmitSteer(String),
@@ -1062,13 +1064,15 @@ impl ComposerInput {
             // next", not "send" — and stays untrimmed because leading or
             // trailing spaces are part of what is searched for.
             FieldMode::Search => {
-                cx.emit(ComposerEvent::Submit(self.content.to_string()));
+                cx.emit(ComposerEvent::Submit(self.content.to_string(), vec![]));
             }
             FieldMode::Composer => {
                 let value = self.content.trim().to_owned();
                 if !value.is_empty() {
+                    let context_files: Vec<String> =
+                        self.mentions.iter().map(|m| m.path.clone()).collect();
                     self.prompt_history.record(value.clone());
-                    cx.emit(ComposerEvent::Submit(value));
+                    cx.emit(ComposerEvent::Submit(value, context_files));
                     self.clear(cx);
                 }
             }

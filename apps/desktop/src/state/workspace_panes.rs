@@ -95,13 +95,8 @@ impl ConsoleDesktopApp {
         self._subscriptions.push(cx.subscribe(
             &composer_input,
             move |this, input, event: &ComposerEvent, cx| match event {
-                ComposerEvent::Submit(prompt) => {
-                    let context_files = input
-                        .read(cx)
-                        .mentions()
-                        .iter()
-                        .map(|m| m.path.clone())
-                        .collect::<Vec<_>>();
+                ComposerEvent::Submit(prompt, context_files) => {
+                    let context_files = context_files.clone();
                     if this.is_active_session_running_for_pane(&submit_pane_id) {
                         let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
                         this.queue_prompt_for_pane(
@@ -125,13 +120,12 @@ impl ConsoleDesktopApp {
                     let input = input.read(cx);
                     let text = input.content().to_string();
                     let mentions = input.mentions().to_vec();
-                    let context_files = input.context_files().to_vec();
                     let session_id = this.active_session_for_pane(&edit_pane_id);
                     this.save_draft_for_session_with_context(
                         session_id.as_deref(),
                         &text,
                         &mentions,
-                        &context_files,
+                        &[],
                         cx,
                     );
                 }
@@ -159,7 +153,7 @@ impl ConsoleDesktopApp {
                 // Typing is repainted by the input entity itself.
                 ComposerEvent::Edited => {}
                 ComposerEvent::Focus => cx.notify(),
-                ComposerEvent::Submit(answer) if !answer.trim().is_empty() => {
+                ComposerEvent::Submit(answer, _) if !answer.trim().is_empty() => {
                     if let Some(session_id) = this.active_session_for_pane(&question_pane_id) {
                         this.answer_pending_question_for_session(
                             session_id,
