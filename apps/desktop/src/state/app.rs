@@ -692,7 +692,12 @@ impl ConsoleDesktopApp {
                         // another split holds focus; pin the pane before
                         // submitting so attachments and run state resolve
                         // against the chat this input is mounted in.
-                        let context_files = input.read(cx).context_files().to_vec();
+                        let context_files = input
+                            .read(cx)
+                            .mentions()
+                            .iter()
+                            .map(|m| m.path.clone())
+                            .collect::<Vec<_>>();
                         this.active_pane_id = Some("pane-main".to_string());
                         this.selected_session_id = this.active_session_for_pane("pane-main");
                         let pane_id = "pane-main".to_string();

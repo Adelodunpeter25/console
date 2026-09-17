@@ -470,25 +470,38 @@ impl ComposerInput {
         }
     }
 
-    /// Insert an accepted file mention: deletes the @query trigger from the text
-    /// and adds the path to context_files (deduplicated).
+    /// Insert an accepted file mention as an inline chip.
+    /// Inserts the filename into the text buffer and tracks the full path in the mention.
     pub fn insert_file_mention(&mut self, range: Range<usize>, path: &str, cx: &mut Context<Self>) {
-        // Delete the @query trigger from the text
-        let range = range.start.min(self.content.len())..range.end.min(self.content.len());
-        self.replace_range(range, "", cx);
-        // Add path to context_files (deduplicate)
-        let path = path.to_string();
-        if !self.context_files.contains(&path) {
-            self.context_files.push(path);
-        }
+        let label = std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(path)
+            .to_string();
+        let insert_text = format!("   {} ", label);
+        let mention_len = label.len();
+        let start = range.start.min(self.content.len());
+        self.replace_range(range, &insert_text, cx);
+        let mention_range = (start + 3)..(start + 3 + mention_len);
+        self.mentions
+            .retain(|m| m.range.end <= start || m.range.start >= start + insert_text.len());
+        self.mentions.push(ComposerMention {
+            range: mention_range,
+            path: path.to_string(),
+            label,
+        });
+        self.reconcile_mentions();
         cx.notify();
     }
 
     pub fn add_mention(&mut self, range: Range<usize>, path: impl Into<String>) {
-        self.mentions.push(ComposerMention {
-            range,
-            path: path.into(),
-        });
+        let path = path.into();
+        let label = std::path::Path::new(&path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&path)
+            .to_string();
+        self.mentions.push(ComposerMention { range, path, label });
         self.reconcile_mentions();
     }
 

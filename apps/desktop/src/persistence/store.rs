@@ -27,6 +27,8 @@ pub struct PersistedDraftMention {
     pub start: usize,
     pub end: usize,
     pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
