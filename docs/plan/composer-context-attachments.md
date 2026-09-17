@@ -1,6 +1,6 @@
-# Composer Context Attachments — Linked Directories + Terminal Output
+# Composer Context Attachments — Linked Directories first, Terminal later
 
-Adds two Conductor-style composer attachments: `add directory` (link an external folder read-only) and `terminal` (attach current terminal output). Built across server + desktop, minimal change, no new services.
+Adds two Conductor-style composer attachments, sequenced: `add directory` (link an external folder read-only) ships first; `terminal` (attach current terminal output) is deferred to a later phase. Both surface as pinned items at the top of the desktop `@` autocomplete, above file results.
 
 Target: `session.header.extraDirs`, `systemprompt/builder.ts`, `tools` cwd guard, desktop `state/attachments.rs`.
 
@@ -18,7 +18,8 @@ Target: `session.header.extraDirs`, `systemprompt/builder.ts`, `tools` cwd guard
 ## 1. Design Principles
 
 1. **Single cwd stays canonical.** `session.header.cwd` remains the only writable root. `extraDirs` is an additive read allowlist, same shape as existing `cwd` plumbing (`session.service.ts`, `run.service.ts`).
-2. **One guard, not N edits.** A single `isPathReadable(path, cwd, extraDirs)` helper used by `bindToolCwd` / `expandPromptRefs` — mirrors how `todo.ts` centralises op handling.
+2. **Directories first, terminal later.** All directory work (Phases 1–3) ships before any terminal work (Phase 4+). Terminal stays specced but unscheduled.
+3. **Pinned `@` actions.** Desktop `@` autocomplete (`state/autocomplete.rs` + `console_ui::filter_items`) always pins `add directory` first and `terminal` second at the top, regardless of query — file results rank below. Selecting one runs its action instead of inserting a mention.
 3. **Attachments ride existing message shape.** Extend current `ImageAttachment` flow with two new kinds (`DirLink`, `TerminalSnapshot`) rather than a new API. Desktop `attachments.rs` + `execution.rs` already stage per-pane; server already expands refs into prompt text.
 4. **Fail loud.** Unknown dir, path escape, oversized terminal dump → `isError: true` with specific message.
 
@@ -52,13 +53,17 @@ interface TerminalAttachment { kind: "terminal"; content: string; truncated: boo
 - Include as `<terminal_output>` block when the message carries a `TerminalAttachment`.
 - **Verification**: `bun tests/terminal-attach.test.ts` — returns last N lines, caps at 8KB with `truncated:true`, empty-terminal returns clean error.
 
-### Phase 3 — Desktop: composer picker + chips
-- Extend `state/attachments.rs` with `DirLink(path)` + `TerminalSnapshot(content)` kinds alongside images; per-pane staging already exists.
-- Add `+` menu items (`workspace_content.rs` composer): `add directory` → native folder picker → `addLinkedDir` call; `terminal` → fetch snapshot endpoint → stage chip.
-- Render chips + removable; `submit_prompt` sends attachments with existing run call.
-- **Verification**: manual — link external repo, ask agent about its files (reads OK, write attempt refused); attach terminal after failed build, agent cites output without paste.
+### Phase 3 — Desktop: `@` pinned actions + DirLink chips (directories first)
+- Pin `add directory` (first) and `terminal` (second, disabled/“soon” or hidden until Phase 4) at the top of `@` autocomplete in `composer_autocomplete_for_pane` / `filter_items`; empty query still shows them.
+- Extend `state/attachments.rs` with `DirLink(path)` alongside images; per-pane staging already exists.
+- `add directory` → native folder picker → `addLinkedDir` call; render chip + removable; `submit_prompt` sends with existing run call.
+- **Verification**: manual — `@` with empty query shows `add directory` pinned at top; link external repo, ask agent about its files (reads OK, write attempt refused).
 
-### Phase 4 — Mobile parity (deferrable) + cleanup
+### Phase 4 — Terminal snapshot (deferred, after directories)
+- Server `GET /api/sessions/:id/terminal-output?lines=200` + `<terminal_output>` block; desktop `TerminalSnapshot(content)` chip wired to the pinned `terminal` `@` row.
+- **Verification**: `bun tests/terminal-attach.test.ts` + manual attach-after-failed-build.
+
+### Phase 5 — Mobile parity (deferrable) + cleanup
 - Mirror DirLink/Terminal chips in mobile composer via `packages/api` client, or explicitly defer.
 - Docs: short section in `docs/harness-features.md`.
 - **Verification**: existing relevant test file passes; no full-suite run.
