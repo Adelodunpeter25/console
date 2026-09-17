@@ -112,17 +112,24 @@ jobs:
           path: dist
           merge-multiple: true
 
+      # Retried: the upload itself usually succeeds but the action's final
+      # release API call occasionally times out (Headers Timeout Error).
+      # Re-runs are safe — assets are deleted then re-uploaded.
       - name: Publish rolling release
-        uses: softprops/action-gh-release@v2
+        uses: Wandalen/wretry.action@v3
         with:
-          tag_name: console-server
-          name: console-server (latest)
-          prerelease: false
-          make_latest: true
-          files: |
-            dist/console-linux-x64
-            dist/libfff_c-linux-x64.so
-            dist/console-macos-x64
-            dist/libfff_c-macos-x64.dylib
-            dist/console-macos-arm64
-            dist/libfff_c-macos-arm64.dylib
+          attempt_limit: 3
+          attempt_delay: 15000
+          action: softprops/action-gh-release@v2
+          with: |
+            tag_name: console-server
+            name: console-server (latest)
+            prerelease: false
+            make_latest: true
+            files: |
+              dist/console-linux-x64
+              dist/libfff_c-linux-x64.so
+              dist/console-macos-x64
+              dist/libfff_c-macos-x64.dylib
+              dist/console-macos-arm64
+              dist/libfff_c-macos-arm64.dylib
