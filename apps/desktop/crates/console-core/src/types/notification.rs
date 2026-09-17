@@ -34,6 +34,16 @@ pub fn parse_session_id_from_ident(ident: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+/// Dock badge text for a count of sessions with unopened banners.
+/// Zero clears the badge (`None`); otherwise the count as a string.
+pub fn dock_badge_label(outstanding: usize) -> Option<String> {
+    if outstanding == 0 {
+        None
+    } else {
+        Some(outstanding.to_string())
+    }
+}
+
 /// Empty titles fall back to `Console` so banners never post blank.
 pub fn normalize_notification_title(title: &str) -> String {
     if title.is_empty() {

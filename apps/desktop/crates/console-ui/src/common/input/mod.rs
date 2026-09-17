@@ -481,16 +481,27 @@ impl ComposerInput {
             .unwrap_or(path)
             .to_string();
         let start = range.start.min(self.content.len());
-        // Add an extra leading space when inserting after non-whitespace so the
-        // pill never visually abuts the preceding word.
-        let needs_gap = start > 0
+        // The pill background extends ~17px left of the label to house the
+        // 11px file icon, which consumes ~4 spaces worth of width. A single
+        // visible space gap needs ~6 spaces of total separation between the
+        // preceding word and the label, otherwise the chip visually touches
+        // the text. The normal @ flow already leaves one preceding space
+        // (the trigger requires whitespace before @), so add 5 more; when
+        // inserting directly after non-whitespace add 6. At the start of the
+        // line no gap is needed, just the icon reservation.
+        let prev_is_whitespace = start > 0
             && self.content[..start]
                 .chars()
-                .last()
-                .map(|c| !c.is_whitespace())
-                .unwrap_or(false);
-        let prefix = if needs_gap { "    " } else { "   " };
-        let insert_text = format!("{prefix}{label} ");
+                .next_back()
+                .is_some_and(|c| c.is_whitespace());
+        let prefix = if start == 0 {
+            "   "
+        } else if prev_is_whitespace {
+            "     "
+        } else {
+            "      "
+        };
+        let insert_text = format!("{prefix}{label}  ");
         let lead = prefix.len();
         let mention_len = label.len();
         self.replace_range(range, &insert_text, cx);
