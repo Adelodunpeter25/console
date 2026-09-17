@@ -2,6 +2,7 @@ package com.console.mobile.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonClassDiscriminator
 
 @Serializable
 sealed interface MessageContent
@@ -29,6 +30,7 @@ data class ImagePart(
 ) : MessageContent
 
 @Serializable
+@JsonClassDiscriminator("role")
 sealed interface AgentMessage {
     val id: String?
     val createdAt: Long?
