@@ -13,7 +13,7 @@
  * start. Any stable string works.
  */
 export const OPENCODE_BASE_URL = "https://opencode.ai/zen/v1";
-export const OPENCODE_USER_AGENT = "opencode/1.18.27";
+export const OPENCODE_USER_AGENT = "opencode/1.18.31";
 export const OPENCODE_SESSION_ID =
   process.env.OPENCODE_SESSION_ID ?? crypto.randomUUID();
 
