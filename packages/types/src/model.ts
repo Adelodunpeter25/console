@@ -3,7 +3,7 @@
  * `ProviderId` is the single source of truth for valid provider names.
  */
 
-export type ProviderId = "antigravity" | "opencode" | "codex" | "cline" | "devin" | "claude";
+export type ProviderId = "antigravity" | "codex" | "cline" | "devin" | "claude";
 
 export type ThinkingLevel = "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 

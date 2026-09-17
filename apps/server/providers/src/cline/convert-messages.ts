@@ -1,2 +1,2 @@
-// Identical wire format to OpenCode Zen. Re-export to keep cline/ self-contained.
-export { convertOpencodeMessages } from "@/providers/src/opencode/convert-messages.js";
+// Shared OpenAI-compatible wire format. Re-export to keep cline/ self-contained.
+export { convertOpenAICompatMessages } from "@/providers/src/shared/openai-compat-messages.js";

@@ -11,7 +11,7 @@ import { tool, type ToolSet } from "ai";
  * `{ properties: {}, additionalProperties: false }` — leaving the model no
  * known parameters and making every parameterized call fail validation.
  */
-export function convertOpencodeTools(tools: AgentTool[]): ToolSet {
+export function convertOpenAICompatTools(tools: AgentTool[]): ToolSet {
   const result: ToolSet = {};
 
   for (const t of tools) {

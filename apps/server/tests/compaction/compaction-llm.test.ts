@@ -16,7 +16,7 @@ import {
 console.log("Running smol summarizer tests...");
 
 const mainModel: Model = { id: "big", provider: "antigravity", contextWindow: 1_000_000 };
-const smolModel: Model = { id: "small", provider: "opencode", contextWindow: 200_000 };
+const smolModel: Model = { id: "small", provider: "antigravity", contextWindow: 200_000 };
 
 function textStream(text: string): StreamFn {
   return async function* () {

@@ -1,5 +1,6 @@
 /**
- * Converts AgentMessage[] to AI SDK CoreMessage[] for the opencode provider.
+ * Converts AgentMessage[] to AI SDK CoreMessage[] for OpenAI-compatible
+ * providers (chat completions wire format).
  *
  * Mapping:
  *   UserMessage       → role: "user", content (string or parts with images)
@@ -9,7 +10,7 @@
 import type { AgentMessage } from "@console/types";
 import type { ModelMessage } from "ai";
 
-export function convertOpencodeMessages(messages: AgentMessage[]): ModelMessage[] {
+export function convertOpenAICompatMessages(messages: AgentMessage[]): ModelMessage[] {
   const out: ModelMessage[] = [];
 
   for (const msg of messages) {
@@ -64,7 +65,7 @@ export function convertOpencodeMessages(messages: AgentMessage[]): ModelMessage[
       );
 
       // A thinking-only assistant turn becomes empty after reasoning is
-      // stripped. OpenCode rejects empty message content, so omit it rather
+      // stripped. OpenAI-compatible endpoints reject empty message content, so omit it rather
       // than sending an invalid assistant message.
       if (wireContent.length > 0) {
         out.push({ role: "assistant", content: wireContent });
@@ -90,7 +91,7 @@ export function convertOpencodeMessages(messages: AgentMessage[]): ModelMessage[
     }
   }
 
-  // OpenCode requires at least one message. This can happen when a restored
+  // Endpoints require at least one message. This can happen when a restored
   // history contains only empty user messages or thinking-only assistant turns.
   if (out.length === 0) {
     out.push({ role: "user", content: "(continue)" });

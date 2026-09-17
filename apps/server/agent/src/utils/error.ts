@@ -99,7 +99,7 @@ const OVERFLOW_MESSAGE_PATTERNS = [
  * Whether a provider failure means the request exceeded the model's context
  * window (agent-loop recovers with emergency compaction + one retry).
  * Matches overflow signatures across Antigravity/CCA, Anthropic, OpenAI/Codex,
- * and OpenCode error shapes.
+ * and provider error shapes.
  */
 export function isContextOverflowError(error: unknown): boolean {
   const message = errorText(error);

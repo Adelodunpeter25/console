@@ -12,7 +12,6 @@ await import("./tools/tools.test.js");
 await import("./tools/todo.test.js");
 await import("./agent/system-prompt.test.js");
 await import("./providers/providers-wire.test.js");
-await import("./providers/opencode.test.js");
 await import("./providers/discovery.test.js");
 await import("./agent/permissions.test.js");
 await import("./api/api.test.js");

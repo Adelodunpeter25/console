@@ -53,7 +53,7 @@ export interface AgentLoopConfig {
   systemPrompt: string;
   /** Tools available to the agent. */
   tools: AgentTool[];
-  /** Provider-specific streaming function — inject your Antigravity/OpenCode/Codex/Cline client here. */
+  /** Provider-specific streaming function — inject your Antigravity/Codex/Cline client here. */
   streamFn: StreamFn;
   /** Optional runtime thinking override for providers that support it. */
   thinkingLevel?: ThinkingLevel;

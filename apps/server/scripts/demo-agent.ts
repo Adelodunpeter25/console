@@ -1,7 +1,7 @@
 /**
  * Interactive Live Demo CLI Runner for Console Agent Engine.
  *
- * Runs real agent prompts against live Antigravity / OpenCode / Codex LLM endpoints using your local credentials.
+ * Runs real agent prompts against live Antigravity / Codex LLM endpoints using your local credentials.
  *
  * Usage:
  *   bun scripts/demo-agent.ts "List files in this project and build a hello world script"
@@ -13,7 +13,6 @@ import { allTools } from "@/agent/src/tools/index.js";
 import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
 import { buildSystemPrompt } from "@/agent/src/systemprompt/builder.js";
 import { createAntigravityStreamFn } from "@/providers/src/antigravity/stream-fn.js";
-import { opencodeStreamFn } from "@/providers/src/opencode/stream-fn.js";
 import type { AgentSessionEvent, Model, ProviderId } from "@console/types";
 
 function parseArgs(): {
@@ -97,10 +96,7 @@ async function main() {
     contextWindow: 1_000_000,
   };
 
-  const streamFn =
-    parsed.provider === "opencode"
-      ? opencodeStreamFn
-      : createAntigravityStreamFn();
+  const streamFn = createAntigravityStreamFn();
 
   const { systemPrompt } = await buildSystemPrompt({
     cwd,

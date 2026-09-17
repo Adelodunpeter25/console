@@ -1,23 +1,20 @@
 /**
  * Provider Registry & Hybrid Model Catalog.
- * Registers supported providers ("antigravity", "opencode", "codex", "cline", "devin", "claude") with dynamic
+ * Registers supported providers ("antigravity", "codex", "cline", "devin", "claude") with dynamic
  * endpoint discovery via /v1internal:fetchAvailableModels (mirroring oh-my-pi).
  */
 
 import {
   createAntigravityStreamFn,
   fetchAvailableModels,
-  fetchOpencodeFreeModels,
   fetchClineFreeModels,
   fetchDevinModels,
   loadCredential,
-  opencodeServeStreamFn,
   refreshIfNeeded,
   codexStreamFn,
   codexCredentialExists,
   loadCodexCredential,
   refreshCodexIfNeeded,
-  OPENCODE_FREE_MODEL_IDS,
   clineStreamFn,
   CLINE_FREE_MODEL_IDS,
   getClineContextWindow,
@@ -67,12 +64,6 @@ export const DEFAULT_ANTIGRAVITY_MODELS: Model[] = AVAILABLE_MODELS.map((id) => 
     : {}),
 }));
 
-export const DEFAULT_OPENCODE_MODELS: Model[] = OPENCODE_FREE_MODEL_IDS.map((id) => ({
-  id,
-  provider: "opencode" as const,
-  contextWindow: 200_000,
-}));
-
 export const DEFAULT_CODEX_MODELS: Model[] = [
   "gpt-5.6-terra",
   "gpt-5.6-luna",
@@ -119,14 +110,6 @@ export const PROVIDER_CATALOG: Record<ProviderId, ProviderEntry> = {
     authMethod: "oauth",
     models: DEFAULT_ANTIGRAVITY_MODELS,
     getStreamFn: () => createAntigravityStreamFn(),
-  },
-  opencode: {
-    name: "opencode",
-    displayName: "OpenCode Zen",
-    description: "Free models via the local opencode serve sidecar (falls back to opencode.ai/zen)",
-    authMethod: "none",
-    models: DEFAULT_OPENCODE_MODELS,
-    getStreamFn: () => opencodeServeStreamFn,
   },
   codex: {
     name: "codex",
@@ -199,9 +182,7 @@ export async function fetchModelsForProvider(
   try {
     let discovered: Model[] | null = null;
 
-    if (providerName === "opencode") {
-      discovered = await fetchOpencodeFreeModels(signal);
-    } else if (providerName === "devin") {
+    if (providerName === "devin") {
       const discoveredDevin = await fetchDevinModels(fetch, signal);
       if (discoveredDevin) {
         discovered = discoveredDevin.map((m) => ({
@@ -274,15 +255,13 @@ export async function fetchModelsForProvider(
   // (Devin has no static fallback — its catalog is server-driven and the picker
   // stays empty until discovery succeeds against `GetCliModelConfigs`).
   const staticFallback =
-    providerName === "opencode"
-      ? DEFAULT_OPENCODE_MODELS
-      : providerName === "codex"
-        ? DEFAULT_CODEX_MODELS
-        : providerName === "cline"
-          ? DEFAULT_CLINE_MODELS
-          : providerName === "claude"
-            ? DEFAULT_CLAUDE_MODELS
-            : DEFAULT_ANTIGRAVITY_MODELS;
+    providerName === "codex"
+      ? DEFAULT_CODEX_MODELS
+      : providerName === "cline"
+        ? DEFAULT_CLINE_MODELS
+        : providerName === "claude"
+          ? DEFAULT_CLAUDE_MODELS
+          : DEFAULT_ANTIGRAVITY_MODELS;
   if (!provider.models || provider.models.length === 0) {
     provider.models = staticFallback;
   }

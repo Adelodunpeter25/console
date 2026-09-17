@@ -2,12 +2,6 @@
 export { createAntigravityStreamFn } from "./antigravity/index.js";
 export type { AntigravitySessionState } from "./antigravity/index.js";
 
-/** OpenCode Zen provider — free OpenAI-compatible endpoint */
-export { opencodeStreamFn, fetchOpencodeFreeModels, OPENCODE_FREE_MODEL_IDS } from "./opencode/index.js";
-
-/** OpenCode sidecar provider — local `opencode serve` owned by `console start` */
-export { opencodeServeStreamFn } from "./opencode/index.js";
-
 /** OpenAI Codex provider — ChatGPT OAuth and Codex Responses API. */
 export { codexStreamFn } from "./codex/stream-fn.js";
 export {

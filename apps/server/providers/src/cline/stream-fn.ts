@@ -1,6 +1,6 @@
 /**
  * Cline StreamFn — OpenAI-compatible /v1/chat/completions via the AI SDK.
- * Same wire format as OpenCode Zen. Auth: Bearer CLINE_API_KEY.
+ * Auth: Bearer CLINE_API_KEY.
  *
  * The key is read per-call (not at module load) so the user can add it
  * mid-session. The AI SDK client is built once per call.
@@ -9,8 +9,8 @@ import { streamText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { StreamFn } from "@/agent/src/service/agent-loop.js";
 import { CLINE_BASE_URL } from "./constants.js";
-import { convertOpencodeMessages } from "@/providers/src/opencode/convert-messages.js";
-import { convertOpencodeTools } from "@/providers/src/opencode/convert-tools.js";
+import { convertOpenAICompatMessages } from "@/providers/src/shared/openai-compat-messages.js";
+import { convertOpenAICompatTools } from "@/providers/src/shared/openai-compat-tools.js";
 import { loadClineCredential } from "./auth.js";
 
 export const clineStreamFn: StreamFn = async function* ({
@@ -34,8 +34,8 @@ export const clineStreamFn: StreamFn = async function* ({
     headers: { "X-Title": "Console" },
   });
 
-  const convertedMessages = convertOpencodeMessages(messages);
-  const convertedTools = convertOpencodeTools(tools);
+  const convertedMessages = convertOpenAICompatMessages(messages);
+  const convertedTools = convertOpenAICompatTools(tools);
 
   let streamError: unknown = null;
 
