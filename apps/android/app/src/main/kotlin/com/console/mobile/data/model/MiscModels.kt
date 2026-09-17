@@ -12,7 +12,7 @@ object TodoStatus {
 }
 
 @Serializable
-data class NotificationEvent(val type: String = "notification", val kind: String, val sessionId: String, val title: String, val body: String)
+data class NotificationEvent(val type: String = "notification", val kind: String, val sessionId: String, val title: String, val subtitle: String = "", val body: String)
 
 @Serializable
 data class UsageWindow(val id: String, val label: String, val durationMs: Long? = null, val resetsAt: Long? = null, val resetLabel: String? = null)

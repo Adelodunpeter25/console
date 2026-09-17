@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -38,6 +39,7 @@ fn selection_row_for_part(row: &str, part_index: usize) -> String {
 pub struct UserMessageBubble {
     pub content: String,
     pub attachments: Vec<ImageAttachment>,
+    pub context_files: Vec<String>,
     pub created_at: Option<i64>,
     selection: Option<TranscriptSelection>,
     selection_row: String,
@@ -49,6 +51,7 @@ impl UserMessageBubble {
         Self {
             content: content.into(),
             attachments: Vec::new(),
+            context_files: Vec::new(),
             created_at: None,
             selection: None,
             selection_row: "user-message".to_owned(),
@@ -64,6 +67,11 @@ impl UserMessageBubble {
 
     pub fn attachments(mut self, attachments: Vec<ImageAttachment>) -> Self {
         self.attachments = attachments;
+        self
+    }
+
+    pub fn context_files(mut self, files: Vec<String>) -> Self {
+        self.context_files = files;
         self
     }
 
@@ -101,6 +109,7 @@ impl RenderOnce for UserMessageBubble {
         );
 
         let preview_handler = self.on_preview_image.clone();
+        let context_files = self.context_files;
         div()
             .w_full()
             .flex()
@@ -108,6 +117,44 @@ impl RenderOnce for UserMessageBubble {
             .items_end()
             .gap(px(3.0))
             .group(group_name.clone())
+            // Message: file chips (if any), then image(s), then text bubble.
+            .when(!context_files.is_empty(), |element| {
+                element.child(
+                    div()
+                        .max_w(px(540.0))
+                        .flex()
+                        .flex_wrap()
+                        .justify_end()
+                        .gap(px(6.0))
+                        .children(context_files.into_iter().enumerate().map(|(index, path)| {
+                            let filename = Path::new(&path)
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or(&path)
+                                .to_string();
+                            div()
+                                .id(ElementId::Name(
+                                    format!("user-ctx-file-chip-{index}").into(),
+                                ))
+                                .flex()
+                                .items_center()
+                                .gap(px(4.0))
+                                .px(px(8.0))
+                                .h(px(24.0))
+                                .rounded(px(6.0))
+                                .border_1()
+                                .border_color(theme.user_bubble_border)
+                                .bg(theme.user_bubble.opacity(0.5))
+                                .child(crate::primitives::file_type_icon(&path, 11.0))
+                                .child(
+                                    div()
+                                        .text_size(px(12.0))
+                                        .text_color(theme.text_secondary)
+                                        .child(filename),
+                                )
+                        })),
+                )
+            })
             // Message: image(s) pinned to the top, text bubble below — the
             // text stays a single line rather than wrapping around the image.
             .child(

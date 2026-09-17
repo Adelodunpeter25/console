@@ -10,6 +10,9 @@ pub struct NotificationEvent {
     pub session_id: String,
     #[serde(default)]
     pub title: String,
+    /// Optional second line (session title). Empty = single-line banner.
+    #[serde(default)]
+    pub subtitle: String,
     #[serde(default)]
     pub body: String,
 }

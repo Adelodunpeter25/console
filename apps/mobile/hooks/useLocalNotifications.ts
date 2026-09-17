@@ -57,6 +57,7 @@ export function useLocalNotifications(): void {
     void Notifications.scheduleNotificationAsync({
       content: {
         title: event.title,
+        ...(event.subtitle ? { subtitle: event.subtitle } : {}),
         body: event.body,
         data: { sessionId: event.sessionId, kind: event.kind },
       },

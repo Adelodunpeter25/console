@@ -35,6 +35,8 @@ pub struct PersistedDraft {
     pub updated_at: i64,
     #[serde(default)]
     pub mentions: Vec<PersistedDraftMention>,
+    #[serde(default)]
+    pub context_files: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

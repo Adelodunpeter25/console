@@ -73,6 +73,35 @@ export class RunService {
     this.hubs.get(sessionId)?.unsubscribe(subscriberId);
   }
 
+  /**
+   * Session title for notification subtitles. Reloads so async title
+   * generation that finished mid-run is picked up. Generic placeholders
+   * ("New Session", …) are omitted — they add noise, not context.
+   */
+  private notificationSessionTitle(sessionId: string): string | undefined {
+    const title = this.sessionStorage.loadSession(sessionId)?.header.title;
+    if (!title || isGenericSessionTitle(title)) return undefined;
+    return title;
+  }
+
+  /** Last assistant text turn, for done-banner previews. */
+  private lastAssistantExcerpt(sessionId: string): string | undefined {
+    const messages = this.sessionStorage.loadSession(sessionId)?.messages;
+    if (!messages) return undefined;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role !== "assistant" || !Array.isArray(msg.content)) continue;
+      const text = msg.content
+        .filter((p) => p.type === "text" && p.text.trim())
+        .map((p) => (p.type === "text" ? p.text : ""))
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (text) return text;
+    }
+    return undefined;
+  }
+
   waitForRunSettle(sessionId: string): Promise<void> {
     return this.hubs.get(sessionId)?.settled ?? Promise.resolve();
   }
@@ -419,9 +448,18 @@ export class RunService {
         }
 
         if (isAttentionEvent(event)) {
-          notificationService.push(attentionNotification(sessionId, event));
+          notificationService.push(
+            attentionNotification(sessionId, event, {
+              sessionTitle: this.notificationSessionTitle(sessionId),
+            }),
+          );
         } else if (isDoneEvent(event) && !runError) {
-          notificationService.push(doneNotification(sessionId));
+          notificationService.push(
+            doneNotification(sessionId, {
+              sessionTitle: this.notificationSessionTitle(sessionId),
+              summary: this.lastAssistantExcerpt(sessionId),
+            }),
+          );
         }
 
         // Compaction is internal LLM context memory management; do not broadcast to user UI

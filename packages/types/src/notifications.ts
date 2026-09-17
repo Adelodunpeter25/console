@@ -10,5 +10,7 @@ export interface NotificationEvent {
   kind: NotificationKind;
   sessionId: string;
   title: string;
+  /** Optional second line (macOS subtitle / Android subtext): session title. */
+  subtitle?: string;
   body: string;
 }

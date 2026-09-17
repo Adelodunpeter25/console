@@ -96,6 +96,7 @@ impl ConsoleDesktopApp {
             &composer_input,
             move |this, input, event: &ComposerEvent, cx| match event {
                 ComposerEvent::Submit(prompt) => {
+                    let context_files = input.read(cx).context_files().to_vec();
                     if this.is_active_session_running_for_pane(&submit_pane_id) {
                         let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
                         this.queue_prompt_for_pane(
@@ -109,7 +110,7 @@ impl ConsoleDesktopApp {
                     this.active_pane_id = Some(submit_pane_id.clone());
                     this.selected_session_id = this.active_session_for_pane(&submit_pane_id);
                     let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
-                    this.submit_prompt(prompt.clone(), attachments, cx);
+                    this.submit_prompt_with_context(prompt.clone(), attachments, context_files, cx);
                 }
                 ComposerEvent::SubmitSteer(prompt) => {
                     this.submit_steer_for_pane(steer_pane_id.clone(), prompt.clone(), cx);
@@ -119,8 +120,15 @@ impl ConsoleDesktopApp {
                     let input = input.read(cx);
                     let text = input.content().to_string();
                     let mentions = input.mentions().to_vec();
+                    let context_files = input.context_files().to_vec();
                     let session_id = this.active_session_for_pane(&edit_pane_id);
-                    this.save_draft_for_session(session_id.as_deref(), &text, &mentions, cx);
+                    this.save_draft_for_session_with_context(
+                        session_id.as_deref(),
+                        &text,
+                        &mentions,
+                        &context_files,
+                        cx,
+                    );
                 }
                 _ => {}
             },
@@ -1194,7 +1202,8 @@ impl ConsoleDesktopApp {
             let input = self.composer_for_pane(pane_id).read(cx);
             let text = input.content().to_string();
             let mentions = input.mentions().to_vec();
-            self.commit_draft_to_sidebar(session_id, &text, &mentions, cx);
+            let context_files = input.context_files().to_vec();
+            self.commit_draft_to_sidebar_with_context(session_id, &text, &mentions, &context_files, cx);
         }
 
         self.save_transcript_scroll_position(cx);
@@ -1215,6 +1224,7 @@ impl ConsoleDesktopApp {
             Some(session_id) => {
                 self.selected_session_id = Some(session_id.clone());
                 let draft = self.get_draft_with_mentions(Some(&session_id));
+                let draft_context_files = self.get_draft_context_files(Some(&session_id));
                 composer.update(cx, |input, cx| {
                     input.set_prompt_history(Vec::new(), cx);
                     if let Some((draft, mentions)) = draft {
@@ -1222,6 +1232,8 @@ impl ConsoleDesktopApp {
                     } else {
                         input.clear(cx);
                     }
+                    input.context_files = draft_context_files;
+                    cx.notify();
                 });
                 // Keep the previous transcript visible until the new load
                 // succeeds. A failed request must not strand the pane empty.
@@ -1230,12 +1242,15 @@ impl ConsoleDesktopApp {
             None => {
                 self.selected_session_id = None;
                 let draft = self.get_draft_with_mentions(None);
+                let draft_context_files = self.get_draft_context_files(None);
                 composer.update(cx, |input, cx| {
                     if let Some((draft, mentions)) = draft {
                         input.set_content_with_mentions(draft, mentions, cx);
                     } else {
                         input.clear(cx);
                     }
+                    input.context_files = draft_context_files;
+                    cx.notify();
                 });
                 transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
             }
@@ -1495,6 +1510,7 @@ impl ConsoleDesktopApp {
                 return;
             }
             let draft = self.get_draft_with_mentions(Some(sid));
+            let draft_ctx_files = self.get_draft_context_files(Some(sid));
             self.composer_for_pane(pane_id).update(cx, |input, cx| {
                 input.set_prompt_history(Vec::new(), cx);
                 if let Some((draft_text, mentions)) = draft {
@@ -1502,6 +1518,8 @@ impl ConsoleDesktopApp {
                 } else {
                     input.clear(cx);
                 }
+                input.context_files = draft_ctx_files;
+                cx.notify();
             });
             // Switching tabs: clear synchronously so the old session's
             // messages never linger while the new session loads. (The
@@ -1789,6 +1807,7 @@ impl ConsoleDesktopApp {
         if let WorkspaceTabConfig::Chat { session_id, .. } = tab {
             self.selected_session_id = Some(session_id.clone());
             let draft = self.get_draft_with_mentions(Some(&session_id));
+            let draft_ctx_files2 = self.get_draft_context_files(Some(&session_id));
             self.composer_for_pane(&new_pane_id)
                 .update(cx, |input, cx| {
                     input.set_prompt_history(Vec::new(), cx);
@@ -1797,6 +1816,8 @@ impl ConsoleDesktopApp {
                     } else {
                         input.clear(cx);
                     }
+                    input.context_files = draft_ctx_files2;
+                    cx.notify();
                 });
             self.transcript_for_pane(&new_pane_id)
                 .update(cx, |transcript, cx| {
