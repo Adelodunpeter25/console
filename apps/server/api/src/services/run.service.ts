@@ -295,6 +295,8 @@ export class RunService {
       session.header.approvalMode ||
       "always-ask") as ApprovalMode;
 
+    const thinkingLevel = dto.thinkingLevel || session.header.thinkingLevel || catalogModel?.defaultThinkingLevel;
+
     this.sessionStorage.updateModel(sessionId, modelId, provider);
     this.sessionStorage.updateApprovalMode(sessionId, approvalMode);
 
@@ -340,6 +342,7 @@ export class RunService {
       getStreamFnForModel: (roleModel) => getProvider(roleModel.provider)?.getStreamFn() ?? streamFn,
       approvalMode,
       onApproval: this.decisions.createApprovalHandler(sessionId),
+      thinkingLevel,
     });
 
     const attachments: ImagePart[] | undefined = dto.attachments?.map((a) => ({

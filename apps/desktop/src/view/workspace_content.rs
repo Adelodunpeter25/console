@@ -485,6 +485,8 @@ impl ConsoleDesktopApp {
         let pane_selected_model = self.effective_model_for_pane(&pane_id);
         let pane_picker_tab = self.pane_picker_tab(&pane_id);
         let pane_approval_mode = self.pane_approval_mode(&pane_id);
+        let pane_thinking_level = self.pane_thinking_level(&pane_id);
+        let pane_supported_thinking_levels = self.supported_thinking_levels_for_pane(&pane_id);
         let pane_project_id = self.pane_project_id(&pane_id);
         let pane_branches = self.pane_branches(&pane_id);
         let pane_branch_loaded = self.pane_branch_loaded(&pane_id);
@@ -855,6 +857,7 @@ impl ConsoleDesktopApp {
                                             model_id: Some(m_id.clone()),
                                             provider: Some(prov.clone()),
                                             approval_mode: None,
+                                            thinking_level: None,
                                         },
                                         cx,
                                     );
@@ -915,6 +918,7 @@ impl ConsoleDesktopApp {
                                         model_id: None,
                                         provider: None,
                                         approval_mode: Some(mode.value().to_string()),
+                                        thinking_level: None,
                                     },
                                     cx,
                                 );
@@ -1053,6 +1057,19 @@ impl ConsoleDesktopApp {
                                 })
                                 .selected_model(pane_selected_model)
                                 .approval_mode(pane_approval_mode)
+                                .thinking_level(pane_thinking_level)
+                                .supported_thinking_levels(pane_supported_thinking_levels)
+                                .on_cycle_thinking({
+                                    let entity = entity.clone();
+                                    let cycle_pane_id = composer_pane_id.clone();
+                                    move |_window, cx| {
+                                        if let Some(app) = entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.cycle_thinking_level_for_pane(&cycle_pane_id, cx);
+                                            });
+                                        }
+                                    }
+                                })
                                 .model_dropdown(model_dropdown, model_handle)
                                 .approval_dropdown(approval_dropdown, approval_handle)
                                 .autocomplete(composer_autocomplete)

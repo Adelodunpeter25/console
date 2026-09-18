@@ -133,6 +133,7 @@ impl ConsoleDesktopApp {
                         model_id: None,
                         provider: None,
                         approval_mode: None,
+                        thinking_level: None,
                     },
                 )
                 .await
@@ -190,6 +191,9 @@ impl ConsoleDesktopApp {
                     session.provider = prov.clone();
                     if let Some(ref mid) = payload.model_id {
                         session.model_id = mid.clone();
+                    }
+                    if payload.thinking_level.is_some() {
+                        session.thinking_level = payload.thinking_level;
                     }
                 }
                 self.persist_workspaces();
@@ -307,6 +311,9 @@ impl ConsoleDesktopApp {
                 .map(ApprovalMode::from_value)
                 .unwrap_or_default(),
         );
+        if header.thinking_level.is_some() {
+            self.set_pane_thinking_level(pane_id, header.thinking_level);
+        }
 
         if let Some(session) = Rc::make_mut(&mut self.sessions)
             .iter_mut()
@@ -317,6 +324,7 @@ impl ConsoleDesktopApp {
             session.model_id = header.model_id.clone();
             session.provider = header.provider.clone();
             session.approval_mode = header.approval_mode.clone();
+            session.thinking_level = header.thinking_level;
             session.status = header.status.clone();
             session.updated_at = header.updated_at;
             // Keep the sidebar row and any open chat tabs in step when the

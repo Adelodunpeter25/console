@@ -193,6 +193,7 @@ impl ConsoleDesktopApp {
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
         let approval_mode = self.pane_approval_mode(&pane_id);
+        let thinking_level = self.pane_thinking_level(&pane_id);
         let selected_model = self.pane_selected_model(&pane_id);
         let session_project_id = self
             .pane_project_id(&pane_id)
@@ -218,6 +219,7 @@ impl ConsoleDesktopApp {
                     provider: selected_model.as_ref().map(|model| model.provider.clone()),
                     title: Some("New Chat".into()),
                     approval_mode: Some(approval_mode.value().to_string()),
+                    thinking_level,
                 })
                 .await
             {

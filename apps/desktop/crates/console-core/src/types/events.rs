@@ -2,6 +2,7 @@ use super::agent::{
     AskQuestionRequest, AssistantMessage, ImageAttachment, PermissionRequest, QueuedPrompt,
     TodoItem, ToolCall, ToolCallPreview, ToolResult,
 };
+use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -14,6 +15,8 @@ pub struct RunPromptDto {
     pub provider: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub approval_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_level: Option<ThinkingLevel>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Vec<ImageAttachment>>,
 }

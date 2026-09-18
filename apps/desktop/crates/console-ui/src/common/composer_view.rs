@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use console_core::{ApprovalMode, ImageAttachment, SelectedModel};
+use console_core::{ApprovalMode, ImageAttachment, SelectedModel, ThinkingLevel};
 use gpui::{
     App, ElementId, Entity, ExternalPaths, InteractiveElement, IntoElement, ParentElement,
     RenderOnce, StatefulInteractiveElement, Styled, Window, div, img, prelude::FluentBuilder, px,
@@ -8,8 +8,8 @@ use gpui::{
 
 use crate::common::{
     ApprovalModeDropdown, ApprovalModeIconExt, AutocompleteConfirm, AutocompleteDismiss,
-    AutocompleteNext, AutocompletePrevious, AutocompleteView, ModelDropdownMenu, attachment_image,
-    format_model_name, provider_svg_path,
+    AutocompleteNext, AutocompletePrevious, AutocompleteView, ModelDropdownMenu, ThinkingStepper,
+    attachment_image, format_model_name, provider_svg_path,
 };
 use crate::input::ComposerInput;
 use crate::primitives::{ContextMenuHandle, IconName, MenuAlign, MenuChip, app_icon, popover};
@@ -46,6 +46,8 @@ pub struct ComposerView {
     pub run_state: ComposerRunState,
     pub selected_model: Option<SelectedModel>,
     pub approval_mode: ApprovalMode,
+    pub thinking_level: Option<ThinkingLevel>,
+    pub supported_thinking_levels: Vec<ThinkingLevel>,
     pub attachments: Rc<Vec<ImageAttachment>>,
     /// Whether the active session already has a staged prompt (server's `queueUpdated` not null).
     /// Rendered independently of `run_state` so a replace does not need a new state variant.
@@ -57,6 +59,7 @@ pub struct ComposerView {
     on_queue: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_abort: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_pick_image: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_cycle_thinking: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     on_remove_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     on_preview_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     on_drop_files: Rc<dyn Fn(&ExternalPaths, &mut Window, &mut App) + 'static>,
@@ -79,6 +82,8 @@ impl ComposerView {
             run_state: ComposerRunState::Ready,
             selected_model: None,
             approval_mode: ApprovalMode::AlwaysAsk,
+            thinking_level: None,
+            supported_thinking_levels: Vec::new(),
             attachments: Rc::new(Vec::new()),
             has_queued_prompt: false,
             model_menu: None,
@@ -88,6 +93,7 @@ impl ComposerView {
             on_send,
             on_abort: Rc::new(on_abort),
             on_pick_image: Rc::new(on_pick_image),
+            on_cycle_thinking: None,
             on_remove_attachment: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
             on_preview_attachment: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
             on_drop_files: Rc::new(|_: &ExternalPaths, _: &mut Window, _: &mut App| {}),
@@ -129,6 +135,21 @@ impl ComposerView {
 
     pub fn approval_mode(mut self, mode: ApprovalMode) -> Self {
         self.approval_mode = mode;
+        self
+    }
+
+    pub fn thinking_level(mut self, level: Option<ThinkingLevel>) -> Self {
+        self.thinking_level = level;
+        self
+    }
+
+    pub fn supported_thinking_levels(mut self, levels: Vec<ThinkingLevel>) -> Self {
+        self.supported_thinking_levels = levels;
+        self
+    }
+
+    pub fn on_cycle_thinking(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_cycle_thinking = Some(Rc::new(handler));
         self
     }
 
@@ -362,6 +383,17 @@ impl RenderOnce for ComposerView {
             approval_trigger.into_any_element()
         };
 
+        let thinking_control = if !self.supported_thinking_levels.is_empty() {
+            let on_cycle = self.on_cycle_thinking.clone().unwrap_or_else(|| Rc::new(|_, _| {}));
+            Some(ThinkingStepper::new(
+                self.thinking_level,
+                self.supported_thinking_levels.clone(),
+                move |window, cx| (on_cycle)(window, cx),
+            ))
+        } else {
+            None
+        };
+
         let has_draft = !self.composer_input.read(cx).content().trim().is_empty()
             || !self.attachments.is_empty();
         let attachment_data = self.attachments.clone();
@@ -497,6 +529,7 @@ impl RenderOnce for ComposerView {
                                             )),
                                     )
                                     .child(model_control)
+                                    .when_some(thinking_control, |el, thinking| el.child(thinking))
                                     .child(approval_control)
                                     .child(div().flex_1())
                                     .child(match run_state {

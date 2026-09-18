@@ -166,6 +166,7 @@ impl ConsoleDesktopApp {
                             model_id: None,
                             provider: None,
                             approval_mode: None,
+                            thinking_level: None,
                         },
                     )
                     .await
@@ -356,6 +357,7 @@ impl ConsoleDesktopApp {
                         model_id: None,
                         provider: None,
                         approval_mode: None,
+                        thinking_level: None,
                     },
                 )
                 .await

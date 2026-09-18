@@ -1,4 +1,5 @@
 use super::agent::AgentMessage;
+use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -24,6 +25,8 @@ pub struct SessionHeader {
     pub message_count: Option<usize>,
     pub status: Option<SessionStatus>,
     pub approval_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thinking_level: Option<ThinkingLevel>,
     pub deleted_at: Option<i64>,
 }
 
@@ -64,6 +67,8 @@ pub struct CreateSessionDto {
     pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub approval_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_level: Option<ThinkingLevel>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -85,6 +90,8 @@ pub struct UpdateSessionDto {
     pub provider: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub approval_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_level: Option<ThinkingLevel>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

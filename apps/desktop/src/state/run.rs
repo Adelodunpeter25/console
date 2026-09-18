@@ -72,6 +72,7 @@ impl ConsoleDesktopApp {
                 .as_ref()
                 .map(|m| m.provider.clone()),
             approval_mode: Some(self.pane_approval_mode(&pane_id).value().to_string()),
+            thinking_level: self.pane_thinking_level(&pane_id),
             attachments: if attachments.is_empty() {
                 None
             } else {
@@ -85,6 +86,7 @@ impl ConsoleDesktopApp {
             model_id: dq.model_id.clone(),
             provider: dq.provider.clone(),
             approval_mode: dq.approval_mode.clone(),
+            thinking_level: dq.thinking_level,
             attachments: dq.attachments.clone(),
             created_at: chrono::Utc::now().to_rfc3339(),
         };
@@ -158,6 +160,7 @@ impl ConsoleDesktopApp {
                 model_id: next.model_id,
                 provider: next.provider,
                 approval_mode: next.approval_mode,
+                thinking_level: next.thinking_level,
                 attachments: next.attachments,
             };
             cx.spawn(async move |_, _| {
@@ -202,6 +205,7 @@ impl ConsoleDesktopApp {
                 model_id: next.model_id,
                 provider: next.provider,
                 approval_mode: next.approval_mode,
+                thinking_level: next.thinking_level,
                 attachments: next.attachments,
             };
             cx.spawn(async move |_, _| {
@@ -239,6 +243,9 @@ impl ConsoleDesktopApp {
                 .approval_mode
                 .clone()
                 .or_else(|| Some(self.pane_approval_mode(&pane_id).value().to_string())),
+            thinking_level: queued
+                .thinking_level
+                .or_else(|| self.pane_thinking_level(&pane_id)),
             attachments: queued.attachments.clone(),
         };
         let client = self.client.clone();
@@ -355,6 +362,7 @@ impl ConsoleDesktopApp {
         let model_id = selected_model.as_ref().map(|m| m.model_id.clone());
         let provider = selected_model.as_ref().map(|m| m.provider.clone());
         let approval_mode = Some(self.pane_approval_mode(&run_pane_id).value().to_string());
+        let thinking_level = self.pane_thinking_level(&run_pane_id);
         let active_sid = self.active_session_for_pane(&run_pane_id);
         let session_project_id = self.pane_project_id(&run_pane_id);
         let session_cwd = self
@@ -395,6 +403,7 @@ impl ConsoleDesktopApp {
                         provider: provider.clone(),
                         title: Some(full_prompt.chars().take(30).collect()),
                         approval_mode: approval_mode.clone(),
+                        thinking_level,
                     }).await {
                         Ok(s) => {
                             let sid = s.id.clone();
@@ -447,6 +456,7 @@ impl ConsoleDesktopApp {
                 model_id,
                 provider,
                 approval_mode,
+                thinking_level,
                 attachments: if attachments.is_empty() { None } else { Some(attachments) },
             };
 
@@ -912,6 +922,7 @@ impl ConsoleDesktopApp {
                                 model_id: next.model_id,
                                 provider: next.provider,
                                 approval_mode: next.approval_mode,
+                                thinking_level: next.thinking_level,
                                 attachments: next.attachments,
                             };
                             cx.spawn(async move |_, _| {

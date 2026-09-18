@@ -1,5 +1,5 @@
 import type { AgentMessage } from "./agent";
-import type { Model } from "./model";
+import type { Model, ThinkingLevel } from "./model";
 import type { AgentTool } from "./tool";
 
 export type SessionStatus = "idle" | "working" | "done" | "needs_attention";
@@ -16,6 +16,7 @@ export interface SessionHeader {
   messageCount?: number;
   status?: SessionStatus;
   approvalMode?: string;
+  thinkingLevel?: ThinkingLevel;
   deletedAt?: number;
 }
 

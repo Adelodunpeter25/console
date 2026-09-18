@@ -4,7 +4,7 @@
 
 use std::rc::Rc;
 
-use console_core::{ApprovalMode, GitBranchInfo, SelectedModel};
+use console_core::{ApprovalMode, GitBranchInfo, SelectedModel, ThinkingLevel};
 use console_ui::workspace::TabStripFollow;
 use console_ui::{ComposerInput, ContextMenuHandle, PickerTab, TranscriptView};
 use gpui::Entity;
@@ -22,6 +22,7 @@ pub(crate) struct WorkspacePaneState {
     pub(crate) selected_model: Option<SelectedModel>,
     pub(crate) active_picker_tab: PickerTab,
     pub(crate) approval_mode: ApprovalMode,
+    pub(crate) thinking_level: Option<ThinkingLevel>,
     /// Most-recently-used approval modes for this pane, newest last. Updated
     /// by every mode change (picker or Shift+Tab) and read by the Shift+Tab
     /// toggle to jump back to where the user was. Session-local on purpose:

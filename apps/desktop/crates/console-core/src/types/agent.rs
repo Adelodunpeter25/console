@@ -1,3 +1,4 @@
+use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -174,5 +175,7 @@ pub struct QueuedPrompt {
     pub provider: Option<String>,
     #[serde(default)]
     pub approval_mode: Option<String>,
+    #[serde(default)]
+    pub thinking_level: Option<ThinkingLevel>,
     pub created_at: String,
 }

@@ -1,5 +1,7 @@
 use console_core::types::git::GitBranchInfo;
-use console_core::{ApprovalMode, SelectedModel, TodoItem, UpdateSessionDto, WorkspaceTabConfig};
+use console_core::{
+    ApprovalMode, SelectedModel, ThinkingLevel, TodoItem, UpdateSessionDto, WorkspaceTabConfig,
+};
 use console_ui::browser::{BrowserView, default_browser_title};
 use console_ui::chat::TranscriptView;
 use console_ui::input::{ComposerAttachmentPaste, ComposerEvent, ComposerInput};
@@ -192,6 +194,7 @@ impl ConsoleDesktopApp {
                 active_picker_tab: self.active_picker_tab.clone(),
                 approval_mode: self.approval_mode,
                 approval_mode_history: Vec::new(),
+                thinking_level: self.thinking_level,
                 model_menu,
                 approval_menu,
                 usage_menu,
@@ -398,6 +401,140 @@ impl ConsoleDesktopApp {
         }
     }
 
+    pub(crate) fn pane_thinking_level(&self, pane_id: &str) -> Option<ThinkingLevel> {
+        let explicit = self
+            .workspace_pane_states
+            .get(pane_id)
+            .and_then(|state| state.thinking_level)
+            .or(self.thinking_level);
+
+        if explicit.is_some() {
+            return explicit;
+        }
+
+        // Check active session header
+        if let Some(session_id) = self.active_session_for_pane(pane_id) {
+            if let Some(session) = self.sessions.iter().find(|s| s.id == session_id) {
+                if session.thinking_level.is_some() {
+                    return session.thinking_level;
+                }
+            }
+        }
+
+        // Default based on active model
+        let supported = self.supported_thinking_levels_for_pane(pane_id);
+        if supported.is_empty() {
+            None
+        } else if supported.contains(&ThinkingLevel::Low) {
+            Some(ThinkingLevel::Low)
+        } else {
+            supported.first().copied()
+        }
+    }
+
+    pub(crate) fn set_pane_thinking_level(&mut self, pane_id: &str, level: Option<ThinkingLevel>) {
+        if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
+            state.thinking_level = level;
+        } else {
+            self.thinking_level = level;
+        }
+    }
+
+    pub(crate) fn supported_thinking_levels_for_pane(&self, pane_id: &str) -> Vec<ThinkingLevel> {
+        let Some(selected) = self.pane_selected_model(pane_id) else {
+            return Vec::new();
+        };
+
+        // Check live fetched models first
+        if let Some(models) = self.models_by_provider.get(&selected.provider) {
+            if let Some(m) = models.iter().find(|m| m.id == selected.model_id) {
+                if let Some(ref levels) = m.supported_thinking_levels {
+                    if !levels.is_empty() {
+                        return levels.clone();
+                    }
+                }
+            }
+        }
+
+        // Check static catalog models
+        if let Some(entry) = self.providers.iter().find(|p| p.name == selected.provider) {
+            if let Some(m) = entry.models.iter().find(|m| m.id == selected.model_id) {
+                if let Some(ref levels) = m.supported_thinking_levels {
+                    if !levels.is_empty() {
+                        return levels.clone();
+                    }
+                }
+            }
+        }
+
+        // Standard defaults per provider
+        match selected.provider.to_ascii_lowercase().as_str() {
+            "claude" => vec![
+                ThinkingLevel::Low,
+                ThinkingLevel::Medium,
+                ThinkingLevel::High,
+                ThinkingLevel::XHigh,
+                ThinkingLevel::Max,
+            ],
+            "codex" | "openai" => vec![
+                ThinkingLevel::None,
+                ThinkingLevel::Minimal,
+                ThinkingLevel::Low,
+                ThinkingLevel::Medium,
+                ThinkingLevel::High,
+                ThinkingLevel::XHigh,
+                ThinkingLevel::Max,
+            ],
+            "antigravity" | "google" => vec![
+                ThinkingLevel::Minimal,
+                ThinkingLevel::Low,
+                ThinkingLevel::Medium,
+                ThinkingLevel::High,
+            ],
+            _ => vec![
+                ThinkingLevel::Low,
+                ThinkingLevel::Medium,
+                ThinkingLevel::High,
+            ],
+        }
+    }
+
+    /// Step to the next supported thinking level for the pane's active model.
+    pub fn cycle_thinking_level_for_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
+        let supported = self.supported_thinking_levels_for_pane(pane_id);
+        if supported.is_empty() {
+            return;
+        }
+
+        let current = self
+            .pane_thinking_level(pane_id)
+            .unwrap_or(supported[0]);
+
+        let current_index = supported
+            .iter()
+            .position(|&lvl| lvl == current)
+            .unwrap_or(0);
+
+        let next_level = supported[(current_index + 1) % supported.len()];
+        self.set_pane_thinking_level(pane_id, Some(next_level));
+
+        self.update_session_settings_for_pane(
+            pane_id.to_string(),
+            console_core::UpdateSessionDto {
+                title: None,
+                cwd: None,
+                project_id: None,
+                model_id: None,
+                provider: None,
+                approval_mode: None,
+                thinking_level: Some(next_level),
+            },
+            cx,
+        );
+
+        cx.notify();
+    }
+
     /// Set a pane's approval mode, recording the outgoing mode in the MRU
     /// history first. No-ops on identical modes so history only reflects real
     /// changes. History is capped so it stays a navigation aid, not a log.
@@ -465,6 +602,7 @@ impl ConsoleDesktopApp {
                 model_id: None,
                 provider: None,
                 approval_mode: Some(next.value().to_string()),
+                thinking_level: None,
             },
             cx,
         );

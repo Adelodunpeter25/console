@@ -1,6 +1,6 @@
 import type { AgentMessage } from "./agent";
 import type { SessionHeader } from "./session";
-import type { OAuthProviderId, ProviderId } from "./model";
+import type { OAuthProviderId, ProviderId, ThinkingLevel } from "./model";
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -15,6 +15,7 @@ export interface CreateSessionDto {
   provider?: ProviderId;
   title?: string;
   approvalMode?: "always-ask" | "accept-edits" | "plan-mode" | "full-access";
+  thinkingLevel?: ThinkingLevel;
 }
 
 export interface UpdateSessionDto {
@@ -24,6 +25,7 @@ export interface UpdateSessionDto {
   modelId?: string;
   provider?: ProviderId;
   approvalMode?: "always-ask" | "accept-edits" | "plan-mode" | "full-access";
+  thinkingLevel?: ThinkingLevel;
 }
 
 export interface RunPromptDto {
@@ -31,6 +33,7 @@ export interface RunPromptDto {
   modelId?: string;
   provider?: ProviderId;
   approvalMode?: "always-ask" | "accept-edits" | "plan-mode" | "full-access";
+  thinkingLevel?: ThinkingLevel;
   /** Image attachments to include with the prompt (base64-encoded). */
   attachments?: ImageAttachment[];
 }

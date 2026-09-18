@@ -7,7 +7,7 @@
 use console_core::{
     AgentMessage, ApprovalMode, AskQuestionRequest, ConsoleClient, GitBranchInfo, ImageAttachment,
     Model, ModelFavorite, PermissionRequest, ProjectInfo, ProviderCatalogEntry, QueuedPrompt,
-    SelectedModel, SessionHeader, TodoItem, WorkspaceNode,
+    SelectedModel, SessionHeader, ThinkingLevel, TodoItem, WorkspaceNode,
 };
 use console_ui::markdown::render::TranscriptSelection;
 use console_ui::terminal::TerminalView;
@@ -119,6 +119,7 @@ pub struct ConsoleDesktopApp {
     pub active_picker_tab: PickerTab,
     pub favorites: Rc<std::collections::HashSet<String>>,
     pub approval_mode: ApprovalMode,
+    pub thinking_level: Option<ThinkingLevel>,
     /// Global fallback for the per-pane approval-mode MRU history, used when
     /// a pane has no state entry yet (same pattern as `approval_mode` above).
     pub(crate) approval_mode_history: Vec<ApprovalMode>,
@@ -835,6 +836,7 @@ impl ConsoleDesktopApp {
             favorites: Rc::new(std::collections::HashSet::new()),
             approval_mode: ApprovalMode::AlwaysAsk,
             approval_mode_history: Vec::new(),
+            thinking_level: None,
             model_menu,
             approval_menu,
             usage_menu,
@@ -1025,6 +1027,7 @@ impl ConsoleDesktopApp {
                 active_picker_tab: app.active_picker_tab.clone(),
                 approval_mode: app.approval_mode,
                 approval_mode_history: Vec::new(),
+                thinking_level: app.thinking_level,
                 model_menu: app.model_menu.clone(),
                 approval_menu: app.approval_menu.clone(),
                 usage_menu: app.usage_menu.clone(),
