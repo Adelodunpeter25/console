@@ -2,45 +2,25 @@
   "name": "console-monorepo",
   "version": "1.0.0",
   "private": true,
-  "description": "A coding agent engine monorepo with CLI, Server, Mobile, Desktop and shared API package",
+  "description": "A coding agent engine monorepo with CLI, Server, Desktop and shared API package",
   "workspaces": [
     "packages/*",
     "apps/server",
-    "apps/mobile",
     "apps/cli"
   ],
   "scripts": {
     "dev:server": "bun --watch apps/server/index.ts",
     "start:server": "bun apps/server/index.ts",
-    "dev:mobile": "bun run --cwd apps/mobile android",
-    "icons:generate": "bun run --cwd apps/mobile icons:generate",
-    "theme:generate": "bun run --cwd apps/mobile theme:generate",
     "dev:desktop": "cargo run --manifest-path apps/desktop/Cargo.toml",
     "build:desktop": "cargo build --release --manifest-path apps/desktop/Cargo.toml",
     "build:desktop:mac": "cargo build --release --manifest-path apps/desktop/Cargo.toml",
     "cli": "bun apps/cli/index.ts",
     "check": "vp check",
-    "typecheck": "bunx tsc --noEmit",
-    "eas-build-pre-install": "curl -fsSL https://bun.sh/install | bash -s \"canary\" && (cp -f ~/.bun/bin/bun $(which bun) 2>/dev/null || cp -f ~/.bun/bin/bun /usr/local/bin/bun 2>/dev/null || true)"
-  },
-  "dependencies": {
-    "metro-runtime": "^0.87.0",
-    "react-native-safe-area-context": "~5.7.0",
-    "react-native-worklets": "~0.10.0"
+    "typecheck": "bunx tsc --noEmit"
   },
   "devDependencies": {
     "@types/bun": "^1.4.0",
     "@types/node": "^26.1.1",
-    "@types/react": "19.2.0",
-    "@types/react-dom": "19.2.0",
-    "expo": "~57.0.0",
-    "expo-router": "~6.0.23",
     "typescript": "~5.9.2"
-  },
-  "overrides": {
-    "@types/react": "19.2.0",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "react-native-safe-area-context": "~5.7.0"
   }
 }

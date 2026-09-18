@@ -1,8 +1,0 @@
-{
-  "name": "native-stream",
-  "platforms": ["android", "ios"],
-  "android": {
-    "package": "expo.modules.nativestream",
-    "modules": ["expo.modules.nativestream.NativeStreamModule"]
-  }
-}

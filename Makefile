@@ -1,4 +1,4 @@
-.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop package-desktop build-desktop-mac typecheck check generate-icons generate-theme help
+.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop package-desktop build-android typecheck check help
 
 # Default target
 .DEFAULT_GOAL := help
@@ -15,9 +15,10 @@ dev-server:
 dev-console:
 	CONSOLE_ENV=$(if $(PORT),,dev) bun apps/cli/index.ts start -p $(if $(PORT),$(PORT),3000)
 
-## dev-mobile: Start the Expo React Native app dev server
+## dev-mobile: Build and run the native Android app in dev mode
+##   Requires Android SDK and emulator running or device connected via adb
 dev-mobile:
-	bun run --cwd apps/mobile android
+	cd apps/android && ./gradlew installDebug
 
 ## dev-desktop: Build and launch the GPUI desktop app in dev mode (Console Dev.app)
 dev-desktop:
@@ -40,23 +41,15 @@ desktop-check:
 build-server:
 	bun scripts/patch-fff-binary.mjs && bun build --compile --minify --sourcemap apps/cli/console.ts --outfile console
 
-## build-preview
-build-preview:
-	cd apps/mobile && eas build --platform android --profile preview 
+## build-android: Build the native Android app for release
+build-android:
+	cd apps/android && ./gradlew assembleRelease
 
 ## typecheck: Run TypeScript check across all monorepo workspaces
 typecheck:
 	bunx tsc --noEmit
 
-## generate-icons: Regenerate mobile SVG icon registries from console-rs assets
-generate-icons:
-	bun run --cwd apps/mobile icons:generate
-
-## generate-theme: Regenerate mobile JS theme from global.css tokens
-generate-theme:
-	bun run --cwd apps/mobile theme:generate
-
-## check: Run vp check for code formatting and linting
+## check: Run code formatting and linting
 check:
 	bun run check
 
@@ -65,14 +58,12 @@ help:
 	@echo "Available commands:"
 	@echo "  make dev-server        - Start the backend agent server"
 	@echo "  make dev-console       - Start the console agent as a background daemon (PORT=nnnn to set port)"
-	@echo "  make dev-mobile        - Start the Expo mobile app dev server"
+	@echo "  make dev-mobile        - Build and run the native Android app in dev mode"
 	@echo "  make dev-desktop       - Start the GPUI desktop app in dev mode"
 	@echo "  make package-desktop   - Package the GPUI desktop app for production (.app bundle)"
 	@echo "  make build-desktop     - Build the GPUI desktop app for production"
 	@echo "  make desktop-check     - Fast typecheck of the GPUI desktop app"
 	@echo "  make build-server      - Compile the multi-call console binary (CLI + server)"
-	@echo "  make build-preview - Build the Android apk with eas"
+	@echo "  make build-android     - Build the native Android app for release"
 	@echo "  make typecheck         - Run TypeScript typechecking"
-	@echo "  make generate-icons    - Regenerate mobile SVG icon registries from console-rs"
-	@echo "  make generate-theme    - Regenerate mobile JS theme from global.css tokens"
-	@echo "  make check             - Run Vite+ code format and lint checks"
+	@echo "  make check             - Run code format and lint checks"
