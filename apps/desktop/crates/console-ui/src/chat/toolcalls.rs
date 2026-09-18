@@ -191,6 +191,7 @@ impl ToolCalls {
             "subagent" => "Subagent".into(),
             "ask" => "Ask Question".into(),
             "todo" => "Todo".into(),
+            "memory" => "Memory".into(),
             name => name.to_owned(),
         }
     }
@@ -210,6 +211,27 @@ impl ToolCalls {
                 return Some(truncate(&format!("{action} {job_id}"), 72));
             }
             return Some(truncate(action, 72));
+        }
+        if call.name == "memory" {
+            let op = object.get("op").and_then(|v| v.as_str()).unwrap_or("memory");
+            if let Some(query) = object.get("query").and_then(|v| v.as_str()) {
+                return Some(truncate(&format!("{op} \"{query}\""), 72));
+            }
+            if let Some(content) = object.get("content").and_then(|v| v.as_str()) {
+                return Some(truncate(&format!("{op} \"{}\"", single_line(content)), 72));
+            }
+            if let Some(tags) = object.get("tags").and_then(|v| v.as_array()) {
+                let tags_str = tags
+                    .iter()
+                    .filter_map(|t| t.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                return Some(truncate(&format!("{op} [{tags_str}]"), 72));
+            }
+            if let Some(id) = object.get("id").and_then(|v| v.as_str()) {
+                return Some(truncate(&format!("{op} {id}"), 72));
+            }
+            return Some(truncate(op, 72));
         }
         for key in ["command", "pattern", "query", "url", "directory"] {
             if let Some(value) = object.get(key).and_then(|value| value.as_str()) {

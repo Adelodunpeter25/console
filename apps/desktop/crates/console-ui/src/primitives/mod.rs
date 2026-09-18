@@ -120,6 +120,7 @@ pub fn activity_icon(tool_name: &str) -> &'static str {
         "search_files" | "grep" | "glob" | "find" | "findFile" | "find_file" => IconName::Search,
         "web_search" => IconName::Globe,
         "plan" => IconName::List,
+        "memory" => IconName::MemoryStick,
         _ => IconName::Wrench,
     };
     icon.path()
