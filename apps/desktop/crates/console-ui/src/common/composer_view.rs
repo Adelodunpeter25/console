@@ -529,8 +529,8 @@ impl RenderOnce for ComposerView {
                                             )),
                                     )
                                     .child(model_control)
-                                    .when_some(thinking_control, |el, thinking| el.child(thinking))
                                     .child(approval_control)
+                                    .when_some(thinking_control, |el, thinking| el.child(thinking))
                                     .child(div().flex_1())
                                     .child(match run_state {
                                         ComposerRunState::Preparing => div()
