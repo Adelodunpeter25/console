@@ -124,6 +124,7 @@ pub struct ConsoleDesktopApp {
     pub(crate) approval_mode_history: Vec<ApprovalMode>,
     pub model_menu: ContextMenuHandle,
     pub approval_menu: ContextMenuHandle,
+    pub usage_menu: ContextMenuHandle,
     /// Shared with the sidebar and footer; cloned per frame as a refcount
     /// bump.
     pub projects: Rc<Vec<ProjectInfo>>,
@@ -646,6 +647,19 @@ impl ConsoleDesktopApp {
                 }
             }
         });
+        let usage_menu = ContextMenuHandle::new(cx).on_toggle({
+            let entity = entity.clone();
+            move |open, _window, cx| {
+                if open {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            let session_id = this.active_session_for_pane("pane-main").unwrap_or_default();
+                            this.maybe_fetch_usage(&session_id, cx);
+                        });
+                    }
+                }
+            }
+        });
 
         let drafts = store_doc.drafts.map(|s| s.drafts).unwrap_or_default();
         // All persisted drafts (except new_chat) are already confirmed for sidebar display.
@@ -823,6 +837,7 @@ impl ConsoleDesktopApp {
             approval_mode_history: Vec::new(),
             model_menu,
             approval_menu,
+            usage_menu,
             projects: Rc::new(Vec::new()),
             selected_project_id: initial_selected_project_id,
             branches: Rc::new(Vec::new()),
@@ -1012,6 +1027,7 @@ impl ConsoleDesktopApp {
                 approval_mode_history: Vec::new(),
                 model_menu: app.model_menu.clone(),
                 approval_menu: app.approval_menu.clone(),
+                usage_menu: app.usage_menu.clone(),
                 selected_project_id: app.selected_project_id.clone(),
                 branches: app.branches.clone(),
                 branch_loaded: app.branch_loaded,

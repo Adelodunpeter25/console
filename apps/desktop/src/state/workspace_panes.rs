@@ -81,6 +81,21 @@ impl ConsoleDesktopApp {
         let approval_menu = ContextMenuHandle::new(cx);
         let project_menu = ContextMenuHandle::new(cx);
         let branch_menu = ContextMenuHandle::new(cx);
+        let usage_pane_id = pane_id.to_string();
+        let usage_menu = ContextMenuHandle::new(cx).on_toggle({
+            let entity = entity.clone();
+            move |open, _window, cx| {
+                if open {
+                    if let Some(app) = entity.upgrade() {
+                        let pane_id = usage_pane_id.clone();
+                        app.update(cx, |this, cx| {
+                            let session_id = this.active_session_for_pane(&pane_id).unwrap_or_default();
+                            this.maybe_fetch_usage(&session_id, cx);
+                        });
+                    }
+                }
+            }
+        });
         transcript_view.update(cx, |transcript, _| {
             super::transcript_wiring::wire_preview_image(transcript, entity.clone());
             super::transcript_wiring::wire_open_file_for_pane(
@@ -179,6 +194,7 @@ impl ConsoleDesktopApp {
                 approval_mode_history: Vec::new(),
                 model_menu,
                 approval_menu,
+                usage_menu,
                 selected_project_id: self.selected_project_id.clone(),
                 branches: self.branches.clone(),
                 branch_loaded: self.branch_loaded,
@@ -361,6 +377,13 @@ impl ConsoleDesktopApp {
             .get(pane_id)
             .map(|state| state.branch_menu.clone())
             .unwrap_or_else(|| self.branch_menu.clone())
+    }
+
+    pub(crate) fn pane_usage_menu(&self, pane_id: &str) -> ContextMenuHandle {
+        self.workspace_pane_states
+            .get(pane_id)
+            .map(|state| state.usage_menu.clone())
+            .unwrap_or_else(|| self.usage_menu.clone())
     }
 
     pub(crate) fn set_pane_model(&mut self, pane_id: &str, model: Option<SelectedModel>) {

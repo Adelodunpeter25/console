@@ -10,6 +10,7 @@ fn test_workspace_node_serialization_roundtrip() {
         WorkspaceTabConfig::Chat {
             session_id: "session-123".into(),
             title: "First Chat".into(),
+            provider: Some("claude".into()),
             project_id: Some("proj-abc".into()),
             last_active_at_ms: None,
         },
@@ -47,6 +48,7 @@ fn test_split_and_deduplication_across_panes() {
         WorkspaceTabConfig::Chat {
             session_id: "chat-alpha".into(),
             title: "Alpha".into(),
+            provider: None,
             project_id: None,
             last_active_at_ms: None,
         },
@@ -60,6 +62,7 @@ fn test_split_and_deduplication_across_panes() {
         WorkspaceTabConfig::Chat {
             session_id: "chat-beta".into(),
             title: "Beta".into(),
+            provider: None,
             project_id: None,
             last_active_at_ms: None,
         },
@@ -98,6 +101,7 @@ fn test_set_tab_project_updates_stored_folder() {
         WorkspaceTabConfig::Chat {
             session_id: "chat-b".into(),
             title: "B".into(),
+            provider: None,
             project_id: Some("ndi".into()),
             last_active_at_ms: None,
         },
@@ -120,6 +124,7 @@ fn test_take_tab_leaves_old_workspace() {
             WorkspaceTabConfig::Chat {
                 session_id: id.into(),
                 title: id.into(),
+                provider: None,
                 project_id: Some(proj.into()),
                 last_active_at_ms: None,
             },
@@ -150,6 +155,7 @@ fn test_retain_project_tabs_drops_foreign_folder() {
             WorkspaceTabConfig::Chat {
                 session_id: id.into(),
                 title: id.into(),
+                provider: None,
                 project_id: Some(proj.into()),
                 last_active_at_ms: None,
             }
@@ -196,6 +202,7 @@ fn test_open_file_paths_collects_only_file_tabs() {
         WorkspaceTabConfig::Chat {
             session_id: "s".into(),
             title: "Chat".into(),
+            provider: None,
             project_id: None,
             last_active_at_ms: None,
         },

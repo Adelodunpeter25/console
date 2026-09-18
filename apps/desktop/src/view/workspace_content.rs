@@ -494,6 +494,7 @@ impl ConsoleDesktopApp {
         let pane_approval_menu = self.pane_approval_menu(&pane_id);
         let pane_project_menu = self.pane_project_menu(&pane_id);
         let pane_branch_menu = self.pane_branch_menu(&pane_id);
+        let pane_usage_menu = self.pane_usage_menu(&pane_id);
         let pane_model_search = self.pane_model_search(&pane_id);
         // Snapshot the query this frame; the dropdown filters against it. Edits
         // notify the app (see the model_search subscription), so this read is
@@ -771,8 +772,10 @@ impl ConsoleDesktopApp {
                     pane_branch_pending,
                     pane_project_menu.clone(),
                     pane_branch_menu.clone(),
+                    pane_usage_menu.clone(),
                     current_provider.clone(),
                     usage_report,
+                    self.usage_loading,
                     {
                         let entity = entity.clone();
                         move |id: String, _w, cx| {
@@ -813,17 +816,6 @@ impl ConsoleDesktopApp {
                                 let pane_id = branch_pane_id.clone();
                                 app.update(cx, |this, cx| {
                                     this.checkout_branch_for_pane(pane_id, name, cx)
-                                });
-                            }
-                        }
-                    },
-                    {
-                        let entity = entity.clone();
-                        let usage_pane_id = pane_id.clone();
-                        move |_window, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.maybe_fetch_usage(&this.active_session_for_pane(&usage_pane_id).unwrap_or_default(), cx);
                                 });
                             }
                         }

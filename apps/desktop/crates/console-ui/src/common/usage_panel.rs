@@ -1,36 +1,15 @@
 //! The usage panel: a dropdown showing detailed quota limits for the active
 //! provider. Displays progress bars for each limit, reset times, and status colors.
 
-use console_core::{UsageLimit, UsageReport};
+use console_core::{UsageLimit, UsageReport, UsageUnit};
 use gpui::{
-    App, IntoElement, ParentElement, RenderOnce, Styled, Window, div, px,
+    App, Div, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div, px,
+    relative,
 };
 
 use crate::theme::Theme;
 
-/// Calculate the fractional usage of a limit (0.0 to 1.0).
-fn resolve_used_fraction(limit: &UsageLimit) -> Option<f64> {
-    let amount = &limit.amount;
-    if let Some(fraction) = amount.used_fraction {
-        return Some(fraction);
-    }
-    if let (Some(used), Some(limit_val)) = (amount.used, amount.limit) {
-        if limit_val > 0.0 {
-            return Some(used / limit_val);
-        }
-    }
-    if amount.unit == console_core::UsageUnit::Percent {
-        if let Some(used) = amount.used {
-            return Some(used / 100.0);
-        }
-    }
-    if let Some(remaining_frac) = amount.remaining_fraction {
-        return Some((1.0 - remaining_frac).max(0.0));
-    }
-    None
-}
-
-#[derive(IntoElement)]
+#[derive(Clone, IntoElement)]
 pub struct UsagePanel {
     provider: String,
     usage_report: Option<UsageReport>,
@@ -55,147 +34,204 @@ impl RenderOnce for UsagePanel {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
 
-        if self.is_loading {
-            return div()
-                .p(px(16.0))
-                .text_size(px(12.0))
-                .text_color(theme.text_tertiary)
-                .child("Loading usage data...")
-                .into_any_element();
-        }
-
-        let Some(report) = self.usage_report else {
-            return div()
-                .p(px(16.0))
-                .text_size(px(12.0))
-                .text_color(theme.text_tertiary)
-                .child("No usage data available")
-                .into_any_element();
-        };
-
-        div()
-            .p(px(12.0))
+        let mut panel = div()
             .w(px(320.0))
-            .bg(theme.surface)
-            .rounded(px(8.0))
+            .p(px(14.0))
+            .rounded(px(10.0))
+            .border_1()
+            .border_color(theme.border_strong)
+            .bg(theme.raised)
+            .shadow_lg()
             .flex()
             .flex_col()
             .gap(px(12.0))
-            .child(
-                // Header
+            .text_size(px(12.5));
+
+        // Header
+        panel = panel.child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(
+                    div()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(theme.text)
+                        .child(format!("{} Quota Limits", capitalize_provider(&self.provider))),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.0))
+                        .text_color(theme.text_tertiary)
+                        .child("Rate Limits"),
+                ),
+        );
+
+        if self.is_loading && self.usage_report.is_none() {
+            panel = panel.child(
                 div()
-                    .text_size(px(13.0))
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(theme.text)
-                    .child(format!("{} Usage Limits", capitalize_provider(&self.provider))),
-            )
-            .children(report.limits.iter().map(|limit| {
-                render_limit_row(&limit, theme)
-            }))
-            .into_any_element()
+                    .py(px(12.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_tertiary)
+                    .child("Loading usage data…"),
+            );
+            return panel.into_any_element();
+        }
+
+        let Some(report) = &self.usage_report else {
+            panel = panel.child(
+                div()
+                    .py(px(12.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_tertiary)
+                    .child("No quota limits reported for this provider."),
+            );
+            return panel.into_any_element();
+        };
+
+        if report.limits.is_empty() {
+            panel = panel.child(
+                div()
+                    .py(px(12.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_tertiary)
+                    .child("No active rate limit windows."),
+            );
+            return panel.into_any_element();
+        }
+
+        for limit in &report.limits {
+            panel = panel.child(render_limit_row(limit, &theme));
+        }
+
+        panel.into_any_element()
     }
 }
 
-fn render_limit_row(limit: &UsageLimit, theme: Theme) -> impl IntoElement {
-    let status_color = match limit.status {
-        Some(console_core::UsageStatus::Ok) => theme.text_secondary,
-        Some(console_core::UsageStatus::Warning) => theme.warning,
-        Some(console_core::UsageStatus::Exhausted) => theme.danger,
-        _ => theme.text_tertiary,
-    };
+fn render_limit_row(limit: &UsageLimit, theme: &Theme) -> impl IntoElement {
+    let percent = resolve_used_percent(limit);
 
-    // Calculate fill percentage
-    let fill_percent = resolve_used_fraction(limit)
-        .unwrap_or(0.0)
-        .clamp(0.0, 1.0);
-    let fill_percent = if fill_percent > 0.0 {
-        fill_percent.max(0.015)
+    let status_color = if percent >= 95.0 || matches!(limit.status, Some(console_core::UsageStatus::Exhausted)) {
+        theme.danger
+    } else if percent >= 80.0 || matches!(limit.status, Some(console_core::UsageStatus::Warning)) {
+        theme.warning
     } else {
-        0.0
+        theme.gauge
     };
 
     let reset_label = limit
         .window
         .as_ref()
         .and_then(|w| w.reset_label.as_ref())
-        .map(|l| l.clone());
+        .cloned();
+
+    let value_label = format_usage_value(limit, percent);
 
     div()
         .flex()
         .flex_col()
-        .gap(px(6.0))
+        .gap(px(7.0))
         .child(
-            // Label and value
             div()
                 .flex()
-                .justify_between()
                 .items_center()
+                .justify_between()
+                .gap(px(8.0))
                 .child(
                     div()
-                        .text_size(px(11.0))
+                        .flex_1()
+                        .min_w(px(0.0))
+                        .truncate()
                         .text_color(theme.text)
-                        .child(limit.label.clone()),
+                        .child(SharedString::from(limit.label.clone())),
                 )
+                .children(reset_label.map(|label| {
+                    div()
+                        .flex_none()
+                        .text_size(px(11.5))
+                        .text_color(theme.text_tertiary)
+                        .child(SharedString::from(label))
+                }))
                 .child(
                     div()
-                        .text_size(px(10.0))
+                        .flex_none()
+                        .text_size(px(12.0))
                         .text_color(theme.text_secondary)
-                        .child(format_usage_value(&limit)),
+                        .child(SharedString::from(value_label)),
                 ),
         )
+        .child(meter_bar(theme, percent, status_color))
+}
+
+fn meter_bar(theme: &Theme, percent: f64, fill_color: gpui::Hsla) -> Div {
+    let fraction = (percent / 100.0).clamp(0.0, 1.0) as f32;
+    let fraction = if fraction > 0.0 {
+        fraction.max(0.015)
+    } else {
+        0.0
+    };
+
+    div()
+        .h(px(3.0))
+        .w_full()
+        .flex_none()
+        .rounded_full()
+        .bg(theme.overlay_strong)
         .child(
-            // Progress bar
             div()
-                .h(px(3.0))
-                .w_full()
+                .h_full()
+                .w(relative(fraction))
                 .rounded_full()
-                .bg(theme.overlay_strong)
-                .child(
-                    div()
-                        .h_full()
-                        .w(gpui::relative(fill_percent as f32))
-                        .rounded_full()
-                        .bg(status_color),
-                ),
-        )
-        .child(
-            if let Some(label) = reset_label {
-                div()
-                    .h(px(12.0))
-                    .flex()
-                    .items_center()
-                    .child(
-                        div()
-                            .text_size(px(10.0))
-                            .text_color(theme.text_tertiary)
-                            .child(label),
-                    )
-                    .into_any_element()
-            } else {
-                div().h_0().into_any_element()
-            },
+                .bg(fill_color),
         )
 }
 
-fn format_usage_value(limit: &UsageLimit) -> String {
+fn resolve_used_percent(limit: &UsageLimit) -> f64 {
+    let amount = &limit.amount;
+    if let Some(fraction) = amount.used_fraction {
+        return (fraction * 100.0).clamp(0.0, 100.0);
+    }
+    if let (Some(used), Some(limit_val)) = (amount.used, amount.limit) {
+        if limit_val > 0.0 {
+            return (used * 100.0 / limit_val).clamp(0.0, 100.0);
+        }
+    }
+    if amount.unit == UsageUnit::Percent {
+        if let Some(used) = amount.used {
+            return used.clamp(0.0, 100.0);
+        }
+    }
+    if let Some(remaining_frac) = amount.remaining_fraction {
+        return ((1.0 - remaining_frac) * 100.0).clamp(0.0, 100.0);
+    }
+    0.0
+}
+
+fn format_usage_value(limit: &UsageLimit, percent: f64) -> String {
     let amount = &limit.amount;
     match (amount.used, amount.limit) {
-        (Some(used), Some(limit)) => {
-            format!("{}/{}", format_amount(used, &amount.unit), format_amount(limit, &amount.unit))
+        (Some(used), Some(limit_val)) if amount.unit != UsageUnit::Percent => {
+            format!("{}/{}", format_amount(used, &amount.unit), format_amount(limit_val, &amount.unit))
         }
-        (Some(used), None) => {
+        (Some(used), None) if amount.unit != UsageUnit::Percent => {
             format!("{} used", format_amount(used, &amount.unit))
         }
-        (None, Some(limit)) => {
-            format!("{} limit", format_amount(limit, &amount.unit))
-        }
-        _ => "—".to_string(),
+        _ => format!("{:.0}%", percent),
     }
 }
 
-fn format_amount(value: f64, unit: &console_core::UsageUnit) -> String {
+fn format_amount(value: f64, unit: &UsageUnit) -> String {
     match unit {
-        console_core::UsageUnit::Minutes => {
+        UsageUnit::Minutes => {
             let hours = value / 60.0;
             if hours >= 1.0 {
                 format!("{:.1}h", hours)
@@ -203,7 +239,7 @@ fn format_amount(value: f64, unit: &console_core::UsageUnit) -> String {
                 format!("{:.0}m", value)
             }
         }
-        console_core::UsageUnit::Tokens => {
+        UsageUnit::Tokens => {
             if value >= 1_000_000.0 {
                 format!("{:.1}M", value / 1_000_000.0)
             } else if value >= 1_000.0 {
@@ -212,20 +248,22 @@ fn format_amount(value: f64, unit: &console_core::UsageUnit) -> String {
                 format!("{:.0}", value)
             }
         }
-        console_core::UsageUnit::Percent => format!("{:.0}%", value),
-        console_core::UsageUnit::Requests => format!("{:.0}", value),
-        console_core::UsageUnit::Usd => format!("${:.2}", value),
+        UsageUnit::Percent => format!("{:.0}%", value),
+        UsageUnit::Requests => format!("{:.0}", value),
+        UsageUnit::Usd => format!("${:.2}", value),
         _ => format!("{:.0}", value),
     }
 }
 
 fn capitalize_provider(provider: &str) -> String {
-    match provider {
+    match provider.to_ascii_lowercase().as_str() {
         "claude" => "Claude".to_string(),
         "antigravity" => "Antigravity".to_string(),
         "codex" => "OpenAI Codex".to_string(),
         "openai" => "OpenAI".to_string(),
         "opencode" => "OpenCode".to_string(),
+        "deepseek" => "DeepSeek".to_string(),
+        "grok" => "Grok".to_string(),
         other => {
             let mut chars = other.chars();
             match chars.next() {

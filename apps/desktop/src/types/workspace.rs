@@ -29,6 +29,7 @@ pub(crate) struct WorkspacePaneState {
     pub(crate) approval_mode_history: Vec<ApprovalMode>,
     pub(crate) model_menu: ContextMenuHandle,
     pub(crate) approval_menu: ContextMenuHandle,
+    pub(crate) usage_menu: ContextMenuHandle,
     pub(crate) selected_project_id: Option<String>,
     pub(crate) branches: Rc<Vec<GitBranchInfo>>,
     pub(crate) branch_loaded: bool,

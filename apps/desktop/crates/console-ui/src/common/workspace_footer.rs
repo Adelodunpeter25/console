@@ -31,13 +31,14 @@ pub struct WorkspaceFooter {
     project_locked: bool,
     project_menu: ContextMenuHandle,
     branch_menu: ContextMenuHandle,
+    usage_menu: ContextMenuHandle,
     current_provider: String,
     usage_report: Option<UsageReport>,
+    usage_loading: bool,
     on_select_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_no_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_select_branch: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_usage_meter_click: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
 
 impl WorkspaceFooter {
@@ -51,13 +52,14 @@ impl WorkspaceFooter {
         branch_pending: bool,
         project_menu: ContextMenuHandle,
         branch_menu: ContextMenuHandle,
+        usage_menu: ContextMenuHandle,
         current_provider: String,
         usage_report: Option<UsageReport>,
+        usage_loading: bool,
         on_select_project: impl Fn(String, &mut Window, &mut App) + 'static,
         on_new_project: impl Fn(&mut Window, &mut App) + 'static,
         on_no_project: impl Fn(&mut Window, &mut App) + 'static,
         on_select_branch: impl Fn(String, &mut Window, &mut App) + 'static,
-        on_usage_meter_click: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
             projects,
@@ -69,13 +71,14 @@ impl WorkspaceFooter {
             project_locked: false,
             project_menu,
             branch_menu,
+            usage_menu,
             current_provider,
             usage_report,
+            usage_loading,
             on_select_project: Rc::new(on_select_project),
             on_new_project: Rc::new(on_new_project),
             on_no_project: Rc::new(on_no_project),
             on_select_branch: Rc::new(on_select_branch),
-            on_usage_meter_click: Rc::new(on_usage_meter_click),
         }
     }
 
@@ -231,13 +234,11 @@ impl RenderOnce for WorkspaceFooter {
             branch_trigger.into_any_element()
         };
 
-        let on_usage_meter_click = self.on_usage_meter_click.clone();
         let usage_meter = crate::common::UsageMeter::new(
-            self.current_provider.clone(),
-            self.usage_report.clone(),
-            move |window, cx| {
-                (on_usage_meter_click)(window, cx);
-            },
+            self.current_provider,
+            self.usage_report,
+            self.usage_menu,
+            self.usage_loading,
         );
 
         div()
