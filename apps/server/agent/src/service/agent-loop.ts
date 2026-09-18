@@ -22,6 +22,7 @@ import {
 import { EventStream } from "./event-stream.js";
 import { executeTool, toolCallKey } from "./tool-executor.js";
 import { streamOneTurn } from "./stream-turn.js";
+import { validateThinkingLevelForModel } from "./validate-thinking.js";
 import { extractErrorMessage, isContextOverflowError } from "@/agent/src/utils/error.js";
 import type {
   AgentMessage,
@@ -87,6 +88,9 @@ function runAgentLoop(
     cacheRetention,
     cacheIdentity,
   } = config;
+
+  // Validate thinking level support early
+  validateThinkingLevelForModel(model, thinkingLevel);
 
   const stream = new EventStream<AgentSessionEvent, AgentMessage[]>(
     (e) => e.type === "sessionEnd",
