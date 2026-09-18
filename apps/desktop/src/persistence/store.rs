@@ -39,6 +39,8 @@ pub struct PersistedDraft {
     pub mentions: Vec<PersistedDraftMention>,
     #[serde(default)]
     pub context_files: Vec<String>,
+    #[serde(default)]
+    pub attachments: Vec<console_core::ImageAttachment>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

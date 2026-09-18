@@ -121,11 +121,13 @@ impl ConsoleDesktopApp {
                     let text = input.content().to_string();
                     let mentions = input.mentions().to_vec();
                     let session_id = this.active_session_for_pane(&edit_pane_id);
+                    let attachments = this.attachments_for_pane(&edit_pane_id);
                     this.save_draft_for_session_with_context(
                         session_id.as_deref(),
                         &text,
                         &mentions,
                         &[],
+                        &attachments,
                         cx,
                     );
                 }
@@ -1200,7 +1202,8 @@ impl ConsoleDesktopApp {
             let text = input.content().to_string();
             let mentions = input.mentions().to_vec();
             let context_files = input.context_files().to_vec();
-            self.commit_draft_to_sidebar_with_context(session_id, &text, &mentions, &context_files, cx);
+            let attachments = self.attachments_for_pane(pane_id);
+            self.commit_draft_to_sidebar_with_context(session_id, &text, &mentions, &context_files, &attachments, cx);
         }
 
         self.save_transcript_scroll_position(cx);
@@ -1508,6 +1511,13 @@ impl ConsoleDesktopApp {
             }
             let draft = self.get_draft_with_mentions(Some(sid));
             let draft_ctx_files = self.get_draft_context_files(Some(sid));
+            // Load attachments from the draft for this session
+            let draft_attachments = self
+                .drafts
+                .get(sid)
+                .map(|draft| draft.attachments.clone())
+                .unwrap_or_default();
+            self.set_attachments_for_pane(pane_id, draft_attachments);
             self.composer_for_pane(pane_id).update(cx, |input, cx| {
                 input.set_prompt_history(Vec::new(), cx);
                 if let Some((draft_text, mentions)) = draft {

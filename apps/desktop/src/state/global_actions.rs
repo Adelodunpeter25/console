@@ -255,11 +255,13 @@ impl ConsoleDesktopApp {
                                     cx.notify();
                                 });
                                 if let Some((draft_text, mentions)) = new_chat_draft {
+                                    let new_chat_attachments = this.attachments_for_pane(&pane_id);
                                     this.save_draft_for_session_with_context(
                                         Some(&new_session.id),
                                         &draft_text,
                                         &mentions,
                                         &new_chat_ctx_files,
+                                        &new_chat_attachments,
                                         cx,
                                     );
                                     this.clear_draft_for_session(None, cx);

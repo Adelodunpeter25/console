@@ -721,11 +721,13 @@ impl ConsoleDesktopApp {
                         let text = input.content().to_string();
                         let mentions = input.mentions().to_vec();
                         let session_id = this.active_session_for_pane("pane-main");
+                        let attachments = this.attachments_for_pane("pane-main");
                         this.save_draft_for_session_with_context(
                             session_id.as_deref(),
                             &text,
                             &mentions,
                             &[],
+                            &attachments,
                             cx,
                         );
                     }

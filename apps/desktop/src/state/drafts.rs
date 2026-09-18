@@ -122,10 +122,11 @@ impl ConsoleDesktopApp {
         text: &str,
         mentions: &[ComposerMention],
         context_files: &[String],
+        attachments: &[console_core::ImageAttachment],
         cx: &mut Context<Self>,
     ) {
         let key = session_id.unwrap_or("new_chat").to_string();
-        if text.trim().is_empty() && context_files.is_empty() {
+        if text.trim().is_empty() && context_files.is_empty() && attachments.is_empty() {
             if self.drafts.remove(&key).is_some() {
                 self.schedule_drafts_save(cx);
             }
@@ -144,6 +145,7 @@ impl ConsoleDesktopApp {
                     existing.prompt != text
                         || existing.mentions != persisted_mentions
                         || existing.context_files != context_files
+                        || existing.attachments != attachments
                 }
                 None => true,
             };
@@ -155,6 +157,7 @@ impl ConsoleDesktopApp {
                         updated_at: chrono::Utc::now().timestamp(),
                         mentions: persisted_mentions,
                         context_files: context_files.to_vec(),
+                        attachments: attachments.to_vec(),
                     },
                 );
                 self.schedule_drafts_save(cx);
@@ -199,10 +202,11 @@ impl ConsoleDesktopApp {
         text: &str,
         mentions: &[ComposerMention],
         context_files: &[String],
+        attachments: &[console_core::ImageAttachment],
         cx: &mut Context<Self>,
     ) {
-        self.save_draft_for_session_with_context(Some(session_id), text, mentions, context_files, cx);
-        if text.trim().is_empty() {
+        self.save_draft_for_session_with_context(Some(session_id), text, mentions, context_files, attachments, cx);
+        if text.trim().is_empty() && attachments.is_empty() {
             self.sidebar_draft_ids.remove(session_id);
         } else {
             self.sidebar_draft_ids.insert(session_id.to_string());
