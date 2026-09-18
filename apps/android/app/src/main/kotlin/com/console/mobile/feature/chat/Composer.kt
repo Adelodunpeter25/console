@@ -205,8 +205,9 @@ private fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean) {
     val modeLabel = ApprovalMode.fromValue(view?.approvalMode ?: "").let {
         when (it) {
             ApprovalMode.AlwaysAsk -> "Always Ask"
-            ApprovalMode.AskEveryTool -> "Ask Every Tool"
-            ApprovalMode.BypassPermissions -> "Bypass"
+            ApprovalMode.AcceptEdits -> "Accept Edits"
+            ApprovalMode.PlanMode -> "Plan Mode"
+            ApprovalMode.FullAccess -> "Full Access"
         }
     }
 
@@ -237,7 +238,8 @@ private fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean) {
             projectSheet = false
             scope.launch {
                 val dto = UpdateSessionDto(cwd = proj.path)
-                AppContainer.sessionRepository.update(sessionId, dto)
+                AppContainer.projectRepository.updateSession(sessionId, dto)
+                AppContainer.sessionRepository.refreshHeader(sessionId)
             }
         })
     }
@@ -246,7 +248,8 @@ private fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean) {
             modelSheet = false
             scope.launch {
                 val dto = UpdateSessionDto(modelId = modelId, provider = provider)
-                AppContainer.sessionRepository.update(sessionId, dto)
+                AppContainer.projectRepository.updateSession(sessionId, dto)
+                AppContainer.sessionRepository.refreshHeader(sessionId)
             }
         })
     }
@@ -255,7 +258,8 @@ private fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean) {
             approvalSheet = false
             scope.launch {
                 val dto = UpdateSessionDto(approvalMode = mode)
-                AppContainer.sessionRepository.update(sessionId, dto)
+                AppContainer.projectRepository.updateSession(sessionId, dto)
+                AppContainer.sessionRepository.refreshHeader(sessionId)
             }
         })
     }
@@ -302,7 +306,7 @@ private fun ModelPickerSheet(selectedModel: String?, selectedProvider: String?, 
     val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()
     var search by remember { mutableStateOf("") }
     var activeProvider by remember(providerState.providers) {
-        mutableStateOf(selectedProvider ?: providerState.providers.firstOrNull()?.id)
+        mutableStateOf(selectedProvider ?: providerState.providers.firstOrNull()?.name)
     }
     LaunchedEffect(Unit) { AppContainer.providerRepository.loadProviders() }
     LaunchedEffect(activeProvider) { activeProvider?.let { AppContainer.providerRepository.loadModels(it) } }
@@ -313,9 +317,9 @@ private fun ModelPickerSheet(selectedModel: String?, selectedProvider: String?, 
             if (providerState.providers.isNotEmpty()) {
                 LazyRow(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                     items(providerState.providers) { p ->
-                        val sel = p.id == activeProvider
-                        Box(modifier = Modifier.padding(end = 8.dp).clip(RoundedCornerShape(8.dp)).background(if (sel) Color.White.copy(alpha = 0.12f) else ConsoleColors.CardAlt).clickable { activeProvider = p.id }.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                            Text(p.name.ifBlank { p.id }, color = if (sel) ConsoleColors.TextPrimary else ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        val sel = p.name == activeProvider
+                        Box(modifier = Modifier.padding(end = 8.dp).clip(RoundedCornerShape(8.dp)).background(if (sel) Color.White.copy(alpha = 0.12f) else ConsoleColors.CardAlt).clickable { activeProvider = p.name }.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                            Text(p.displayName.ifBlank { p.name }, color = if (sel) ConsoleColors.TextPrimary else ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
