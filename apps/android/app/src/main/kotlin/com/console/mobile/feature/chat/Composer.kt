@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -53,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -123,19 +125,34 @@ fun Composer(
             modifier = Modifier.fillMaxWidth().clip(if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
                 .background(ConsoleColors.Card)
                 .border(1.dp, ConsoleColors.Border, if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
-                .padding(start = 4.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.Bottom,
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { pickImages.launch("image/*") }, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Filled.Add, contentDescription = "Attach image", tint = ConsoleColors.TextSecondary, modifier = Modifier.size(21.dp))
+                Icon(Icons.Filled.Add, contentDescription = "Attach image", tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
             }
-            TextField(
+            BasicTextField(
                 value = value,
                 onValueChange = onChange,
-                placeholder = { Text("Ask anything…", color = ConsoleColors.TextMuted, fontSize = 14.sp) },
-                colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, focusedTextColor = ConsoleColors.TextPrimary, unfocusedTextColor = ConsoleColors.TextPrimary, cursorColor = ConsoleColors.TextPrimary),
-                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, lineHeight = 19.sp),
-                modifier = Modifier.weight(1f).heightIn(min = 40.dp, max = 120.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+                    .heightIn(max = 120.dp),
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    color = ConsoleColors.TextPrimary,
+                    fontSize = 14.sp,
+                    lineHeight = 19.sp,
+                ),
+                cursorBrush = SolidColor(ConsoleColors.TextPrimary),
+                maxLines = 6,
+                decorationBox = { innerTextField ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (value.isEmpty()) {
+                            Text("Ask anything…", color = ConsoleColors.TextMuted, fontSize = 14.sp)
+                        }
+                        innerTextField()
+                    }
+                },
             )
             if (running) {
                 IconButton(onClick = onStop, modifier = Modifier.size(32.dp).clip(CircleShape).background(Color.White)) {
