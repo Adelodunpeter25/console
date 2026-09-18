@@ -381,6 +381,26 @@ mod macos_host {
             let _ = self.webview.load_url(url);
         }
 
+        /// Committed URL of the underlying `WKWebView`, if any.
+        /// Nil-safe (unlike `wry::WebView::url`, which unwraps): a fresh
+        /// webview has no URL until its first navigation commits.
+        pub fn current_url(&self) -> Option<String> {
+            let absolute = unsafe { self.wk.URL() }?.absoluteString()?;
+            let bytes_ptr = absolute.UTF8String();
+            if bytes_ptr.is_null() {
+                return None;
+            }
+            // 4 represents UTF-8 string encoding.
+            let len = absolute.lengthOfBytesUsingEncoding(4);
+            if len == 0 {
+                return None;
+            }
+            let bytes =
+                unsafe { std::slice::from_raw_parts(bytes_ptr as *const u8, len) };
+            let url = std::str::from_utf8(bytes).ok()?;
+            (!url.is_empty()).then(|| url.to_owned())
+        }
+
         pub fn go_back(&self) {
             let _ = self.webview.go_back();
         }
@@ -534,6 +554,9 @@ impl WebviewHost {
     pub fn hard_reload(&self) {}
     pub fn stop(&self) {}
     pub fn load_url(&self, _url: &str) {}
+    pub fn current_url(&self) -> Option<String> {
+        None
+    }
     pub fn evaluate_script(&self, _script: &str) {}
     pub fn open_devtools(&self) {}
     pub fn close_devtools(&self) {}

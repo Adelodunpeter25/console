@@ -223,6 +223,12 @@ impl BrowserView {
                         if !this.occluded {
                             host.set_visible(true);
                         }
+                        // In-page navigations (link clicks, back/forward)
+                        // bypass `navigate_to_url`, so read back the
+                        // committed URL instead of echoing the stale one.
+                        if let Some(url) = host.current_url() {
+                            this.commit_navigated_url(url);
+                        }
                     }
                     this.refresh_navigation_state();
                     this.echo_page_url(cx);
@@ -314,6 +320,19 @@ impl BrowserView {
         if self.page_title != title {
             self.page_title = title;
             cx.notify();
+        }
+    }
+
+    /// Record the webview's committed URL after a native navigation.
+    /// Link clicks and back/forward bypass `navigate_to_url`, so the finish
+    /// handler reads the URL back from the host through here. Empty URLs
+    /// are ignored so a transient blank never clobbers the address bar.
+    fn commit_navigated_url(&mut self, url: String) {
+        if url.is_empty() {
+            return;
+        }
+        if self.current_url.as_deref() != Some(url.as_str()) {
+            self.current_url = Some(url);
         }
     }
 
