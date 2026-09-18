@@ -7,6 +7,12 @@ command = "PORT=3001 bun --watch apps/server/index.ts"
 shortcut = "cmd-shift-r"
 persistent = true
 
+[scripts.dev-mobile]
+label = "Dev Mobile (Native Android)"
+command = "cd apps/android && ./gradlew installDebug"
+shortcut = "cmd-shift-m"
+persistent = false
+
 [scripts.dev-desktop]
 label = "Dev Desktop"
 command = "bash apps/desktop/scripts/dev.sh"
@@ -17,4 +23,9 @@ shortcut = "cmd-shift-d"
 label = "Package Desktop"
 command = "bash apps/desktop/scripts/package.sh"
 shortcut = "cmd-shift-p"
+persistent = false
+
+[scripts.build-android]
+label = "Build Android (Release)"
+command = "cd apps/android && ./gradlew assembleRelease"
 persistent = false
