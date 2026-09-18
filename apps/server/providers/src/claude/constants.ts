@@ -17,7 +17,7 @@ export const CLAUDE_SCOPE =
 export const CLAUDE_REFRESH_SKEW_MS = 5 * 60_000;
 
 /** Claude Code CLI version represented on the Anthropic wire. */
-export const CLAUDE_CODE_VERSION = "2.1.257";
+export const CLAUDE_CODE_VERSION = "2.1.276";
 /** `@anthropic-ai/sdk` version bundled by the current Claude Code release. */
 export const CLAUDE_SDK_VERSION = "0.112.1";
 /** User-Agent emitted by Claude Code's CLI inference entrypoint. */
