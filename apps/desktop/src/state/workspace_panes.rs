@@ -641,7 +641,7 @@ impl ConsoleDesktopApp {
             self.terminals.len(),
         );
         let view = cx.new(|cx| TerminalView::with_cwd(cwd, self.client.clone(), window, cx));
-        self.terminals.insert(terminal_id.clone(), view);
+        self.terminals.insert(terminal_id.clone(), view.clone());
         let tab = WorkspaceTabConfig::Terminal {
             terminal_id: terminal_id.clone(),
             title: "Terminal".into(),
@@ -652,6 +652,8 @@ impl ConsoleDesktopApp {
         self.active_pane_id = Some(pane_id.to_string());
         self.sync_workspace_webviews(cx);
         self.persist_workspaces();
+        // Focus the terminal so keyboard input works immediately
+        window.focus(&view.read(cx).focus_handle(cx), cx);
         cx.notify();
     }
 
@@ -796,7 +798,7 @@ impl ConsoleDesktopApp {
             .as_deref()
             .map(default_browser_title)
             .unwrap_or_else(|| "New Tab".into());
-        let _ = self.get_or_create_browser_view(&browser_id, url.clone(), window, cx);
+        let browser_view = self.get_or_create_browser_view(&browser_id, url.clone(), window, cx);
         let tab = WorkspaceTabConfig::Browser {
             browser_id: browser_id.clone(),
             url: url.unwrap_or_default(),
@@ -808,6 +810,8 @@ impl ConsoleDesktopApp {
         self.active_pane_id = Some(pane_id);
         self.sync_workspace_webviews(cx);
         self.persist_workspaces();
+        // Focus the browser so keyboard input works immediately (address bar via ⌘L, etc.)
+        window.focus(&browser_view.read(cx).focus_handle(cx), cx);
         cx.notify();
     }
 
@@ -1531,6 +1535,42 @@ impl ConsoleDesktopApp {
                 });
             }
             self.load_session_messages_for_pane(pane_id.to_string(), sid.to_string(), cx);
+        } else if let Some(terminal_id) = tab_id.strip_prefix("term:") {
+            // Focus terminal content so keyboard input works immediately (deferred)
+            self.selected_session_id = None;
+            let terminal_id = terminal_id.to_string();
+            let entity = cx.entity().downgrade();
+            cx.defer(move |cx| {
+                if let Some(window) = cx.active_window() {
+                    let _ = window.update(cx, |_, window, cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                if let Some(terminal) = this.terminals.get(&terminal_id) {
+                                    window.focus(&terminal.read(cx).focus_handle(cx), cx);
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        } else if let Some(browser_id) = tab_id.strip_prefix("browser:") {
+            // Focus browser content so keyboard input (⌘L for address bar, etc.) works immediately (deferred)
+            self.selected_session_id = None;
+            let browser_id = browser_id.to_string();
+            let entity = cx.entity().downgrade();
+            cx.defer(move |cx| {
+                if let Some(window) = cx.active_window() {
+                    let _ = window.update(cx, |_, window, cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                if let Some(browser) = this.browser_views.get(&browser_id) {
+                                    window.focus(&browser.read(cx).focus_handle(cx), cx);
+                                }
+                            });
+                        }
+                    });
+                }
+            });
         } else {
             self.selected_session_id = None;
         }
