@@ -74,28 +74,28 @@ impl RenderOnce for ThinkingStepper {
         let icon_color = if is_off {
             theme.text_ghost
         } else {
-            theme.accent
+            theme.text_secondary
         };
 
         let text_color = if is_off {
-            theme.text_tertiary
+            theme.text_ghost
         } else {
-            theme.text
+            theme.text_secondary
         };
 
         let on_cycle = self.on_cycle.clone();
 
         div()
             .id("thinking-stepper-chip")
-            .h(px(24.0))
-            .px(px(6.0))
+            .h(px(22.0))
+            .px(px(5.0))
             .rounded(px(5.0))
             .border_1()
             .border_color(theme.border_strong)
             .bg(theme.composer)
             .flex()
             .items_center()
-            .gap(px(4.0))
+            .gap(px(3.5))
             .cursor_default()
             .hover(|element| element.bg(theme.overlay).border_color(theme.border))
             .active(|element| element.opacity(0.85))
@@ -103,10 +103,10 @@ impl RenderOnce for ThinkingStepper {
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                 (on_cycle)(window, cx);
             })
-            .child(app_icon(IconName::Sparkle, 11.0, icon_color))
+            .child(app_icon(IconName::Brain, 11.0, icon_color))
             .child(
                 div()
-                    .text_size(px(11.0))
+                    .text_size(px(10.5))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(text_color)
                     .child(SharedString::from(step_label)),
