@@ -164,33 +164,45 @@ impl RenderOnce for UserMessageBubble {
                     .flex_col()
                     .items_end()
                     .gap(px(8.0))
-                    .children(self.attachments.iter().cloned().enumerate().filter_map(
-                        |(index, attachment)| {
-                            // Decode to bytes so gpui actually renders it (a
-                            // `data:` URI string would be fetched as a URL).
-                            let image = attachment_image(&attachment)?;
-                            let on_preview = preview_handler.clone();
-                            Some(
-                                div()
-                                    .id(ElementId::Name(format!("user-attachment-{index}").into()))
-                                    .size(px(80.0))
-                                    .rounded(px(9.0))
-                                    .overflow_hidden()
-                                    .border_1()
-                                    .border_color(theme.user_bubble_border)
-                                    .bg(gpui::rgb(0x000000))
-                                    .cursor_default()
-                                    .when_some(on_preview, |tile, on_preview| {
-                                        let image = image.clone();
-                                        tile.on_click(move |_, window, cx| {
-                                            (on_preview)(image.clone(), window, cx);
-                                            cx.stop_propagation();
-                                        })
-                                    })
-                                    .child(img(image).size_full()),
-                            )
-                        },
-                    ))
+                    .when(!self.attachments.is_empty(), |element| {
+                        element.child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .flex_wrap()
+                                .justify_end()
+                                .gap(px(8.0))
+                                .children(self.attachments.iter().cloned().enumerate().filter_map(
+                                    |(index, attachment)| {
+                                        // Decode to bytes so gpui actually renders it (a
+                                        // `data:` URI string would be fetched as a URL).
+                                        let image = attachment_image(&attachment)?;
+                                        let on_preview = preview_handler.clone();
+                                        Some(
+                                            div()
+                                                .id(ElementId::Name(
+                                                    format!("user-attachment-{index}").into(),
+                                                ))
+                                                .size(px(80.0))
+                                                .rounded(px(9.0))
+                                                .overflow_hidden()
+                                                .border_1()
+                                                .border_color(theme.user_bubble_border)
+                                                .bg(gpui::rgb(0x000000))
+                                                .cursor_default()
+                                                .when_some(on_preview, |tile, on_preview| {
+                                                    let image = image.clone();
+                                                    tile.on_click(move |_, window, cx| {
+                                                        (on_preview)(image.clone(), window, cx);
+                                                        cx.stop_propagation();
+                                                    })
+                                                })
+                                                .child(img(image).size_full()),
+                                        )
+                                    },
+                                )),
+                        )
+                    })
                     .when(!self.content.is_empty(), |element| {
                         element.child(
                             div()
