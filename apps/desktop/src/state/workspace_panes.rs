@@ -1519,7 +1519,7 @@ impl ConsoleDesktopApp {
                 cx.notify();
             });
             // Switching tabs: clear synchronously so the old session's
-            // messages and attachments never linger while the new session loads. (The
+            // messages never linger while the new session loads. (The
             // close-tab path intentionally keeps the old transcript
             // visible until its load succeeds; here the tab highlight
             // already moved, so stale content reads as lag.)
@@ -1527,7 +1527,6 @@ impl ConsoleDesktopApp {
                 self.transcript_for_pane(pane_id).update(cx, |t, cx| {
                     t.set_messages(Vec::new(), cx);
                 });
-                self.set_attachments_for_pane(pane_id, Vec::new());
             }
             self.load_session_messages_for_pane(pane_id.to_string(), sid.to_string(), cx);
         } else if let Some(terminal_id) = tab_id.strip_prefix("term:") {
