@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import type { AgentMessage, AgentTool, CacheRetention, CacheStatus, TurnUsage } from "@console/types";
 import type { StreamFn } from "@/agent/src/service/agent-loop.js";
+import type { ThinkingLevel } from "@/agent/src/types/index.js";
 import { parseSse } from "@/providers/src/shared/sse-parser.js";
 import { CODEX_BASE_URL, CODEX_CLIENT_VERSION, codexResponsesUrl } from "./constants.js";
 import { loadCodexCredential, refreshCodexIfNeeded } from "./oauth.js";
@@ -165,6 +166,16 @@ export function normalizeCodexUsage(
  * the implicit in-memory cache, and `"long"` opts into the 24h retention
  * tier that the Codex Responses API exposes.
  */
+/**
+ * Map Console thinking level to OpenAI Codex reasoning.effort value.
+ * Codex supports all 7 levels (none through max).
+ */
+function mapThinkingLevelToCodex(level?: ThinkingLevel): string | undefined {
+  if (!level) return undefined;
+  // Direct 1:1 mapping for all levels
+  return level as string;
+}
+
 function buildRequestBody(
   model: { id: string },
   systemPrompt: string,
@@ -172,6 +183,7 @@ function buildRequestBody(
   tools: AgentTool[],
   retention: CacheRetention | undefined,
   promptCacheKey: string,
+  thinkingLevel?: ThinkingLevel,
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
     model: model.id,
@@ -187,6 +199,14 @@ function buildRequestBody(
       body.prompt_cache_retention = "24h";
     }
   }
+  // Add thinking level if specified
+  const reasoningEffort = mapThinkingLevelToCodex(thinkingLevel);
+  if (reasoningEffort) {
+    body.reasoning = {
+      type: "enabled",
+      effort: reasoningEffort,
+    };
+  }
   return body;
 }
 
@@ -198,6 +218,7 @@ export const codexStreamFn: StreamFn = async function* ({
   signal,
   cacheRetention,
   cacheIdentity,
+  thinkingLevel,
 }) {
   const credential = await refreshCodexIfNeeded(await loadCodexCredential());
   // Stable per-conversation session id: reusing the cache identity keeps the
@@ -206,7 +227,7 @@ export const codexStreamFn: StreamFn = async function* ({
   // provider/model changes; we just propagate it here.
   const sessionId = cacheIdentity?.conversationId ?? randomUUID();
   const promptCacheKey = sessionId;
-  const body = buildRequestBody(model, systemPrompt, messages, tools, cacheRetention, promptCacheKey);
+  const body = buildRequestBody(model, systemPrompt, messages, tools, cacheRetention, promptCacheKey, thinkingLevel);
   const response = await fetch(codexResponsesUrl((model as { baseUrl?: string }).baseUrl ?? CODEX_BASE_URL), {
     method: "POST",
     headers: {
