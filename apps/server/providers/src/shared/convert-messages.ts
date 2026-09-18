@@ -7,6 +7,7 @@
  *   ToolResultMessage    → role: "user",  parts: [GeminiFunctionResponsePart]
  */
 import type { AgentMessage } from "@console/types";
+import { transformMessages } from "./transform-messages.js";
 import type {
   GeminiContent,
   GeminiFunctionCallPart,
@@ -73,9 +74,13 @@ export function convertMessages(
   messages: AgentMessage[],
   options: ConvertMessagesOptions = {},
 ): GeminiContent[] {
+  const processedMessages = options.requireUserTerminator
+    ? transformMessages(messages, { demoteThinkingToText: true, continuationPrompt: "(continue)" })
+    : messages;
+
   // 1. Build toolCallId -> toolName lookup map from assistant tool calls in history
   const toolNameByCallId = new Map<string, string>();
-  for (const msg of messages) {
+  for (const msg of processedMessages) {
     if (msg.role === "assistant") {
       for (const part of msg.content) {
         if (part.type === "toolCall") {
@@ -88,7 +93,7 @@ export function convertMessages(
 
   const rawTurns: GeminiContent[] = [];
 
-  for (const msg of messages) {
+  for (const msg of processedMessages) {
     if (msg.role === "user") {
       const text = msg.content ?? "";
       const attachments = msg.attachments ?? [];

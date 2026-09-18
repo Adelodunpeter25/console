@@ -9,6 +9,7 @@
  */
 import { zodToJsonSchema } from "zod-to-json-schema";
 import type { AgentMessage, AgentTool, CacheRetention } from "@console/types";
+import { transformMessages } from "@/providers/src/shared/transform-messages.js";
 
 export interface ClaudeMessage {
   role: "user" | "assistant";
@@ -62,9 +63,10 @@ function normalizeImageMime(mimeType: string): "image/jpeg" | "image/png" | "ima
 }
 
 export function convertClaudeMessages(messages: AgentMessage[], cacheRetention?: CacheRetention): ClaudeMessage[] {
+  const normalizedMessages = transformMessages(messages, { demoteThinkingToText: true });
   const turns: ClaudeMessage[] = [];
 
-  for (const msg of messages) {
+  for (const msg of normalizedMessages) {
     if (msg.role === "user") {
       const text = msg.content ?? "";
       const attachments = msg.attachments ?? [];
