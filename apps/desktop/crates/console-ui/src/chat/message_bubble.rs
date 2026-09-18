@@ -117,46 +117,8 @@ impl RenderOnce for UserMessageBubble {
             .items_end()
             .gap(px(3.0))
             .group(group_name.clone())
-            // Message: file chips (if any), then image(s), then text bubble.
-            .when(!context_files.is_empty(), |element| {
-                element.child(
-                    div()
-                        .max_w(px(540.0))
-                        .flex()
-                        .flex_wrap()
-                        .justify_end()
-                        .gap(px(6.0))
-                        .children(context_files.into_iter().enumerate().map(|(index, path)| {
-                            let filename = Path::new(&path)
-                                .file_name()
-                                .and_then(|n| n.to_str())
-                                .unwrap_or(&path)
-                                .to_string();
-                            div()
-                                .id(ElementId::Name(
-                                    format!("user-ctx-file-chip-{index}").into(),
-                                ))
-                                .flex()
-                                .items_center()
-                                .gap(px(4.0))
-                                .px(px(8.0))
-                                .h(px(24.0))
-                                .rounded(px(6.0))
-                                .border_1()
-                                .border_color(theme.user_bubble_border)
-                                .bg(theme.user_bubble.opacity(0.5))
-                                .child(crate::primitives::file_type_icon(&path, 11.0))
-                                .child(
-                                    div()
-                                        .text_size(px(12.0))
-                                        .text_color(theme.text_secondary)
-                                        .child(filename),
-                                )
-                        })),
-                )
-            })
-            // Message: image(s) pinned to the top, text bubble below — the
-            // text stays a single line rather than wrapping around the image.
+            // Message: image(s) pinned to the top, user bubble card below
+            // with attached file chips and message content contained inside.
             .child(
                 div()
                     .max_w(px(540.0))
@@ -203,7 +165,7 @@ impl RenderOnce for UserMessageBubble {
                                 )),
                         )
                     })
-                    .when(!self.content.is_empty(), |element| {
+                    .when(!self.content.is_empty() || !context_files.is_empty(), |element| {
                         element.child(
                             div()
                                 .max_w(px(540.0))
@@ -213,10 +175,60 @@ impl RenderOnce for UserMessageBubble {
                                 .bg(theme.user_bubble)
                                 .border_1()
                                 .border_color(theme.user_bubble_border)
-                                .text_size(px(14.0))
-                                .line_height(px(20.0))
-                                .text_color(theme.text)
-                                .child(selectable_content),
+                                .flex()
+                                .flex_col()
+                                .gap(px(6.0))
+                                .when(!context_files.is_empty(), |bubble| {
+                                    bubble.child(
+                                        div()
+                                            .flex()
+                                            .flex_wrap()
+                                            .gap(px(6.0))
+                                            .children(context_files.into_iter().enumerate().map(
+                                                |(index, path)| {
+                                                    let filename = Path::new(&path)
+                                                        .file_name()
+                                                        .and_then(|n| n.to_str())
+                                                        .unwrap_or(&path)
+                                                        .to_string();
+                                                    div()
+                                                        .id(ElementId::Name(
+                                                            format!("user-ctx-file-chip-{index}")
+                                                                .into(),
+                                                        ))
+                                                        .flex()
+                                                        .items_center()
+                                                        .gap(px(4.0))
+                                                        .px(px(7.0))
+                                                        .h(px(22.0))
+                                                        .rounded(px(5.0))
+                                                        .border_1()
+                                                        .border_color(theme.user_bubble_border)
+                                                        .bg(theme.user_bubble.opacity(0.6))
+                                                        .child(
+                                                            crate::primitives::file_type_icon(
+                                                                &path, 11.0,
+                                                            ),
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .text_size(px(11.5))
+                                                                .text_color(theme.text_secondary)
+                                                                .child(filename),
+                                                        )
+                                                },
+                                            )),
+                                    )
+                                })
+                                .when(!self.content.is_empty(), |bubble| {
+                                    bubble.child(
+                                        div()
+                                            .text_size(px(14.0))
+                                            .line_height(px(20.0))
+                                            .text_color(theme.text)
+                                            .child(selectable_content),
+                                    )
+                                }),
                         )
                     }),
             )
