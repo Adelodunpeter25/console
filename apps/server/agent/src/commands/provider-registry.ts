@@ -50,6 +50,10 @@ export const AVAILABLE_MODELS = [
 
 const GEMINI_THINKING_LEVELS: ThinkingLevel[] = ["minimal", "low", "medium", "high"];
 
+const CODEX_THINKING_LEVELS: ThinkingLevel[] = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+const CLAUDE_THINKING_LEVELS: ThinkingLevel[] = ["low", "medium", "high", "xhigh", "max"];
+
 export const DEFAULT_ANTIGRAVITY_MODELS: Model[] = AVAILABLE_MODELS.map((id) => ({
   id,
   provider: "antigravity",
@@ -69,7 +73,14 @@ export const DEFAULT_CODEX_MODELS: Model[] = [
   "gpt-5.6-luna",
   "gpt-5.5",
   "gpt-5.4-mini",
-].map((id) => ({ id, provider: "codex" as const, contextWindow: 272_000, supportsImages: true }));
+].map((id) => ({
+  id,
+  provider: "codex" as const,
+  contextWindow: 272_000,
+  supportsImages: true,
+  supportedThinkingLevels: CODEX_THINKING_LEVELS,
+  defaultThinkingLevel: "medium" as const,
+}));
 
 export const DEFAULT_CLINE_MODELS: Model[] = [...CLINE_FREE_MODEL_IDS]
   .map((id) => ({
@@ -97,6 +108,8 @@ export const DEFAULT_CLAUDE_MODELS: Model[] = [
   provider: "claude" as const,
   contextWindow,
   supportsImages: true,
+  supportedThinkingLevels: CLAUDE_THINKING_LEVELS,
+  defaultThinkingLevel: "high" as const,
 }));
 
 /** Providers that are temporarily disabled (kept in code but hidden from catalog). */
