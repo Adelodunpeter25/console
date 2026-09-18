@@ -93,17 +93,18 @@ export function convertClaudeMessages(messages: AgentMessage[], cacheRetention?:
     }
 
     if (msg.role === "assistant") {
-      const content: Array<Record<string, unknown>> = [];
+      const textBlocks: Array<Record<string, unknown>> = [];
+      const toolBlocks: Array<Record<string, unknown>> = [];
       for (const part of msg.content) {
         if (part.type === "text" && part.text) {
-          content.push({ type: "text", text: part.text });
+          textBlocks.push({ type: "text", text: part.text });
         } else if (part.type === "thinking" && part.text) {
           // Prior thinking is replayed unsigned, which the signing endpoint
           // rejects — demote it to text (mirrors oh-my-pi's demotion path)
           // instead of dropping the reasoning context entirely.
-          content.push({ type: "text", text: part.text });
+          textBlocks.push({ type: "text", text: part.text });
         } else if (part.type === "toolCall") {
-          content.push({
+          toolBlocks.push({
             type: "tool_use",
             id: part.call.id,
             name: part.call.name,
@@ -111,6 +112,8 @@ export function convertClaudeMessages(messages: AgentMessage[], cacheRetention?:
           });
         }
       }
+      // All text must precede tool_use blocks in an Anthropic assistant turn
+      const content = [...textBlocks, ...toolBlocks];
       if (content.length > 0) {
         turns.push({ role: "assistant", content });
       }

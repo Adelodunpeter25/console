@@ -108,27 +108,34 @@ export function transformMessages(
         continue;
       }
 
-      const newContent: AssistantMessageContent[] = [];
+      const nonToolParts: AssistantMessageContent[] = [];
+      const toolCallParts: AssistantMessageContent[] = [];
 
       for (const part of msg.content) {
         if (part.type === "text") {
           const text = part.text.trimEnd();
           if (text) {
-            newContent.push({ ...part, text });
+            nonToolParts.push({ ...part, text });
           }
         } else if (part.type === "thinking") {
           const text = part.text.trimEnd();
           if (text) {
             if (demoteThinkingToText) {
-              newContent.push({ type: "text", text });
+              nonToolParts.push({ type: "text", text });
             } else {
-              newContent.push({ ...part, text });
+              nonToolParts.push({ ...part, text });
             }
           }
         } else if (part.type === "toolCall") {
-          newContent.push(part);
+          toolCallParts.push(part);
         }
       }
+
+      // Anthropic Messages API and Google CCA require all tool_use / functionCall
+      // blocks to be at the very end of an assistant turn. Text blocks appearing
+      // after tool_use trigger "This model does not support assistant message prefill"
+      // when followed by tool results.
+      const newContent = [...nonToolParts, ...toolCallParts];
 
       if (newContent.length === 0) {
         continue;

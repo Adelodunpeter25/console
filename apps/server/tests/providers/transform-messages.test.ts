@@ -256,4 +256,42 @@ console.log("Running transform-messages tests...");
   console.log("  ✅ convertClaudeMessages guarantees compliant tool_use/tool_result and user termination");
 }
 
+// 11. Assistant text after tool_use is grouped before tool_use
+{
+  const input: AgentMessage[] = [
+    { role: "user", content: "inspect files" },
+    {
+      role: "assistant",
+      content: [
+        { type: "text", text: "First let me read." },
+        {
+          type: "toolCall",
+          call: { id: "call_read", name: "readFile", arguments: { path: "a.ts" } },
+        },
+        { type: "text", text: "Now let me read b.ts." },
+      ],
+      stopReason: "toolUse",
+    },
+    {
+      role: "toolResult",
+      results: [{ toolCallId: "call_read", content: "file content" }],
+    },
+  ];
+
+  const result = transformMessages(input);
+  const assistantMsg = result[1] as any;
+  assert.equal(assistantMsg.role, "assistant");
+  assert.equal(assistantMsg.content[0].type, "text");
+  assert.equal(assistantMsg.content[1].type, "text");
+  assert.equal(assistantMsg.content[2].type, "toolCall");
+
+  const wire = convertClaudeMessages(input);
+  const wireAssistant = wire[1]!;
+  assert.equal(wireAssistant.role, "assistant");
+  assert.equal(wireAssistant.content[0]!.type, "text");
+  assert.equal(wireAssistant.content[1]!.type, "text");
+  assert.equal(wireAssistant.content[2]!.type, "tool_use");
+  console.log("  ✅ Assistant text appearing after tool_use is placed before all tool_use blocks");
+}
+
 console.log("All transform-messages tests passed!\n");

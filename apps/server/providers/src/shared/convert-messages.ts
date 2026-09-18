@@ -116,19 +116,20 @@ export function convertMessages(
     }
 
     if (msg.role === "assistant") {
-      const parts: GeminiOutgoingPart[] = [];
+      const textParts: GeminiOutgoingPart[] = [];
+      const funcParts: GeminiOutgoingPart[] = [];
 
       for (const part of msg.content) {
         if (part.type === "text" && (part.text || part.thoughtSignature)) {
-          parts.push(makeTextPart(part.text, part.thoughtSignature));
+          textParts.push(makeTextPart(part.text, part.thoughtSignature));
         } else if (part.type === "thinking" && part.text) {
           // Prior thinking is replayed unsigned, which strict signing endpoints
           // reject — demote it to text instead of losing reasoning context.
-          parts.push(makeTextPart(part.text));
+          textParts.push(makeTextPart(part.text));
         } else if (part.type === "toolCall") {
           const args = (part.call.arguments ?? {}) as Record<string, unknown>;
           const normalizedId = normalizeToolCallId(part.call.id);
-          parts.push(
+          funcParts.push(
             makeFunctionCallPart(
               part.call.name,
               args,
@@ -139,7 +140,8 @@ export function convertMessages(
         }
       }
 
-      // Only add assistant message if it has content
+      // All text must precede functionCall parts for Claude on CCA
+      const parts = [...textParts, ...funcParts];
       if (parts.length > 0) {
         rawTurns.push({ role: "model", parts });
       }
