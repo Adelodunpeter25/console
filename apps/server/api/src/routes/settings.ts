@@ -13,9 +13,7 @@ settingsRoutes.patch("/settings", async (c) => {
   const raw = (body as { modelRoles?: unknown }).modelRoles;
   if (!raw || typeof raw !== "object") return c.json({ success: false, error: "modelRoles must be an object." }, 400);
   // Only roles present in the body are touched (set, or cleared if
-  // null/empty) — a role the caller doesn't mention is left as-is. This lets
-  // a caller that only manages one role (e.g. the composer's model picker)
-  // patch it without clobbering roles it doesn't know about.
+  // null/empty) — a role the caller doesn't mention is left as-is.
   const patch: Partial<Record<ConsoleModelRole, string | null>> = {};
   for (const [role, model] of Object.entries(raw)) {
     if (!isConsoleModelRole(role)) {

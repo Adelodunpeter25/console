@@ -1,7 +1,7 @@
 use super::ConsoleDesktopApp;
 use crate::persistence::store::load_settings_window;
 use crate::settings_window::SettingsWindow;
-use console_core::{ConsoleSettings, SelectedModel};
+use console_core::ConsoleSettings;
 use gpui::{
     AppContext, Context, TitlebarOptions, Window, WindowBounds, WindowOptions, point, px, size,
 };
@@ -18,7 +18,6 @@ impl ConsoleDesktopApp {
         self.load_sessions(cx);
         self.load_providers(cx);
         self.fetch_usage(cx);
-        self.refresh_plan_role_model(cx);
 
         let client = self.client.clone();
         cx.spawn(async move |this, cx| {
@@ -77,68 +76,6 @@ impl ConsoleDesktopApp {
                     settings_view.update(cx, |view, cx| {
                         view.model_saving = false;
                         view.model_error = Some(error.to_string());
-                        cx.notify();
-                    });
-                }
-            });
-        })
-        .detach();
-    }
-
-    /// Patches the `plan` model role to `model_reference` (`"provider/model_id"`),
-    /// leaving other roles untouched. Used by the composer's model picker when
-    /// the pane is in plan mode, so picking a model there also becomes the
-    /// plan model for plan-mode runs.
-    pub fn save_plan_model_role(&mut self, model_reference: String, cx: &mut Context<Self>) {
-        let client = self.client.clone();
-        let settings_view = self
-            .settings_window_view
-            .as_ref()
-            .and_then(|view| view.upgrade());
-
-        cx.spawn(async move |entity, cx| {
-            let result = client.settings.patch_plan_model(&model_reference).await;
-            if let Ok(saved_settings) = result {
-                let _ = cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.plan_role_model = saved_settings
-                                .model_roles
-                                .plan
-                                .as_deref()
-                                .and_then(parse_model_reference);
-                            cx.notify();
-                        });
-                    }
-                    if let Some(settings_view) = &settings_view {
-                        settings_view.update(cx, |view, cx| {
-                            view.apply_model_settings(&saved_settings, cx);
-                        });
-                    }
-                    crate::window::broadcast_settings_refresh(cx);
-                });
-            }
-        })
-        .detach();
-    }
-
-    /// Reload the server `plan` model role into `plan_role_model` so the
-    /// composer picker shows the effective plan model while a pane is in
-    /// plan mode. An unset role clears it back to the chat-model fallback.
-    pub fn refresh_plan_role_model(&mut self, cx: &mut Context<Self>) {
-        let client = self.client.clone();
-        cx.spawn(async move |entity, cx| {
-            let Ok(settings) = client.settings.get().await else {
-                return;
-            };
-            cx.update(|cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.plan_role_model = settings
-                            .model_roles
-                            .plan
-                            .as_deref()
-                            .and_then(parse_model_reference);
                         cx.notify();
                     });
                 }
@@ -226,17 +163,4 @@ impl ConsoleDesktopApp {
             });
         }
     }
-}
-
-/// Parse a `"provider/model"` role reference into a picker model.
-/// Malformed references yield `None` so callers fall back to the chat model.
-fn parse_model_reference(reference: &str) -> Option<SelectedModel> {
-    let (provider, model_id) = reference.split_once('/')?;
-    if provider.is_empty() || model_id.is_empty() {
-        return None;
-    }
-    Some(SelectedModel {
-        provider: provider.to_string(),
-        model_id: model_id.to_string(),
-    })
 }

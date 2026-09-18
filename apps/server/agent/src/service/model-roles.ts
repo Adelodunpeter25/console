@@ -4,7 +4,7 @@ import { getConsoleStorageDir } from "@/agent/src/session/apppaths.js";
 import { findModelInProvider, getProvider } from "@/agent/src/commands/provider-registry.js";
 import type { Model, ProviderId } from "@console/types";
 
-export type ConsoleModelRole = "plan" | "vision" | "smol";
+export type ConsoleModelRole = "vision" | "smol";
 export type ModelRoleMapping = Partial<Record<ConsoleModelRole, string>>;
 
 export interface ConsoleSettings {
@@ -12,7 +12,7 @@ export interface ConsoleSettings {
 }
 
 const SETTINGS_FILE = "settings.json";
-const ROLES: ConsoleModelRole[] = ["plan", "vision", "smol"];
+const ROLES: ConsoleModelRole[] = ["vision", "smol"];
 
 export function getSettingsPath(): string {
   // Overridable for test isolation (mirrors the *_CREDENTIALS_PATH pattern).
@@ -35,9 +35,8 @@ export async function loadSettings(): Promise<ConsoleSettings> {
 
 /**
  * Merges a patch onto the currently saved roles rather than replacing the
- * whole mapping, so a caller that only knows about one role (e.g. the
- * composer's model picker, which only manages "plan") can't clobber
- * roles it never saw (e.g. vision/smol set from the settings page).
+ * whole mapping, so a caller that only knows about one role can't clobber
+ * roles it never saw.
  * A role present in the patch with an empty/null value clears that role;
  * a role absent from the patch is left untouched.
  */

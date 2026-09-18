@@ -822,36 +822,23 @@ impl ConsoleDesktopApp {
                                         provider: prov.clone(),
                                         model_id: m_id.clone(),
                                     };
-                                    if this.pane_approval_mode(&model_pane_id)
-                                        == ApprovalMode::PlanMode
-                                    {
-                                        // Plan mode runs the plan role: show and
-                                        // persist it, leaving the chat's own
-                                        // model untouched.
-                                        this.plan_role_model = Some(model);
-                                        this.save_plan_model_role(
-                                            format!("{prov}/{m_id}"),
-                                            cx,
-                                        );
-                                    } else {
-                                        this.set_pane_model(
-                                            &model_pane_id,
-                                            Some(model),
-                                        );
+                                    this.set_pane_model(
+                                        &model_pane_id,
+                                        Some(model),
+                                    );
 
-                                        this.update_session_settings_for_pane(
-                                            model_pane_id.clone(),
-                                            UpdateSessionDto {
-                                                title: None,
-                                                cwd: None,
-                                                project_id: None,
-                                                model_id: Some(m_id.clone()),
-                                                provider: Some(prov.clone()),
-                                                approval_mode: None,
-                                            },
-                                            cx,
-                                        );
-                                    }
+                                    this.update_session_settings_for_pane(
+                                        model_pane_id.clone(),
+                                        UpdateSessionDto {
+                                            title: None,
+                                            cwd: None,
+                                            project_id: None,
+                                            model_id: Some(m_id.clone()),
+                                            provider: Some(prov.clone()),
+                                            approval_mode: None,
+                                        },
+                                        cx,
+                                    );
 
                                     cx.notify();
                                 });
@@ -912,13 +899,6 @@ impl ConsoleDesktopApp {
                                     },
                                     cx,
                                 );
-                                if mode == ApprovalMode::PlanMode {
-                                    // The picker shows the plan role in
-                                    // plan mode; reload it so a role set
-                                    // in Settings (or another window)
-                                    // shows up immediately.
-                                    this.refresh_plan_role_model(cx);
-                                }
                                 cx.notify();
                             });
                         }

@@ -270,8 +270,7 @@ const app = createApiApp();
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       modelRoles: {
-        plan: "antigravity/claude-sonnet-4-6",
-        vision: null,
+        vision: "antigravity/claude-sonnet-4-6",
         smol: "",
       },
     }),
@@ -279,14 +278,21 @@ const app = createApiApp();
   assert.equal(patchRes.status, 200);
   const patchJson = await patchRes.json();
   assert.equal(patchJson.success, true);
-  assert.equal(patchJson.data.modelRoles.plan, "antigravity/claude-sonnet-4-6");
-  assert.equal(patchJson.data.modelRoles.vision, undefined);
+  assert.equal(patchJson.data.modelRoles.vision, "antigravity/claude-sonnet-4-6");
   assert.equal(patchJson.data.modelRoles.smol, undefined);
 
   const getRes = await app.request("/api/settings");
   assert.equal(getRes.status, 200);
   const getJson = await getRes.json();
-  assert.equal(getJson.data.modelRoles.plan, "antigravity/claude-sonnet-4-6");
+  assert.equal(getJson.data.modelRoles.vision, "antigravity/claude-sonnet-4-6");
+
+  // The removed "plan" role is rejected.
+  const planRes = await app.request("/api/settings", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ modelRoles: { plan: "antigravity/claude-sonnet-4-6" } }),
+  });
+  assert.equal(planRes.status, 400);
 
   // The removed "default" role is rejected.
   const defaultRes = await app.request("/api/settings", {

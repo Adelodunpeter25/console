@@ -266,17 +266,9 @@ impl ConsoleDesktopApp {
             .and_then(|state| state.selected_model.clone())
     }
 
-    /// The model the composer picker shows for a pane. In plan mode the
-    /// plan role is what runs, so the picker displays it (falling back to
-    /// the chat's own model while the role is unset); otherwise it shows
-    /// the chat's own model. Run payloads keep using `pane_selected_model`
-    /// so plan-mode runs never rewrite the chat's stored model.
+    /// The model the composer picker shows for a pane: the chat's own
+    /// model. Run payloads use the same value.
     pub(crate) fn effective_model_for_pane(&self, pane_id: &str) -> Option<SelectedModel> {
-        if self.pane_approval_mode(pane_id) == ApprovalMode::PlanMode {
-            if let Some(plan) = self.plan_role_model.clone() {
-                return Some(plan);
-            }
-        }
         self.pane_selected_model(pane_id)
     }
 

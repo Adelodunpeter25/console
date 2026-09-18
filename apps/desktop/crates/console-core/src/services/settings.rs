@@ -1,7 +1,6 @@
 use crate::types::{ApiResponse, ConsoleSettings};
 use crate::utils::HttpTransport;
 use anyhow::{Context, Result, anyhow};
-use serde_json::json;
 
 #[derive(Clone)]
 pub struct SettingsService {
@@ -56,33 +55,6 @@ impl SettingsService {
             Err(anyhow!(
                 body.error
                     .unwrap_or_else(|| "Failed to save settings".into())
-            ))
-        }
-    }
-
-    /// Patches only the `plan` model role, leaving other roles (vision,
-    /// smol) untouched server-side.
-    pub async fn patch_plan_model(&self, model_reference: &str) -> Result<ConsoleSettings> {
-        let url = self.transport.url("/api/settings").await;
-        let response = self
-            .transport
-            .client()
-            .patch(url)
-            .headers(self.transport.build_headers().await)
-            .json(&json!({ "modelRoles": { "plan": model_reference } }))
-            .send()
-            .await
-            .context("Failed to save plan model")?;
-        let body: ApiResponse<ConsoleSettings> = response
-            .json()
-            .await
-            .context("Failed to parse saved settings")?;
-        if body.success {
-            Ok(body.data.unwrap_or_default())
-        } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to save plan model".into())
             ))
         }
     }
