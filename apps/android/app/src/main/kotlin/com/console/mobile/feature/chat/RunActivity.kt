@@ -1,15 +1,22 @@
 package com.console.mobile.feature.chat
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -22,6 +29,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,6 +38,7 @@ import com.console.mobile.core.chat.ActivityEvent
 import com.console.mobile.core.chat.RunActivityState
 import com.console.mobile.core.chat.RunStatus
 import com.console.mobile.core.util.formatDurationMs
+import com.console.mobile.core.util.getToolLabel
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
 import com.console.mobile.ui.theme.ConsoleColors
@@ -107,9 +117,105 @@ fun RunActivity(activity: RunActivityState, running: Boolean, cwd: String? = nul
                     is RenderGroup.Text -> MarkdownText(content = g.text, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
                     is RenderGroup.Tools -> {
                         val byId = g.results.associateBy { it.toolCallId }
-                        g.calls.forEach { call ->
-                            ToolCallRow(call = call, result = byId[call.id], cwd = cwd)
+                        if (g.calls.size == 1) {
+                            val call = g.calls.first()
+                            Box(modifier = Modifier.padding(vertical = 2.dp)) {
+                                ToolCallRow(call = call, result = byId[call.id], cwd = cwd)
+                            }
+                        } else {
+                            ToolGroupRow(
+                                toolName = g.calls.first().name,
+                                calls = g.calls,
+                                results = g.results,
+                                cwd = cwd,
+                            )
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ToolGroupRow(
+    toolName: String,
+    calls: List<ToolCall>,
+    results: List<ToolResult>,
+    cwd: String? = null,
+) {
+    var expanded by remember(calls.firstOrNull()?.id) { mutableStateOf(false) }
+    val byId = results.associateBy { it.toolCallId }
+    val anyRunning = calls.any { byId[it.id] == null }
+    val anyError = calls.any { byId[it.id]?.isError == true }
+    val shape = RoundedCornerShape(10.dp)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp)
+            .clip(shape)
+            .background(Color.White.copy(alpha = 0.02f))
+            .border(1.dp, Color.White.copy(alpha = 0.06f), shape)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                getToolLabel(toolName),
+                color = ConsoleColors.TextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "· ${calls.size} calls",
+                color = ConsoleColors.TextMuted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 6.dp),
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            if (anyRunning) {
+                CircularProgressIndicator(
+                    color = ConsoleColors.TextMuted,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(13.dp),
+                )
+            } else if (anyError) {
+                Icon(
+                    Icons.Filled.Warning,
+                    contentDescription = null,
+                    tint = Color(0xFFF87171),
+                    modifier = Modifier.size(13.dp),
+                )
+            } else {
+                Icon(
+                    Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = Color(0xFF34D399),
+                    modifier = Modifier.size(13.dp),
+                )
+            }
+            Icon(
+                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = null,
+                tint = ConsoleColors.TextMuted,
+                modifier = Modifier.size(13.dp).padding(start = 4.dp),
+            )
+        }
+        if (expanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .padding(bottom = 8.dp)
+            ) {
+                calls.forEach { call ->
+                    Box(modifier = Modifier.padding(vertical = 2.dp)) {
+                        ToolCallRow(call = call, result = byId[call.id], cwd = cwd)
                     }
                 }
             }

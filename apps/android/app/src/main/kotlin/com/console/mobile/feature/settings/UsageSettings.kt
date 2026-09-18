@@ -68,6 +68,7 @@ fun UsageSettings(onBack: () -> Unit) {
     val cards = listOf(
         Triple("antigravity", "Google Antigravity", authState.status?.get("antigravity")),
         Triple("codex", "OpenAI Codex", authState.status?.get("codex")),
+        Triple("claude", "Anthropic Claude", authState.status?.get("claude")),
     )
     val isLoading = usageState.loading && usageState.reports.isEmpty()
 

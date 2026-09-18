@@ -28,6 +28,7 @@ class AuthRepository(
                     "antigravity" to shim.antigravity,
                     "codex" to shim.codex,
                     "devin" to shim.devin,
+                    "claude" to shim.claude,
                 )
                 val projectIds = mapOf(
                     "antigravity" to shim.antigravity.configuredProjectId,
@@ -47,6 +48,7 @@ class AuthRepository(
                             "antigravity" to ProviderAuthStatus(loggedIn = false),
                             "codex" to ProviderAuthStatus(loggedIn = false),
                             "devin" to ProviderAuthStatus(loggedIn = false),
+                            "claude" to ProviderAuthStatus(loggedIn = false),
                         ),
                         loading = false,
                         error = e.message ?: "Failed to load auth status",

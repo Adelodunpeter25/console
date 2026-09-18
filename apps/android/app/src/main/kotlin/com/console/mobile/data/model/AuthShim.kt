@@ -7,4 +7,5 @@ data class AuthStatusShim(
     val antigravity: ProviderAuthStatus = ProviderAuthStatus(false),
     val codex: ProviderAuthStatus = ProviderAuthStatus(false),
     val devin: ProviderAuthStatus = ProviderAuthStatus(false),
+    val claude: ProviderAuthStatus = ProviderAuthStatus(false),
 )

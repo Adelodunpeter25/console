@@ -3,19 +3,8 @@ package com.console.mobile.ui.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.ChangeCircle
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material3.Icon
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,9 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -44,12 +31,6 @@ import com.console.mobile.feature.subagents.SubagentsScreen
 import com.console.mobile.feature.terminal.TerminalScreen
 import com.console.mobile.ui.components.ConfirmDialogHost
 import com.console.mobile.ui.theme.ConsoleColors
-
-private data class Tab(
-    val label: String,
-    val route: Any,
-    val icon: ImageVector,
-)
 
 @Composable
 fun AppNavGraph() {
@@ -73,23 +54,7 @@ fun AppNavGraph() {
         return
     }
 
-    val tabs = remember {
-        listOf(
-            Tab("Home", RouteHome, Icons.Filled.Home),
-            Tab("Chat", RouteChat, Icons.AutoMirrored.Filled.Chat),
-            Tab("Files", RouteFiles, Icons.Filled.Folder),
-            Tab("Changes", RouteChanges, Icons.Filled.ChangeCircle),
-            Tab("Terminal", RouteTerminal, Icons.Filled.Terminal),
-        )
-    }
-
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val selectedIndex = remember(backStackEntry) {
-        val dest = backStackEntry?.destination?.route ?: ""
-        tabs.indexOfFirst { tab ->
-            dest.contains(tab.route.javaClass.simpleName.removePrefix("Route"), ignoreCase = true)
-        }.takeIf { it >= 0 } ?: 0
-    }
     var pendingChatNav by remember { mutableStateOf<String?>(null) }
 
     // Deep-link from notification → open chat for that session.
@@ -117,30 +82,6 @@ fun AppNavGraph() {
 
     Scaffold(
         containerColor = ConsoleColors.Background,
-        bottomBar = {
-            NavigationBar(containerColor = ConsoleColors.Surface) {
-                tabs.forEachIndexed { index, tab ->
-                    NavigationBarItem(
-                        selected = selectedIndex == index,
-                        onClick = {
-                            navController.navigate(tab.route) {
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        label = { Text(tab.label, fontSize = 10.sp) },
-                        icon = { Icon(tab.icon, contentDescription = tab.label) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = ConsoleColors.TextPrimary,
-                            selectedTextColor = ConsoleColors.TextPrimary,
-                            unselectedIconColor = ConsoleColors.TextMuted,
-                            unselectedTextColor = ConsoleColors.TextMuted,
-                            indicatorColor = ConsoleColors.SurfaceElevated,
-                        ),
-                    )
-                }
-            }
-        },
     ) { padding ->
         NavHost(
             navController = navController,
