@@ -121,6 +121,7 @@ impl RenderOnce for SidebarSessionItem {
             console_core::WorkspaceTabConfig::Chat {
                 session_id: session.id.clone(),
                 title: display_title.clone(),
+                provider: Some(session.provider.clone()),
                 project_id: session.project_id.clone(),
                 last_active_at_ms: None,
             },

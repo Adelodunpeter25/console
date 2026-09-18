@@ -10,7 +10,7 @@ use gpui::{
 
 use crate::primitives::file_icon;
 use crate::primitives::file_icons::file_icon_for_name;
-use crate::primitives::{IconName, app_icon};
+use crate::primitives::{IconName, app_icon, provider_app_icon};
 use crate::theme::{TABBAR_HEIGHT, Theme};
 
 use super::{WorkspaceDrag, WorkspaceDragPreview};
@@ -251,16 +251,24 @@ impl RenderOnce for WorkspaceTabBar {
                             })
                             // Tab Icon
                             .child(match &tab {
-                                console_core::WorkspaceTabConfig::Chat { .. } => app_icon(
-                                    IconName::ChatRoundLine,
-                                    11.0,
-                                    if is_active {
+                                console_core::WorkspaceTabConfig::Chat { provider, .. } => {
+                                    let color = if is_active {
                                         theme.text
                                     } else {
                                         theme.text_tertiary
-                                    },
-                                )
-                                .into_any_element(),
+                                    };
+                                    match provider.as_deref() {
+                                        Some(p) if !p.is_empty() => {
+                                            provider_app_icon(p, 11.0, color).into_any_element()
+                                        }
+                                        _ => app_icon(
+                                            IconName::ChatRoundLine,
+                                            11.0,
+                                            color,
+                                        )
+                                        .into_any_element(),
+                                    }
+                                }
                                 console_core::WorkspaceTabConfig::Terminal { .. } => app_icon(
                                     IconName::Terminal,
                                     11.0,

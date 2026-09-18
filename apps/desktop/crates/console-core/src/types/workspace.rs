@@ -18,6 +18,8 @@ pub enum WorkspaceTabConfig {
         session_id: String,
         title: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        provider: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         project_id: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[serde(rename = "lastActiveAtMs")]

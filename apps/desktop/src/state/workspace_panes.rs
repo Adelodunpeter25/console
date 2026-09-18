@@ -571,17 +571,18 @@ impl ConsoleDesktopApp {
             }
         }
 
-        // A known session stamps its project verbatim — including explicit
+        // A known session stamps its project and provider verbatim — including explicit
         // None (No project) — so reopening never inherits the pane's project.
         // Only truly unknown sessions fall back to the pane.
-        let known_project_id = self
+        let known_session = self
             .sessions
             .iter()
-            .find(|s| s.id == session_id)
-            .map(|s| s.project_id.clone());
+            .find(|s| s.id == session_id);
+        let known_project_id = known_session.map(|s| s.project_id.clone());
         let project_id = known_project_id
             .clone()
             .unwrap_or_else(|| self.pane_project_id(pane_id));
+        let provider = known_session.map(|s| s.provider.clone());
         if known_project_id.is_some() {
             if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
                 state.selected_project_id = project_id.clone();
@@ -591,6 +592,7 @@ impl ConsoleDesktopApp {
         let tab = WorkspaceTabConfig::Chat {
             session_id: session_id.clone(),
             title: title.into(),
+            provider,
             project_id,
             last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };

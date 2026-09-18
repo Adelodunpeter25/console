@@ -262,6 +262,27 @@ pub fn rename_tabs(
     }
 }
 
+/// Update the provider on every chat tab matching `predicate`.
+pub fn sync_chat_provider(
+    root: &mut WorkspaceNode,
+    predicate: impl Fn(&console_core::WorkspaceTabConfig) -> bool,
+    provider: String,
+) {
+    for leaf in root.leaves_mut() {
+        for tab in &mut leaf.tabs {
+            if predicate(tab) {
+                if let console_core::WorkspaceTabConfig::Chat {
+                    provider: p,
+                    ..
+                } = tab
+                {
+                    *p = Some(provider.clone());
+                }
+            }
+        }
+    }
+}
+
 /// Close every tab whose id matches `predicate` across the whole tree,
 /// fixing up active ids as it goes.
 pub fn close_matching_tabs(

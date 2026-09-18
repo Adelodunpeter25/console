@@ -269,7 +269,8 @@ impl ConsoleDesktopApp {
             session.status = header.status.clone();
             session.updated_at = header.updated_at;
             // Keep the sidebar row and any open chat tabs in step when the
-            // backend renames the session (e.g. after the first turn).
+            // backend renames the session (e.g. after the first turn) or updates
+            // the provider/model.
             if !header.title.trim().is_empty() && session.title != header.title {
                 session.title = header.title.clone();
                 console_ui::workspace::ops::rename_tabs(
@@ -288,6 +289,28 @@ impl ConsoleDesktopApp {
                                 if session_id == &header.id)
                         },
                         header.title.clone(),
+                    );
+                }
+                cx.notify();
+            }
+            // Sync provider changes to all open chat tabs for this session.
+            if !header.provider.is_empty() {
+                console_ui::workspace::ops::sync_chat_provider(
+                    &mut self.workspace_root,
+                    |tab| {
+                        matches!(tab, console_core::WorkspaceTabConfig::Chat { session_id, .. }
+                            if session_id == &header.id)
+                    },
+                    header.provider.clone(),
+                );
+                for root in self.project_workspace_roots.values_mut() {
+                    console_ui::workspace::ops::sync_chat_provider(
+                        root,
+                        |tab| {
+                            matches!(tab, console_core::WorkspaceTabConfig::Chat { session_id, .. }
+                                if session_id == &header.id)
+                        },
+                        header.provider.clone(),
                     );
                 }
                 cx.notify();
