@@ -73,3 +73,7 @@ path = "tests/viewer/svg_test.rs"
 [[test]]
 name = "path_test"
 path = "tests/utils/path_test.rs"
+
+[[test]]
+name = "tool_icon_test"
+path = "tests/chat/tool_icon_test.rs"

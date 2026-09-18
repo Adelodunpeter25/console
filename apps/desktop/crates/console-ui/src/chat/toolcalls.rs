@@ -408,12 +408,17 @@ impl ToolCalls {
                             );
                         }
                     })
-                    .when_some(file_path.clone(), |element, path| {
-                        // File-targeting calls show the file's real type icon
-                        // (multicolor, like mobile) instead of the generic
-                        // monochrome tool glyph.
-                        element.child(file_type_icon(&path, 13.0))
-                    })
+                    .when_some(
+                        file_path
+                            .clone()
+                            .filter(|_| is_file_target_tool(&entry.call.name)),
+                        |element, path| {
+                            // File-targeting calls show the file's real type icon
+                            // (multicolor, like mobile) instead of the generic
+                            // monochrome tool glyph.
+                            element.child(file_type_icon(&path, 13.0))
+                        },
+                    )
                     .when_none(&file_path, |element| {
                         element.child(icon(
                             activity_icon(&entry.call.name),
@@ -1074,6 +1079,14 @@ fn is_write_file(name: &str) -> bool {
         name,
         "writeFile" | "write_file" | "batchWrite" | "batch_write"
     )
+}
+
+/// Whether a row for this tool should show the target file's type icon
+/// instead of the generic tool glyph. Search/list tools also carry a `path`
+/// argument, but there it is only the search scope (often a directory) —
+/// those rows keep the tool glyph (e.g. the magnifier for grep).
+fn is_file_target_tool(name: &str) -> bool {
+    matches!(name, "readFile" | "read_file") || is_edit_file(name) || is_write_file(name)
 }
 
 /// Build the visual diff for a file transition. A write starts with an empty
