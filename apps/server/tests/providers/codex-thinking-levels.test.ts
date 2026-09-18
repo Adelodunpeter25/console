@@ -91,9 +91,9 @@ describe("Codex Thinking Levels", () => {
   });
 
   describe("Model registry defaults", () => {
-    it("should have 'medium' as default thinking level for Codex models", () => {
-      const defaultLevel: ThinkingLevel = "medium" as const;
-      expect(defaultLevel).toBe("medium");
+    it("should have 'low' as default thinking level for Codex models", () => {
+      const defaultLevel: ThinkingLevel = "low" as const;
+      expect(defaultLevel).toBe("low");
     });
   });
 });

@@ -111,9 +111,9 @@ describe("Claude Thinking Levels", () => {
   });
 
   describe("Model registry defaults", () => {
-    it("should have 'high' as default thinking level for Claude models", () => {
-      const defaultLevel: ThinkingLevel = "high" as const;
-      expect(defaultLevel).toBe("high");
+    it("should have 'low' as default thinking level for Claude models", () => {
+      const defaultLevel: ThinkingLevel = "low" as const;
+      expect(defaultLevel).toBe("low");
     });
   });
 });

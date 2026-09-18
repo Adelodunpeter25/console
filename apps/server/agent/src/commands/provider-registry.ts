@@ -63,7 +63,7 @@ export const DEFAULT_ANTIGRAVITY_MODELS: Model[] = AVAILABLE_MODELS.map((id) => 
   ...(id.startsWith("gemini-")
     ? {
         supportedThinkingLevels: GEMINI_THINKING_LEVELS,
-        defaultThinkingLevel: "medium" as const,
+        defaultThinkingLevel: "low" as const,
       }
     : {}),
 }));
@@ -79,7 +79,7 @@ export const DEFAULT_CODEX_MODELS: Model[] = [
   contextWindow: 272_000,
   supportsImages: true,
   supportedThinkingLevels: CODEX_THINKING_LEVELS,
-  defaultThinkingLevel: "medium" as const,
+  defaultThinkingLevel: "low" as const,
 }));
 
 export const DEFAULT_CLINE_MODELS: Model[] = [...CLINE_FREE_MODEL_IDS]
@@ -109,7 +109,7 @@ export const DEFAULT_CLAUDE_MODELS: Model[] = [
   contextWindow,
   supportsImages: true,
   supportedThinkingLevels: CLAUDE_THINKING_LEVELS,
-  defaultThinkingLevel: "high" as const,
+  defaultThinkingLevel: "low" as const,
 }));
 
 /** Providers that are temporarily disabled (kept in code but hidden from catalog). */

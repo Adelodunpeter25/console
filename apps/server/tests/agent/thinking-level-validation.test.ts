@@ -16,7 +16,7 @@ describe("Thinking Level Validation", () => {
       contextWindow: 272_000,
       supportsImages: true,
       supportedThinkingLevels: ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
-      defaultThinkingLevel: "medium",
+      defaultThinkingLevel: "low",
     };
 
     it("should accept 'low' thinking level", () => {
@@ -55,7 +55,7 @@ describe("Thinking Level Validation", () => {
       contextWindow: 1_000_000,
       supportsImages: true,
       supportedThinkingLevels: ["low", "medium", "high", "xhigh", "max"],
-      defaultThinkingLevel: "high",
+      defaultThinkingLevel: "low",
     };
 
     it("should accept 'low' thinking level", () => {
@@ -97,7 +97,7 @@ describe("Thinking Level Validation", () => {
       provider: "antigravity",
       contextWindow: 1_048_576,
       supportedThinkingLevels: ["minimal", "low", "medium", "high"],
-      defaultThinkingLevel: "medium",
+      defaultThinkingLevel: "low",
     };
 
     it("should accept 'low' thinking level", () => {
@@ -157,7 +157,7 @@ describe("Thinking Level Validation", () => {
       provider: "claude",
       contextWindow: 1_000_000,
       supportedThinkingLevels: ["low", "medium", "high", "xhigh", "max"],
-      defaultThinkingLevel: "high",
+      defaultThinkingLevel: "low",
     };
 
     it("should include model ID and level in error message", () => {
