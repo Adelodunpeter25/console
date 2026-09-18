@@ -71,11 +71,7 @@ impl RenderOnce for ThinkingStepper {
 
         let tooltip_text = current.label().to_string();
 
-        let icon_color = if is_off {
-            theme.text_ghost
-        } else {
-            theme.text_secondary
-        };
+        let icon_color = thinking_level_color(current, &theme);
 
         let text_color = if is_off {
             theme.text_ghost
@@ -112,5 +108,54 @@ impl RenderOnce for ThinkingStepper {
                     .child(SharedString::from(step_label)),
             )
             .into_any_element()
+    }
+}
+
+/// Highlight colors for the brain icon across thinking levels.
+fn thinking_level_color(level: ThinkingLevel, theme: &Theme) -> gpui::Hsla {
+    match level {
+        ThinkingLevel::None => theme.text_ghost,
+        ThinkingLevel::Minimal => {
+            if theme.is_dark {
+                gpui::rgb(0x2DD4BF).into() // Mint / Teal
+            } else {
+                gpui::rgb(0x0D9488).into()
+            }
+        }
+        ThinkingLevel::Low => {
+            if theme.is_dark {
+                gpui::rgb(0x38BDF8).into() // Sky Blue
+            } else {
+                gpui::rgb(0x0284C7).into()
+            }
+        }
+        ThinkingLevel::Medium => {
+            if theme.is_dark {
+                gpui::rgb(0x818CF8).into() // Indigo
+            } else {
+                gpui::rgb(0x4F46E5).into()
+            }
+        }
+        ThinkingLevel::High => {
+            if theme.is_dark {
+                gpui::rgb(0xC084FC).into() // Violet / Purple
+            } else {
+                gpui::rgb(0x9333EA).into()
+            }
+        }
+        ThinkingLevel::XHigh => {
+            if theme.is_dark {
+                gpui::rgb(0xF472B6).into() // Fuchsia / Magenta
+            } else {
+                gpui::rgb(0xDB2777).into()
+            }
+        }
+        ThinkingLevel::Max => {
+            if theme.is_dark {
+                gpui::rgb(0xFBBF24).into() // Warm Amber / Gold
+            } else {
+                gpui::rgb(0xD97706).into()
+            }
+        }
     }
 }
