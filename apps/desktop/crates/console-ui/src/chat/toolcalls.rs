@@ -873,10 +873,7 @@ impl RenderOnce for ToolCalls {
 
 impl ToolCalls {
     /// The Result block for readFile calls: the file's code, syntax
-    /// highlighted through the markdown lexer when its extension maps to a
-    /// language. Mirrors mobile's `ReadFileResult` normalization — a leading
-    /// `File:` header is dropped, and line numbers are stripped when most
-    /// lines carry them.
+    /// highlighted through the markdown lexer with aligned line numbers in the gutter.
     fn read_file_section(
         &self,
         call_id: &str,
@@ -898,6 +895,8 @@ impl ToolCalls {
             self.selection.clone(),
             None,
         );
+        let (line_numbers, code_body) = parse_read_file_output(&raw);
+
         div()
             .flex()
             .flex_col()
@@ -921,15 +920,33 @@ impl ToolCalls {
                     .bg(theme.inset)
                     .px(px(8.0))
                     .py(px(6.0))
-                    .font_family(markdown_render::MONO_FAMILY)
-                    .text_size(px(12.0))
-                    .line_height(px(17.0))
-                    .text_color(theme.text_tertiary)
-                    .child(markdown_render::highlighted_code(
-                        normalize_read_file_output(&raw),
-                        lang_tag,
-                        &ctx,
-                    )),
+                    .flex()
+                    .flex_row()
+                    .gap(px(10.0))
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_align(gpui::TextAlign::Right)
+                            .text_color(theme.text_ghost)
+                            .font_family(markdown_render::MONO_FAMILY)
+                            .text_size(px(12.0))
+                            .line_height(px(17.0))
+                            .child(line_numbers),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .font_family(markdown_render::MONO_FAMILY)
+                            .text_size(px(12.0))
+                            .line_height(px(17.0))
+                            .text_color(theme.text_tertiary)
+                            .child(markdown_render::highlighted_code(
+                                code_body,
+                                lang_tag,
+                                &ctx,
+                            )),
+                    ),
             )
             .into_any_element()
     }
@@ -1081,28 +1098,32 @@ fn is_subagent(name: &str) -> bool {
     matches!(name, "subagent")
 }
 
-/// Byte length of the `\s*\d+:\s?` line-number prefix, if present.
-fn line_number_prefix_len(line: &str) -> Option<usize> {
+/// Parse a line-number prefix like `\s*123:\s?`, returning `(line_number_str, code_str)`.
+fn parse_line_number_and_code(line: &str) -> Option<(&str, &str)> {
+    let trimmed_start_len = line.trim_start().len();
+    let leading_spaces = line.len() - trimmed_start_len;
     let bytes = line.as_bytes();
-    let mut index = line.len() - line.trim_start().len();
-    let digits_start = index;
+    let digits_start = leading_spaces;
+    let mut index = digits_start;
     while index < line.len() && bytes[index].is_ascii_digit() {
         index += 1;
     }
     if index == digits_start || bytes.get(index) != Some(&b':') {
         return None;
     }
-    index += 1;
+    let num_str = &line[digits_start..index];
+    index += 1; // skip ':'
     if bytes.get(index) == Some(&b' ') {
         index += 1;
     }
-    Some(index)
+    let code = &line[index..];
+    Some((num_str, code))
 }
 
-/// Normalize readFile output to its bare code body, mirroring mobile's
-/// `ReadFileResult`: drop the `File:` header block (when short and followed by
-/// a blank line) and strip per-line numbers when most lines carry them.
-fn normalize_read_file_output(raw: &str) -> String {
+/// Parse readFile output into `(line_numbers_gutter, code_body)`:
+/// Drops the leading `File:` metadata header, extracts line numbers for the gutter,
+/// and produces the clean code body for syntax highlighting.
+fn parse_read_file_output(raw: &str) -> (String, String) {
     let lines: Vec<&str> = raw.lines().collect();
     let header_end = lines
         .iter()
@@ -1115,21 +1136,32 @@ fn normalize_read_file_output(raw: &str) -> String {
                 .is_some_and(|first| first.starts_with("File:"))
         })
         .map(|end| end + 1);
-    let code: &[&str] = match header_end {
+    let code_lines: &[&str] = match header_end {
         Some(end) => &lines[end..],
         None => &lines[..],
     };
-    let numbered = code
+
+    let numbered_count = code_lines
         .iter()
-        .filter(|line| line_number_prefix_len(line).is_some())
+        .filter(|line| parse_line_number_and_code(line).is_some())
         .count();
-    if numbered * 2 > code.len() {
-        code.iter()
-            .map(|line| line_number_prefix_len(line).map_or(*line, |prefix| &line[prefix..]))
-            .collect::<Vec<_>>()
-            .join("\n")
+
+    if numbered_count * 2 > code_lines.len() {
+        let mut numbers = Vec::with_capacity(code_lines.len());
+        let mut body = Vec::with_capacity(code_lines.len());
+        for line in code_lines {
+            if let Some((num, code)) = parse_line_number_and_code(line) {
+                numbers.push(num);
+                body.push(code);
+            } else {
+                numbers.push("");
+                body.push(*line);
+            }
+        }
+        (numbers.join("\n"), body.join("\n"))
     } else {
-        code.join("\n")
+        let numbers: Vec<String> = (1..=code_lines.len()).map(|n| n.to_string()).collect();
+        (numbers.join("\n"), code_lines.join("\n"))
     }
 }
 
