@@ -69,7 +69,7 @@ impl RenderOnce for ThinkingStepper {
             format!("{}/{}", current_index + 1, total_steps)
         };
 
-        let tooltip_text = current.as_str().to_string();
+        let tooltip_text = current.label().to_string();
 
         let icon_color = if is_off {
             theme.text_ghost

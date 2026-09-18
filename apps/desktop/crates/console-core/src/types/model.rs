@@ -33,7 +33,7 @@ impl ThinkingLevel {
             Self::Low => "Low",
             Self::Medium => "Medium",
             Self::High => "High",
-            Self::XHigh => "Extra High",
+            Self::XHigh => "Xhigh",
             Self::Max => "Max",
         }
     }
