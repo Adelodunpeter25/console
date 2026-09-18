@@ -1,4 +1,5 @@
 use crate::input::ComposerInput;
+use crate::markdown::render_markdown;
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 use console_core::{AskQuestionRequest, PermissionRequest};
@@ -75,7 +76,7 @@ impl RenderOnce for PermissionInteractionCard {
                         .pl(px(24.0))
                         .text_size(px(12.0))
                         .text_color(theme.text_secondary)
-                        .child(reason),
+                        .child(render_markdown(&reason, &theme)),
                 )
             })
             // Tool args JSON preview
@@ -255,19 +256,19 @@ impl RenderOnce for QuestionInteractionCard {
             .child(
                 div()
                     .flex()
-                    .items_center()
+                    .items_start()
                     .gap(px(8.0))
                     .min_w_0()
-                    .overflow_hidden()
-                    .child(app_icon(IconName::Bot, 14.0, theme.accent).flex_shrink_0())
+                    .child(
+                        app_icon(IconName::Bot, 14.0, theme.accent)
+                            .flex_shrink_0()
+                            .mt(px(2.0)),
+                    )
                     .child(
                         div()
                             .flex_1()
                             .min_w_0()
-                            .text_size(px(13.5))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.text)
-                            .child(req.question.clone()),
+                            .child(render_markdown(&req.question, &theme)),
                     ),
             )
             // Options
@@ -322,7 +323,12 @@ impl RenderOnce for QuestionInteractionCard {
                                         b.child(app_icon(IconName::Check, 9.0, theme.on_inverse))
                                     }),
                             )
-                            .child(div().text_size(px(12.5)).text_color(theme.text).child(opt))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(render_markdown(&opt, &theme)),
+                            )
                     }),
                 ))
             })
