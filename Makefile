@@ -16,9 +16,10 @@ dev-console:
 	CONSOLE_ENV=$(if $(PORT),,dev) bun apps/cli/index.ts start -p $(if $(PORT),$(PORT),3000)
 
 ## dev-mobile: Build and run the native Android app in dev mode
+##   Installs debug APK and launches the app on Android emulator/device
 ##   Requires Android SDK and emulator running or device connected via adb
 dev-mobile:
-	cd apps/android && ./gradlew installDebug
+	cd apps/android && ./gradlew installDebug && adb shell am start -n com.console.mobile/.MainActivity
 
 ## dev-desktop: Build and launch the GPUI desktop app in dev mode (Console Dev.app)
 dev-desktop:

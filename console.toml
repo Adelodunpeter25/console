@@ -9,7 +9,7 @@ persistent = true
 
 [scripts.dev-mobile]
 label = "Dev Mobile (Native Android)"
-command = "cd apps/android && ./gradlew installDebug"
+command = "cd apps/android && ./gradlew installDebug && adb shell am start -n com.console.mobile/.MainActivity"
 shortcut = "cmd-shift-m"
 persistent = false
 
