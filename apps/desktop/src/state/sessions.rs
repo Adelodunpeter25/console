@@ -332,6 +332,9 @@ impl ConsoleDesktopApp {
         // persists `cwd` when the workspace changes), then by project id.
         self.sync_project_from_session_for_pane(pane_id, header, cx);
 
+        // Fetch usage data for the current provider
+        self.maybe_fetch_usage(&header.id, cx);
+
         // Tool-call rows render paths relative to the session's working
         // directory; empty when the backend has not reported one yet.
         let cwd = (!header.cwd.is_empty()).then(|| header.cwd.clone());

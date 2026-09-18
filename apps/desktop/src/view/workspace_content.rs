@@ -748,6 +748,20 @@ impl ConsoleDesktopApp {
                 let submit_pane_id = composer_pane_id.clone();
                 let abort_pane_id = pane_id.clone();
                 let composer_autocomplete = autocomplete;
+                // Get current provider from active session
+                let current_provider = self
+                    .active_session_for_pane(&pane_id)
+                    .and_then(|sid| {
+                        self.sessions.iter().find(|s| s.id == sid).map(|s| s.provider.clone())
+                    })
+                    .unwrap_or_else(|| "claude".to_string());
+
+                // Get usage report for current provider
+                let usage_report = self
+                    .usage_reports
+                    .as_ref()
+                    .and_then(|reports| reports.get(&current_provider).cloned().flatten());
+
                 let workspace_footer = WorkspaceFooter::new(
                     self.projects.clone(),
                     pane_project_id.clone(),
@@ -757,6 +771,8 @@ impl ConsoleDesktopApp {
                     pane_branch_pending,
                     pane_project_menu.clone(),
                     pane_branch_menu.clone(),
+                    current_provider.clone(),
+                    usage_report,
                     {
                         let entity = entity.clone();
                         move |id: String, _w, cx| {
@@ -797,6 +813,17 @@ impl ConsoleDesktopApp {
                                 let pane_id = branch_pane_id.clone();
                                 app.update(cx, |this, cx| {
                                     this.checkout_branch_for_pane(pane_id, name, cx)
+                                });
+                            }
+                        }
+                    },
+                    {
+                        let entity = entity.clone();
+                        let usage_pane_id = pane_id.clone();
+                        move |_window, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.maybe_fetch_usage(&this.active_session_for_pane(&usage_pane_id).unwrap_or_default(), cx);
                                 });
                             }
                         }
