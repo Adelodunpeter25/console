@@ -1,15 +1,16 @@
-//! The bottom strip under the composer: project and branch selectors.
+//! The bottom strip under the composer: project and branch selectors, plus usage meter.
 //!
 //! Mirrors Waku's `render_workspace_footer`: a slim row of chips below the
 //! composer card. The project chip lists the backend's known projects plus
 //! "New project…" (native folder picker) and "No project"; the branch chip
 //! lists the selected project's Git branches and marks the checked-out one.
+//! The usage meter shows the active provider's quota status.
 //! The parent owns all backend calls — this component only paints state and
 //! forwards callbacks.
 
 use std::rc::Rc;
 
-use console_core::{GitBranchInfo, ProjectInfo};
+use console_core::{GitBranchInfo, ProjectInfo, UsageReport};
 use gpui::{
     App, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, Window, div, px,
 };
@@ -30,10 +31,13 @@ pub struct WorkspaceFooter {
     project_locked: bool,
     project_menu: ContextMenuHandle,
     branch_menu: ContextMenuHandle,
+    current_provider: String,
+    usage_report: Option<UsageReport>,
     on_select_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_no_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_select_branch: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_usage_meter_click: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
 
 impl WorkspaceFooter {
@@ -47,10 +51,13 @@ impl WorkspaceFooter {
         branch_pending: bool,
         project_menu: ContextMenuHandle,
         branch_menu: ContextMenuHandle,
+        current_provider: String,
+        usage_report: Option<UsageReport>,
         on_select_project: impl Fn(String, &mut Window, &mut App) + 'static,
         on_new_project: impl Fn(&mut Window, &mut App) + 'static,
         on_no_project: impl Fn(&mut Window, &mut App) + 'static,
         on_select_branch: impl Fn(String, &mut Window, &mut App) + 'static,
+        on_usage_meter_click: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
             projects,
@@ -62,10 +69,13 @@ impl WorkspaceFooter {
             project_locked: false,
             project_menu,
             branch_menu,
+            current_provider,
+            usage_report,
             on_select_project: Rc::new(on_select_project),
             on_new_project: Rc::new(on_new_project),
             on_no_project: Rc::new(on_no_project),
             on_select_branch: Rc::new(on_select_branch),
+            on_usage_meter_click: Rc::new(on_usage_meter_click),
         }
     }
 
@@ -221,6 +231,15 @@ impl RenderOnce for WorkspaceFooter {
             branch_trigger.into_any_element()
         };
 
+        let on_usage_meter_click = self.on_usage_meter_click.clone();
+        let usage_meter = crate::common::UsageMeter::new(
+            self.current_provider.clone(),
+            self.usage_report.clone(),
+            move |window, cx| {
+                (on_usage_meter_click)(window, cx);
+            },
+        );
+
         div()
             .id("workspace-footer")
             .w_full()
@@ -243,7 +262,8 @@ impl RenderOnce for WorkspaceFooter {
                     .line_height(px(14.0))
                     .child(project_selector)
                     .child(branch_selector)
-                    .child(div().flex_1()),
+                    .child(div().flex_1())
+                    .child(usage_meter),
             )
     }
 }

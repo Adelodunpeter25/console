@@ -14,6 +14,8 @@ pub mod queued_prompt_card;
 pub mod quick_open_palette;
 pub mod stripe;
 pub mod todo_card;
+pub mod usage_meter;
+pub mod usage_panel;
 pub mod workspace_footer;
 
 pub use approval_selector::{ApprovalModeDropdown, ApprovalModeIconExt, ApprovalModeSelector};
@@ -38,4 +40,6 @@ pub use queued_prompt_card::{queued_prompt_card, queued_prompt_row, queued_promp
 pub use quick_open_palette::QuickOpenPalette;
 pub use stripe::centered_stripe;
 pub use todo_card::todo_card;
+pub use usage_meter::UsageMeter;
+pub use usage_panel::UsagePanel;
 pub use workspace_footer::WorkspaceFooter;
