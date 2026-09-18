@@ -161,18 +161,69 @@ impl ConsoleDesktopApp {
         let Some(session_id) = self.active_session_for_pane(&pane_id) else {
             return;
         };
+
+        // Optimistically sync provider changes to open chat tabs, local session state, and usage meter
+        if let Some(ref prov) = payload.provider {
+            if !prov.is_empty() {
+                console_ui::workspace::ops::sync_chat_provider(
+                    &mut self.workspace_root,
+                    |tab| {
+                        matches!(tab, console_core::WorkspaceTabConfig::Chat { session_id: sid, .. }
+                            if sid == &session_id)
+                    },
+                    prov.clone(),
+                );
+                for root in self.project_workspace_roots.values_mut() {
+                    console_ui::workspace::ops::sync_chat_provider(
+                        root,
+                        |tab| {
+                            matches!(tab, console_core::WorkspaceTabConfig::Chat { session_id: sid, .. }
+                                if sid == &session_id)
+                        },
+                        prov.clone(),
+                    );
+                }
+                if let Some(session) = Rc::make_mut(&mut self.sessions)
+                    .iter_mut()
+                    .find(|session| session.id == session_id)
+                {
+                    session.provider = prov.clone();
+                    if let Some(ref mid) = payload.model_id {
+                        session.model_id = mid.clone();
+                    }
+                }
+                self.persist_workspaces();
+                self.maybe_fetch_usage(&session_id, cx);
+                cx.notify();
+            }
+        }
+
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
+        let sid = session_id.clone();
+        let pid = pane_id.clone();
         cx.spawn(async move |_entity, cx| {
-            if let Err(error) = client.sessions.update(&session_id, payload).await {
-                let message = format!("Unable to update session settings: {error}");
-                cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.set_error_for_session(&session_id, message, cx)
-                        });
-                    }
-                });
+            match client.sessions.update(&sid, payload).await {
+                Ok(header) => {
+                    let _ = cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.apply_session_header_for_pane(&pid, &header, cx);
+                                cx.notify();
+                            });
+                        }
+                    });
+                }
+                Err(error) => {
+                    let message = format!("Unable to update session settings: {error}");
+                    let _ = cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.set_error_for_session(&sid, message, cx)
+                            });
+                        }
+                    });
+                }
             }
         })
         .detach();
