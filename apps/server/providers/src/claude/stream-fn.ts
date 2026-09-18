@@ -8,6 +8,7 @@
  */
 import type { CacheRetention, CacheStatus, TurnUsage } from "@console/types";
 import type { StreamFn } from "@/agent/src/service/agent-loop.js";
+import type { ThinkingLevel } from "@/agent/src/types/index.js";
 import {
   CLAUDE_BASE_URL,
   CLAUDE_MAX_OUTPUT_TOKENS,
@@ -167,14 +168,32 @@ export function normalizeClaudeUsage(
   };
 }
 
+/**
+ * Map Console thinking level to Anthropic Claude output_config.effort value.
+ * Claude supports 5 levels (low, medium, high, xhigh, max) — no "none" or "minimal".
+ */
+function mapThinkingLevelToClaude(level?: ThinkingLevel): string | undefined {
+  if (!level) return undefined;
+  
+  // Claude doesn't support "none" or "minimal" — omit the param
+  if (level === "none" || level === "minimal") {
+    return undefined;
+  }
+  
+  // Direct 1:1 mapping for supported levels: low, medium, high, xhigh, max
+  return level as string;
+}
+
 function buildRequestBody(
   model: { id: string },
   systemPrompt: string,
   messages: ReturnType<typeof convertClaudeMessages>,
   tools: ReturnType<typeof convertClaudeTools>,
   retention: CacheRetention | undefined,
+  thinkingLevel?: ThinkingLevel,
 ): Record<string, unknown> {
   const trimmedSystem = systemPrompt.trim();
+  const effortLevel = mapThinkingLevelToClaude(thinkingLevel);
   return {
     model: model.id,
     max_tokens: CLAUDE_MAX_OUTPUT_TOKENS,
@@ -182,6 +201,8 @@ function buildRequestBody(
     // interleaved-thinking beta (sent in headers) keeps tool use working
     // alongside thinking.
     thinking: { type: "enabled", budget_tokens: CLAUDE_THINKING_BUDGET_TOKENS },
+    // Add output_config with effort level if specified
+    ...(effortLevel ? { output_config: { effort: effortLevel } } : {}),
     ...(trimmedSystem
       ? {
           system:
@@ -289,6 +310,7 @@ export const claudeStreamFn: StreamFn = async function* ({
   tools,
   signal,
   cacheRetention,
+  thinkingLevel,
 }) {
   const credential = await refreshClaudeIfNeeded(await loadClaudeCredential());
   const convertedMessages = convertClaudeMessages(messages, cacheRetention);
@@ -299,6 +321,7 @@ export const claudeStreamFn: StreamFn = async function* ({
     convertedMessages,
     convertedTools,
     cacheRetention,
+    thinkingLevel,
   );
 
   const baseUrl = (model as { baseUrl?: string }).baseUrl ?? CLAUDE_BASE_URL;
