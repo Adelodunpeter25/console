@@ -1440,19 +1440,28 @@ impl ConsoleDesktopApp {
             syntax::ThemePreset::GitHubLight
         };
 
+        let font_config = editor_ui::FontConfig {
+            family: "JetBrains Mono".into(),
+            size: gpui::px(12.0),
+            line_height: gpui::px(20.0),
+        };
+
         if let Some((cached_len, cached_hash, state, view)) = self.viewer_editor_views.get(path) {
             if *cached_len == len && *cached_hash == hash {
-                let (current_theme, current_wrap) = {
+                let (current_theme, current_wrap, current_font) = {
                     let editor = state.read(cx);
-                    (editor.theme(), editor.wrap_enabled())
+                    (editor.theme(), editor.wrap_enabled(), editor.font().clone())
                 };
-                if current_theme != theme_preset || !current_wrap {
+                if current_theme != theme_preset || !current_wrap || current_font != font_config {
                     state.update(cx, |editor, _cx| {
                         if editor.theme() != theme_preset {
                             editor.set_theme(theme_preset);
                         }
                         if !editor.wrap_enabled() {
                             editor.set_wrap_enabled(true);
+                        }
+                        if editor.font() != &font_config {
+                            editor.set_font(font_config);
                         }
                     });
                 }
@@ -1466,6 +1475,9 @@ impl ConsoleDesktopApp {
                     editor.set_theme(theme_preset);
                 }
                 editor.set_wrap_enabled(true);
+                if editor.font() != &font_config {
+                    editor.set_font(font_config);
+                }
             });
             let view_clone = view.clone();
             self.viewer_editor_views
@@ -1478,6 +1490,7 @@ impl ConsoleDesktopApp {
             let mut s = editor_ui::EditorState::readonly(content, lang);
             s.set_theme(theme_preset);
             s.set_wrap_enabled(true);
+            s.set_font(font_config);
             s
         });
         let view = cx.new(|cx| editor_ui::EditorView::new(&state, cx));
