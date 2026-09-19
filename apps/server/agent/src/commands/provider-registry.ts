@@ -229,6 +229,8 @@ export async function fetchModelsForProvider(
             provider: "codex" as const,
             contextWindow: entry.context_window ?? 272_000,
             ...(entry.input_modalities?.includes("image") ? { supportsImages: true } : {}),
+            supportedThinkingLevels: CODEX_THINKING_LEVELS,
+            defaultThinkingLevel: "low" as const,
           }];
         });
       }
@@ -243,6 +245,8 @@ export async function fetchModelsForProvider(
           provider: "claude" as const,
           contextWindow: m.contextWindow ?? 200_000,
           ...(m.supportsImages ? { supportsImages: true } : {}),
+          supportedThinkingLevels: CLAUDE_THINKING_LEVELS,
+          defaultThinkingLevel: "low" as const,
         }));
       }
     } else {

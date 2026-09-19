@@ -5,7 +5,7 @@
  * Hits the /v1internal:fetchAvailableModels endpoint with an OAuth token
  * to fetch live discoverable models for Antigravity.
  */
-import type { Model, OAuthProviderId } from "@console/types";
+import type { Model, OAuthProviderId, ThinkingLevel } from "@console/types";
 
 import {
   ANTIGRAVITY_BASE_URL,
@@ -13,6 +13,8 @@ import {
 } from "@/providers/src/constants.js";
 
 const DENYLIST = new Set(["chat_20706", "chat_23310"]);
+
+const GEMINI_THINKING_LEVELS: ThinkingLevel[] = ["minimal", "low", "medium", "high"];
 
 export interface FetchAvailableModelsOptions {
   accessToken: string;
@@ -92,11 +94,16 @@ export async function fetchAvailableModels(
     const contextWindow =
       typeof meta.maxTokens === "number" && meta.maxTokens > 0 ? meta.maxTokens : 200_000;
 
+    const supportsThinking = meta.supportsThinking ?? modelId.startsWith("gemini-");
+
     models.push({
       id: modelId,
       provider: options.provider,
       contextWindow,
       ...(typeof meta.supportsImages === "boolean" ? { supportsImages: meta.supportsImages } : {}),
+      ...(supportsThinking
+        ? { supportedThinkingLevels: GEMINI_THINKING_LEVELS, defaultThinkingLevel: "low" as const }
+        : {}),
     });
   }
 
