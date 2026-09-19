@@ -15,6 +15,6 @@ impl DiffViewer {
 
 impl RenderOnce for DiffViewer {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        div().size_full().bg(gpui::rgb(0x1e1e2e)).child(self.view)
+        div().size_full().bg(gpui::rgb(0x000000)).child(self.view)
     }
 }
