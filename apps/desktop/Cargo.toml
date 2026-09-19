@@ -59,3 +59,14 @@ objc2-app-kit = { version = "0.3" }
 objc2-web-kit = { version = "0.3" }
 objc2-user-notifications = { version = "0.3" }
 block2 = { version = "0.6" }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = 1
