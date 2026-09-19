@@ -107,23 +107,27 @@ Returns the cached `diff_text` directly as text/plain or JSON, avoiding any git 
 
 ## 6. Implementation Steps
 
-1. **Step 1 (Schema & DB)**:
-   - Update `apps/server/agent/src/session/session-changes.ts` to support `diff_text` column and composite primary key `(path, turn_index)`.
-   - Update unit tests in `apps/server/tests/changes-and-git.test.ts`.
+1. **Step 1 (Schema & DB)** ✅ COMPLETED:
+   - Updated `apps/server/agent/src/session/schema.ts` to support `diff_text` column and composite primary key `(path, turn_index)`.
+   - Updated `apps/server/agent/src/session/session-changes.ts` to handle new schema and `turnIndex` parameter.
+   - Updated `packages/types/src/session.ts` to include `diffText` in `SessionFileChange` interface.
 
-2. **Step 2 (Diff Generator)**:
-   - In `apps/server/api/src/services/run/run-file-changes.ts`, integrate diff generation for `write_file` and `replace_file_content`.
-   - Pass the active `turnIndex` into `extractAndRecordFileChange`.
+2. **Step 2 (Diff Generator)** ✅ COMPLETED:
+   - In `apps/server/api/src/services/run/run-file-changes.ts`, integrated diff generation using the `diff` package for `write_file`, `replace_file_content`, and `batch_write`.
+   - Added 1MB size limit for diff storage to prevent large file issues.
+   - Updated `apps/server/api/src/services/run.service.ts` to pass the active `turnIndex` into `extractAndRecordFileChange`.
 
-3. **Step 3 (API Updates)**:
-   - Update `apps/server/api/src/routes/sessions.ts` to support `turnIndex` query param and return `diffText`.
+3. **Step 3 (API Updates)** ✅ COMPLETED:
+   - Updated `apps/server/api/src/routes/sessions.ts` to support `turnIndex` query param and return `diffText`.
+   - Added `GET /api/sessions/:id/changes/diff` endpoint for fetching specific diff text.
+   - Updated `apps/server/api/src/services/session.service.ts` to support turn-based queries.
 
-4. **Step 4 (Desktop UI Updates)**:
+4. **Step 4 (Desktop UI Updates)** ⏳ PENDING:
    - In `apps/desktop/crates/console-ui/src/inspector/changes_list.rs`, render the `session_changes` list with proper file row styling.
    - Wire `open_diff_tab` to display the session diff rather than relying solely on `git diff`.
    - Add toggle for "Latest Turn" vs "All Turns".
 
-5. **Step 5 (Verification)**:
+5. **Step 5 (Verification)** ⏳ PENDING:
    - Test in an empty non-git directory:
      - Run prompt: *"Create a hello.txt file and write 3 lines"*.
      - Verify Changes tab shows `1` badge with `+3` additions.
