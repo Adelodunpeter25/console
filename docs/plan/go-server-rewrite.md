@@ -29,10 +29,12 @@ Ground rules:
 
 ## Phase 0 — Foundations
 
-- [ ] Scaffold `apps/server-go` module (`go.mod`, `cmd/server`, `internal/`).
-- [ ] Set up Fiber app skeleton: routes registration matching current paths,
+- [x] Scaffold `apps/server-go` module (`go.mod`, `cmd/server`, `internal/`).
+- [x] Set up Fiber app skeleton: routes registration matching current paths,
       middleware, error handler.
-- [ ] Define package layout mirroring existing seams:
+- [x] Define package layout mirroring existing seams (so far
+      `internal/session/`, `internal/httpapi/`; the rest arrive with their
+      phases):
       `internal/agent/`, `internal/api/`, `internal/providers/<name>/`,
       `internal/session/`, `internal/tools/`, `internal/types/`.
 - [ ] Decide config loading (BurntSushi/toml vs pelletier/go-toml/v2) and
@@ -47,18 +49,21 @@ Ground rules:
 
 TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
 
-- [ ] Port session schema + migrations (agent/src/session/schema.ts,
+- [x] Port session schema + migrations (agent/src/session/schema.ts,
       session-changes.ts).
-- [ ] Choose SQLite driver: `modernc.org/sqlite` (pure Go, no cgo,
-      recommended) or `mattn/go-sqlite3`.
-- [ ] Port session storage/ops: storage.ts, session-ops.ts,
-      session-messages.ts, session-helpers.ts, utils.ts.
-- [ ] Port projects.ts and model-favorites.ts.
+- [x] Choose SQLite driver: `modernc.org/sqlite` (pure Go, no cgo).
+- [x] Port session storage/ops (initial slice): storage.ts, session-ops.ts,
+      session-messages.ts — create, list, load with cursor pagination,
+      append/replace messages, soft delete. Remaining: repair, orphan-file
+      self-heal, subagents, todos, queued prompt, file changes.
+- [x] Port projects.ts and model-favorites.ts.
 - [ ] Port memory subsystem: schema.ts, storage.ts, search.ts, registry.ts.
-- [ ] Add a DB access policy (single writer mutex + WAL) replacing Bun's
+- [x] Add a DB access policy (single writer mutex + WAL) replacing Bun's
       implicit single-threaded sync behavior.
-- [ ] Tests: port apps/server/tests/sessions and tests/memory to Go table
-      tests against the same schema.
+- [x] Tests (initial slice): project CRUD, session lifecycle (create /
+      append / dedupe / load / soft delete), model favorites, project
+      deletion cascade — `apps/server-go/internal/session/storage_test.go`.
+      tests/memory and remaining ops pending.
 
 ## Phase 2 — Agent core (`agent/src/service`, `agent/src/types`)
 
