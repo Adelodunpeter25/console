@@ -2,7 +2,7 @@
 // One global index DB + one SQLite file per session; each *sql.DB is
 // opened with a single connection so concurrent goroutines serialize on
 // SQLite writes, mirroring Bun's single-threaded behavior.
-package session
+package db
 
 import (
 	"database/sql"

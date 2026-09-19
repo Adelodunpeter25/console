@@ -9,15 +9,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/httpapi"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/session"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	store, err := session.OpenStorage(session.OpenOptions{})
+	store, err := db.OpenStorage(db.OpenOptions{})
 	if err != nil {
 		slog.Error("failed to open storage", "error", err)
 		os.Exit(1)

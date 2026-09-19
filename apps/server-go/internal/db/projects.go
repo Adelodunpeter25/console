@@ -1,11 +1,12 @@
 // Project CRUD against the global DB. Port of agent/src/session/projects.ts.
-package session
+package db
 
 import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"os"
 )
 
@@ -26,7 +27,7 @@ type createProjectOptions struct {
 	Dir  string
 }
 
-func createProject(db *sql.DB, opts createProjectOptions) (ProjectInfo, error) {
+func createProject(db *sql.DB, opts createProjectOptions) (types.ProjectInfo, error) {
 	id := opts.ID
 	if id == "" {
 		id = randomID()
@@ -40,35 +41,35 @@ func createProject(db *sql.DB, opts createProjectOptions) (ProjectInfo, error) {
 			updated_at = excluded.updated_at
 	`, id, opts.Name, opts.Dir, now, now)
 	if err != nil {
-		return ProjectInfo{}, err
+		return types.ProjectInfo{}, err
 	}
 	return projectByDir(db, opts.Dir)
 }
 
-func scanProject(row interface{ Scan(...any) error }) (ProjectInfo, error) {
-	var p ProjectInfo
+func scanProject(row interface{ Scan(...any) error }) (types.ProjectInfo, error) {
+	var p types.ProjectInfo
 	err := row.Scan(&p.ID, &p.Name, &p.Path, &p.CreatedAt, &p.UpdatedAt)
 	return p, err
 }
 
-func projectByID(db *sql.DB, id string) (ProjectInfo, error) {
+func projectByID(db *sql.DB, id string) (types.ProjectInfo, error) {
 	return scanProject(db.QueryRow(
 		`SELECT id, name, dir, created_at, updated_at FROM projects WHERE id = ?`, id))
 }
 
-func projectByDir(db *sql.DB, dir string) (ProjectInfo, error) {
+func projectByDir(db *sql.DB, dir string) (types.ProjectInfo, error) {
 	return scanProject(db.QueryRow(
 		`SELECT id, name, dir, created_at, updated_at FROM projects WHERE dir = ?`, dir))
 }
 
-func listProjects(db *sql.DB) ([]ProjectInfo, error) {
+func listProjects(db *sql.DB) ([]types.ProjectInfo, error) {
 	rows, err := db.Query(
 		`SELECT id, name, dir, created_at, updated_at FROM projects ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []ProjectInfo
+	out := make([]types.ProjectInfo, 0)
 	for rows.Next() {
 		p, err := scanProject(rows)
 		if err != nil {

@@ -1,7 +1,7 @@
-// Wire/storage types ported from @console/types and agent types. Message
+// Central type definitions shared by every internal package. Message
 // payloads are kept as raw JSON so role-discriminated unions survive the
 // port unchanged.
-package session
+package types
 
 import "encoding/json"
 
@@ -31,9 +31,9 @@ type SessionHeader struct {
 // AgentMessage mirrors the TS union loosely: identity + role on the struct,
 // the full original payload preserved in Data for the provider layer.
 type AgentMessage struct {
-	ID    string          `json:"id"`
-	Role  string          `json:"role"`
-	Data  json.RawMessage `json:"data,omitempty"`
+	ID   string          `json:"id"`
+	Role string          `json:"role"`
+	Data json.RawMessage `json:"data,omitempty"`
 }
 
 type ModelFavorite struct {
@@ -49,4 +49,11 @@ type CreateSessionOptions struct {
 	ModelID      string  `json:"modelId"`
 	Provider     string  `json:"provider"`
 	ApprovalMode string  `json:"approvalMode,omitempty"`
+}
+
+type LoadedSession struct {
+	Header     SessionHeader  `json:"header"`
+	Messages   []AgentMessage `json:"messages"`
+	HasMore    bool           `json:"hasMore"`
+	NextCursor *int64         `json:"nextCursor"`
 }

@@ -1,7 +1,8 @@
-package session
+package db
 
 import (
 	"encoding/json"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"testing"
 )
 
@@ -49,7 +50,7 @@ func TestProjectsCRUD(t *testing.T) {
 func TestSessionLifecycle(t *testing.T) {
 	s := newTestStorage(t)
 
-	header, err := s.CreateSession(CreateSessionOptions{
+	header, err := s.CreateSession(types.CreateSessionOptions{
 		Cwd: "/tmp/console", ModelID: "claude-sonnet-4", Provider: "anthropic",
 	})
 	if err != nil {
@@ -60,7 +61,7 @@ func TestSessionLifecycle(t *testing.T) {
 	}
 
 	// Messages persist to the per-session DB with role and raw JSON.
-	msg := AgentMessage{ID: "m1", Role: "user"}
+	msg := types.AgentMessage{ID: "m1", Role: "user"}
 	msg.Data, _ = json.Marshal(map[string]string{"text": "hello"})
 	if err := s.AppendMessage(header.ID, msg); err != nil {
 		t.Fatalf("append: %v", err)
@@ -101,7 +102,7 @@ func TestSessionLifecycle(t *testing.T) {
 func TestModelFavorites(t *testing.T) {
 	s := newTestStorage(t)
 
-	fav := ModelFavorite{Provider: "anthropic", ModelID: "claude-sonnet-4"}
+	fav := types.ModelFavorite{Provider: "anthropic", ModelID: "claude-sonnet-4"}
 	if err := s.SetModelFavorite(fav, true); err != nil {
 		t.Fatalf("set: %v", err)
 	}
@@ -129,7 +130,7 @@ func TestDeleteProjectRemovesSessions(t *testing.T) {
 		t.Fatalf("create project: %v", err)
 	}
 	pid := proj.ID
-	if _, err := s.CreateSession(CreateSessionOptions{
+	if _, err := s.CreateSession(types.CreateSessionOptions{
 		Cwd: "/tmp/p", ModelID: "m", Provider: "anthropic", ProjectID: &pid,
 	}); err != nil {
 		t.Fatalf("create session: %v", err)

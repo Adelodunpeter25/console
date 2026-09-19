@@ -33,7 +33,8 @@ Ground rules:
 - [x] Set up Fiber app skeleton: routes registration matching current paths,
       middleware, error handler.
 - [x] Define package layout mirroring existing seams (so far
-      `internal/session/`, `internal/httpapi/`; the rest arrive with their
+      `internal/types/` (all types, centralized), `internal/db/` (all
+      database code), `internal/httpapi/`; the rest arrive with their
       phases):
       `internal/agent/`, `internal/api/`, `internal/providers/<name>/`,
       `internal/session/`, `internal/tools/`, `internal/types/`.
@@ -49,9 +50,10 @@ Ground rules:
 
 TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
 
-- [x] Port session schema + migrations (agent/src/session/schema.ts,
-      session-changes.ts).
-- [x] Choose SQLite driver: `modernc.org/sqlite` (pure Go, no cgo).
+- [x] Port session schema as a single canonical DDL — **no migration
+      compatibility**, no ALTER TABLE logic; schema changes recreate
+      storage (source: agent/src/session/schema.ts).
+- [x] Go toolchain: 1.25. SQLite driver: `modernc.org/sqlite` (pure Go, no cgo).
 - [x] Port session storage/ops (initial slice): storage.ts, session-ops.ts,
       session-messages.ts — create, list, load with cursor pagination,
       append/replace messages, soft delete. Remaining: repair, orphan-file

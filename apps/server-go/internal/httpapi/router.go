@@ -9,11 +9,11 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/session"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 )
 
 type Config struct {
-	Store *session.Storage
+	Store *db.Storage
 }
 
 func New(cfg Config) *fiber.App {

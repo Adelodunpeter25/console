@@ -1,16 +1,18 @@
 // Model favorites. Port of agent/src/session/model-favorites.ts.
-package session
+package db
 
-func (s *Storage) ListModelFavorites() ([]ModelFavorite, error) {
+import "github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+
+func (s *Storage) ListModelFavorites() ([]types.ModelFavorite, error) {
 	rows, err := s.globalDB.Query(
 		`SELECT provider, model_id FROM model_favorites ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []ModelFavorite
+	out := make([]types.ModelFavorite, 0)
 	for rows.Next() {
-		var f ModelFavorite
+		var f types.ModelFavorite
 		if err := rows.Scan(&f.Provider, &f.ModelID); err != nil {
 			return nil, err
 		}
@@ -19,7 +21,7 @@ func (s *Storage) ListModelFavorites() ([]ModelFavorite, error) {
 	return out, rows.Err()
 }
 
-func (s *Storage) SetModelFavorite(f ModelFavorite, isFavorite bool) error {
+func (s *Storage) SetModelFavorite(f types.ModelFavorite, isFavorite bool) error {
 	if isFavorite {
 		_, err := s.globalDB.Exec(`
 			INSERT INTO model_favorites (provider, model_id, created_at)

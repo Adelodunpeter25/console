@@ -1,7 +1,7 @@
 // Session operations. Port of agent/src/session/session-ops.ts and
 // session-messages.ts (initial slice: create, list, load, append,
 // replace, soft delete; repair and subagent ops land later in Phase 1).
-package session
+package db
 
 import (
 	"crypto/sha256"
@@ -9,12 +9,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"strings"
 )
 
 const deletedSessionRetentionMs = 7 * 24 * 60 * 60 * 1000
 
-func (s *Storage) CreateSession(opts CreateSessionOptions) (SessionHeader, error) {
+func (s *Storage) CreateSession(opts types.CreateSessionOptions) (types.SessionHeader, error) {
 	id := opts.ID
 	if id == "" {
 		id = randomID()
@@ -35,12 +36,12 @@ func (s *Storage) CreateSession(opts CreateSessionOptions) (SessionHeader, error
 		VALUES (?, ?, ?, ?, ?, ?, 0, 'idle', ?, ?, ?)`,
 		id, title, opts.Cwd, opts.ProjectID, opts.ModelID, opts.Provider, approvalMode, now, now,
 	); err != nil {
-		return SessionHeader{}, err
+		return types.SessionHeader{}, err
 	}
 
 	db, err := s.sessionDB(id, derefString(opts.ProjectID))
 	if err != nil {
-		return SessionHeader{}, err
+		return types.SessionHeader{}, err
 	}
 	if _, err := db.Exec(`
 		INSERT INTO session_meta
@@ -48,17 +49,17 @@ func (s *Storage) CreateSession(opts CreateSessionOptions) (SessionHeader, error
 		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		title, opts.Cwd, opts.ProjectID, opts.ModelID, opts.Provider, approvalMode, now, now,
 	); err != nil {
-		return SessionHeader{}, err
+		return types.SessionHeader{}, err
 	}
 
-	return SessionHeader{
+	return types.SessionHeader{
 		ID: id, Title: title, Cwd: opts.Cwd, ProjectID: opts.ProjectID,
 		ModelID: opts.ModelID, Provider: opts.Provider, ApprovalMode: approvalMode,
 		CreatedAt: now, UpdatedAt: now, MessageCount: 0, Status: "idle",
 	}, nil
 }
 
-func (s *Storage) ListSessions(minUpdatedAt int64) ([]SessionHeader, error) {
+func (s *Storage) ListSessions(minUpdatedAt int64) ([]types.SessionHeader, error) {
 	rows, err := s.globalDB.Query(`
 		SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
 			created_at, updated_at, message_count, status, deleted_at
@@ -72,10 +73,10 @@ func (s *Storage) ListSessions(minUpdatedAt int64) ([]SessionHeader, error) {
 	return scanSessionRows(rows)
 }
 
-func scanSessionRows(rows *sql.Rows) ([]SessionHeader, error) {
-	var out []SessionHeader
+func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
+	out := make([]types.SessionHeader, 0)
 	for rows.Next() {
-		var h SessionHeader
+		var h types.SessionHeader
 		var projectID sql.NullString
 		var deletedAt sql.NullInt64
 		if err := rows.Scan(&h.ID, &h.Title, &h.Cwd, &projectID, &h.ModelID, &h.Provider,
@@ -95,16 +96,9 @@ func scanSessionRows(rows *sql.Rows) ([]SessionHeader, error) {
 	return out, rows.Err()
 }
 
-type LoadedSession struct {
-	Header   SessionHeader  `json:"header"`
-	Messages []AgentMessage `json:"messages"`
-	HasMore  bool           `json:"hasMore"`
-	NextCursor *int64 `json:"nextCursor"`
-}
-
 // LoadSession reads the header from the global index and history from the
 // per-session DB. limit == 0 means all messages.
-func (s *Storage) LoadSession(sessionID string, limit int64, before int64) (*LoadedSession, error) {
+func (s *Storage) LoadSession(sessionID string, limit int64, before int64) (*types.LoadedSession, error) {
 	rows, err := s.globalDB.Query(`
 		SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
 			created_at, updated_at, message_count, status, deleted_at
@@ -147,10 +141,10 @@ func (s *Storage) LoadSession(sessionID string, limit int64, before int64) (*Loa
 	}
 	defer msgRows.Close()
 
-	var messages []AgentMessage
+	var messages []types.AgentMessage
 	var createdAts []int64
 	for msgRows.Next() {
-		var m AgentMessage
+		var m types.AgentMessage
 		var content string
 		var createdAt int64
 		if err := msgRows.Scan(&m.ID, &m.Role, &content, &createdAt); err != nil {
@@ -164,7 +158,7 @@ func (s *Storage) LoadSession(sessionID string, limit int64, before int64) (*Loa
 		return nil, err
 	}
 
-	result := &LoadedSession{Header: headers[0], Messages: messages}
+	result := &types.LoadedSession{Header: headers[0], Messages: messages}
 	if limit > 0 && int64(len(messages)) > limit {
 		result.HasMore = true
 		result.Messages = messages[:limit]
@@ -174,13 +168,13 @@ func (s *Storage) LoadSession(sessionID string, limit int64, before int64) (*Loa
 	return result, nil
 }
 
-func (s *Storage) AppendMessage(sessionID string, msg AgentMessage) error {
-	return s.AppendMessages(sessionID, []AgentMessage{msg})
+func (s *Storage) AppendMessage(sessionID string, msg types.AgentMessage) error {
+	return s.AppendMessages(sessionID, []types.AgentMessage{msg})
 }
 
 // AppendMessages inserts messages transactionally; duplicates by id are
 // ignored (INSERT OR IGNORE, matching the TS path).
-func (s *Storage) AppendMessages(sessionID string, messages []AgentMessage) error {
+func (s *Storage) AppendMessages(sessionID string, messages []types.AgentMessage) error {
 	if len(messages) == 0 {
 		return nil
 	}
@@ -225,7 +219,7 @@ func (s *Storage) AppendMessages(sessionID string, messages []AgentMessage) erro
 
 // ReplaceMessages rewrites session history after repairing an interrupted
 // tool turn.
-func (s *Storage) ReplaceMessages(sessionID string, messages []AgentMessage) error {
+func (s *Storage) ReplaceMessages(sessionID string, messages []types.AgentMessage) error {
 	projectID, ok := s.projectIDBySession(sessionID)
 	if !ok {
 		return fmt.Errorf("session %s not found", sessionID)

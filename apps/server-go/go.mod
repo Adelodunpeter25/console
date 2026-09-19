@@ -1,6 +1,6 @@
 module github.com/Adelodunpeter25/console/apps/server-go
 
-go 1.24
+go 1.25
 
 require (
 	github.com/gofiber/fiber/v2 v2.52.9

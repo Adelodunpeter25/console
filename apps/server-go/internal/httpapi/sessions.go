@@ -3,11 +3,12 @@ package httpapi
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/session"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
 // First slice of session routes (Phase 1): list, create, get, delete.
-func registerSessionRoutes(app *fiber.App, store *session.Storage) {
+func registerSessionRoutes(app *fiber.App, store *db.Storage) {
 	h := app.Group("/api/sessions")
 
 	h.Get("/", func(c *fiber.Ctx) error {
@@ -19,7 +20,7 @@ func registerSessionRoutes(app *fiber.App, store *session.Storage) {
 	})
 
 	h.Post("/", func(c *fiber.Ctx) error {
-		var req session.CreateSessionOptions
+		var req types.CreateSessionOptions
 		if err := c.BodyParser(&req); err != nil {
 			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 		}

@@ -1,7 +1,7 @@
 // Storage path resolution. Port of agent/src/session/apppaths.ts — the
 // binary-only NODE_ENV quirk does not apply to Go, so CONSOLE_ENV and
 // CONSOLE_STORAGE_DIR are the only inputs. Keep in sync with the TS side.
-package session
+package db
 
 import (
 	"os"
