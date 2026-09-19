@@ -22,8 +22,8 @@ pub use image_preview::{
 pub use markdown_viewer::MarkdownViewer;
 pub use svg::rasterize_svg;
 pub use editor_ui::{
-    EditorState, EditorView, IndentOptions, Mode as EditorMode, SearchState as EditorSearchState,
-    Selection as EditorSelection,
+    DiffState, DiffView as EditorDiffView, EditorState, EditorView, FontConfig, IndentOptions,
+    Mode as EditorMode, SearchState as EditorSearchState, Selection as EditorSelection,
 };
 pub use syntax::{
     Capture as SyntaxCapture, HighlightSpan, Language, LanguageRegistry,

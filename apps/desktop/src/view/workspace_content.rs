@@ -428,22 +428,8 @@ impl ConsoleDesktopApp {
                 .cloned()
                 .unwrap_or_else(|| (console_core::DiffResult::default(), String::new()));
             let theme = Theme::current(cx);
-            let lines = self.get_or_build_diff_lines(path, &diff_result, &theme);
-            let line_count = lines.len();
-            let list_state = self.viewer_list_state(
-                &format!("diff:{}", path),
-                line_count,
-                console_ui::CODE_LINE_HEIGHT,
-            );
-            let selection_state = self.viewer_selection_state(&format!("diff:{}", path), cx);
-            let focus_handle = self.viewer_focus_handle(&format!("diff:{}", path), cx);
-            let scrollbar_state = self.viewer_scrollbar_state(&format!("diff:{}", path));
-            return console_ui::DiffViewer::new(path.clone(), diff_result, raw_diff, list_state)
-                .rc_lines(lines)
-                .selection_state(selection_state)
-                .scrollbar_state(scrollbar_state)
-                .focus_handle(focus_handle)
-                .into_any_element();
+            let diff_view = self.get_or_build_diff_view(path, &diff_result, &raw_diff, &theme, cx);
+            return console_ui::DiffViewer::new(diff_view).into_any_element();
         }
 
         let pane_id = pane_id.to_owned();

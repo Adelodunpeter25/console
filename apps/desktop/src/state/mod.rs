@@ -10,6 +10,7 @@ mod auth;
 mod autocomplete;
 mod deleted_sessions;
 mod drafts;
+mod editor_views;
 mod environments;
 mod errors;
 mod execution;

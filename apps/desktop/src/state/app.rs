@@ -256,9 +256,6 @@ pub struct ConsoleDesktopApp {
     pub svg_preview_mode: std::collections::HashMap<String, console_ui::SvgViewMode>,
     pub open_diff_contents: std::collections::HashMap<String, (console_core::DiffResult, String)>,
     pub viewer_list_states: std::collections::HashMap<String, ListState>,
-    pub viewer_selection_states:
-        std::collections::HashMap<String, gpui::Entity<console_ui::SelectionState>>,
-    pub viewer_focus_handles: std::collections::HashMap<String, gpui::FocusHandle>,
     pub viewer_scrollbar_states:
         std::collections::HashMap<String, std::rc::Rc<console_ui::ScrollbarState>>,
     pub viewer_editor_views: std::collections::HashMap<
@@ -270,9 +267,14 @@ pub struct ConsoleDesktopApp {
             gpui::Entity<editor_ui::EditorView>,
         ),
     >,
-    pub viewer_cached_diff_lines: std::collections::HashMap<
+    pub viewer_diff_views: std::collections::HashMap<
         String,
-        (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>),
+        (
+            usize,
+            u64,
+            gpui::Entity<editor_ui::DiffState>,
+            gpui::Entity<editor_ui::DiffView>,
+        ),
     >,
     pub viewer_cached_markdown_views: std::collections::HashMap<
         String,
@@ -918,11 +920,9 @@ impl ConsoleDesktopApp {
             svg_preview_mode: std::collections::HashMap::new(),
             open_diff_contents: std::collections::HashMap::new(),
             viewer_list_states: std::collections::HashMap::new(),
-            viewer_selection_states: std::collections::HashMap::new(),
-            viewer_focus_handles: std::collections::HashMap::new(),
             viewer_scrollbar_states: std::collections::HashMap::new(),
-            viewer_cached_diff_lines: std::collections::HashMap::new(),
             viewer_editor_views: std::collections::HashMap::new(),
+            viewer_diff_views: std::collections::HashMap::new(),
             viewer_cached_markdown_views: std::collections::HashMap::new(),
             viewer_markdown_selections: std::collections::HashMap::new(),
             sidebar_list_state: ListState::new(0, ListAlignment::Top, px(55.0)),
@@ -1390,142 +1390,11 @@ impl ConsoleDesktopApp {
         state.clone()
     }
 
-    pub fn viewer_selection_state(
-        &mut self,
-        id: &str,
-        cx: &mut gpui::Context<Self>,
-    ) -> gpui::Entity<console_ui::SelectionState> {
-        self.viewer_selection_states
-            .entry(id.to_string())
-            .or_insert_with(|| cx.new(|_| console_ui::SelectionState::default()))
-            .clone()
-    }
-
-    /// Focus handle for a code viewer tab. Cached per-id so a re-render of
-    /// the same tab keeps the same handle, preserving focus across state
-    /// updates.
-    pub fn viewer_focus_handle(&mut self, id: &str, cx: &mut gpui::App) -> gpui::FocusHandle {
-        if let Some(handle) = self.viewer_focus_handles.get(id) {
-            return handle.clone();
-        }
-        let handle = cx.focus_handle();
-        self.viewer_focus_handles
-            .insert(id.to_string(), handle.clone());
-        handle
-    }
-
     pub fn viewer_scrollbar_state(&mut self, id: &str) -> std::rc::Rc<console_ui::ScrollbarState> {
         self.viewer_scrollbar_states
             .entry(id.to_string())
             .or_insert_with(console_ui::ScrollbarState::new)
             .clone()
-    }
-
-    pub fn get_or_build_editor_view(
-        &mut self,
-        path: &str,
-        content: &str,
-        theme: &console_ui::Theme,
-        cx: &mut gpui::App,
-    ) -> gpui::Entity<editor_ui::EditorView> {
-        use std::hash::{Hash, Hasher};
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        content.hash(&mut hasher);
-        let hash = hasher.finish();
-        let len = content.len();
-
-        let theme_preset = if theme.is_dark {
-            syntax::ThemePreset::GitHubDark
-        } else {
-            syntax::ThemePreset::GitHubLight
-        };
-
-        let font_config = editor_ui::FontConfig {
-            family: "JetBrains Mono".into(),
-            size: gpui::px(12.0),
-            line_height: gpui::px(20.0),
-        };
-
-        if let Some((cached_len, cached_hash, state, view)) = self.viewer_editor_views.get(path) {
-            if *cached_len == len && *cached_hash == hash {
-                let (current_theme, current_wrap, current_font) = {
-                    let editor = state.read(cx);
-                    (editor.theme(), editor.wrap_enabled(), editor.font().clone())
-                };
-                if current_theme != theme_preset || !current_wrap || current_font != font_config {
-                    state.update(cx, |editor, _cx| {
-                        if editor.theme() != theme_preset {
-                            editor.set_theme(theme_preset);
-                        }
-                        if !editor.wrap_enabled() {
-                            editor.set_wrap_enabled(true);
-                        }
-                        if editor.font() != &font_config {
-                            editor.set_font(font_config);
-                        }
-                    });
-                }
-                return view.clone();
-            }
-            state.update(cx, |editor, _cx| {
-                editor.set_text(content);
-                let lang = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
-                editor.set_language(lang);
-                if editor.theme() != theme_preset {
-                    editor.set_theme(theme_preset);
-                }
-                editor.set_wrap_enabled(true);
-                if editor.font() != &font_config {
-                    editor.set_font(font_config);
-                }
-            });
-            let view_clone = view.clone();
-            self.viewer_editor_views
-                .insert(path.to_string(), (len, hash, state.clone(), view_clone.clone()));
-            return view_clone;
-        }
-
-        let lang = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
-        let state = cx.new(|_| {
-            let mut s = editor_ui::EditorState::readonly(content, lang);
-            s.set_theme(theme_preset);
-            s.set_wrap_enabled(true);
-            s.set_font(font_config);
-            s
-        });
-        let view = cx.new(|cx| editor_ui::EditorView::new(&state, cx));
-        self.viewer_editor_views
-            .insert(path.to_string(), (len, hash, state, view.clone()));
-        view
-    }
-
-    pub fn get_or_build_diff_lines(
-        &mut self,
-        path: &str,
-        diff: &console_core::DiffResult,
-        theme: &console_ui::Theme,
-    ) -> std::rc::Rc<Vec<console_ui::CodeViewerLine>> {
-        use std::hash::{Hash, Hasher};
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        diff.lines.len().hash(&mut hasher);
-        for line in &diff.lines {
-            line.text.hash(&mut hasher);
-        }
-        let hash = hasher.finish();
-        let len = diff.lines.len();
-
-        if let Some((cached_len, cached_hash, cached_lines)) =
-            self.viewer_cached_diff_lines.get(path)
-        {
-            if *cached_len == len && *cached_hash == hash {
-                return cached_lines.clone();
-            }
-        }
-
-        let lines = std::rc::Rc::new(console_ui::build_diff_lines(path, diff, theme));
-        self.viewer_cached_diff_lines
-            .insert(path.to_string(), (len, hash, lines.clone()));
-        lines
     }
 
     pub fn get_or_build_markdown_view(

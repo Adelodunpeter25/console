@@ -1529,8 +1529,8 @@ impl ConsoleDesktopApp {
         let over = self.open_file_contents.len() > MAX_CACHED_FILES
             || self.open_image_contents.len() > MAX_CACHED_FILES
             || self.open_diff_contents.len() > MAX_CACHED_FILES
-            || self.viewer_cached_diff_lines.len() > MAX_CACHED_FILES
             || self.viewer_editor_views.len() > MAX_CACHED_FILES
+            || self.viewer_diff_views.len() > MAX_CACHED_FILES
             || self.viewer_cached_markdown_views.len() > MAX_CACHED_FILES;
         if !over {
             return;
@@ -1544,17 +1544,13 @@ impl ConsoleDesktopApp {
         self.svg_preview_mode.retain(|path, _| open.contains(path));
         self.open_diff_contents
             .retain(|path, _| open.contains(path));
-        self.viewer_cached_diff_lines
-            .retain(|path, _| open.contains(path));
         self.viewer_editor_views
+            .retain(|path, _| open.contains(path));
+        self.viewer_diff_views
             .retain(|path, _| open.contains(path));
         self.viewer_cached_markdown_views
             .retain(|path, _| open.contains(path));
         self.viewer_list_states
-            .retain(|key, _| Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids));
-        self.viewer_selection_states
-            .retain(|key, _| Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids));
-        self.viewer_focus_handles
             .retain(|key, _| Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids));
         self.viewer_scrollbar_states
             .retain(|key, _| Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids));
@@ -1609,8 +1605,8 @@ impl ConsoleDesktopApp {
         self.open_image_contents.remove(path);
         self.svg_preview_mode.remove(path);
         self.open_diff_contents.remove(path);
-        self.viewer_cached_diff_lines.remove(path);
         self.viewer_editor_views.remove(path);
+        self.viewer_diff_views.remove(path);
         self.viewer_cached_markdown_views.remove(path);
         for key in [
             format!("file:{path}"),
@@ -1618,8 +1614,6 @@ impl ConsoleDesktopApp {
             format!("md:{path}"),
         ] {
             self.viewer_list_states.remove(&key);
-            self.viewer_selection_states.remove(&key);
-            self.viewer_focus_handles.remove(&key);
             self.viewer_scrollbar_states.remove(&key);
             self.viewer_markdown_selections.remove(&key);
         }
