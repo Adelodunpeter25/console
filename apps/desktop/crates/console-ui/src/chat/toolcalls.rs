@@ -408,23 +408,18 @@ impl ToolCalls {
                             );
                         }
                     })
-                    .when_some(
-                        file_path
-                            .clone()
-                            .filter(|_| is_file_target_tool(&entry.call.name)),
-                        |element, path| {
-                            // File-targeting calls show the file's real type icon
-                            // (multicolor, like mobile) instead of the generic
-                            // monochrome tool glyph.
-                            element.child(file_type_icon(&path, 13.0))
-                        },
-                    )
-                    .when_none(&file_path, |element| {
-                        element.child(icon(
+                    .child(if is_file_target_tool(&entry.call.name) && file_path.is_some() {
+                        // File-targeting calls show the file's real type icon
+                        // (multicolor, like mobile) instead of the generic
+                        // monochrome tool glyph.
+                        file_type_icon(file_path.as_ref().unwrap(), 13.0).into_any_element()
+                    } else {
+                        icon(
                             activity_icon(&entry.call.name),
                             13.0,
                             theme.text_tertiary,
-                        ))
+                        )
+                        .into_any_element()
                     })
                     .child(
                         div()
