@@ -79,7 +79,11 @@ impl TerminalBackend for TermyBackend {
                 let idx = r * cols + c;
                 if let Some(cell) = frame.cells.get(idx) {
                     let fg = termycolor_to_terminal(cell.fg);
-                    let bg = termycolor_to_terminal(cell.bg);
+                    let bg = if cell.uses_terminal_default_bg {
+                        None
+                    } else {
+                        termycolor_to_terminal(cell.bg)
+                    };
                     let flags = TerminalCellFlags {
                         bold: cell.bold,
                         dim: false,
