@@ -436,19 +436,21 @@ export class RunService {
           this.sessionStorage.updateSessionStatus(sessionId, "needs_attention");
         }
 
-        if (isAttentionEvent(event)) {
-          notificationService.push(
-            attentionNotification(sessionId, event, {
-              sessionTitle: this.notificationSessionTitle(sessionId),
-            }),
-          );
-        } else if (isDoneEvent(event) && !runError) {
-          notificationService.push(
-            doneNotification(sessionId, {
-              sessionTitle: this.notificationSessionTitle(sessionId),
-              summary: this.lastAssistantExcerpt(sessionId),
-            }),
-          );
+        if (!abortController.signal.aborted) {
+          if (isAttentionEvent(event)) {
+            notificationService.push(
+              attentionNotification(sessionId, event, {
+                sessionTitle: this.notificationSessionTitle(sessionId),
+              }),
+            );
+          } else if (isDoneEvent(event) && !runError) {
+            notificationService.push(
+              doneNotification(sessionId, {
+                sessionTitle: this.notificationSessionTitle(sessionId),
+                summary: this.lastAssistantExcerpt(sessionId),
+              }),
+            );
+          }
         }
 
         // Compaction is internal LLM context memory management; do not broadcast to user UI
