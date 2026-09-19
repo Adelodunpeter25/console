@@ -196,8 +196,8 @@ export class SqliteSessionStorage {
     Sessions.recordFileChange(this.state, sessionId, change);
   }
 
-  getSessionFileChanges(sessionId: string): SessionFileChange[] {
-    return Sessions.getSessionFileChanges(this.state, sessionId);
+  getSessionFileChanges(sessionId: string, turnIndex?: number): SessionFileChange[] {
+    return Sessions.getSessionFileChanges(this.state, sessionId, turnIndex);
   }
 
   clearSessionFileChanges(sessionId: string): void {
