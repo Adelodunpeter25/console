@@ -19,20 +19,21 @@ export class ProjectService {
     // Load persistent projects from SQLite database
     try {
       const dbProjects = this.storage.listProjects();
-      for (const proj of dbProjects) {
-        try {
-          const stat = await fs.stat(proj.path);
-          projectsMap.set(proj.path, {
-            id: proj.id,
-            name: proj.name,
-            path: proj.path,
-            createdAt: proj.createdAt,
-            updatedAt: Math.round(stat.mtimeMs),
-          });
-        } catch {
-          // Ignored if custom project folder no longer exists
-        }
-      }
+      // Stats are independent per project — resolve them concurrently.
+      const stats = await Promise.all(
+        dbProjects.map((proj) => fs.stat(proj.path).catch(() => null)),
+      );
+      dbProjects.forEach((proj, i) => {
+        const stat = stats[i];
+        if (!stat) return; // Ignored if custom project folder no longer exists
+        projectsMap.set(proj.path, {
+          id: proj.id,
+          name: proj.name,
+          path: proj.path,
+          createdAt: proj.createdAt,
+          updatedAt: Math.round(stat.mtimeMs),
+        });
+      });
     } catch (e) {
       console.error("Failed to load projects from DB:", e);
     }
