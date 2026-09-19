@@ -269,6 +269,15 @@ pub struct ConsoleDesktopApp {
         String,
         (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>),
     >,
+    pub viewer_editor_views: std::collections::HashMap<
+        String,
+        (
+            usize,
+            u64,
+            gpui::Entity<editor_ui::EditorState>,
+            gpui::Entity<editor_ui::EditorView>,
+        ),
+    >,
     pub viewer_cached_markdown_views: std::collections::HashMap<
         String,
         (
@@ -918,6 +927,7 @@ impl ConsoleDesktopApp {
             viewer_scrollbar_states: std::collections::HashMap::new(),
             viewer_cached_file_lines: std::collections::HashMap::new(),
             viewer_cached_diff_lines: std::collections::HashMap::new(),
+            viewer_editor_views: std::collections::HashMap::new(),
             viewer_cached_markdown_views: std::collections::HashMap::new(),
             viewer_markdown_selections: std::collections::HashMap::new(),
             sidebar_list_state: ListState::new(0, ListAlignment::Top, px(55.0)),
@@ -1416,6 +1426,7 @@ impl ConsoleDesktopApp {
             .clone()
     }
 
+    #[allow(dead_code)]
     pub fn get_or_build_file_lines(
         &mut self,
         path: &str,
@@ -1439,6 +1450,56 @@ impl ConsoleDesktopApp {
         self.viewer_cached_file_lines
             .insert(path.to_string(), (len, hash, lines.clone()));
         lines
+    }
+
+    pub fn get_or_build_editor_view(
+        &mut self,
+        path: &str,
+        content: &str,
+        theme: &console_ui::Theme,
+        cx: &mut gpui::App,
+    ) -> gpui::Entity<editor_ui::EditorView> {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        content.hash(&mut hasher);
+        let hash = hasher.finish();
+        let len = content.len();
+
+        let theme_preset = if theme.is_dark {
+            syntax::ThemePreset::GitHubDark
+        } else {
+            syntax::ThemePreset::GitHubLight
+        };
+
+        if let Some((cached_len, cached_hash, state, view)) = self.viewer_editor_views.get(path) {
+            if *cached_len == len && *cached_hash == hash {
+                state.update(cx, |editor, _cx| {
+                    editor.set_theme(theme_preset);
+                });
+                return view.clone();
+            }
+            state.update(cx, |editor, _cx| {
+                editor.set_text(content);
+                let lang = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
+                editor.set_language(lang);
+                editor.set_theme(theme_preset);
+            });
+            let view_clone = view.clone();
+            self.viewer_editor_views
+                .insert(path.to_string(), (len, hash, state.clone(), view_clone.clone()));
+            return view_clone;
+        }
+
+        let lang = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
+        let state = cx.new(|_| {
+            let mut s = editor_ui::EditorState::readonly(content, lang);
+            s.set_theme(theme_preset);
+            s
+        });
+        let view = cx.new(|cx| editor_ui::EditorView::new(&state, cx));
+        self.viewer_editor_views
+            .insert(path.to_string(), (len, hash, state, view.clone()));
+        view
     }
 
     pub fn get_or_build_diff_lines(

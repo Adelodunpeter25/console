@@ -353,25 +353,8 @@ impl ConsoleDesktopApp {
                                 .cloned()
                                 .unwrap_or_else(|| "Loading file content...".to_string());
 
-                            let lines = self.get_or_build_file_lines(path, &content);
-                            let line_count = lines.len();
-                            let list_state = self.viewer_list_state(
-                                &format!("file:{}", path),
-                                line_count,
-                                console_ui::CODE_LINE_HEIGHT,
-                            );
-                            let selection_state =
-                                self.viewer_selection_state(&format!("file:{}", path), cx);
-                            let focus_handle =
-                                self.viewer_focus_handle(&format!("file:{}", path), cx);
-                            let scrollbar_state =
-                                self.viewer_scrollbar_state(&format!("file:{}", path));
-                            let file_viewer =
-                                console_ui::FileViewer::new(path.clone(), content, list_state)
-                                    .rc_lines(lines)
-                                    .selection_state(selection_state)
-                                    .scrollbar_state(scrollbar_state)
-                                    .focus_handle(focus_handle);
+                            let editor_view = self.get_or_build_editor_view(path, &content, &theme, cx);
+                            let file_viewer = console_ui::FileViewer::new(editor_view);
 
                             let toggle_path = path.clone();
                             let entity = cx.entity().downgrade();
@@ -431,23 +414,8 @@ impl ConsoleDesktopApp {
                         .cloned()
                         .unwrap_or_else(|| "Loading file content...".to_string());
 
-                    let lines = self.get_or_build_file_lines(path, &content);
-                    let line_count = lines.len();
-                    let list_state = self.viewer_list_state(
-                        &format!("file:{}", path),
-                        line_count,
-                        console_ui::CODE_LINE_HEIGHT,
-                    );
-                    let selection_state =
-                        self.viewer_selection_state(&format!("file:{}", path), cx);
-                    let focus_handle = self.viewer_focus_handle(&format!("file:{}", path), cx);
-                    let scrollbar_state = self.viewer_scrollbar_state(&format!("file:{}", path));
-                    return console_ui::FileViewer::new(path.clone(), content, list_state)
-                        .rc_lines(lines)
-                        .selection_state(selection_state)
-                        .scrollbar_state(scrollbar_state)
-                        .focus_handle(focus_handle)
-                        .into_any_element();
+                    let editor_view = self.get_or_build_editor_view(path, &content, &theme, cx);
+                    return console_ui::FileViewer::new(editor_view).into_any_element();
                 }
             }
         }

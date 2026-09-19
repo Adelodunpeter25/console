@@ -1548,6 +1548,8 @@ impl ConsoleDesktopApp {
             .retain(|path, _| open.contains(path));
         self.viewer_cached_diff_lines
             .retain(|path, _| open.contains(path));
+        self.viewer_editor_views
+            .retain(|path, _| open.contains(path));
         self.viewer_cached_markdown_views
             .retain(|path, _| open.contains(path));
         self.viewer_list_states
@@ -1611,6 +1613,7 @@ impl ConsoleDesktopApp {
         self.open_diff_contents.remove(path);
         self.viewer_cached_file_lines.remove(path);
         self.viewer_cached_diff_lines.remove(path);
+        self.viewer_editor_views.remove(path);
         self.viewer_cached_markdown_views.remove(path);
         for key in [
             format!("file:{path}"),
