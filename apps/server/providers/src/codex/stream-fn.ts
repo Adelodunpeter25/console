@@ -176,7 +176,7 @@ function mapThinkingLevelToCodex(level?: ThinkingLevel): string | undefined {
   return level as string;
 }
 
-function buildRequestBody(
+export function buildRequestBody(
   model: { id: string },
   systemPrompt: string,
   messages: AgentMessage[],
@@ -203,7 +203,6 @@ function buildRequestBody(
   const reasoningEffort = mapThinkingLevelToCodex(thinkingLevel);
   if (reasoningEffort) {
     body.reasoning = {
-      type: "enabled",
       effort: reasoningEffort,
     };
   }

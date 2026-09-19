@@ -3,7 +3,7 @@ export { createAntigravityStreamFn } from "./antigravity/index.js";
 export type { AntigravitySessionState } from "./antigravity/index.js";
 
 /** OpenAI Codex provider — ChatGPT OAuth and Codex Responses API. */
-export { codexStreamFn } from "./codex/stream-fn.js";
+export { codexStreamFn, buildRequestBody as buildCodexRequestBody } from "./codex/stream-fn.js";
 export {
   codexCredentialExists,
   createCodexAuthorizationUrl,

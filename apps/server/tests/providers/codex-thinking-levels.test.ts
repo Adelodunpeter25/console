@@ -7,6 +7,10 @@
 import { describe, it, expect } from "bun:test";
 import type { ThinkingLevel } from "@/agent/src/types/index.js";
 import type { AgentMessage, AgentTool } from "@console/types";
+import { buildCodexRequestBody } from "@/providers/src/index.js";
+
+const NO_MESSAGES: AgentMessage[] = [];
+const NO_TOOLS: AgentTool[] = [];
 
 describe("Codex Thinking Levels", () => {
   describe("Level support", () => {
@@ -68,25 +72,34 @@ describe("Codex Thinking Levels", () => {
   });
 
   describe("Request body construction", () => {
-    it("should include reasoning object when level is specified", () => {
-      const level: ThinkingLevel = "high";
-      const effort = level as string;
-      const reasoning = {
-        type: "enabled" as const,
-        effort,
-      };
+    it("should include a reasoning object with only 'effort' when level is specified", () => {
+      const body = buildCodexRequestBody(
+        { id: "gpt-5.6-terra" },
+        "",
+        NO_MESSAGES,
+        NO_TOOLS,
+        "none",
+        "cache-key",
+        "high",
+      );
 
-      expect(reasoning).toEqual({
-        type: "enabled",
-        effort: "high",
-      });
+      // Codex's Responses API rejects an unknown `reasoning.type` field —
+      // regression test for the "Unknown parameter: 'reasoning.type'" 400.
+      expect(body.reasoning).toEqual({ effort: "high" });
     });
 
     it("should omit reasoning when level is undefined", () => {
-      const level: ThinkingLevel | undefined = undefined;
-      const effort = level ? (level as string) : undefined;
+      const body = buildCodexRequestBody(
+        { id: "gpt-5.6-terra" },
+        "",
+        NO_MESSAGES,
+        NO_TOOLS,
+        "none",
+        "cache-key",
+        undefined,
+      );
 
-      expect(effort).toBeUndefined();
+      expect(body.reasoning).toBeUndefined();
     });
   });
 
