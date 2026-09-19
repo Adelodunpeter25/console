@@ -145,14 +145,17 @@ impl ConsoleDesktopApp {
 
         if let Some((cached_len, cached_hash, state, view)) = self.viewer_diff_views.get(path) {
             if *cached_len == len && *cached_hash == hash {
-                let (current_theme, current_font) = {
+                let (current_theme, current_wrap, current_font) = {
                     let diff_state = state.read(cx);
-                    (diff_state.theme(), diff_state.font().clone())
+                    (diff_state.theme(), diff_state.wrap_enabled(), diff_state.font().clone())
                 };
-                if current_theme != theme_preset || current_font != font_config {
+                if current_theme != theme_preset || !current_wrap || current_font != font_config {
                     state.update(cx, |diff_state, _cx| {
                         if diff_state.theme() != theme_preset {
                             diff_state.set_theme(theme_preset);
+                        }
+                        if !diff_state.wrap_enabled() {
+                            diff_state.set_wrap_enabled(true);
                         }
                         if diff_state.font() != &font_config {
                             diff_state.set_font(font_config);
@@ -168,6 +171,7 @@ impl ConsoleDesktopApp {
                 if diff_state.theme() != theme_preset {
                     diff_state.set_theme(theme_preset);
                 }
+                diff_state.set_wrap_enabled(true);
                 if diff_state.font() != &font_config {
                     diff_state.set_font(font_config);
                 }
@@ -182,6 +186,7 @@ impl ConsoleDesktopApp {
         let state = cx.new(|_| {
             let mut s = editor_ui::DiffState::from_result(convert_result(), lang);
             s.set_theme(theme_preset);
+            s.set_wrap_enabled(true);
             s.set_font(font_config);
             s
         });
