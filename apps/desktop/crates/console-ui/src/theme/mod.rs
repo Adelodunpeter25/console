@@ -114,7 +114,7 @@ impl Theme {
             raised: rgb(0x232323).into(),
             composer: rgb(0x0A0A0A).into(),
             inset: rgb(0x151515).into(),
-            terminal: rgb(0x151515).into(),
+            terminal: rgb(0x000000).into(),
             overlay: hsla(220.0 / 360.0, 0.10, 0.90, 0.05),
             overlay_strong: hsla(220.0 / 360.0, 0.10, 0.90, 0.09),
 

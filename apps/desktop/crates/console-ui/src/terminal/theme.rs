@@ -33,10 +33,10 @@ pub struct TerminalTheme {
 impl TerminalTheme {
     pub fn dark() -> Self {
         Self {
-            background: rgb(0x0a0a0b).into(),
+            background: rgb(0x000000).into(),
             foreground: rgb(0xe4e4e7).into(),
             cursor: rgb(0x009fff).into(),
-            cursor_text: rgb(0x0a0a0b).into(),
+            cursor_text: rgb(0x000000).into(),
             selection: hsla(240.0 / 360.0, 0.06, 0.20, 0.6),
             black: rgb(0x1a1a1e).into(),
             red: rgb(0xef4444).into(),
