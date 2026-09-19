@@ -4,7 +4,7 @@
  */
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { FsService, FilePreviewBlockedError } from "@/api/src/services/fs.service.js";
+import { FsService, FilePreviewBlockedError, buildFileETag } from "@/api/src/services/fs.service.js";
 import { fsWatchService } from "@/api/src/services/fswatch.service.js";
 import { searchFiles } from "@/api/src/services/assist.service.js";
 
@@ -52,14 +52,15 @@ fsRoutes.get("/search", async (c) => {
 
 /**
  * GET /api/fs/entries — List all entries recursively for building a file tree.
- * Query: path=<project root>, depth=<max depth, default 6>, hidden=<include dotfiles>
+ * Query: path=<project root>, depth=<max depth, default 6>, hidden=<include dotfiles>,
+ *   withSizes=<false to skip stat calls for a tree-only scan>, maxEntries=<cap, default 30000>
  */
 fsRoutes.get("/entries", async (c) => {
   const dirPath = c.req.query("path");
   if (!dirPath) {
     return c.json({ success: false, error: "Query parameter 'path' is required." }, 400);
   }
-  const rawDepth = c.req.query("depth") ?? "25";
+  const rawDepth = c.req.query("depth") ?? "6";
   const maxDepth = Number.parseInt(rawDepth, 10);
   if (!Number.isSafeInteger(maxDepth) || maxDepth < 1 || maxDepth > 25) {
     return c.json(
@@ -68,9 +69,21 @@ fsRoutes.get("/entries", async (c) => {
     );
   }
   const showHidden = c.req.query("hidden") === "true";
+  const withSizes = c.req.query("withSizes") !== "false" && c.req.query("withSizes") !== "0";
+  const rawMax = c.req.query("maxEntries") ?? "30000";
+  const maxEntries = Number.parseInt(rawMax, 10);
+  if (!Number.isSafeInteger(maxEntries) || maxEntries < 1 || maxEntries > 100000) {
+    return c.json(
+      { success: false, error: "Query parameter 'maxEntries' must be an integer between 1 and 100000." },
+      400,
+    );
+  }
 
   try {
-    const entries = await fsService.listAllEntries(dirPath, maxDepth, showHidden);
+    const entries = await fsService.listAllEntries(dirPath, maxDepth, showHidden, {
+      withSizes,
+      maxEntries,
+    });
     return c.json({ success: true, data: entries });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -110,6 +123,7 @@ fsRoutes.get("/tree", async (c) => {
 
 /**
  * GET /api/fs/file/raw — Read raw file bytes (for image/SVG preview).
+ * Streams via Bun.file (zero-copy) with ETag/304 support.
  */
 fsRoutes.get("/file/raw", async (c) => {
   const filePath = c.req.query("path");
@@ -118,11 +132,19 @@ fsRoutes.get("/file/raw", async (c) => {
   }
 
   try {
-    const { bytes, mimeType, sizeBytes } = await fsService.readFileBytes(filePath);
-    return c.body(new Uint8Array(bytes), 200, {
-      "Content-Type": mimeType,
-      "Content-Length": String(sizeBytes),
-      "Cache-Control": "private, max-age=30",
+    const { mimeType, sizeBytes, mtimeMs } = await fsService.getImageMeta(filePath);
+    const etag = buildFileETag(sizeBytes, mtimeMs);
+    if (c.req.header("if-none-match") === etag) {
+      return c.body(null, 304, { ETag: etag });
+    }
+    // Zero-copy streaming — no Buffer round-trip through Node.
+    return new Response(Bun.file(filePath), {
+      headers: {
+        "Content-Type": mimeType,
+        "Content-Length": String(sizeBytes),
+        "Cache-Control": "private, max-age=30",
+        ETag: etag,
+      },
     });
   } catch (err) {
     if (err instanceof FilePreviewBlockedError) {
@@ -160,7 +182,17 @@ fsRoutes.get("/file", async (c) => {
   }
 
   try {
-    const content = await fsService.readFileContent(filePath, startLine, endLine);
+    const {
+      content,
+      sizeBytes,
+      mtimeMs,
+    } = await fsService.readFileContentWithMeta(filePath, startLine, endLine);
+    const etag = buildFileETag(sizeBytes, mtimeMs);
+    if (c.req.header("if-none-match") === etag) {
+      return c.body(null, 304, { ETag: etag });
+    }
+    c.header("ETag", etag);
+    c.header("Cache-Control", "private, max-age=5");
     return c.json({
       success: true,
       data: { path: filePath, content },

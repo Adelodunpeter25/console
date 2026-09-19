@@ -47,6 +47,42 @@ export class FilePreviewBlockedError extends Error {
 /** Bytes inspected for NUL bytes before trusting that a file is text. */
 const BINARY_SNIFF_BYTES = 8192;
 
+/** Weak ETag from size + mtime so repeated previews get 304s. */
+export function buildFileETag(sizeBytes: number, mtimeMs: number): string {
+  return `W/"${sizeBytes.toString(36)}-${Math.round(mtimeMs).toString(36)}"`;
+}
+
+/**
+ * Slice already-decoded text to [startLine, endLine] (1-based, inclusive)
+ * with a single scan — avoids splitting the whole file into an array.
+ * Matches the previous split/slice/join semantics exactly (including
+ * trailing-newline handling).
+ */
+function sliceLines(text: string, startLine?: number, endLine?: number): string {
+  if (startLine === undefined && endLine === undefined) return text;
+  // Line count as split("\n").length without materialising the array.
+  let count = 1;
+  for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) count++;
+  const start0 = Math.max(1, startLine ?? 1) - 1;
+  const endExcl = Math.min(endLine ?? count, count);
+  if (start0 >= count || endExcl <= start0) return "";
+  // Locate the offset where line `idx` (0-based) starts.
+  const offsetOf = (idx: number): number => {
+    if (idx <= 0) return 0;
+    let line = 0;
+    for (let i = 0; i < text.length; i++) {
+      if (text.charCodeAt(i) === 10) {
+        line++;
+        if (line === idx) return i + 1;
+      }
+    }
+    return text.length;
+  };
+  const sliceStart = offsetOf(start0);
+  if (endExcl >= count) return text.slice(sliceStart);
+  return text.slice(sliceStart, offsetOf(endExcl) - 1);
+}
+
 export class FsService {
   /**
    * Browse a system directory for the mobile/desktop file picker UI.
@@ -91,22 +127,31 @@ export class FsService {
    * List all file and directory entries under a project path recursively.
    * Returns a flat list (like T3's ProjectEntry[]) for building a client-side
    * file tree. Used by the mobile file browser for search and full-tree views.
+   *
+   * Parallelised: stats for a directory resolve together and subdirectories
+   * are walked concurrently (bounded), instead of one stat + one awaited
+   * recursion at a time. `withSizes: false` skips all stats for the fastest
+   * tree-only scan; `maxEntries` caps runaway trees.
    */
   async listAllEntries(
     targetPath: string,
     maxDepth = 25,
     showHidden = false,
+    options?: { withSizes?: boolean; maxEntries?: number },
   ): Promise<FsTreeEntry[]> {
     const resolvedRoot = path.resolve(targetPath);
-    const result: FsTreeEntry[] = [];
+    const withSizes = options?.withSizes ?? true;
+    const maxEntries = options?.maxEntries ?? 30000;
+    const counter = { count: 0 };
+    const truncated = { value: false };
 
-    async function walk(currentPath: string, depth: number): Promise<void> {
-      if (depth > maxDepth) return;
+    const walk = async (currentPath: string, depth: number): Promise<FsTreeEntry[]> => {
+      if (depth > maxDepth || truncated.value) return [];
       let dirEntries: import("node:fs").Dirent[];
       try {
         dirEntries = await fs.readdir(currentPath, { withFileTypes: true });
       } catch {
-        return;
+        return [];
       }
       const visible = dirEntries.filter((e) => showHidden || !isHiddenName(e.name));
       // Directories first, then files, alphabetically (numeric-aware).
@@ -115,36 +160,61 @@ export class FsService {
         return a.name.localeCompare(b.name, undefined, { numeric: true });
       });
 
+      // Stats for the whole directory resolve together, not one by one.
+      const sizes = withSizes
+        ? await Promise.all(
+            visible.map((entry) => {
+              if (!showHidden && isPathIgnored(entry.name)) return Promise.resolve(undefined);
+              const entryPath = path.join(currentPath, entry.name);
+              return safeFileSize(entryPath, entry.isDirectory());
+            }),
+          )
+        : visible.map(() => undefined);
+
+      // Collect subdirectories to walk concurrently (bounded), then
+      // interleave children DFS-style to preserve the previous ordering:
+      // each directory immediately followed by its subtree.
+      const subdirPaths: string[] = [];
       for (const entry of visible) {
+        if (!showHidden && isPathIgnored(entry.name)) continue;
+        if (entry.isDirectory()) subdirPaths.push(path.join(currentPath, entry.name));
+      }
+      const childrenByPath = new Map<string, FsTreeEntry[]>();
+      const CONCURRENCY = 8;
+      for (let i = 0; i < subdirPaths.length; i += CONCURRENCY) {
+        if (truncated.value) break;
+        const batch = subdirPaths.slice(i, i + CONCURRENCY);
+        const children = await Promise.all(batch.map((p) => walk(p, depth + 1)));
+        batch.forEach((p, j) => childrenByPath.set(p, children[j]!));
+      }
+
+      const local: FsTreeEntry[] = [];
+      for (let i = 0; i < visible.length; i++) {
+        if (truncated.value || counter.count >= maxEntries) {
+          truncated.value = true;
+          break;
+        }
+        const entry = visible[i]!;
         if (!showHidden && isPathIgnored(entry.name)) {
           const dirPath = path.join(currentPath, entry.name);
-          result.push({
-            name: entry.name,
-            path: dirPath,
-            isDir: true,
-          });
+          local.push({ name: entry.name, path: dirPath, isDir: true });
+          counter.count++;
           continue;
         }
 
         const entryPath = path.join(currentPath, entry.name);
         const isDir = entry.isDirectory();
-        const size = await safeFileSize(entryPath, isDir);
-
-        result.push({
-          name: entry.name,
-          path: entryPath,
-          isDir,
-          size,
-        });
-
+        local.push({ name: entry.name, path: entryPath, isDir, size: sizes[i] });
+        counter.count++;
         if (isDir) {
-          await walk(entryPath, depth + 1);
+          // Children already counted inside the recursive walk.
+          local.push(...(childrenByPath.get(entryPath) ?? []));
         }
       }
-    }
+      return local;
+    };
 
-    await walk(resolvedRoot, 1);
-    return result;
+    return walk(resolvedRoot, 1);
   }
 
   /**
@@ -153,9 +223,14 @@ export class FsService {
    * Enforces the file-preview gate (docs/notes/file-preview-gating.md):
    * lockfiles, binary files (extension or NUL-byte sniff), and files over
    * MAX_FILE_PREVIEW_BYTES are rejected with FilePreviewBlockedError before
-   * the body is read.
+   * the body is read. Single open/read: stat + sniff + body share one
+   * file handle instead of stat + open/sniff/close + reopen.
    */
-  async readFileContent(filePath: string, startLine?: number, endLine?: number): Promise<string> {
+  async readFileContentWithMeta(
+    filePath: string,
+    startLine?: number,
+    endLine?: number,
+  ): Promise<{ content: string; sizeBytes: number; mtimeMs: number }> {
     const fileName = path.basename(filePath);
 
     const nameBlock = getFilePreviewBlock(fileName);
@@ -166,54 +241,54 @@ export class FsService {
       throw new FilePreviewBlockedError("BINARY_FILE", nameBlock.message);
     }
 
-    const stat = await fs.stat(filePath);
-    if (!stat.isFile()) {
-      throw new Error(`${filePath} is not a regular file.`);
-    }
-    if (stat.size > MAX_FILE_PREVIEW_BYTES) {
-      throw new FilePreviewBlockedError(
-        "FILE_TOO_LARGE",
-        `"${fileName}" is ${formatBytes(stat.size)} — previews are capped at ${formatBytes(MAX_FILE_PREVIEW_BYTES)}.`,
-        { status: 413, detail: { sizeBytes: stat.size, maxBytes: MAX_FILE_PREVIEW_BYTES } },
-      );
-    }
-
-    // Content sniff: extensions lie, NUL bytes don't. Catches binaries whose
-    // extension isn't on the denylist.
     const handle = await fs.open(filePath, "r");
     try {
-      const sniff = Buffer.alloc(Math.min(BINARY_SNIFF_BYTES, stat.size));
-      await handle.read(sniff, 0, sniff.length, 0);
-      if (sniff.includes(0)) {
+      const stat = await handle.stat();
+      if (!stat.isFile()) {
+        throw new Error(`${filePath} is not a regular file.`);
+      }
+      if (stat.size > MAX_FILE_PREVIEW_BYTES) {
         throw new FilePreviewBlockedError(
-          "BINARY_FILE",
-          `"${fileName}" doesn't look like a text file.`,
+          "FILE_TOO_LARGE",
+          `"${fileName}" is ${formatBytes(stat.size)} — previews are capped at ${formatBytes(MAX_FILE_PREVIEW_BYTES)}.`,
+          { status: 413, detail: { sizeBytes: stat.size, maxBytes: MAX_FILE_PREVIEW_BYTES } },
         );
       }
+
+      // Single read: sniff the head of the same buffer for NUL bytes.
+      // Extensions lie, NUL bytes don't — catches binaries whose extension
+      // isn't on the denylist.
+      const buffer = Buffer.alloc(stat.size);
+      await handle.read(buffer, 0, stat.size, 0);
+      const headLen = Math.min(BINARY_SNIFF_BYTES, buffer.length);
+      for (let i = 0; i < headLen; i++) {
+        if (buffer[i] === 0) {
+          throw new FilePreviewBlockedError(
+            "BINARY_FILE",
+            `"${fileName}" doesn't look like a text file.`,
+          );
+        }
+      }
+
+      const raw = buffer.toString("utf-8");
+      return { content: sliceLines(raw, startLine, endLine), sizeBytes: stat.size, mtimeMs: stat.mtimeMs };
     } finally {
       await handle.close();
     }
+  }
 
-    const raw = await Bun.file(filePath).text();
-    if (startLine === undefined && endLine === undefined) {
-      return raw;
-    }
-    const lines = raw.split("\n");
-    const start = startLine ? Math.max(1, startLine) - 1 : 0;
-    const end = endLine ? Math.min(lines.length, endLine) : lines.length;
-    return lines.slice(start, end).join("\n");
+  async readFileContent(filePath: string, startLine?: number, endLine?: number): Promise<string> {
+    return (await this.readFileContentWithMeta(filePath, startLine, endLine)).content;
   }
 
   /**
-   * Read raw image / SVG bytes for binary preview.
-   *
-   * Only allows supported raster image extensions and SVG.
-   * Lockfiles and non-image binaries/text are blocked.
-   * Enforces IMAGE_MAX_BYTES.
+   * Validate an image/SVG preview request and return its metadata.
+   * Lets the route stream `Bun.file()` (zero-copy sendfile) instead of
+   * buffering the whole file through Node.
    */
-  async readFileBytes(
+  async getImageMeta(
     filePath: string,
-  ): Promise<{ bytes: Buffer; mimeType: string; sizeBytes: number }> {
+  ): Promise<{ mimeType: string; sizeBytes: number; mtimeMs: number }> {
     const fileName = path.basename(filePath);
 
     if (isLockFileName(fileName)) {
@@ -244,9 +319,23 @@ export class FsService {
     }
 
     const mimeType = imageMimeForExtension(path.extname(filePath)) ?? "application/octet-stream";
+    return { mimeType, sizeBytes: stat.size, mtimeMs: stat.mtimeMs };
+  }
+
+  /**
+   * Read raw image / SVG bytes for binary preview.
+   *
+   * Only allows supported raster image extensions and SVG.
+   * Lockfiles and non-image binaries/text are blocked.
+   * Enforces IMAGE_MAX_BYTES.
+   */
+  async readFileBytes(
+    filePath: string,
+  ): Promise<{ bytes: Buffer; mimeType: string; sizeBytes: number; mtimeMs: number }> {
+    const { mimeType, sizeBytes, mtimeMs } = await this.getImageMeta(filePath);
     const bytes = await fs.readFile(filePath);
 
-    return { bytes, mimeType, sizeBytes: stat.size };
+    return { bytes, mimeType, sizeBytes, mtimeMs };
   }
 
   /**

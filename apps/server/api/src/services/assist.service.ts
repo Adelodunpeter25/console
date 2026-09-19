@@ -10,6 +10,84 @@ import type { FileSearchResult } from "@console/types";
 
 const MAX_RESULTS = 20;
 
+/** Reused FileFinder per project root so repeat searches hit a warm index. */
+interface CachedFinder {
+  finder: FileFinder;
+  lastUsed: number;
+  warm: boolean;
+}
+const finderCache = new Map<string, CachedFinder>();
+const MAX_CACHED_FINDERS = 8;
+const FINDER_IDLE_MS = 5 * 60 * 1000;
+
+function evictStaleFinders(now: number): void {
+  for (const [key, entry] of finderCache) {
+    if (now - entry.lastUsed > FINDER_IDLE_MS || entry.finder.isDestroyed) {
+      try {
+        if (!entry.finder.isDestroyed) entry.finder.destroy();
+      } catch {
+        // Best-effort cleanup.
+      }
+      finderCache.delete(key);
+    }
+  }
+  while (finderCache.size > MAX_CACHED_FINDERS) {
+    let oldestKey: string | null = null;
+    let oldestTime = Number.POSITIVE_INFINITY;
+    for (const [key, entry] of finderCache) {
+      if (entry.lastUsed < oldestTime) {
+        oldestTime = entry.lastUsed;
+        oldestKey = key;
+      }
+    }
+    if (oldestKey === null) break;
+    const victim = finderCache.get(oldestKey);
+    try {
+      if (victim && !victim.finder.isDestroyed) victim.finder.destroy();
+    } catch {
+      // Best-effort cleanup.
+    }
+    finderCache.delete(oldestKey);
+  }
+}
+
+function getCachedFinder(basePath: string): { finder: FileFinder; warm: boolean } {
+  const now = Date.now();
+  evictStaleFinders(now);
+  const hit = finderCache.get(basePath);
+  if (hit && !hit.finder.isDestroyed) {
+    hit.lastUsed = now;
+    return { finder: hit.finder, warm: hit.warm };
+  }
+  if (hit) finderCache.delete(basePath);
+  const created = FileFinder.create({ basePath });
+  if (!created.ok) {
+    throw new Error(`Failed to initialise file finder: ${created.error}`);
+  }
+  finderCache.set(basePath, { finder: created.value, lastUsed: now, warm: false });
+  return { finder: created.value, warm: false };
+}
+
+function markFinderWarm(basePath: string): void {
+  const entry = finderCache.get(basePath);
+  if (entry) {
+    entry.warm = true;
+    entry.lastUsed = Date.now();
+  }
+}
+
+function dropFinder(basePath: string): void {
+  const entry = finderCache.get(basePath);
+  if (entry) {
+    try {
+      if (!entry.finder.isDestroyed) entry.finder.destroy();
+    } catch {
+      // Best-effort cleanup.
+    }
+    finderCache.delete(basePath);
+  }
+}
+
 /**
  * Expand `@path/to/file` mentions (relative to the session cwd) into absolute
  * paths before the prompt reaches the agent. This is the server-side half of
@@ -41,14 +119,12 @@ export async function searchFiles(
 ): Promise<FileSearchResult[]> {
   const basePath = path.resolve(root);
 
-  const created = FileFinder.create({ basePath });
-  if (!created.ok) {
-    throw new Error(`Failed to initialise file finder: ${created.error}`);
-  }
-
-  const finder = created.value;
+  const { finder, warm } = getCachedFinder(basePath);
   try {
-    await finder.waitForScan(5000);
+    // Cold index waits up to 5s; warm reuse only needs a short grace period
+    // since the background scan is already running.
+    await finder.waitForScan(warm ? 500 : 5000);
+    markFinderWarm(basePath);
 
     // Request headroom when excluding directories so a full page of files
     // survives the filter instead of returning short.
@@ -73,7 +149,9 @@ export async function searchFiles(
           score,
         };
       });
-  } finally {
-    finder.destroy();
+  } catch (err) {
+    // A broken native handle must not poison the cache for later searches.
+    dropFinder(basePath);
+    throw err;
   }
 }

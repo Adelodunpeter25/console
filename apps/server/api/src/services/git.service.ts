@@ -9,6 +9,11 @@ import type {
 } from "@console/types";
 
 export class GitService {
+  /** Short-lived status cache + inflight dedup to survive watch storms. */
+  private statusCache = new Map<string, { expires: number; data: GitStatusSummary }>();
+  private statusInflight = new Map<string, Promise<GitStatusSummary>>();
+  private static readonly STATUS_TTL_MS = 2000;
+
   private parseNumstat(output: string, map: Map<string, { additions: number; deletions: number }>): void {
     for (const line of output.split("\n")) {
       const trimmed = line.trim();
@@ -29,35 +34,52 @@ export class GitService {
 
   private async getNumstatMap(repoPath: string): Promise<Map<string, { additions: number; deletions: number }>> {
     const map = new Map<string, { additions: number; deletions: number }>();
-    try {
-      const unstaged = await execAsync("git diff --numstat", { cwd: repoPath });
-      this.parseNumstat(unstaged.stdout, map);
-    } catch {
-      // Ignored
-    }
-    try {
-      const staged = await execAsync("git diff --cached --numstat", { cwd: repoPath });
-      this.parseNumstat(staged.stdout, map);
-    } catch {
-      // Ignored
-    }
+    // Staged + unstaged numstats are independent — run together.
+    const [unstaged, staged] = await Promise.all([
+      execAsync("git diff --numstat", { cwd: repoPath }).catch(() => null),
+      execAsync("git diff --cached --numstat", { cwd: repoPath }).catch(() => null),
+    ]);
+    if (unstaged) this.parseNumstat(unstaged.stdout, map);
+    if (staged) this.parseNumstat(staged.stdout, map);
     return map;
   }
 
   /**
    * Run git status --porcelain=v1 in the repository directory and return structured status.
+   * Branch, porcelain status, and numstats resolve concurrently; repeated
+   * calls within STATUS_TTL_MS share one cached snapshot and concurrent
+   * callers share one inflight promise.
    */
   async getGitStatus(repoPath: string): Promise<GitStatusSummary> {
+    const now = Date.now();
+    const cached = this.statusCache.get(repoPath);
+    if (cached && cached.expires > now) return cached.data;
+    const inflight = this.statusInflight.get(repoPath);
+    if (inflight) return inflight;
+
+    const promise = this.computeGitStatus(repoPath)
+      .then((data) => {
+        this.statusCache.set(repoPath, { expires: Date.now() + GitService.STATUS_TTL_MS, data });
+        return data;
+      })
+      .finally(() => {
+        if (this.statusInflight.get(repoPath) === promise) this.statusInflight.delete(repoPath);
+      });
+    this.statusInflight.set(repoPath, promise);
+    return promise;
+  }
+
+  private async computeGitStatus(repoPath: string): Promise<GitStatusSummary> {
     try {
-      // Get current branch name
-      const branchRes = await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: repoPath });
+      // Branch, porcelain status, and numstats are independent — resolve
+      // concurrently instead of four sequential shell spawns.
+      const [branchRes, statusRes, numstatMap] = await Promise.all([
+        execAsync("git rev-parse --abbrev-ref HEAD", { cwd: repoPath }),
+        execAsync("git status --porcelain=v1 -u", { cwd: repoPath }),
+        this.getNumstatMap(repoPath),
+      ]);
       const branch = branchRes.stdout.trim() || "main";
-
-      // Get porcelain git status
-      const statusRes = await execAsync("git status --porcelain=v1 -u", { cwd: repoPath });
       const lines = statusRes.stdout.split("\n").filter((line) => line.trim().length > 0);
-
-      const numstatMap = await this.getNumstatMap(repoPath);
       const files: import("@console/types").GitFileEntry[] = [];
 
       for (const line of lines) {
@@ -191,22 +213,20 @@ export class GitService {
         return { branches: [], isGitRepository: false };
       }
 
-      const { stdout } = await execAsync('git branch --format="%(refname:short)"', {
-        cwd: repoPath,
-      });
+      const [{ stdout }, currentRes] = await Promise.all([
+        execAsync('git branch --format="%(refname:short)"', {
+          cwd: repoPath,
+        }),
+        execAsync("git rev-parse --abbrev-ref HEAD", {
+          cwd: repoPath,
+        }).catch(() => null),
+      ]);
       const branches = stdout
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean);
-      let current = "";
-      try {
-        const currentRes = await execAsync("git rev-parse --abbrev-ref HEAD", {
-          cwd: repoPath,
-        });
-        current = currentRes.stdout.trim();
-      } catch {
-        // Empty repository or detached HEAD: no current local branch.
-      }
+      // Empty repository or detached HEAD: no current local branch.
+      const current = currentRes?.stdout.trim() ?? "";
       return {
         branches: branches.map((name) => ({ name, current: name === current })),
         isGitRepository: true,
