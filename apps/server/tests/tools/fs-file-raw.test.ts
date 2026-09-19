@@ -2,6 +2,9 @@
  * Tests for GET /api/fs/file/raw (image & SVG preview raw bytes endpoint).
  * Verifies allowed rasters/SVGs, content-type headers, size limits, and gating rules.
  */
+// Must stay first: isolates session storage before route singletons load.
+import "../helpers/isolate.js";
+import { teardownIsolatedStorage } from "../helpers/isolate.js";
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
@@ -133,4 +136,5 @@ try {
   console.log("\nAll fs raw file preview endpoint tests passed!");
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
+  teardownIsolatedStorage();
 }

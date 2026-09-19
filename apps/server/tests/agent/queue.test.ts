@@ -3,6 +3,9 @@
  * Runs 100% offline — the "antigravity" provider's stream fn is swapped for
  * a scripted mock so no LLM calls happen (0 credits used).
  */
+// Must stay first: isolates session storage before route singletons load.
+import "../helpers/isolate.js";
+import { teardownIsolatedStorage } from "../helpers/isolate.js";
 import assert from "node:assert/strict";
 import { createApiApp } from "@/api/src/index.js";
 import { RunService } from "@/api/src/services/run.service.js";
@@ -312,3 +315,4 @@ await withMockStream(
 );
 
 console.log("Prompt queueing & steering tests passed!\n");
+teardownIsolatedStorage();

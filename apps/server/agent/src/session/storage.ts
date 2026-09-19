@@ -33,13 +33,24 @@ export class SqliteSessionStorage {
   /**
    * @param options Optional overrides for testability.
    *   - `dbPath`: global DB path (use `":memory:"` for in-memory tests).
-   *   - `storageDir`: root storage directory. Per-project session DBs are
-   *     written under `<storageDir>/projects/<projectId>/sessions/`. Defaults
-   *     to the Console storage dir; when `dbPath` is `:memory:`, a temp dir
-   *     is used so per-session files don't collide with real storage.
+   *   - `storageDir`: root storage directory. The global index DB lives at
+   *     `<storageDir>/console-global.db` and per-project session DBs under
+   *     `<storageDir>/projects/<projectId>/sessions/`, so passing a temp dir
+   *     fully isolates from real storage. Defaults to the Console storage
+   *     dir; when `dbPath` is `:memory:`, a temp dir is used so per-session
+   *     files don't collide with real storage.
    */
   constructor(options?: { dbPath?: string; storageDir?: string }) {
-    const globalDbPath = options?.dbPath ?? getGlobalDbPath();
+    let storageDir: string;
+    if (options?.storageDir) {
+      storageDir = options.storageDir;
+    } else if (options?.dbPath === ":memory:") {
+      storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "console-storage-"));
+    } else {
+      storageDir = getConsoleStorageDir();
+    }
+
+    const globalDbPath = options?.dbPath ?? path.join(storageDir, "console-global.db");
     const dir = path.dirname(globalDbPath);
     if (dir !== "." && dir !== "/") {
       try {
@@ -51,15 +62,6 @@ export class SqliteSessionStorage {
 
     const globalDb = new DatabaseConstructor(globalDbPath);
     initGlobalDatabase(globalDb);
-
-    let storageDir: string;
-    if (options?.storageDir) {
-      storageDir = options.storageDir;
-    } else if (options?.dbPath === ":memory:") {
-      storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "console-storage-"));
-    } else {
-      storageDir = getConsoleStorageDir();
-    }
 
     this.state = {
       globalDb,

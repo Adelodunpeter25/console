@@ -1,4 +1,7 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, afterAll } from "bun:test";
+// Must stay first: isolates session storage before route singletons load.
+import "../helpers/isolate.js";
+import { teardownIsolatedStorage } from "../helpers/isolate.js";
 import { SqliteSessionStorage } from "@/agent/src/session/storage.js";
 import { MAX_CACHED_SESSION_DBS } from "@/agent/src/session/utils.js";
 import { createApiApp } from "@/api/src/app.js";
@@ -8,6 +11,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 
 describe("Session File Changes & Git Endpoints", () => {
+  afterAll(() => teardownIsolatedStorage());
   it("records and retrieves session file changes in sqlite storage", () => {
     const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "console-test-storage-"));
     const storage = new SqliteSessionStorage({ storageDir });

@@ -3,6 +3,9 @@
  * GET /api/sessions/:id/run/stream attach route.
  * Runs fully offline — no LLM calls.
  */
+// Must stay first: isolates session storage before route singletons load.
+import "../helpers/isolate.js";
+import { teardownIsolatedStorage } from "../helpers/isolate.js";
 import assert from "node:assert/strict";
 import { createApiApp } from "@/api/src/index.js";
 import {
@@ -241,3 +244,4 @@ const app = createApiApp();
 }
 
 console.log("✅ run re-attach tests passed\n");
+teardownIsolatedStorage();

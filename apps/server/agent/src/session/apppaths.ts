@@ -24,8 +24,13 @@ export function resolveConsoleMode(env: NodeJS.ProcessEnv = process.env): Consol
 
 /**
  * Returns the root directory path for Console storage based on the environment.
+ *
+ * `CONSOLE_STORAGE_DIR` overrides everything (used by tests to isolate from
+ * real `~/.console` data — see `apps/server/tests/helpers/isolate.ts`).
  */
 export function getConsoleStorageDir(): string {
+  const override = process.env.CONSOLE_STORAGE_DIR;
+  if (override) return override;
   const homeDir = os.homedir();
   const folderName = resolveConsoleMode() === "dev" ? ".console-dev" : ".console";
   return path.join(homeDir, folderName);

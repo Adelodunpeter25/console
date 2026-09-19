@@ -2,6 +2,9 @@
  * Unit & Integration Tests for Hono API Layer & Services (server/api/).
  * Runs 100% offline using Hono's app.request() in-memory testing — 0 LLM credits used.
  */
+// Must stay first: isolates session storage before route singletons load.
+import "../helpers/isolate.js";
+import { teardownIsolatedStorage } from "../helpers/isolate.js";
 import assert from "node:assert/strict";
 import * as os from "node:os";
 import * as fs from "node:fs";
@@ -306,3 +309,4 @@ const app = createApiApp();
 }
 
 console.log("Hono API Layer & Service tests passed!\n");
+teardownIsolatedStorage();

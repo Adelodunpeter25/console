@@ -1,3 +1,6 @@
+// Must stay first: isolates session storage before route singletons load.
+import "../helpers/isolate.js";
+import { teardownIsolatedStorage } from "../helpers/isolate.js";
 import assert from "node:assert/strict";
 import { createApiApp } from "@/api/src/index.js";
 import { portRegistry } from "@/api/src/services/port-registry.service.js";
@@ -131,3 +134,4 @@ try {
 }
 
 console.log("Port forwarding tests passed!\n");
+teardownIsolatedStorage();

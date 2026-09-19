@@ -1,3 +1,6 @@
+// Must stay first: isolates session storage before route singletons load.
+import "../helpers/isolate.js";
+import { teardownIsolatedStorage } from "../helpers/isolate.js";
 import assert from "node:assert/strict";
 import { createApiApp } from "@/api/src/app.js";
 import {
@@ -211,7 +214,9 @@ async function binaryProtocolTest(port: number): Promise<void> {
   ws.close();
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  })
+  .finally(() => teardownIsolatedStorage());

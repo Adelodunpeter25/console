@@ -1,3 +1,6 @@
+// Must stay first: isolates session storage before route singletons load.
+import "../helpers/isolate.js";
+import { teardownIsolatedStorage } from "../helpers/isolate.js";
 import assert from "node:assert/strict";
 import { createApiApp } from "@/api/src/app.js";
 
@@ -31,3 +34,4 @@ assert.equal(streamRes.headers.get("content-type"), "multipart/x-mixed-replace; 
 console.log("  ✅ GET /api/devices/:id/stream returns live multipart frame stream");
 
 console.log("Device Service tests passed!\n");
+teardownIsolatedStorage();
