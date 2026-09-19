@@ -21,8 +21,8 @@ console-core = { path = "crates/console-core" }
 console-ui = { path = "crates/console-ui" }
 
 # Editor & Syntax
-syntax = { path = "../../../gpui-editor/crates/syntax" }
-editor-ui = { path = "../../../gpui-editor/crates/editor-ui" }
+syntax = { git = "https://github.com/Adelodunpeter25/gpui-editor.git" }
+editor-ui = { git = "https://github.com/Adelodunpeter25/gpui-editor.git" }
 
 # UI components (command palette, dialogs, dock). Uses the same pinned zed gpui,
 # so cargo unifies sources. Must call gpui_component::init(cx) at startup and wrap
