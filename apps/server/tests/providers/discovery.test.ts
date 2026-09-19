@@ -6,8 +6,10 @@ import assert from "node:assert/strict";
 import {
   fetchModelsForProvider,
   listModelsForProvider,
+  inferThinkingLevels,
 } from "@/agent/src/commands/provider-registry.js";
 import { fetchAvailableModels } from "@/providers/src/discovery/fetch-models.js";
+import { buildRunModel } from "@/api/src/services/run/run-tools.js";
 
 console.log("Running Model Discovery tests...");
 
@@ -94,6 +96,24 @@ console.log("Running Model Discovery tests...");
   assert.ok(models.length > 0);
   assert.equal(models[0]?.id, "gemini-3.1-pro-low");
   console.log("  ✅ ProviderService models list prioritizes favorites first");
+}
+
+// 4. Regression: thinking-level metadata must survive for models proxied
+// through antigravity under a claude-* id, and for ids missing from the
+// in-memory catalog entirely — both previously produced a bare Model with
+// no supportedThinkingLevels, which validate-thinking.ts then rejected.
+{
+  const claudeUnderAntigravity = inferThinkingLevels("antigravity", "claude-sonnet-4-6");
+  assert.ok(claudeUnderAntigravity.supportedThinkingLevels?.length);
+  assert.equal(claudeUnderAntigravity.defaultThinkingLevel, "low");
+
+  const unknownGeminiModel = buildRunModel("antigravity", "gemini-3.7-flash-tiered");
+  assert.ok(unknownGeminiModel.supportedThinkingLevels?.length);
+  assert.equal(unknownGeminiModel.defaultThinkingLevel, "low");
+
+  const knownClaudeModel = buildRunModel("claude", "claude-sonnet-4-6");
+  assert.ok(knownClaudeModel.supportedThinkingLevels?.length);
+  console.log("  ✅ inferThinkingLevels/buildRunModel preserve thinking support for unseeded & cross-provider ids");
 }
 
 console.log("Model Discovery tests passed!\n");

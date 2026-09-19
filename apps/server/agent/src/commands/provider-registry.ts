@@ -54,18 +54,36 @@ const CODEX_THINKING_LEVELS: ThinkingLevel[] = ["none", "minimal", "low", "mediu
 
 const CLAUDE_THINKING_LEVELS: ThinkingLevel[] = ["low", "medium", "high", "xhigh", "max"];
 
+/**
+ * Best-effort thinking-level support for a model that either isn't in the
+ * in-memory catalog yet (not-yet-discovered id) or is a seed entry, keyed by
+ * provider + naming convention. Used to avoid `buildRunModel`/`resolveRoleModel`
+ * producing a bare `Model` with no thinking fields, which `validate-thinking.ts`
+ * would then reject as "does not support thinking levels" even when it does.
+ */
+export function inferThinkingLevels(
+  provider: ProviderId,
+  modelId: string,
+): Pick<Model, "supportedThinkingLevels" | "defaultThinkingLevel"> {
+  if (provider === "codex") {
+    return { supportedThinkingLevels: CODEX_THINKING_LEVELS, defaultThinkingLevel: "low" };
+  }
+  if (provider === "claude") {
+    return { supportedThinkingLevels: CLAUDE_THINKING_LEVELS, defaultThinkingLevel: "low" };
+  }
+  if (provider === "antigravity" && (modelId.startsWith("gemini-") || modelId.startsWith("claude-"))) {
+    return { supportedThinkingLevels: GEMINI_THINKING_LEVELS, defaultThinkingLevel: "low" };
+  }
+  return {};
+}
+
 export const DEFAULT_ANTIGRAVITY_MODELS: Model[] = AVAILABLE_MODELS.map((id) => ({
   id,
   provider: "antigravity",
   // Offline seed mirrors measured fetchAvailableModels maxTokens:
   // claude-* 250k, gpt-oss-120b 128k, gemini-* 1M. Live discovery overwrites.
   contextWindow: id.startsWith("claude-") ? 250_000 : id.startsWith("gpt-oss-") ? 131_072 : 1_048_576,
-  ...(id.startsWith("gemini-")
-    ? {
-        supportedThinkingLevels: GEMINI_THINKING_LEVELS,
-        defaultThinkingLevel: "low" as const,
-      }
-    : {}),
+  ...inferThinkingLevels("antigravity", id),
 }));
 
 export const DEFAULT_CODEX_MODELS: Model[] = [

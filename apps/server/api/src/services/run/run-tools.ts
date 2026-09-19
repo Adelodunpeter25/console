@@ -2,12 +2,25 @@ import { allTools } from "@/agent/src/tools/index.js";
 import { createAskManyTool, createAskTool } from "@/agent/src/tools/ask.js";
 import { createMemoryTool } from "@/agent/src/tools/memory.js";
 import { createTodoTool, type TodoItem } from "@/agent/src/tools/todo.js";
-import { findModelInProvider } from "@/agent/src/commands/provider-registry.js";
-import type { AgentTool, AskQuestionRequest, Model } from "@console/types";
+import { findModelInProvider, inferThinkingLevels } from "@/agent/src/commands/provider-registry.js";
+import type { AgentTool, AskQuestionRequest, Model, ProviderId } from "@console/types";
 import { bindToolCwd } from "@console/types";
 
 export function buildRunModel(provider: string, modelId: string): Model {
   const catalogModel = findModelInProvider(provider, modelId);
+  // Fall back to naming-convention inference when the catalog hasn't
+  // discovered this id yet, so it isn't wrongly treated as thinking-incapable.
+  const thinking =
+    catalogModel?.supportedThinkingLevels || catalogModel?.defaultThinkingLevel
+      ? {
+          ...(catalogModel.supportedThinkingLevels
+            ? { supportedThinkingLevels: catalogModel.supportedThinkingLevels }
+            : {}),
+          ...(catalogModel.defaultThinkingLevel
+            ? { defaultThinkingLevel: catalogModel.defaultThinkingLevel }
+            : {}),
+        }
+      : inferThinkingLevels(provider as ProviderId, modelId);
   return {
     id: modelId,
     provider: provider as Model["provider"],
@@ -15,12 +28,7 @@ export function buildRunModel(provider: string, modelId: string): Model {
     ...(typeof catalogModel?.supportsImages === "boolean"
       ? { supportsImages: catalogModel.supportsImages }
       : {}),
-    ...(catalogModel?.supportedThinkingLevels
-      ? { supportedThinkingLevels: catalogModel.supportedThinkingLevels }
-      : {}),
-    ...(catalogModel?.defaultThinkingLevel
-      ? { defaultThinkingLevel: catalogModel.defaultThinkingLevel }
-      : {}),
+    ...thinking,
   };
 }
 

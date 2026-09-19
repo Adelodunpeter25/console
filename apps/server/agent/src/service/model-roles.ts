@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { getConsoleStorageDir } from "@/agent/src/session/apppaths.js";
-import { findModelInProvider, getProvider } from "@/agent/src/commands/provider-registry.js";
+import { findModelInProvider, getProvider, inferThinkingLevels } from "@/agent/src/commands/provider-registry.js";
 import type { Model, ProviderId } from "@console/types";
 
 export type ConsoleModelRole = "vision" | "smol";
@@ -89,6 +89,7 @@ export async function resolveRoleModel(role: ConsoleModelRole, fallback: Model):
     id: parsed.modelId,
     provider: parsed.provider,
     contextWindow: 128_000,
+    ...inferThinkingLevels(parsed.provider, parsed.modelId),
   };
 }
 
