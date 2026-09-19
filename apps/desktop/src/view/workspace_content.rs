@@ -351,6 +351,7 @@ impl ConsoleDesktopApp {
                                 .open_file_contents
                                 .get(path)
                                 .cloned()
+                                .or_else(|| std::fs::read_to_string(path).ok())
                                 .unwrap_or_else(|| "Loading file content...".to_string());
 
                             let editor_view = self.get_or_build_editor_view(path, &content, &theme, cx);
@@ -390,6 +391,7 @@ impl ConsoleDesktopApp {
                         .open_file_contents
                         .get(path)
                         .cloned()
+                        .or_else(|| std::fs::read_to_string(path).ok())
                         .unwrap_or_else(|| "Loading file content...".to_string());
 
                     let view = self.get_or_build_markdown_view(path, &content);
@@ -412,6 +414,7 @@ impl ConsoleDesktopApp {
                         .open_file_contents
                         .get(path)
                         .cloned()
+                        .or_else(|| std::fs::read_to_string(path).ok())
                         .unwrap_or_else(|| "Loading file content...".to_string());
 
                     let editor_view = self.get_or_build_editor_view(path, &content, &theme, cx);

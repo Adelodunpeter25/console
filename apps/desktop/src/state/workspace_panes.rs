@@ -1061,6 +1061,12 @@ impl ConsoleDesktopApp {
         let kind = console_core::file_kind_for_path(&path);
         match kind {
             console_core::FileKind::Markdown | console_core::FileKind::Text => {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    self.open_file_contents.insert(path, content);
+                    cx.notify();
+                    return;
+                }
+
                 let client = self.client.clone();
                 let file_path = path;
                 cx.spawn(
