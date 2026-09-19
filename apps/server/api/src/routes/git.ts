@@ -28,7 +28,7 @@ gitRoutes.get("/status", async (c) => {
  *
  * Sends one `gitStatus` snapshot on subscribe, then re-computes and pushes
  * on debounced filesystem changes (via FsWatchService). One shared OS
- * watcher per repo path; per-subscriber git recompute debounced 500ms so
+ * watcher per repo path; per-subscriber git recompute debounced 400ms so
  * bulk writes don't spawn a git process per keystroke or hit index.lock.
  * Non-git folders get an empty clean summary and heartbeat only.
  */
@@ -59,7 +59,7 @@ gitRoutes.get("/status/watch", (c) => {
       debounce = setTimeout(() => {
         debounce = undefined;
         void sendStatus();
-      }, 500);
+      }, 400);
     };
 
     fsWatchService.on("change", handler);
