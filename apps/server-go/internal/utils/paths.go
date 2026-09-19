@@ -6,7 +6,36 @@ package utils
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+// IgnoredPaths mirrors apps/server/api/src/utils/ignored.ts.
+var IgnoredPaths = []string{
+	"node_modules", ".git", ".hg", ".svn", "dist", "build", ".next",
+	".turbo", ".vite", ".vite-temp", ".cache", "coverage", ".ds_store",
+	"thumbs.db", ".gemini", "target", "tmp", ".parcel-cache", "out",
+	".output", ".expo", ".gradle", "bin", "obj",
+}
+
+// IsPathIgnored reports whether any path segment is an ignored entry.
+func IsPathIgnored(path string) bool {
+	if path == "" {
+		return false
+	}
+	for _, segment := range strings.Split(path, "/") {
+		for _, ignored := range IgnoredPaths {
+			if strings.EqualFold(segment, ignored) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// IsHiddenName reports whether a client should not show the entry by default.
+func IsHiddenName(name string) bool {
+	return strings.HasPrefix(name, ".")
+}
 
 func ConsoleMode() string {
 	switch os.Getenv("CONSOLE_ENV") {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 func main() {
@@ -24,7 +25,14 @@ func main() {
 	}
 	defer manager.Close()
 
-	app := routes.New(routes.Config{DB: manager})
+	watch, err := services.NewFsWatchService()
+	if err != nil {
+		slog.Error("failed to start fs watcher", "error", err)
+		os.Exit(1)
+	}
+	defer watch.Close()
+
+	app := routes.New(routes.Config{DB: manager, Watch: watch})
 
 	addr := ":3000"
 	if p := os.Getenv("PORT"); p != "" {

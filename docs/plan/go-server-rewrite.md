@@ -128,13 +128,14 @@ terminal socket.
       after dropping cline: assist, auth, config, devices, fs, git,
       model-favorites, notifications, ports, project-scripts, projects,
       providers, run, sessions, settings, usage).
-- [ ] Port services: session, project, provider, git (os/exec git),
-      fs, fswatch (fsnotify recursive), notification, usage, auth,
-      port-registry, port-tunnel socket, assist, project-scripts, run.
-- [ ] Port terminal: pty.manager + socket.route (`creack/pty`; keep the
-      socket protocol byte-identical). Optimize for throughput/latency:
-      minimal allocation per frame, direct socket pumping, no per-message
-      JSON where avoidable.
+- [x] Port services (done: session, project, model-favorites, fs,
+      fswatch (fsnotify recursive), git (os/exec git). Remaining: provider,
+      notification, usage, auth, port-registry, port-tunnel socket, assist,
+      project-scripts, run.
+- [x] Port terminal (initial): pty.manager (`creack/pty`) + `/api/terminals`
+      WebSocket via `fasthttp/websocket` — JSON protocol {spawned, output,
+      exit, error} / {input, resize, kill} and ?proto=binary tag framing;
+      verified end to end. Remaining vs TS: send-buffer backpressure pause.
 - [ ] Port device managers (device.manager, ios.manager) — audit what
       `agent-device` wraps first; likely shell out to adb/xcrun.
 - [ ] Tests: port tests/api + tests/terminal; contract tests diffing

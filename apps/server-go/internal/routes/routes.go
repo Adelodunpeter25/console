@@ -14,7 +14,8 @@ import (
 )
 
 type Config struct {
-	DB *db.DB
+	DB    *db.DB
+	Watch *services.FsWatchService
 }
 
 func New(cfg Config) *fiber.App {
@@ -31,6 +32,9 @@ func New(cfg Config) *fiber.App {
 	})
 
 	registerSessionRoutes(app, services.NewSessionService(cfg.DB))
+	registerFsRoutes(app, services.NewFsService(), cfg.Watch)
+	registerGitRoutes(app, services.NewGitService(), cfg.Watch)
+	registerTerminalRoutes(app, services.NewPtyManager())
 
 	slog.Info("api routes registered")
 	return app
