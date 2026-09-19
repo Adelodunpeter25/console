@@ -49,9 +49,9 @@ impl ConsoleDesktopApp {
                     (editor.theme(), editor.wrap_enabled(), editor.font().clone())
                 };
                 if current_theme != theme_preset || !current_wrap || current_font != font_config {
-                    state.update(cx, |editor, _cx| {
+                    state.update(cx, |editor, cx| {
                         if editor.theme() != theme_preset {
-                            editor.set_theme(theme_preset);
+                            editor.set_theme(theme_preset, cx);
                         }
                         if !editor.wrap_enabled() {
                             editor.set_wrap_enabled(true);
@@ -63,12 +63,12 @@ impl ConsoleDesktopApp {
                 }
                 return view.clone();
             }
-            state.update(cx, |editor, _cx| {
-                editor.set_text(content);
+            state.update(cx, |editor, cx| {
+                editor.set_text(content, cx);
                 let lang = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
-                editor.set_language(lang);
+                editor.set_language(lang, cx);
                 if editor.theme() != theme_preset {
-                    editor.set_theme(theme_preset);
+                    editor.set_theme(theme_preset, cx);
                 }
                 editor.set_wrap_enabled(true);
                 if editor.font() != &font_config {
@@ -82,9 +82,9 @@ impl ConsoleDesktopApp {
         }
 
         let lang = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
-        let state = cx.new(|_| {
+        let state = cx.new(|cx| {
             let mut s = editor_ui::EditorState::readonly(content, lang);
-            s.set_theme(theme_preset);
+            s.set_theme(theme_preset, cx);
             s.set_wrap_enabled(true);
             s.set_font(font_config);
             s

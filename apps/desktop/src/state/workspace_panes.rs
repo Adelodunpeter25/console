@@ -1331,6 +1331,41 @@ impl ConsoleDesktopApp {
                     .map(|p| p.path.clone())
             });
 
+        if let Some(ref cwd_path) = cwd {
+            if std::path::Path::new(cwd_path).is_dir() {
+                let mut cmd = std::process::Command::new("git");
+                cmd.args(["diff", "HEAD", "--", &file_path]).current_dir(cwd_path);
+                let diff_raw = cmd.output().ok().and_then(|output| {
+                    if output.status.success() && !output.stdout.is_empty() {
+                        String::from_utf8(output.stdout).ok()
+                    } else {
+                        None
+                    }
+                }).or_else(|| {
+                    let mut cmd = std::process::Command::new("git");
+                    cmd.args(["diff", "--", &file_path]).current_dir(cwd_path);
+                    cmd.output().ok().and_then(|output| {
+                        if output.status.success() && !output.stdout.is_empty() {
+                            String::from_utf8(output.stdout).ok()
+                        } else {
+                            None
+                        }
+                    })
+                });
+
+                if let Some(raw) = diff_raw {
+                    let diff_result = if !raw.trim().is_empty() {
+                        console_core::utils::diff::parse_unified_diff(&raw)
+                    } else {
+                        console_core::DiffResult::default()
+                    };
+                    self.open_diff_contents.insert(file_path.clone(), (diff_result, raw));
+                    cx.notify();
+                    return;
+                }
+            }
+        }
+
         cx.spawn(async move |entity, cx| {
             let mut diff_raw = String::new();
             if let Ok(resp) = client.git.get_diff(cwd.as_deref(), Some(&file_path)).await {
