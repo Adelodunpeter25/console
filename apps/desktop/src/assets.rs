@@ -53,6 +53,10 @@ pub fn register_core_fonts(cx: &App) -> gpui::Result<()> {
         Cow::Borrowed(FONT_GEIST),
         Cow::Borrowed(FONT_GEIST_MONO),
         Cow::Borrowed(FONT_GEIST_MEDIUM),
+        Cow::Borrowed(FONT_JETBRAINS_MONO_REGULAR),
+        Cow::Borrowed(FONT_JETBRAINS_MONO_MEDIUM),
+        Cow::Borrowed(FONT_JETBRAINS_MONO_SEMIBOLD),
+        Cow::Borrowed(FONT_JETBRAINS_MONO_BOLD),
     ])
 }
 
@@ -76,11 +80,7 @@ pub fn register_remaining_fonts_once(cx: &App) {
     if let Err(error) = cx.text_system().add_fonts(vec![
         Cow::Borrowed(FONT_GEIST_SEMIBOLD),
         Cow::Borrowed(FONT_GEIST_BOLD),
-        Cow::Borrowed(FONT_JETBRAINS_MONO_REGULAR),
         Cow::Borrowed(FONT_JETBRAINS_MONO_ITALIC),
-        Cow::Borrowed(FONT_JETBRAINS_MONO_MEDIUM),
-        Cow::Borrowed(FONT_JETBRAINS_MONO_SEMIBOLD),
-        Cow::Borrowed(FONT_JETBRAINS_MONO_BOLD),
     ]) {
         log::warn!("Failed to register remaining fonts: {error}");
     }
