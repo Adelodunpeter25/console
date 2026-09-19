@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/fff"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
@@ -21,6 +22,12 @@ const (
 	maxFilePreviewBytes = 512 * 1024
 	imageMaxBytes       = 10 * 1024 * 1024
 )
+
+// manager is set once at startup; nil means fff is not wired.
+var manager *fff.Manager
+
+// SetFffManager wires the fff index manager into the fs service.
+func SetFffManager(m *fff.Manager) { manager = m }
 
 // PreviewBlocked carries the structured code/status the /file routes emit.
 type PreviewBlocked struct {
@@ -392,9 +399,27 @@ func (s *FsService) DeleteDirectory(path string) (bool, error) {
 	return true, nil
 }
 
-// SearchFiles walks the root and returns fuzzy substring matches, mirroring
-// the /api/fs/search contract (fff-node-backed in TS; pure Go here).
+// SearchFiles serves /api/fs/search. When the fff C library is available the
+// fuzzy search runs through its index (much faster, frecency-ranked); until
+// the index is warm — and always when fff is absent — it falls back to a
+// substring walk, mirroring the TS fff-node semantics.
 func (s *FsService) SearchFiles(root, query string, limit int, includeDirs bool) ([]types.FsTreeEntry, error) {
+	if manager != nil && manager.Enabled() {
+		if items, ok := manager.SearchAsync(root, query, limit); ok {
+			resolved, _ := filepath.Abs(root)
+			out := make([]types.FsTreeEntry, 0, len(items))
+			for _, item := range items {
+				full := filepath.Join(resolved, item.RelPath)
+				entry := types.FsTreeEntry{Name: item.Name, Path: full, IsDir: item.IsDir}
+				if !item.IsDir && item.Size > 0 {
+					size := item.Size
+					entry.Size = &size
+				}
+				out = append(out, entry)
+			}
+			return out, nil
+		}
+	}
 	resolved, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -426,8 +451,25 @@ func (s *FsService) SearchFiles(root, query string, limit int, includeDirs bool)
 		if utils.IsPathIgnored(d.Name()) {
 			return nil
 		}
-		if q != "" && !strings.Contains(strings.ToLower(path[len(resolved)+1:]), q) {
-			return nil
+		if q != "" {
+			// Separator-insensitive comparison so fallback still matches
+			// camel/underscore queries like "ptymanager" -> pty_manager.go.
+			lq, lp := strings.ToLower(q), strings.ToLower(path[len(resolved)+1:])
+			lq = strings.Map(func(r rune) rune {
+				if r == '_' || r == '-' || r == '/' || r == '.' {
+					return -1
+				}
+				return r
+			}, lq)
+			lp = strings.Map(func(r rune) rune {
+				if r == '_' || r == '-' || r == '/' || r == '.' {
+					return -1
+				}
+				return r
+			}, lp)
+			if !strings.Contains(lp, lq) {
+				return nil
+			}
 		}
 		out = append(out, types.FsTreeEntry{Name: d.Name(), Path: path, IsDir: false})
 		if len(out) >= limit {

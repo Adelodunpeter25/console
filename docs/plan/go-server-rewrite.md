@@ -115,6 +115,13 @@ TS deps to replace: `@ff-labs/fff-node` (FileFinder), `diff`,
 - [ ] Port remaining tools: fetch, firecrawl, web-search, todo, memory,
       subagent, read-skill, ask.
 - [ ] Port fff-bootstrap.ts.
+- [x] fff integration: CGo bindings to the fff C ABI
+      (github.com/dmtrKovalenko/fff, crates/fff-c) — prebuilt shared lib
+      loaded at runtime via dlopen (`third_party/fff/libfff_c.so` or
+      `FFF_LIB_PATH`), per-root indexed instances with background watcher,
+      wired into /api/fs/search with a walk-based fallback until the index
+      is warm. Binary committed for linux-x64; other platforms fetch via
+      `apps/server-go/scripts/fetch-fff-lib.sh`.
 - [ ] Tests: port tests/tools.
 
 ## Phase 5 — API surface (`api/src/`)
@@ -130,10 +137,10 @@ terminal socket.
       providers, run, sessions, settings, usage).
 - [x] Port services (done: session, project, model-favorites, fs,
       fswatch (fsnotify recursive), git (os/exec git), project-scripts
-      (console.toml parse + managed runs + SSE stream + process-group stop;
-      port-registry output observation not yet wired). Remaining: provider,
-      notification, usage, auth, port-registry, port-tunnel socket, assist,
-      run (session-level).
+      (console.toml parse + managed runs + SSE stream + process-group stop),
+      port-registry (output observation, liveness reaper, proxy ports
+      45000+ with HTTP/WS passthrough) + port-tunnel WebSocket. Remaining:
+      provider, notification, usage, auth, assist, run (session-level).
 - [x] Port terminal (initial): pty.manager (`creack/pty`) + `/api/terminals`
       WebSocket via `fasthttp/websocket` — JSON protocol {spawned, output,
       exit, error} / {input, resize, kill} and ?proto=binary tag framing;
