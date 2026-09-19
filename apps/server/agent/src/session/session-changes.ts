@@ -22,21 +22,22 @@ export function recordFileChange(
 
   sessionDb
     .prepare(
-      `INSERT INTO session_file_changes (path, status, additions, deletions, turn_index, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(path) DO UPDATE SET
+      `INSERT INTO session_file_changes (path, turn_index, status, additions, deletions, diff_text, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(path, turn_index) DO UPDATE SET
          status = excluded.status,
          additions = excluded.additions,
          deletions = excluded.deletions,
-         turn_index = excluded.turn_index,
+         diff_text = excluded.diff_text,
          updated_at = excluded.updated_at`,
     )
     .run(
       change.path,
+      change.turnIndex || 0,
       change.status,
       change.additions || 0,
       change.deletions || 0,
-      change.turnIndex || 0,
+      change.diffText || null,
       now,
     );
 }
@@ -44,18 +45,23 @@ export function recordFileChange(
 export function getSessionFileChanges(
   state: StorageState,
   sessionId: string,
+  turnIndex?: number,
 ): SessionFileChange[] {
   const sessionDb = getSessionDbForSession(state, sessionId);
   if (!sessionDb) return [];
 
-  const rows = sessionDb
-    .prepare(
-      `SELECT path, status, additions, deletions, turn_index as turnIndex, updated_at as updatedAt
-       FROM session_file_changes
-       ORDER BY updated_at DESC`,
-    )
-    .all() as SessionFileChange[];
+  let query = `SELECT path, status, additions, deletions, turn_index as turnIndex, diff_text as diffText, updated_at as updatedAt
+       FROM session_file_changes`;
+  const params: any[] = [];
 
+  if (turnIndex !== undefined) {
+    query += ` WHERE turn_index = ?`;
+    params.push(turnIndex);
+  }
+
+  query += ` ORDER BY updated_at DESC`;
+
+  const rows = sessionDb.prepare(query).all(...params) as SessionFileChange[];
   return rows;
 }
 

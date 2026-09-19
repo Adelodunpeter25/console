@@ -143,11 +143,55 @@ sessionRoutes.delete("/sessions/:id/permanent", (c) => {
  */
 sessionRoutes.get("/sessions/:id/changes", (c) => {
   const id = c.req.param("id");
-  const changes = sessionService.getSessionFileChanges(id);
+  const rawTurnIndex = c.req.query("turnIndex");
+  const turnIndex = rawTurnIndex === undefined ? undefined : Number(rawTurnIndex);
+
+  if (turnIndex !== undefined && !Number.isSafeInteger(turnIndex)) {
+    return c.json(
+      { success: false, error: "'turnIndex' must be a non-negative integer." },
+      400,
+    );
+  }
+
+  const changes = sessionService.getSessionFileChanges(id, turnIndex);
   return c.json({
     success: true,
     data: changes,
   });
+});
+
+/**
+ * GET /api/sessions/:id/changes/diff — Get diff text for a specific file change.
+ */
+sessionRoutes.get("/sessions/:id/changes/diff", (c) => {
+  const id = c.req.param("id");
+  const path = c.req.query("path");
+  const rawTurnIndex = c.req.query("turnIndex");
+  const turnIndex = rawTurnIndex === undefined ? undefined : Number(rawTurnIndex);
+
+  if (!path) {
+    return c.json({ success: false, error: "Query parameter 'path' is required." }, 400);
+  }
+
+  if (turnIndex !== undefined && !Number.isSafeInteger(turnIndex)) {
+    return c.json(
+      { success: false, error: "'turnIndex' must be a non-negative integer." },
+      400,
+    );
+  }
+
+  const changes = sessionService.getSessionFileChanges(id, turnIndex);
+  const change = changes.find((c) => c.path === path);
+
+  if (!change) {
+    return c.json({ success: false, error: "File change not found." }, 404);
+  }
+
+  if (!change.diffText) {
+    return c.json({ success: false, error: "Diff text not available for this file." }, 404);
+  }
+
+  return c.text(change.diffText);
 });
 
 /**

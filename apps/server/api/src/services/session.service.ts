@@ -137,8 +137,10 @@ export class SessionService {
    */
   purgeExpiredDeletedSessions(): string[] {
     return this.storage.purgeExpiredDeletedSessions({ isActive: RunService.isRunActive });
-  }  getSessionFileChanges(sessionId: string) {
-    return this.storage.getSessionFileChanges(sessionId);
+  }
+
+  getSessionFileChanges(sessionId: string, turnIndex?: number) {
+    return this.storage.getSessionFileChanges(sessionId, turnIndex);
   }
 
   recordFileChange(sessionId: string, change: import("@console/types").SessionFileChange) {

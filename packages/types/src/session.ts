@@ -32,6 +32,7 @@ export interface SessionFileChange {
   additions: number;
   deletions: number;
   turnIndex: number;
+  diffText?: string;
   updatedAt: number;
 }
 

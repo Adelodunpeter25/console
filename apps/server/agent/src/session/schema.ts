@@ -100,13 +100,18 @@ export function initSessionDatabase(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
 
     CREATE TABLE IF NOT EXISTS session_file_changes (
-      path TEXT PRIMARY KEY,
+      path TEXT NOT NULL,
+      turn_index INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL,
       additions INTEGER NOT NULL DEFAULT 0,
       deletions INTEGER NOT NULL DEFAULT 0,
-      turn_index INTEGER NOT NULL DEFAULT 0,
-      updated_at INTEGER NOT NULL
+      diff_text TEXT,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (path, turn_index)
     );
+
+    CREATE INDEX IF NOT EXISTS idx_session_file_changes_turn 
+      ON session_file_changes (turn_index, updated_at DESC);
 
     CREATE TABLE IF NOT EXISTS session_todos (
       id INTEGER PRIMARY KEY,

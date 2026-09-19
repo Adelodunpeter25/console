@@ -408,7 +408,9 @@ export class RunService {
           this.sessionStorage.upsertToolResult(sessionId, toolResultsPersistenceId, event.result);
           const callInfo = pendingToolCalls.get(event.result.toolCallId);
           if (callInfo) {
-            extractAndRecordFileChange(this.sessionStorage, sessionId, callInfo.name, callInfo.args, event.result.isError);
+            const session = this.sessionStorage.loadSession(sessionId);
+            const turnIndex = session?.messages.filter(m => m.role === "user").length || 0;
+            extractAndRecordFileChange(this.sessionStorage, sessionId, callInfo.name, callInfo.args, event.result.isError, turnIndex);
           }
         }
         if (event.type === "toolExecutionEnd") {
@@ -417,7 +419,9 @@ export class RunService {
             this.sessionStorage.upsertToolResult(sessionId, toolResultsPersistenceId, result);
             const callInfo = pendingToolCalls.get(result.toolCallId);
             if (callInfo) {
-              extractAndRecordFileChange(this.sessionStorage, sessionId, callInfo.name, callInfo.args, result.isError);
+              const session = this.sessionStorage.loadSession(sessionId);
+              const turnIndex = session?.messages.filter(m => m.role === "user").length || 0;
+              extractAndRecordFileChange(this.sessionStorage, sessionId, callInfo.name, callInfo.args, result.isError, turnIndex);
             }
           }
           toolResultsPersistenceId = null;
