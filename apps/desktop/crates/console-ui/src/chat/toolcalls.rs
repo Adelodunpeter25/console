@@ -23,7 +23,7 @@ use crate::chat::{DiffView, ThinkingBlock, WorkingIndicator};
 use crate::markdown::render::{
     LinkHandler, MarkdownView, Palette, TranscriptSelection, plain_text,
 };
-use crate::markdown::{highlight, render as markdown_render};
+use crate::markdown::render as markdown_render;
 use crate::primitives::{IconName, activity_icon, app_icon, file_type_icon, icon, motion};
 use crate::theme::Theme;
 use crate::utils::time::{format_working_elapsed, normalize_unix_timestamp};
@@ -886,7 +886,9 @@ impl ToolCalls {
         path: Option<&str>,
         theme: Theme,
     ) -> AnyElement {
-        let lang_tag = path.and_then(highlight::lang_tag_for_path);
+        let lang_tag = path.and_then(|p| {
+            syntax::LanguageRegistry::for_path(std::path::Path::new(p)).map(|l| l.name)
+        });
         let Some(lang_tag) = lang_tag else {
             return self
                 .section(call_id, "Result", raw, theme)

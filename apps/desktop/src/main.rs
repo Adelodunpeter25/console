@@ -39,6 +39,7 @@ fn main() {
         // any of its components (CommandPalette) are used, and its `Root` must
         // wrap the window's top-level view for overlays to render.
         gpui_component::init(cx);
+        editor_ui::init(cx);
         console_ui::theme::init(cx);
         init_input_keybindings(cx);
         // Global shortcuts last, so context-scoped bindings keep winning ties

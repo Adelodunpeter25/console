@@ -30,7 +30,7 @@ use gpui::{
     relative, size,
 };
 
-use super::highlight::{self, Lang, TokenClass};
+use super::highlight::TokenClass;
 use super::mend::PENDING_LINK_URL;
 use super::parser::{Block, IncrementalParser, InlineRun, ListItem, TableAlign, TopBlock};
 use super::selection::{
@@ -186,6 +186,19 @@ impl Palette {
             TokenClass::Removed => self.removed,
         }
     }
+
+    pub fn capture_color(&self, capture: syntax::Capture) -> Hsla {
+        let dark = self.is_dark;
+        match capture {
+            syntax::Capture::Keyword => hue(dark, 0xC98BC0, 0x9A4B92),
+            syntax::Capture::String => hue(dark, 0x94C08A, 0x3F7A36),
+            syntax::Capture::Comment => self.ghost,
+            syntax::Capture::Number => hue(dark, 0xD9A05B, 0x9A6019),
+            syntax::Capture::Function => hue(dark, 0x8FB8D9, 0x2F6690),
+            syntax::Capture::Type => hue(dark, 0x8FB8D9, 0x2F6690),
+            syntax::Capture::Plain => self.secondary,
+        }
+    }
 }
 
 fn hue(is_dark: bool, dark: u32, light: u32) -> Hsla {
@@ -324,7 +337,7 @@ pub fn flatten_plain(
 /// share one font, so shaping is identical with or without highlighting.
 pub fn flatten_code(
     text: impl Into<SharedString>,
-    lang: Option<Lang>,
+    lang: Option<&'static syntax::Language>,
     palette: &Palette,
 ) -> FlatText {
     let text: SharedString = text.into();
@@ -344,7 +357,8 @@ pub fn flatten_code(
 /// Syntax-highlighted monospace code for tool results (readFile output),
 /// styled like the renderer's own fenced-code blocks.
 pub fn highlighted_code(code: impl Into<SharedString>, lang_tag: &str, ctx: &Ctx) -> AnyElement {
-    let lang = highlight::lang_for_tag(lang_tag);
+    let reg = syntax::LanguageRegistry::builtin();
+    let lang = reg.for_name(lang_tag).or_else(|| reg.for_extension(lang_tag));
     let key = ctx.next_key();
     let flat = ctx.flat(key.index, || flatten_code(code.into(), lang, &ctx.palette));
     text_element(&flat, key, ctx)
@@ -1415,7 +1429,8 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
     // Tokenizing is the most expensive flatten in the document, so a settled
     // code block is exactly the case the cache exists for.
     let flat = ctx.flat(key.index, || {
-        let lang = language.and_then(highlight::lang_for_tag);
+        let reg = syntax::LanguageRegistry::builtin();
+        let lang = language.and_then(|tag| reg.for_name(tag).or_else(|| reg.for_extension(tag)));
         let mut code_font = font(MONO_FAMILY);
         code_font.weight = FontWeight::NORMAL;
         FlatText {
@@ -1551,11 +1566,20 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
         .into_any_element()
 }
 
-/// `TextRun`s that tile `code` exactly, colored by the lexer. Every run shares
-/// one font, so the shaped width of a line is identical with or without
+/// `TextRun`s that tile `code` exactly, colored by tree-sitter/lumis syntax highlighting.
+/// Every run shares one font, so the shaped width of a line is identical with or without
 /// highlighting — the property that makes coloring safe to defer.
-fn code_runs(code: &str, lang: Option<Lang>, code_font: &Font, palette: &Palette) -> Vec<TextRun> {
+fn code_runs(
+    code: &str,
+    lang: Option<&'static syntax::Language>,
+    code_font: &Font,
+    palette: &Palette,
+) -> Vec<TextRun> {
     let plain = palette.secondary;
+    if code.is_empty() {
+        return Vec::new();
+    }
+
     let mut runs: Vec<TextRun> = Vec::new();
     let push = |runs: &mut Vec<TextRun>, len: usize, color: Hsla| {
         if len == 0 {
@@ -1574,26 +1598,61 @@ fn code_runs(code: &str, lang: Option<Lang>, code_font: &Font, palette: &Palette
         }
     };
 
-    let tokenized = lang.map(|lang| highlight::tokenize(lang, code));
-    let lines = code.split('\n').collect::<Vec<_>>();
-    for (index, line) in lines.iter().enumerate() {
-        let tokens = tokenized
-            .as_ref()
-            .and_then(|lines| lines.get(index))
-            .map(Vec::as_slice)
-            .unwrap_or_default();
-        let mut cursor = 0;
-        for token in tokens {
-            push(&mut runs, token.range.start.saturating_sub(cursor), plain);
-            push(&mut runs, token.range.len(), palette.token(token.class));
-            cursor = token.range.end;
+    let Some(lang) = lang else {
+        push(&mut runs, code.len(), plain);
+        return runs;
+    };
+
+    let theme_preset = if palette.is_dark {
+        syntax::ThemePreset::GitHubDark
+    } else {
+        syntax::ThemePreset::GitHubLight
+    };
+
+    let highlighted = syntax::highlight_themed(code, Some(lang), 0, Some(theme_preset));
+
+    let char_to_byte: Option<Vec<usize>> = if code.is_ascii() {
+        None
+    } else {
+        let mut table: Vec<usize> = code.char_indices().map(|(b, _)| b).collect();
+        table.push(code.len());
+        Some(table)
+    };
+
+    let to_byte = |char_offset: usize| -> usize {
+        if let Some(ref table) = char_to_byte {
+            table.get(char_offset).copied().unwrap_or(code.len())
+        } else {
+            char_offset.min(code.len())
         }
-        push(&mut runs, line.len().saturating_sub(cursor), plain);
-        if index + 1 < lines.len() {
-            // The '\n' separator must belong to a run or shaping rejects them.
-            push(&mut runs, 1, plain);
+    };
+
+    let mut cursor = 0;
+    for span in highlighted.spans {
+        let byte_start = to_byte(span.start).min(code.len());
+        let byte_end = to_byte(span.end).min(code.len());
+
+        if byte_start > cursor {
+            push(&mut runs, byte_start - cursor, plain);
+            cursor = byte_start;
+        }
+
+        if byte_end > cursor {
+            let color = span
+                .color
+                .map(|(r, g, b)| {
+                    gpui::rgb(((r as u32) << 16) | ((g as u32) << 8) | (b as u32)).into()
+                })
+                .unwrap_or_else(|| palette.capture_color(span.capture));
+            push(&mut runs, byte_end - cursor, color);
+            cursor = byte_end;
         }
     }
+
+    if cursor < code.len() {
+        push(&mut runs, code.len() - cursor, plain);
+    }
+
     runs
 }
 

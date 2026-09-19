@@ -10,6 +10,8 @@ gpui_macros = { workspace = true }
 gpui_platform = { workspace = true }
 gpui-component = { workspace = true }
 console-core = { workspace = true }
+syntax = { workspace = true }
+editor-ui = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

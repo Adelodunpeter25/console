@@ -12,10 +12,6 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-# NOTE: do NOT add `rev` pins here. gpui-component (below) requires zed via a
-# bare git URL, and cargo treats `git+url` and `git+url?rev=X` as different
-# sources even at the same commit — pinning would split `gpui` in two and fail
-# the build. The committed Cargo.lock is what pins zed (with --locked on CI).
 gpui = { version = "0.2.2", git = "https://github.com/zed-industries/zed" }
 gpui_macros = { version = "0.1.0", git = "https://github.com/zed-industries/zed" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit", "runtime_shaders"] }
@@ -23,6 +19,10 @@ gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["fo
 # Internal workspace crates
 console-core = { path = "crates/console-core" }
 console-ui = { path = "crates/console-ui" }
+
+# Editor & Syntax
+syntax = { path = "../../../gpui-editor/crates/syntax" }
+editor-ui = { path = "../../../gpui-editor/crates/editor-ui" }
 
 # UI components (command palette, dialogs, dock). Uses the same pinned zed gpui,
 # so cargo unifies sources. Must call gpui_component::init(cx) at startup and wrap

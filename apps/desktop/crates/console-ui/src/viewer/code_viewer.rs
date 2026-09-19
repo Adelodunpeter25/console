@@ -11,7 +11,7 @@ use gpui::{
     TextRun, Window, actions, canvas, div, list, prelude::*, px,
 };
 
-use crate::markdown::highlight::{self, Carry, lang_for_tag, lang_tag_for_path};
+use crate::markdown::highlight::{self, TokenClass};
 use crate::markdown::render::{MONO_FAMILY, Palette};
 use crate::primitives::scrollbar::{self, ScrollbarState};
 use crate::theme::Theme;
@@ -175,34 +175,86 @@ impl CodeViewer {
     }
 }
 
+fn capture_to_token_class(capture: syntax::Capture) -> TokenClass {
+    match capture {
+        syntax::Capture::Keyword => TokenClass::Keyword,
+        syntax::Capture::String => TokenClass::String,
+        syntax::Capture::Comment => TokenClass::Comment,
+        syntax::Capture::Number => TokenClass::Number,
+        syntax::Capture::Function => TokenClass::Function,
+        syntax::Capture::Type => TokenClass::Type,
+        syntax::Capture::Plain => TokenClass::Literal,
+    }
+}
+
 /// Helper to tokenize a slice of code lines once for a given file path.
 pub fn build_file_lines(path: &str, content: &str) -> Vec<CodeViewerLine> {
-    let lang = lang_tag_for_path(path).and_then(lang_for_tag);
-    let mut carry = Carry::None;
+    if content.is_empty() {
+        return Vec::new();
+    }
+    let lang = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
+    let highlighted = lang.map(|l| syntax::highlight_themed(content, Some(l), 0, None));
+
+    let char_to_byte: Option<Vec<usize>> = if content.is_ascii() {
+        None
+    } else {
+        let mut table: Vec<usize> = content.char_indices().map(|(b, _)| b).collect();
+        table.push(content.len());
+        Some(table)
+    };
+
+    let to_byte = |char_offset: usize| -> usize {
+        if let Some(ref table) = char_to_byte {
+            table.get(char_offset).copied().unwrap_or(content.len())
+        } else {
+            char_offset.min(content.len())
+        }
+    };
+
+    let mut line_tokens: Vec<Vec<highlight::Token>> = Vec::new();
+    let mut line_starts = Vec::new();
+    let mut offset = 0;
+    for line in content.lines() {
+        line_starts.push((offset, offset + line.len()));
+        line_tokens.push(Vec::new());
+        offset += line.len() + 1; // +1 for '\n'
+    }
+
+    if let Some(h) = highlighted {
+        for span in h.spans {
+            let span_start = to_byte(span.start);
+            let span_end = to_byte(span.end);
+            if span_start >= span_end {
+                continue;
+            }
+            for (line_idx, &(l_start, l_end)) in line_starts.iter().enumerate() {
+                if span_start < l_end && span_end > l_start {
+                    let token_start = span_start.max(l_start) - l_start;
+                    let token_end = span_end.min(l_end) - l_start;
+                    if token_start < token_end {
+                        line_tokens[line_idx].push(highlight::Token {
+                            range: token_start..token_end,
+                            class: capture_to_token_class(span.capture),
+                        });
+                    }
+                }
+            }
+        }
+    }
 
     content
         .lines()
         .enumerate()
-        .map(|(idx, line)| {
-            let tokens = if let Some(l) = lang {
-                let (t, next) = highlight::tokenize_line(l, line, carry);
-                carry = next;
-                t
-            } else {
-                Vec::new()
-            };
-
-            CodeViewerLine {
-                line_no: Some(idx + 1),
-                old_line_no: None,
-                new_line_no: None,
-                gutter: None,
-                gutter_color: None,
-                bg_color: None,
-                text_color: None,
-                text: line.to_string(),
-                tokens,
-            }
+        .map(|(idx, line)| CodeViewerLine {
+            line_no: Some(idx + 1),
+            old_line_no: None,
+            new_line_no: None,
+            gutter: None,
+            gutter_color: None,
+            bg_color: None,
+            text_color: None,
+            text: line.to_string(),
+            tokens: line_tokens.get(idx).cloned().unwrap_or_default(),
         })
         .collect()
 }
@@ -213,16 +265,24 @@ pub fn build_diff_lines(
     diff: &console_core::DiffResult,
     theme: &Theme,
 ) -> Vec<CodeViewerLine> {
-    let lang = lang_tag_for_path(path).and_then(lang_for_tag);
-    let mut carry = Carry::None;
+    let lang = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
 
     diff.lines
         .iter()
         .map(|line| {
             let tokens = if let Some(l) = lang {
-                let (t, next) = highlight::tokenize_line(l, &line.text, carry);
-                carry = next;
-                t
+                let h = syntax::highlight_themed(&line.text, Some(l), 0, None);
+                h.spans
+                    .into_iter()
+                    .filter_map(|s| {
+                        let start = s.start.min(line.text.len());
+                        let end = s.end.min(line.text.len());
+                        (start < end).then(|| highlight::Token {
+                            range: start..end,
+                            class: capture_to_token_class(s.capture),
+                        })
+                    })
+                    .collect()
             } else {
                 Vec::new()
             };
