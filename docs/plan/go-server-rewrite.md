@@ -129,9 +129,11 @@ terminal socket.
       model-favorites, notifications, ports, project-scripts, projects,
       providers, run, sessions, settings, usage).
 - [x] Port services (done: session, project, model-favorites, fs,
-      fswatch (fsnotify recursive), git (os/exec git). Remaining: provider,
+      fswatch (fsnotify recursive), git (os/exec git), project-scripts
+      (console.toml parse + managed runs + SSE stream + process-group stop;
+      port-registry output observation not yet wired). Remaining: provider,
       notification, usage, auth, port-registry, port-tunnel socket, assist,
-      project-scripts, run.
+      run (session-level).
 - [x] Port terminal (initial): pty.manager (`creack/pty`) + `/api/terminals`
       WebSocket via `fasthttp/websocket` — JSON protocol {spawned, output,
       exit, error} / {input, resize, kill} and ?proto=binary tag framing;

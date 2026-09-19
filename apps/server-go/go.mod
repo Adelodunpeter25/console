@@ -3,6 +3,7 @@ module github.com/Adelodunpeter25/console/apps/server-go
 go 1.25
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/creack/pty v1.1.24
 	github.com/fasthttp/websocket v1.5.12
 	github.com/fsnotify/fsnotify v1.10.1

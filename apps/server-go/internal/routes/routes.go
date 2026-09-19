@@ -35,6 +35,7 @@ func New(cfg Config) *fiber.App {
 	registerFsRoutes(app, services.NewFsService(), cfg.Watch)
 	registerGitRoutes(app, services.NewGitService(), cfg.Watch)
 	registerTerminalRoutes(app, services.NewPtyManager())
+	registerScriptRoutes(app, services.NewProjectScriptsService(services.NewProjectService(cfg.DB)))
 
 	slog.Info("api routes registered")
 	return app
