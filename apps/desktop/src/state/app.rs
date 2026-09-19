@@ -1442,17 +1442,29 @@ impl ConsoleDesktopApp {
 
         if let Some((cached_len, cached_hash, state, view)) = self.viewer_editor_views.get(path) {
             if *cached_len == len && *cached_hash == hash {
-                state.update(cx, |editor, _cx| {
-                    editor.set_theme(theme_preset);
-                    editor.set_wrap_enabled(true);
-                });
+                let (current_theme, current_wrap) = {
+                    let editor = state.read(cx);
+                    (editor.theme(), editor.wrap_enabled())
+                };
+                if current_theme != theme_preset || !current_wrap {
+                    state.update(cx, |editor, _cx| {
+                        if editor.theme() != theme_preset {
+                            editor.set_theme(theme_preset);
+                        }
+                        if !editor.wrap_enabled() {
+                            editor.set_wrap_enabled(true);
+                        }
+                    });
+                }
                 return view.clone();
             }
             state.update(cx, |editor, _cx| {
                 editor.set_text(content);
                 let lang = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
                 editor.set_language(lang);
-                editor.set_theme(theme_preset);
+                if editor.theme() != theme_preset {
+                    editor.set_theme(theme_preset);
+                }
                 editor.set_wrap_enabled(true);
             });
             let view_clone = view.clone();
