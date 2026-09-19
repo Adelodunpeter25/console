@@ -3,7 +3,6 @@ use std::ops::Range;
 use gpui::{Hsla, TextRun, UnderlineStyle, px};
 
 use super::mentions::ComposerMention;
-use crate::markdown::highlight::TokenClass;
 
 /// Search-match rendering configuration passed into [`input_text_runs`].
 ///
@@ -36,8 +35,8 @@ pub fn input_text_runs(
     selected_range: Option<&Range<usize>>,
     marked_range: Option<&Range<usize>>,
     _selection_color: Hsla,
-    highlight: &[(Range<usize>, TokenClass)],
-    token_color: impl Fn(TokenClass) -> Hsla,
+    highlight: &[(Range<usize>, syntax::Capture)],
+    token_color: impl Fn(syntax::Capture) -> Hsla,
     search: SearchPaint,
     mentions: &[ComposerMention],
     mention_color: Hsla,

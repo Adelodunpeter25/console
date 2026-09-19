@@ -17,7 +17,6 @@ pub use history::*;
 pub use mentions::*;
 pub use text_runs::*;
 
-use crate::markdown::highlight::{self, Lang, TokenClass};
 use crate::primitives::menu::{ContextMenuHandle, MenuItem, context_menu};
 use crate::primitives::scrollbar::{self, ScrollbarState};
 use crate::theme::Theme;
@@ -192,10 +191,10 @@ pub struct ComposerInput {
     /// into a drag-selection first, the release selects everything.
     pub(crate) focus_click_select_all: bool,
     /// Language for paint-only syntax colouring, in code mode.
-    pub(crate) language: Option<Lang>,
+    pub(crate) language: Option<&'static syntax::Language>,
     /// Cached token spans over `content`, as absolute byte ranges. Recomputed
     /// only when the content changes, so painting a large file is free.
-    pub(crate) highlight: Vec<(Range<usize>, TokenClass)>,
+    pub(crate) highlight: Vec<(Range<usize>, syntax::Capture)>,
     /// Find-in-file match ranges painted as washes under the text, sorted and
     /// non-overlapping. Owned by the find bar, which recomputes them whenever
     /// the content or the query changes; the field only paints them.
@@ -389,7 +388,8 @@ impl ComposerInput {
     /// submitting, and `language` (when recognised) colours the text.
     pub fn code_editor(mut self, language: Option<&str>) -> Self {
         self.mode = FieldMode::Code;
-        self.language = language.and_then(highlight::lang_for_tag);
+        let reg = syntax::LanguageRegistry::builtin();
+        self.language = language.and_then(|tag| reg.for_name(tag).or_else(|| reg.for_extension(tag)));
         self
     }
 
@@ -428,19 +428,30 @@ impl ComposerInput {
             return;
         };
         self.highlight.clear();
-        let mut line_start = 0;
-        for (line, tokens) in self
-            .content
-            .split('\n')
-            .zip(highlight::tokenize(language, &self.content))
-        {
-            self.highlight.extend(tokens.into_iter().map(|token| {
-                (
-                    line_start + token.range.start..line_start + token.range.end,
-                    token.class,
-                )
-            }));
-            line_start += line.len() + 1;
+        let highlighted = syntax::highlight_themed(&self.content, Some(language), 0, None);
+
+        let char_to_byte: Option<Vec<usize>> = if self.content.is_ascii() {
+            None
+        } else {
+            let mut table: Vec<usize> = self.content.char_indices().map(|(b, _)| b).collect();
+            table.push(self.content.len());
+            Some(table)
+        };
+
+        let to_byte = |char_offset: usize| -> usize {
+            if let Some(ref table) = char_to_byte {
+                table.get(char_offset).copied().unwrap_or(self.content.len())
+            } else {
+                char_offset.min(self.content.len())
+            }
+        };
+
+        for span in highlighted.spans {
+            let start = to_byte(span.start).min(self.content.len());
+            let end = to_byte(span.end).min(self.content.len());
+            if start < end {
+                self.highlight.push((start..end, span.capture));
+            }
         }
     }
 

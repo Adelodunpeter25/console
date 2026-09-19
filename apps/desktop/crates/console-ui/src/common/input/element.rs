@@ -311,7 +311,7 @@ impl Element for InputElement {
                 } else {
                     &input.highlight
                 },
-                |class| palette.token(class),
+                |capture| palette.capture_color(capture),
                 search,
                 if content_is_empty || input.mode != FieldMode::Composer {
                     &[]
