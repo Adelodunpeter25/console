@@ -16,8 +16,8 @@ Ground rules:
   The TS server stays the source of truth until Phase 8.
 - HTTP framework: **Fiber** (fasthttp-based), chosen for performance in the
   terminal and API hot paths.
-- The **cline provider is not ported** — it is dropped in the Go server
-  (including its `/cline` route).
+- The **cline provider is not ported** — it is unused and dropped in the Go
+  server (including its `/cline` route).
 - The **console CLI (`apps/cli`) is rewritten in Go** as a compiled binary
   (Phase 9).
 - File search keeps using the same `@ff-labs/fff-node`-style finder approach;
