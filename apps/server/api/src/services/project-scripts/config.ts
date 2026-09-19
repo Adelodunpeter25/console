@@ -52,13 +52,27 @@ export function parseProjectScripts(text: string): ProjectScript[] {
   });
 }
 
+/** Short-lived cache: avoids re-reading + re-parsing console.toml on every list/run call. */
+const cache = new Map<string, { expires: number; data: ProjectScriptsResult }>();
+const CACHE_TTL_MS = 2000;
+
 export async function loadProjectScripts(projectId: string, projectRoot: string): Promise<ProjectScriptsResult> {
+  const now = Date.now();
+  const cached = cache.get(projectRoot);
+  if (cached && cached.expires > now) return cached.data;
+
   const filePath = path.join(projectRoot, "console.toml");
+  let result: ProjectScriptsResult;
   try {
     const text = await fs.readFile(filePath, "utf8");
-    return { projectId, scripts: parseProjectScripts(text), source: "console.toml" };
+    result = { projectId, scripts: parseProjectScripts(text), source: "console.toml" };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { projectId, scripts: [], source: "missing" };
-    throw error;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      result = { projectId, scripts: [], source: "missing" };
+    } else {
+      throw error;
+    }
   }
+  cache.set(projectRoot, { expires: now + CACHE_TTL_MS, data: result });
+  return result;
 }
