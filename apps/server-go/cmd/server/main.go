@@ -10,21 +10,21 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/httpapi"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	store, err := db.OpenStorage(db.OpenOptions{})
+	manager, err := db.Open(db.OpenOptions{})
 	if err != nil {
-		slog.Error("failed to open storage", "error", err)
+		slog.Error("failed to open database", "error", err)
 		os.Exit(1)
 	}
-	defer store.Close()
+	defer manager.Close()
 
-	app := httpapi.New(httpapi.Config{Store: store})
+	app := routes.New(routes.Config{DB: manager})
 
 	addr := ":3000"
 	if p := os.Getenv("PORT"); p != "" {

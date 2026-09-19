@@ -33,9 +33,9 @@ Ground rules:
 - [x] Set up Fiber app skeleton: routes registration matching current paths,
       middleware, error handler.
 - [x] Define package layout mirroring existing seams (so far
-      `internal/types/` (all types, centralized), `internal/db/` (all
-      database code), `internal/httpapi/`; the rest arrive with their
-      phases):
+      `internal/types/` (one file per type), `internal/db/` (database
+      manager + schema only), `internal/routes/`, `internal/services/`,
+      `internal/utils/`, `tests/`; the rest arrive with their phases):
       `internal/agent/`, `internal/api/`, `internal/providers/<name>/`,
       `internal/session/`, `internal/tools/`, `internal/types/`.
 - [ ] Decide config loading (BurntSushi/toml vs pelletier/go-toml/v2) and

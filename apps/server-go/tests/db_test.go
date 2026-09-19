@@ -1,25 +1,32 @@
-package db
+// All server tests live in this folder. DB + service coverage.
+package tests
 
 import (
 	"encoding/json"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"testing"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
-func newTestStorage(t *testing.T) *Storage {
+func newTestManager(t *testing.T) (*db.DB, *services.SessionService, *services.ProjectService, *services.FavoriteService) {
 	t.Helper()
-	s, err := OpenStorage(OpenOptions{DBPath: ":memory:"})
+	manager, err := db.Open(db.OpenOptions{Path: ":memory:"})
 	if err != nil {
-		t.Fatalf("open storage: %v", err)
+		t.Fatalf("open db: %v", err)
 	}
-	t.Cleanup(s.Close)
-	return s
+	t.Cleanup(manager.Close)
+	return manager,
+		services.NewSessionService(manager),
+		services.NewProjectService(manager),
+		services.NewFavoriteService(manager)
 }
 
 func TestProjectsCRUD(t *testing.T) {
-	s := newTestStorage(t)
+	_, _, projects, _ := newTestManager(t)
 
-	created, err := createProject(s.globalDB, createProjectOptions{Name: "Console", Dir: "/tmp/console"})
+	created, err := projects.Create(services.CreateProjectOptions{Name: "Console", Dir: "/tmp/console"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -28,7 +35,7 @@ func TestProjectsCRUD(t *testing.T) {
 	}
 
 	// Upsert on same dir replaces the name.
-	updated, err := createProject(s.globalDB, createProjectOptions{Name: "Console v2", Dir: "/tmp/console"})
+	updated, err := projects.Create(services.CreateProjectOptions{Name: "Console v2", Dir: "/tmp/console"})
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -36,21 +43,21 @@ func TestProjectsCRUD(t *testing.T) {
 		t.Fatalf("upsert mismatch: %+v vs %+v", updated, created)
 	}
 
-	byDir, err := projectByDir(s.globalDB, "/tmp/console")
+	byDir, err := projects.GetByDir("/tmp/console")
 	if err != nil || byDir.ID != created.ID {
 		t.Fatalf("byDir: %v %+v", err, byDir)
 	}
 
-	list, err := listProjects(s.globalDB)
+	list, err := projects.List()
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list: %v %d", err, len(list))
 	}
 }
 
 func TestSessionLifecycle(t *testing.T) {
-	s := newTestStorage(t)
+	_, sessions, _, _ := newTestManager(t)
 
-	header, err := s.CreateSession(types.CreateSessionOptions{
+	header, err := sessions.Create(types.CreateSessionOptions{
 		Cwd: "/tmp/console", ModelID: "claude-sonnet-4", Provider: "anthropic",
 	})
 	if err != nil {
@@ -63,11 +70,11 @@ func TestSessionLifecycle(t *testing.T) {
 	// Messages persist to the per-session DB with role and raw JSON.
 	msg := types.AgentMessage{ID: "m1", Role: "user"}
 	msg.Data, _ = json.Marshal(map[string]string{"text": "hello"})
-	if err := s.AppendMessage(header.ID, msg); err != nil {
+	if err := sessions.AppendMessage(header.ID, msg); err != nil {
 		t.Fatalf("append: %v", err)
 	}
 
-	loaded, err := s.LoadSession(header.ID, 0, 0)
+	loaded, err := sessions.Load(header.ID, 0, 0)
 	if err != nil || loaded == nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -79,68 +86,68 @@ func TestSessionLifecycle(t *testing.T) {
 	}
 
 	// Duplicate ids are ignored.
-	if err := s.AppendMessage(header.ID, msg); err != nil {
+	if err := sessions.AppendMessage(header.ID, msg); err != nil {
 		t.Fatalf("re-append: %v", err)
 	}
-	loaded, _ = s.LoadSession(header.ID, 0, 0)
+	loaded, _ = sessions.Load(header.ID, 0, 0)
 	if len(loaded.Messages) != 1 {
 		t.Fatalf("duplicate not ignored: %d messages", len(loaded.Messages))
 	}
 
-	deleted, err := s.SoftDeleteSession(header.ID)
+	deleted, err := sessions.SoftDelete(header.ID)
 	if err != nil || !deleted {
 		t.Fatalf("delete: %v %v", err, deleted)
 	}
-	if got, _ := s.LoadSession(header.ID, 0, 0); got != nil {
+	if got, _ := sessions.Load(header.ID, 0, 0); got != nil {
 		t.Fatal("deleted session should not load")
 	}
-	if list, _ := s.ListSessions(0); len(list) != 0 {
+	if list, _ := sessions.List(0); len(list) != 0 {
 		t.Fatal("deleted session should not list")
 	}
 }
 
 func TestModelFavorites(t *testing.T) {
-	s := newTestStorage(t)
+	_, _, _, favorites := newTestManager(t)
 
 	fav := types.ModelFavorite{Provider: "anthropic", ModelID: "claude-sonnet-4"}
-	if err := s.SetModelFavorite(fav, true); err != nil {
+	if err := favorites.Set(fav, true); err != nil {
 		t.Fatalf("set: %v", err)
 	}
 	// Re-set is a no-op conflict insert.
-	if err := s.SetModelFavorite(fav, true); err != nil {
+	if err := favorites.Set(fav, true); err != nil {
 		t.Fatalf("re-set: %v", err)
 	}
-	list, err := s.ListModelFavorites()
+	list, err := favorites.List()
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list: %v %d", err, len(list))
 	}
-	if err := s.SetModelFavorite(fav, false); err != nil {
+	if err := favorites.Set(fav, false); err != nil {
 		t.Fatalf("unset: %v", err)
 	}
-	if list, _ := s.ListModelFavorites(); len(list) != 0 {
+	if list, _ := favorites.List(); len(list) != 0 {
 		t.Fatal("favorite not removed")
 	}
 }
 
 func TestDeleteProjectRemovesSessions(t *testing.T) {
-	s := newTestStorage(t)
+	_, sessions, projects, _ := newTestManager(t)
 
-	proj, err := createProject(s.globalDB, createProjectOptions{Name: "P", Dir: "/tmp/p"})
+	proj, err := projects.Create(services.CreateProjectOptions{Name: "P", Dir: "/tmp/p"})
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
 	pid := proj.ID
-	if _, err := s.CreateSession(types.CreateSessionOptions{
+	if _, err := sessions.Create(types.CreateSessionOptions{
 		Cwd: "/tmp/p", ModelID: "m", Provider: "anthropic", ProjectID: &pid,
 	}); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
-	deleted, err := s.deleteProject(pid)
+	deleted, err := projects.Delete(pid)
 	if err != nil || !deleted {
-		t.Fatalf("deleteProject: %v %v", err, deleted)
+		t.Fatalf("delete: %v %v", err, deleted)
 	}
-	if list, _ := s.ListSessions(0); len(list) != 0 {
+	if list, _ := sessions.List(0); len(list) != 0 {
 		t.Fatal("project session still listed")
 	}
 }

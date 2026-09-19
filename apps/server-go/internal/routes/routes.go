@@ -1,6 +1,6 @@
 // Fiber API surface. Route parity with apps/server/api/src/routes is
 // tracked in docs/plan/go-server-rewrite.md (Phase 5).
-package httpapi
+package routes
 
 import (
 	"log/slog"
@@ -10,10 +10,11 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 type Config struct {
-	Store *db.Storage
+	DB *db.DB
 }
 
 func New(cfg Config) *fiber.App {
@@ -29,7 +30,7 @@ func New(cfg Config) *fiber.App {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
 
-	registerSessionRoutes(app, cfg.Store)
+	registerSessionRoutes(app, services.NewSessionService(cfg.DB))
 
 	slog.Info("api routes registered")
 	return app
