@@ -15,6 +15,12 @@ export function buildRunModel(provider: string, modelId: string): Model {
     ...(typeof catalogModel?.supportsImages === "boolean"
       ? { supportsImages: catalogModel.supportsImages }
       : {}),
+    ...(catalogModel?.supportedThinkingLevels
+      ? { supportedThinkingLevels: catalogModel.supportedThinkingLevels }
+      : {}),
+    ...(catalogModel?.defaultThinkingLevel
+      ? { defaultThinkingLevel: catalogModel.defaultThinkingLevel }
+      : {}),
   };
 }
 
