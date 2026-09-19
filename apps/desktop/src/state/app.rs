@@ -261,14 +261,6 @@ pub struct ConsoleDesktopApp {
     pub viewer_focus_handles: std::collections::HashMap<String, gpui::FocusHandle>,
     pub viewer_scrollbar_states:
         std::collections::HashMap<String, std::rc::Rc<console_ui::ScrollbarState>>,
-    pub viewer_cached_file_lines: std::collections::HashMap<
-        String,
-        (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>),
-    >,
-    pub viewer_cached_diff_lines: std::collections::HashMap<
-        String,
-        (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>),
-    >,
     pub viewer_editor_views: std::collections::HashMap<
         String,
         (
@@ -277,6 +269,10 @@ pub struct ConsoleDesktopApp {
             gpui::Entity<editor_ui::EditorState>,
             gpui::Entity<editor_ui::EditorView>,
         ),
+    >,
+    pub viewer_cached_diff_lines: std::collections::HashMap<
+        String,
+        (usize, u64, std::rc::Rc<Vec<console_ui::CodeViewerLine>>),
     >,
     pub viewer_cached_markdown_views: std::collections::HashMap<
         String,
@@ -925,7 +921,6 @@ impl ConsoleDesktopApp {
             viewer_selection_states: std::collections::HashMap::new(),
             viewer_focus_handles: std::collections::HashMap::new(),
             viewer_scrollbar_states: std::collections::HashMap::new(),
-            viewer_cached_file_lines: std::collections::HashMap::new(),
             viewer_cached_diff_lines: std::collections::HashMap::new(),
             viewer_editor_views: std::collections::HashMap::new(),
             viewer_cached_markdown_views: std::collections::HashMap::new(),
@@ -1426,32 +1421,6 @@ impl ConsoleDesktopApp {
             .clone()
     }
 
-    #[allow(dead_code)]
-    pub fn get_or_build_file_lines(
-        &mut self,
-        path: &str,
-        content: &str,
-    ) -> std::rc::Rc<Vec<console_ui::CodeViewerLine>> {
-        use std::hash::{Hash, Hasher};
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        content.hash(&mut hasher);
-        let hash = hasher.finish();
-        let len = content.len();
-
-        if let Some((cached_len, cached_hash, cached_lines)) =
-            self.viewer_cached_file_lines.get(path)
-        {
-            if *cached_len == len && *cached_hash == hash {
-                return cached_lines.clone();
-            }
-        }
-
-        let lines = std::rc::Rc::new(console_ui::build_file_lines(path, content));
-        self.viewer_cached_file_lines
-            .insert(path.to_string(), (len, hash, lines.clone()));
-        lines
-    }
-
     pub fn get_or_build_editor_view(
         &mut self,
         path: &str,
@@ -1475,6 +1444,7 @@ impl ConsoleDesktopApp {
             if *cached_len == len && *cached_hash == hash {
                 state.update(cx, |editor, _cx| {
                     editor.set_theme(theme_preset);
+                    editor.set_wrap_enabled(true);
                 });
                 return view.clone();
             }
@@ -1483,6 +1453,7 @@ impl ConsoleDesktopApp {
                 let lang = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
                 editor.set_language(lang);
                 editor.set_theme(theme_preset);
+                editor.set_wrap_enabled(true);
             });
             let view_clone = view.clone();
             self.viewer_editor_views
@@ -1494,6 +1465,7 @@ impl ConsoleDesktopApp {
         let state = cx.new(|_| {
             let mut s = editor_ui::EditorState::readonly(content, lang);
             s.set_theme(theme_preset);
+            s.set_wrap_enabled(true);
             s
         });
         let view = cx.new(|cx| editor_ui::EditorView::new(&state, cx));
