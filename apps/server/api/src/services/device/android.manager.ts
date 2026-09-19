@@ -81,41 +81,48 @@ export class AndroidDeviceManager {
     const devices: DeviceDescriptor[] = [];
     const runningSerialMap = new Map<string, string>(); // avdName -> serial
 
-    try {
-      const { stdout: adbOut } = await execAsync(`"${adb}" devices -l`);
-      const lines = adbOut.trim().split("\n").slice(1);
-      for (const line of lines) {
-        const parts = line.trim().split(/\s+/);
-        if (parts.length >= 2 && parts[1] === "device") {
-          const serial = parts[0]!;
-          let name = serial;
-          try {
-            const { stdout: modelOut } = await execAsync(`"${adb}" -s "${serial}" shell getprop ro.product.model`);
-            if (modelOut.trim()) name = modelOut.trim();
-          } catch {}
+    // `adb devices -l` and `emulator -list-avds` are independent — run together.
+    const [adbResult, avdListResult] = await Promise.all([
+      execAsync(`"${adb}" devices -l`).catch(() => null),
+      execAsync(`"${emu}" -list-avds`).catch(() => null),
+    ]);
 
-          try {
-            const { stdout: avdOut } = await execAsync(`"${adb}" -s "${serial}" emu avd name`);
-            const avdName = avdOut.trim().split("\n")[0]?.trim();
-            if (avdName) runningSerialMap.set(avdName, serial);
-          } catch {}
+    if (adbResult) {
+      const lines = adbResult.stdout.trim().split("\n").slice(1);
+      const serials = lines
+        .map((line) => line.trim().split(/\s+/))
+        .filter((parts) => parts.length >= 2 && parts[1] === "device")
+        .map((parts) => parts[0]!);
 
-          devices.push({
-            id: serial,
-            name: `${name} (${serial})`,
-            platform: "android",
-            state: "booted",
-            model: name,
-            isAvailable: true,
-          });
-        }
+      // Per-serial detail lookups are independent — batch across all serials.
+      const details = await Promise.all(
+        serials.map(async (serial) => {
+          const [modelResult, avdResult] = await Promise.all([
+            execAsync(`"${adb}" -s "${serial}" shell getprop ro.product.model`).catch(() => null),
+            execAsync(`"${adb}" -s "${serial}" emu avd name`).catch(() => null),
+          ]);
+          const name = modelResult?.stdout.trim() || serial;
+          const avdName = avdResult?.stdout.trim().split("\n")[0]?.trim();
+          return { serial, name, avdName };
+        }),
+      );
+
+      for (const { serial, name, avdName } of details) {
+        if (avdName) runningSerialMap.set(avdName, serial);
+        devices.push({
+          id: serial,
+          name: `${name} (${serial})`,
+          platform: "android",
+          state: "booted",
+          model: name,
+          isAvailable: true,
+        });
       }
-    } catch {}
+    }
 
     // Also list configured AVDs that might not be running yet
-    try {
-      const { stdout: avdListOut } = await execAsync(`"${emu}" -list-avds`);
-      const avds = avdListOut.trim().split("\n").filter(Boolean);
+    if (avdListResult) {
+      const avds = avdListResult.stdout.trim().split("\n").filter(Boolean);
       for (const avd of avds) {
         const avdName = avd.trim();
         if (!runningSerialMap.has(avdName) && !devices.some((d) => d.id === avdName)) {
@@ -129,7 +136,7 @@ export class AndroidDeviceManager {
           });
         }
       }
-    } catch {}
+    }
 
     return devices;
   }

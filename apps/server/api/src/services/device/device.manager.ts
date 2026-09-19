@@ -7,26 +7,51 @@ import { iosDeviceManager } from "./ios.manager.js";
 
 const execAsync = promisify(exec);
 
+/** Short-lived cache + inflight dedup so UI polling doesn't re-spawn adb/simctl/df per request. */
+const POLL_TTL_MS = 2000;
+
 export class DeviceManager {
   private client = createAgentDeviceClient({ session: "console-device-service" });
 
+  private diagnosticsCache: { expires: number; data: DeviceDiagnostics } | null = null;
+  private diagnosticsInflight: Promise<DeviceDiagnostics> | null = null;
+  private devicesCache: { expires: number; data: DeviceDescriptor[] } | null = null;
+  private devicesInflight: Promise<DeviceDescriptor[]> | null = null;
+
   async getDiagnostics(): Promise<DeviceDiagnostics> {
-    const iosDiag = await iosDeviceManager.getDiagnostics();
-    const adbAvailable = await androidDeviceManager.isAdbAvailable();
-    const emulatorAvailable = await androidDeviceManager.isEmulatorAvailable();
+    const now = Date.now();
+    if (this.diagnosticsCache && this.diagnosticsCache.expires > now) return this.diagnosticsCache.data;
+    if (this.diagnosticsInflight) return this.diagnosticsInflight;
+    const promise = this.computeDiagnostics().then((data) => {
+      this.diagnosticsCache = { expires: Date.now() + POLL_TTL_MS, data };
+      return data;
+    }).finally(() => {
+      this.diagnosticsInflight = null;
+    });
+    this.diagnosticsInflight = promise;
+    return promise;
+  }
+
+  private async computeDiagnostics(): Promise<DeviceDiagnostics> {
+    // Independent shell-backed checks — resolve concurrently.
+    const [iosDiag, adbAvailable, emulatorAvailable, dfResult] = await Promise.all([
+      iosDeviceManager.getDiagnostics(),
+      androidDeviceManager.isAdbAvailable(),
+      androidDeviceManager.isEmulatorAvailable(),
+      execAsync("df -k .").catch(() => null),
+    ]);
     const androidSdkFound = Boolean(findAndroidSdk() || adbAvailable);
 
     let diskFreeBytes = 0;
-    try {
-      const { stdout: dfOut } = await execAsync("df -k .");
-      const lines = dfOut.trim().split("\n");
+    if (dfResult) {
+      const lines = dfResult.stdout.trim().split("\n");
       if (lines.length > 1) {
         const parts = lines[1]!.replace(/\s+/g, " ").split(" ");
         if (parts.length >= 4) {
           diskFreeBytes = Number.parseInt(parts[3]!, 10) * 1024;
         }
       }
-    } catch {}
+    }
 
     const hasEnoughDiskSpace = diskFreeBytes > 5 * 1024 * 1024 * 1024; // > 5GB
     const errors: string[] = [];
@@ -55,6 +80,20 @@ export class DeviceManager {
   }
 
   async listDevices(): Promise<DeviceDescriptor[]> {
+    const now = Date.now();
+    if (this.devicesCache && this.devicesCache.expires > now) return this.devicesCache.data;
+    if (this.devicesInflight) return this.devicesInflight;
+    const promise = this.computeListDevices().then((data) => {
+      this.devicesCache = { expires: Date.now() + POLL_TTL_MS, data };
+      return data;
+    }).finally(() => {
+      this.devicesInflight = null;
+    });
+    this.devicesInflight = promise;
+    return promise;
+  }
+
+  private async computeListDevices(): Promise<DeviceDescriptor[]> {
     const [iosList, androidList] = await Promise.all([
       iosDeviceManager.listDevices(),
       androidDeviceManager.listDevices(),
