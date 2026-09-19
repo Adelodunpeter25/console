@@ -6,7 +6,7 @@
 use std::rc::Rc;
 
 use console_core::{CreateSessionDto, WorkspaceNode, WorkspaceTabConfig};
-use console_ui::{IconName, MenuAlign, PaletteEntry, toggle_popover};
+use console_ui::{IconName, MenuAlign, PaletteEntry, toggle_popover, browser};
 use gpui::{Context, Focusable as _, WeakEntity, Window};
 
 use super::ConsoleDesktopApp;
@@ -164,21 +164,35 @@ fn tab_palette_entry(
         String::new()
     };
     let label = format!("{}{}", title, pane_suffix);
-    let icon = match tab {
-        WorkspaceTabConfig::Chat { .. } => IconName::ChatRoundLine,
-        WorkspaceTabConfig::Browser { .. } => IconName::Globe,
-        _ => IconName::Terminal,
-    };
     let pane_id_for_handler = pane_id.to_string();
     let tab_id_for_handler = tab_id.clone();
-    PaletteEntry::new(format!("tab-{}", tab_id), label, move |_window, cx| {
+    let mut entry = PaletteEntry::new(format!("tab-{}", tab_id), label, move |_window, cx| {
         if let Some(app) = entity.upgrade() {
             app.update(cx, |this, cx| {
                 this.activate_workspace_tab(&pane_id_for_handler, &tab_id_for_handler, cx);
             });
         }
-    })
-    .icon(icon)
+    });
+
+    // Use favicon for browser tabs, fallback to app icons for other tab types
+    match tab {
+        WorkspaceTabConfig::Browser { url, .. } => {
+            // Try to fetch favicon; fall back to globe icon if unavailable
+            if let Some(favicon) = browser::get_or_fetch_favicon(url) {
+                entry = entry.favicon(favicon);
+            } else {
+                entry = entry.icon(IconName::Globe);
+            }
+        }
+        WorkspaceTabConfig::Chat { .. } => {
+            entry = entry.icon(IconName::ChatRoundLine);
+        }
+        _ => {
+            entry = entry.icon(IconName::Terminal);
+        }
+    }
+
+    entry
 }
 
 impl ConsoleDesktopApp {

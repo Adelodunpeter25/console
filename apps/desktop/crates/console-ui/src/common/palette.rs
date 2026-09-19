@@ -15,9 +15,11 @@
 
 use std::rc::Rc;
 
+use std::sync::Arc;
+
 use gpui::{
-    AnyElement, App, Context, Entity, Focusable, IntoElement, ParentElement, Render, SharedString,
-    Styled, Window, div, prelude::*, px,
+    AnyElement, App, Context, Entity, Focusable, Image, IntoElement, ParentElement, Render,
+    SharedString, Styled, Window, div, prelude::*, px,
 };
 use gpui_component::command::{Command, CommandItem, CommandState};
 
@@ -32,6 +34,8 @@ pub enum PaletteIcon {
     App(IconName),
     /// Multicolor file-type icon resolved from a filename or path.
     FileType(SharedString),
+    /// Custom image (e.g., website favicon).
+    Image(Arc<Image>),
 }
 
 /// One palette row: a stable id, display label, and the action to run on Enter.
@@ -79,6 +83,12 @@ impl PaletteEntry {
         self
     }
 
+    /// Custom image icon (e.g., website favicon).
+    pub fn favicon(mut self, image: Arc<Image>) -> Self {
+        self.icon = Some(PaletteIcon::Image(image));
+        self
+    }
+
     /// Keep the palette open after this entry is confirmed. Navigation rows
     /// ("..", …) use this; actions that finish the flow leave it `false`.
     pub fn keep_open(mut self, keep_open: bool) -> Self {
@@ -110,6 +120,12 @@ fn render_entry_row(
             app_icon(*name, 15.0, theme.text_secondary).into_any_element()
         }
         Some(PaletteIcon::FileType(path)) => file_type_icon(path.as_ref(), 15.0).into_any_element(),
+        Some(PaletteIcon::Image(image)) => {
+            gpui::img(image.clone())
+                .h(px(15.0))
+                .w(px(15.0))
+                .into_any_element()
+        }
         None => div().size(px(15.0)).into_any_element(),
     };
 
