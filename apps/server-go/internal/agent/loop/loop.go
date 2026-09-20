@@ -27,6 +27,16 @@ type TurnRequest struct {
 	SystemPrompt string
 	Messages     []any // UserMessage | AssistantMessage | ToolResultMessage
 	Tools        []tools.Definition
+	// Phase 3 provider options (all optional, zero value = provider default).
+	// BaseURL overrides the provider's default endpoint (e.g. tests).
+	BaseURL string
+	// CacheRetention controls prompt-cache behavior ("short"|"long"|"none").
+	CacheRetention CacheRetention
+	// ConversationID is the stable per-conversation session id reused
+	// across turns to keep the provider's prompt cache warm.
+	ConversationID string
+	// ThinkingLevel maps to the provider's reasoning effort (e.g. codex).
+	ThinkingLevel string
 }
 
 // Events a turn can emit (mirrors the TS event stream vocabulary).
@@ -39,6 +49,7 @@ const (
 	EventToolResult EventKind = "toolResult"
 	EventError      EventKind = "error"
 	EventTurnDone   EventKind = "turnDone"
+	EventUsage      EventKind = "usage"
 )
 
 type Event struct {
@@ -48,6 +59,7 @@ type Event struct {
 	Result     *tools.ToolResult `json:"result,omitempty"`
 	StopReason StopReason        `json:"stopReason,omitempty"`
 	Message    any               `json:"message,omitempty"`
+	Usage      *TurnUsage        `json:"usage,omitempty"`
 }
 
 // streamOf is a thin alias over the generic stream for loop events.
@@ -154,6 +166,10 @@ func (a *Agent) turn(ctx context.Context, sessionID string, history []any, tools
 			if event.Call != nil {
 				assistant.Content = append(assistant.Content, ToolCallPart{Type: "toolCall", Call: *event.Call})
 				assistant.StopReason = StopToolUse
+			}
+		case EventUsage:
+			if event.Usage != nil {
+				assistant.Usage = event.Usage
 			}
 		case EventError:
 			assistant.StopReason = StopError

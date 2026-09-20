@@ -37,14 +37,53 @@ type ThinkingPart struct {
 	Text string `json:"text"`
 }
 
+// CacheRetention mirrors @console/types CacheRetention: prompt-cache tier.
+type CacheRetention string
+
+const (
+	CacheShort CacheRetention = "short"
+	CacheLong  CacheRetention = "long"
+	CacheNone  CacheRetention = "none"
+)
+
+// CacheStatus mirrors @console/types CacheStatus.
+type CacheStatus string
+
+const (
+	CacheHit         CacheStatus = "hit"
+	CacheMiss        CacheStatus = "miss"
+	CacheWrite       CacheStatus = "write"
+	CacheUnknown     CacheStatus = "unknown"
+	CacheUnsupported CacheStatus = "unsupported"
+)
+
+// TurnUsage is the normalized per-turn token usage with cache breakdown.
+// Port of packages/types/src/cache.ts TurnUsage.
+type TurnUsage struct {
+	Input           int         `json:"input"`
+	CacheRead       int         `json:"cacheRead"`
+	CacheWrite      int         `json:"cacheWrite"`
+	Output          int         `json:"output"`
+	ReasoningTokens *int        `json:"reasoningTokens,omitempty"`
+	TotalTokens     int         `json:"totalTokens"`
+	CacheStatus     CacheStatus `json:"cacheStatus"`
+}
+
 type ToolCallPart struct {
 	Type string         `json:"type"` // "toolCall"
 	Call tools.ToolCall `json:"call"`
 }
 
 type UserMessage struct {
-	Role    MessageRole `json:"role"`
-	Content string      `json:"content"`
+	Role        MessageRole       `json:"role"`
+	Content     string            `json:"content"`
+	Attachments []ImageAttachment `json:"attachments,omitempty"`
+}
+
+// ImageAttachment is base64 image data sent inline with a user message.
+type ImageAttachment struct {
+	Data     string `json:"data"`
+	MimeType string `json:"mimeType"`
 }
 
 type AssistantMessage struct {
@@ -52,6 +91,7 @@ type AssistantMessage struct {
 	ID         string      `json:"id"`
 	Content    []any       `json:"content"` // TextPart | ThinkingPart | ToolCallPart
 	StopReason StopReason  `json:"stopReason"`
+	Usage      *TurnUsage  `json:"usage,omitempty"`
 }
 
 type ToolResultMessage struct {
