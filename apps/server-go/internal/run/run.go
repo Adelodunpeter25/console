@@ -57,12 +57,31 @@ type Service struct {
 	pending   map[string]Prompt
 	sessions  *services.SessionService
 	decisions *Decisions
+	notify    *services.NotificationService
 	// Lookup resolves a provider id to a backend (overridable in tests).
 	Lookup func(id string) (loop.Provider, error)
 }
 
 func NewService(sessions *services.SessionService) *Service {
-	return &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup}
+	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup}
+	s.decisions.Notify = func(ctx context.Context, sessionID string, event loop.Event) {
+		s.notifyEvent(ctx, sessionID, event)
+	}
+	return s
+}
+
+// SetNotifications attaches the bus for attention/done banners (nil-safe
+// when unset).
+func (s *Service) SetNotifications(n *services.NotificationService) {
+	s.mu.Lock()
+	s.notify = n
+	s.mu.Unlock()
+}
+
+func (s *Service) notifier() *services.NotificationService {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.notify
 }
 
 // IsActive reports whether the session has an in-flight run.
@@ -145,14 +164,19 @@ func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, f
 
 	current, currentCtx := first, ctx
 	currentProvider, currentProviderID := firstProvider, firstProviderID
+	var runErr error
 	for {
 		turnErr := s.runOneTurn(currentCtx, sessionID, current, hub, &currentProvider, &currentProviderID)
+		runErr = turnErr
 		next, hasNext := s.nextTurn(currentCtx, turnErr, sessionID, hub)
 		if !hasNext {
 			if currentCtx.Err() != nil {
 				hub.Close(OutcomeAborted)
 			} else {
 				hub.Close(OutcomeDone)
+				if runErr == nil {
+					s.notifyDone(sessionID)
+				}
 			}
 			return
 		}
@@ -281,12 +305,41 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 		if !ok {
 			if err != nil {
 				hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
+				s.notifyEvent(ctx, sessionID, loop.Event{Kind: loop.EventError, Text: err.Error()})
 				return err
 			}
 			return nil
 		}
 		hub.Broadcast(event)
+		s.notifyEvent(ctx, sessionID, event)
 	}
+}
+
+// notifyEvent pushes an attention banner for questions, approvals, and
+// errors (never for aborted runs).
+func (s *Service) notifyEvent(ctx context.Context, sessionID string, event loop.Event) {
+	bus := s.notifier()
+	if bus == nil || !IsAttentionKind(event.Kind) || ctx.Err() != nil {
+		return
+	}
+	title := ""
+	if loaded, err := s.sessions.Load(sessionID, 0, 0); err == nil && loaded != nil {
+		title = loaded.Header.Title
+	}
+	bus.Push(AttentionNotification(sessionID, event, title))
+}
+
+// notifyDone pushes the clean-completion banner with an excerpt.
+func (s *Service) notifyDone(sessionID string) {
+	bus := s.notifier()
+	if bus == nil {
+		return
+	}
+	title := ""
+	if loaded, err := s.sessions.Load(sessionID, 0, 0); err == nil && loaded != nil {
+		title = loaded.Header.Title
+	}
+	bus.Push(DoneNotification(sessionID, title, lastAssistantExcerpt(s.sessions, sessionID)))
 }
 
 // generateTitle resolves the session title off the critical path: LLM

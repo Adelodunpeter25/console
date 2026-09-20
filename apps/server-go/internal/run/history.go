@@ -5,6 +5,7 @@ package run
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
@@ -41,6 +42,25 @@ func decodeHistory(stored []types.AgentMessage) []any {
 		}
 	}
 	return out
+}
+
+// decodeAssistantText extracts concatenated non-blank text parts from a
+// stored assistant message (for done-banner previews).
+func decodeAssistantText(raw json.RawMessage) (string, bool) {
+	assistant, ok := decodeAssistant(raw)
+	if !ok || assistant.Role != loop.RoleAssistant {
+		return "", false
+	}
+	var parts []string
+	for _, part := range assistant.Content {
+		if text, ok := part.(loop.TextPart); ok && strings.TrimSpace(text.Text) != "" {
+			parts = append(parts, text.Text)
+		}
+	}
+	if len(parts) == 0 {
+		return "", false
+	}
+	return strings.Join(parts, " "), true
 }
 
 func decodeAssistant(raw json.RawMessage) (loop.AssistantMessage, bool) {
