@@ -1,6 +1,10 @@
 # Plan: Rewrite `apps/server` in Go (`apps/server-go`)
 
-Status: **planned — not started**
+Status: **in progress** — Phases 0–1 complete, Phase 4/5 partially complete
+(session storage, fs, git, scripts, ports, favorites, projects, terminal
+WebSocket, fff integration). Remaining: agent core (Phase 2), providers
+(Phase 3), remaining Phase 5 services, parity harness, OpenAPI contract,
+cutover, CLI rewrite.
 
 Goal: replace the Bun/TypeScript server (`apps/server`, ~39k LOC across
 `agent/`, `api/`, `providers/`) with a Go implementation at `apps/server-go`,
