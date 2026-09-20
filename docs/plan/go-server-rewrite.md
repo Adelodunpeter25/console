@@ -1,10 +1,11 @@
 # Plan: Rewrite `apps/server` in Go (`apps/server-go`)
 
-Status: **in progress** — Phases 0–1 complete, Phase 4/5 partially complete
+Status: **in progress** — Phases 0–1 complete, Phase 2 (agent core) started
+(tool framework, permissions, event stream, initial loop), Phase 4/5 partially complete
 (session storage, fs, git, scripts, ports, favorites, projects, terminal
-WebSocket, fff integration). Remaining: agent core (Phase 2), providers
-(Phase 3), remaining Phase 5 services, parity harness, OpenAPI contract,
-cutover, CLI rewrite.
+WebSocket, fff integration). Remaining: rest of agent core (Phase 2),
+providers (Phase 3), remaining Phase 5 services, parity harness, OpenAPI
+contract, cutover, CLI rewrite.
 
 Goal: replace the Bun/TypeScript server (`apps/server`, ~39k LOC across
 `agent/`, `api/`, `providers/`) with a Go implementation at `apps/server-go`,
@@ -73,15 +74,26 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
 
 ## Phase 2 — Agent core (`agent/src/service`, `agent/src/types`)
 
-- [ ] Port agent-loop.ts, stream-turn.ts, tool-executor.ts, tool-input.ts.
+- [x] Tool framework: generic `NewTool[I]` deriving JSON Schema from struct
+      tags via `invopop/jsonschema`; decode-to-struct doubles as validation.
+      Initial tools: read_file, write_file, list_dir, glob, grep.
+- [x] Port permissions (approval.ts) as tier/mode → policy resolution
+      (`internal/agent/permissions`); plan mode hard-denies write/exec.
+- [x] Generic queue-based event stream (`internal/agent/stream`),
+      loss-free under producer/consumer speed mismatch.
+- [ ] Port agent-loop.ts, stream-turn.ts, tool-executor.ts, tool-input.ts
+      (initial slice done: sequential turns, tool-call/result cycle, session
+      persistence, mock-provider round-trip test; still missing compaction,
+      subagents, todos, queued prompts, thinking-block validation).
 - [ ] Port model-roles.ts, role-resolver.ts, thinking.ts,
       validate-thinking.ts, session-title.ts.
 - [ ] Port event-stream.ts (SSE) using `http.Flusher`.
-- [ ] Port permissions (approval.ts) and compaction
-      (cut-point, file-tracker, llm-compaction, shake, structural-summary,
-      token-estimator).
+- [ ] Port compaction (cut-point, file-tracker, llm-compaction, shake,
+      structural-summary, token-estimator).
 - [ ] Port system prompts and types (types/index, types/system-prompt).
-- [ ] Tests: port tests/agent.
+- [x] Tests: tool schema generation, tool validation, permission matrix,
+      mock-provider loop round-trip (tool call + persistence), stream
+      no-loss, plan-mode denial (`tests/agent_test.go`).
 
 ## Phase 3 — Provider layer (`providers/src/`) — highest risk
 

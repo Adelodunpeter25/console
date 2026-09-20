@@ -1,0 +1,178 @@
+// Agent loop: drives turns against a provider, executing tool calls until
+// the model stops. Port of apps/server/agent/src/service/agent-loop.ts
+// (initial slice: sequential turns, session persistence, event stream).
+package loop
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+)
+
+// Provider is the Phase 3 seam: a streaming model backend. The loop only
+// depends on this interface, so real providers (claude, codex...) plug in
+// without loop changes.
+type Provider interface {
+	// RunTurn streams one assistant turn for the given history. Events
+	// arrive in order; the final event determines the stop reason.
+	RunTurn(ctx context.Context, req TurnRequest, stream *streamOf) error
+}
+
+type TurnRequest struct {
+	Model        string
+	SystemPrompt string
+	Messages     []any // UserMessage | AssistantMessage | ToolResultMessage
+	Tools        []tools.Definition
+}
+
+// Events a turn can emit (mirrors the TS event stream vocabulary).
+type EventKind string
+
+const (
+	EventText       EventKind = "text"
+	EventThinking   EventKind = "thinking"
+	EventToolCall   EventKind = "toolCall"
+	EventToolResult EventKind = "toolResult"
+	EventError      EventKind = "error"
+	EventTurnDone   EventKind = "turnDone"
+)
+
+type Event struct {
+	Kind       EventKind         `json:"kind"`
+	Text       string            `json:"text,omitempty"`
+	Call       *tools.ToolCall   `json:"call,omitempty"`
+	Result     *tools.ToolResult `json:"result,omitempty"`
+	StopReason StopReason        `json:"stopReason,omitempty"`
+	Message    any               `json:"message,omitempty"`
+}
+
+// streamOf is a thin alias over the generic stream for loop events.
+type streamOf = stream.Stream[Event]
+
+// Agent runs the loop for one user prompt: provider turns + tool execution
+// until the model stops, persisting every message into the session.
+type Agent struct {
+	provider Provider
+	executor *Executor
+	sessions *services.SessionService
+	maxTurns int
+}
+
+func New(provider Provider, executor *Executor, sessions *services.SessionService) *Agent {
+	return &Agent{provider: provider, executor: executor, sessions: sessions, maxTurns: 20}
+}
+
+// Run processes the user prompt and streams events until the final turn.
+func (a *Agent) Run(ctx context.Context, sessionID string, userText string, toolsList []tools.Definition) (*stream.Stream[Event], error) {
+	stream := stream.New[Event]()
+	go a.run(ctx, sessionID, userText, toolsList, stream)
+	return stream, nil
+}
+
+func (a *Agent) run(ctx context.Context, sessionID string, userText string, toolsList []tools.Definition, events *stream.Stream[Event]) {
+	// Persist the user message first.
+	user := UserMessage{Role: RoleUser, Content: userText}
+	if err := a.sessions.AppendMessage(sessionID, types.AgentMessage{
+		ID:   newMessageID(),
+		Role: string(RoleUser),
+		Data: messageJSON(user),
+	}); err != nil {
+		events.Fail(fmt.Errorf("persist user message: %w", err))
+		return
+	}
+
+	history := []any{user}
+	for turn := 0; turn < a.maxTurns; turn++ {
+		assistant, err := a.turn(ctx, sessionID, history, toolsList, events)
+		if err != nil {
+			events.Fail(err)
+			return
+		}
+		history = append(history, assistant)
+
+		if assistant.StopReason != StopToolUse {
+			events.Push(Event{Kind: EventTurnDone, StopReason: assistant.StopReason, Message: assistant})
+			events.Complete()
+			return
+		}
+
+		// Execute every tool call the model requested this turn.
+		results := make([]tools.ToolResult, 0, len(assistant.Content))
+		for _, part := range assistant.Content {
+			if callPart, ok := part.(ToolCallPart); ok {
+				result, err := a.executor.Execute(ctx, callPart.Call)
+				if err != nil {
+					events.Fail(err)
+					return
+				}
+				results = append(results, result)
+				events.Push(Event{Kind: EventToolResult, Result: &result})
+			}
+		}
+		resultMsg := ToolResultMessage{Role: RoleToolResult, Results: results}
+		if err := a.sessions.AppendMessage(sessionID, types.AgentMessage{
+			ID:   newMessageID(),
+			Role: string(RoleToolResult),
+			Data: messageJSON(resultMsg),
+		}); err != nil {
+			events.Fail(err)
+			return
+		}
+		history = append(history, resultMsg)
+	}
+	events.Fail(fmt.Errorf("agent exceeded %d turns", a.maxTurns))
+}
+
+// turn runs one provider streaming turn, accumulating parts into an
+// AssistantMessage and re-emitting stream events.
+func (a *Agent) turn(ctx context.Context, sessionID string, history []any, toolsList []tools.Definition, events *stream.Stream[Event]) (AssistantMessage, error) {
+	assistant := AssistantMessage{Role: RoleAssistant, ID: newMessageID(), Content: []any{}}
+	turnStream := stream.New[Event]()
+	done := make(chan error, 1)
+	go func() {
+		done <- a.provider.RunTurn(ctx, TurnRequest{Messages: history, Tools: toolsList}, turnStream)
+	}()
+
+	for {
+		event, err, ok := turnStream.Next()
+		if !ok {
+			if err != nil {
+				return assistant, err
+			}
+			break
+		}
+		switch event.Kind {
+		case EventText:
+			assistant.Content = append(assistant.Content, TextPart{Type: "text", Text: event.Text})
+		case EventThinking:
+			assistant.Content = append(assistant.Content, ThinkingPart{Type: "thinking", Text: event.Text})
+		case EventToolCall:
+			if event.Call != nil {
+				assistant.Content = append(assistant.Content, ToolCallPart{Type: "toolCall", Call: *event.Call})
+				assistant.StopReason = StopToolUse
+			}
+		case EventError:
+			assistant.StopReason = StopError
+		}
+		events.Push(event)
+	}
+	if err := <-done; err != nil {
+		return assistant, err
+	}
+	if assistant.StopReason == "" {
+		assistant.StopReason = StopStop
+	}
+
+	if err := a.sessions.AppendMessage(sessionID, types.AgentMessage{
+		ID:   assistant.ID,
+		Role: string(RoleAssistant),
+		Data: messageJSON(assistant),
+	}); err != nil {
+		return assistant, err
+	}
+	return assistant, nil
+}
