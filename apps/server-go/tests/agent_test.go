@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
@@ -13,6 +14,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/fff"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
@@ -78,6 +80,80 @@ func TestToolValidation(t *testing.T) {
 	content := m["content"].(string)
 	if content != "l2\nl3" {
 		t.Fatalf("sliced content: %q", content)
+	}
+}
+
+// TestGlobGrepFallback exercises the walk-based path (no fff manager wired),
+// which always runs regardless of the environment.
+func TestGlobGrepFallback(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.txt"), []byte("hello world\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	globArgs, _ := json.Marshal(map[string]any{"pattern": filepath.Join(dir, "*.go")})
+	globOut, err := tools.Glob.Execute(context.Background(), globArgs)
+	if err != nil {
+		t.Fatalf("glob execute: %v", err)
+	}
+	matches, ok := globOut.([]string)
+	if !ok || len(matches) != 1 || !strings.HasSuffix(matches[0], "a.go") {
+		t.Fatalf("glob fallback matches: %#v", globOut)
+	}
+
+	grepArgs, _ := json.Marshal(map[string]any{"pattern": "hello", "root": dir})
+	grepOut, err := tools.Grep.Execute(context.Background(), grepArgs)
+	if err != nil {
+		t.Fatalf("grep execute: %v", err)
+	}
+	if grepOut == nil {
+		t.Fatal("grep fallback returned nil")
+	}
+}
+
+// TestGlobGrepFff verifies glob/grep go through the real fff C ABI when the
+// shared library is available. Skips (rather than fails) when FFF_LIB_PATH
+// is unset, matching the rest of the fff integration's opt-in test pattern.
+func TestGlobGrepFff(t *testing.T) {
+	if os.Getenv("FFF_LIB_PATH") == "" {
+		t.Skip("FFF_LIB_PATH not set")
+	}
+	manager := fff.NewManager()
+	if !manager.Enabled() {
+		t.Fatal("fff manager not enabled with FFF_LIB_PATH set")
+	}
+	tools.SetFffManager(manager)
+	t.Cleanup(manager.CloseAll)
+	t.Cleanup(func() { tools.SetFffManager(nil) })
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.txt"), []byte("needle here\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	globArgs, _ := json.Marshal(map[string]any{"pattern": "*.go", "root": dir})
+	globOut, err := tools.Glob.Execute(context.Background(), globArgs)
+	if err != nil {
+		t.Fatalf("glob execute: %v", err)
+	}
+	matches, ok := globOut.([]string)
+	if !ok || len(matches) != 1 || matches[0] != "a.go" {
+		t.Fatalf("fff glob matches: %#v", globOut)
+	}
+
+	grepArgs, _ := json.Marshal(map[string]any{"pattern": "needle", "root": dir, "mode": "plain"})
+	grepOut, err := tools.Grep.Execute(context.Background(), grepArgs)
+	if err != nil {
+		t.Fatalf("grep execute: %v", err)
+	}
+	if grepOut == nil {
+		t.Fatal("fff grep returned nil")
 	}
 }
 

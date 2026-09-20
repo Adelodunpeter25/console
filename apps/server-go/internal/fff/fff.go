@@ -82,20 +82,69 @@ typedef struct FffSearchResult {
 	FffLocation location;
 } FffSearchResult;
 
+typedef struct FffMatchRange {
+	uint32_t start;
+	uint32_t end;
+} FffMatchRange;
+
+typedef struct FffGrepMatch {
+	char *relative_path;
+	char *file_name;
+	char *git_status;
+	char *line_content;
+	FffMatchRange *match_ranges;
+	char **context_before;
+	char **context_after;
+	uint64_t size;
+	uint64_t modified;
+	int64_t total_frecency_score;
+	int64_t access_frecency_score;
+	int64_t modification_frecency_score;
+	uint64_t line_number;
+	uint64_t byte_offset;
+	uint32_t col;
+	uint32_t match_ranges_count;
+	uint32_t context_before_count;
+	uint32_t context_after_count;
+	uint16_t fuzzy_score;
+	bool has_fuzzy_score;
+	bool is_binary;
+	bool is_definition;
+} FffGrepMatch;
+
+typedef struct FffGrepResult {
+	FffGrepMatch *items;
+	uint32_t count;
+	uint32_t total_matched;
+	uint32_t total_files_searched;
+	uint32_t total_files;
+	uint32_t filtered_file_count;
+	uint32_t next_file_offset;
+	char *regex_fallback_error;
+} FffGrepResult;
+
 typedef struct FffResult *(*fff_create_instance_with_t)(const FffCreateOptions *);
 typedef void (*fff_destroy_t)(void *);
 typedef struct FffResult *(*fff_search_t)(void *, const char *, const char *,
 	uint32_t, uint32_t, uint32_t, int32_t, uint32_t);
+typedef struct FffResult *(*fff_glob_t)(void *, const char *, const char *,
+	uint32_t, uint32_t, uint32_t);
+typedef struct FffResult *(*fff_live_grep_t)(void *, const char *, uint8_t, uint64_t,
+	uint32_t, bool, uint32_t, uint32_t, uint64_t, uint32_t, uint32_t, bool);
 typedef struct FffResult *(*fff_wait_for_scan_t)(void *, uint64_t);
 typedef void (*fff_free_result_t)(struct FffResult *);
 typedef void (*fff_free_search_result_t)(struct FffSearchResult *);
+typedef void (*fff_free_grep_result_t)(struct FffGrepResult *);
 
 static fff_create_instance_with_t p_create;
 static fff_destroy_t p_destroy;
 static fff_search_t p_search;
+static fff_glob_t p_glob;
+static fff_live_grep_t p_grep;
 static fff_wait_for_scan_t p_wait;
 static fff_free_result_t p_free_result;
 static fff_free_search_result_t p_free_search;
+static fff_free_grep_result_t p_free_grep;
 typedef struct FffResult *(*fff_health_check_t)(void *);
 static fff_health_check_t p_health;
 
@@ -107,12 +156,18 @@ static bool fff_bind_all(void *dl) {
 	if (!p_destroy) return false;
 	p_search = (fff_search_t)dlsym(dl, "fff_search");
 	if (!p_search) return false;
+	p_glob = (fff_glob_t)dlsym(dl, "fff_glob");
+	if (!p_glob) return false;
+	p_grep = (fff_live_grep_t)dlsym(dl, "fff_live_grep");
+	if (!p_grep) return false;
 	p_wait = (fff_wait_for_scan_t)dlsym(dl, "fff_wait_for_scan");
 	if (!p_wait) return false;
 	p_free_result = (fff_free_result_t)dlsym(dl, "fff_free_result");
 	if (!p_free_result) return false;
 	p_free_search = (fff_free_search_result_t)dlsym(dl, "fff_free_search_result");
 	if (!p_free_search) return false;
+	p_free_grep = (fff_free_grep_result_t)dlsym(dl, "fff_free_grep_result");
+	if (!p_free_grep) return false;
 	p_health = (fff_health_check_t)dlsym(dl, "fff_health_check");
 	return p_health != NULL;
 }
@@ -123,9 +178,20 @@ static struct FffResult *go_search(void *h, const char *q, const char *cf,
 	uint32_t t, uint32_t pi, uint32_t ps, int32_t cb, uint32_t mc) {
 	return p_search(h, q, cf, t, pi, ps, cb, mc);
 }
+static struct FffResult *go_glob(void *h, const char *pattern, const char *cf,
+	uint32_t t, uint32_t pi, uint32_t ps) {
+	return p_glob(h, pattern, cf, t, pi, ps);
+}
+static struct FffResult *go_grep(void *h, const char *q, uint8_t mode, uint64_t maxFileSize,
+	uint32_t maxMatchesPerFile, bool smartCase, uint32_t fileOffset, uint32_t pageLimit,
+	uint64_t timeBudgetMs, uint32_t beforeCtx, uint32_t afterCtx, bool classifyDefs) {
+	return p_grep(h, q, mode, maxFileSize, maxMatchesPerFile, smartCase, fileOffset,
+		pageLimit, timeBudgetMs, beforeCtx, afterCtx, classifyDefs);
+}
 static struct FffResult *go_wait(void *h, uint64_t ms) { return p_wait(h, ms); }
 static void go_free_result(struct FffResult *r) { p_free_result(r); }
 static void go_free_search(struct FffSearchResult *r) { p_free_search(r); }
+static void go_free_grep(struct FffGrepResult *r) { p_free_grep(r); }
 static struct FffResult *go_health(void *h) { return p_health(h); }
 */
 import "C"
@@ -207,6 +273,22 @@ type Item struct {
 	IsDir   bool
 }
 
+// GrepMatch is one content-search hit.
+type GrepMatch struct {
+	RelPath     string
+	LineContent string
+	LineNumber  uint64
+}
+
+// GrepMode selects fff's content-search matching strategy.
+type GrepMode uint8
+
+const (
+	GrepModePlain GrepMode = 0
+	GrepModeRegex GrepMode = 1
+	GrepModeFuzzy GrepMode = 2
+)
+
 // Instance is one indexed directory.
 type Instance struct {
 	handle unsafe.Pointer
@@ -282,6 +364,91 @@ func (i *Instance) Search(query string, limit int) ([]Item, error) {
 		})
 	}
 	return items, nil
+}
+
+// Glob filters indexed files by a glob pattern (native fff glob, no query
+// parsing — backs the agent glob tool the same way TS's FileFinder.glob does).
+func (i *Instance) Glob(pattern string, limit int) ([]Item, error) {
+	if i.handle == nil {
+		return nil, fmt.Errorf("fff instance destroyed")
+	}
+	cPattern := C.CString(pattern)
+	defer C.free(unsafe.Pointer(cPattern))
+	if limit <= 0 {
+		limit = 200
+	}
+	res := C.go_glob(i.handle, cPattern, nil, 0, 0, C.uint32_t(limit))
+	if res == nil {
+		return nil, fmt.Errorf("fff_glob returned null")
+	}
+	defer C.go_free_result(res)
+	if !bool(res.success) {
+		msg := "unknown error"
+		if res.error != nil {
+			msg = C.GoString(res.error)
+		}
+		return nil, fmt.Errorf("fff_glob: %s", msg)
+	}
+	sr := (*C.FffSearchResult)(unsafe.Pointer(res.handle))
+	defer C.go_free_search(sr)
+	count := int(sr.count)
+	if count > limit {
+		count = limit
+	}
+	items := make([]Item, 0, count)
+	slice := unsafe.Slice(sr.items, int(sr.count))
+	for _, it := range slice[:count] {
+		items = append(items, Item{
+			RelPath: C.GoString(it.relative_path),
+			Name:    C.GoString(it.file_name),
+			Size:    int64(it.size),
+		})
+	}
+	return items, nil
+}
+
+// Grep runs fff's native content search (backs the agent grep tool the same
+// way TS's FileFinder.grep does).
+func (i *Instance) Grep(query string, mode GrepMode, caseInsensitive bool, contextLines, maxMatches int) ([]GrepMatch, int, error) {
+	if i.handle == nil {
+		return nil, 0, fmt.Errorf("fff instance destroyed")
+	}
+	cQuery := C.CString(query)
+	defer C.free(unsafe.Pointer(cQuery))
+	if maxMatches <= 0 {
+		maxMatches = 100
+	}
+	res := C.go_grep(i.handle, cQuery, C.uint8_t(mode), 0, 0, C.bool(!caseInsensitive),
+		0, C.uint32_t(maxMatches), 0, C.uint32_t(contextLines), C.uint32_t(contextLines), false)
+	if res == nil {
+		return nil, 0, fmt.Errorf("fff_live_grep returned null")
+	}
+	defer C.go_free_result(res)
+	if !bool(res.success) {
+		msg := "unknown error"
+		if res.error != nil {
+			msg = C.GoString(res.error)
+		}
+		return nil, 0, fmt.Errorf("fff_live_grep: %s", msg)
+	}
+	gr := (*C.FffGrepResult)(unsafe.Pointer(res.handle))
+	defer C.go_free_grep(gr)
+	count := int(gr.count)
+	if count > maxMatches {
+		count = maxMatches
+	}
+	matches := make([]GrepMatch, 0, count)
+	if count > 0 {
+		slice := unsafe.Slice(gr.items, int(gr.count))
+		for _, m := range slice[:count] {
+			matches = append(matches, GrepMatch{
+				RelPath:     C.GoString(m.relative_path),
+				LineContent: C.GoString(m.line_content),
+				LineNumber:  uint64(m.line_number),
+			})
+		}
+	}
+	return matches, int(gr.total_files_searched), nil
 }
 
 // Health returns the instance health JSON (indexed counts etc.). The C ABI
@@ -361,6 +528,34 @@ func (m *Manager) SearchAsync(root, query string, limit int) ([]Item, bool) {
 		return nil, false
 	}
 	return items, true
+}
+
+// GetOrCreate returns the instance for root, creating and indexing it
+// synchronously if needed. Unlike SearchAsync (interactive, non-blocking),
+// tool calls (glob/grep) can afford to wait for the initial scan.
+func (m *Manager) GetOrCreate(root string) (*Instance, error) {
+	if !m.enabled {
+		return nil, fmt.Errorf("fff is not available")
+	}
+	m.mu.Lock()
+	if inst, ok := m.instances[root]; ok {
+		m.mu.Unlock()
+		return inst, nil
+	}
+	m.mu.Unlock()
+	inst, err := Create(root)
+	if err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	if existing, ok := m.instances[root]; ok {
+		m.mu.Unlock()
+		inst.Destroy()
+		return existing, nil
+	}
+	m.instances[root] = inst
+	m.mu.Unlock()
+	return inst, nil
 }
 
 // CloseAll destroys every instance.

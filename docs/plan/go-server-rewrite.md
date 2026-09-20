@@ -77,6 +77,9 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
 - [x] Tool framework: generic `NewTool[I]` deriving JSON Schema from struct
       tags via `invopop/jsonschema`; decode-to-struct doubles as validation.
       Initial tools: read_file, write_file, list_dir, glob, grep.
+      glob/grep are fff-powered (native fff_glob/fff_live_grep via the same
+      CGo bindings backing /api/fs/search), falling back to a filesystem
+      walk when fff is unavailable.
 - [x] Port permissions (approval.ts) as tier/mode → policy resolution
       (`internal/agent/permissions`); plan mode hard-denies write/exec.
 - [x] Generic queue-based event stream (`internal/agent/stream`),

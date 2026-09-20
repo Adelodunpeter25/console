@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/fff"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
@@ -37,6 +38,7 @@ func New(cfg Config) *fiber.App {
 	registerSessionRoutes(app, services.NewSessionService(cfg.DB))
 	fffManager := fff.NewManager()
 	services.SetFffManager(fffManager)
+	tools.SetFffManager(fffManager)
 	registerFsRoutes(app, services.NewFsService(), cfg.Watch)
 	registerGitRoutes(app, services.NewGitService(), cfg.Watch)
 	registerTerminalRoutes(app, services.NewPtyManager())
