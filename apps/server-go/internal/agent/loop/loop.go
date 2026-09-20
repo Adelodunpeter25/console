@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -50,6 +51,10 @@ const (
 	EventError      EventKind = "error"
 	EventTurnDone   EventKind = "turnDone"
 	EventUsage      EventKind = "usage"
+	// EventAskQuestion carries an AskQuestionRequest awaiting the answer route.
+	EventAskQuestion EventKind = "askQuestion"
+	// EventPermissionRequest carries a permission Request awaiting approval.
+	EventPermissionRequest EventKind = "permissionRequest"
 )
 
 type Event struct {
@@ -60,6 +65,8 @@ type Event struct {
 	StopReason StopReason        `json:"stopReason,omitempty"`
 	Message    any               `json:"message,omitempty"`
 	Usage      *TurnUsage        `json:"usage,omitempty"`
+	Ask        *tools.AskQuestionRequest `json:"ask,omitempty"`
+	Permission *permissions.Request      `json:"permission,omitempty"`
 }
 
 // streamOf is a thin alias over the generic stream for loop events.
@@ -72,6 +79,13 @@ type Agent struct {
 	executor *Executor
 	sessions *services.SessionService
 	maxTurns int
+	// Run options forwarded to the provider each turn. Zero values mean
+	// provider defaults; the run service sets them per session/model.
+	SystemPrompt   string
+	Model          string
+	CacheRetention CacheRetention
+	ConversationID string
+	ThinkingLevel  string
 }
 
 func New(provider Provider, executor *Executor, sessions *services.SessionService) *Agent {
@@ -80,14 +94,19 @@ func New(provider Provider, executor *Executor, sessions *services.SessionServic
 
 // Run processes the user prompt and streams events until the final turn.
 func (a *Agent) Run(ctx context.Context, sessionID string, userText string, toolsList []tools.Definition) (*stream.Stream[Event], error) {
+	return a.RunWithHistory(ctx, sessionID, nil, UserMessage{Role: RoleUser, Content: userText}, toolsList)
+}
+
+// RunWithHistory processes a user message with preloaded conversation
+// history (decoded from session storage by the run service).
+func (a *Agent) RunWithHistory(ctx context.Context, sessionID string, history []any, user UserMessage, toolsList []tools.Definition) (*stream.Stream[Event], error) {
 	stream := stream.New[Event]()
-	go a.run(ctx, sessionID, userText, toolsList, stream)
+	go a.run(ctx, sessionID, history, user, toolsList, stream)
 	return stream, nil
 }
 
-func (a *Agent) run(ctx context.Context, sessionID string, userText string, toolsList []tools.Definition, events *stream.Stream[Event]) {
+func (a *Agent) run(ctx context.Context, sessionID string, history []any, user UserMessage, toolsList []tools.Definition, events *stream.Stream[Event]) {
 	// Persist the user message first.
-	user := UserMessage{Role: RoleUser, Content: userText}
 	if err := a.sessions.AppendMessage(sessionID, types.AgentMessage{
 		ID:   newMessageID(),
 		Role: string(RoleUser),
@@ -97,7 +116,7 @@ func (a *Agent) run(ctx context.Context, sessionID string, userText string, tool
 		return
 	}
 
-	history := []any{user}
+	history = append(append([]any{}, history...), user)
 	for turn := 0; turn < a.maxTurns; turn++ {
 		assistant, err := a.turn(ctx, sessionID, history, toolsList, events)
 		if err != nil {
@@ -146,7 +165,15 @@ func (a *Agent) turn(ctx context.Context, sessionID string, history []any, tools
 	turnStream := stream.New[Event]()
 	done := make(chan error, 1)
 	go func() {
-		done <- a.provider.RunTurn(ctx, TurnRequest{Messages: history, Tools: toolsList}, turnStream)
+		done <- a.provider.RunTurn(ctx, TurnRequest{
+			Model:          a.Model,
+			SystemPrompt:   a.SystemPrompt,
+			Messages:       history,
+			Tools:          toolsList,
+			CacheRetention: a.CacheRetention,
+			ConversationID: a.ConversationID,
+			ThinkingLevel:  a.ThinkingLevel,
+		}, turnStream)
 	}()
 
 	for {
