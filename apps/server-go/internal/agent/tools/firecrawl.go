@@ -108,3 +108,73 @@ func firecrawlScrape(ctx context.Context, url string) (markdown, title, sourceUR
 	}
 	return truncateMarkdown(md), title, sourceURL, statusCode, true, nil
 }
+
+// FirecrawlSearchResult is one hit from firecrawlSearch.
+type FirecrawlSearchResult struct {
+	Title       string
+	URL         string
+	Markdown    string
+	Description string
+}
+
+// firecrawlSearch runs a web search via Firecrawl's /search endpoint,
+// returning full markdown per result (richer than snippet-only engines).
+// ok=false (not an error) means Firecrawl succeeded but found nothing.
+func firecrawlSearch(ctx context.Context, query string, limit int) ([]FirecrawlSearchResult, bool, error) {
+	json, err := firecrawlPost(ctx, "/search", map[string]any{
+		"query": query, "limit": limit,
+		"scrapeOptions": map[string]any{"formats": []string{"markdown"}, "onlyMainContent": true},
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	success, _ := json["success"].(bool)
+	data, _ := json["data"].([]any)
+	if !success || len(data) == 0 {
+		return nil, false, nil
+	}
+	out := make([]FirecrawlSearchResult, 0, len(data))
+	for _, item := range data {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		url, _ := m["url"].(string)
+		if url == "" {
+			continue
+		}
+		title, _ := m["title"].(string)
+		description, _ := m["description"].(string)
+		markdown, _ := m["markdown"].(string)
+		out = append(out, FirecrawlSearchResult{
+			Title: title, URL: url, Markdown: truncateMarkdown(markdown), Description: description,
+		})
+		if len(out) >= limit {
+			break
+		}
+	}
+	if len(out) == 0 {
+		return nil, false, nil
+	}
+	return out, true, nil
+}
+
+// isRetryableFirecrawlError reports whether a Firecrawl error (rate limit,
+// network failure, 5xx) should trigger a fallback search engine rather than
+// surfacing directly.
+func isRetryableFirecrawlError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "429") || strings.Contains(msg, "Rate limit") {
+		return true
+	}
+	if strings.Contains(msg, "HTTP 5") {
+		return true
+	}
+	if strings.Contains(msg, "network") || strings.Contains(msg, "connection") || strings.Contains(msg, "timeout") {
+		return true
+	}
+	return false
+}

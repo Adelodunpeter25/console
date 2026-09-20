@@ -77,7 +77,7 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
 - [x] Tool framework: generic `NewTool[I]` deriving JSON Schema from struct
       tags via `invopop/jsonschema`; decode-to-struct doubles as validation.
       Tools so far: read_file, write_file, list_dir, glob, grep, editFile,
-      batchWrite, readSkill, fetch.
+      batchWrite, readSkill, fetch, webSearch.
       glob/grep are fff-powered (native fff_glob/fff_live_grep via the same
       CGo bindings backing /api/fs/search), falling back to a filesystem
       walk when fff is unavailable.
@@ -90,10 +90,14 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
       against a real URL), falling back to a direct HTTP request with
       content-type-aware formatting (JSON pretty-print, naive HTML-to-text)
       for everything else and any Firecrawl miss.
-      Still to port: webSearch, todo, subagent, memory, ask/askMany,
-      bash/bashJob (each needs a new subsystem — search backend,
-      session-scoped state, nested agent loop, interactive approval
-      channel, or process/job management).
+      webSearch tries keyless Firecrawl search first (full markdown per
+      result, live-verified against a real query), falls back to scraping
+      DuckDuckGo's HTML lite page on a retryable Firecrawl error or empty
+      result set, or calls Brave's API directly when `searchEngine: brave`
+      is requested (needs `BRAVE_SEARCH_API_KEY`).
+      Still to port: todo, subagent, memory, ask/askMany, bash/bashJob
+      (each needs a new subsystem — session-scoped state, nested agent
+      loop, interactive approval channel, or process/job management).
 - [x] Port permissions (approval.ts) as tier/mode → policy resolution
       (`internal/agent/permissions`); plan mode hard-denies write/exec.
 - [x] Generic queue-based event stream (`internal/agent/stream`),
@@ -118,9 +122,13 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
       no-loss, plan-mode denial, glob/grep fff + fallback, editFile,
       batchWrite, readSkill, fetch (direct JSON/HTML/POST/error-status via
       httptest, plus a live Firecrawl smoke test against a real URL),
+      webSearch (Firecrawl success, retryable-error fallback to DuckDuckGo,
+      Brave success/missing-key, all via local httptest doubles, plus a
+      live smoke test against a real query),
       system-prompt discovery + assembly, approval-mode instructions
       (`tests/agent_test.go`, `tests/tools_more_test.go`,
-      `tests/fetch_tool_test.go`, `tests/systemprompt_test.go`).
+      `tests/fetch_tool_test.go`, `tests/web_search_tool_test.go`,
+      `tests/systemprompt_test.go`).
 
 ## Phase 3 — Provider layer (`providers/src/`) — highest risk
 
