@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/memory"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/systemprompt"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/titles"
@@ -58,6 +59,7 @@ type Service struct {
 	sessions  *services.SessionService
 	decisions *Decisions
 	notify    *services.NotificationService
+	memories  *memory.Registry
 	// Lookup resolves a provider id to a backend (overridable in tests).
 	Lookup func(id string) (loop.Provider, error)
 }
@@ -76,6 +78,20 @@ func (s *Service) SetNotifications(n *services.NotificationService) {
 	s.mu.Lock()
 	s.notify = n
 	s.mu.Unlock()
+}
+
+// SetMemories attaches the memory registry backing the per-run memory
+// tool (nil-safe when unset: the tool reports unavailable).
+func (s *Service) SetMemories(r *memory.Registry) {
+	s.mu.Lock()
+	s.memories = r
+	s.mu.Unlock()
+}
+
+func (s *Service) memoryRegistry() *memory.Registry {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.memories
 }
 
 func (s *Service) notifier() *services.NotificationService {
@@ -262,7 +278,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	})
 
 	askHandler := s.decisions.AskHandlerFor(sessionID, hub)
-	toolList := make([]tools.Tool, 0, len(tools.DefaultTools()))
+	toolList := make([]tools.Tool, 0, len(tools.DefaultTools())+1)
 	for _, t := range tools.DefaultTools() {
 		switch t.Name() {
 		case "ask":
@@ -273,6 +289,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 			toolList = append(toolList, t)
 		}
 	}
+	var projectID string
+	if header.ProjectID != nil {
+		projectID = *header.ProjectID
+	}
+	toolList = append(toolList, tools.NewMemoryTool(projectID, s.memoryRegistry()))
 	registry := tools.NewRegistry(toolList...)
 	executor := loop.NewExecutor(registry, mode, s.decisions.ApproverFor(sessionID, hub))
 	agent := loop.New(provider, executor, s.sessions)
