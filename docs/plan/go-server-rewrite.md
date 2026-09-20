@@ -281,11 +281,15 @@ terminal socket.
 
 ## Phase 9 — Console CLI rewrite in Go
 
-- [ ] Port apps/cli (~900 LOC: commander-based bin, index.ts, types.ts)
+Status: **done** (`apps/cli-go`).
+
+- [x] Port apps/cli (~900 LOC: commander-based bin, index.ts, types.ts)
       to Go, compiled to a single static binary.
-- [ ] CLI framework: cobra or urfave/cli; source commands from the same
-      OpenAPI spec produced in Phase 7.
-- [ ] Keep the `console` bin name and existing command/flag surface.
+- [x] CLI framework: cobra; daemon helpers (pid/config/env/status/paths)
+      in `internal/daemon`, all 7 commands (start/stop/status/logs/restart/
+      env/upgrade) in `internal/commands`, entry at `cmd/console`.
+- [x] Keep the `console` bin name and existing command/flag surface
+      (one divergence: `-h` stays the help flag, host is long-only `--host`).
 - [ ] Ship release binaries (goreleaser) and update install.sh.
 
 ## Phase 8 — Cutover
