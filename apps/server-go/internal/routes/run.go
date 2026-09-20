@@ -8,6 +8,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 )
 
@@ -92,6 +93,62 @@ func registerRunRoutes(app *fiber.App, runs *run.Service) {
 		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"sessionId": sessionID, "aborted": true}})
 	})
+
+	// POST /api/sessions/:id/answer — answer a pending agent question.
+	app.Post("/api/sessions/:id/answer", func(c *fiber.Ctx) error {
+		sessionID := c.Params("id")
+		var body struct {
+			RequestID string `json:"requestId"`
+			Answer    any    `json:"answer"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid request body."})
+		}
+		answer, ok := parseAnswer(body.Answer)
+		if !ok {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Field 'answer' must be a string or string array."})
+		}
+		if !runs.AnswerQuestion(sessionID, body.RequestID, answer) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No pending question for requestId '" + body.RequestID + "'."})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"answered": true}})
+	})
+
+	// POST /api/sessions/:id/approve — approve or deny a pending tool request.
+	app.Post("/api/sessions/:id/approve", func(c *fiber.Ctx) error {
+		sessionID := c.Params("id")
+		var body struct {
+			RequestID string `json:"requestId"`
+			Allow     bool   `json:"allow"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid request body."})
+		}
+		if !runs.ApprovePermission(sessionID, body.RequestID, body.Allow) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No pending permission for requestId '" + body.RequestID + "'."})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"approved": body.Allow}})
+	})
+}
+
+// parseAnswer maps the TS answer union (string | string[]) to AskAnswer.
+func parseAnswer(raw any) (tools.AskAnswer, bool) {
+	switch v := raw.(type) {
+	case string:
+		return tools.AskAnswer{Text: v}, true
+	case []any:
+		answer := tools.AskAnswer{}
+		for _, item := range v {
+			s, ok := item.(string)
+			if !ok {
+				return tools.AskAnswer{}, false
+			}
+			answer.Multi = append(answer.Multi, s)
+		}
+		return answer, true
+	default:
+		return tools.AskAnswer{}, false
+	}
 }
 
 // pumpHub streams live frames until the hub settles, then a terminal frame.

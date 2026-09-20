@@ -169,15 +169,16 @@ type activeRun struct {
 // Service coordinates agent runs: one active run per session, abort, and
 // hub lookup for attaching streams.
 type Service struct {
-	mu       sync.Mutex
-	active   map[string]*activeRun
-	sessions *services.SessionService
+	mu        sync.Mutex
+	active    map[string]*activeRun
+	sessions  *services.SessionService
+	decisions *Decisions
 	// Lookup resolves a provider id to a backend (overridable in tests).
 	Lookup func(id string) (loop.Provider, error)
 }
 
 func NewService(sessions *services.SessionService) *Service {
-	return &Service{active: map[string]*activeRun{}, sessions: sessions, Lookup: providers.Lookup}
+	return &Service{active: map[string]*activeRun{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup}
 }
 
 // IsActive reports whether the session has an in-flight run.
@@ -248,10 +249,21 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 		ApprovalMode: systemprompt.ApprovalMode(mode),
 	})
 
-	registry := tools.NewRegistry(tools.DefaultTools()...)
-	// No approver is connected in this slice: permission prompts become
-	// isError tool results instead of blocking (approve routes land next).
-	executor := loop.NewExecutor(registry, mode, nil)
+	hub := NewHub()
+	askHandler := s.decisions.AskHandlerFor(sessionID, hub)
+	toolList := make([]tools.Tool, 0, len(tools.DefaultTools()))
+	for _, t := range tools.DefaultTools() {
+		switch t.Name() {
+		case "ask":
+			toolList = append(toolList, tools.NewAskTool(askHandler))
+		case "askMany":
+			toolList = append(toolList, tools.NewAskManyTool(askHandler))
+		default:
+			toolList = append(toolList, t)
+		}
+	}
+	registry := tools.NewRegistry(toolList...)
+	executor := loop.NewExecutor(registry, mode, s.decisions.ApproverFor(sessionID, hub))
 	agent := loop.New(provider, executor, s.sessions)
 	agent.SystemPrompt = prompt.SystemPrompt
 	agent.Model = modelID
@@ -266,7 +278,6 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 		user.Attachments = append(user.Attachments, loop.ImageAttachment{Data: a.Data, MimeType: a.MimeType})
 	}
 
-	hub := NewHub()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	s.mu.Lock()
@@ -286,6 +297,7 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 func (s *Service) execute(ctx context.Context, sessionID string, agent *loop.Agent, registry *tools.Registry, history []any, user loop.UserMessage, hub *Hub, done chan struct{}) {
 	defer close(done)
 	defer func() {
+		s.decisions.RejectAllForSession(sessionID, "Run ended")
 		s.mu.Lock()
 		delete(s.active, sessionID)
 		s.mu.Unlock()
@@ -325,5 +337,16 @@ func (s *Service) Abort(sessionID string) bool {
 		return false
 	}
 	ar.cancel()
+	s.decisions.RejectAllForSession(sessionID, "Run aborted")
 	return true
+}
+
+// ApprovePermission resolves a pending tool approval for a session.
+func (s *Service) ApprovePermission(sessionID, requestID string, allow bool) bool {
+	return s.decisions.ApprovePermission(sessionID, requestID, allow)
+}
+
+// AnswerQuestion resolves a pending ask-question for a session.
+func (s *Service) AnswerQuestion(sessionID, requestID string, answer tools.AskAnswer) bool {
+	return s.decisions.AnswerQuestion(sessionID, requestID, answer)
 }

@@ -5,7 +5,8 @@ package loop
 
 import (
 	"context"
-	"fmt"
+	"crypto/rand"
+	"encoding/hex"
 	"log/slog"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
@@ -43,7 +44,7 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 			return e.errResult(call, tools.NewToolError("Tool '%s' requires approval but no approver is connected (mode %s).", call.Name, e.mode)), nil
 		}
 		req := permissions.Request{
-			RequestID:  fmt.Sprintf("perm_%s", call.ID),
+			RequestID:  newRequestID(),
 			ToolCallID: call.ID,
 			ToolName:   call.Name,
 			Args:       jsonAny(call.Arguments),
@@ -80,4 +81,14 @@ func (e *Executor) errResult(call tools.ToolCall, err error) tools.ToolResult {
 		Content:    err.Error(),
 		IsError:    true,
 	}
+}
+
+// newRequestID mints a unique id per permission prompt (mirroring the TS
+// randomUUID), so concurrent sessions can never collide on one map key.
+func newRequestID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	return "perm_" + hex.EncodeToString(b)
 }

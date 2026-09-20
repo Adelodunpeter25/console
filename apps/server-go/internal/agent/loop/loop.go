@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -50,6 +51,10 @@ const (
 	EventError      EventKind = "error"
 	EventTurnDone   EventKind = "turnDone"
 	EventUsage      EventKind = "usage"
+	// EventAskQuestion carries an AskQuestionRequest awaiting the answer route.
+	EventAskQuestion EventKind = "askQuestion"
+	// EventPermissionRequest carries a permission Request awaiting approval.
+	EventPermissionRequest EventKind = "permissionRequest"
 )
 
 type Event struct {
@@ -60,6 +65,8 @@ type Event struct {
 	StopReason StopReason        `json:"stopReason,omitempty"`
 	Message    any               `json:"message,omitempty"`
 	Usage      *TurnUsage        `json:"usage,omitempty"`
+	Ask        *tools.AskQuestionRequest `json:"ask,omitempty"`
+	Permission *permissions.Request      `json:"permission,omitempty"`
 }
 
 // streamOf is a thin alias over the generic stream for loop events.
