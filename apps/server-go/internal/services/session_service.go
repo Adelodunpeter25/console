@@ -469,6 +469,27 @@ func nullString(v string) any {
 	return v
 }
 
+// UpdateTitle sets the session title in the global index and the
+// per-session meta row. Mirrors updateTitle in session-ops.
+func (s *SessionService) UpdateTitle(sessionID, title string) error {
+	projectID, err := s.projectIDBySession(sessionID)
+	if err != nil {
+		return err
+	}
+	conn, err := s.manager.Session(sessionID, projectID)
+	if err != nil {
+		return err
+	}
+	now := utils.NowMillis()
+	if _, err := conn.Exec(`UPDATE session_meta SET title = ?, updated_at = ? WHERE id = 1`, title, now); err != nil {
+		return err
+	}
+	if _, err := s.manager.Global().Exec(`UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?`, title, now, sessionID); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *SessionService) projectIDBySession(sessionID string) (string, error) {
 	var projectID sql.NullString
 	err := s.manager.Global().QueryRow(

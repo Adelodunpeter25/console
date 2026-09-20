@@ -57,6 +57,8 @@ const (
 	EventPermissionRequest EventKind = "permissionRequest"
 	// EventQueueUpdated carries the staged QueuedPrompt (or null).
 	EventQueueUpdated EventKind = "queueUpdated"
+	// EventSessionTitleUpdated carries a freshly generated title.
+	EventSessionTitleUpdated EventKind = "sessionTitleUpdated"
 )
 
 type Event struct {
@@ -70,6 +72,7 @@ type Event struct {
 	Ask        *tools.AskQuestionRequest `json:"ask,omitempty"`
 	Permission *permissions.Request      `json:"permission,omitempty"`
 	Queued     *types.QueuedPrompt       `json:"queuedPrompt,omitempty"`
+	Title      string                    `json:"title,omitempty"`
 }
 
 // streamOf is a thin alias over the generic stream for loop events.

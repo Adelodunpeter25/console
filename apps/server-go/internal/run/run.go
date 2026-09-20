@@ -14,6 +14,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/systemprompt"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/titles"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
@@ -259,6 +260,12 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	agent.ConversationID = fmt.Sprintf("%s:%s:%s", sessionID, providerID, modelID)
 	agent.ThinkingLevel = dto.Thinking
 
+	// First user turn on a placeholder title: generate one in the
+	// background (TS session-title flow). Only applied if still generic.
+	if titles.IsGenericTitle(header.Title) && len(history) == 0 {
+		go s.generateTitle(sessionID, dto.Text, providerID, modelID, hub)
+	}
+
 	user := loop.UserMessage{Role: loop.RoleUser, Content: dto.Text}
 	for _, a := range dto.Attachments {
 		user.Attachments = append(user.Attachments, loop.ImageAttachment{Data: a.Data, MimeType: a.MimeType})
@@ -280,6 +287,28 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 		}
 		hub.Broadcast(event)
 	}
+}
+
+// generateTitle resolves the session title off the critical path: LLM
+// title first, truncation fallback on failure/empty. Applied + broadcast
+// only while the stored title is still generic. Uses a fresh provider
+// instance so generation never interferes with the running turn.
+func (s *Service) generateTitle(sessionID, prompt, providerID, modelID string, hub *Hub) {
+	title := ""
+	if provider, err := s.Lookup(providerID); err == nil {
+		title = titles.Generate(context.Background(), provider, modelID, prompt)
+	}
+	if title == "" {
+		title = titles.FallbackTitle(prompt)
+	}
+	loaded, err := s.sessions.Load(sessionID, 0, 0)
+	if err != nil || loaded == nil || !titles.IsGenericTitle(loaded.Header.Title) {
+		return
+	}
+	if err := s.sessions.UpdateTitle(sessionID, title); err != nil {
+		return
+	}
+	hub.Broadcast(loop.Event{Kind: loop.EventSessionTitleUpdated, Title: title})
 }
 
 // Abort cancels the active run. The run goroutine owns hub/session
