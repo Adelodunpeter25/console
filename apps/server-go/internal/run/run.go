@@ -171,6 +171,7 @@ type activeRun struct {
 type Service struct {
 	mu        sync.Mutex
 	active    map[string]*activeRun
+	pending   map[string]Prompt
 	sessions  *services.SessionService
 	decisions *Decisions
 	// Lookup resolves a provider id to a backend (overridable in tests).
@@ -178,7 +179,7 @@ type Service struct {
 }
 
 func NewService(sessions *services.SessionService) *Service {
-	return &Service{active: map[string]*activeRun{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup}
+	return &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup}
 }
 
 // IsActive reports whether the session has an in-flight run.
@@ -199,8 +200,9 @@ func (s *Service) Hub(sessionID string) *Hub {
 	return nil
 }
 
-// StartRun validates, builds the agent, and drives the run in the
-// background, returning the hub immediately for streaming.
+// StartRun validates the first turn and drives the run chain in the
+// background, returning the hub immediately for streaming. Staged prompts
+// drain as further turns on the same hub (see execute).
 func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 	s.mu.Lock()
 	if _, ok := s.active[sessionID]; ok {
@@ -215,6 +217,101 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 	}
 	if loaded == nil {
 		return nil, ErrNoSession
+	}
+	// Fail fast on an unknown provider before streaming starts. The
+	// validated instance is reused for the first turn; later turns
+	// re-resolve only when the staged prompt switches provider.
+	providerID := dto.Provider
+	if providerID == "" {
+		providerID = loaded.Header.Provider
+	}
+	firstProvider, err := s.Lookup(providerID)
+	if err != nil {
+		return nil, err
+	}
+
+	hub := NewHub()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	s.mu.Lock()
+	// Re-check under lock: a concurrent StartRun may have won the race.
+	if _, ok := s.active[sessionID]; ok {
+		s.mu.Unlock()
+		cancel()
+		return nil, ErrActive
+	}
+	s.active[sessionID] = &activeRun{hub: hub, cancel: cancel, done: done}
+	s.mu.Unlock()
+
+	go s.execute(ctx, cancel, sessionID, dto, firstProvider, providerID, hub, done)
+	return hub, nil
+}
+
+// execute drives one turn per loop iteration, draining a staged prompt as
+// the next turn when the previous settled cleanly. A failed turn holds
+// (not auto-runs, not drops) any staged prompt. One hub spans the whole
+// chain so subscribers keep gap-free sequence numbers.
+func (s *Service) execute(ctx context.Context, cancel context.CancelFunc, sessionID string, first Prompt, firstProvider loop.Provider, firstProviderID string, hub *Hub, done chan struct{}) {
+	defer close(done)
+	defer func() {
+		s.decisions.RejectAllForSession(sessionID, "Run ended")
+		s.mu.Lock()
+		delete(s.active, sessionID)
+		s.mu.Unlock()
+	}()
+
+	current, currentCtx, currentCancel := first, ctx, cancel
+	currentProvider, currentProviderID := firstProvider, firstProviderID
+	for {
+		turnErr := s.runOneTurn(currentCtx, sessionID, current, hub, &currentProvider, &currentProviderID)
+		next, hasNext := s.nextTurn(currentCtx, turnErr, sessionID, hub)
+		if !hasNext {
+			if currentCtx.Err() != nil {
+				hub.Close(OutcomeAborted)
+			} else {
+				hub.Close(OutcomeDone)
+			}
+			return
+		}
+		currentCtx, currentCancel = context.WithCancel(context.Background())
+		s.mu.Lock()
+		if ar, ok := s.active[sessionID]; ok {
+			ar.cancel = currentCancel
+		}
+		s.mu.Unlock()
+		current = next
+	}
+}
+
+// nextTurn decides whether a staged prompt drains as the next turn. A clean
+// settle always drains; a canceled settle drains only when staged (steer:
+// halt now, staged prompt runs next). Other errors hold the staged prompt
+// so the user can steer, edit, or delete it.
+func (s *Service) nextTurn(ctx context.Context, turnErr error, sessionID string, hub *Hub) (Prompt, bool) {
+	if turnErr != nil && !errors.Is(turnErr, context.Canceled) {
+		return Prompt{}, false
+	}
+	staged, ok := s.takeStaged(sessionID)
+	if !ok {
+		return Prompt{}, false
+	}
+	hub.Broadcast(loop.Event{Kind: loop.EventQueueUpdated})
+	return staged, true
+}
+
+// runOneTurn builds the agent for one prompt and pumps its events to the
+// hub, returning the terminal error (nil on success). The provider instance
+// is reused unless the prompt switches provider id.
+func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, hub *Hub, current *loop.Provider, currentID *string) error {
+	loaded, err := s.sessions.Load(sessionID, 0, 0)
+	if err != nil {
+		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
+		return err
+	}
+	if loaded == nil {
+		err := ErrNoSession
+		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
+		return err
 	}
 	header := loaded.Header
 
@@ -237,10 +334,16 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 		mode = permissions.AlwaysAsk
 	}
 
-	provider, err := s.Lookup(providerID)
-	if err != nil {
-		return nil, err
+	if providerID != *currentID {
+		switched, err := s.Lookup(providerID)
+		if err != nil {
+			hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
+			return err
+		}
+		*current = switched
+		*currentID = providerID
 	}
+	provider := *current
 
 	history := decodeHistory(loaded.Messages)
 	prompt := systemprompt.BuildSystemPrompt(systemprompt.BuildOptions{
@@ -249,7 +352,6 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 		ApprovalMode: systemprompt.ApprovalMode(mode),
 	})
 
-	hub := NewHub()
 	askHandler := s.decisions.AskHandlerFor(sessionID, hub)
 	toolList := make([]tools.Tool, 0, len(tools.DefaultTools()))
 	for _, t := range tools.DefaultTools() {
@@ -278,51 +380,21 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 		user.Attachments = append(user.Attachments, loop.ImageAttachment{Data: a.Data, MimeType: a.MimeType})
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	s.mu.Lock()
-	// Re-check under lock: a concurrent StartRun may have won the race.
-	if _, ok := s.active[sessionID]; ok {
-		s.mu.Unlock()
-		cancel()
-		return nil, ErrActive
-	}
-	s.active[sessionID] = &activeRun{hub: hub, cancel: cancel, done: done}
-	s.mu.Unlock()
-
-	go s.execute(ctx, sessionID, agent, registry, history, user, hub, done)
-	return hub, nil
-}
-
-func (s *Service) execute(ctx context.Context, sessionID string, agent *loop.Agent, registry *tools.Registry, history []any, user loop.UserMessage, hub *Hub, done chan struct{}) {
-	defer close(done)
-	defer func() {
-		s.decisions.RejectAllForSession(sessionID, "Run ended")
-		s.mu.Lock()
-		delete(s.active, sessionID)
-		s.mu.Unlock()
-	}()
-
 	events, err := agent.RunWithHistory(ctx, sessionID, history, user, registry.Definitions())
 	if err != nil {
 		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
-		hub.Close(OutcomeDone)
-		return
+		return err
 	}
 	for {
 		event, err, ok := events.Next()
 		if !ok {
 			if err != nil {
 				hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
+				return err
 			}
-			break
+			return nil
 		}
 		hub.Broadcast(event)
-	}
-	if ctx.Err() != nil {
-		hub.Close(OutcomeAborted)
-	} else {
-		hub.Close(OutcomeDone)
 	}
 }
 

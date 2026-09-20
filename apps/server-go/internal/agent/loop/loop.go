@@ -55,6 +55,8 @@ const (
 	EventAskQuestion EventKind = "askQuestion"
 	// EventPermissionRequest carries a permission Request awaiting approval.
 	EventPermissionRequest EventKind = "permissionRequest"
+	// EventQueueUpdated carries the staged QueuedPrompt (or null).
+	EventQueueUpdated EventKind = "queueUpdated"
 )
 
 type Event struct {
@@ -67,6 +69,7 @@ type Event struct {
 	Usage      *TurnUsage        `json:"usage,omitempty"`
 	Ask        *tools.AskQuestionRequest `json:"ask,omitempty"`
 	Permission *permissions.Request      `json:"permission,omitempty"`
+	Queued     *types.QueuedPrompt       `json:"queuedPrompt,omitempty"`
 }
 
 // streamOf is a thin alias over the generic stream for loop events.

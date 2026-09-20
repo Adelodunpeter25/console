@@ -1,5 +1,5 @@
-// Agent run routes. Port of apps/server/api/src/routes/run.ts (slice 1:
-// run, attach-to-stream, abort; queue/steer/approve/answer land next).
+// Agent run routes. Port of apps/server/api/src/routes/run.ts: run,
+// attach-to-stream, abort, queue, steer, approve, answer.
 package routes
 
 import (
@@ -24,6 +24,17 @@ type runPromptBody struct {
 	} `json:"attachments"`
 }
 
+func bodyToPrompt(body runPromptBody) run.Prompt {
+	dto := run.Prompt{
+		Text: strings.TrimSpace(body.Prompt), ModelID: body.ModelID, Provider: body.Provider,
+		ApprovalMode: body.ApprovalMode, Thinking: body.Thinking,
+	}
+	for _, a := range body.Attachments {
+		dto.Attachments = append(dto.Attachments, run.Attachment{Data: a.Data, MimeType: a.MimeType})
+	}
+	return dto
+}
+
 func registerRunRoutes(app *fiber.App, runs *run.Service) {
 	// POST /api/sessions/:id/run — start a run and stream its events.
 	app.Post("/api/sessions/:id/run", func(c *fiber.Ctx) error {
@@ -35,14 +46,7 @@ func registerRunRoutes(app *fiber.App, runs *run.Service) {
 		if strings.TrimSpace(body.Prompt) == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Field 'prompt' is required."})
 		}
-		dto := run.Prompt{
-			Text: strings.TrimSpace(body.Prompt), ModelID: body.ModelID, Provider: body.Provider,
-			ApprovalMode: body.ApprovalMode, Thinking: body.Thinking,
-		}
-		for _, a := range body.Attachments {
-			dto.Attachments = append(dto.Attachments, run.Attachment{Data: a.Data, MimeType: a.MimeType})
-		}
-		hub, err := runs.StartRun(sessionID, dto)
+		hub, err := runs.StartRun(sessionID, bodyToPrompt(body))
 		if err != nil {
 			switch {
 			case errors.Is(err, run.ErrActive):
@@ -85,11 +89,15 @@ func registerRunRoutes(app *fiber.App, runs *run.Service) {
 		})
 	})
 
-	// POST /api/sessions/:id/abort — cancel the active run.
+	// POST /api/sessions/:id/abort — cancel the active run and discard any
+	// staged prompt: Stop means stop everything.
 	app.Post("/api/sessions/:id/abort", func(c *fiber.Ctx) error {
 		sessionID := c.Params("id")
 		if !runs.Abort(sessionID) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No active run found for session '" + sessionID + "'."})
+		}
+		if _, err := runs.ClearQueuedPrompt(sessionID); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
 		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"sessionId": sessionID, "aborted": true}})
 	})
@@ -129,6 +137,91 @@ func registerRunRoutes(app *fiber.App, runs *run.Service) {
 		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"approved": body.Allow}})
 	})
+
+	// POST /api/sessions/:id/queue — stage (or replace) the prompt that
+	// runs once the active turn settles.
+	app.Post("/api/sessions/:id/queue", func(c *fiber.Ctx) error {
+		sessionID := c.Params("id")
+		var body runPromptBody
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid request body."})
+		}
+		if strings.TrimSpace(body.Prompt) == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Field 'prompt' is required."})
+		}
+		queued, err := runs.QueuePrompt(sessionID, bodyToPrompt(body))
+		if err != nil {
+			return queueError(c, sessionID, err)
+		}
+		return c.JSON(fiber.Map{"success": true, "data": queued})
+	})
+
+	// PUT /api/sessions/:id/queue — edit the staged prompt in place.
+	app.Put("/api/sessions/:id/queue", func(c *fiber.Ctx) error {
+		sessionID := c.Params("id")
+		var body runPromptBody
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid request body."})
+		}
+		if strings.TrimSpace(body.Prompt) == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Field 'prompt' is required."})
+		}
+		updated, err := runs.EditQueuedPrompt(sessionID, bodyToPrompt(body))
+		if err != nil {
+			return queueError(c, sessionID, err)
+		}
+		if updated == nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No queued prompt found for session '" + sessionID + "'."})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": updated})
+	})
+
+	// GET /api/sessions/:id/queue — fetch the staged prompt, if any.
+	app.Get("/api/sessions/:id/queue", func(c *fiber.Ctx) error {
+		queued, err := runs.QueuedPrompt(c.Params("id"))
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": queued})
+	})
+
+	// DELETE /api/sessions/:id/queue — discard the staged prompt.
+	app.Delete("/api/sessions/:id/queue", func(c *fiber.Ctx) error {
+		deleted, err := runs.ClearQueuedPrompt(c.Params("id"))
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"deleted": deleted}})
+	})
+
+	// POST /api/sessions/:id/steer — halt the run and stage body to start
+	// as the next turn as soon as the aborted run settles.
+	app.Post("/api/sessions/:id/steer", func(c *fiber.Ctx) error {
+		sessionID := c.Params("id")
+		var body runPromptBody
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid request body."})
+		}
+		if strings.TrimSpace(body.Prompt) == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Field 'prompt' is required."})
+		}
+		steered, err := runs.Steer(sessionID, bodyToPrompt(body))
+		if err != nil {
+			return queueError(c, sessionID, err)
+		}
+		if !steered {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No active run found for session '" + sessionID + "'."})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"steered": true}})
+	})
+}
+
+// queueError maps queue storage errors: missing session → 404.
+func queueError(c *fiber.Ctx, sessionID string, err error) error {
+	if errors.Is(err, run.ErrNoSession) {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No session found for id '" + sessionID + "'."})
+	}
+	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
 }
 
 // parseAnswer maps the TS answer union (string | string[]) to AskAnswer.
