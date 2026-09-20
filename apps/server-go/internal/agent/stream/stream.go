@@ -35,7 +35,8 @@ func (s *Stream[T]) Push(event T) {
 	s.mu.Unlock()
 }
 
-// Fail terminates the stream with an error.
+// Fail terminates the stream with an error, waking blocked consumers so
+// Next returns (zero, err, false).
 func (s *Stream[T]) Fail(err error) {
 	s.mu.Lock()
 	if s.done {
@@ -44,15 +45,24 @@ func (s *Stream[T]) Fail(err error) {
 	}
 	s.done = true
 	s.failed = err
+	for _, w := range s.waiters {
+		close(w)
+	}
+	s.waiters = nil
 	close(s.closedCh)
 	s.mu.Unlock()
 }
 
-// Complete terminates the stream normally.
+// Complete terminates the stream normally, waking blocked consumers so
+// Next returns (zero, nil, false) once drained.
 func (s *Stream[T]) Complete() {
 	s.mu.Lock()
 	if !s.done {
 		s.done = true
+		for _, w := range s.waiters {
+			close(w)
+		}
+		s.waiters = nil
 		close(s.closedCh)
 	}
 	s.mu.Unlock()
