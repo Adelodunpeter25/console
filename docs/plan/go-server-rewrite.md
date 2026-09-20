@@ -77,7 +77,7 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
 - [x] Tool framework: generic `NewTool[I]` deriving JSON Schema from struct
       tags via `invopop/jsonschema`; decode-to-struct doubles as validation.
       Tools so far: read_file, write_file, list_dir, glob, grep, editFile,
-      batchWrite, readSkill, fetch, webSearch.
+      batchWrite, readSkill, fetch, webSearch, ask, askMany.
       glob/grep are fff-powered (native fff_glob/fff_live_grep via the same
       CGo bindings backing /api/fs/search), falling back to a filesystem
       walk when fff is unavailable.
@@ -95,9 +95,14 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
       DuckDuckGo's HTML lite page on a retryable Firecrawl error or empty
       result set, or calls Brave's API directly when `searchEngine: brave`
       is requested (needs `BRAVE_SEARCH_API_KEY`).
-      Still to port: todo, subagent, memory, ask/askMany, bash/bashJob
-      (each needs a new subsystem — session-scoped state, nested agent
-      loop, interactive approval channel, or process/job management).
+      ask/askMany take an optional `AskHandler`; the `Ask`/`AskMany`
+      singletons in `DefaultTools()` run headless (auto-pick the first
+      option or report "skipped"), while `NewAskTool`/`NewAskManyTool`
+      build interactive instances once a real handler (approval-channel
+      wired) exists — same pattern as the executor's `Approver`.
+      Still to port: todo, memory, bash/bashJob (session-scoped state or
+      process/job management); subagent waits on Phase 3 providers since
+      it runs a nested agent-loop turn against a real model.
 - [x] Port permissions (approval.ts) as tier/mode → policy resolution
       (`internal/agent/permissions`); plan mode hard-denies write/exec.
 - [x] Generic queue-based event stream (`internal/agent/stream`),
@@ -125,10 +130,12 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
       webSearch (Firecrawl success, retryable-error fallback to DuckDuckGo,
       Brave success/missing-key, all via local httptest doubles, plus a
       live smoke test against a real query),
+      ask/askMany (headless default-option fallback, handler-driven
+      answers, shared batch id across askMany's questions),
       system-prompt discovery + assembly, approval-mode instructions
       (`tests/agent_test.go`, `tests/tools_more_test.go`,
       `tests/fetch_tool_test.go`, `tests/web_search_tool_test.go`,
-      `tests/systemprompt_test.go`).
+      `tests/ask_tools_test.go`, `tests/systemprompt_test.go`).
 
 ## Phase 3 — Provider layer (`providers/src/`) — highest risk
 
