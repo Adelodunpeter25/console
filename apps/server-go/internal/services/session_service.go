@@ -275,6 +275,78 @@ func (s *SessionService) SoftDelete(sessionID string) (bool, error) {
 	return n > 0, nil
 }
 
+// SaveSessionTodos replaces the persisted todo list for a session
+// (delete-then-insert, matching the TS session-todos.ts semantics).
+func (s *SessionService) SaveSessionTodos(sessionID string, items []types.TodoItem) error {
+	projectID, err := s.projectIDBySession(sessionID)
+	if err != nil {
+		return err
+	}
+	conn, err := s.manager.Session(sessionID, projectID)
+	if err != nil {
+		return err
+	}
+	tx, err := conn.Begin()
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM session_todos`); err != nil {
+		tx.Rollback()
+		return err
+	}
+	now := utils.NowMillis()
+	for _, item := range items {
+		if _, err := tx.Exec(
+			`INSERT INTO session_todos (id, content, status, updated_at) VALUES (?, ?, ?, ?)`,
+			item.ID, item.Content, item.Status, now); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// GetSessionTodos returns the persisted todo list for a session, ordered
+// by id (empty slice, not nil, when there is none).
+func (s *SessionService) GetSessionTodos(sessionID string) ([]types.TodoItem, error) {
+	projectID, err := s.projectIDBySession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := s.manager.Session(sessionID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := conn.Query(`SELECT id, content, status FROM session_todos ORDER BY id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]types.TodoItem, 0)
+	for rows.Next() {
+		var item types.TodoItem
+		if err := rows.Scan(&item.ID, &item.Content, &item.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+// ClearSessionTodos deletes the persisted todo list for a session.
+func (s *SessionService) ClearSessionTodos(sessionID string) error {
+	projectID, err := s.projectIDBySession(sessionID)
+	if err != nil {
+		return err
+	}
+	conn, err := s.manager.Session(sessionID, projectID)
+	if err != nil {
+		return err
+	}
+	_, err = conn.Exec(`DELETE FROM session_todos`)
+	return err
+}
+
 func (s *SessionService) projectIDBySession(sessionID string) (string, error) {
 	var projectID sql.NullString
 	err := s.manager.Global().QueryRow(

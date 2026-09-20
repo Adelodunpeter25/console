@@ -55,4 +55,13 @@ func registerSessionRoutes(app *fiber.App, sessions *services.SessionService) {
 		}
 		return c.SendStatus(fiber.StatusNoContent)
 	})
+
+	// GET /api/sessions/:id/todos — persisted todos for a session.
+	h.Get("/:id/todos", func(c *fiber.Ctx) error {
+		todos, err := sessions.GetSessionTodos(c.Params("id"))
+		if err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(fiber.Map{"success": true, "data": todos})
+	})
 }

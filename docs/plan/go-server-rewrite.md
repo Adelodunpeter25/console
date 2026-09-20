@@ -77,7 +77,7 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
 - [x] Tool framework: generic `NewTool[I]` deriving JSON Schema from struct
       tags via `invopop/jsonschema`; decode-to-struct doubles as validation.
       Tools so far: read_file, write_file, list_dir, glob, grep, editFile,
-      batchWrite, readSkill, fetch, webSearch, ask, askMany.
+      batchWrite, readSkill, fetch, webSearch, ask, askMany, todo.
       glob/grep are fff-powered (native fff_glob/fff_live_grep via the same
       CGo bindings backing /api/fs/search), falling back to a filesystem
       walk when fff is unavailable.
@@ -100,7 +100,19 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
       option or report "skipped"), while `NewAskTool`/`NewAskManyTool`
       build interactive instances once a real handler (approval-channel
       wired) exists — same pattern as the executor's `Approver`.
-      Still to port: todo, memory, bash/bashJob (session-scoped state or
+      todo is genuinely persisted (not memory-only) — `session_todos` table
+      per session, matching TS's session-todos.ts exactly: `NewTodoTool`
+      lazy-loads existing items from `SessionService.GetSessionTodos` on
+      first use and delete-then-insert persists after every mutation via
+      `SaveSessionTodos`; a fresh tool instance for the same session id
+      picks up prior state (verified with two independent tool instances
+      against one real SQLite session). Added the matching
+      `GET /api/sessions/:id/todos` route (live-curled against a running
+      server) and `ClearSessionTodos`. The `Todo` singleton in
+      `DefaultTools()` is unbound (nil store) for the process lifetime,
+      matching TS's default `createTodoTool()` export used for offline/
+      static registration; a real run binds its own via `NewTodoTool`.
+      Still to port: memory, bash/bashJob (own persistent store, or
       process/job management); subagent waits on Phase 3 providers since
       it runs a nested agent-loop turn against a real model.
 - [x] Port permissions (approval.ts) as tier/mode → policy resolution
@@ -132,10 +144,13 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
       live smoke test against a real query),
       ask/askMany (headless default-option fallback, handler-driven
       answers, shared batch id across askMany's questions),
+      todo (unbound in-memory lifecycle, and persistence across two
+      independent tool instances backed by a real SQLite session),
       system-prompt discovery + assembly, approval-mode instructions
       (`tests/agent_test.go`, `tests/tools_more_test.go`,
       `tests/fetch_tool_test.go`, `tests/web_search_tool_test.go`,
-      `tests/ask_tools_test.go`, `tests/systemprompt_test.go`).
+      `tests/ask_tools_test.go`, `tests/todo_tool_test.go`,
+      `tests/systemprompt_test.go`).
 
 ## Phase 3 — Provider layer (`providers/src/`) — highest risk
 
