@@ -22,7 +22,7 @@ import (
 func TestToolSchemaFromTags(t *testing.T) {
 	registry := tools.NewRegistry(tools.DefaultTools()...)
 	defs := registry.Definitions()
-	if len(defs) != 8 {
+	if len(defs) != 9 {
 		t.Fatalf("definitions: %d", len(defs))
 	}
 
