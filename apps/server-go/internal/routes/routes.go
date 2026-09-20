@@ -13,6 +13,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/fff"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/usage"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
@@ -49,7 +50,7 @@ func New(cfg Config) *fiber.App {
 	registerFavoriteRoutes(app, services.NewFavoriteService(cfg.DB))
 	registerPortRoutes(app, cfg.Ports)
 	registerSettingsRoutes(app, services.NewSettingsService())
-	registerUsageRoutes(app, services.NewUsageService())
+	registerUsageRoutes(app, usage.NewService())
 	registerAuthRoutes(app, auth.NewAuthService())
 	registerRunRoutes(app, run.NewService(services.NewSessionService(cfg.DB)))
 	registerMiscRoutes(app, cfg.Notifications)
