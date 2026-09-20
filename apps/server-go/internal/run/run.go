@@ -294,6 +294,12 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 		projectID = *header.ProjectID
 	}
 	toolList = append(toolList, tools.NewMemoryTool(projectID, s.memoryRegistry()))
+	toolList = append(toolList, loop.NewSubagentTool(&loop.SubagentContext{
+		Provider:     provider,
+		Tools:        toolList,
+		SystemPrompt: prompt.SystemPrompt,
+		OnEvent:      hub.Broadcast,
+	}))
 	registry := tools.NewRegistry(toolList...)
 	executor := loop.NewExecutor(registry, mode, s.decisions.ApproverFor(sessionID, hub))
 	agent := loop.New(provider, executor, s.sessions)
