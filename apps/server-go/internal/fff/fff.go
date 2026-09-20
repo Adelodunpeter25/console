@@ -156,11 +156,17 @@ func Load() error {
 		// Resolve relative to the executable too — the server CWD is not
 		// guaranteed to be the module root.
 		if exe, err := os.Executable(); err == nil {
-			candidates = append(candidates, filepath.Join(filepath.Dir(exe), "third_party/fff/libfff_c.so"))
+			exeDir := filepath.Dir(exe)
+			candidates = append(candidates,
+				filepath.Join(exeDir, "third_party/fff/libfff_c.so"),
+				filepath.Join(exeDir, "third_party/fff/libfff_c.dylib"),
+			)
 		}
 		candidates = append(candidates,
 			"third_party/fff/libfff_c.so",
+			"third_party/fff/libfff_c.dylib",
 			"/usr/local/lib/libfff_c.so",
+			"/usr/local/lib/libfff_c.dylib",
 		)
 		var handle unsafe.Pointer
 		for _, path := range candidates {

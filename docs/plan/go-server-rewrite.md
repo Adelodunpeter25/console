@@ -120,8 +120,9 @@ TS deps to replace: `@ff-labs/fff-node` (FileFinder), `diff`,
       loaded at runtime via dlopen (`third_party/fff/libfff_c.so` or
       `FFF_LIB_PATH`), per-root indexed instances with background watcher,
       wired into /api/fs/search with a walk-based fallback until the index
-      is warm. Binary committed for linux-x64; other platforms fetch via
-      `apps/server-go/scripts/fetch-fff-lib.sh`.
+      is warm. The binary is not committed — fetch per machine with
+      `apps/server-go/scripts/fetch-fff-lib.sh` (Linux x64/arm64, macOS
+      x64/arm64) or set `FFF_LIB_PATH`.
 - [ ] Tests: port tests/tools.
 
 ## Phase 5 — API surface (`api/src/`)
