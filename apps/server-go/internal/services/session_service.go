@@ -347,6 +347,27 @@ func (s *SessionService) ClearSessionTodos(sessionID string) error {
 	return err
 }
 
+// ClearCompletedTodos wipes the session's todo list once every item is
+// "completed" — matching RunService's end-of-run cleanup in the TS server
+// (finally block of runAgentStream): a finished list is cleared so the next
+// run starts fresh, but a partially-done list is left alone. Call this
+// after an agent run settles, not from the todo tool itself.
+func (s *SessionService) ClearCompletedTodos(sessionID string) error {
+	items, err := s.GetSessionTodos(sessionID)
+	if err != nil {
+		return err
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	for _, item := range items {
+		if item.Status != "completed" {
+			return nil
+		}
+	}
+	return s.ClearSessionTodos(sessionID)
+}
+
 func (s *SessionService) projectIDBySession(sessionID string) (string, error) {
 	var projectID sql.NullString
 	err := s.manager.Global().QueryRow(

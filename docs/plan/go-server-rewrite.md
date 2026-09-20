@@ -112,6 +112,14 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
       `DefaultTools()` is unbound (nil store) for the process lifetime,
       matching TS's default `createTodoTool()` export used for offline/
       static registration; a real run binds its own via `NewTodoTool`.
+      Also ported `ClearCompletedTodos` (`SessionService`): matches
+      RunService's end-of-run cleanup in the TS server (`finally` block of
+      `runAgentStream`) — once every item in a non-empty list is
+      "completed", the whole list is wiped from `session_todos` so the
+      next run starts fresh; a partially-done list is left untouched. This
+      is a run-orchestration concern, not the tool's — the tool only ever
+      marks status, so the primitive is on `SessionService` ready for the
+      future run layer (Phase 3+) to call after each run settles.
       Still to port: memory, bash/bashJob (own persistent store, or
       process/job management); subagent waits on Phase 3 providers since
       it runs a nested agent-loop turn against a real model.
@@ -145,7 +153,9 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
       ask/askMany (headless default-option fallback, handler-driven
       answers, shared batch id across askMany's questions),
       todo (unbound in-memory lifecycle, and persistence across two
-      independent tool instances backed by a real SQLite session),
+      independent tool instances backed by a real SQLite session,
+      plus ClearCompletedTodos: partial lists survive, fully-completed
+      lists are wiped, empty lists are a no-op),
       system-prompt discovery + assembly, approval-mode instructions
       (`tests/agent_test.go`, `tests/tools_more_test.go`,
       `tests/fetch_tool_test.go`, `tests/web_search_tool_test.go`,

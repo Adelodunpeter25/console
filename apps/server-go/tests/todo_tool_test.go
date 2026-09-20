@@ -133,3 +133,64 @@ func TestTodoPersistsAcrossToolInstances(t *testing.T) {
 		t.Fatalf("expected cleared todos, got: %+v", cleared)
 	}
 }
+
+// TestClearCompletedTodos matches RunService's end-of-run cleanup (TS
+// run.service.ts finally block): only a non-empty list where EVERY item is
+// completed gets wiped; a partial list is left alone.
+func TestClearCompletedTodos(t *testing.T) {
+	manager, err := db.Open(db.OpenOptions{Path: ":memory:"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(manager.Close)
+	sessions := services.NewSessionService(manager)
+	header, err := sessions.Create(types.CreateSessionOptions{
+		Cwd: "/tmp/todo-clear-test", ModelID: "mock", Provider: "mock",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Empty list: no-op.
+	if err := sessions.ClearCompletedTodos(header.ID); err != nil {
+		t.Fatalf("clear on empty: %v", err)
+	}
+
+	// Partially done: must survive.
+	partial := []types.TodoItem{
+		{ID: 1, Content: "a", Status: "completed"},
+		{ID: 2, Content: "b", Status: "in_progress"},
+	}
+	if err := sessions.SaveSessionTodos(header.ID, partial); err != nil {
+		t.Fatal(err)
+	}
+	if err := sessions.ClearCompletedTodos(header.ID); err != nil {
+		t.Fatalf("clear on partial: %v", err)
+	}
+	stillThere, err := sessions.GetSessionTodos(header.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stillThere) != 2 {
+		t.Fatalf("partial list must survive: %+v", stillThere)
+	}
+
+	// Fully done: must be wiped.
+	done := []types.TodoItem{
+		{ID: 1, Content: "a", Status: "completed"},
+		{ID: 2, Content: "b", Status: "completed"},
+	}
+	if err := sessions.SaveSessionTodos(header.ID, done); err != nil {
+		t.Fatal(err)
+	}
+	if err := sessions.ClearCompletedTodos(header.ID); err != nil {
+		t.Fatalf("clear on all-done: %v", err)
+	}
+	gone, err := sessions.GetSessionTodos(header.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gone) != 0 {
+		t.Fatalf("fully-completed list must be wiped: %+v", gone)
+	}
+}
