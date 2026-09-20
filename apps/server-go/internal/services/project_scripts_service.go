@@ -172,13 +172,21 @@ func (s *ProjectScriptsService) Run(projectID, scriptID string) (types.ScriptRun
 	}
 
 	s.mu.Lock()
+	candidates := make([]*managedRun, 0, len(s.runs))
 	for _, run := range s.runs {
-		if run.ProjectID == projectID && run.ScriptID == scriptID && run.Status == "running" {
-			s.mu.Unlock()
-			return types.ScriptRun{}, fmt.Errorf("Script '%s' is already running.", scriptID)
+		if run.ProjectID == projectID && run.ScriptID == scriptID {
+			candidates = append(candidates, run)
 		}
 	}
 	s.mu.Unlock()
+	for _, run := range candidates {
+		run.mu.Lock()
+		running := run.Status == "running"
+		run.mu.Unlock()
+		if running {
+			return types.ScriptRun{}, fmt.Errorf("Script '%s' is already running.", scriptID)
+		}
+	}
 
 	cmd := exec.Command("sh", "-c", script.Command)
 	cmd.Dir = project.Path
@@ -211,9 +219,15 @@ func (s *ProjectScriptsService) Run(projectID, scriptID string) (types.ScriptRun
 	s.mu.Unlock()
 	run.publish(types.ScriptRunEvent{Type: "status", Status: "running"})
 
-	go pumpOutput(run, stdout, "stdout")
-	go pumpOutput(run, stderr, "stderr")
 	go func() {
+		// cmd.Wait must not run until both StdoutPipe/StderrPipe readers
+		// have drained (see os/exec docs); otherwise the run can flip to a
+		// terminal status before its output is fully captured.
+		var pumps sync.WaitGroup
+		pumps.Add(2)
+		go func() { defer pumps.Done(); pumpOutput(run, stdout, "stdout") }()
+		go func() { defer pumps.Done(); pumpOutput(run, stderr, "stderr") }()
+		pumps.Wait()
 		err := cmd.Wait()
 		run.mu.Lock()
 		if run.Status != "stopped" {
@@ -229,8 +243,9 @@ func (s *ProjectScriptsService) Run(projectID, scriptID string) (types.ScriptRun
 			} else {
 				run.Status = "failed"
 			}
+			finalStatus := run.Status
 			run.mu.Unlock()
-			run.publish(types.ScriptRunEvent{Type: "exit", Status: run.Status, ExitCode: &code})
+			run.publish(types.ScriptRunEvent{Type: "exit", Status: finalStatus, ExitCode: &code})
 			run.mu.Lock()
 			run.subscribers = make(map[chan types.ScriptRunEvent]bool)
 		}

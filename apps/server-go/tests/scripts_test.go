@@ -90,7 +90,7 @@ func TestRunLifecycle(t *testing.T) {
 	writeConsoleToml(t, root, `
 [scripts.scripts.hello]
 label = "Hello"
-command = "echo SCRIPT_RAN && echo oops >&2 && exit 3"
+command = "echo SCRIPT_RAN && echo oops >&2 && sleep 0.2 && exit 3"
 `)
 
 	run, err := scripts.Run(projectID, "hello")
