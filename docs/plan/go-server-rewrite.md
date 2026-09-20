@@ -76,10 +76,19 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
 
 - [x] Tool framework: generic `NewTool[I]` deriving JSON Schema from struct
       tags via `invopop/jsonschema`; decode-to-struct doubles as validation.
-      Initial tools: read_file, write_file, list_dir, glob, grep.
+      Tools so far: read_file, write_file, list_dir, glob, grep, editFile,
+      batchWrite, readSkill.
       glob/grep are fff-powered (native fff_glob/fff_live_grep via the same
       CGo bindings backing /api/fs/search), falling back to a filesystem
       walk when fff is unavailable.
+      editFile does exact-string find/replace (errors on 0 or >1 matches);
+      batchWrite writes multiple files concurrently (or stop-on-error);
+      readSkill loads full skill content on demand via the new
+      `internal/agent/systemprompt` skill discovery.
+      Still to port: fetch, webSearch, todo, subagent, memory, ask/askMany,
+      bash/bashJob (each needs a new subsystem — network fetch, search
+      backend, session-scoped state, nested agent loop, interactive
+      approval channel, or process/job management).
 - [x] Port permissions (approval.ts) as tier/mode → policy resolution
       (`internal/agent/permissions`); plan mode hard-denies write/exec.
 - [x] Generic queue-based event stream (`internal/agent/stream`),
@@ -93,10 +102,18 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
 - [ ] Port event-stream.ts (SSE) using `http.Flusher`.
 - [ ] Port compaction (cut-point, file-tracker, llm-compaction, shake,
       structural-summary, token-estimator).
-- [ ] Port system prompts and types (types/index, types/system-prompt).
+- [x] Port system prompts and discovery (`internal/agent/systemprompt`):
+      walk-up config-dir helpers, frontmatter parsing, skills/rules/commands
+      discovery, AGENTS.md/CLAUDE.md context files, SYSTEM.md override,
+      workspace tree, environment info, approval-mode instructions, and the
+      `BuildSystemPrompt` assembler — full parity with
+      apps/server/agent/src/systemprompt/*.
 - [x] Tests: tool schema generation, tool validation, permission matrix,
       mock-provider loop round-trip (tool call + persistence), stream
-      no-loss, plan-mode denial (`tests/agent_test.go`).
+      no-loss, plan-mode denial, glob/grep fff + fallback, editFile,
+      batchWrite, readSkill, system-prompt discovery + assembly, approval-
+      mode instructions (`tests/agent_test.go`, `tests/tools_more_test.go`,
+      `tests/systemprompt_test.go`).
 
 ## Phase 3 — Provider layer (`providers/src/`) — highest risk
 
