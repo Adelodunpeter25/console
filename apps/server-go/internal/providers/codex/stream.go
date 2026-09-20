@@ -2,15 +2,16 @@
 // apps/server/providers/src/codex/stream-fn.ts: request body, SSE parsing,
 // function-call reassembly, usage normalization. Implements loop.Provider
 // so the agent loop drives turns without changes.
+//
+// Generic SSE, JSON-number, and call-reassembly helpers live in
+// providers/shared; this file keeps Codex request/response shapes.
 package codex
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/shared"
 )
 
 // Provider streams Codex Responses turns. HTTPClient and BaseURL are
@@ -52,17 +54,6 @@ func (p *Provider) loadCredential() (ParsedCredential, error) {
 		return ParsedCredential{}, err
 	}
 	return RefreshIfNeeded(nil, cred)
-}
-
-func toolResultText(content any) string {
-	if s, ok := content.(string); ok {
-		return s
-	}
-	raw, err := json.Marshal(content)
-	if err != nil {
-		return fmt.Sprint(content)
-	}
-	return string(raw)
 }
 
 // ConvertInput maps loop messages to Codex Responses `input` items.
@@ -146,7 +137,7 @@ func ConvertInput(messages []any) []map[string]any {
 				input = append(input, map[string]any{
 					"type":    "function_call_output",
 					"call_id": r.ToolCallID,
-					"output":  toolResultText(r.Content),
+					"output":  shared.ToolResultText(r.Content),
 				})
 			}
 		case *loop.ToolResultMessage:
@@ -234,21 +225,21 @@ func NormalizeUsage(usage any, retention loop.CacheRetention) *loop.TurnUsage {
 	if !ok || m == nil {
 		return nil
 	}
-	input, hasInput := numberField(m, "input_tokens")
-	output := numberFieldOr(m, "output_tokens", 0)
-	total := numberFieldOr(m, "total_tokens", input+output)
+	input, hasInput := shared.NumberField(m, "input_tokens")
+	output := shared.NumberFieldOr(m, "output_tokens", 0)
+	total := shared.NumberFieldOr(m, "total_tokens", input+output)
 	if !hasInput {
 		return nil
 	}
 	var cached *float64
 	var reasoning *int
 	if details, ok := m["input_tokens_details"].(map[string]any); ok {
-		if c, ok := numberField(details, "cached_tokens"); ok {
+		if c, ok := shared.NumberField(details, "cached_tokens"); ok {
 			cached = &c
 		}
 	}
 	if outDetails, ok := m["output_tokens_details"].(map[string]any); ok {
-		if r, ok := numberField(outDetails, "reasoning_tokens"); ok {
+		if r, ok := shared.NumberField(outDetails, "reasoning_tokens"); ok {
 			ri := int(r)
 			reasoning = &ri
 		}
@@ -283,35 +274,6 @@ func NormalizeUsage(usage any, retention loop.CacheRetention) *loop.TurnUsage {
 	}
 }
 
-func numberField(m map[string]any, key string) (float64, bool) {
-	v, ok := m[key]
-	if !ok {
-		return 0, false
-	}
-	switch n := v.(type) {
-	case float64:
-		return n, true
-	case float32:
-		return float64(n), true
-	case int:
-		return float64(n), true
-	case int64:
-		return float64(n), true
-	case json.Number:
-		f, err := n.Float64()
-		return f, err == nil
-	default:
-		return 0, false
-	}
-}
-
-func numberFieldOr(m map[string]any, key string, fallback float64) float64 {
-	if v, ok := numberField(m, key); ok {
-		return v
-	}
-	return fallback
-}
-
 // BuildRequestBody assembles the Codex Responses request body with prompt
 // cache controls and optional reasoning effort.
 func BuildRequestBody(modelID, systemPrompt string, messages []any, toolDefs []tools.Definition, retention loop.CacheRetention, promptCacheKey, thinkingLevel string) map[string]any {
@@ -339,13 +301,21 @@ func BuildRequestBody(modelID, systemPrompt string, messages []any, toolDefs []t
 	return body
 }
 
-type functionCallState struct {
-	itemID           string
-	callID           string
-	name             string
-	arguments        string
-	finalized        bool
-	emittedArguments bool
+// emitCall pushes a single EventToolCall per call. Empty arguments fall back
+// to {} (mirrors TS parseToolCallArguments: "" → {}). The Emitted flag
+// prevents the done-handler + final flush from double-emitting; the Go loop
+// appends one ToolCallPart per event, so unlike the TS streamFn we must NOT
+// emit an initial empty event.
+func emitCall(c *shared.Call) *loop.Event {
+	if c.Emitted {
+		return nil
+	}
+	c.Emitted = true
+	args := c.Arguments
+	if args == "" {
+		args = "{}"
+	}
+	return &loop.Event{Kind: loop.EventToolCall, Call: &tools.ToolCall{ID: c.CallID, Name: c.Name, Arguments: json.RawMessage(args)}}
 }
 
 // RunTurn implements loop.Provider: one streaming assistant turn.
@@ -385,37 +355,11 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return fmt.Errorf("Codex request failed (%d %s): %s", resp.StatusCode, resp.Status, strings.TrimSpace(string(raw)))
+		return shared.HTTPError("Codex", resp.StatusCode, resp.Status, resp.Body)
 	}
 
-	callsByItemID := map[string]*functionCallState{}
-	callsByCallID := map[string]*functionCallState{}
-	var callOrder []string
-	pendingDeltas := map[string]string{}
-	pendingFinal := map[string]struct {
-		name      string
-		arguments string
-		hasName   bool
-	}{}
+	acc := shared.NewAccumulator()
 	var lastUsage any
-
-	// emitArguments pushes a single EventToolCall per call_id. Empty
-	// arguments fall back to {} (mirrors TS parseToolCallArguments: "" → {}).
-	// The emitted flag prevents the done-handler + deferred flush from
-	// double-emitting; the Go loop appends one ToolCallPart per event, so
-	// unlike the TS streamFn we must NOT emit an initial empty event.
-	emitArguments := func(state *functionCallState, argumentsJSON string) *loop.Event {
-		if state.emittedArguments {
-			return nil
-		}
-		state.emittedArguments = true
-		if argumentsJSON == "" {
-			argumentsJSON = "{}"
-		}
-		var args json.RawMessage = json.RawMessage(argumentsJSON)
-		return &loop.Event{Kind: loop.EventToolCall, Call: &tools.ToolCall{ID: state.callID, Name: state.name, Arguments: args}}
-	}
 
 	flushUsage := func() {
 		usage := NormalizeUsage(lastUsage, req.CacheRetention)
@@ -429,7 +373,7 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 		events.Push(loop.Event{Kind: loop.EventUsage, Usage: usage})
 	}
 
-	parseErr := parseSSE(ctx, resp.Body, func(event map[string]any) error {
+	parseErr := shared.ParseSSE(ctx, resp.Body, func(event map[string]any) error {
 		typ, _ := event["type"].(string)
 		switch typ {
 		case "error":
@@ -466,58 +410,27 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 				itemID = callID
 			}
 			args, _ := item["arguments"].(string)
-			state := &functionCallState{itemID: itemID, callID: callID, name: name, arguments: args}
-			if pending, ok := pendingDeltas[itemID]; ok {
-				state.arguments += pending
-				delete(pendingDeltas, itemID)
-			}
-			if pending, ok := pendingFinal[itemID]; ok {
-				if pending.hasName {
-					state.name = pending.name
-				}
-				state.arguments = pending.arguments
-				state.finalized = true
-				delete(pendingFinal, itemID)
-			}
-			callsByItemID[itemID] = state
-			callsByCallID[callID] = state
-			callOrder = append(callOrder, callID)
 			// Single emit only when already finalized (out-of-order done
 			// arrived first). No initial empty event: the Go loop records
 			// one ToolCallPart per event, so an empty + finalized pair
 			// would execute the tool twice.
-			if state.finalized {
-				if ev := emitArguments(state, state.arguments); ev != nil {
+			if fin := acc.Add(itemID, callID, name, args); fin != nil {
+				if ev := emitCall(fin); ev != nil {
 					events.Push(*ev)
 				}
 			}
 		case "response.function_call_arguments.delta":
 			itemID, _ := event["item_id"].(string)
 			fragment, _ := event["delta"].(string)
-			if state, ok := callsByItemID[itemID]; ok {
-				state.arguments += fragment
-			} else if itemID != "" {
-				pendingDeltas[itemID] += fragment
-			}
+			acc.Delta(itemID, fragment)
 		case "response.function_call_arguments.done":
 			itemID, _ := event["item_id"].(string)
 			arguments, _ := event["arguments"].(string)
 			name, _ := event["name"].(string)
-			if state, ok := callsByItemID[itemID]; ok {
-				if name != "" {
-					state.name = name
-				}
-				state.arguments = arguments
-				state.finalized = true
-				if ev := emitArguments(state, state.arguments); ev != nil {
+			if fin := acc.Done(itemID, name, arguments); fin != nil {
+				if ev := emitCall(fin); ev != nil {
 					events.Push(*ev)
 				}
-			} else if itemID != "" {
-				pendingFinal[itemID] = struct {
-					name      string
-					arguments string
-					hasName   bool
-				}{name: name, arguments: arguments, hasName: name != ""}
 			}
 		case "response.completed", "response.incomplete":
 			if responseBlock, ok := event["response"].(map[string]any); ok {
@@ -548,11 +461,9 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 	// Flush incomplete calls (stream ended with only deltas) and the final
 	// usage delta before terminating — mirrors the TS finally block. The
 	// usage push must precede Complete/Fail (Push after termination drops).
-	for _, callID := range callOrder {
-		if state, ok := callsByCallID[callID]; ok && !state.finalized {
-			if ev := emitArguments(state, state.arguments); ev != nil {
-				events.Push(*ev)
-			}
+	for _, c := range acc.Unfinalized() {
+		if ev := emitCall(c); ev != nil {
+			events.Push(*ev)
 		}
 	}
 	flushUsage()
@@ -562,33 +473,4 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 	}
 	events.Complete()
 	return nil
-}
-
-// parseSSE yields JSON objects from data: lines, skipping [DONE]/blanks.
-func parseSSE(ctx context.Context, r io.Reader, handle func(map[string]any) error) error {
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
-	for scanner.Scan() {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		line := strings.TrimSpace(scanner.Text())
-		if !strings.HasPrefix(line, "data:") {
-			continue
-		}
-		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if payload == "" || payload == "[DONE]" {
-			continue
-		}
-		var event map[string]any
-		if err := json.Unmarshal([]byte(payload), &event); err != nil {
-			continue
-		}
-		if err := handle(event); err != nil {
-			return err
-		}
-	}
-	return scanner.Err()
 }

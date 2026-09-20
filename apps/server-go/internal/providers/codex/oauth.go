@@ -1,21 +1,20 @@
 // Codex ChatGPT OAuth: PKCE, authorize URL, code exchange, token refresh,
 // credential load/save. Port of apps/server/providers/src/codex/oauth.ts.
+// Generic JWT/PKCE/file helpers live in providers/shared.
 package codex
 
 import (
 	"bytes"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/shared"
 )
 
 // OAuthCredential is the stored Codex credential file shape.
@@ -47,36 +46,20 @@ type tokenResponse struct {
 // CredentialPath mirrors oauth.ts: CODEX_CREDENTIALS_PATH override,
 // otherwise ~/.console/codex-creds.json.
 func CredentialPath() string {
-	if p := os.Getenv("CODEX_CREDENTIALS_PATH"); p != "" {
-		return p
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".console", "codex-creds.json")
+	return shared.CredentialPath("CODEX_CREDENTIALS_PATH", "codex-creds.json")
 }
 
 // DecodeJWTPayload decodes the middle JWT segment without verification.
 func DecodeJWTPayload(token string) map[string]any {
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return nil
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return nil
-	}
-	var out map[string]any
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil
-	}
-	return out
+	return shared.DecodeJWTPayload(token)
 }
 
 // TokenProfile extracts account id / email / plan from access + id tokens.
 func TokenProfile(accessToken, idToken string) (accountID, email, planType string) {
-	payload := DecodeJWTPayload(accessToken)
+	payload := shared.DecodeJWTPayload(accessToken)
 	var idPayload map[string]any
 	if idToken != "" {
-		idPayload = DecodeJWTPayload(idToken)
+		idPayload = shared.DecodeJWTPayload(idToken)
 	}
 	if auth, ok := payload[AccountClaim].(map[string]any); ok {
 		if v, ok := auth["chatgpt_account_id"].(string); ok {
@@ -103,14 +86,7 @@ func TokenProfile(accessToken, idToken string) (accountID, email, planType strin
 
 // GeneratePKCE creates a verifier/challenge pair (S256).
 func GeneratePKCE() (verifier, challenge string, err error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", "", err
-	}
-	verifier = base64.RawURLEncoding.EncodeToString(b)
-	sum := sha256.Sum256([]byte(verifier))
-	challenge = base64.RawURLEncoding.EncodeToString(sum[:])
-	return verifier, challenge, nil
+	return shared.GeneratePKCE()
 }
 
 // AuthorizationURL builds the ChatGPT OAuth authorize URL + redirect URI.
@@ -118,42 +94,19 @@ func AuthorizationURL(state, verifierChallenge string) (authURL, redirectURI str
 	redirectURI = fmt.Sprintf("http://localhost:%d%s", CallbackPort, CallbackPath)
 	u, _ := url.Parse(AuthorizeURL)
 	q := url.Values{
-		"response_type":                {"code"},
-		"client_id":                    {ClientID},
-		"redirect_uri":                 {redirectURI},
-		"scope":                        {Scope},
-		"code_challenge":               {verifierChallenge},
-		"code_challenge_method":        {"S256"},
-		"state":                        {state},
-		"id_token_add_organizations":   {"true"},
-		"codex_cli_simplified_flow":    {"true"},
-		"originator":                   {"pi"},
+		"response_type":              {"code"},
+		"client_id":                  {ClientID},
+		"redirect_uri":               {redirectURI},
+		"scope":                      {Scope},
+		"code_challenge":             {verifierChallenge},
+		"code_challenge_method":      {"S256"},
+		"state":                      {state},
+		"id_token_add_organizations": {"true"},
+		"codex_cli_simplified_flow":  {"true"},
+		"originator":                 {"pi"},
 	}
 	u.RawQuery = q.Encode()
 	return u.String(), redirectURI
-}
-
-func tokenError(status int, body string) error {
-	detail := strings.TrimSpace(body)
-	if detail != "" {
-		var parsed struct {
-			Error       any `json:"error"`
-			Description any `json:"error_description"`
-			Message     any `json:"message"`
-		}
-		if err := json.Unmarshal([]byte(detail), &parsed); err == nil {
-			for _, v := range []any{parsed.Description, parsed.Error, parsed.Message} {
-				if s, ok := v.(string); ok && s != "" {
-					detail = s
-					break
-				}
-			}
-		}
-	}
-	if detail == "" {
-		detail = "unknown error"
-	}
-	return fmt.Errorf("Codex OAuth request failed (%d): %s", status, detail)
 }
 
 func postToken(client *http.Client, body url.Values) (tokenResponse, error) {
@@ -172,7 +125,7 @@ func postToken(client *http.Client, body url.Values) (tokenResponse, error) {
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return tokenResponse{}, tokenError(resp.StatusCode, string(raw))
+		return tokenResponse{}, shared.TokenError("Codex", resp.StatusCode, string(raw))
 	}
 	var data tokenResponse
 	if err := json.Unmarshal(raw, &data); err != nil {
@@ -286,15 +239,7 @@ func LoadCredential() (ParsedCredential, error) {
 
 // SaveCredential writes the credential file (0600 dir 0700).
 func SaveCredential(cred OAuthCredential) error {
-	path := CredentialPath()
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(cred, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, append(data, '\n'), 0o600)
+	return shared.SaveCredentialFile(CredentialPath(), cred)
 }
 
 // CredentialExists reports whether a login exists (env token or file).
@@ -302,8 +247,7 @@ func CredentialExists() bool {
 	if os.Getenv("OPENAI_CODEX_OAUTH_TOKEN") != "" {
 		return true
 	}
-	_, err := os.Stat(CredentialPath())
-	return err == nil
+	return shared.CredentialFileExists(CredentialPath())
 }
 
 // RefreshIfNeeded refreshes an expiring credential (60s skew).
