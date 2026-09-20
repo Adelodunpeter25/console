@@ -100,6 +100,45 @@ func TestParseCodexUsageEmpty(t *testing.T) {
 	}
 }
 
+func TestSharedUsageBuilders(t *testing.T) {
+	if id, label := usage.WindowLabel(18000); id != "5h" || label != "5 hours" {
+		t.Fatalf("window: %s %s", id, label)
+	}
+	if id, label := usage.WindowLabel(86400); id != "1d" || label != "1 day" {
+		t.Fatalf("window: %s %s", id, label)
+	}
+	full, half, none := 1.0, 0.5, 0.0
+	yes, no := true, false
+	if got := usage.StatusForFraction(&full, &yes, &no); got != "warning" {
+		t.Fatalf("explicit allowed at 100%%: %s", got)
+	}
+	if got := usage.StatusForFraction(&full, &yes, nil); got != "exhausted" {
+		t.Fatalf("absent limitReached at 100%%: %s", got)
+	}
+	if got := usage.StatusForFraction(&full, nil, nil); got != "exhausted" {
+		t.Fatalf("unknown at 100%%: %s", got)
+	}
+	if got := usage.StatusForFraction(&half, nil, nil); got != "warning" {
+		t.Fatalf("half: %s", got)
+	}
+	if got := usage.StatusForFraction(&none, nil, nil); got != "ok" {
+		t.Fatalf("empty: %s", got)
+	}
+	if got := usage.StatusForFraction(nil, nil, nil); got != "unknown" {
+		t.Fatalf("nil: %s", got)
+	}
+	amount := usage.BuildPercentAmount(nil)
+	if amount.Unit != "percent" || amount.UsedFraction != nil {
+		t.Fatalf("unit-only: %+v", amount)
+	}
+	if _, ok := usage.Number("80"); !ok {
+		t.Fatal("numeric string must parse")
+	}
+	if _, ok := usage.Number("x"); ok {
+		t.Fatal("non-numeric must fail")
+	}
+}
+
 func TestCodexUsageURLs(t *testing.T) {
 	if got := usage.NormalizeCodexUsageBaseURL("https://chatgpt.com/backend-api/", "def"); got != "https://chatgpt.com/backend-api" {
 		t.Fatalf("base: %s", got)

@@ -1,13 +1,12 @@
 // Agent run execution service. Port of the run/agent-loop slice of
 // apps/server/api/src/services/run.service.ts: active-run tracking with
-// abort, a broadcast hub with replay for attaching clients, and one
-// Agent drive per run. Queue/steer/approve/answer arrive in later slices.
+// abort, turn chaining with staged-prompt drain, and one Agent drive per
+// turn. Events flow through the Hub (hub.go); queue/steer decisions live
+// in queue.go/decisions.go.
 package run
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -41,123 +40,6 @@ type Prompt struct {
 	ApprovalMode string
 	Thinking     string
 	Attachments  []Attachment
-}
-
-// Terminal outcomes broadcast when a run settles.
-const (
-	OutcomeDone    = "done"
-	OutcomeAborted = "aborted"
-)
-
-// Frame is one sequenced hub event for attaching clients.
-type Frame struct {
-	Seq   int64
-	Event loop.Event
-}
-
-// Hub broadcasts run events to live subscribers and keeps a bounded ring
-// for ?since= replay. Slow subscribers are evicted (they re-attach with
-// since) so a stuck client never stalls the run.
-type Hub struct {
-	mu     sync.Mutex
-	seq    int64
-	buf    []Frame
-	subs   map[string]chan Frame
-	closed bool
-	done   chan struct{}
-	// Outcome is set by Close: "done" or "aborted".
-	Outcome string
-}
-
-const hubBuffer = 500
-const subBuffer = 256
-
-// NewHub creates a broadcast hub (exported for tests and attach flows).
-func NewHub() *Hub {
-	return &Hub{subs: map[string]chan Frame{}, done: make(chan struct{})}
-}
-
-// Broadcast assigns the next sequence number and delivers to subscribers.
-func (h *Hub) Broadcast(event loop.Event) {
-	h.mu.Lock()
-	if h.closed {
-		h.mu.Unlock()
-		return
-	}
-	h.seq++
-	frame := Frame{Seq: h.seq, Event: event}
-	h.buf = append(h.buf, frame)
-	if len(h.buf) > hubBuffer {
-		h.buf = h.buf[len(h.buf)-hubBuffer:]
-	}
-	for id, ch := range h.subs {
-		select {
-		case ch <- frame:
-		default:
-			delete(h.subs, id)
-			close(ch)
-		}
-	}
-	h.mu.Unlock()
-}
-
-// Subscribe registers a live subscriber. When since != nil the buffered
-// frames newer than since are returned for replay first.
-func (h *Hub) Subscribe(since *int64) (id string, ch <-chan Frame, replay []Frame) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.closed {
-		return "", nil, nil
-	}
-	id = newSubID()
-	c := make(chan Frame, subBuffer)
-	h.subs[id] = c
-	if since != nil {
-		for _, f := range h.buf {
-			if f.Seq > *since {
-				replay = append(replay, f)
-			}
-		}
-	}
-	return id, c, replay
-}
-
-// Unsubscribe removes a subscriber and drains its channel.
-func (h *Hub) Unsubscribe(id string) {
-	h.mu.Lock()
-	if ch, ok := h.subs[id]; ok {
-		delete(h.subs, id)
-		close(ch)
-	}
-	h.mu.Unlock()
-}
-
-// Close terminates the hub with an outcome, waking settle waiters.
-func (h *Hub) Close(outcome string) {
-	h.mu.Lock()
-	if h.closed {
-		h.mu.Unlock()
-		return
-	}
-	h.closed = true
-	h.Outcome = outcome
-	for id, ch := range h.subs {
-		delete(h.subs, id)
-		close(ch)
-	}
-	close(h.done)
-	h.mu.Unlock()
-}
-
-// Done closes when the run settles.
-func (h *Hub) Done() <-chan struct{} { return h.done }
-
-func newSubID() string {
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		panic(err)
-	}
-	return "sub_" + hex.EncodeToString(b)
 }
 
 type activeRun struct {
@@ -243,7 +125,7 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 	s.active[sessionID] = &activeRun{hub: hub, cancel: cancel, done: done}
 	s.mu.Unlock()
 
-	go s.execute(ctx, cancel, sessionID, dto, firstProvider, providerID, hub, done)
+	go s.execute(ctx, sessionID, dto, firstProvider, providerID, hub, done)
 	return hub, nil
 }
 
@@ -251,7 +133,7 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 // the next turn when the previous settled cleanly. A failed turn holds
 // (not auto-runs, not drops) any staged prompt. One hub spans the whole
 // chain so subscribers keep gap-free sequence numbers.
-func (s *Service) execute(ctx context.Context, cancel context.CancelFunc, sessionID string, first Prompt, firstProvider loop.Provider, firstProviderID string, hub *Hub, done chan struct{}) {
+func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, firstProvider loop.Provider, firstProviderID string, hub *Hub, done chan struct{}) {
 	defer close(done)
 	defer func() {
 		s.decisions.RejectAllForSession(sessionID, "Run ended")
@@ -260,7 +142,7 @@ func (s *Service) execute(ctx context.Context, cancel context.CancelFunc, sessio
 		s.mu.Unlock()
 	}()
 
-	current, currentCtx, currentCancel := first, ctx, cancel
+	current, currentCtx := first, ctx
 	currentProvider, currentProviderID := firstProvider, firstProviderID
 	for {
 		turnErr := s.runOneTurn(currentCtx, sessionID, current, hub, &currentProvider, &currentProviderID)
@@ -273,13 +155,15 @@ func (s *Service) execute(ctx context.Context, cancel context.CancelFunc, sessio
 			}
 			return
 		}
-		currentCtx, currentCancel = context.WithCancel(context.Background())
+		nextCtx, nextCancel := context.WithCancel(context.Background())
 		s.mu.Lock()
 		if ar, ok := s.active[sessionID]; ok {
-			ar.cancel = currentCancel
+			ar.cancel = nextCancel
+		} else {
+			nextCancel()
 		}
 		s.mu.Unlock()
-		current = next
+		current, currentCtx = next, nextCtx
 	}
 }
 

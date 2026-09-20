@@ -6,9 +6,7 @@ package usage
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -59,69 +57,31 @@ type codexAdditional struct {
 	secondary      *codexWindow
 }
 
-func toNumber(v any) (float64, bool) {
-	switch n := v.(type) {
-	case float64:
-		if math.IsNaN(n) || math.IsInf(n, 0) {
-			return 0, false
-		}
-		return n, true
-	case float32:
-		return float64(n), true
-	case int:
-		return float64(n), true
-	case int64:
-		return float64(n), true
-	case json.Number:
-		f, err := n.Float64()
-		return f, err == nil
-	case string:
-		s := strings.TrimSpace(n)
-		if s == "" {
-			return 0, false
-		}
-		var f float64
-		if _, err := fmt.Sscanf(s, "%g", &f); err != nil {
-			return 0, false
-		}
-		if math.IsNaN(f) || math.IsInf(f, 0) {
-			return 0, false
-		}
-		return f, true
-	default:
-		return 0, false
+// times converts parsed fields to the shared WindowTimes shape.
+func (w *codexWindow) times() WindowTimes {
+	return WindowTimes{
+		LimitWindowSeconds: w.limitWindowSeconds,
+		ResetAt:            w.resetAt,
+		ResetAfterSeconds:  w.resetAfterSeconds,
 	}
-}
-
-func toBool(v any) (*bool, bool) {
-	b, ok := v.(bool)
-	if !ok {
-		return nil, false
-	}
-	return &b, true
-}
-
-func asRecord(v any) (map[string]any, bool) {
-	m, ok := v.(map[string]any)
-	return m, ok
 }
 
 func parseCodexWindow(payload any) *codexWindow {
-	m, ok := asRecord(payload)
+	m, ok := Record(payload)
 	if !ok {
 		return nil
 	}
 	w := &codexWindow{}
-	if v, ok := toNumber(m["used_percent"]); ok {
+	if v, ok := Number(m["used_percent"]); ok {
 		w.usedPercent = &v
 	}
-	if v, ok := toNumber(m["limit_window_seconds"]); ok {
+	if v, ok := Number(m["limit_window_seconds"]); ok {
 		w.limitWindowSeconds = &v
 	}
-	if v, ok := toNumber(m["reset_after_seconds"]); ok {
+	if v, ok := Number(m["reset_after_seconds"]); ok {
 		w.resetAfterSeconds = &v
 	}
-	if v, ok := toNumber(m["reset_at"]); ok {
+	if v, ok := Number(m["reset_at"]); ok {
 		w.resetAt = &v
 	}
 	if w.usedPercent == nil && w.limitWindowSeconds == nil && w.resetAfterSeconds == nil && w.resetAt == nil {
@@ -131,11 +91,11 @@ func parseCodexWindow(payload any) *codexWindow {
 }
 
 func parseCodexAdditional(payload any) *codexAdditional {
-	m, ok := asRecord(payload)
+	m, ok := Record(payload)
 	if !ok {
 		return nil
 	}
-	rl, ok := asRecord(m["rate_limit"])
+	rl, ok := Record(m["rate_limit"])
 	if !ok {
 		return nil
 	}
@@ -146,10 +106,10 @@ func parseCodexAdditional(payload any) *codexAdditional {
 	if s, ok := m["metered_feature"].(string); ok {
 		out.meteredFeature = s
 	}
-	if b, ok := toBool(rl["allowed"]); ok {
+	if b, ok := Bool(rl["allowed"]); ok {
 		out.allowed = b
 	}
-	if b, ok := toBool(rl["limit_reached"]); ok {
+	if b, ok := Bool(rl["limit_reached"]); ok {
 		out.limitReached = b
 	}
 	out.primary = parseCodexWindow(rl["primary_window"])
@@ -158,94 +118,6 @@ func parseCodexAdditional(payload any) *codexAdditional {
 		return nil
 	}
 	return out
-}
-
-func windowLabel(seconds float64) (id, label string) {
-	const daySeconds = 86400.0
-	if seconds >= daySeconds {
-		days := int(math.Round(seconds / daySeconds))
-		unit := "days"
-		if days == 1 {
-			unit = "day"
-		}
-		return fmt.Sprintf("%dd", days), fmt.Sprintf("%d %s", days, unit)
-	}
-	hours := int(math.Max(1, math.Round(seconds/3600)))
-	unit := "hours"
-	if hours == 1 {
-		unit = "hour"
-	}
-	return fmt.Sprintf("%dh", hours), fmt.Sprintf("%d %s", hours, unit)
-}
-
-func resolveResetTime(w *codexWindow, nowMs int64) *int64 {
-	if w.resetAt != nil {
-		ms := *w.resetAt
-		if ms <= 1_000_000_000_000 {
-			ms *= 1000
-		}
-		if !math.IsNaN(ms) && !math.IsInf(ms, 0) {
-			out := int64(ms)
-			return &out
-		}
-	}
-	if w.resetAfterSeconds != nil {
-		out := nowMs + int64(*w.resetAfterSeconds*1000)
-		return &out
-	}
-	return nil
-}
-
-func buildWindow(w *codexWindow, key string, nowMs int64) Window {
-	out := Window{ID: key}
-	if w.limitWindowSeconds != nil {
-		id, label := windowLabel(*w.limitWindowSeconds)
-		out.ID, out.Label = id, label
-		dur := int64(*w.limitWindowSeconds * 1000)
-		out.DurationMs = &dur
-	} else if key == "primary" {
-		out.Label = "Primary window"
-	} else {
-		out.Label = "Secondary window"
-	}
-	out.ResetsAt = resolveResetTime(w, nowMs)
-	return out
-}
-
-func buildAmount(w *codexWindow) Amount {
-	out := Amount{Unit: "percent"}
-	if w.usedPercent == nil {
-		return out
-	}
-	clamped := math.Min(math.Max(*w.usedPercent, 0), 100)
-	frac := clamped / 100
-	rem := math.Max(0, 100-clamped)
-	remFrac := math.Max(0, 1-frac)
-	out.Used, out.Limit, out.Remaining = &clamped, ptrFloat(100), &rem
-	out.UsedFraction, out.RemainingFraction = &frac, &remFrac
-	return out
-}
-
-func ptrFloat(v float64) *float64 { return &v }
-
-func usageStatus(amount Amount, allowed, limitReached *bool) string {
-	if amount.UsedFraction == nil {
-		return "unknown"
-	}
-	f := *amount.UsedFraction
-	// Mirrors buildUsageStatus: explicitlyAllowed is allowed===true &&
-	// limitReached===false (undefined is not false).
-	explicit := allowed != nil && *allowed && limitReached != nil && !*limitReached
-	if f >= 1 {
-		if explicit {
-			return "warning"
-		}
-		return "exhausted"
-	}
-	if f >= 0.5 {
-		return "warning"
-	}
-	return "ok"
 }
 
 func additionalSlug(limitName, meteredFeature string) string {
@@ -298,19 +170,19 @@ func additionalDisplayName(slug, limitName string) string {
 }
 
 func primaryLimit(key string, w *codexWindow, accountID, planType string, allowed, limitReached *bool, nowMs int64) Limit {
-	window := buildWindow(w, key, nowMs)
-	amount := buildAmount(w)
+	window := BuildWindow(key, w.times(), nowMs)
+	amount := BuildPercentAmount(w.usedPercent)
 	return Limit{
 		ID: "codex:" + key, Label: window.Label,
 		Scope: Scope{Provider: "codex", WindowID: window.ID, Shared: true},
 		Window: &window, Amount: amount,
-		Status: usageStatus(amount, allowed, limitReached),
+		Status: StatusForFraction(amount.UsedFraction, allowed, limitReached),
 	}
 }
 
 func additionalLimit(key, slug, displayName string, w *codexWindow, accountID, limitName, meteredFeature string, allowed, limitReached *bool, nowMs int64) Limit {
-	window := buildWindow(w, key, nowMs)
-	amount := buildAmount(w)
+	window := BuildWindow(key, w.times(), nowMs)
+	amount := BuildPercentAmount(w.usedPercent)
 	scope := Scope{Provider: "codex", WindowID: window.ID, Shared: true, Tier: slug}
 	if accountID != "" {
 		scope.AccountID = accountID
@@ -321,14 +193,14 @@ func additionalLimit(key, slug, displayName string, w *codexWindow, accountID, l
 	return Limit{
 		ID: "codex:" + slug + ":" + key, Label: window.Label + " (" + displayName + ")",
 		Scope: scope, Window: &window, Amount: amount,
-		Status: usageStatus(amount, allowed, limitReached),
+		Status: StatusForFraction(amount.UsedFraction, allowed, limitReached),
 	}
 }
 
 // ParseCodexPayload converts a wham/usage payload to a Report. Returns nil
 // when the payload carries no usable limit data.
 func ParseCodexPayload(payload any, accountID, email string, nowMs int64) *Report {
-	m, ok := asRecord(payload)
+	m, ok := Record(payload)
 	if !ok {
 		return nil
 	}
@@ -336,11 +208,11 @@ func ParseCodexPayload(payload any, accountID, email string, nowMs int64) *Repor
 	if s, ok := m["plan_type"].(string); ok {
 		planType = s
 	}
-	rl, _ := asRecord(m["rate_limit"])
+	rl, _ := Record(m["rate_limit"])
 	var allowed, limitReached *bool
 	if rl != nil {
-		allowed, _ = toBool(rl["allowed"])
-		limitReached, _ = toBool(rl["limit_reached"])
+		allowed, _ = Bool(rl["allowed"])
+		limitReached, _ = Bool(rl["limit_reached"])
 	}
 	var primary, secondary *codexWindow
 	if rl != nil {
@@ -385,9 +257,12 @@ func ParseCodexPayload(payload any, accountID, email string, nowMs int64) *Repor
 	}
 
 	var resetCredits *ResetCredits
-	if block, ok := asRecord(m["rate_limit_reset_credits"]); ok {
-		if n, ok := toNumber(block["available_count"]); ok {
-			count := int(math.Max(0, math.Trunc(n)))
+	if block, ok := Record(m["rate_limit_reset_credits"]); ok {
+		if n, ok := Number(block["available_count"]); ok {
+			count := int(n)
+			if count < 0 {
+				count = 0
+			}
 			resetCredits = &ResetCredits{AvailableCount: count}
 		}
 	}
@@ -443,13 +318,13 @@ func FetchCodexUsage(ctx context.Context, client *http.Client, baseURL, accessTo
 	}
 	if accountID == "" {
 		if profile := shared.DecodeJWTPayload(accessToken); profile != nil {
-			if auth, ok := asRecord(profile["https://api.openai.com/auth"]); ok {
+			if auth, ok := Record(profile["https://api.openai.com/auth"]); ok {
 				if id, ok := auth["chatgpt_account_id"].(string); ok {
 					accountID = id
 				}
 			}
 			if email == "" {
-				if prof, ok := asRecord(profile["https://api.openai.com/profile"]); ok {
+				if prof, ok := Record(profile["https://api.openai.com/profile"]); ok {
 					if e, ok := prof["email"].(string); ok {
 						email = strings.TrimSpace(strings.ToLower(e))
 					}
