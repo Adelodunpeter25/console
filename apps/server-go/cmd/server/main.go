@@ -35,8 +35,9 @@ func main() {
 	ports := services.NewPortRegistry()
 	defer ports.CloseAll()
 	ports.StartReaper(5 * time.Second)
+	notifications := services.NewNotificationService()
 
-	app := routes.New(routes.Config{DB: manager, Watch: watch, Ports: ports})
+	app := routes.New(routes.Config{DB: manager, Watch: watch, Ports: ports, Notifications: notifications})
 
 	addr := ":3000"
 	if p := os.Getenv("PORT"); p != "" {

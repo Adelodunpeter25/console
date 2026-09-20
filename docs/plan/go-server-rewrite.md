@@ -144,8 +144,12 @@ terminal socket.
       fswatch (fsnotify recursive), git (os/exec git), project-scripts
       (console.toml parse + managed runs + SSE stream + process-group stop),
       port-registry (output observation, liveness reaper, proxy ports
-      45000+ with HTTP/WS passthrough) + port-tunnel WebSocket. Remaining:
-      provider, notification, usage, auth, assist, run (session-level).
+      45000+ with HTTP/WS passthrough) + port-tunnel WebSocket, settings
+      (model roles), usage (wire shape only — reports stay null until the
+      Phase 3 quota fetchers), notification bus + SSE stream, config
+      approval-modes, assist (skills discovery + fff-backed @-mention
+      search). Remaining: provider, auth (needs Phase 3 OAuth/token-store
+      internals), run (session-level). Devices intentionally skipped.
 - [x] Port terminal (initial): pty.manager (`creack/pty`) + `/api/terminals`
       WebSocket via `fasthttp/websocket` — JSON protocol {spawned, output,
       exit, error} / {input, resize, kill} and ?proto=binary tag framing;
