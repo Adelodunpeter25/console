@@ -77,7 +77,8 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
 - [x] Tool framework: generic `NewTool[I]` deriving JSON Schema from struct
       tags via `invopop/jsonschema`; decode-to-struct doubles as validation.
       Tools so far: read_file, write_file, list_dir, glob, grep, editFile,
-      batchWrite, readSkill, fetch, webSearch, ask, askMany, todo.
+      batchWrite, readSkill, fetch, webSearch, ask, askMany, todo,
+      bash, bashJob.
       glob/grep are fff-powered (native fff_glob/fff_live_grep via the same
       CGo bindings backing /api/fs/search), falling back to a filesystem
       walk when fff is unavailable.
@@ -120,9 +121,23 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
       is a run-orchestration concern, not the tool's — the tool only ever
       marks status, so the primitive is on `SessionService` ready for the
       future run layer (Phase 3+) to call after each run settles.
-      Still to port: memory, bash/bashJob (own persistent store, or
-      process/job management); subagent waits on Phase 3 providers since
-      it runs a nested agent-loop turn against a real model.
+      bash/bashJob: `internal/services/bash_capture.go` (sync mode, port
+      of `spawnCapture` — captures stdout/stderr with a byte cap while
+      draining past it so the child still exits normally, tree-kills via
+      process group on timeout/context-cancel) and
+      `internal/services/bash_job_manager.go` (background mode, port of
+      `manager.ts` — one job per detached process group, ring-buffered
+      output per stream, cursor-paginated reads, retention after
+      completion, per-session ownership). `NewBashTool`/`NewBashJobTool`
+      share one `*BashJobManager` per run (bash starts jobs, bashJob polls
+      them); the `Bash`/`BashJob` singletons in `DefaultTools()` have no
+      manager (background mode errors cleanly). Verified live: real
+      subprocess exit codes/output capture, context-cancellation abort,
+      background-job timeout/expire, and process-group kill all exercised
+      against actual child processes (not mocked).
+      Still to port: memory (own persistent store); subagent waits on
+      Phase 3 providers since it runs a nested agent-loop turn against a
+      real model.
 - [x] Port permissions (approval.ts) as tier/mode → policy resolution
       (`internal/agent/permissions`); plan mode hard-denies write/exec.
 - [x] Generic queue-based event stream (`internal/agent/stream`),
@@ -156,11 +171,15 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
       independent tool instances backed by a real SQLite session,
       plus ClearCompletedTodos: partial lists survive, fully-completed
       lists are wiped, empty lists are a no-op),
+      bash/bashJob (sync success/non-zero-exit/timeout/missing-command,
+      background start->wait->list lifecycle, cross-session ownership
+      isolation, kill, missing-jobId/unknown-action errors — all against
+      real subprocesses),
       system-prompt discovery + assembly, approval-mode instructions
       (`tests/agent_test.go`, `tests/tools_more_test.go`,
       `tests/fetch_tool_test.go`, `tests/web_search_tool_test.go`,
       `tests/ask_tools_test.go`, `tests/todo_tool_test.go`,
-      `tests/systemprompt_test.go`).
+      `tests/bash_tools_test.go`, `tests/systemprompt_test.go`).
 
 ## Phase 3 — Provider layer (`providers/src/`) — highest risk
 
