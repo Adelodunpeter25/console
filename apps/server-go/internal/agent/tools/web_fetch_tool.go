@@ -1,4 +1,4 @@
-// fetch tool: HTTP GET/POST/etc a URL, returning readable text. Port of
+// webFetch tool: HTTP GET/POST/etc a URL, returning readable text. Port of
 // apps/server/agent/src/tools/fetch.ts. GET requests to likely web pages
 // try Firecrawl first (clean markdown extraction); everything else, and
 // any Firecrawl miss, falls back to a direct HTTP request with naive
@@ -67,7 +67,7 @@ func isLikelyAPIURL(url string, headers map[string]string) bool {
 // Fetch performs an HTTP request and returns readable text. GET requests to
 // likely web pages try Firecrawl first; everything else (and any Firecrawl
 // miss) uses a direct request with content-type-aware formatting.
-var Fetch = NewTool("fetch", "Fetch content from a URL or web page as markdown or text.", TierRead,
+var Fetch = NewTool("webFetch", "Fetch content from a URL or web page as markdown or text.", TierRead,
 	func(ctx context.Context, in fetchInput) (any, error) {
 		if in.URL == "" {
 			return nil, NewToolError("url is required")

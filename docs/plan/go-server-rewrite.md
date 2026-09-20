@@ -77,7 +77,7 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
 - [x] Tool framework: generic `NewTool[I]` deriving JSON Schema from struct
       tags via `invopop/jsonschema`; decode-to-struct doubles as validation.
       Tools so far: read_file, write_file, list_dir, glob, grep, editFile,
-      batchWrite, readSkill, fetch, webSearch, ask, askMany, todo,
+      batchWrite, readSkill, webFetch, webSearch, ask, askMany, todo,
       bash, bashJob.
       glob/grep are fff-powered (native fff_glob/fff_live_grep via the same
       CGo bindings backing /api/fs/search), falling back to a filesystem
@@ -86,11 +86,14 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
       batchWrite writes multiple files concurrently (or stop-on-error);
       readSkill loads full skill content on demand via the new
       `internal/agent/systemprompt` skill discovery.
-      fetch tries keyless Firecrawl markdown extraction for GET requests to
+      webFetch tries keyless Firecrawl markdown extraction for GET requests to
       likely web pages (`internal/agent/tools/firecrawl.go`, live-verified
       against a real URL), falling back to a direct HTTP request with
       content-type-aware formatting (JSON pretty-print, naive HTML-to-text)
-      for everything else and any Firecrawl miss.
+      for everything else and any Firecrawl miss. Named `webFetch` (not
+      TS's `fetch`) to disambiguate from a future generic HTTP-client
+      concept; tracked as a deliberate wire-contract naming divergence
+      from the TS tool inventory.
       webSearch tries keyless Firecrawl search first (full markdown per
       result, live-verified against a real query), falls back to scraping
       DuckDuckGo's HTML lite page on a retryable Firecrawl error or empty
@@ -160,7 +163,7 @@ TS deps to replace: `bun:sqlite` (9 files), `zod` schemas.
 - [x] Tests: tool schema generation, tool validation, permission matrix,
       mock-provider loop round-trip (tool call + persistence), stream
       no-loss, plan-mode denial, glob/grep fff + fallback, editFile,
-      batchWrite, readSkill, fetch (direct JSON/HTML/POST/error-status via
+      batchWrite, readSkill, webFetch (direct JSON/HTML/POST/error-status via
       httptest, plus a live Firecrawl smoke test against a real URL),
       webSearch (Firecrawl success, retryable-error fallback to DuckDuckGo,
       Brave success/missing-key, all via local httptest doubles, plus a

@@ -30,7 +30,7 @@ Use the available tools to explore the codebase, edit files, run shell commands,
 // doesn't supply an explicit set.
 var DefaultToolNames = []string{
 	"read_file", "readSkill", "list_dir", "glob", "grep",
-	"write_file", "editFile", "batchWrite", "bash", "webSearch", "fetch",
+	"write_file", "editFile", "batchWrite", "bash", "webSearch", "webFetch",
 	"todo", "subagent", "ask",
 }
 

@@ -1,4 +1,4 @@
-// Coverage for the fetch tool (direct-fetch path; Firecrawl is skipped by
+// Coverage for the webFetch tool (direct-fetch path; Firecrawl is skipped by
 // using an /api/ URL so tests stay hermetic and fast).
 package tests
 
@@ -14,7 +14,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 )
 
-func TestFetchDirectJSON(t *testing.T) {
+func TestWebFetchDirectJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"ok":true}`))
@@ -33,7 +33,7 @@ func TestFetchDirectJSON(t *testing.T) {
 	}
 }
 
-func TestFetchDirectHTML(t *testing.T) {
+func TestWebFetchDirectHTML(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte("<html><body><script>evil()</script><p>Hello world</p></body></html>"))
@@ -51,7 +51,7 @@ func TestFetchDirectHTML(t *testing.T) {
 	}
 }
 
-func TestFetchErrorStatus(t *testing.T) {
+func TestWebFetchErrorStatus(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte("nope"))
@@ -64,7 +64,7 @@ func TestFetchErrorStatus(t *testing.T) {
 	}
 }
 
-func TestFetchPost(t *testing.T) {
+func TestWebFetchPost(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %s", r.Method)
@@ -85,7 +85,7 @@ func TestFetchPost(t *testing.T) {
 	}
 }
 
-func TestFetchMissingURL(t *testing.T) {
+func TestWebFetchMissingURL(t *testing.T) {
 	args, _ := json.Marshal(map[string]any{"url": ""})
 	if _, err := tools.Fetch.Execute(context.Background(), args); err == nil {
 		t.Fatal("expected error for missing url")
