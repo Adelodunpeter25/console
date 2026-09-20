@@ -9,17 +9,13 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
-// DiscoveredModel mirrors the provider-registry discovered shape.
-type DiscoveredModel struct {
-	ID              string   `json:"id"`
-	Provider        string   `json:"provider"`
-	ContextWindow   int      `json:"contextWindow"`
-	SupportsImages  bool     `json:"supportsImages,omitempty"`
-	ThinkingLevels  []string `json:"supportedThinkingLevels,omitempty"`
-	DefaultThinking string   `json:"defaultThinkingLevel,omitempty"`
-}
+// DiscoveredModel is the provider-registry discovered shape (alias of the
+// shared catalog model type).
+type DiscoveredModel = types.Model
 
 // CodexThinkingLevels mirrors CODEX_THINKING_LEVELS in TS.
 var CodexThinkingLevels = []string{"none", "low", "medium", "high", "xhigh", "max"}

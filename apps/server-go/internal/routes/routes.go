@@ -52,6 +52,7 @@ func New(cfg Config) *fiber.App {
 	registerSettingsRoutes(app, services.NewSettingsService())
 	registerUsageRoutes(app, usage.NewService())
 	registerAuthRoutes(app, auth.NewAuthService())
+	registerProviderRoutes(app, services.NewFavoriteService(cfg.DB))
 	registerRunRoutes(app, run.NewService(services.NewSessionService(cfg.DB)))
 	registerMiscRoutes(app, cfg.Notifications)
 	registerAssistRoutes(app, services.NewSessionService(cfg.DB), services.NewFsService(), services.NewSkillsService())
