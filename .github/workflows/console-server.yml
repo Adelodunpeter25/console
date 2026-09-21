@@ -65,7 +65,8 @@ jobs:
       # (fetch-fff-lib.sh only covers the runner's own platform).
       - name: Stage fff native sidecar
         run: |
-          curl -fL "https://github.com/dmtrKovalenko/fff/releases/latest/download/${{ matrix.fff-asset }}" \
+          curl -fL --retry 5 --retry-all-errors --retry-delay 5 \
+            "https://github.com/dmtrKovalenko/fff/releases/latest/download/${{ matrix.fff-asset }}" \
             -o "${{ matrix.lib-asset }}"
 
       - name: Upload package artifact
