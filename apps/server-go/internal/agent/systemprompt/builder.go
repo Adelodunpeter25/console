@@ -30,8 +30,8 @@ Use the available tools to explore the codebase, edit files, run shell commands,
 // doesn't supply an explicit set.
 var DefaultToolNames = []string{
 	"read_file", "readSkill", "list_dir", "glob", "grep",
-	"write_file", "editFile", "batchWrite", "bash", "webSearch", "webFetch",
-	"todo", "subagent", "ask",
+	"write_file", "editFile", "batchWrite", "bash", "bashJob", "webSearch", "webFetch",
+	"todo", "subagent", "ask", "askMany", "memory",
 }
 
 // DiscoveredContext is everything discovery found for one build.
@@ -247,7 +247,6 @@ func renderWorkstation(env EnvironmentInfo, mode ApprovalMode) string {
 			"<critical>",
 			"- Each response MUST advance the task.",
 			"- Default to informed action; do not ask for confirmation when tools or repo context can answer.",
-			"- Never search code/files via bash (grep, rg, find). Use the dedicated `grep` and `glob` tools — they run on an indexed engine and are faster",
 			"</critical>",
 		}
 	}
@@ -286,8 +285,9 @@ func renderApprovalModeInstruction(mode ApprovalMode) string {
 	case AlwaysAsk:
 		return strings.Join([]string{
 			heading, tag,
-			"You are in Normal mode. Use tools freely, but request approval before any write, edit, delete, or command execution.",
-			"Do not claim a restricted action was performed until the user approves it.",
+			"You are in Normal mode. Use tools freely, including writes, edits, and command execution.",
+			"Restricted actions trigger an approval dialog for the user automatically; never use the ask tool to request permission and never pause to ask permission yourself.",
+			"Do not claim a restricted action was performed until it is approved.",
 			"If approval is denied, stop and report the denial rather than retrying silently.",
 			"</approval-mode-instructions>",
 		}, "\n")
@@ -295,7 +295,7 @@ func renderApprovalModeInstruction(mode ApprovalMode) string {
 		return strings.Join([]string{
 			heading, tag,
 			"You are in Accept Edits mode. Read, write, and edit files directly without pausing for each edit.",
-			"Still request approval before executing commands or performing higher-risk operations.",
+			"Commands and higher-risk operations trigger an automatic approval dialog; never pause to ask permission yourself.",
 			"Proceed efficiently through multi-file edits; do not stop to ask permission for routine file writes.",
 			"</approval-mode-instructions>",
 		}, "\n")
