@@ -702,41 +702,30 @@ impl ConsoleDesktopApp {
             return;
         };
 
-        let client = self.client.clone();
-        cx.spawn(
-            async move |entity, cx| match client.sessions.get_subagents(&session_id).await {
-                Ok(subagents) => {
-                    cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                for sub in &subagents {
-                                    if let Some(ref sum) = sub.summary {
-                                        let view = this
-                                            .subagent_markdown_views
-                                            .borrow_mut()
-                                            .entry(sub.subagent_id.clone())
-                                            .or_insert_with(|| {
-                                                Rc::new(RefCell::new(
-                                                    console_ui::markdown::render::MarkdownView::new(
-                                                    ),
-                                                ))
-                                            })
-                                            .clone();
-                                        view.borrow_mut().set_text(sum, false);
-                                    }
-                                }
-                                this.session_subagents
-                                    .insert(session_id, Rc::new(subagents));
-                                cx.notify();
-                            });
-                        }
-                    });
-                }
-                Err(err) => {
-                    log::warn!("Failed to fetch inspector session subagents: {}", err);
-                }
-            },
-        )
-        .detach();
+        // Live subagent state arrives exclusively over the run event stream
+        // (SubagentStart/Activity/End into session_subagents); the endpoint
+        // is no longer polled. Just ensure summary markdown views exist for
+        // whatever the stream has recorded.
+        let list = self
+            .session_subagents
+            .get(&session_id)
+            .cloned()
+            .unwrap_or_else(|| Rc::new(Vec::new()));
+        for sub in list.iter() {
+            if let Some(ref sum) = sub.summary {
+                let view = self
+                    .subagent_markdown_views
+                    .borrow_mut()
+                    .entry(sub.subagent_id.clone())
+                    .or_insert_with(|| {
+                        Rc::new(RefCell::new(
+                            console_ui::markdown::render::MarkdownView::new(),
+                        ))
+                    })
+                    .clone();
+                view.borrow_mut().set_text(sum, false);
+            }
+        }
+        cx.notify();
     }
 }
