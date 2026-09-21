@@ -155,7 +155,7 @@ func TestRunUnknownSessionAndProvider(t *testing.T) {
 		t.Fatal("missing session must fail")
 	}
 	header := helpers.CreateRunSession(t, sessions)
-	if _, err := svc.StartRun(header.ID, run.Prompt{Text: "hi", Provider: "claude", ModelID: "m"}); err == nil {
+	if _, err := svc.StartRun(header.ID, run.Prompt{Text: "hi", Provider: "antigravity", ModelID: "m"}); err == nil {
 		t.Fatal("unported provider must fail")
 	}
 	if svc.IsActive(header.ID) {
