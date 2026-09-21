@@ -10,9 +10,12 @@ import (
 
 // RecordFileChange inserts or updates a file change for a session.
 func (s *Service) RecordFileChange(sessionID string, change types.SessionFileChange) error {
-	projectID, err := s.projectIDBySession(sessionID)
+	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return err
+	}
+	if !ok {
+		return nil
 	}
 	conn, err := s.manager.Session(sessionID, projectID)
 	if err != nil {
@@ -36,9 +39,12 @@ func (s *Service) RecordFileChange(sessionID string, change types.SessionFileCha
 // GetSessionFileChanges retrieves file changes for a session.
 // If turnIndex is >= 0, filters to that turn only; otherwise returns all changes.
 func (s *Service) GetSessionFileChanges(sessionID string, turnIndex int) ([]types.SessionFileChange, error) {
-	projectID, err := s.projectIDBySession(sessionID)
+	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return nil, err
+	}
+	if !ok {
+		return []types.SessionFileChange{}, nil
 	}
 	conn, err := s.manager.Session(sessionID, projectID)
 	if err != nil {
@@ -77,9 +83,12 @@ func (s *Service) GetSessionFileChanges(sessionID string, turnIndex int) ([]type
 
 // ClearSessionFileChanges removes all file changes for a session.
 func (s *Service) ClearSessionFileChanges(sessionID string) error {
-	projectID, err := s.projectIDBySession(sessionID)
+	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return err
+	}
+	if !ok {
+		return nil
 	}
 	conn, err := s.manager.Session(sessionID, projectID)
 	if err != nil {

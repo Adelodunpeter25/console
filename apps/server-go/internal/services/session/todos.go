@@ -9,9 +9,12 @@ import (
 // SaveSessionTodos replaces the persisted todo list for a session
 // (delete-then-insert, matching the TS session-todos.ts semantics).
 func (s *Service) SaveSessionTodos(sessionID string, items []types.TodoItem) error {
-	projectID, err := s.projectIDBySession(sessionID)
+	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return err
+	}
+	if !ok {
+		return nil
 	}
 	conn, err := s.manager.Session(sessionID, projectID)
 	if err != nil {
@@ -40,9 +43,12 @@ func (s *Service) SaveSessionTodos(sessionID string, items []types.TodoItem) err
 // GetSessionTodos returns the persisted todo list for a session, ordered
 // by id (empty slice, not nil, when there is none).
 func (s *Service) GetSessionTodos(sessionID string) ([]types.TodoItem, error) {
-	projectID, err := s.projectIDBySession(sessionID)
+	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return nil, err
+	}
+	if !ok {
+		return []types.TodoItem{}, nil
 	}
 	conn, err := s.manager.Session(sessionID, projectID)
 	if err != nil {
@@ -66,9 +72,12 @@ func (s *Service) GetSessionTodos(sessionID string) ([]types.TodoItem, error) {
 
 // ClearSessionTodos deletes the persisted todo list for a session.
 func (s *Service) ClearSessionTodos(sessionID string) error {
-	projectID, err := s.projectIDBySession(sessionID)
+	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return err
+	}
+	if !ok {
+		return nil
 	}
 	conn, err := s.manager.Session(sessionID, projectID)
 	if err != nil {

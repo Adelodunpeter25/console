@@ -11,9 +11,12 @@ import (
 
 // SaveQueuedPrompt upserts the single staged prompt for a session.
 func (s *Service) SaveQueuedPrompt(sessionID string, qp types.QueuedPrompt) error {
-	projectID, err := s.projectIDBySession(sessionID)
+	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return err
+	}
+	if !ok {
+		return nil
 	}
 	conn, err := s.manager.Session(sessionID, projectID)
 	if err != nil {
@@ -45,9 +48,12 @@ func (s *Service) SaveQueuedPrompt(sessionID string, qp types.QueuedPrompt) erro
 
 // GetQueuedPrompt returns the staged prompt, or nil when none is staged.
 func (s *Service) GetQueuedPrompt(sessionID string) (*types.QueuedPrompt, error) {
-	projectID, err := s.projectIDBySession(sessionID)
+	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return nil, err
+	}
+	if !ok {
+		return nil, nil
 	}
 	conn, err := s.manager.Session(sessionID, projectID)
 	if err != nil {
@@ -89,9 +95,12 @@ func (s *Service) GetQueuedPrompt(sessionID string) (*types.QueuedPrompt, error)
 
 // ClearQueuedPrompt discards the staged prompt for a session.
 func (s *Service) ClearQueuedPrompt(sessionID string) error {
-	projectID, err := s.projectIDBySession(sessionID)
+	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return err
+	}
+	if !ok {
+		return nil
 	}
 	conn, err := s.manager.Session(sessionID, projectID)
 	if err != nil {

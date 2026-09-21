@@ -6,17 +6,26 @@ import (
 	"encoding/json"
 )
 
-func (s *Service) projectIDBySession(sessionID string) (string, error) {
+// projectIDBySession returns the project id for a session and whether the
+// session row exists at all. A session with no project (scratch) still
+// "exists" (ok=true, id=""); ok=false means the id has no row in the
+// global sessions table (deleted or never created). Mirrors
+// getProjectIdBySessionId, whose callers all no-op on a missing session
+// rather than treating it as an error.
+func (s *Service) projectIDBySession(sessionID string) (id string, ok bool, err error) {
 	var projectID sql.NullString
-	err := s.manager.Global().QueryRow(
+	err = s.manager.Global().QueryRow(
 		`SELECT project_id FROM sessions WHERE id = ?`, sessionID).Scan(&projectID)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	if projectID.Valid && projectID.String != "" && projectID.String != "scratch" {
-		return projectID.String, nil
+		return projectID.String, true, nil
 	}
-	return "", nil
+	return "", true, nil
 }
 
 func (s *Service) bumpSessionUpdated(sessionID string, now int64, delta int) {

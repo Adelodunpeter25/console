@@ -249,3 +249,40 @@ func TestPurgeExpiredDeletedSessions(t *testing.T) {
 		t.Fatalf("second purge = %v, want [%s]", purged, liveID)
 	}
 }
+
+// TestOpsOnMissingSessionNoOp mirrors the TS session-*.ts convention: an
+// operation on a session id with no row in the global index silently
+// no-ops (matching `if (projectId === undefined) return;`) instead of
+// leaking a raw "sql: no rows in result set" as a turn-ending agent error.
+func TestOpsOnMissingSessionNoOp(t *testing.T) {
+	_, sessions, _, _ := newTestManager(t)
+	missing := "does-not-exist"
+
+	if err := sessions.AppendMessage(missing, types.AgentMessage{ID: "m1", Role: "user", Data: json.RawMessage(`{"role":"user","content":"hi"}`)}); err != nil {
+		t.Fatalf("AppendMessage on missing session must no-op, got: %v", err)
+	}
+	if err := sessions.ReplaceMessages(missing, nil); err != nil {
+		t.Fatalf("ReplaceMessages on missing session must no-op, got: %v", err)
+	}
+	if items, err := sessions.GetSessionTodos(missing); err != nil || len(items) != 0 {
+		t.Fatalf("GetSessionTodos on missing session: %+v %v", items, err)
+	}
+	if err := sessions.SaveSessionTodos(missing, []types.TodoItem{{ID: 1, Content: "x", Status: "pending"}}); err != nil {
+		t.Fatalf("SaveSessionTodos on missing session must no-op, got: %v", err)
+	}
+	if changes, err := sessions.GetSessionFileChanges(missing, -1); err != nil || len(changes) != 0 {
+		t.Fatalf("GetSessionFileChanges on missing session: %+v %v", changes, err)
+	}
+	if err := sessions.RecordFileChange(missing, types.SessionFileChange{Path: "a.go", TurnIndex: 0, Status: "modified"}); err != nil {
+		t.Fatalf("RecordFileChange on missing session must no-op, got: %v", err)
+	}
+	if err := sessions.UpdateTitle(missing, "New title"); err != nil {
+		t.Fatalf("UpdateTitle on missing session must no-op, got: %v", err)
+	}
+	if qp, err := sessions.GetQueuedPrompt(missing); err != nil || qp != nil {
+		t.Fatalf("GetQueuedPrompt on missing session: %+v %v", qp, err)
+	}
+	if subs, err := sessions.GetSubagents(missing); err != nil || len(subs) != 0 {
+		t.Fatalf("GetSubagents on missing session: %+v %v", subs, err)
+	}
+}

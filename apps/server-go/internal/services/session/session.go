@@ -281,9 +281,12 @@ func (s *Service) SoftDelete(sessionID string) (bool, error) {
 // UpdateTitle sets the session title in the global index and the
 // per-session meta row.
 func (s *Service) UpdateTitle(sessionID, title string) error {
-	projectID, err := s.projectIDBySession(sessionID)
+	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return err
+	}
+	if !ok {
+		return nil
 	}
 	conn, err := s.manager.Session(sessionID, projectID)
 	if err != nil {

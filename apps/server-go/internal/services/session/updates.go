@@ -159,7 +159,7 @@ func (s *Service) Header(sessionID string) (*types.SessionHeader, error) {
 // UpdateModel mirrors the TS updateModel: session_meta (when the DB file
 // exists, to avoid materializing empty DBs) plus the global index.
 func (s *Service) UpdateModel(sessionID, modelID, provider string) error {
-	projectID, err := s.projectIDBySession(sessionID)
+	projectID, _, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return err
 	}
@@ -184,7 +184,7 @@ func (s *Service) UpdateModel(sessionID, modelID, provider string) error {
 // UpdateCwd mirrors the TS updateCwd: meta + index writes, then file
 // relocation when project ownership changes (never clobbers).
 func (s *Service) UpdateCwd(sessionID, cwd string, newProjectID *string) error {
-	oldProjectID, err := s.projectIDBySession(sessionID)
+	oldProjectID, _, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return err
 	}
@@ -278,7 +278,7 @@ func relocateSessionDb(fromPath, toPath string) bool {
 
 // UpdateApprovalMode mirrors the TS updateApprovalMode.
 func (s *Service) UpdateApprovalMode(sessionID, approvalMode string) error {
-	projectID, err := s.projectIDBySession(sessionID)
+	projectID, _, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return err
 	}
@@ -312,21 +312,11 @@ func (s *Service) UpdateStatus(sessionID, status string) error {
 // GetSubagents mirrors the TS getSessionSubagents: live (running) subagents
 // only, empty for unknown sessions.
 func (s *Service) GetSubagents(sessionID string) ([]types.SubagentInfo, error) {
-	projectID, err := s.projectIDBySession(sessionID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return []types.SubagentInfo{}, nil
-		}
-		return nil, err
-	}
-	// projectIDBySession returns "" both for missing rows (via Scan of no
-	// rows? no — QueryRow.Scan on missing row returns ErrNoRows above) and
-	// scratch sessions; verify the index row exists.
-	header, err := s.Header(sessionID)
+	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return nil, err
 	}
-	if header == nil {
+	if !ok {
 		return []types.SubagentInfo{}, nil
 	}
 	conn, err := s.manager.Session(sessionID, projectID)

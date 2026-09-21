@@ -19,9 +19,12 @@ func (s *Service) AppendMessages(sessionID string, messages []types.AgentMessage
 	if len(messages) == 0 {
 		return nil
 	}
-	projectID, err := s.projectIDBySession(sessionID)
+	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return err
+	}
+	if !ok {
+		return nil
 	}
 	conn, err := s.manager.Session(sessionID, projectID)
 	if err != nil {
@@ -61,9 +64,12 @@ func (s *Service) AppendMessages(sessionID string, messages []types.AgentMessage
 // ReplaceMessages rewrites session history after repairing an interrupted
 // tool turn.
 func (s *Service) ReplaceMessages(sessionID string, messages []types.AgentMessage) error {
-	projectID, err := s.projectIDBySession(sessionID)
+	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return err
+	}
+	if !ok {
+		return nil
 	}
 	conn, err := s.manager.Session(sessionID, projectID)
 	if err != nil {
