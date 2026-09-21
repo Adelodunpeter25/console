@@ -125,6 +125,55 @@ fn split_message_segments(content: &str, context_files: &[String]) -> Vec<Messag
     segments
 }
 
+/// Whether a whitespace-separated token looks like an embedded file path.
+/// Matches the server-facing footnotes (`"   /full/path "`) as well as
+/// relative paths like `apps/android/.../certificate.svg`, while ignoring
+/// URLs and plain words.
+fn is_path_like_token(token: &str) -> bool {
+    let token = token.trim_matches(|c: char| matches!(c, '"' | '\'' | '`' | '(' | ')' | ',' | ';'));
+    if token.is_empty() || token.contains("://") {
+        return false;
+    }
+    if !(token.contains('/') || token.contains('\\')) {
+        return false;
+    }
+    if token.len() < 3 {
+        return false;
+    }
+    let last_segment = token.rsplit(['/', '\\']).next().unwrap_or(token);
+    last_segment.contains('.')
+}
+
+fn clean_path_token(token: &str) -> String {
+    token
+        .trim_matches(|c: char| matches!(c, '"' | '\'' | '`' | '(' | ')' | ',' | ';' | '.'))
+        .to_string()
+}
+
+/// Split reloaded server content into its prompt body and embedded file refs.
+///
+/// The client sends the server `{prompt}\n{refs}` where refs are
+/// space-separated full paths, but the reloaded message carries no
+/// `context_files`. When the trailing line after the last newline consists
+/// solely of path-like tokens, treat it as the footnote and hide it — the
+/// body keeps the bare filename for pill rendering.
+fn extract_embedded_context_files(content: &str) -> (String, Vec<String>) {
+    let Some(newline) = content.rfind('\n') else {
+        return (content.to_string(), Vec::new());
+    };
+    let (body, footnote) = content.split_at(newline);
+    // Skip the newline itself.
+    let footnote = &footnote[1..];
+    let tokens: Vec<String> = footnote
+        .split_whitespace()
+        .map(clean_path_token)
+        .filter(|t| !t.is_empty())
+        .collect();
+    if tokens.is_empty() || !tokens.iter().all(|t| is_path_like_token(t)) {
+        return (content.to_string(), Vec::new());
+    }
+    (body.trim_end().to_string(), tokens)
+}
 /// Invoked with the decoded image when the user clicks an image in a message,
 /// opening the app's image preview modal.
 type PreviewImageHandler = Rc<dyn Fn(Arc<gpui::Image>, &mut Window, &mut App) + 'static>;
@@ -199,14 +248,23 @@ impl RenderOnce for UserMessageBubble {
         let preview_handler = self.on_preview_image.clone();
         let context_files = self.context_files;
 
+        // Reloaded server messages carry no `context_files`; their content is
+        // `{prompt}\n{refs}` with space-separated full paths appended.
+        // Re-derive pills from that footnote and hide it so reopen matches live.
+        let (display_content, effective_files) = if context_files.is_empty() {
+            extract_embedded_context_files(&self.content)
+        } else {
+            (self.content.clone(), context_files)
+        };
+
         // Build inline segments: text runs interleaved with file pills.
         // When there are no context files the content renders as-is.
-        let segments = if context_files.is_empty() {
-            vec![MessageSegment::Text(self.content.clone())]
+        let segments = if effective_files.is_empty() {
+            vec![MessageSegment::Text(display_content.clone())]
         } else {
-            split_message_segments(&self.content, &context_files)
+            split_message_segments(&display_content, &effective_files)
         };
-        let has_content = !self.content.is_empty() || !context_files.is_empty();
+        let has_content = !display_content.is_empty() || !effective_files.is_empty();
 
         div()
             .w_full()
