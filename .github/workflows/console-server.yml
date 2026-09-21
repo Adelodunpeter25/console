@@ -1,9 +1,12 @@
-# Builds the multi-call `console` binary (management CLI + agent server in one
-# executable) for every platform on each push to main, then uploads them to a
-# rolling GitHub Release tagged `console-server` (latest always wins).
+# Builds the Go `console` CLI and `console-server-go` agent server for every
+# platform on each push to main, then uploads them to a rolling GitHub Release
+# tagged `console-server` (latest always wins).
 #
-# Assets: console-<suffix> + libfff_c-<suffix>.{so,dylib} sidecar (fff native lib,
-# missing from `bun build --compile` output — see docs/notes/fff-native-library-fix.md).
+# Assets per platform: console-<suffix> + console-server-go-<suffix> +
+# libfff_c-<suffix>.{so,dylib} sidecar (fff file-search native lib, dlopened at
+# runtime — same assets as apps/server-go/scripts/fetch-fff-lib.sh, which only
+# covers the host). `console start` launches the sibling console-server-go
+# binary, so install/upgrade must place both binaries side by side.
 name: Build console
 
 on:
@@ -15,74 +18,66 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         include:
           - os-suffix: linux-x64
-            bun-target: bun-linux-x64
-            install-os: linux
-            install-cpu: x64
+            runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            fff-asset: c-lib-x86_64-unknown-linux-gnu.so
             lib-asset: libfff_c-linux-x64.so
-            bin-package: fff-bin-linux-x64-gnu
-            lib-file: libfff_c.so
           - os-suffix: macos-x64
-            bun-target: bun-darwin-x64
-            install-os: darwin
-            install-cpu: x64
+            runner: macos-14
+            goos: darwin
+            goarch: amd64
+            fff-asset: c-lib-x86_64-apple-darwin.dylib
             lib-asset: libfff_c-macos-x64.dylib
-            bin-package: fff-bin-darwin-x64
-            lib-file: libfff_c.dylib
           - os-suffix: macos-arm64
-            bun-target: bun-darwin-aarch64
-            install-os: darwin
-            install-cpu: arm64
+            runner: macos-14
+            goos: darwin
+            goarch: arm64
+            fff-asset: c-lib-aarch64-apple-darwin.dylib
             lib-asset: libfff_c-macos-arm64.dylib
-            bin-package: fff-bin-darwin-arm64
-            lib-file: libfff_c.dylib
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
+      # Must match the `go` directive in apps/*/go.mod (source of truth).
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          bun-version: latest
+          go-version: "1.25"
+          cache-dependency-path: |
+            apps/server-go/go.sum
+            apps/cli-go/go.sum
 
-      # Install optional native deps for the TARGET platform, not the runner.
-      # ffi-rs (via @ff-labs/fff-node) ships a .node addon per os/arch; without
-      # this override a cross-compiled binary would miss its addon and crash.
-      - name: Install dependencies (for target platform)
-        run: bun install --frozen-lockfile --os=${{ matrix.install-os }} --cpu=${{ matrix.install-cpu }}
+      # server-go uses cgo (fff dlopen bindings); cli-go is pure Go.
+      # Flags: -trimpath for reproducible builds; -s -w strips debug info.
+      - name: Build console CLI
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+        run: >
+          go -C apps/cli-go build -trimpath -ldflags="-s -w"
+          -o ../../console-${{ matrix.os-suffix }} ./cmd/console
 
-      # Patch fff-node's findBinary() so the bundled build checks FFF_LIB_PATH
-      # and the binary's own directory before the npm-package lookup.
-      - name: Patch fff-node sidecar lookup
-        run: bun scripts/patch-fff-binary.mjs
+      - name: Build console-server-go
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+        run: >
+          go -C apps/server-go build -trimpath -ldflags="-s -w"
+          -o ../../console-server-go-${{ matrix.os-suffix }} ./cmd/server
 
-      # Copy the target platform's libfff_c out of its optional bin package as
-      # a release sidecar (bun --compile embeds JS, not the .so/.dylib).
+      # Fetch the target platform's libfff_c from fff releases
+      # (fetch-fff-lib.sh only covers the runner's own platform).
       - name: Stage fff native sidecar
         run: |
-          for base in node_modules apps/server/node_modules; do
-            src="$base/@ff-labs/${{ matrix.bin-package }}/${{ matrix.lib-file }}"
-            if [ -f "$src" ]; then
-              cp "$src" "${{ matrix.lib-asset }}"
-              echo "staged $src"
-              exit 0
-            fi
-          done
-          echo "missing lib: @ff-labs/${{ matrix.bin-package }}/${{ matrix.lib-file }}"
-          ls node_modules/@ff-labs/ || true
-          ls apps/server/node_modules/@ff-labs/ || true
-          exit 1
-
-      # Flags: --minify shrinks bundled JS; --sourcemap (zstd-compressed) keeps
-      # stacktraces pointing at TS source in production crashes.
-      - name: Build console binary
-        run: |
-          bun build --compile --minify --sourcemap \
-            apps/cli/console.ts \
-            --target=${{ matrix.bun-target }} \
-            --outfile console-${{ matrix.os-suffix }}
+          curl -fL "https://github.com/dmtrKovalenko/fff/releases/latest/download/${{ matrix.fff-asset }}" \
+            -o "${{ matrix.lib-asset }}"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
@@ -90,6 +85,7 @@ jobs:
           name: console-${{ matrix.os-suffix }}
           path: |
             console-${{ matrix.os-suffix }}
+            console-server-go-${{ matrix.os-suffix }}
             ${{ matrix.lib-asset }}
           if-no-files-found: error
 
@@ -128,8 +124,11 @@ jobs:
             make_latest: true
             files: |
               dist/console-linux-x64
+              dist/console-server-go-linux-x64
               dist/libfff_c-linux-x64.so
               dist/console-macos-x64
+              dist/console-server-go-macos-x64
               dist/libfff_c-macos-x64.dylib
               dist/console-macos-arm64
+              dist/console-server-go-macos-arm64
               dist/libfff_c-macos-arm64.dylib

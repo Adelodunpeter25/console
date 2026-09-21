@@ -1,19 +1,20 @@
-.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop package-desktop build-android typecheck check help
+.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop package-desktop build-server build-android typecheck check help
 
 # Default target
 .DEFAULT_GOAL := help
 
-## dev-server: Start the Hono agent server in dev mode (uses ~/.console-dev storage)
+## dev-server: Start the Go agent server in dev mode (uses ~/.console-dev storage)
 dev-server:
-	CONSOLE_ENV=dev bun --watch apps/server/index.ts
+	CONSOLE_ENV=dev go -C apps/server-go run ./cmd/server
 
 ## dev-console: Start the console agent as a background daemon (survives closing terminal)
 ##   Usage: make dev-console            (dev: port 3000, ~/.console-dev storage)
 ##          make dev-console PORT=3001  (prod: port 3001, ~/.console storage)
-## Dev (default port) sets CONSOLE_ENV=dev so apppaths/daemon-manager resolve
+## Dev (default port) sets CONSOLE_ENV=dev so daemon paths resolve
 ## ~/.console-dev, matching the desktop's separate dev bundle identifier.
-dev-console:
-	CONSOLE_ENV=$(if $(PORT),,dev) bun apps/cli/index.ts start -p $(if $(PORT),$(PORT),3000)
+## Builds the Go binaries first so the CLI finds its sibling server binary.
+dev-console: build-server
+	CONSOLE_ENV=$(if $(PORT),,dev) ./console start -p $(if $(PORT),$(PORT),3000)
 
 ## dev-mobile: Build and run the native Android app in dev mode
 ##   Installs debug APK and launches the app on Android emulator/device
@@ -37,10 +38,11 @@ build-desktop:
 desktop-check:
 	cargo check --locked --manifest-path apps/desktop/Cargo.toml
 
-## build-server: Compile the multi-call `console` binary (CLI + agent server)
-## (bun runtime embedded, minified JS, zstd sourcemap for readable stacktraces)
+## build-server: Compile the Go `console` CLI + `console-server-go` agent server
+## (`console start` launches the sibling server binary in the same directory)
 build-server:
-	bun scripts/patch-fff-binary.mjs && bun build --compile --minify --sourcemap apps/cli/console.ts --outfile console
+	go -C apps/cli-go build -o ../../console ./cmd/console
+	go -C apps/server-go build -o ../../console-server-go ./cmd/server
 
 ## build-android: Build the native Android app for release
 build-android:
@@ -64,7 +66,7 @@ help:
 	@echo "  make package-desktop   - Package the GPUI desktop app for production (.app bundle)"
 	@echo "  make build-desktop     - Build the GPUI desktop app for production"
 	@echo "  make desktop-check     - Fast typecheck of the GPUI desktop app"
-	@echo "  make build-server      - Compile the multi-call console binary (CLI + server)"
+	@echo "  make build-server      - Compile the Go console CLI and server binaries"
 	@echo "  make build-android     - Build the native Android app for release"
 	@echo "  make typecheck         - Run TypeScript typechecking"
 	@echo "  make check             - Run code format and lint checks"

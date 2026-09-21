@@ -3,7 +3,7 @@
 
 [scripts.dev-server]
 label = "Dev Server :3001"
-command = "PORT=3001 bun --watch apps/server/index.ts"
+command = "PORT=3001 go -C apps/server-go run ./cmd/server"
 shortcut = "cmd-shift-r"
 persistent = true
 
