@@ -17,6 +17,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
 func TestParseReference(t *testing.T) {
@@ -108,19 +109,19 @@ func TestFindModel(t *testing.T) {
 }
 
 func TestRunRejectsUnsupportedThinking(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	svc.Lookup = func(id string) (loop.Provider, error) {
 		return queueMock("hi"), nil
 	}
-	header := createRunSession(t, sessions)
+	header := helpers.CreateRunSession(t, sessions)
 	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "hi", Provider: "mock", ModelID: "mock-model", Thinking: "max"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	subID, subCh, _ := hub.Subscribe(nil)
 	defer hub.Unsubscribe(subID)
-	waitSettled(t, hub)
+	helpers.WaitSettled(t, hub)
 	if hub.Outcome != run.OutcomeDone {
 		t.Fatalf("outcome: %s", hub.Outcome)
 	}
@@ -147,7 +148,7 @@ func TestRunRejectsUnsupportedThinking(t *testing.T) {
 
 type modelRecorder struct {
 	models []string
-	mock   *mockProvider
+	mock   *helpers.MockProvider
 }
 
 func (r *modelRecorder) RunTurn(ctx context.Context, req loop.TurnRequest, s *stream.Stream[loop.Event]) error {
@@ -163,9 +164,9 @@ func TestTitleUsesSmolModel(t *testing.T) {
 	}
 	t.Setenv("CONSOLE_SETTINGS_PATH", filepath.Join(dir, "settings.json"))
 
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	rec := &modelRecorder{mock: &mockProvider{turns: []func() []loop.Event{
+	rec := &modelRecorder{mock: &helpers.MockProvider{Turns: []func() []loop.Event{
 		func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "done"}} },
 	}}}
 	svc.Lookup = func(id string) (loop.Provider, error) { return rec, nil }
@@ -179,7 +180,7 @@ func TestTitleUsesSmolModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitSettled(t, hub)
+	helpers.WaitSettled(t, hub)
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		seen := false

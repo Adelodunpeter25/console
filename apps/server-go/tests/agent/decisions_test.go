@@ -15,6 +15,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
+	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
 // waitHubFrame returns the first frame of the wanted kind, or fails.
@@ -59,11 +60,11 @@ func writeCallArgs(t *testing.T, path, content string) json.RawMessage {
 }
 
 func TestApprovalAllowRunsTool(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	target := filepath.Join(t.TempDir(), "hello.txt")
 	svc.Lookup = func(id string) (loop.Provider, error) {
-		return &mockProvider{turns: []func() []loop.Event{
+		return &helpers.MockProvider{Turns: []func() []loop.Event{
 			func() []loop.Event {
 				return []loop.Event{{Kind: loop.EventToolCall, Call: &tools.ToolCall{
 					ID: "c1", Name: "write_file", Arguments: writeCallArgs(t, target, "hi"),
@@ -72,7 +73,7 @@ func TestApprovalAllowRunsTool(t *testing.T) {
 			func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "done"}} },
 		}}, nil
 	}
-	header := createRunSession(t, sessions)
+	header := helpers.CreateRunSession(t, sessions)
 	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "write hi", Provider: "mock", ModelID: "m"})
 	if err != nil {
 		t.Fatal(err)
@@ -100,11 +101,11 @@ func TestApprovalAllowRunsTool(t *testing.T) {
 }
 
 func TestApprovalDenyFailsTool(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	target := filepath.Join(t.TempDir(), "nope.txt")
 	svc.Lookup = func(id string) (loop.Provider, error) {
-		return &mockProvider{turns: []func() []loop.Event{
+		return &helpers.MockProvider{Turns: []func() []loop.Event{
 			func() []loop.Event {
 				return []loop.Event{{Kind: loop.EventToolCall, Call: &tools.ToolCall{
 					ID: "c1", Name: "write_file", Arguments: writeCallArgs(t, target, "hi"),
@@ -113,7 +114,7 @@ func TestApprovalDenyFailsTool(t *testing.T) {
 			func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "ok"}} },
 		}}, nil
 	}
-	header := createRunSession(t, sessions)
+	header := helpers.CreateRunSession(t, sessions)
 	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "write hi", Provider: "mock", ModelID: "m"})
 	if err != nil {
 		t.Fatal(err)
@@ -133,11 +134,11 @@ func TestApprovalDenyFailsTool(t *testing.T) {
 }
 
 func TestAskQuestionAnswered(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	askArgs, _ := json.Marshal(map[string]any{"question": "Pick a color?", "options": []string{"red", "blue"}})
 	svc.Lookup = func(id string) (loop.Provider, error) {
-		return &mockProvider{turns: []func() []loop.Event{
+		return &helpers.MockProvider{Turns: []func() []loop.Event{
 			func() []loop.Event {
 				return []loop.Event{{Kind: loop.EventToolCall, Call: &tools.ToolCall{
 					ID: "q1", Name: "ask", Arguments: askArgs,
@@ -146,7 +147,7 @@ func TestAskQuestionAnswered(t *testing.T) {
 			func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "thanks"}} },
 		}}, nil
 	}
-	header := createRunSession(t, sessions)
+	header := helpers.CreateRunSession(t, sessions)
 	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "ask me", Provider: "mock", ModelID: "m"})
 	if err != nil {
 		t.Fatal(err)
@@ -186,10 +187,10 @@ func TestDecisionTimeout(t *testing.T) {
 }
 
 func TestRejectAllIsSessionScoped(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	svc.Lookup = func(id string) (loop.Provider, error) {
-		return &mockProvider{turns: []func() []loop.Event{
+		return &helpers.MockProvider{Turns: []func() []loop.Event{
 			func() []loop.Event {
 				args, _ := json.Marshal(map[string]any{"path": filepath.Join(t.TempDir(), "x.txt"), "content": "hi"})
 				return []loop.Event{{Kind: loop.EventToolCall, Call: &tools.ToolCall{ID: "c1", Name: "write_file", Arguments: args}}}
@@ -197,8 +198,8 @@ func TestRejectAllIsSessionScoped(t *testing.T) {
 			func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "done"}} },
 		}}, nil
 	}
-	headerA := createRunSession(t, sessions)
-	headerB := createRunSession(t, sessions)
+	headerA := helpers.CreateRunSession(t, sessions)
+	headerB := helpers.CreateRunSession(t, sessions)
 	hubA, err := svc.StartRun(headerA.ID, run.Prompt{Text: "a", Provider: "mock", ModelID: "m"})
 	if err != nil {
 		t.Fatal(err)

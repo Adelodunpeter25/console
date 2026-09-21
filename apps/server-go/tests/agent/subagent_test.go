@@ -12,6 +12,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
 func subagentCall(t *testing.T, prompt string) tools.ToolCall {
@@ -24,7 +25,7 @@ func subagentCall(t *testing.T, prompt string) tools.ToolCall {
 }
 
 func TestSubagentCompletes(t *testing.T) {
-	nested := &mockProvider{turns: []func() []loop.Event{
+	nested := &helpers.MockProvider{Turns: []func() []loop.Event{
 		func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "found it"}} },
 	}}
 	var kinds []loop.EventKind
@@ -96,7 +97,7 @@ func TestSubagentAborted(t *testing.T) {
 }
 
 type recordingProvider struct {
-	mock  *mockProvider
+	mock  *helpers.MockProvider
 	names [][]string
 }
 
@@ -126,7 +127,7 @@ func TestSubagentInDefaultTools(t *testing.T) {
 }
 
 func TestSubagentExcludedFromNested(t *testing.T) {
-	rec := &recordingProvider{mock: &mockProvider{turns: []func() []loop.Event{
+	rec := &recordingProvider{mock: &helpers.MockProvider{Turns: []func() []loop.Event{
 		func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "ok"}} },
 	}}}
 	// Mirror run.go: nested tools are the parent list including the bound

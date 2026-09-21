@@ -16,6 +16,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
 func compactionHistory() []any {
@@ -251,7 +252,7 @@ func (p *overflowProvider) RunTurn(ctx context.Context, req loop.TurnRequest, s 
 
 func TestLoopEmergencyRetry(t *testing.T) {
 	provider := &overflowProvider{}
-	executor := loop.NewExecutor(tools.NewRegistry(tools.DefaultTools()...), "full-access", autoApprover{})
+	executor := loop.NewExecutor(tools.NewRegistry(tools.DefaultTools()...), "full-access", helpers.AutoApprover{})
 	agent := loop.New(provider, executor, nil)
 	agent.Compaction = &loop.CompactionHooks{
 		IsOverflow: compaction.IsContextOverflowError,
@@ -286,7 +287,7 @@ func TestLoopEmergencyRetry(t *testing.T) {
 
 func TestLoopNoRetryOnPlainError(t *testing.T) {
 	failing := &failingProvider{err: errors.New("boom: invalid auth (400)")}
-	executor := loop.NewExecutor(tools.NewRegistry(), "full-access", autoApprover{})
+	executor := loop.NewExecutor(tools.NewRegistry(), "full-access", helpers.AutoApprover{})
 	agent := loop.New(failing, executor, nil)
 	agent.Compaction = &loop.CompactionHooks{
 		IsOverflow: compaction.IsContextOverflowError,
@@ -316,7 +317,7 @@ func (p *failingProvider) RunTurn(ctx context.Context, req loop.TurnRequest, s *
 
 type messageRecorder struct {
 	sizes []int
-	mock  *mockProvider
+	mock  *helpers.MockProvider
 }
 
 func (r *messageRecorder) RunTurn(ctx context.Context, req loop.TurnRequest, s *stream.Stream[loop.Event]) error {
@@ -330,13 +331,13 @@ func (r *messageRecorder) RunTurn(ctx context.Context, req loop.TurnRequest, s *
 }
 
 func TestRunCompactsHistory(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	rec := &messageRecorder{mock: &mockProvider{turns: []func() []loop.Event{
+	rec := &messageRecorder{mock: &helpers.MockProvider{Turns: []func() []loop.Event{
 		func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "ok"}} },
 	}}}
 	svc.Lookup = func(id string) (loop.Provider, error) { return rec, nil }
-	header := createRunSession(t, sessions)
+	header := helpers.CreateRunSession(t, sessions)
 	// Seed a history dominated by one 600KB tool result (~150k tokens,
 	// over the 128k*0.85 synthetic threshold for the mock model).
 	huge, _ := json.Marshal(map[string]any{"role": "toolResult", "results": []any{
@@ -353,7 +354,7 @@ func TestRunCompactsHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitSettled(t, hub)
+	helpers.WaitSettled(t, hub)
 	if len(rec.sizes) == 0 {
 		t.Fatal("provider never called")
 	}
