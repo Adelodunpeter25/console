@@ -74,13 +74,23 @@ func TestToolValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal output: %v", err)
 	}
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
+	// Wire shape must be the MCP-style content array the TS server sends
+	// (tool-output.ts normalizeToolOutput), not a raw Go struct — the
+	// desktop UI's read-file renderer parses this exact "File: ...\n
+	// Showing: ...\n\n N: line" text format.
+	var blocks []map[string]any
+	if err := json.Unmarshal(raw, &blocks); err != nil {
 		t.Fatalf("unmarshal output: %v", err)
 	}
-	content := m["content"].(string)
-	if content != "l2\nl3" {
-		t.Fatalf("sliced content: %q", content)
+	if len(blocks) != 1 || blocks[0]["type"] != "text" {
+		t.Fatalf("content blocks: %+v", blocks)
+	}
+	text := blocks[0]["text"].(string)
+	if !strings.HasPrefix(text, "File: "+p+"\n") {
+		t.Fatalf("missing File: header: %q", text)
+	}
+	if !strings.Contains(text, "2: l2\n3: l3") {
+		t.Fatalf("sliced numbered content: %q", text)
 	}
 }
 
@@ -110,8 +120,17 @@ func TestGlobGrepFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grep execute: %v", err)
 	}
-	if grepOut == nil {
-		t.Fatal("grep fallback returned nil")
+	grepRaw, err := json.Marshal(grepOut)
+	if err != nil {
+		t.Fatalf("marshal grep output: %v", err)
+	}
+	var grepBlocks []map[string]any
+	if err := json.Unmarshal(grepRaw, &grepBlocks); err != nil {
+		t.Fatalf("grep output must be an MCP content array: %v (%s)", err, grepRaw)
+	}
+	grepText := grepBlocks[0]["text"].(string)
+	if !strings.Contains(grepText, "Found 1 match(es)") || !strings.Contains(grepText, "→    1: hello world") {
+		t.Fatalf("grep result text: %q", grepText)
 	}
 }
 

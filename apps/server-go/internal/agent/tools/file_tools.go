@@ -4,6 +4,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -26,57 +27,103 @@ type readFileInput struct {
 	EndLine   int    `json:"endLine,omitempty" jsonschema:"description=1-based end line (inclusive)"`
 }
 
-type readFileOutput struct {
-	Content   string `json:"content"`
-	Bytes     int    `json:"bytes"`
-	Truncated bool   `json:"truncated,omitempty"`
-}
-
+// readMaxBytes/readMaxLines mirror the TS readFileTool's MAX_BYTES/MAX_LINES
+// safety ceilings (engine.ts). Go reads the capped bytes in one shot rather
+// than streaming, so only the *content* ceiling matters here.
 const (
-	readMaxBytes  = 512 * 1024
-	readMaxOutput = 256 * 1024
+	readMaxBytes = 512 * 1024
+	readMaxLines = 2000
 )
+
+// textResult wraps a formatted string as the MCP-style content array the TS
+// server always sends over the wire (tool-output.ts normalizeToolOutput
+// strips everything except this array + isError before it reaches the
+// client) — the desktop UI parses this exact shape, not raw Go structs.
+func textResult(text string) []map[string]any {
+	return []map[string]any{{"type": "text", "text": text}}
+}
 
 var ReadFile = NewTool("read_file", "Read the content of a file on disk. Use startLine/endLine for large files.", TierRead,
 	func(ctx context.Context, in readFileInput) (any, error) {
 		if in.Path == "" {
 			return nil, NewToolError("path is required")
 		}
+		info, err := os.Stat(in.Path)
+		if err != nil {
+			return nil, NewToolError("Cannot read %s: %v", in.Path, err)
+		}
+		if info.IsDir() {
+			return textResult(fmt.Sprintf("%q is a directory. Use list_dir to browse directories.", in.Path)), nil
+		}
+		sizeBytes := info.Size()
 		data, err := os.ReadFile(in.Path)
 		if err != nil {
 			return nil, NewToolError("Cannot read %s: %v", in.Path, err)
 		}
+		byteCapped := false
 		if len(data) > readMaxBytes {
 			data = data[:readMaxBytes]
+			byteCapped = true
 		}
-		content := string(data)
-		if in.StartLine > 0 || in.EndLine > 0 {
-			content = sliceLines(content, in.StartLine, in.EndLine)
+		if len(data) == 0 {
+			return textResult(fmt.Sprintf("File is empty: %s", in.Path)), nil
 		}
-		out := readFileOutput{Content: content, Bytes: len(data)}
-		if len(out.Content) > readMaxOutput {
-			out.Content = out.Content[:readMaxOutput]
-			out.Truncated = true
-		}
-		return out, nil
-	})
 
-func sliceLines(text string, startLine, endLine int) string {
-	lines := strings.Split(text, "\n")
-	count := len(lines)
-	start0 := startLine
-	if start0 < 1 {
-		start0 = 1
-	}
-	endExcl := endLine
-	if endExcl <= 0 || endExcl > count {
-		endExcl = count
-	}
-	if start0-1 >= count || endExcl <= start0-1 {
-		return ""
-	}
-	return strings.Join(lines[start0-1:endExcl], "\n")
-}
+		allLines := strings.Split(string(data), "\n")
+		totalLines := len(allLines)
+		start := in.StartLine
+		if start < 1 {
+			start = 1
+		}
+		if start > totalLines {
+			return textResult(fmt.Sprintf("Offset beyond EOF. The file has %d lines. Try a smaller startLine.", totalLines)), nil
+		}
+		naturalEnd := totalLines
+		if in.EndLine > 0 && in.EndLine < naturalEnd {
+			naturalEnd = in.EndLine
+		}
+		if start > naturalEnd {
+			return textResult(fmt.Sprintf("startLine (%d) must be less than or equal to endLine (%d).", start, naturalEnd)), nil
+		}
+		end := naturalEnd
+		if emitEnd := start + readMaxLines - 1; end > emitEnd {
+			end = emitEnd
+		}
+		truncated := byteCapped || end < naturalEnd
+
+		lines := allLines[start-1 : end]
+		eofReached := !truncated && end == totalLines
+		rangeDescription := fmt.Sprintf("lines %d–%d", start, end)
+		if eofReached {
+			if start == 1 {
+				rangeDescription = fmt.Sprintf("all %d lines", totalLines)
+			} else {
+				rangeDescription = fmt.Sprintf("lines %d–%d of %d", start, end, totalLines)
+			}
+		}
+
+		showing := "Showing: " + rangeDescription
+		if truncated {
+			showing += " (truncated)"
+		}
+		header := []string{
+			"File: " + in.Path,
+			showing,
+			fmt.Sprintf("Size: %d bytes", sizeBytes),
+		}
+		if truncated {
+			header = append(header, fmt.Sprintf("Output truncated at line %d. Resume with startLine=%d.", end, end+1))
+		}
+		header = append(header, "")
+
+		width := len(fmt.Sprintf("%d", end))
+		numbered := make([]string, len(lines))
+		for i, line := range lines {
+			numbered[i] = fmt.Sprintf("%*d: %s", width, start+i, line)
+		}
+
+		return textResult(strings.Join(header, "\n") + strings.Join(numbered, "\n")), nil
+	})
 
 type writeFileInput struct {
 	Path    string `json:"path" jsonschema:"required,description=Absolute file path to write"`
@@ -231,7 +278,7 @@ var Grep = NewTool("grep", "Search file contents by pattern. Use for finding def
 					if contextLines <= 0 {
 						contextLines = 2
 					}
-					items, _, err := inst.Grep(in.Pattern, mode, in.CaseInsensitive, contextLines, max)
+					items, filesSearched, err := inst.Grep(in.Pattern, mode, in.CaseInsensitive, contextLines, max)
 					if err == nil {
 						matches := make([]grepMatch, 0, len(items))
 						for _, m := range items {
@@ -239,7 +286,7 @@ var Grep = NewTool("grep", "Search file contents by pattern. Use for finding def
 								Path: m.RelPath, Line: int(m.LineNumber), Text: m.LineContent,
 							})
 						}
-						return matches, nil
+						return textResult(formatGrepMatches(matches, filesSearched, max, in.Pattern, root)), nil
 					}
 				}
 			}
@@ -257,6 +304,7 @@ var Grep = NewTool("grep", "Search file contents by pattern. Use for finding def
 			}
 		}
 		matches := make([]grepMatch, 0)
+		filesSearched := 0
 		_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				return nil
@@ -280,6 +328,7 @@ var Grep = NewTool("grep", "Search file contents by pattern. Use for finding def
 				if rerr != nil || strings.ContainsRune(string(data[:min(len(data), 4096)]), 0) {
 					return nil // binary or unreadable
 				}
+				filesSearched++
 				for i, line := range strings.Split(string(data), "\n") {
 					if re.MatchString(line) {
 						matches = append(matches, grepMatch{Path: path, Line: i + 1, Text: line})
@@ -291,8 +340,37 @@ var Grep = NewTool("grep", "Search file contents by pattern. Use for finding def
 			}
 			return nil
 		})
-		return matches, nil
+		return textResult(formatGrepMatches(matches, filesSearched, max, in.Pattern, root)), nil
 	})
+
+// formatGrepMatches mirrors the TS grepTool's result text: a header line,
+// then matches grouped by file under "── path ──" with "→ line: text" rows.
+func formatGrepMatches(matches []grepMatch, filesSearched, max int, pattern, searchPath string) string {
+	if len(matches) == 0 {
+		return fmt.Sprintf("No matches found for %q in %s\n(searched %d files)", pattern, searchPath, filesSearched)
+	}
+	truncated := len(matches) >= max
+	lines := make([]string, 0, len(matches)+8)
+	header := fmt.Sprintf("Found %d match(es) across files", len(matches))
+	if truncated {
+		header += fmt.Sprintf(" (showing first %d)", max)
+	}
+	header += fmt.Sprintf("  [searched %d files]\n", filesSearched)
+	lines = append(lines, header)
+
+	currentFile := ""
+	for _, m := range matches {
+		if m.Path != currentFile {
+			if currentFile != "" {
+				lines = append(lines, "")
+			}
+			lines = append(lines, fmt.Sprintf("── %s ──", m.Path))
+			currentFile = m.Path
+		}
+		lines = append(lines, fmt.Sprintf("→ %4d: %s", m.Line, m.Text))
+	}
+	return strings.Join(lines, "\n")
+}
 
 // globToRegex converts a simple *.ext glob into a name regex.
 func globToRegex(glob string) string {
