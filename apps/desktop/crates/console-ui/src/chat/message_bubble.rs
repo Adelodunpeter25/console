@@ -347,12 +347,15 @@ impl RenderOnce for UserMessageBubble {
                                                     .id(ElementId::Name(
                                                         format!("msg-text-{seg_idx}").into(),
                                                     ))
+                                                    .flex_1()
+                                                    .min_w(px(48.0))
                                                     .child(text)
                                                     .into_any_element(),
                                                 MessageSegment::FilePill { path, label } => div()
                                                     .id(ElementId::Name(
                                                         format!("msg-pill-{seg_idx}").into(),
                                                     ))
+                                                    .flex_none()
                                                     .child(file_mention_chip(&path, label, theme))
                                                     .into_any_element(),
                                             },
