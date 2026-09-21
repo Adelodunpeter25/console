@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
 )
@@ -80,7 +81,7 @@ func (s *Service) GetUsage(ctx context.Context, provider string) (*Report, error
 	if !IsValidProvider(provider) {
 		return nil, &invalidProviderError{provider}
 	}
-	if provider != "codex" && provider != "claude" {
+	if provider != "codex" && provider != "claude" && provider != "antigravity" {
 		return nil, nil
 	}
 	s.mu.Lock()
@@ -102,9 +103,12 @@ func (s *Service) GetUsage(ctx context.Context, provider string) (*Report, error
 	s.inflight[provider] = c
 	s.mu.Unlock()
 
-	if provider == "claude" {
+	switch provider {
+	case "claude":
 		c.report = s.fetchClaude(ctx)
-	} else {
+	case "antigravity":
+		c.report = s.fetchAntigravity(ctx)
+	default:
 		c.report = s.fetchCodex(ctx)
 	}
 	s.mu.Lock()
@@ -150,6 +154,25 @@ func (s *Service) fetchClaude(ctx context.Context) *Report {
 	timeoutCtx, cancel := context.WithTimeout(ctx, upstreamTimeout)
 	defer cancel()
 	report, _ := FetchClaudeUsage(timeoutCtx, nil, base, cred.AccessToken, cred.Email, cred.ExpiresAtMs)
+	return report
+}
+
+func (s *Service) fetchAntigravity(ctx context.Context) *Report {
+	cred, err := antigravity.LoadCredential()
+	if err != nil {
+		return nil
+	}
+	cred, err = antigravity.RefreshIfNeeded(nil, cred)
+	if err != nil {
+		return nil
+	}
+	base := ""
+	if s.BaseURL != "" {
+		base = s.BaseURL
+	}
+	timeoutCtx, cancel := context.WithTimeout(ctx, upstreamTimeout)
+	defer cancel()
+	report, _ := FetchAntigravityUsage(timeoutCtx, nil, base, cred.AccessToken, cred.ProjectID, "", cred.Email, cred.ExpiresAtMs)
 	return report
 }
 

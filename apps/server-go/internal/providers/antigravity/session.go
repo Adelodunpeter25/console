@@ -93,3 +93,26 @@ func UpdateLastExecutionID(state *SessionState, responseID string) {
 	state.LastExecutionID = responseID
 	state.mu.Unlock()
 }
+
+// stateStore holds one SessionState per conversation for the life of the
+// process, so requestId/stepIndex/sessionId stay stable across every run
+// in a conversation — not just the turns within one run — mirroring the TS
+// factory (createAntigravityStreamFn is called once per Agent instance,
+// which persists for the whole conversation).
+var (
+	stateStoreMu sync.Mutex
+	stateStore   = map[string]*SessionState{}
+)
+
+// StateForConversation returns the persistent session state for a
+// conversation id, creating it on first use.
+func StateForConversation(conversationID string) *SessionState {
+	stateStoreMu.Lock()
+	defer stateStoreMu.Unlock()
+	if s, ok := stateStore[conversationID]; ok {
+		return s
+	}
+	s := NewSessionState()
+	stateStore[conversationID] = s
+	return s
+}

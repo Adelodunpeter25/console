@@ -49,13 +49,16 @@ func shouldInjectSystemInstruction(modelID string) bool {
 
 // Provider streams Antigravity CCA turns. HTTPClient and BaseURL are
 // overridable for tests; CredentialLoader defaults to OAuth file/env.
-// SessionState is created once per Provider instance so requestId/stepIndex
-// stay stable across turns in the same run, mirroring createAntigravityStreamFn.
+// Session state (requestId/stepIndex/sessionId) is looked up by
+// TurnRequest.ConversationID from the process-wide store, so it stays
+// stable across every run in a conversation — not just this Provider
+// instance, which Lookup() recreates per run — mirroring
+// createAntigravityStreamFn's once-per-Agent-instance lifetime.
 type Provider struct {
 	BaseURL          string
 	HTTPClient       *http.Client
 	CredentialLoader func() (ParsedCredential, error)
-	sessionState     *SessionState
+	fallbackSession  *SessionState
 }
 
 func (p *Provider) baseURL() string {
@@ -83,11 +86,19 @@ func (p *Provider) loadCredential() (ParsedCredential, error) {
 	return RefreshIfNeeded(nil, cred)
 }
 
-func (p *Provider) session() *SessionState {
-	if p.sessionState == nil {
-		p.sessionState = NewSessionState()
+// session resolves the conversation's persistent state. conversationID is
+// normally always set (run/turns.go stamps it as "sessionId:provider:model"),
+// but falls back to a Provider-local state for callers that never set it
+// (e.g. in-memory subagent runs) so requestId/stepIndex still advance
+// consistently within that call.
+func (p *Provider) session(conversationID string) *SessionState {
+	if conversationID == "" {
+		if p.fallbackSession == nil {
+			p.fallbackSession = NewSessionState()
+		}
+		return p.fallbackSession
 	}
-	return p.sessionState
+	return StateForConversation(conversationID)
 }
 
 // buildSystemInstruction mirrors buildSystemInstruction.
@@ -233,7 +244,7 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 	requireUserTerminator := IsClaudeModel(req.Model)
 	contents := ConvertMessages(req.Messages, ConvertMessagesOptions{RequireUserTerminator: requireUserTerminator})
 	toolDefs := ConvertTools(req.Tools)
-	body := buildRequestBody(cred.ProjectID, req.Model, req.SystemPrompt, contents, toolDefs, p.session(), req.ThinkingLevel)
+	body := buildRequestBody(cred.ProjectID, req.Model, req.SystemPrompt, contents, toolDefs, p.session(req.ConversationID), req.ThinkingLevel)
 
 	rawBody, err := json.Marshal(body)
 	if err != nil {
@@ -331,7 +342,7 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 		return nil
 	})
 
-	UpdateLastExecutionID(p.session(), lastResponseID)
+	UpdateLastExecutionID(p.session(req.ConversationID), lastResponseID)
 
 	usage := NormalizeUsage(lastUsage, req.CacheRetention)
 	if usage == nil {
