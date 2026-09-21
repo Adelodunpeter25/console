@@ -92,8 +92,12 @@ func TestQueueDrainsNextTurn(t *testing.T) {
 	var texts []string
 	for f := range subCh {
 		switch f.Event.Kind {
-		case loop.EventText:
-			texts = append(texts, f.Event.Text)
+		case loop.EventModelStreamPart:
+			if part, ok := f.Event.Part.(map[string]any); ok {
+				if text, ok := part["text"].(string); ok {
+					texts = append(texts, text)
+				}
+			}
 		case loop.EventQueueUpdated:
 			texts = append(texts, "<queueUpdated>")
 		}
@@ -161,8 +165,12 @@ func TestSteerAbortsAndDrains(t *testing.T) {
 	}
 	var texts []string
 	for f := range subCh {
-		if f.Event.Kind == loop.EventText {
-			texts = append(texts, f.Event.Text)
+		if f.Event.Kind == loop.EventModelStreamPart {
+			if part, ok := f.Event.Part.(map[string]any); ok {
+				if text, ok := part["text"].(string); ok {
+					texts = append(texts, text)
+				}
+			}
 		}
 	}
 	joined := ""

@@ -33,6 +33,8 @@ type SubagentStartInfo struct {
 	Name           string `json:"name"`
 	Role           string `json:"role"`
 	Prompt         string `json:"prompt"`
+	// MaxTurns mirrors the TS subagent default (10); the desktop requires it.
+	MaxTurns int `json:"maxTurns"`
 }
 
 // SubagentActivityInfo tracks one nested tool call.
@@ -110,7 +112,7 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 	}
 	emit(EventSubagentStart, SubagentStartInfo{
 		SubagentID: subagentID, ParentToolCall: parentCallID,
-		Name: name, Role: role, Prompt: prompt,
+		Name: name, Role: role, Prompt: prompt, MaxTurns: 10,
 	})
 
 	nested := make([]tools.Tool, 0, len(c.Tools))

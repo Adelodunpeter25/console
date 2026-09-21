@@ -3,11 +3,13 @@
 package routes
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 )
@@ -244,7 +246,9 @@ func parseAnswer(raw any) (tools.AskAnswer, bool) {
 	}
 }
 
-// pumpHub streams live frames until the hub settles, then a terminal frame.
+// pumpHub streams live frames until the hub settles, then closes silently:
+// the terminal sessionEnd hub event (mirroring the TS finally) is the
+// desktop's run-completion signal, so no extra terminal frame is needed.
 // Send errors (client gone) end the pump; the server-side run continues.
 func pumpHub(sse *sseStream, hub *run.Hub, since *int64) {
 	id, ch, replay := hub.Subscribe(since)
@@ -253,11 +257,6 @@ func pumpHub(sse *sseStream, hub *run.Hub, since *int64) {
 		return
 	}
 	defer hub.Unsubscribe(id)
-	if since != nil {
-		if err := sse.Send("streamReset", mustJSON(fiber.Map{"type": "streamReset"})); err != nil {
-			return
-		}
-	}
 	for _, f := range replay {
 		if err := sendFrame(sse, f); err != nil {
 			return
@@ -268,15 +267,93 @@ func pumpHub(sse *sseStream, hub *run.Hub, since *int64) {
 			return
 		}
 	}
-	if hub.Outcome == run.OutcomeAborted {
-		_ = sse.Send("aborted", mustJSON(fiber.Map{"type": "aborted", "reason": "Run was aborted."}))
-	} else {
-		_ = sse.Send("done", mustJSON(fiber.Map{"type": "done"}))
+}
+
+// sendFrame translates one hub event into the TS/desktop wire shape:
+// {"type": <event>, ...payload}. Internal-only kinds (token accounting,
+// raw provider deltas) are dropped; the desktop cannot parse them.
+func sendFrame(sse *sseStream, f run.Frame) error {
+	name, body, drop := wireFrame(f.Event)
+	if drop {
+		return nil
+	}
+	return sse.Send(name, mustJSON(body))
+}
+
+// wireFrame maps a hub event to its SSE event name and JSON body.
+func wireFrame(e loop.Event) (string, any, bool) {
+	switch e.Kind {
+	case loop.EventSessionStart:
+		return "sessionStart", fiber.Map{"type": "sessionStart"}, false
+	case loop.EventTurnStart:
+		return "turnStart", fiber.Map{"type": "turnStart", "prompt": e.Text}, false
+	case loop.EventModelStreamStart:
+		return "modelStreamStart", fiber.Map{"type": "modelStreamStart", "turnId": e.Text}, false
+	case loop.EventModelStreamPart:
+		return "modelStreamPart", fiber.Map{"type": "modelStreamPart", "part": e.Part}, false
+	case loop.EventModelStreamEnd:
+		return "modelStreamEnd", fiber.Map{"type": "modelStreamEnd", "turnId": e.Text, "turn": e.Message}, false
+	case loop.EventToolExecutionStart:
+		return "toolExecutionStart", fiber.Map{"type": "toolExecutionStart", "calls": nonNilCalls(e.Calls)}, false
+	case loop.EventToolExecutionResult:
+		return "toolExecutionResult", fiber.Map{"type": "toolExecutionResult", "result": e.Result}, false
+	case loop.EventToolExecutionEnd:
+		return "toolExecutionEnd", fiber.Map{"type": "toolExecutionEnd", "results": nonNilResults(e.Results)}, false
+	case loop.EventTurnEnd:
+		return "turnEnd", fiber.Map{"type": "turnEnd", "turnId": e.Text}, false
+	case loop.EventSessionEnd:
+		return "sessionEnd", fiber.Map{"type": "sessionEnd"}, false
+	case loop.EventSessionTitleUpdated:
+		return "sessionTitleUpdated", fiber.Map{"type": "sessionTitleUpdated", "title": e.Title}, false
+	case loop.EventQueueUpdated:
+		return "queueUpdated", fiber.Map{"type": "queueUpdated", "queuedPrompt": e.Queued}, false
+	case loop.EventAskQuestion:
+		return "askQuestion", fiber.Map{"type": "askQuestion", "request": e.Ask}, false
+	case loop.EventPermissionRequest:
+		return "permissionRequest", fiber.Map{"type": "permissionRequest", "request": e.Permission}, false
+	case loop.EventSubagentStart, loop.EventSubagentActivity, loop.EventSubagentEnd:
+		body, ok := subagentWire(e)
+		if !ok {
+			return "", nil, true
+		}
+		return string(e.Kind), body, false
+	case loop.EventError:
+		return "error", fiber.Map{"type": "error", "error": fiber.Map{"message": e.Text}}, false
+	default:
+		// Internal provider kinds (text/thinking/toolCall/usage/toolResult/
+		// turnDone) never reach subscribers; drop defensively.
+		return "", nil, true
 	}
 }
 
-func sendFrame(sse *sseStream, f run.Frame) error {
-	return sse.Send(string(f.Event.Kind), mustJSON(f.Event))
+// subagentWire flattens a subagent lifecycle payload under its TS type tag.
+func subagentWire(e loop.Event) (any, bool) {
+	raw, err := json.Marshal(e.Subagent)
+	if err != nil {
+		return nil, false
+	}
+	var body map[string]any
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return nil, false
+	}
+	body["type"] = string(e.Kind)
+	return body, true
+}
+
+// nonNilCalls/nonNilResults keep array fields as [] (never null) for the
+// desktop lists.
+func nonNilCalls(s []tools.ToolCall) []tools.ToolCall {
+	if s == nil {
+		return []tools.ToolCall{}
+	}
+	return s
+}
+
+func nonNilResults(s []tools.ToolResult) []tools.ToolResult {
+	if s == nil {
+		return []tools.ToolResult{}
+	}
+	return s
 }
 
 func parseSince(raw string) (int64, error) {

@@ -32,12 +32,16 @@ func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, f
 
 	current, currentCtx := first, ctx
 	currentProvider, currentProviderID := firstProvider, firstProviderID
+	hub.Broadcast(loop.Event{Kind: loop.EventSessionStart})
 	var runErr error
 	for {
 		turnErr := s.runOneTurn(currentCtx, sessionID, current, hub, &currentProvider, &currentProviderID)
 		runErr = turnErr
 		next, hasNext := s.nextTurn(currentCtx, turnErr, sessionID, hub)
 		if !hasNext {
+			// Terminal frame mirrors the TS finally: sessionEnd always
+			// closes the wire stream, on done and on abort alike.
+			hub.Broadcast(loop.Event{Kind: loop.EventSessionEnd})
 			if currentCtx.Err() != nil {
 				hub.Close(OutcomeAborted)
 			} else {
@@ -217,6 +221,8 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	agent.ThinkingLevel = dto.Thinking
 	agent.Compaction = s.compactionHooks(sessionID, model, prompt.SystemPrompt, registry.Definitions())
 
+	hub.Broadcast(loop.Event{Kind: loop.EventTurnStart, Text: dto.Text})
+
 	// First user turn on a placeholder title: generate one in the
 	// background (TS session-title flow). Only applied if still generic.
 	if titles.IsGenericTitle(header.Title) && len(history) == 0 {
@@ -228,6 +234,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
 		return err
 	}
+	// Translate the flat provider stream into the TS/desktop wire
+	// vocabulary: model-stream triplets bracketed by turn ids, tool phases
+	// bracketed by execution start/end. Raw provider kinds (text/thinking/
+	// toolCall/usage/toolResult/turnDone) never reach subscribers.
+	turner := newTurnTranslator(hub)
 	for {
 		event, err, ok := events.Next()
 		if !ok {
@@ -238,7 +249,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 			}
 			return nil
 		}
-		
+
 		// Track file changes on tool execution results
 		if event.Kind == loop.EventToolResult && event.Result != nil {
 			turnIndex := len(history) // Approximate turn index from history length
@@ -248,8 +259,81 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 			}
 			_ = ExtractAndRecordFileChange(s.sessions, sessionID, event.Result.ToolName, args, event.Result.IsError, turnIndex)
 		}
-		
-		hub.Broadcast(event)
+
+		turner.translate(event)
 		s.notifyEvent(ctx, sessionID, event)
+	}
+}
+
+// turnTranslator converts one agent run's flat provider events into the
+// TS wire structure: model-stream parts pass through (turn triplets arrive
+// bracketed from the loop with canonical snapshots), tool phases are
+// bracketed by execution start/end around results.
+type turnTranslator struct {
+	hub      *Hub
+	calls    []tools.ToolCall
+	results  []tools.ToolResult
+	toolOpen bool
+}
+
+func newTurnTranslator(hub *Hub) *turnTranslator {
+	return &turnTranslator{hub: hub}
+}
+
+func (t *turnTranslator) flushTools() {
+	if t.toolOpen {
+		t.hub.Broadcast(loop.Event{Kind: loop.EventToolExecutionEnd, Results: t.results})
+		t.calls = nil
+		t.results = nil
+		t.toolOpen = false
+	}
+}
+
+func (t *turnTranslator) translate(event loop.Event) {
+	switch event.Kind {
+	case loop.EventText:
+		t.hub.Broadcast(loop.Event{
+			Kind: loop.EventModelStreamPart,
+			Part: map[string]any{"text": event.Text},
+		})
+	case loop.EventThinking:
+		t.hub.Broadcast(loop.Event{
+			Kind: loop.EventModelStreamPart,
+			Part: map[string]any{"thinking": event.Text},
+		})
+	case loop.EventToolCall:
+		if event.Call == nil {
+			return
+		}
+		t.hub.Broadcast(loop.Event{
+			Kind: loop.EventModelStreamPart,
+			Part: map[string]any{"toolCall": map[string]any{
+				"id": event.Call.ID, "name": event.Call.Name,
+			}},
+		})
+		t.calls = append(t.calls, *event.Call)
+	case loop.EventToolResult:
+		if event.Result == nil {
+			return
+		}
+		if !t.toolOpen {
+			t.hub.Broadcast(loop.Event{Kind: loop.EventToolExecutionStart, Calls: t.calls})
+			t.toolOpen = true
+		}
+		t.hub.Broadcast(loop.Event{Kind: loop.EventToolExecutionResult, Result: event.Result})
+		t.results = append(t.results, *event.Result)
+	case loop.EventModelStreamEnd, loop.EventTurnEnd:
+		t.flushTools()
+		t.hub.Broadcast(event)
+	case loop.EventModelStreamStart:
+		// A new provider turn closes any dangling tool phase first,
+		// keeping execution-end strictly before the next stream start.
+		t.flushTools()
+		t.hub.Broadcast(event)
+	case loop.EventUsage, loop.EventTurnDone:
+		// Token accounting and the terminal marker stay internal; TS does
+		// not stream them and the desktop cannot parse them.
+	default:
+		t.hub.Broadcast(event)
 	}
 }

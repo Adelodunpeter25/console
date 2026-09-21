@@ -65,6 +65,31 @@ const (
 	EventSubagentStart    EventKind = "subagentStart"
 	EventSubagentActivity EventKind = "subagentActivity"
 	EventSubagentEnd      EventKind = "subagentEnd"
+	// Wire-structure markers. The run service broadcasts these around the
+	// raw provider stream so the SSE layer can emit the TS/desktop event
+	// vocabulary (sessionStart/turnStart/modelStream*/toolExecution*/turnEnd/
+	// sessionEnd) instead of internal-turn kinds.
+	// EventSessionStart opens a run.
+	EventSessionStart EventKind = "sessionStart"
+	// EventTurnStart opens a turn; Text carries the prompt.
+	EventTurnStart EventKind = "turnStart"
+	// EventModelStreamStart opens a model stream; Text carries the turn id.
+	EventModelStreamStart EventKind = "modelStreamStart"
+	// EventModelStreamPart carries one rendered part in Part.
+	EventModelStreamPart EventKind = "modelStreamPart"
+	// EventModelStreamEnd closes a model stream; Text is the turn id,
+	// Message the completed assistant message.
+	EventModelStreamEnd EventKind = "modelStreamEnd"
+	// EventToolExecutionStart opens a tool phase; Calls holds the calls.
+	EventToolExecutionStart EventKind = "toolExecutionStart"
+	// EventToolExecutionResult carries one tool result.
+	EventToolExecutionResult EventKind = "toolExecutionResult"
+	// EventToolExecutionEnd closes a tool phase; Results holds the results.
+	EventToolExecutionEnd EventKind = "toolExecutionEnd"
+	// EventTurnEnd closes a turn; Text carries the turn id.
+	EventTurnEnd EventKind = "turnEnd"
+	// EventSessionEnd closes a run.
+	EventSessionEnd EventKind = "sessionEnd"
 )
 
 type Event struct {
@@ -80,6 +105,13 @@ type Event struct {
 	Queued     *types.QueuedPrompt       `json:"queuedPrompt,omitempty"`
 	Title      string                    `json:"title,omitempty"`
 	Subagent   any                       `json:"subagent,omitempty"`
+	// Part carries a rendered model-stream part ({text}|{thinking}|{toolCall})
+	// for EventModelStreamPart. Calls/Results accumulate a tool phase for
+	// EventToolExecutionStart/End. All three are consumed by the SSE layer
+	// when building wire frames and never serialized as-is.
+	Part    any                `json:"-"`
+	Calls   []tools.ToolCall   `json:"-"`
+	Results []tools.ToolResult `json:"-"`
 }
 
 // streamOf is a thin alias over the generic stream for loop events.
@@ -212,6 +244,11 @@ func (a *Agent) turn(ctx context.Context, sessionID string, history []any, tools
 // success.
 func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, toolsList []tools.Definition, events *stream.Stream[Event]) (AssistantMessage, error) {
 	assistant := AssistantMessage{Role: RoleAssistant, ID: newMessageID(), Content: []any{}}
+	// Bracket every provider turn with stream markers (TS streamOneTurn
+	// parity) so subscribers get per-turn triplets with the canonical
+	// assistant snapshot — the desktop replaces streamed content with it.
+	turnID := newTurnID()
+	events.Push(Event{Kind: EventModelStreamStart, Text: turnID})
 	turnStream := stream.New[Event]()
 	done := make(chan error, 1)
 	go func() {
@@ -291,6 +328,8 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 	}); err != nil {
 		return assistant, err
 	}
+	events.Push(Event{Kind: EventModelStreamEnd, Text: turnID, Message: assistant})
+	events.Push(Event{Kind: EventTurnEnd, Text: turnID})
 	return assistant, nil
 }
 
