@@ -54,6 +54,7 @@ type Service struct {
 	decisions *Decisions
 	notify    *services.NotificationService
 	memories  *memory.Registry
+	bashJobs  *services.BashJobManager
 	// Lookup resolves a provider id to a backend (overridable in tests).
 	Lookup func(id string) (loop.Provider, error)
 }
@@ -86,6 +87,21 @@ func (s *Service) memoryRegistry() *memory.Registry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.memories
+}
+
+// SetBashJobs attaches the background-job manager backing the per-run
+// bash/bashJob tools (nil-safe when unset: background mode reports
+// unavailable, matching the unbound DefaultTools() instances).
+func (s *Service) SetBashJobs(j *services.BashJobManager) {
+	s.mu.Lock()
+	s.bashJobs = j
+	s.mu.Unlock()
+}
+
+func (s *Service) bashJobManager() *services.BashJobManager {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.bashJobs
 }
 
 func (s *Service) notifier() *services.NotificationService {

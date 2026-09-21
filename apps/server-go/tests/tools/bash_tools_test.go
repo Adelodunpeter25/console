@@ -63,7 +63,7 @@ func TestBashBackgroundDisabledWithoutManager(t *testing.T) {
 }
 
 func TestBashJobLifecycle(t *testing.T) {
-	jobs := services.NewBashJobManager()
+	jobs := services.NewBashJobManager(nil)
 	bash := tools.NewBashTool(jobs, "sess1")
 	bashJob := tools.NewBashJobTool(jobs, "sess1")
 
@@ -108,7 +108,7 @@ func TestBashJobLifecycle(t *testing.T) {
 }
 
 func TestBashJobKill(t *testing.T) {
-	jobs := services.NewBashJobManager()
+	jobs := services.NewBashJobManager(nil)
 	bash := tools.NewBashTool(jobs, "")
 	bashJob := tools.NewBashJobTool(jobs, "")
 
@@ -131,7 +131,7 @@ func TestBashJobKill(t *testing.T) {
 }
 
 func TestBashJobMissingJobID(t *testing.T) {
-	jobs := services.NewBashJobManager()
+	jobs := services.NewBashJobManager(nil)
 	bashJob := tools.NewBashJobTool(jobs, "")
 	for _, action := range []string{"status", "output", "wait", "kill"} {
 		args, _ := json.Marshal(map[string]any{"action": action})
@@ -142,7 +142,7 @@ func TestBashJobMissingJobID(t *testing.T) {
 }
 
 func TestBashJobUnknownAction(t *testing.T) {
-	jobs := services.NewBashJobManager()
+	jobs := services.NewBashJobManager(nil)
 	bashJob := tools.NewBashJobTool(jobs, "")
 	args, _ := json.Marshal(map[string]any{"action": "bogus"})
 	if _, err := bashJob.Execute(context.Background(), args); err == nil {

@@ -194,6 +194,10 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 			toolList = append(toolList, tools.NewAskTool(askHandler))
 		case "askMany":
 			toolList = append(toolList, tools.NewAskManyTool(askHandler))
+		case "bash":
+			toolList = append(toolList, tools.NewBashTool(s.bashJobManager(), sessionID))
+		case "bashJob":
+			toolList = append(toolList, tools.NewBashJobTool(s.bashJobManager(), sessionID))
 		default:
 			toolList = append(toolList, t)
 		}

@@ -41,18 +41,18 @@ const maxConcurrentTerminals = 20
 
 // Shell allowlist mirroring Bun's ALLOWED_SHELLS.
 var allowedShells = map[string]struct{}{
-	"/bin/bash":          {},
-	"/bin/zsh":           {},
-	"/bin/sh":            {},
-	"/usr/bin/bash":      {},
-	"/usr/bin/zsh":       {},
+	"/bin/bash":           {},
+	"/bin/zsh":            {},
+	"/bin/sh":             {},
+	"/usr/bin/bash":       {},
+	"/usr/bin/zsh":        {},
 	"/usr/local/bin/bash": {},
-	"/usr/local/bin/zsh": {},
-	"/bin/fish":          {},
-	"/usr/bin/fish":      {},
-	"powershell.exe":     {},
-	"pwsh.exe":           {},
-	"cmd.exe":            {},
+	"/usr/local/bin/zsh":  {},
+	"/bin/fish":           {},
+	"/usr/bin/fish":       {},
+	"powershell.exe":      {},
+	"pwsh.exe":            {},
+	"cmd.exe":             {},
 }
 
 func isAllowedShell(shell string) bool {
@@ -86,9 +86,10 @@ func baseEnv() []string {
 }
 
 type PtySession struct {
-	ID  string
-	cmd *exec.Cmd
-	ptmx *os.File
+	ID        string
+	ProjectID string
+	cmd       *exec.Cmd
+	ptmx      *os.File
 
 	manager *PtyManager
 
@@ -103,15 +104,15 @@ type PtySession struct {
 	writeMu sync.Mutex
 
 	// Output coalescing + backpressure state, all guarded by outputMu.
-	outputMu      sync.Mutex
-	outputQueue   [][]byte
-	outputBytes   int
-	flushTimer    *time.Timer
-	paused        bool
-	pausedBuffer  [][]byte
-	pausedBytes   int
-	pending       [][]byte
-	pendingCount  int
+	outputMu     sync.Mutex
+	outputQueue  [][]byte
+	outputBytes  int
+	flushTimer   *time.Timer
+	paused       bool
+	pausedBuffer [][]byte
+	pausedBytes  int
+	pending      [][]byte
+	pendingCount int
 }
 
 // SetCallbacks attaches the WS pump and flushes early output that arrived
@@ -347,10 +348,23 @@ type PtyManager struct {
 	mu         sync.Mutex
 	sessions   map[string]*PtySession
 	spawnTimes []int64
+
+	// ports and projectByDir back the same live dev-server detection as
+	// the TS pty.manager.ts: every raw PTY read is scanned for
+	// localhost:PORT candidates (mirrors portRegistry.observeOutput), and
+	// the session's owner entry is cleaned up on exit. Both are optional —
+	// a nil ports registry disables detection entirely (e.g. tests).
+	ports        *PortRegistry
+	projectByDir func(cwd string) string
 }
 
-func NewPtyManager() *PtyManager {
-	return &PtyManager{sessions: make(map[string]*PtySession)}
+// NewPtyManager wires port-forward auto-detection: ports may be nil to
+// disable it (matching a manager with no registry attached). projectByDir
+// resolves a spawn's cwd to a project id for scoping detected ports,
+// mirroring pty.manager.ts's getSharedSessionStorage().getProjectByDir(cwd)
+// lookup; nil means every session is unscoped (empty project id).
+func NewPtyManager(ports *PortRegistry, projectByDir func(cwd string) string) *PtyManager {
+	return &PtyManager{sessions: make(map[string]*PtySession), ports: ports, projectByDir: projectByDir}
 }
 
 // Spawn validates params and starts the shell under a PTY.
@@ -420,7 +434,11 @@ func (m *PtyManager) Spawn(params types.TerminalSpawnParams) (*PtySession, error
 	if err != nil {
 		return nil, err
 	}
-	session := &PtySession{ID: id, cmd: cmd, ptmx: ptmx, manager: m}
+	projectID := ""
+	if m.projectByDir != nil {
+		projectID = m.projectByDir(params.Cwd)
+	}
+	session := &PtySession{ID: id, ProjectID: projectID, cmd: cmd, ptmx: ptmx, manager: m}
 
 	// Pump PTY output through the coalescing queue.
 	go func() {
@@ -428,6 +446,9 @@ func (m *PtyManager) Spawn(params types.TerminalSpawnParams) (*PtySession, error
 		for {
 			n, err := ptmx.Read(buf)
 			if n > 0 {
+				if m.ports != nil {
+					m.ports.ObserveOutput(PortOwner{Kind: "terminal", ID: session.ID}, string(buf[:n]), session.ProjectID)
+				}
 				session.enqueueOutput(buf[:n])
 			}
 			if err != nil {
@@ -444,9 +465,14 @@ func (m *PtyManager) Spawn(params types.TerminalSpawnParams) (*PtySession, error
 		}
 		// Natural exit: remove from the registry so entries don't leak
 		// under churn (explicit Kill also deletes; this covers the
-		// process-exits-first path).
+		// process-exits-first path). Covers both natural exit and an
+		// explicit Kill() — the latter force-kills the process, which
+		// unblocks ptmx.Read/cmd.Wait and runs this same path.
 		if session.manager != nil {
 			session.manager.remove(session.ID)
+			if session.manager.ports != nil {
+				session.manager.ports.RemoveOwner(PortOwner{Kind: "terminal", ID: session.ID})
+			}
 		}
 		session.Kill()
 		session.outputMu.Lock()

@@ -49,7 +49,14 @@ func New(cfg Config) (*fiber.App, *run.Service) {
 	registerSettingsRoutes(app, services.NewSettingsService())
 	registerFsRoutes(app, services.NewFsService(), cfg.Watch)
 	registerGitRoutes(app, services.NewGitService(), cfg.Watch)
-	registerTerminalRoutes(app, services.NewPtyManager())
+	projects := services.NewProjectService(cfg.DB)
+	registerTerminalRoutes(app, services.NewPtyManager(cfg.Ports, func(cwd string) string {
+		project, err := projects.GetByDir(cwd)
+		if err != nil {
+			return ""
+		}
+		return project.ID
+	}))
 	registerScriptRoutes(app, services.NewProjectScriptsService(services.NewProjectService(cfg.DB)))
 	registerProjectRoutes(app, services.NewProjectService(cfg.DB))
 	registerUsageRoutes(app, usage.NewService())
@@ -58,6 +65,7 @@ func New(cfg Config) (*fiber.App, *run.Service) {
 	runSvc := run.NewService(services.NewSessionService(cfg.DB))
 	runSvc.SetNotifications(cfg.Notifications)
 	runSvc.SetMemories(memory.NewRegistry(""))
+	runSvc.SetBashJobs(services.NewBashJobManager(cfg.Ports))
 	registerSessionRoutes(app, services.NewSessionService(cfg.DB), runSvc)
 	fffManager := fff.NewManager()
 	services.SetFffManager(fffManager)

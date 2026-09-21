@@ -77,10 +77,16 @@ type bashJobRecord struct {
 type BashJobManager struct {
 	mu   sync.Mutex
 	jobs map[string]*bashJobRecord
+
+	// ports backs the same live dev-server detection as pty.manager.ts:
+	// job output is scanned for localhost:PORT candidates, and the job's
+	// owner entry is cleaned up once it settles. Nil disables detection
+	// (e.g. tests).
+	ports *PortRegistry
 }
 
-func NewBashJobManager() *BashJobManager {
-	return &BashJobManager{jobs: make(map[string]*bashJobRecord)}
+func NewBashJobManager(ports *PortRegistry) *BashJobManager {
+	return &BashJobManager{jobs: make(map[string]*bashJobRecord), ports: ports}
 }
 
 func (m *BashJobManager) runningCount() int {
@@ -204,6 +210,9 @@ func (m *BashJobManager) append(rec *bashJobRecord, stream, text string) {
 	if text == "" {
 		return
 	}
+	if m.ports != nil {
+		m.ports.ObserveOutput(PortOwner{Kind: "job", ID: rec.JobID}, text, "")
+	}
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
 	if stream == "stdout" {
@@ -264,6 +273,9 @@ func (m *BashJobManager) maybeFinish(rec *bashJobRecord) {
 		rec.Status = BashJobFailed
 	}
 	rec.mu.Unlock()
+	if m.ports != nil {
+		m.ports.RemoveOwner(PortOwner{Kind: "job", ID: rec.JobID})
+	}
 	m.scheduleRetention(rec)
 	m.notify(rec)
 }
@@ -280,6 +292,9 @@ func (m *BashJobManager) expire(rec *bashJobRecord) {
 	pid := rec.cmd.Process.Pid
 	rec.mu.Unlock()
 	safeKillGroup(pid)
+	if m.ports != nil {
+		m.ports.RemoveOwner(PortOwner{Kind: "job", ID: rec.JobID})
+	}
 	m.scheduleRetention(rec)
 	m.notify(rec)
 }
@@ -407,6 +422,9 @@ func (m *BashJobManager) Kill(jobID, ownerSessionID string) (BashJobSnapshot, er
 	rec.mu.Unlock()
 
 	safeKillGroup(pid)
+	if m.ports != nil {
+		m.ports.RemoveOwner(PortOwner{Kind: "job", ID: rec.JobID})
+	}
 	m.scheduleRetention(rec)
 	m.notify(rec)
 	return rec.snapshot(), nil
@@ -438,9 +456,13 @@ func (m *BashJobManager) KillAll() {
 		rec.mu.Lock()
 		if rec.Status == BashJobRunning {
 			pid := rec.cmd.Process.Pid
+			jobID := rec.JobID
 			rec.Status = BashJobKilled
 			rec.mu.Unlock()
 			safeKillGroup(pid)
+			if m.ports != nil {
+				m.ports.RemoveOwner(PortOwner{Kind: "job", ID: jobID})
+			}
 			continue
 		}
 		rec.mu.Unlock()
