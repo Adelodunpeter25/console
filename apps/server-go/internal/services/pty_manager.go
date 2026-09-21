@@ -151,6 +151,16 @@ func (s *PtySession) Write(data []byte) error {
 	return err
 }
 
+// Pid returns the spawned shell's process id (0 when unknown). The desktop
+// requires pid in the `spawned` frame to flip a terminal to Running.
+// cmd is assigned once during Spawn before the session is shared.
+func (s *PtySession) Pid() int {
+	if s.cmd == nil || s.cmd.Process == nil {
+		return 0
+	}
+	return s.cmd.Process.Pid
+}
+
 // Resize updates the PTY window size.
 func (s *PtySession) Resize(cols, rows int) error {
 	if cols < 1 || cols > 500 || rows < 1 || rows > 200 {

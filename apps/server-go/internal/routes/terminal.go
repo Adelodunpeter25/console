@@ -151,7 +151,7 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, p
 		sendJSON(types.TerminalExitMessage{Type: "exit", Code: code})
 	})
 	sendJSON(types.TerminalSpawnedMessage{
-		Type: "spawned", ID: session.ID, Cwd: params.Cwd, Shell: params.Shell,
+		Type: "spawned", ID: session.ID, Pid: session.Pid(), Cwd: params.Cwd, Shell: params.Shell,
 		Label: params.Label, Cols: params.Cols, Rows: params.Rows,
 	})
 

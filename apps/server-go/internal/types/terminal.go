@@ -23,6 +23,7 @@ type TerminalClientMessage struct {
 type TerminalSpawnedMessage struct {
 	Type  string `json:"type"` // "spawned"
 	ID    string `json:"id"`
+	Pid   int    `json:"pid"`
 	Cwd   string `json:"cwd"`
 	Shell string `json:"shell"`
 	Label string `json:"label,omitempty"`
