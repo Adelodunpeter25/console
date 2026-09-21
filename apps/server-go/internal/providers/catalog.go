@@ -33,7 +33,7 @@ func DefaultCodexModels() []types.Model {
 func ListProviders() []types.ProviderEntry {
 	return []types.ProviderEntry{
 		{
-			Name: "codex", DisplayName: "OpenAI Codex",
+			Name: "codex", DisplayName: "Codex",
 			Description: "ChatGPT subscription models through the Codex Responses API",
 			Models:      DefaultCodexModels(), AuthMethod: "oauth",
 		},
