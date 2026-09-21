@@ -41,7 +41,7 @@ desktop-check:
 ## build-server: Compile the multi-call `console` binary (Go CLI + agent server)
 ## (`console start` re-executes itself with CONSOLE_SERVE=1 to BE the daemon)
 build-server:
-	go -C apps/server-go build -o ../../console ./cmd/console
+	go -C apps/server-go build -ldflags="-s -w" -trimpath -o ../../console ./cmd/console
 
 ## build-android: Build the native Android app for release
 build-android:
