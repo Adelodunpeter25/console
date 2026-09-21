@@ -302,15 +302,6 @@ impl ConsoleDesktopApp {
         self.queue_prompt_for_pane(pane_id, prompt, attachments, context_files, cx);
     }
 
-    pub fn submit_prompt(
-        &mut self,
-        prompt: String,
-        attachments: Vec<ImageAttachment>,
-        cx: &mut Context<Self>,
-    ) {
-        self.submit_prompt_with_context(prompt, attachments, Vec::new(), cx);
-    }
-
     pub fn submit_prompt_with_context(
         &mut self,
         prompt: String,
