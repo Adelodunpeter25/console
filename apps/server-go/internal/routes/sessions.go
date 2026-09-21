@@ -64,4 +64,41 @@ func registerSessionRoutes(app *fiber.App, sessions *services.SessionService) {
 		}
 		return c.JSON(fiber.Map{"success": true, "data": todos})
 	})
+
+	// GET /api/sessions/:id/changes — session file changes with optional turn filter.
+	h.Get("/:id/changes", func(c *fiber.Ctx) error {
+		sessionID := c.Params("id")
+		turnIndex := -1 // -1 means all turns
+		if turnStr := c.Query("turnIndex"); turnStr != "" {
+			turnIndex = c.QueryInt("turnIndex", 0)
+		}
+		changes, err := sessions.GetSessionFileChanges(sessionID, turnIndex)
+		if err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(fiber.Map{"success": true, "data": changes})
+	})
+
+	// GET /api/sessions/:id/changes/diff — raw diff text for a specific file change.
+	h.Get("/:id/changes/diff", func(c *fiber.Ctx) error {
+		sessionID := c.Params("id")
+		path := c.Query("path")
+		if path == "" {
+			return fiber.NewError(fiber.StatusBadRequest, "path query parameter is required")
+		}
+		turnIndex := -1
+		if turnStr := c.Query("turnIndex"); turnStr != "" {
+			turnIndex = c.QueryInt("turnIndex", 0)
+		}
+		changes, err := sessions.GetSessionFileChanges(sessionID, turnIndex)
+		if err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+		}
+		for _, change := range changes {
+			if change.Path == path && change.DiffText != nil {
+				return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"diffText": *change.DiffText}})
+			}
+		}
+		return fiber.NewError(fiber.StatusNotFound, "file change not found")
+	})
 }

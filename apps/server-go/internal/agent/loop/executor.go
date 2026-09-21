@@ -35,13 +35,13 @@ func NewExecutor(registry *tools.Registry, mode permissions.Mode, approver Appro
 func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.ToolResult, error) {
 	tool, err := e.registry.Get(call.Name)
 	if err != nil {
-		return e.errResult(call, err), nil
+		return e.errResult(call, err.Error()), nil
 	}
 
 	decision := permissions.Resolve(e.mode, tool.Tier())
 	if decision == permissions.Prompt {
 		if e.approver == nil {
-			return e.errResult(call, tools.NewToolError("Tool '%s' requires approval but no approver is connected (mode %s).", call.Name, e.mode)), nil
+			return e.errResult(call, tools.NewToolError("Tool '%s' requires approval but no approver is connected (mode %s).", call.Name, e.mode).Error()), nil
 		}
 		req := permissions.Request{
 			RequestID:  newRequestID(),
@@ -55,23 +55,40 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 			return tools.ToolResult{}, err
 		}
 		if !ok {
-			return e.errResult(call, tools.NewToolError("User denied permission for tool '%s'.", call.Name)), nil
+			return tools.ToolResult{
+				ToolCallID: call.ID,
+				ToolName:   call.Name,
+				Content:    tools.NewToolError("User denied permission for tool '%s'.", call.Name).Error(),
+				IsError:    true,
+				Args:       call.Arguments,
+			}, nil
 		}
 	} else if decision == permissions.Deny {
-		return e.errResult(call, tools.NewToolError("Tool '%s' is denied in %s mode.", call.Name, e.mode)), nil
+		return tools.ToolResult{
+			ToolCallID: call.ID,
+			ToolName:   call.Name,
+			Content:    tools.NewToolError("Tool '%s' is denied in %s mode.", call.Name, e.mode).Error(),
+			IsError:    true,
+			Args:       call.Arguments,
+		}, nil
 	}
 
 	out, err := executeToolCall(ctx, tool, call)
 	if err != nil {
 		var toolErr *tools.ToolError
 		if asToolError(err, &toolErr) {
-			return e.errResult(call, err), nil
+			return e.errResult(call, err.Error()), nil
 		}
 		// Unknown (non-tool) errors abort the turn.
 		return tools.ToolResult{}, err
 	}
 	slog.Debug("tool executed", "tool", call.Name, "call", call.ID)
-	return tools.ToolResult{ToolCallID: call.ID, ToolName: call.Name, Content: out}, nil
+	return tools.ToolResult{
+		ToolCallID: call.ID,
+		ToolName:   call.Name,
+		Content:    out,
+		Args:       call.Arguments,
+	}, nil
 }
 
 // executeToolCall prefers CallAwareTool.ExecuteCall (full call incl. id)
@@ -83,12 +100,13 @@ func executeToolCall(ctx context.Context, tool tools.Tool, call tools.ToolCall) 
 	return tool.Execute(ctx, call.Arguments)
 }
 
-func (e *Executor) errResult(call tools.ToolCall, err error) tools.ToolResult {
+func (e *Executor) errResult(call tools.ToolCall, errMsg string) tools.ToolResult {
 	return tools.ToolResult{
 		ToolCallID: call.ID,
 		ToolName:   call.Name,
-		Content:    err.Error(),
+		Content:    errMsg,
 		IsError:    true,
+		Args:       call.Arguments,
 	}
 }
 

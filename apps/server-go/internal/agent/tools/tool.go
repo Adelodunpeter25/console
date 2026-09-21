@@ -29,10 +29,11 @@ type ToolCall struct {
 
 // ToolResult is the outcome sent back to the model.
 type ToolResult struct {
-	ToolCallID string `json:"toolCallId"`
-	ToolName   string `json:"toolName,omitempty"`
-	Content    any    `json:"content"`
-	IsError    bool   `json:"isError,omitempty"`
+	ToolCallID string          `json:"toolCallId"`
+	ToolName   string          `json:"toolName,omitempty"`
+	Content    any             `json:"content"`
+	IsError    bool            `json:"isError,omitempty"`
+	Args       json.RawMessage `json:"args,omitempty"`
 }
 
 // ToolError signals a tool failure back to the harness (result carries it

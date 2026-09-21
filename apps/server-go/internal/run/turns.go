@@ -5,6 +5,7 @@ package run
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -237,6 +238,17 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 			}
 			return nil
 		}
+		
+		// Track file changes on tool execution results
+		if event.Kind == loop.EventToolResult && event.Result != nil {
+			turnIndex := len(history) // Approximate turn index from history length
+			var args map[string]any
+			if len(event.Result.Args) > 0 {
+				_ = json.Unmarshal(event.Result.Args, &args)
+			}
+			_ = ExtractAndRecordFileChange(s.sessions, sessionID, event.Result.ToolName, args, event.Result.IsError, turnIndex)
+		}
+		
 		hub.Broadcast(event)
 		s.notifyEvent(ctx, sessionID, event)
 	}
