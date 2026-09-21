@@ -7,8 +7,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -55,18 +55,29 @@ const (
 	EventAskQuestion EventKind = "askQuestion"
 	// EventPermissionRequest carries a permission Request awaiting approval.
 	EventPermissionRequest EventKind = "permissionRequest"
+	// EventQueueUpdated carries the staged QueuedPrompt (or null).
+	EventQueueUpdated EventKind = "queueUpdated"
+	// EventSessionTitleUpdated carries a freshly generated title.
+	EventSessionTitleUpdated EventKind = "sessionTitleUpdated"
+	// EventSubagentStart/Activity/End carry subagent lifecycle payloads.
+	EventSubagentStart    EventKind = "subagentStart"
+	EventSubagentActivity EventKind = "subagentActivity"
+	EventSubagentEnd      EventKind = "subagentEnd"
 )
 
 type Event struct {
-	Kind       EventKind         `json:"kind"`
-	Text       string            `json:"text,omitempty"`
-	Call       *tools.ToolCall   `json:"call,omitempty"`
-	Result     *tools.ToolResult `json:"result,omitempty"`
-	StopReason StopReason        `json:"stopReason,omitempty"`
-	Message    any               `json:"message,omitempty"`
-	Usage      *TurnUsage        `json:"usage,omitempty"`
+	Kind       EventKind                 `json:"kind"`
+	Text       string                    `json:"text,omitempty"`
+	Call       *tools.ToolCall           `json:"call,omitempty"`
+	Result     *tools.ToolResult         `json:"result,omitempty"`
+	StopReason StopReason                `json:"stopReason,omitempty"`
+	Message    any                       `json:"message,omitempty"`
+	Usage      *TurnUsage                `json:"usage,omitempty"`
 	Ask        *tools.AskQuestionRequest `json:"ask,omitempty"`
 	Permission *permissions.Request      `json:"permission,omitempty"`
+	Queued     *types.QueuedPrompt       `json:"queuedPrompt,omitempty"`
+	Title      string                    `json:"title,omitempty"`
+	Subagent   any                       `json:"subagent,omitempty"`
 }
 
 // streamOf is a thin alias over the generic stream for loop events.
@@ -77,8 +88,8 @@ type streamOf = stream.Stream[Event]
 type Agent struct {
 	provider Provider
 	executor *Executor
+	// sessions persists turns; nil runs fully in-memory (subagents).
 	sessions *services.SessionService
-	maxTurns int
 	// Run options forwarded to the provider each turn. Zero values mean
 	// provider defaults; the run service sets them per session/model.
 	SystemPrompt   string
@@ -89,7 +100,7 @@ type Agent struct {
 }
 
 func New(provider Provider, executor *Executor, sessions *services.SessionService) *Agent {
-	return &Agent{provider: provider, executor: executor, sessions: sessions, maxTurns: 20}
+	return &Agent{provider: provider, executor: executor, sessions: sessions}
 }
 
 // Run processes the user prompt and streams events until the final turn.
@@ -106,8 +117,8 @@ func (a *Agent) RunWithHistory(ctx context.Context, sessionID string, history []
 }
 
 func (a *Agent) run(ctx context.Context, sessionID string, history []any, user UserMessage, toolsList []tools.Definition, events *stream.Stream[Event]) {
-	// Persist the user message first.
-	if err := a.sessions.AppendMessage(sessionID, types.AgentMessage{
+	// Persist the user message first (skipped for in-memory subagents).
+	if err := a.persist(sessionID, types.AgentMessage{
 		ID:   newMessageID(),
 		Role: string(RoleUser),
 		Data: messageJSON(user),
@@ -117,7 +128,7 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 	}
 
 	history = append(append([]any{}, history...), user)
-	for turn := 0; turn < a.maxTurns; turn++ {
+	for {
 		assistant, err := a.turn(ctx, sessionID, history, toolsList, events)
 		if err != nil {
 			events.Fail(err)
@@ -145,7 +156,7 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 			}
 		}
 		resultMsg := ToolResultMessage{Role: RoleToolResult, Results: results}
-		if err := a.sessions.AppendMessage(sessionID, types.AgentMessage{
+		if err := a.persist(sessionID, types.AgentMessage{
 			ID:   newMessageID(),
 			Role: string(RoleToolResult),
 			Data: messageJSON(resultMsg),
@@ -155,7 +166,6 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 		}
 		history = append(history, resultMsg)
 	}
-	events.Fail(fmt.Errorf("agent exceeded %d turns", a.maxTurns))
 }
 
 // turn runs one provider streaming turn, accumulating parts into an
@@ -210,7 +220,7 @@ func (a *Agent) turn(ctx context.Context, sessionID string, history []any, tools
 		assistant.StopReason = StopStop
 	}
 
-	if err := a.sessions.AppendMessage(sessionID, types.AgentMessage{
+	if err := a.persist(sessionID, types.AgentMessage{
 		ID:   assistant.ID,
 		Role: string(RoleAssistant),
 		Data: messageJSON(assistant),
@@ -218,4 +228,12 @@ func (a *Agent) turn(ctx context.Context, sessionID string, history []any, tools
 		return assistant, err
 	}
 	return assistant, nil
+}
+
+// persist appends a message unless the agent runs in-memory (subagents).
+func (a *Agent) persist(sessionID string, msg types.AgentMessage) error {
+	if a.sessions == nil {
+		return nil
+	}
+	return a.sessions.AppendMessage(sessionID, msg)
 }

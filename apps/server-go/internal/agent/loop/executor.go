@@ -61,7 +61,7 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 		return e.errResult(call, tools.NewToolError("Tool '%s' is denied in %s mode.", call.Name, e.mode)), nil
 	}
 
-	out, err := tool.Execute(ctx, call.Arguments)
+	out, err := executeToolCall(ctx, tool, call)
 	if err != nil {
 		var toolErr *tools.ToolError
 		if asToolError(err, &toolErr) {
@@ -72,6 +72,15 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 	}
 	slog.Debug("tool executed", "tool", call.Name, "call", call.ID)
 	return tools.ToolResult{ToolCallID: call.ID, ToolName: call.Name, Content: out}, nil
+}
+
+// executeToolCall prefers CallAwareTool.ExecuteCall (full call incl. id)
+// over plain argument execution.
+func executeToolCall(ctx context.Context, tool tools.Tool, call tools.ToolCall) (any, error) {
+	if aware, ok := tool.(tools.CallAwareTool); ok {
+		return aware.ExecuteCall(ctx, call)
+	}
+	return tool.Execute(ctx, call.Arguments)
 }
 
 func (e *Executor) errResult(call tools.ToolCall, err error) tools.ToolResult {

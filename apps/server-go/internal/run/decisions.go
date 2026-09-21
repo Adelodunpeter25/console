@@ -46,6 +46,9 @@ type Decisions struct {
 	questions map[string]pendingQuestion
 	// Timeout bounds one decision wait (overridable in tests).
 	Timeout time.Duration
+	// Notify fires after a request broadcasts on the hub (attention
+	// banners). Nil-safe when unset.
+	Notify func(ctx context.Context, sessionID string, event loop.Event)
 }
 
 func newDecisions() *Decisions {
@@ -71,8 +74,13 @@ func (d *Decisions) ApproverFor(sessionID string, hub *Hub) loop.Approver {
 		ch := make(chan approvalResult, 1)
 		d.mu.Lock()
 		d.approvals[req.RequestID] = pendingApproval{sessionID: sessionID, ch: ch}
+		notify := d.Notify
 		d.mu.Unlock()
-		hub.Broadcast(loop.Event{Kind: loop.EventPermissionRequest, Permission: &req})
+		event := loop.Event{Kind: loop.EventPermissionRequest, Permission: &req}
+		hub.Broadcast(event)
+		if notify != nil {
+			notify(ctx, sessionID, event)
+		}
 
 		timer := time.NewTimer(d.timeout())
 		defer timer.Stop()
@@ -96,8 +104,13 @@ func (d *Decisions) AskHandlerFor(sessionID string, hub *Hub) tools.AskHandler {
 		ch := make(chan questionResult, 1)
 		d.mu.Lock()
 		d.questions[req.RequestID] = pendingQuestion{sessionID: sessionID, ch: ch}
+		notify := d.Notify
 		d.mu.Unlock()
-		hub.Broadcast(loop.Event{Kind: loop.EventAskQuestion, Ask: &req})
+		event := loop.Event{Kind: loop.EventAskQuestion, Ask: &req}
+		hub.Broadcast(event)
+		if notify != nil {
+			notify(ctx, sessionID, event)
+		}
 
 		timer := time.NewTimer(d.timeout())
 		defer timer.Stop()

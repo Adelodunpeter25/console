@@ -113,7 +113,6 @@ func InitSessionDB(db *sql.DB, path string) error {
 			name TEXT NOT NULL,
 			role TEXT NOT NULL,
 			prompt TEXT NOT NULL,
-			max_turns INTEGER NOT NULL DEFAULT 10,
 			current_turn INTEGER NOT NULL DEFAULT 0,
 			status TEXT NOT NULL,
 			summary TEXT,

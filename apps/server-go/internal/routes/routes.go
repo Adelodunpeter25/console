@@ -9,10 +9,12 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/memory"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/fff"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/usage"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
@@ -49,9 +51,13 @@ func New(cfg Config) *fiber.App {
 	registerFavoriteRoutes(app, services.NewFavoriteService(cfg.DB))
 	registerPortRoutes(app, cfg.Ports)
 	registerSettingsRoutes(app, services.NewSettingsService())
-	registerUsageRoutes(app, services.NewUsageService())
+	registerUsageRoutes(app, usage.NewService())
 	registerAuthRoutes(app, auth.NewAuthService())
-	registerRunRoutes(app, run.NewService(services.NewSessionService(cfg.DB)))
+	registerProviderRoutes(app, services.NewFavoriteService(cfg.DB))
+	runSvc := run.NewService(services.NewSessionService(cfg.DB))
+	runSvc.SetNotifications(cfg.Notifications)
+	runSvc.SetMemories(memory.NewRegistry(""))
+	registerRunRoutes(app, runSvc)
 	registerMiscRoutes(app, cfg.Notifications)
 	registerAssistRoutes(app, services.NewSessionService(cfg.DB), services.NewFsService(), services.NewSkillsService())
 

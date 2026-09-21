@@ -40,7 +40,6 @@ type ToolResult struct {
 type ToolError struct {
 	Msg string
 }
-
 func (e *ToolError) Error() string { return e.Msg }
 
 // NewToolError wraps an error message for ToolResult.IsError.
@@ -59,6 +58,13 @@ type Tool interface {
 	// then runs. Errors of type *ToolError flow to the model as results;
 	// anything else aborts the turn.
 	Execute(ctx context.Context, arguments json.RawMessage) (any, error)
+}
+
+// CallAwareTool is a Tool that also receives the full call (id included).
+// The executor prefers ExecuteCall when implemented.
+type CallAwareTool interface {
+	Tool
+	ExecuteCall(ctx context.Context, call ToolCall) (any, error)
 }
 
 type typedTool[I any] struct {

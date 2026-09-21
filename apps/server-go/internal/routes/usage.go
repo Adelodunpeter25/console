@@ -1,25 +1,22 @@
 // Usage routes (/api/usage, /api/providers/:id/usage). Port of
-// apps/server/api/src/routes/usage.ts; reports are null until the provider
-// quota fetchers land in Phase 3.
+// apps/server/api/src/routes/usage.ts.
 package routes
 
 import (
-	"fmt"
-
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/usage"
 )
 
-func registerUsageRoutes(app *fiber.App, usage *services.UsageService) {
+func registerUsageRoutes(app *fiber.App, svc *usage.Service) {
 	app.Get("/api/usage", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"success": true, "data": usage.GetAllUsage()})
+		return c.JSON(fiber.Map{"success": true, "data": svc.GetAllUsage(c.Context())})
 	})
 
 	app.Get("/api/providers/:id/usage", func(c *fiber.Ctx) error {
-		report, err := usage.GetUsage(c.Params("id"))
+		report, err := svc.GetUsage(c.Context(), c.Params("id"))
 		if err != nil {
-			return fail400(c, fmt.Errorf("Invalid provider '%s' for usage.", c.Params("id")))
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": err.Error()})
 		}
 		return c.JSON(fiber.Map{"success": true, "data": report})
 	})

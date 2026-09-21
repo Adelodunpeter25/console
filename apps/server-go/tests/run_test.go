@@ -167,11 +167,19 @@ func TestRunUnknownSessionAndProvider(t *testing.T) {
 
 // blockingProvider stalls RunTurn until release closes or ctx ends.
 type blockingProvider struct {
-	release  chan struct{}
-	released *bool
+	release     chan struct{}
+	released    *bool
+	entered     chan struct{}
+	enteredOnce *bool
 }
 
 func (b *blockingProvider) RunTurn(ctx context.Context, req loop.TurnRequest, s *stream.Stream[loop.Event]) error {
+	if b.entered != nil && (b.enteredOnce == nil || !*b.enteredOnce) {
+		if b.enteredOnce != nil {
+			*b.enteredOnce = true
+		}
+		close(b.entered)
+	}
 	select {
 	case <-b.release:
 		*(b.released) = true
