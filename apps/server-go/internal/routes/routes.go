@@ -26,7 +26,7 @@ type Config struct {
 	Notifications *services.NotificationService
 }
 
-func New(cfg Config) *fiber.App {
+func New(cfg Config) (*fiber.App, *run.Service) {
 	app := fiber.New(fiber.Config{
 		AppName:      "console-server-go",
 		IdleTimeout:  5 * time.Minute,
@@ -62,5 +62,5 @@ func New(cfg Config) *fiber.App {
 	registerAssistRoutes(app, services.NewSessionService(cfg.DB), services.NewFsService(), services.NewSkillsService())
 
 	slog.Info("api routes registered")
-	return app
+	return app, runSvc
 }

@@ -12,8 +12,37 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
+
+// startDeletedChatSweep purges soft-deleted chats past retention once
+// immediately, then daily. It returns a stop func for shutdown.
+func startDeletedChatSweep(runs *run.Service) func() {
+	sweep := func() {
+		purged := runs.PurgeExpiredDeletedSessions()
+		if len(purged) > 0 {
+			slog.Info("purged deleted chats older than 7 days", "count", len(purged))
+		}
+	}
+	sweep()
+	ticker := time.NewTicker(24 * time.Hour)
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				sweep()
+			case <-done:
+				return
+			}
+		}
+	}()
+	return func() {
+		ticker.Stop()
+		close(done)
+	}
+}
 
 // Run starts the server and blocks until SIGINT/SIGTERM. It returns nil on
 // clean shutdown and a non-nil error when startup fails.
@@ -40,7 +69,12 @@ func Run() error {
 	ports.StartReaper(5 * time.Second)
 	notifications := services.NewNotificationService()
 
-	app := routes.New(routes.Config{DB: manager, Watch: watch, Ports: ports, Notifications: notifications})
+	app, runs := routes.New(routes.Config{DB: manager, Watch: watch, Ports: ports, Notifications: notifications})
+
+	// Deleted chats stay restorable for 7 days, then the backend purges
+	// them permanently. The sweep runs once at startup plus once a day.
+	stopSweep := startDeletedChatSweep(runs)
+	defer stopSweep()
 
 	addr := ":3000"
 	if p := os.Getenv("PORT"); p != "" {

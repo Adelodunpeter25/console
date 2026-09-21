@@ -41,6 +41,10 @@ func (s *SessionService) Restore(sessionID string) (bool, error) {
 	return s.inner.Restore(sessionID)
 }
 
+func (s *SessionService) ExpiredDeletedSessions(cutoffMillis int64) ([]string, error) {
+	return s.inner.ExpiredDeletedSessions(cutoffMillis)
+}
+
 func (s *SessionService) PermanentDelete(sessionID string) (bool, error) {
 	return s.inner.PermanentDelete(sessionID)
 }

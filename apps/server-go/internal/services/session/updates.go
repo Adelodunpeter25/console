@@ -13,6 +13,27 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
+// ExpiredDeletedSessions lists soft-deleted session ids whose deleted_at is
+// at or before the cutoff (unix millis), oldest first.
+func (s *Service) ExpiredDeletedSessions(cutoffMillis int64) ([]string, error) {
+	rows, err := s.manager.Global().Query(
+		`SELECT id FROM sessions WHERE deleted_at IS NOT NULL AND deleted_at <= ? ORDER BY deleted_at ASC`,
+		cutoffMillis)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]string, 0)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // Restore clears the soft-delete mark. Mirrors the TS restoreSession:
 // success for any known id, even one that was not deleted.
 func (s *Service) Restore(sessionID string) (bool, error) {

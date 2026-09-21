@@ -4,11 +4,15 @@ package tests
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
 func newTestManager(t *testing.T) (*db.DB, *services.SessionService, *services.ProjectService, *services.FavoriteService) {
@@ -161,5 +165,87 @@ func TestDeleteProjectRemovesSessions(t *testing.T) {
 	}
 	if list, _ := sessions.ListFiltered(session.ListFilter{}); len(list) != 0 {
 		t.Fatal("project session still listed")
+	}
+}
+
+func TestPurgeExpiredDeletedSessions(t *testing.T) {
+	manager, sessions, _, _ := newTestManager(t)
+	svc := run.NewService(sessions)
+
+	mkSession := func() string {
+		h, err := sessions.Create(types.CreateSessionOptions{Cwd: t.TempDir(), ModelID: "m", Provider: "p"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h.ID
+	}
+	backdateDeleted := func(id string, age time.Duration) {
+		old := time.Now().UnixMilli() - age.Milliseconds()
+		if _, err := manager.Global().Exec(
+			`UPDATE sessions SET deleted_at = ? WHERE id = ?`, old, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	oldID := mkSession()
+	recentID := mkSession()
+	if _, err := sessions.SoftDelete(oldID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sessions.SoftDelete(recentID); err != nil {
+		t.Fatal(err)
+	}
+	backdateDeleted(oldID, run.DeletedSessionRetention+time.Hour)
+
+	// An expired soft-deleted session with an active run is deferred.
+	liveID := mkSession()
+	entered := make(chan struct{}, 1)
+	release := make(chan struct{})
+	svc.Lookup = func(id string) (loop.Provider, error) {
+		return &helpers.MockProvider{Turns: []func() []loop.Event{
+			func() []loop.Event {
+				entered <- struct{}{}
+				<-release
+				return []loop.Event{{Kind: loop.EventText, Text: "done"}}
+			},
+		}}, nil
+	}
+	hub, err := svc.StartRun(liveID, run.Prompt{Text: "slow", Provider: "mock", ModelID: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("run never started")
+	}
+	if _, err := sessions.SoftDelete(liveID); err != nil {
+		t.Fatal(err)
+	}
+	backdateDeleted(liveID, run.DeletedSessionRetention+time.Hour)
+
+	purged := svc.PurgeExpiredDeletedSessions()
+	if len(purged) != 1 || purged[0] != oldID {
+		t.Fatalf("purged = %v, want [%s]", purged, oldID)
+	}
+	if got, _ := sessions.Load(oldID, 0, 0); got != nil {
+		t.Fatal("expired session should be gone")
+	}
+	if got, _ := sessions.Load(recentID, 0, 0); got != nil {
+		t.Fatal("recently deleted session must survive")
+	}
+	if got, _ := sessions.Load(liveID, 0, 0); got != nil {
+		t.Fatal("active session must be deferred")
+	}
+
+	close(release)
+	select {
+	case <-hub.Done():
+	case <-time.After(15 * time.Second):
+		t.Fatal("run did not settle")
+	}
+	purged = svc.PurgeExpiredDeletedSessions()
+	if len(purged) != 1 || purged[0] != liveID {
+		t.Fatalf("second purge = %v, want [%s]", purged, liveID)
 	}
 }
