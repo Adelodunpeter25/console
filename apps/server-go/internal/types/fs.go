@@ -16,6 +16,15 @@ type FsBrowseResult struct {
 	Entries     []FsTreeEntry `json:"entries"`
 }
 
+// FileSearchResult mirrors the TS assist search item: the desktop ⌘P
+// palette requires all four keys (score included).
+type FileSearchResult struct {
+	RelativePath string  `json:"relativePath"`
+	AbsolutePath string  `json:"absolutePath"`
+	IsDir        bool    `json:"isDir"`
+	Score        float64 `json:"score"`
+}
+
 type FsChangeEvent struct {
 	Type        string `json:"type"` // "fsChange"
 	ProjectPath string `json:"projectPath"`

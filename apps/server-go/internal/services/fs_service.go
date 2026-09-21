@@ -402,20 +402,18 @@ func (s *FsService) DeleteDirectory(path string) (bool, error) {
 // SearchFiles serves /api/fs/search. When the fff C library is available the
 // fuzzy search runs through its index (much faster, frecency-ranked); until
 // the index is warm — and always when fff is absent — it falls back to a
-// substring walk, mirroring the TS fff-node semantics.
-func (s *FsService) SearchFiles(root, query string, limit int, includeDirs bool) ([]types.FsTreeEntry, error) {
+// substring walk, mirroring the TS fff-node semantics. Items use the TS
+// FileSearchResult shape (relative/absolute paths plus score).
+func (s *FsService) SearchFiles(root, query string, limit int, includeDirs bool) ([]types.FileSearchResult, error) {
 	if manager != nil && manager.Enabled() {
 		if items, ok := manager.SearchAsync(root, query, limit); ok {
 			resolved, _ := filepath.Abs(root)
-			out := make([]types.FsTreeEntry, 0, len(items))
+			out := make([]types.FileSearchResult, 0, len(items))
 			for _, item := range items {
 				full := filepath.Join(resolved, item.RelPath)
-				entry := types.FsTreeEntry{Name: item.Name, Path: full, IsDir: item.IsDir}
-				if !item.IsDir && item.Size > 0 {
-					size := item.Size
-					entry.Size = &size
-				}
-				out = append(out, entry)
+				out = append(out, types.FileSearchResult{
+					RelativePath: item.RelPath, AbsolutePath: full, IsDir: item.IsDir,
+				})
 			}
 			return out, nil
 		}
@@ -428,7 +426,15 @@ func (s *FsService) SearchFiles(root, query string, limit int, includeDirs bool)
 		limit = 20
 	}
 	q := strings.ToLower(query)
-	out := make([]types.FsTreeEntry, 0)
+	out := make([]types.FileSearchResult, 0)
+	addItem := func(abs string, isDir bool) bool {
+		rel, err := filepath.Rel(resolved, abs)
+		if err != nil {
+			rel = abs
+		}
+		out = append(out, types.FileSearchResult{RelativePath: rel, AbsolutePath: abs, IsDir: isDir})
+		return len(out) >= limit
+	}
 	_ = filepath.WalkDir(resolved, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -441,8 +447,7 @@ func (s *FsService) SearchFiles(root, query string, limit int, includeDirs bool)
 				return filepath.SkipDir
 			}
 			if includeDirs && q != "" && strings.Contains(strings.ToLower(d.Name()), q) && path != resolved {
-				out = append(out, types.FsTreeEntry{Name: d.Name(), Path: path, IsDir: true})
-				if len(out) >= limit {
+				if addItem(path, true) {
 					return filepath.SkipAll
 				}
 			}
@@ -471,8 +476,7 @@ func (s *FsService) SearchFiles(root, query string, limit int, includeDirs bool)
 				return nil
 			}
 		}
-		out = append(out, types.FsTreeEntry{Name: d.Name(), Path: path, IsDir: false})
-		if len(out) >= limit {
+		if addItem(path, false) {
 			return filepath.SkipAll
 		}
 		return nil
