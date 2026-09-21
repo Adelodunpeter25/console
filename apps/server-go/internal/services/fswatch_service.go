@@ -19,6 +19,7 @@ type FsWatchService struct {
 	mu       sync.Mutex
 	watcher  *fsnotify.Watcher
 	watched  map[string]bool
+	gitMeta  map[string]string // watched git dir -> project path filter
 	debounce map[string]*time.Timer
 	subs     map[chan types.FsChangeEvent]string // chan -> project path filter
 	closed   bool
@@ -32,6 +33,7 @@ func NewFsWatchService() (*FsWatchService, error) {
 	s := &FsWatchService{
 		watcher:  w,
 		watched:  make(map[string]bool),
+		gitMeta:  make(map[string]string),
 		debounce: make(map[string]*time.Timer),
 		subs:     make(map[chan types.FsChangeEvent]string),
 	}
@@ -42,6 +44,13 @@ func NewFsWatchService() (*FsWatchService, error) {
 func (s *FsWatchService) loop() {
 	for event := range s.watcher.Events {
 		if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove|fsnotify.Rename) == 0 {
+			continue
+		}
+		// Git metadata (HEAD/index/branch refs) bypasses the ignore rules:
+		// .git is ignored as a tree, but these paths record commits,
+		// checkouts, and branch switches the status views must reflect.
+		if project, ok := s.gitProjectFor(event.Name); ok {
+			s.scheduleEmit(project, event.Name)
 			continue
 		}
 		projectPath := s.projectFor(event.Name)
@@ -140,6 +149,61 @@ func (s *FsWatchService) Watch(projectPath string) {
 	s.mu.Unlock()
 	if !already {
 		s.addDirRecursive(abs)
+	}
+	s.watchGitMeta(abs)
+}
+
+// gitProjectFor maps a git-metadata event back to its project, so worktree
+// commits (recorded outside the worktree dir) still notify the right view.
+func (s *FsWatchService) gitProjectFor(eventPath string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for dir, project := range s.gitMeta {
+		if eventPath == dir || strings.HasPrefix(eventPath, dir+"/") {
+			return project, true
+		}
+	}
+	return "", false
+}
+
+// watchGitMeta registers non-recursive watches on a repo's git metadata
+// dirs: the git dir itself (HEAD/index rewrites) and refs/heads (branch
+// updates). Resolves worktree .git pointer files to the real git dir.
+func (s *FsWatchService) watchGitMeta(projectAbs string) {
+	gitDir := filepath.Join(projectAbs, ".git")
+	if info, err := os.Stat(gitDir); err != nil || !info.IsDir() {
+		// Worktree (or submodule): .git is a pointer file.
+		data, err := os.ReadFile(gitDir)
+		if err != nil {
+			return
+		}
+		line := strings.TrimSpace(string(data))
+		const prefix = "gitdir: "
+		if !strings.HasPrefix(line, prefix) {
+			return
+		}
+		target := strings.TrimSpace(strings.TrimPrefix(line, prefix))
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(projectAbs, target)
+		}
+		gitDir = target
+	}
+	s.mu.Lock()
+	w := s.watcher
+	s.mu.Unlock()
+	for _, dir := range []string{gitDir, filepath.Join(gitDir, "refs", "heads")} {
+		if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+			continue
+		}
+		s.mu.Lock()
+		_, seen := s.gitMeta[dir]
+		if !seen {
+			s.gitMeta[dir] = projectAbs
+		}
+		s.mu.Unlock()
+		if !seen {
+			_ = w.Add(dir)
+		}
 	}
 }
 
