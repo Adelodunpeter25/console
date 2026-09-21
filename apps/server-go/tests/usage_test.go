@@ -32,7 +32,7 @@ func usageFixture() map[string]any {
 			map[string]any{
 				"limit_name": "codex-spark", "metered_feature": "spark",
 				"rate_limit": map[string]any{
-					"allowed": true,
+					"allowed":        true,
 					"primary_window": map[string]any{"used_percent": 100.0, "limit_window_seconds": 86400.0},
 				},
 			},
@@ -159,7 +159,7 @@ func saveUsageCred(t *testing.T, dir string) {
 	t.Setenv("CODEX_CREDENTIALS_PATH", filepath.Join(dir, "codex-creds.json"))
 	cred := codex.OAuthCredential{
 		AccessToken: "tok", RefreshToken: "ref",
-		ExpiresAt:   time.Now().UnixMilli() + 3600_000, AccountID: "acc-1",
+		ExpiresAt: time.Now().UnixMilli() + 3600_000, AccountID: "acc-1",
 	}
 	if err := codex.SaveCredential(cred); err != nil {
 		t.Fatal(err)

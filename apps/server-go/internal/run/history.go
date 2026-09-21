@@ -65,11 +65,11 @@ func decodeAssistantText(raw json.RawMessage) (string, bool) {
 
 func decodeAssistant(raw json.RawMessage) (loop.AssistantMessage, bool) {
 	var envelope struct {
-		Role       loop.MessageRole `json:"role"`
-		ID         string           `json:"id"`
+		Role       loop.MessageRole  `json:"role"`
+		ID         string            `json:"id"`
 		Content    []json.RawMessage `json:"content"`
-		StopReason loop.StopReason  `json:"stopReason"`
-		Usage      *loop.TurnUsage  `json:"usage"`
+		StopReason loop.StopReason   `json:"stopReason"`
+		Usage      *loop.TurnUsage   `json:"usage"`
 	}
 	if err := json.Unmarshal(raw, &envelope); err != nil {
 		return loop.AssistantMessage{}, false

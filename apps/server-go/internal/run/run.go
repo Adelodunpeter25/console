@@ -224,6 +224,27 @@ func (s *Service) nextTurn(ctx context.Context, turnErr error, sessionID string,
 	return staged, true
 }
 
+// replaceTool swaps a DefaultTools entry for a per-run bound instance
+// (simulated subagent → loop-bound real one). Appends when absent.
+func replaceTool(list []tools.Tool, name string, replacement tools.Tool) []tools.Tool {
+	out := make([]tools.Tool, 0, len(list))
+	replaced := false
+	for _, t := range list {
+		if t.Name() == name {
+			if !replaced {
+				out = append(out, replacement)
+				replaced = true
+			}
+			continue
+		}
+		out = append(out, t)
+	}
+	if !replaced {
+		out = append(out, replacement)
+	}
+	return out
+}
+
 // runOneTurn builds the agent for one prompt and pumps its events to the
 // hub, returning the terminal error (nil on success). The provider instance
 // is reused unless the prompt switches provider id.
@@ -294,7 +315,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 		projectID = *header.ProjectID
 	}
 	toolList = append(toolList, tools.NewMemoryTool(projectID, s.memoryRegistry()))
-	toolList = append(toolList, loop.NewSubagentTool(&loop.SubagentContext{
+	toolList = replaceTool(toolList, "subagent", loop.NewSubagentTool(&loop.SubagentContext{
 		Provider:     provider,
 		Tools:        toolList,
 		SystemPrompt: prompt.SystemPrompt,

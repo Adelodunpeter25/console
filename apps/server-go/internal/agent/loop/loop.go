@@ -90,8 +90,6 @@ type Agent struct {
 	executor *Executor
 	// sessions persists turns; nil runs fully in-memory (subagents).
 	sessions *services.SessionService
-	// MaxTurns caps tool-use turns per run (default 20, subagents 10).
-	MaxTurns int
 	// Run options forwarded to the provider each turn. Zero values mean
 	// provider defaults; the run service sets them per session/model.
 	SystemPrompt   string
@@ -102,7 +100,7 @@ type Agent struct {
 }
 
 func New(provider Provider, executor *Executor, sessions *services.SessionService) *Agent {
-	return &Agent{provider: provider, executor: executor, sessions: sessions, MaxTurns: 20}
+	return &Agent{provider: provider, executor: executor, sessions: sessions}
 }
 
 // Run processes the user prompt and streams events until the final turn.
@@ -130,7 +128,7 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 	}
 
 	history = append(append([]any{}, history...), user)
-	for turn := 0; turn < a.MaxTurns; turn++ {
+	for {
 		assistant, err := a.turn(ctx, sessionID, history, toolsList, events)
 		if err != nil {
 			events.Fail(err)
@@ -168,7 +166,6 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 		}
 		history = append(history, resultMsg)
 	}
-	events.Fail(fmt.Errorf("agent exceeded %d turns", a.MaxTurns))
 }
 
 // turn runs one provider streaming turn, accumulating parts into an

@@ -174,7 +174,7 @@ func primaryLimit(key string, w *codexWindow, accountID, planType string, allowe
 	amount := BuildPercentAmount(w.usedPercent)
 	return Limit{
 		ID: "codex:" + key, Label: window.Label,
-		Scope: Scope{Provider: "codex", WindowID: window.ID, Shared: true},
+		Scope:  Scope{Provider: "codex", WindowID: window.ID, Shared: true},
 		Window: &window, Amount: amount,
 		Status: StatusForFraction(amount.UsedFraction, allowed, limitReached),
 	}

@@ -15,9 +15,6 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 )
 
-// SubagentMaxTurns mirrors the TS subagent turn cap.
-const SubagentMaxTurns = 10
-
 // SubagentContext wires a subagent tool run. A nil context yields the
 // simulated no-model response (TS parity for static registration).
 type SubagentContext struct {
@@ -31,12 +28,11 @@ type SubagentContext struct {
 
 // SubagentStartInfo opens a subagent run.
 type SubagentStartInfo struct {
-	SubagentID      string `json:"subagentId"`
-	ParentToolCall  string `json:"parentToolCallId,omitempty"`
-	Name            string `json:"name"`
-	Role            string `json:"role"`
-	Prompt          string `json:"prompt"`
-	MaxTurns        int    `json:"maxTurns"`
+	SubagentID     string `json:"subagentId"`
+	ParentToolCall string `json:"parentToolCallId,omitempty"`
+	Name           string `json:"name"`
+	Role           string `json:"role"`
+	Prompt         string `json:"prompt"`
 }
 
 // SubagentActivityInfo tracks one nested tool call.
@@ -114,7 +110,7 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 	}
 	emit(EventSubagentStart, SubagentStartInfo{
 		SubagentID: subagentID, ParentToolCall: parentCallID,
-		Name: name, Role: role, Prompt: prompt, MaxTurns: SubagentMaxTurns,
+		Name: name, Role: role, Prompt: prompt,
 	})
 
 	nested := make([]tools.Tool, 0, len(c.Tools))
@@ -126,7 +122,6 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 	}
 	registry := tools.NewRegistry(nested...)
 	agent := New(c.Provider, NewExecutor(registry, permissions.FullAccess, c.Approver), nil)
-	agent.MaxTurns = SubagentMaxTurns
 	agent.SystemPrompt = fmt.Sprintf("You are a specialized subagent (%s). Execute the task thoroughly and summarize your findings cleanly.\n%s", role, c.SystemPrompt)
 
 	events, err := agent.Run(ctx, randomSubSession(), prompt, registry.Definitions())

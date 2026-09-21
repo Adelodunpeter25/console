@@ -167,9 +167,9 @@ func TestRunUnknownSessionAndProvider(t *testing.T) {
 
 // blockingProvider stalls RunTurn until release closes or ctx ends.
 type blockingProvider struct {
-	release    chan struct{}
-	released   *bool
-	entered    chan struct{}
+	release     chan struct{}
+	released    *bool
+	entered     chan struct{}
 	enteredOnce *bool
 }
 

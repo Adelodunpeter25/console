@@ -109,6 +109,22 @@ func (r *recordingProvider) RunTurn(ctx context.Context, req loop.TurnRequest, s
 	return r.mock.RunTurn(ctx, req, s)
 }
 
+func TestSubagentInDefaultTools(t *testing.T) {
+	registry := tools.NewRegistry(tools.DefaultTools()...)
+	tool, err := registry.Get("subagent")
+	if err != nil {
+		t.Fatalf("subagent must be registered: %v", err)
+	}
+	raw, _ := json.Marshal(map[string]any{"prompt": "hi", "name": "scout"})
+	out, err := tool.Execute(context.Background(), raw)
+	if err != nil {
+		t.Fatalf("simulated subagent must not error: %v", err)
+	}
+	if text, _ := out.(string); !strings.Contains(text, "simulated") {
+		t.Fatalf("simulated: %q", text)
+	}
+}
+
 func TestSubagentExcludedFromNested(t *testing.T) {
 	rec := &recordingProvider{mock: &mockProvider{turns: []func() []loop.Event{
 		func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "ok"}} },
