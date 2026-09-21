@@ -156,7 +156,7 @@ func (s *GitService) ListBranches(repoPath string) types.GitBranchesResponse {
 		if name == "" {
 			continue
 		}
-		branches = append(branches, types.GitBranchInfo{Name: name, IsCurrent: name == current})
+		branches = append(branches, types.GitBranchInfo{Name: name, Current: name == current})
 	}
 	return types.GitBranchesResponse{Branches: branches, IsGitRepository: true}
 }

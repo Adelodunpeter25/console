@@ -18,8 +18,8 @@ type GitStatusSummary struct {
 }
 
 type GitBranchInfo struct {
-	Name      string `json:"name"`
-	IsCurrent bool   `json:"isCurrent"`
+	Name    string `json:"name"`
+	Current bool   `json:"current"`
 }
 
 type GitBranchesResponse struct {
