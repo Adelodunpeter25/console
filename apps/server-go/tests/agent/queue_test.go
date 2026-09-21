@@ -8,9 +8,10 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
+	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
-func queueMock(texts ...string) *mockProvider {
+func queueMock(texts ...string) *helpers.MockProvider {
 	turns := make([]func() []loop.Event, 0, len(texts))
 	for _, text := range texts {
 		text := text
@@ -18,22 +19,13 @@ func queueMock(texts ...string) *mockProvider {
 			return []loop.Event{{Kind: loop.EventText, Text: text}}
 		})
 	}
-	return &mockProvider{turns: turns}
-}
-
-func waitSettled(t *testing.T, hub *run.Hub) {
-	t.Helper()
-	select {
-	case <-hub.Done():
-	case <-time.After(15 * time.Second):
-		t.Fatal("run did not settle")
-	}
+	return &helpers.MockProvider{Turns: turns}
 }
 
 func TestQueuePersistence(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	header := createRunSession(t, sessions)
+	header := helpers.CreateRunSession(t, sessions)
 
 	if qp, err := svc.QueuedPrompt(header.ID); err != nil || qp != nil {
 		t.Fatalf("empty queue: %+v %v", qp, err)
@@ -73,14 +65,14 @@ func TestQueuePersistence(t *testing.T) {
 }
 
 func TestQueueDrainsNextTurn(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	// One two-script mock: turn one emits "first", the drained turn two
 	// emits "second".
 	svc.Lookup = func(id string) (loop.Provider, error) {
 		return queueMock("first", "second"), nil
 	}
-	header := createRunSession(t, sessions)
+	header := helpers.CreateRunSession(t, sessions)
 	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "one", Provider: "mock", ModelID: "m"})
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +85,7 @@ func TestQueueDrainsNextTurn(t *testing.T) {
 	if _, err := svc.QueuePrompt(header.ID, run.Prompt{Text: "two"}); err != nil {
 		t.Fatal(err)
 	}
-	waitSettled(t, hub)
+	helpers.WaitSettled(t, hub)
 	if hub.Outcome != run.OutcomeDone {
 		t.Fatalf("outcome: %s", hub.Outcome)
 	}
@@ -126,7 +118,7 @@ func TestQueueDrainsNextTurn(t *testing.T) {
 }
 
 func TestSteerAbortsAndDrains(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	release := make(chan struct{})
 	entered := make(chan struct{})
@@ -139,7 +131,7 @@ func TestSteerAbortsAndDrains(t *testing.T) {
 		}
 		return &blockingProvider{release: release, released: new(bool), entered: entered, enteredOnce: &enteredOnce}, nil
 	}
-	header := createRunSession(t, sessions)
+	header := helpers.CreateRunSession(t, sessions)
 	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "slow", Provider: "mock", ModelID: "m"})
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +139,7 @@ func TestSteerAbortsAndDrains(t *testing.T) {
 	subID, subCh, _ := hub.Subscribe(nil)
 	defer hub.Unsubscribe(subID)
 	// Steer with no active run on another session must fail.
-	other := createRunSession(t, sessions)
+	other := helpers.CreateRunSession(t, sessions)
 	if ok, _ := svc.Steer(other.ID, run.Prompt{Text: "x"}); ok {
 		t.Fatal("steer without active run must fail")
 	}
@@ -163,7 +155,7 @@ func TestSteerAbortsAndDrains(t *testing.T) {
 	}
 	// Leave release open: turn one can only settle via the steer cancel,
 	// so the drain of the staged turn is deterministic.
-	waitSettled(t, hub)
+	helpers.WaitSettled(t, hub)
 	if hub.Outcome != run.OutcomeDone {
 		t.Fatalf("outcome: %s", hub.Outcome)
 	}

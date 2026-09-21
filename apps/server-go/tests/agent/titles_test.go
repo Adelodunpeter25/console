@@ -12,6 +12,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/titles"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
 func TestTitleHelpers(t *testing.T) {
@@ -58,7 +59,7 @@ func TestGenerateTitle(t *testing.T) {
 }
 
 func TestRunTitlesFreshSession(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	svc.Lookup = func(id string) (loop.Provider, error) {
 		return queueMock("done"), nil
@@ -73,7 +74,7 @@ func TestRunTitlesFreshSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitSettled(t, hub)
+	helpers.WaitSettled(t, hub)
 	// Title generation runs off the critical path; poll briefly.
 	deadline := time.Now().Add(5 * time.Second)
 	for {

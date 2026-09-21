@@ -9,9 +9,7 @@ import (
 	"testing"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
 func TestTodoUnboundLifecycle(t *testing.T) {
@@ -63,13 +61,13 @@ func TestTodoUnboundLifecycle(t *testing.T) {
 	}
 
 	// Missing index / tasks -> tool errors.
-	if _, err := todo.Execute(context.Background(), mustJSONRaw(t, map[string]any{"op": "start"})); err == nil {
+	if _, err := todo.Execute(context.Background(), helpers.MustJSONRaw(t, map[string]any{"op": "start"})); err == nil {
 		t.Fatal("expected error for missing index")
 	}
-	if _, err := todo.Execute(context.Background(), mustJSONRaw(t, map[string]any{"op": "init"})); err == nil {
+	if _, err := todo.Execute(context.Background(), helpers.MustJSONRaw(t, map[string]any{"op": "init"})); err == nil {
 		t.Fatal("expected error for missing tasks")
 	}
-	if _, err := todo.Execute(context.Background(), mustJSONRaw(t, map[string]any{"op": "done", "index": 999})); err == nil {
+	if _, err := todo.Execute(context.Background(), helpers.MustJSONRaw(t, map[string]any{"op": "done", "index": 999})); err == nil {
 		t.Fatal("expected error for unknown index")
 	}
 }

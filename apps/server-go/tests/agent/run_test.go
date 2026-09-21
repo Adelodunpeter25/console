@@ -10,12 +10,10 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
 func TestProviderRegistry(t *testing.T) {
@@ -69,14 +67,14 @@ func TestHubReplay(t *testing.T) {
 }
 
 func TestRunHistoryRoundTrip(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	svc.Lookup = func(id string) (loop.Provider, error) {
-		return &mockProvider{turns: []func() []loop.Event{
+		return &helpers.MockProvider{Turns: []func() []loop.Event{
 			func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "second"}} },
 		}}, nil
 	}
-	header := createRunSession(t, sessions)
+	header := helpers.CreateRunSession(t, sessions)
 	// Seed a prior turn directly, as stored by the loop.
 	seedUser, _ := json.Marshal(map[string]any{"role": "user", "content": "first"})
 	seedAssistant, _ := json.Marshal(map[string]any{
@@ -112,14 +110,14 @@ func TestRunHistoryRoundTrip(t *testing.T) {
 }
 
 func TestRunDoubleStartAndAbort(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	release := make(chan struct{})
 	var released bool
 	svc.Lookup = func(id string) (loop.Provider, error) {
 		return &blockingProvider{release: release, released: &released}, nil
 	}
-	header := createRunSession(t, sessions)
+	header := helpers.CreateRunSession(t, sessions)
 	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "go", Provider: "mock", ModelID: "m"})
 	if err != nil {
 		t.Fatal(err)
@@ -151,12 +149,12 @@ func TestRunDoubleStartAndAbort(t *testing.T) {
 }
 
 func TestRunUnknownSessionAndProvider(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	if _, err := svc.StartRun("missing", run.Prompt{Text: "hi"}); err == nil {
 		t.Fatal("missing session must fail")
 	}
-	header := createRunSession(t, sessions)
+	header := helpers.CreateRunSession(t, sessions)
 	if _, err := svc.StartRun(header.ID, run.Prompt{Text: "hi", Provider: "claude", ModelID: "m"}); err == nil {
 		t.Fatal("unported provider must fail")
 	}
@@ -190,26 +188,4 @@ func (b *blockingProvider) RunTurn(ctx context.Context, req loop.TurnRequest, s 
 		s.Fail(ctx.Err())
 		return ctx.Err()
 	}
-}
-
-func newRunSessions(t *testing.T) *services.SessionService {
-	t.Helper()
-	manager, err := db.Open(db.OpenOptions{Path: ":memory:"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(manager.Close)
-	return services.NewSessionService(manager)
-}
-
-func createRunSession(t *testing.T, sessions *services.SessionService) types.SessionHeader {
-	t.Helper()
-	header, err := sessions.Create(types.CreateSessionOptions{
-		Cwd: t.TempDir(), ModelID: "mock-model", Provider: "mock",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = tools.DefaultTools
-	return header
 }

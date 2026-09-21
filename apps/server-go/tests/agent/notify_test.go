@@ -13,6 +13,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
 func collectNotifications(t *testing.T, bus *services.NotificationService, stop <-chan struct{}) chan types.NotificationEvent {
@@ -52,7 +53,7 @@ func waitNotification(t *testing.T, ch chan types.NotificationEvent, kind string
 }
 
 func TestNotifyApprovalAndDone(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	bus := services.NewNotificationService()
 	svc.SetNotifications(bus)
@@ -62,14 +63,14 @@ func TestNotifyApprovalAndDone(t *testing.T) {
 
 	args, _ := json.Marshal(map[string]any{"path": "/tmp/notify-test.txt", "content": "hi"})
 	svc.Lookup = func(id string) (loop.Provider, error) {
-		return &mockProvider{turns: []func() []loop.Event{
+		return &helpers.MockProvider{Turns: []func() []loop.Event{
 			func() []loop.Event {
 				return []loop.Event{{Kind: loop.EventToolCall, Call: &tools.ToolCall{ID: "c1", Name: "write_file", Arguments: args}}}
 			},
 			func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "all done here"}} },
 		}}, nil
 	}
-	header := createRunSession(t, sessions)
+	header := helpers.CreateRunSession(t, sessions)
 	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "write", Provider: "mock", ModelID: "m"})
 	if err != nil {
 		t.Fatal(err)
@@ -82,15 +83,15 @@ func TestNotifyApprovalAndDone(t *testing.T) {
 	if !svc.ApprovePermission(header.ID, req.Permission.RequestID, true) {
 		t.Fatal("approve must resolve")
 	}
-	waitSettled(t, hub)
+	helpers.WaitSettled(t, hub)
 	done := waitNotification(t, notes, "done")
-	if done.Title != "Done" || !contains(done.Body, "all done here") {
+	if done.Title != "Done" || !strings.Contains(done.Body, "all done here") {
 		t.Fatalf("done: %+v", done)
 	}
 }
 
 func TestNotifySilentOnAbort(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	bus := services.NewNotificationService()
 	svc.SetNotifications(bus)
@@ -102,7 +103,7 @@ func TestNotifySilentOnAbort(t *testing.T) {
 	svc.Lookup = func(id string) (loop.Provider, error) {
 		return &blockingProvider{release: release, released: new(bool)}, nil
 	}
-	header := createRunSession(t, sessions)
+	header := helpers.CreateRunSession(t, sessions)
 	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "slow", Provider: "mock", ModelID: "m"})
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +112,7 @@ func TestNotifySilentOnAbort(t *testing.T) {
 		t.Fatal("abort must succeed")
 	}
 	close(release)
-	waitSettled(t, hub)
+	helpers.WaitSettled(t, hub)
 	select {
 	case ev := <-notes:
 		if ev.Kind == "done" {

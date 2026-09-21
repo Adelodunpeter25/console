@@ -11,6 +11,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/memory"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
+	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
 func openTestStore(t *testing.T, dir, name string, scope memory.Scope) *memory.Store {
@@ -203,24 +204,24 @@ func TestMemoryToolFlows(t *testing.T) {
 }
 
 func TestMemoryToolInRun(t *testing.T) {
-	sessions := newRunSessions(t)
+	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	svc.SetMemories(memory.NewRegistry(t.TempDir()))
 	storeArgs, _ := json.Marshal(map[string]any{"op": "store", "content": "remember the alamo", "tags": []string{"test"}})
 	svc.Lookup = func(id string) (loop.Provider, error) {
-		return &mockProvider{turns: []func() []loop.Event{
+		return &helpers.MockProvider{Turns: []func() []loop.Event{
 			func() []loop.Event {
 				return []loop.Event{{Kind: loop.EventToolCall, Call: &tools.ToolCall{ID: "m1", Name: "memory", Arguments: storeArgs}}}
 			},
 			func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "stored"}} },
 		}}, nil
 	}
-	header := createRunSession(t, sessions)
+	header := helpers.CreateRunSession(t, sessions)
 	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "remember this", Provider: "mock", ModelID: "m", ApprovalMode: "full-access"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitSettled(t, hub)
+	helpers.WaitSettled(t, hub)
 	if hub.Outcome != run.OutcomeDone {
 		t.Fatalf("outcome: %s", hub.Outcome)
 	}

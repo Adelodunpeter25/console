@@ -17,6 +17,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/fff"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
 func TestToolSchemaFromTags(t *testing.T) {
@@ -157,15 +158,6 @@ func TestGlobGrepFff(t *testing.T) {
 	}
 }
 
-func mustJSONRaw(t *testing.T, v any) json.RawMessage {
-	t.Helper()
-	raw, err := json.Marshal(v)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return raw
-}
-
 func TestPermissionMatrix(t *testing.T) {
 	cases := []struct {
 		mode permissions.Mode
@@ -187,29 +179,6 @@ func TestPermissionMatrix(t *testing.T) {
 	}
 }
 
-// mockProvider replays scripted turns; used to drive the loop without a
-// real model backend (Phase 3 plugs in behind the same interface).
-type mockProvider struct {
-	turns []func() []loop.Event
-	calls int
-}
-
-func (m *mockProvider) RunTurn(ctx context.Context, req loop.TurnRequest, s *stream.Stream[loop.Event]) error {
-	script := m.turns[min(m.calls, len(m.turns)-1)]
-	m.calls++
-	for _, event := range script() {
-		s.Push(event)
-	}
-	s.Complete()
-	return nil
-}
-
-type autoApprover struct{}
-
-func (autoApprover) Approve(ctx context.Context, req permissions.Request) (bool, error) {
-	return true, nil
-}
-
 func TestAgentLoopToolRoundTrip(t *testing.T) {
 	manager, err := db.Open(db.OpenOptions{Path: ":memory:"})
 	if err != nil {
@@ -225,13 +194,13 @@ func TestAgentLoopToolRoundTrip(t *testing.T) {
 	}
 
 	// Turn 1: assistant asks to write a file. Turn 2: model finishes.
-	provider := &mockProvider{turns: []func() []loop.Event{
+	provider := &helpers.MockProvider{Turns: []func() []loop.Event{
 		func() []loop.Event {
 			return []loop.Event{
 				{Kind: loop.EventText, Text: "writing"},
 				{Kind: loop.EventToolCall, Call: &tools.ToolCall{
 					ID: "c1", Name: "write_file",
-					Arguments: mustJSONRaw(t, map[string]any{
+					Arguments: helpers.MustJSONRaw(t, map[string]any{
 						"path": "/tmp/agent-test-out/hello.txt", "content": "hi",
 					}),
 				}},
@@ -242,7 +211,7 @@ func TestAgentLoopToolRoundTrip(t *testing.T) {
 		},
 	}}
 	registry := tools.NewRegistry(tools.DefaultTools()...)
-	executor := loop.NewExecutor(registry, permissions.FullAccess, autoApprover{})
+	executor := loop.NewExecutor(registry, permissions.FullAccess, helpers.AutoApprover{})
 	agent := loop.New(provider, executor, sessions)
 
 	events, err := agent.Run(context.Background(), header.ID, "please write hi", registry.Definitions())
@@ -321,10 +290,10 @@ func TestStreamNoEventLoss(t *testing.T) {
 
 func TestExecutorDeniesInPlanMode(t *testing.T) {
 	registry := tools.NewRegistry(tools.WriteFile)
-	executor := loop.NewExecutor(registry, permissions.PlanMode, autoApprover{})
+	executor := loop.NewExecutor(registry, permissions.PlanMode, helpers.AutoApprover{})
 	result, err := executor.Execute(context.Background(), tools.ToolCall{
 		ID: "c1", Name: "write_file",
-		Arguments: mustJSONRaw(t, map[string]any{"path": "/tmp/x.txt", "content": "y"}),
+		Arguments: helpers.MustJSONRaw(t, map[string]any{"path": "/tmp/x.txt", "content": "y"}),
 	})
 	if err != nil {
 		t.Fatal(err)
