@@ -29,13 +29,13 @@ enum MessageSegment {
 
 /// Split `content` into alternating text/pill segments.
 ///
-/// For each context file we look for `@<filename>` in the content (the label
-/// the autocomplete inserted). Unmatched files are ignored — they won't appear
-/// in the content string anyway. The plain text between mentions is preserved
-/// verbatim so the rest of the message renders exactly as typed.
+/// The composer inserts mentions as bare filenames (no `@`) surrounded by
+/// whitespace padding, e.g. `"     .gitignore  "`. We find each label as a
+/// whole-word token (preceded and followed by whitespace or string boundaries)
+/// and absorb the surrounding whitespace into the pill so no stray gaps appear.
 fn split_message_segments(content: &str, context_files: &[String]) -> Vec<MessageSegment> {
-    // Build (label, path) pairs — label is the bare filename the composer inserted.
-    let mut pills: Vec<(String, String)> = context_files
+    // Build (label, path) pairs.
+    let pills: Vec<(String, String)> = context_files
         .iter()
         .map(|path| {
             let label = Path::new(path)
@@ -47,28 +47,47 @@ fn split_message_segments(content: &str, context_files: &[String]) -> Vec<Messag
         })
         .collect();
 
-    // Deduplicate by label so we don't try to match the same token twice.
-    pills.dedup_by(|a, b| a.0 == b.0);
-
     let mut segments: Vec<MessageSegment> = Vec::new();
     let mut remaining = content;
 
     'outer: while !remaining.is_empty() {
-        // Find the earliest `@<label>` occurrence among all pills.
-        let mut earliest: Option<(usize, usize, usize)> = None; // (start, end, pill_index)
+        // Find the earliest label occurrence among all pills.
+        let mut earliest: Option<(usize, usize, usize)> = None; // (match_start, match_end, pill_idx)
         for (pill_idx, (label, _)) in pills.iter().enumerate() {
-            let needle = format!("@{}", label);
-            if let Some(pos) = remaining.find(&needle) {
-                let end = pos + needle.len();
-                if earliest.is_none() || pos < earliest.unwrap().0 {
-                    earliest = Some((pos, end, pill_idx));
+            if let Some(pos) = remaining.find(label.as_str()) {
+                // Must be surrounded by whitespace or string boundaries.
+                let before_ok = pos == 0
+                    || remaining[..pos]
+                        .chars()
+                        .next_back()
+                        .is_some_and(|c| c.is_whitespace());
+                let after_pos = pos + label.len();
+                let after_ok = after_pos >= remaining.len()
+                    || remaining[after_pos..]
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_whitespace());
+
+                if before_ok && after_ok {
+                    // Absorb surrounding whitespace so no padding gaps remain.
+                    let match_start = remaining[..pos]
+                        .rfind(|c: char| !c.is_whitespace())
+                        .map(|i| i + remaining[i..].chars().next().map(|c| c.len_utf8()).unwrap_or(1))
+                        .unwrap_or(0);
+                    let match_end = after_pos
+                        + remaining[after_pos..]
+                            .find(|c: char| !c.is_whitespace())
+                            .unwrap_or(remaining[after_pos..].len());
+
+                    if earliest.is_none() || match_start < earliest.unwrap().0 {
+                        earliest = Some((match_start, match_end, pill_idx));
+                    }
                 }
             }
         }
 
         match earliest {
             None => {
-                // No more pills — push the rest as plain text.
                 if !remaining.is_empty() {
                     segments.push(MessageSegment::Text(remaining.to_string()));
                 }
