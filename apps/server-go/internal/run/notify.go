@@ -6,6 +6,7 @@
 package run
 
 import (
+	"context"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
@@ -88,6 +89,33 @@ func DoneNotification(sessionID, sessionTitle, summary string) types.Notificatio
 		out.Body = "Agent finished"
 	}
 	return out
+}
+
+// notifyEvent pushes an attention banner for questions, approvals, and
+// errors (never for aborted runs).
+func (s *Service) notifyEvent(ctx context.Context, sessionID string, event loop.Event) {
+	bus := s.notifier()
+	if bus == nil || !IsAttentionKind(event.Kind) || ctx.Err() != nil {
+		return
+	}
+	title := ""
+	if loaded, err := s.sessions.Load(sessionID, 0, 0); err == nil && loaded != nil {
+		title = loaded.Header.Title
+	}
+	bus.Push(AttentionNotification(sessionID, event, title))
+}
+
+// notifyDone pushes the clean-completion banner with an excerpt.
+func (s *Service) notifyDone(sessionID string) {
+	bus := s.notifier()
+	if bus == nil {
+		return
+	}
+	title := ""
+	if loaded, err := s.sessions.Load(sessionID, 0, 0); err == nil && loaded != nil {
+		title = loaded.Header.Title
+	}
+	bus.Push(DoneNotification(sessionID, title, lastAssistantExcerpt(s.sessions, sessionID)))
 }
 
 // lastAssistantExcerpt returns the latest assistant text turn for
