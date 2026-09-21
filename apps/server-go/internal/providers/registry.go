@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
 )
@@ -19,6 +20,8 @@ func Lookup(id string) (loop.Provider, error) {
 		return &codex.Provider{}, nil
 	case "claude":
 		return &claude.Provider{}, nil
+	case "antigravity":
+		return &antigravity.Provider{}, nil
 	default:
 		return nil, fmt.Errorf("Unknown provider '%s'.", id)
 	}

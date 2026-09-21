@@ -19,11 +19,12 @@ func TestAuthStatusLoggedOut(t *testing.T) {
 	t.Setenv("CLAUDE_CREDENTIALS_PATH", filepath.Join(dir, "missing.json"))
 	t.Setenv("CLAUDE_OAUTH_TOKEN", "")
 	t.Setenv("ANTHROPIC_OAUTH_TOKEN", "")
+	t.Setenv("ANTIGRAVITY_CREDENTIALS_PATH", filepath.Join(dir, "missing.json"))
 	status := auth.NewAuthService().GetStatus()
-	if status.Codex.LoggedIn {
+	if status.Codex.LoggedIn || status.Claude.LoggedIn || status.Antigravity.LoggedIn {
 		t.Fatal("must be logged out without credentials")
 	}
-	if status.Antigravity.LoggedIn || status.Devin.LoggedIn || status.Claude.LoggedIn {
+	if status.Devin.LoggedIn {
 		t.Fatalf("unported providers must report logged out: %+v", status)
 	}
 }
@@ -32,6 +33,8 @@ func TestAuthStatusLoggedIn(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("CODEX_CREDENTIALS_PATH", filepath.Join(dir, "codex-creds.json"))
 	t.Setenv("OPENAI_CODEX_OAUTH_TOKEN", "")
+	t.Setenv("CLAUDE_CREDENTIALS_PATH", filepath.Join(dir, "missing-claude.json"))
+	t.Setenv("ANTIGRAVITY_CREDENTIALS_PATH", filepath.Join(dir, "missing-antigravity.json"))
 	svc := auth.NewAuthService()
 	if err := codex.SaveCredential(codex.OAuthCredential{AccessToken: "a", RefreshToken: "r", ExpiresAt: 1, AccountID: "acc", Email: "u@example.com"}); err != nil {
 		t.Fatal(err)

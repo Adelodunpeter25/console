@@ -30,6 +30,9 @@ const (
 type TextPart struct {
 	Type string `json:"type"` // "text"
 	Text string `json:"text"`
+	// ThoughtSignature is Gemini's opaque reasoning-continuity token,
+	// echoed back verbatim on replay. Unused by Claude/Codex.
+	ThoughtSignature string `json:"thoughtSignature,omitempty"`
 }
 
 type ThinkingPart struct {

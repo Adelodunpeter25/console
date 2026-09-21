@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -33,6 +34,11 @@ func DefaultCodexModels() []types.Model {
 func ListProviders() []types.ProviderEntry {
 	return []types.ProviderEntry{
 		{
+			Name: "antigravity", DisplayName: "Google Antigravity",
+			Description: "Daily Cloud Code Assist endpoint with Antigravity session envelope",
+			Models:      DefaultAntigravityModels(), AuthMethod: "oauth",
+		},
+		{
 			Name: "codex", DisplayName: "Codex",
 			Description: "ChatGPT subscription models through the Codex Responses API",
 			Models:      DefaultCodexModels(), AuthMethod: "oauth",
@@ -43,6 +49,30 @@ func ListProviders() []types.ProviderEntry {
 			Models:      DefaultClaudeModels(), AuthMethod: "oauth",
 		},
 	}
+}
+
+// DefaultAntigravityModels mirrors DEFAULT_ANTIGRAVITY_MODELS: offline
+// seed refreshed from the live list after login.
+func DefaultAntigravityModels() []types.Model {
+	return antigravity.DefaultModels()
+}
+
+// AntigravityModels returns live Antigravity models when logged in, else
+// the static seed. Mirrors fetchModelsForProvider's discover-or-fallback rule.
+func AntigravityModels(ctx context.Context) []types.Model {
+	cred, err := antigravity.LoadCredential()
+	if err != nil {
+		return DefaultAntigravityModels()
+	}
+	if refreshed, err := antigravity.RefreshIfNeeded(nil, cred); err == nil {
+		cred = refreshed
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if discovered, err := antigravity.FetchModels(ctx, nil, "", cred.AccessToken); err == nil && len(discovered) > 0 {
+		return discovered
+	}
+	return DefaultAntigravityModels()
 }
 
 // CodexModels returns live Codex models when logged in, else the static

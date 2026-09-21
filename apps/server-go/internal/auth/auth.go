@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
 )
@@ -99,6 +100,11 @@ func (s *AuthService) GetStatus() AuthStatus {
 		status.Claude = CodexAuthStatus{LoggedIn: true, Email: cred.Email}
 	} else if claude.CredentialExists() {
 		status.Claude = CodexAuthStatus{LoggedIn: true}
+	}
+	if cred, err := antigravity.LoadCredential(); err == nil && cred.AccessToken != "" {
+		status.Antigravity = CodexAuthStatus{LoggedIn: true, Email: cred.Email}
+	} else if antigravity.CredentialExists() {
+		status.Antigravity = CodexAuthStatus{LoggedIn: true}
 	}
 	return status
 }

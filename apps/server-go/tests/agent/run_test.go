@@ -21,7 +21,13 @@ func TestProviderRegistry(t *testing.T) {
 	if err != nil || p == nil {
 		t.Fatalf("codex lookup: %v", p)
 	}
-	if _, err := providers.Lookup("claude"); err == nil {
+	if _, err := providers.Lookup("claude"); err != nil {
+		t.Fatalf("claude lookup: %v", err)
+	}
+	if _, err := providers.Lookup("antigravity"); err != nil {
+		t.Fatalf("antigravity lookup: %v", err)
+	}
+	if _, err := providers.Lookup("devin"); err == nil {
 		t.Fatal("unported provider must fail")
 	}
 	if _, err := providers.Lookup("nope"); err == nil {
@@ -155,7 +161,7 @@ func TestRunUnknownSessionAndProvider(t *testing.T) {
 		t.Fatal("missing session must fail")
 	}
 	header := helpers.CreateRunSession(t, sessions)
-	if _, err := svc.StartRun(header.ID, run.Prompt{Text: "hi", Provider: "antigravity", ModelID: "m"}); err == nil {
+	if _, err := svc.StartRun(header.ID, run.Prompt{Text: "hi", Provider: "devin", ModelID: "m"}); err == nil {
 		t.Fatal("unported provider must fail")
 	}
 	if svc.IsActive(header.ID) {

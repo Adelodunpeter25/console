@@ -112,6 +112,9 @@ type Event struct {
 	Part    any                `json:"-"`
 	Calls   []tools.ToolCall   `json:"-"`
 	Results []tools.ToolResult `json:"-"`
+	// ThoughtSignature accompanies EventText for Gemini's reasoning-
+	// continuity token. Unused by Claude/Codex.
+	ThoughtSignature string `json:"-"`
 }
 
 // streamOf is a thin alias over the generic stream for loop events.
@@ -283,11 +286,14 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 			if n := len(assistant.Content); n > 0 {
 				if last, ok := assistant.Content[n-1].(TextPart); ok {
 					last.Text += event.Text
+					if event.ThoughtSignature != "" {
+						last.ThoughtSignature = event.ThoughtSignature
+					}
 					assistant.Content[n-1] = last
 					break
 				}
 			}
-			assistant.Content = append(assistant.Content, TextPart{Type: "text", Text: event.Text})
+			assistant.Content = append(assistant.Content, TextPart{Type: "text", Text: event.Text, ThoughtSignature: event.ThoughtSignature})
 		case EventThinking:
 			if event.Text == "" {
 				break

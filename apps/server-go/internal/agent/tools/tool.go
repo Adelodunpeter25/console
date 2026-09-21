@@ -25,6 +25,9 @@ type ToolCall struct {
 	ID        string          `json:"id"`
 	Name      string          `json:"name"`
 	Arguments json.RawMessage `json:"arguments,omitempty"`
+	// ThoughtSignature is Gemini's opaque reasoning-continuity token, echoed
+	// back verbatim on replay. Unused by Claude/Codex.
+	ThoughtSignature string `json:"thoughtSignature,omitempty"`
 }
 
 // ToolResult is the outcome sent back to the model.
