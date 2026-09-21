@@ -63,16 +63,41 @@ func registerTerminalRoutes(app *fiber.App, ptyManager *services.PtyManager) {
 }
 
 func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, params types.TerminalSpawnParams) {
-	defer conn.Close()
+	var connMu sync.Mutex
+	connClosed := false
 
-	// fasthttp/websocket conns are not safe for concurrent writers: the PTY
-	// read pump and the exit path both write, so serialize all writes.
-	var writeMu sync.Mutex
+	// closeConn is the only closer: flag + close under one lock so a
+	// concurrent PTY-callback write can never race the close (fasthttp
+	// panics, rather than errors, on use-after-close). Writes are
+	// serialized on the same mutex: the PTY pump and the exit path both
+	// write while the read loop may be closing.
+	closeConn := func() {
+		connMu.Lock()
+		if !connClosed {
+			connClosed = true
+			_ = conn.Close()
+		}
+		connMu.Unlock()
+	}
+	defer closeConn()
+	// One panicking socket must never take down the daemon.
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("terminal socket panic", "panic", r)
+		}
+	}()
+
 	sendJSON := func(msg any) {
+		connMu.Lock()
+		defer connMu.Unlock()
+		if connClosed {
+			return
+		}
 		data, _ := json.Marshal(msg)
-		writeMu.Lock()
-		_ = conn.WriteMessage(websocket.TextMessage, data)
-		writeMu.Unlock()
+		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+			slog.Debug("terminal send error", "error", err)
+			connClosed = true
+		}
 	}
 	sendBinary := func(chunk []byte) {
 		bufPtr := terminalFramePool.Get().(*[]byte)
@@ -84,9 +109,14 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, p
 		}
 		buf[0] = terminalOutputFrameTag
 		copy(buf[1:], chunk)
-		writeMu.Lock()
-		_ = conn.WriteMessage(websocket.BinaryMessage, buf)
-		writeMu.Unlock()
+		connMu.Lock()
+		if !connClosed {
+			if err := conn.WriteMessage(websocket.BinaryMessage, buf); err != nil {
+				slog.Debug("terminal binary send error", "error", err)
+				connClosed = true
+			}
+		}
+		connMu.Unlock()
 		*bufPtr = buf[:0]
 		terminalFramePool.Put(bufPtr)
 	}
@@ -129,6 +159,9 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, p
 		msgType, data, err := conn.ReadMessage()
 		if err != nil {
 			slog.Debug("terminal socket closed", "session", session.ID, "error", err)
+			connMu.Lock()
+			connClosed = true
+			connMu.Unlock()
 			return
 		}
 		if len(data) > maxTerminalFrameBytes {
