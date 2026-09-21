@@ -22,7 +22,7 @@ func registerScriptRoutes(app *fiber.App, scripts *services.ProjectScriptsServic
 		return c.Status(status).JSON(fiber.Map{"success": false, "error": err.Error()})
 	}
 
-	app.Get("/projects/:projectId/scripts", func(c *fiber.Ctx) error {
+	app.Get("/api/projects/:projectId/scripts", func(c *fiber.Ctx) error {
 		result, err := scripts.List(c.Params("projectId"))
 		if err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
@@ -30,7 +30,7 @@ func registerScriptRoutes(app *fiber.App, scripts *services.ProjectScriptsServic
 		return ok(c, result)
 	})
 
-	app.Post("/projects/:projectId/scripts/:scriptId/runs", func(c *fiber.Ctx) error {
+	app.Post("/api/projects/:projectId/scripts/:scriptId/runs", func(c *fiber.Ctx) error {
 		run, err := scripts.Run(c.Params("projectId"), c.Params("scriptId"))
 		if err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
@@ -38,11 +38,11 @@ func registerScriptRoutes(app *fiber.App, scripts *services.ProjectScriptsServic
 		return ok(c, run, fiber.StatusCreated)
 	})
 
-	app.Get("/projects/:projectId/scripts/runs", func(c *fiber.Ctx) error {
+	app.Get("/api/projects/:projectId/scripts/runs", func(c *fiber.Ctx) error {
 		return ok(c, scripts.ListRuns(c.Params("projectId")))
 	})
 
-	app.Get("/projects/:projectId/scripts/runs/:runId", func(c *fiber.Ctx) error {
+	app.Get("/api/projects/:projectId/scripts/runs/:runId", func(c *fiber.Ctx) error {
 		run := scripts.GetRun(c.Params("projectId"), c.Params("runId"))
 		if run == nil {
 			return fail(c, fiber.StatusNotFound, errNotFound("Run not found."))
@@ -50,14 +50,14 @@ func registerScriptRoutes(app *fiber.App, scripts *services.ProjectScriptsServic
 		return ok(c, run)
 	})
 
-	app.Post("/projects/:projectId/scripts/runs/:runId/stop", func(c *fiber.Ctx) error {
+	app.Post("/api/projects/:projectId/scripts/runs/:runId/stop", func(c *fiber.Ctx) error {
 		if !scripts.Stop(c.Params("projectId"), c.Params("runId")) {
 			return fail(c, fiber.StatusNotFound, errNotFound("Run not found or already stopped."))
 		}
 		return ok(c, fiber.Map{"stopped": true})
 	})
 
-	app.Get("/projects/:projectId/scripts/runs/:runId/stream", func(c *fiber.Ctx) error {
+	app.Get("/api/projects/:projectId/scripts/runs/:runId/stream", func(c *fiber.Ctx) error {
 		projectID, runID := c.Params("projectId"), c.Params("runId")
 		if scripts.GetRun(projectID, runID) == nil {
 			return fail(c, fiber.StatusNotFound, errNotFound("Run not found."))

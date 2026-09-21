@@ -30,9 +30,7 @@ type scriptEntry struct {
 }
 
 type scriptDoc struct {
-	Scripts struct {
-		Scripts map[string]scriptEntry `toml:"scripts"`
-	} `toml:"scripts"`
+	Scripts map[string]scriptEntry `toml:"scripts"`
 }
 
 func parseProjectScripts(text string) ([]types.ProjectScript, error) {
@@ -44,7 +42,7 @@ func parseProjectScripts(text string) ([]types.ProjectScript, error) {
 		return nil, fail(err.Error())
 	}
 	scripts := make([]types.ProjectScript, 0)
-	for id, entry := range doc.Scripts.Scripts {
+	for id, entry := range doc.Scripts {
 		if !scriptIDPattern.MatchString(id) {
 			return nil, fail(fmt.Sprintf("script identifier '%s' contains unsupported characters.", id))
 		}

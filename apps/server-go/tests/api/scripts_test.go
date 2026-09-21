@@ -38,14 +38,14 @@ func writeConsoleToml(t *testing.T, root, content string) {
 
 func TestParseProjectScripts(t *testing.T) {
 	tomlText := `
-[scripts.scripts]
+[scripts]
 
-[scripts.scripts.dev]
+[scripts.dev]
 label = "Dev server"
 command = "bun dev"
 persistent = true
 
-[scripts.scripts.test]
+[scripts.test]
 label = "Tests"
 command = "bun test"
 `
@@ -66,7 +66,7 @@ command = "bun test"
 
 	// Bad identifier rejected.
 	if _, err := services.ParseProjectScriptsForTest(`
-[scripts.scripts."bad id"]
+[scripts."bad id"]
 label = "x"
 command = "y"
 `); err == nil {
@@ -88,7 +88,7 @@ func TestListMissingConfig(t *testing.T) {
 func TestRunLifecycle(t *testing.T) {
 	scripts, projectID, root := newScriptService(t)
 	writeConsoleToml(t, root, `
-[scripts.scripts.hello]
+[scripts.hello]
 label = "Hello"
 command = "echo SCRIPT_RAN && echo oops >&2 && sleep 0.2 && exit 3"
 `)
@@ -134,7 +134,7 @@ command = "echo SCRIPT_RAN && echo oops >&2 && sleep 0.2 && exit 3"
 func TestStopRunning(t *testing.T) {
 	scripts, projectID, root := newScriptService(t)
 	writeConsoleToml(t, root, `
-[scripts.scripts.sleeper]
+[scripts.sleeper]
 label = "Sleeper"
 command = "sleep 30"
 `)
