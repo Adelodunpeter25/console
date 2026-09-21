@@ -28,10 +28,15 @@ type Config struct {
 
 func New(cfg Config) (*fiber.App, *run.Service) {
 	app := fiber.New(fiber.Config{
-		AppName:      "console-server-go",
-		IdleTimeout:  5 * time.Minute,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		AppName:     "console-server-go",
+		IdleTimeout: 5 * time.Minute,
+		ReadTimeout: 15 * time.Second,
+		// fasthttp's WriteTimeout is an absolute deadline from the start of
+		// the response, not an idle timeout — it silently kills SSE run
+		// streams once elapsed even while the connection is still active.
+		// Agent turns (extended thinking, long tool loops) routinely run
+		// past any fixed window, so leave writes unbounded.
+		WriteTimeout: 0,
 	})
 	app.Use(recover.New())
 
