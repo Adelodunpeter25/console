@@ -48,13 +48,13 @@ impl ConsoleDesktopApp {
                     let editor = state.read(cx);
                     (editor.theme(), editor.wrap_enabled(), editor.font().clone())
                 };
-                if current_theme != theme_preset || !current_wrap || current_font != font_config {
+                if current_theme != theme_preset || current_wrap || current_font != font_config {
                     state.update(cx, |editor, cx| {
                         if editor.theme() != theme_preset {
                             editor.set_theme(theme_preset, cx);
                         }
-                        if !editor.wrap_enabled() {
-                            editor.set_wrap_enabled(true);
+                        if editor.wrap_enabled() {
+                            editor.set_wrap_enabled(false);
                         }
                         if editor.font() != &font_config {
                             editor.set_font(font_config);
@@ -70,7 +70,7 @@ impl ConsoleDesktopApp {
                 if editor.theme() != theme_preset {
                     editor.set_theme(theme_preset, cx);
                 }
-                editor.set_wrap_enabled(true);
+                editor.set_wrap_enabled(false);
                 if editor.font() != &font_config {
                     editor.set_font(font_config);
                 }
@@ -85,7 +85,7 @@ impl ConsoleDesktopApp {
         let state = cx.new(|cx| {
             let mut s = editor_ui::EditorState::readonly(content, lang);
             s.set_theme(theme_preset, cx);
-            s.set_wrap_enabled(true);
+            s.set_wrap_enabled(false);
             s.set_font(font_config);
             s
         });
@@ -149,13 +149,13 @@ impl ConsoleDesktopApp {
                     let diff_state = state.read(cx);
                     (diff_state.theme(), diff_state.wrap_enabled(), diff_state.font().clone())
                 };
-                if current_theme != theme_preset || !current_wrap || current_font != font_config {
+                if current_theme != theme_preset || current_wrap || current_font != font_config {
                     state.update(cx, |diff_state, _cx| {
                         if diff_state.theme() != theme_preset {
                             diff_state.set_theme(theme_preset);
                         }
-                        if !diff_state.wrap_enabled() {
-                            diff_state.set_wrap_enabled(true);
+                        if diff_state.wrap_enabled() {
+                            diff_state.set_wrap_enabled(false);
                         }
                         if diff_state.font() != &font_config {
                             diff_state.set_font(font_config);
@@ -171,7 +171,7 @@ impl ConsoleDesktopApp {
                 if diff_state.theme() != theme_preset {
                     diff_state.set_theme(theme_preset);
                 }
-                diff_state.set_wrap_enabled(true);
+                diff_state.set_wrap_enabled(false);
                 if diff_state.font() != &font_config {
                     diff_state.set_font(font_config);
                 }
@@ -186,7 +186,7 @@ impl ConsoleDesktopApp {
         let state = cx.new(|_| {
             let mut s = editor_ui::DiffState::from_result(convert_result(), lang);
             s.set_theme(theme_preset);
-            s.set_wrap_enabled(true);
+            s.set_wrap_enabled(false);
             s.set_font(font_config);
             s
         });
