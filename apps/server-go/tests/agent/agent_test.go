@@ -20,6 +20,22 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
+// resultText extracts the text of the first MCP content block from a
+// tool's successful return value, unwrapping tools.Envelope when present.
+func resultText(t *testing.T, out any) string {
+	t.Helper()
+	content := out
+	if env, ok := out.(tools.Envelope); ok {
+		content = env.Content
+	}
+	blocks, ok := content.([]map[string]any)
+	if !ok || len(blocks) == 0 {
+		t.Fatalf("expected MCP content array, got %#v", out)
+	}
+	text, _ := blocks[0]["text"].(string)
+	return text
+}
+
 func TestToolSchemaFromTags(t *testing.T) {
 	registry := tools.NewRegistry(tools.DefaultTools()...)
 	defs := registry.Definitions()
@@ -110,8 +126,8 @@ func TestGlobGrepFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("glob execute: %v", err)
 	}
-	matches, ok := globOut.([]string)
-	if !ok || len(matches) != 1 || !strings.HasSuffix(matches[0], "a.go") {
+	globText := resultText(t, globOut)
+	if !strings.Contains(globText, "Found 1 file(s)") || !strings.HasSuffix(strings.TrimSpace(globText), "a.go") {
 		t.Fatalf("glob fallback matches: %#v", globOut)
 	}
 
@@ -162,8 +178,8 @@ func TestGlobGrepFff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("glob execute: %v", err)
 	}
-	matches, ok := globOut.([]string)
-	if !ok || len(matches) != 1 || matches[0] != "a.go" {
+	globText := resultText(t, globOut)
+	if !strings.Contains(globText, "Found 1 file(s)") || !strings.HasSuffix(strings.TrimSpace(globText), "a.go") {
 		t.Fatalf("fff glob matches: %#v", globOut)
 	}
 

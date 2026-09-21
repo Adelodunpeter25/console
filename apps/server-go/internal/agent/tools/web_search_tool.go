@@ -182,7 +182,7 @@ func searchBrave(ctx context.Context, query string, numResults int) ([]webSearch
 	return out, nil
 }
 
-func renderFirecrawlResults(query string, results []FirecrawlSearchResult) string {
+func renderFirecrawlResults(query string, results []FirecrawlSearchResult) []map[string]any {
 	lines := []string{fmt.Sprintf("Web search results for: %q (%d results) — via Firecrawl (markdown)\n", query, len(results))}
 	for i, r := range results {
 		lines = append(lines, fmt.Sprintf("[%d] %s", i+1, r.Title))
@@ -195,10 +195,10 @@ func renderFirecrawlResults(query string, results []FirecrawlSearchResult) strin
 		}
 		lines = append(lines, "")
 	}
-	return strings.Join(lines, "\n")
+	return textResult(strings.Join(lines, "\n"))
 }
 
-func renderSnippetResults(query string, results []webSearchResult) string {
+func renderSnippetResults(query string, results []webSearchResult) []map[string]any {
 	lines := []string{fmt.Sprintf("Web search results for: %q (%d results)\n", query, len(results))}
 	for i, r := range results {
 		lines = append(lines, fmt.Sprintf("[%d] %s", i+1, r.Title))
@@ -208,7 +208,7 @@ func renderSnippetResults(query string, results []webSearchResult) string {
 		}
 		lines = append(lines, "")
 	}
-	return strings.Join(lines, "\n")
+	return textResult(strings.Join(lines, "\n"))
 }
 
 const webSearchTimeout = 15 * time.Second
@@ -239,7 +239,7 @@ var WebSearch = NewTool("webSearch", "Search the web for up-to-date documentatio
 				return nil, NewToolError("%v", err)
 			}
 			if len(results) == 0 {
-				return fmt.Sprintf("No results found for: %q", in.Query), nil
+				return textResult(fmt.Sprintf("No results found for: %q", in.Query)), nil
 			}
 			return renderSnippetResults(in.Query, results), nil
 		}
@@ -258,7 +258,7 @@ var WebSearch = NewTool("webSearch", "Search the web for up-to-date documentatio
 			return nil, NewToolError("%v", err)
 		}
 		if len(results) == 0 {
-			return fmt.Sprintf("No results found for: %q", in.Query), nil
+			return textResult(fmt.Sprintf("No results found for: %q", in.Query)), nil
 		}
 		return renderSnippetResults(in.Query, results), nil
 	})

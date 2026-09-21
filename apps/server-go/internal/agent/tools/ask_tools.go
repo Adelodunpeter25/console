@@ -89,13 +89,13 @@ func NewAskTool(handler AskHandler) Tool {
 				return nil, NewToolError("question is required")
 			}
 			if handler == nil {
-				return headlessAnswer(in.Question, in.Options), nil
+				return textResult(headlessAnswer(in.Question, in.Options)), nil
 			}
 			answer, err := askOne(ctx, handler, in, "")
 			if err != nil {
 				return nil, err
 			}
-			return answer.format(), nil
+			return textResult(answer.format()), nil
 		})
 }
 
@@ -116,7 +116,7 @@ func NewAskManyTool(handler AskHandler) Tool {
 				for _, q := range in.Questions {
 					lines = append(lines, headlessAnswer(q.Question, q.Options))
 				}
-				return strings.Join(lines, "\n\n"), nil
+				return textResult(strings.Join(lines, "\n\n")), nil
 			}
 			batchID := utils.RandomID()
 			lines := make([]string, 0, len(in.Questions))
@@ -127,7 +127,7 @@ func NewAskManyTool(handler AskHandler) Tool {
 				}
 				lines = append(lines, fmt.Sprintf("Q%d: %s", i+1, answer.format()))
 			}
-			return strings.Join(lines, "\n"), nil
+			return textResult(strings.Join(lines, "\n")), nil
 		})
 }
 

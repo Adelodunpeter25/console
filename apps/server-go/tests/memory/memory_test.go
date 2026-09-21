@@ -14,6 +14,18 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
+// resultText extracts the text of the first MCP content block from a
+// tool's successful return value.
+func resultText(t *testing.T, out any) string {
+	t.Helper()
+	blocks, ok := out.([]map[string]any)
+	if !ok || len(blocks) == 0 {
+		t.Fatalf("expected MCP content array, got %#v", out)
+	}
+	text, _ := blocks[0]["text"].(string)
+	return text
+}
+
 func openTestStore(t *testing.T, dir, name string, scope memory.Scope) *memory.Store {
 	t.Helper()
 	store, err := memory.OpenStore(dir+"/"+name, scope)
@@ -156,7 +168,7 @@ func TestMemoryToolFlows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("store: %v", err)
 	}
-	stored, _ := out.(string)
+	stored := resultText(t, out)
 	if stored == "" || len(stored) < 10 {
 		t.Fatalf("store output: %q", stored)
 	}
@@ -165,7 +177,7 @@ func TestMemoryToolFlows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("recall: %v", err)
 	}
-	if text, _ := out.(string); text == "" {
+	if text := resultText(t, out); text == "" {
 		t.Fatalf("recall output: %q", text)
 	}
 
@@ -173,7 +185,7 @@ func TestMemoryToolFlows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if text, _ := out.(string); text == "" {
+	if text := resultText(t, out); text == "" {
 		t.Fatalf("list output: %q", text)
 	}
 

@@ -26,8 +26,8 @@ func TestWebFetchDirectJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	s, ok := out.(string)
-	if !ok || !strings.Contains(s, `"ok": true`) || !strings.Contains(s, "Status: 200") {
+	s := resultText(t, out)
+	if !strings.Contains(s, `"ok": true`) || !strings.Contains(s, "Status: 200") {
 		t.Fatalf("output: %v", out)
 	}
 }
@@ -44,8 +44,8 @@ func TestWebFetchDirectHTML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	s, ok := out.(string)
-	if !ok || !strings.Contains(s, "Hello world") || strings.Contains(s, "evil()") {
+	s := resultText(t, out)
+	if !strings.Contains(s, "Hello world") || strings.Contains(s, "evil()") {
 		t.Fatalf("output: %v", out)
 	}
 }
@@ -58,8 +58,12 @@ func TestWebFetchErrorStatus(t *testing.T) {
 	defer srv.Close()
 
 	args, _ := json.Marshal(map[string]any{"url": srv.URL + "/api/missing"})
-	if _, err := tools.Fetch.Execute(context.Background(), args); err == nil {
-		t.Fatal("expected tool error for 404 status")
+	out, err := tools.Fetch.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !resultIsError(out) {
+		t.Fatalf("expected isError for 404 status: %v", out)
 	}
 }
 
@@ -77,8 +81,8 @@ func TestWebFetchGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	s, ok := out.(string)
-	if !ok || !strings.Contains(s, "hello") {
+	s := resultText(t, out)
+	if !strings.Contains(s, "hello") {
 		t.Fatalf("output: %v", out)
 	}
 }

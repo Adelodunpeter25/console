@@ -44,11 +44,21 @@ type ToolResult struct {
 type ToolError struct {
 	Msg string
 }
+
 func (e *ToolError) Error() string { return e.Msg }
 
 // NewToolError wraps an error message for ToolResult.IsError.
 func NewToolError(format string, args ...any) error {
 	return &ToolError{Msg: fmt.Sprintf(format, args...)}
+}
+
+// Envelope lets a tool signal isError from a *successful* return, mirroring
+// TS's normalizeToolOutput: `{content, isError}` (batch-write.ts's partial
+// failure reports isError this way without throwing — the summary text is
+// still useful even when some writes failed).
+type Envelope struct {
+	Content any
+	IsError bool
 }
 
 // Tool is the agent-callable unit. Schema() is derived from the input

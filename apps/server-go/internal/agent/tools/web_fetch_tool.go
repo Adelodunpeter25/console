@@ -82,7 +82,7 @@ var Fetch = NewTool("webFetch", "Fetch content from a URL or web page as markdow
 					fmt.Sprintf("Title: %s", title),
 				}
 				sections = append(sections, "", "Body (markdown):", markdown)
-				return strings.Join(sections, "\n"), nil
+				return textResult(strings.Join(sections, "\n")), nil
 			}
 			// Firecrawl error or empty result — fall through to direct fetch.
 		}
@@ -95,9 +95,9 @@ var Fetch = NewTool("webFetch", "Fetch content from a URL or web page as markdow
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			if reqCtx.Err() == context.DeadlineExceeded {
-				return fmt.Sprintf("Error: Request timed out after %dms — %s", timeoutMs, in.URL), nil
+				return textResult(fmt.Sprintf("Error: Request timed out after %dms — %s", timeoutMs, in.URL)), nil
 			}
-			return fmt.Sprintf("Error: %v", err), nil
+			return textResult(fmt.Sprintf("Error: %v", err)), nil
 		}
 		defer resp.Body.Close()
 
@@ -139,8 +139,5 @@ var Fetch = NewTool("webFetch", "Fetch content from a URL or web page as markdow
 		sections = append(sections, "", "Body:", formattedBody)
 
 		result := strings.Join(sections, "\n")
-		if resp.StatusCode >= 400 {
-			return nil, NewToolError("%s", result)
-		}
-		return result, nil
+		return Envelope{Content: textResult(result), IsError: resp.StatusCode >= 400}, nil
 	})

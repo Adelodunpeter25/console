@@ -77,13 +77,13 @@ func NewBashJobTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
 			case "list":
 				snapshots := jobs.List(ownerSessionID)
 				if len(snapshots) == 0 {
-					return "No background bash jobs.", nil
+					return textResult("No background bash jobs."), nil
 				}
 				lines := make([]string, len(snapshots))
 				for i, s := range snapshots {
 					lines[i] = formatJobSnapshot(s)
 				}
-				return strings.Join(lines, "\n\n---\n\n"), nil
+				return textResult(strings.Join(lines, "\n\n---\n\n")), nil
 
 			case "status":
 				if in.JobID == "" {
@@ -96,7 +96,7 @@ func NewBashJobTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
 				if s.Status == services.BashJobFailed || s.Status == services.BashJobExpired {
 					return nil, NewToolError("%s", formatJobSnapshot(s))
 				}
-				return formatJobSnapshot(s), nil
+				return textResult(formatJobSnapshot(s)), nil
 
 			case "output":
 				if in.JobID == "" {
@@ -110,7 +110,7 @@ func NewBashJobTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
 				if err != nil {
 					return nil, NewToolError("%v", err)
 				}
-				return formatJobSnapshot(s) + "\n" + body, nil
+				return textResult(formatJobSnapshot(s) + "\n" + body), nil
 
 			case "wait":
 				if in.JobID == "" {
@@ -136,7 +136,7 @@ func NewBashJobTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
 				if s.Status == services.BashJobFailed || s.Status == services.BashJobExpired {
 					return nil, NewToolError("%s", result)
 				}
-				return result, nil
+				return textResult(result), nil
 
 			case "kill":
 				if in.JobID == "" {
@@ -146,7 +146,7 @@ func NewBashJobTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
 				if err != nil {
 					return nil, NewToolError("%v", err)
 				}
-				return formatJobSnapshot(s) + "\n\nJob killed; process tree terminated.", nil
+				return textResult(formatJobSnapshot(s) + "\n\nJob killed; process tree terminated."), nil
 
 			default:
 				return nil, NewToolError("Unknown action: %s", in.Action)

@@ -40,7 +40,7 @@ func TestSubagentCompletes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	text, _ := out.(string)
+	text := resultText(t, out)
 	if !strings.Contains(text, "found it") || !strings.Contains(text, "Completed Task") {
 		t.Fatalf("summary: %q", text)
 	}
@@ -61,7 +61,7 @@ func TestSubagentSimulated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("simulated must not error: %v", err)
 	}
-	if text, _ := out.(string); !strings.Contains(text, "simulated") {
+	if text := resultText(t, out); !strings.Contains(text, "simulated") {
 		t.Fatalf("simulated: %q", text)
 	}
 }
@@ -121,7 +121,7 @@ func TestSubagentInDefaultTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("simulated subagent must not error: %v", err)
 	}
-	if text, _ := out.(string); !strings.Contains(text, "simulated") {
+	if text := resultText(t, out); !strings.Contains(text, "simulated") {
 		t.Fatalf("simulated: %q", text)
 	}
 }

@@ -30,8 +30,8 @@ func TestWebSearchFirecrawlSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	s, ok := out.(string)
-	if !ok || !strings.Contains(s, "Fire Title") || !strings.Contains(s, "Fire Markdown") {
+	s := resultText(t, out)
+	if !strings.Contains(s, "Fire Title") || !strings.Contains(s, "Fire Markdown") {
 		t.Fatalf("output: %v", out)
 	}
 }
@@ -62,8 +62,8 @@ func TestWebSearchFallbackOnRetryableError(t *testing.T) {
 	if !fireCalled {
 		t.Fatal("expected Firecrawl to be called first")
 	}
-	s, ok := out.(string)
-	if !ok || !strings.Contains(s, "Example Title") {
+	s := resultText(t, out)
+	if !strings.Contains(s, "Example Title") {
 		t.Fatalf("output: %v", out)
 	}
 }
@@ -94,8 +94,8 @@ func TestWebSearchBraveSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	s, ok := out.(string)
-	if !ok || !strings.Contains(s, "Brave Title") {
+	s := resultText(t, out)
+	if !strings.Contains(s, "Brave Title") {
 		t.Fatalf("output: %v", out)
 	}
 }

@@ -23,5 +23,5 @@ var Subagent = NewTool("subagent", "Delegate a focused sub-task to an isolated s
 		if displayName == "" {
 			displayName = in.Role
 		}
-		return fmt.Sprintf("Subagent [%s] simulated run for: %q\n(No active provider attached to task tool context)", displayName, in.Prompt), nil
+		return textResult(fmt.Sprintf("Subagent [%s] simulated run for: %q\n(No active provider attached to task tool context)", displayName, in.Prompt)), nil
 	})

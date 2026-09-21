@@ -98,7 +98,7 @@ func (t *subagentTool) ExecuteCall(ctx context.Context, call tools.ToolCall) (an
 		displayName = role
 	}
 	if t.context == nil {
-		return fmt.Sprintf("Subagent [%s] simulated run for: %q\n(No active provider attached to task tool context)", displayName, in.Prompt), nil
+		return textResult(fmt.Sprintf("Subagent [%s] simulated run for: %q\n(No active provider attached to task tool context)", displayName, in.Prompt)), nil
 	}
 	return t.context.run(ctx, call.ID, in.Prompt, displayName, role)
 }
@@ -182,7 +182,14 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 		final = "Subagent finished with no text output."
 	}
 	emit(EventSubagentEnd, SubagentEndInfo{SubagentID: subagentID, Status: "completed", Summary: final, TotalTurns: totalTurns})
-	return fmt.Sprintf("Subagent [%s] Completed Task:\n%s", name, final), nil
+	return textResult(fmt.Sprintf("Subagent [%s] Completed Task:\n%s", name, final)), nil
+}
+
+// textResult wraps a formatted string as the MCP-style content array the TS
+// server always sends over the wire (mirrors tools.textResult; duplicated
+// here since it is unexported across the package boundary).
+func textResult(text string) []map[string]any {
+	return []map[string]any{{"type": "text", "text": text}}
 }
 
 func randomSubSession() string {

@@ -23,7 +23,7 @@ func TestTodoUnboundLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("init: %v", err)
 	}
-	s, _ := out.(string)
+	s := resultText(t, out)
 	if !strings.Contains(s, "#1: first (pending)") || !strings.Contains(s, "#2: second (pending)") {
 		t.Fatalf("init output: %v", out)
 	}
@@ -33,7 +33,7 @@ func TestTodoUnboundLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	s, _ = out.(string)
+	s = resultText(t, out)
 	if !strings.Contains(s, "#1: first (in_progress)") {
 		t.Fatalf("start output: %v", out)
 	}
@@ -48,7 +48,7 @@ func TestTodoUnboundLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("append: %v", err)
 	}
-	s, _ = out.(string)
+	s = resultText(t, out)
 	if !strings.Contains(s, "#3: third (pending)") {
 		t.Fatalf("append output: %v", out)
 	}
@@ -58,7 +58,7 @@ func TestTodoUnboundLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("view: %v", err)
 	}
-	s, _ = out.(string)
+	s = resultText(t, out)
 	if !strings.Contains(s, "#1: first (completed)") {
 		t.Fatalf("view output: %v", out)
 	}
@@ -107,7 +107,7 @@ func TestTodoPersistsAcrossToolInstances(t *testing.T) {
 	if err != nil {
 		t.Fatalf("view: %v", err)
 	}
-	s, _ := out.(string)
+	s := resultText(t, out)
 	if !strings.Contains(s, "#1: write code (in_progress)") || !strings.Contains(s, "#2: write tests (pending)") {
 		t.Fatalf("persisted view: %v", out)
 	}

@@ -143,7 +143,8 @@ var WriteFile = NewTool("write_file", "Create or overwrite a file with the given
 		if err := os.WriteFile(in.Path, []byte(in.Content), 0o644); err != nil {
 			return nil, NewToolError("Cannot write %s: %v", in.Path, err)
 		}
-		return map[string]any{"path": in.Path, "bytes": len(in.Content), "written": true}, nil
+		lineCount := strings.Count(in.Content, "\n") + 1
+		return textResult(fmt.Sprintf("Written: %s\n  Bytes: %d\n  Lines: %d", in.Path, len(in.Content), lineCount)), nil
 	})
 
 type listDirInput struct {
@@ -152,19 +153,59 @@ type listDirInput struct {
 }
 
 type dirEntry struct {
-	Name  string `json:"name"`
-	IsDir bool   `json:"isDir"`
-	Size  int64  `json:"size,omitempty"`
+	Name  string
+	IsDir bool
+	Size  int64
 }
 
-var ListDir = NewTool("list_dir", "List the immediate children of a directory.", TierRead,
+// formatBytes mirrors packages/types/src/fs.ts formatBytes.
+func formatBytes(n int64) string {
+	switch {
+	case n < 1024:
+		return fmt.Sprintf("%d B", n)
+	case n < 1024*1024:
+		return fmt.Sprintf("%.0f KB", float64(n)/1024)
+	default:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1024*1024))
+	}
+}
+
+// renderDirTree mirrors list-dir.ts's renderTree: box-drawing connectors,
+// "N/" for directories, "  [size]" for files.
+func renderDirTree(entries []dirEntry) []string {
+	lines := make([]string, 0, len(entries))
+	for i, e := range entries {
+		connector := "├── "
+		if i == len(entries)-1 {
+			connector = "└── "
+		}
+		if e.IsDir {
+			lines = append(lines, connector+e.Name+"/")
+		} else {
+			lines = append(lines, fmt.Sprintf("%s%s  [%s]", connector, e.Name, formatBytes(e.Size)))
+		}
+	}
+	return lines
+}
+
+var ListDir = NewTool("list_dir", "List files and directories at a path.", TierRead,
 	func(ctx context.Context, in listDirInput) (any, error) {
 		if in.Path == "" {
 			return nil, NewToolError("path is required")
 		}
+		info, err := os.Stat(in.Path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, NewToolError("Directory not found: %s", in.Path)
+			}
+			return nil, NewToolError("%v", err)
+		}
+		if !info.IsDir() {
+			return nil, NewToolError("%q is not a directory. Use read_file to read files.", in.Path)
+		}
 		entries, err := os.ReadDir(in.Path)
 		if err != nil {
-			return nil, NewToolError("Cannot list %s: %v", in.Path, err)
+			return nil, NewToolError("Cannot read directory %q: %v", in.Path, err)
 		}
 		out := make([]dirEntry, 0, len(entries))
 		for _, e := range entries {
@@ -173,8 +214,8 @@ var ListDir = NewTool("list_dir", "List the immediate children of a directory.",
 			}
 			entry := dirEntry{Name: e.Name(), IsDir: e.IsDir()}
 			if !e.IsDir() {
-				if info, err := e.Info(); err == nil {
-					entry.Size = info.Size()
+				if fi, err := e.Info(); err == nil {
+					entry.Size = fi.Size()
 				}
 			}
 			out = append(out, entry)
@@ -185,7 +226,13 @@ var ListDir = NewTool("list_dir", "List the immediate children of a directory.",
 			}
 			return out[i].Name < out[j].Name
 		})
-		return out, nil
+
+		header := fmt.Sprintf("Directory: %s (top-level only)\n", in.Path)
+		body := "(empty directory)"
+		if len(out) > 0 {
+			body = strings.Join(renderDirTree(out), "\n")
+		}
+		return textResult(header + body), nil
 	})
 
 type globInput struct {
@@ -217,7 +264,7 @@ var Glob = NewTool("glob", "Find files matching a glob pattern (e.g. 'src/**/*.t
 							matches = append(matches, item.RelPath)
 						}
 						sort.Strings(matches)
-						return matches, nil
+						return textResult(formatGlobMatches(matches, in.Pattern, resolvedRoot)), nil
 					}
 				}
 			}
@@ -232,8 +279,18 @@ var Glob = NewTool("glob", "Find files matching a glob pattern (e.g. 'src/**/*.t
 			return nil, NewToolError("Invalid glob pattern %s: %v", in.Pattern, err)
 		}
 		sort.Strings(matches)
-		return matches, nil
+		resolvedRoot, _ := filepath.Abs(root)
+		return textResult(formatGlobMatches(matches, in.Pattern, resolvedRoot)), nil
 	})
+
+// formatGlobMatches mirrors glob.ts's result text.
+func formatGlobMatches(matches []string, pattern, searchRoot string) string {
+	if len(matches) == 0 {
+		return fmt.Sprintf("No files matched pattern %q in %s", pattern, searchRoot)
+	}
+	header := fmt.Sprintf("Found %d file(s) matching %q in %s:\n", len(matches), pattern, searchRoot)
+	return header + strings.Join(matches, "\n")
+}
 
 type grepInput struct {
 	Pattern         string `json:"pattern" jsonschema:"required,description=Regular expression to search for"`

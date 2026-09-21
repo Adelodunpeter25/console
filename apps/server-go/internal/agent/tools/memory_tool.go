@@ -50,7 +50,7 @@ func NewMemoryTool(projectID string, registry *memory.Registry) Tool {
 				if err != nil {
 					return nil, err
 				}
-				return fmt.Sprintf("Stored memory %s (scope: %s).", entry.ID, entry.Scope), nil
+				return textResult(fmt.Sprintf("Stored memory %s (scope: %s).", entry.ID, entry.Scope)), nil
 			case "recall":
 				if in.Query == "" && len(in.Tags) == 0 {
 					return nil, NewToolError("'recall' operation requires 'query' and/or 'tags'.")
@@ -89,7 +89,7 @@ func NewMemoryTool(projectID string, registry *memory.Registry) Tool {
 				if updated == nil {
 					return nil, NewToolError("Memory %s not found in scope '%s'.", in.ID, scope)
 				}
-				return fmt.Sprintf("Updated memory %s.", updated.ID), nil
+				return textResult(fmt.Sprintf("Updated memory %s.", updated.ID)), nil
 			case "delete":
 				if in.ID == "" {
 					return nil, NewToolError("'delete' operation requires 'id'.")
@@ -101,16 +101,16 @@ func NewMemoryTool(projectID string, registry *memory.Registry) Tool {
 				if !removed {
 					return nil, NewToolError("Memory %s not found in scope '%s'.", in.ID, scope)
 				}
-				return fmt.Sprintf("Deleted memory %s.", in.ID), nil
+				return textResult(fmt.Sprintf("Deleted memory %s.", in.ID)), nil
 			default:
 				return nil, NewToolError("Unknown operation.")
 			}
 		})
 }
 
-func renderMemories(title string, entries []memory.Entry) string {
+func renderMemories(title string, entries []memory.Entry) []map[string]any {
 	if len(entries) == 0 {
-		return title + ":\n(No memories found)"
+		return textResult(title + ":\n(No memories found)")
 	}
 	lines := make([]string, 0, len(entries))
 	for _, e := range entries {
@@ -120,5 +120,5 @@ func renderMemories(title string, entries []memory.Entry) string {
 		}
 		lines = append(lines, fmt.Sprintf("- %s: %s%s", e.ID, e.Content, suffix))
 	}
-	return title + ":\n" + strings.Join(lines, "\n")
+	return textResult(title + ":\n" + strings.Join(lines, "\n"))
 }

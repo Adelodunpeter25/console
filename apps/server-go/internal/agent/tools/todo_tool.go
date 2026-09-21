@@ -25,9 +25,9 @@ type todoInput struct {
 	Index int      `json:"index,omitempty" jsonschema:"description=Task ID/index (1-indexed) to update status for ('start' or 'done')"`
 }
 
-func renderTodoList(title string, items []types.TodoItem) string {
+func renderTodoList(title string, items []types.TodoItem) []map[string]any {
 	if len(items) == 0 {
-		return fmt.Sprintf("%s:\n(No active tasks in TODO list)", title)
+		return textResult(fmt.Sprintf("%s:\n(No active tasks in TODO list)", title))
 	}
 	out := title + ":\n"
 	for i, item := range items {
@@ -43,7 +43,7 @@ func renderTodoList(title string, items []types.TodoItem) string {
 		}
 		out += fmt.Sprintf("%s #%d: %s (%s)", icon, item.ID, item.Content, item.Status)
 	}
-	return out
+	return textResult(out)
 }
 
 // NewTodoTool builds a todo tool bound to one session: reads/writes persist

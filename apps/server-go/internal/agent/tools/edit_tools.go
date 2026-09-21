@@ -53,11 +53,14 @@ var EditFile = NewTool("editFile", "Edit a file by replacing an exact string. Re
 
 		oldLines := strings.Count(in.OldContent, "\n") + 1
 		newLines := strings.Count(in.NewContent, "\n") + 1
-		return map[string]any{
-			"path":     in.Path,
-			"oldLines": oldLines,
-			"newLines": newLines,
-		}, nil
+		lineDelta := newLines - oldLines
+		deltaStr := "no line count change"
+		if lineDelta > 0 {
+			deltaStr = fmt.Sprintf("+%d lines", lineDelta)
+		} else if lineDelta < 0 {
+			deltaStr = fmt.Sprintf("%d lines", lineDelta)
+		}
+		return textResult(fmt.Sprintf("Edited: %s\n  Replaced %d line(s) with %d line(s) (%s)", in.Path, oldLines, newLines, deltaStr)), nil
 	})
 
 type batchWriteFile struct {
@@ -71,10 +74,11 @@ type batchWriteInput struct {
 }
 
 type batchWriteResult struct {
-	Path   string `json:"path"`
-	Status string `json:"status"` // "written" | "failed" | "skipped"
-	Bytes  int    `json:"bytes,omitempty"`
-	Error  string `json:"error,omitempty"`
+	Path   string
+	Status string // "written" | "failed"
+	Bytes  int
+	Lines  int
+	Error  string
 }
 
 func writeOneFile(path, content string) batchWriteResult {
@@ -86,7 +90,38 @@ func writeOneFile(path, content string) batchWriteResult {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return batchWriteResult{Path: path, Status: "failed", Error: err.Error()}
 	}
-	return batchWriteResult{Path: path, Status: "written", Bytes: len(content)}
+	return batchWriteResult{Path: path, Status: "written", Bytes: len(content), Lines: strings.Count(content, "\n") + 1}
+}
+
+// formatBatchWriteResults mirrors batch-write.ts's formatResults.
+func formatBatchWriteResults(results []batchWriteResult) string {
+	var lines []string
+	written := 0
+	for _, r := range results {
+		if r.Status == "written" {
+			written++
+		}
+	}
+	lines = append(lines, fmt.Sprintf("Summary: %d/%d files written successfully.", written, len(results)), "")
+
+	if written > 0 {
+		lines = append(lines, "✓ Written:")
+		for _, r := range results {
+			if r.Status == "written" {
+				lines = append(lines, fmt.Sprintf("  %s  [%dB, %d lines]", r.Path, r.Bytes, r.Lines))
+			}
+		}
+	}
+	failed := len(results) - written
+	if failed > 0 {
+		lines = append(lines, "", "✗ Failed:")
+		for _, r := range results {
+			if r.Status != "written" {
+				lines = append(lines, fmt.Sprintf("  %s", r.Path), fmt.Sprintf("    Error: %s", r.Error))
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // BatchWrite writes multiple files in one call, useful for scaffolding or
@@ -114,7 +149,7 @@ var BatchWrite = NewTool("batchWrite", "Write multiple files at once. Useful for
 				if result.Status == "failed" {
 					anyFailed = true
 					for _, remaining := range in.Files[len(results):] {
-						results = append(results, batchWriteResult{Path: remaining.Path, Status: "skipped", Error: "Skipped due to stopOnError"})
+						results = append(results, batchWriteResult{Path: remaining.Path, Status: "failed", Error: "Skipped due to stopOnError"})
 					}
 					break
 				}
@@ -138,15 +173,5 @@ var BatchWrite = NewTool("batchWrite", "Write multiple files at once. Useful for
 			}
 		}
 
-		written := 0
-		for _, r := range results {
-			if r.Status == "written" {
-				written++
-			}
-		}
-		return map[string]any{
-			"summary": fmt.Sprintf("%d/%d files written successfully.", written, len(in.Files)),
-			"results": results,
-			"isError": anyFailed,
-		}, nil
+		return Envelope{Content: textResult(formatBatchWriteResults(results)), IsError: anyFailed}, nil
 	})

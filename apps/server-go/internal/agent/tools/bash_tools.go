@@ -83,10 +83,10 @@ func NewBashTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
 				if err != nil {
 					return nil, NewToolError("%v", err)
 				}
-				return fmt.Sprintf(
+				return textResult(fmt.Sprintf(
 					"Started: %s\nMax lifetime: %dms\nDefault wait: %dms\n\nUse bashJob action=\"output|wait|kill\" with jobId=%q.\nThis response is not an exit result — poll for status before assuming success.",
 					snap.JobID, timeoutMs, services.BashJobMaxWaitMs, snap.JobID,
-				), nil
+				)), nil
 			}
 
 			timeoutMs := in.TimeoutMs
@@ -120,10 +120,7 @@ func NewBashTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
 				sections = append(sections, "", "stderr:", stderr)
 			}
 			result := strings.Join(sections, "\n")
-			if res.ExitCode != 0 {
-				return nil, NewToolError("%s", result)
-			}
-			return result, nil
+			return Envelope{Content: textResult(result), IsError: res.ExitCode != 0}, nil
 		})
 }
 

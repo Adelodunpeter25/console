@@ -25,7 +25,7 @@ var ReadSkill = NewTool("readSkill", "Read a skill's full instructions by name. 
 		query := strings.TrimSpace(in.Name)
 		if query == "" {
 			if len(skills) == 0 {
-				return "No skills discovered. Skills are loaded from `skills/` directories under `.console`, `.agent`, or `.agents` in the project tree and user home.", nil
+				return textResult("No skills discovered. Skills are loaded from `skills/` directories under `.console`, `.agent`, or `.agents` in the project tree and user home."), nil
 			}
 			lines := make([]string, 0, len(skills))
 			for _, s := range skills {
@@ -35,7 +35,7 @@ var ReadSkill = NewTool("readSkill", "Read a skill's full instructions by name. 
 				}
 				lines = append(lines, fmt.Sprintf("- %s: %s", s.Name, desc))
 			}
-			return fmt.Sprintf("Available skills (%d):\n%s\n\nCall readSkill with a name to load full content.", len(skills), strings.Join(lines, "\n")), nil
+			return textResult(fmt.Sprintf("Available skills (%d):\n%s\n\nCall readSkill with a name to load full content.", len(skills), strings.Join(lines, "\n"))), nil
 		}
 
 		var matched *systemprompt.Skill
@@ -57,5 +57,5 @@ var ReadSkill = NewTool("readSkill", "Read a skill's full instructions by name. 
 			return nil, NewToolError("Skill '%s' not found.%s", query, hint)
 		}
 
-		return fmt.Sprintf("Skill: %s\nFile: %s\n\n%s", matched.Name, matched.Path, matched.Content), nil
+		return textResult(fmt.Sprintf("Skill: %s\nFile: %s\n\n%s", matched.Name, matched.Path, matched.Content)), nil
 	})

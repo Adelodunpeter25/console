@@ -57,13 +57,12 @@ func TestBatchWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	raw, _ := json.Marshal(out)
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
-		t.Fatal(err)
+	if resultIsError(out) {
+		t.Fatalf("unexpected error: %+v", out)
 	}
-	if m["isError"] != false {
-		t.Fatalf("unexpected error: %+v", m)
+	s := resultText(t, out)
+	if !strings.Contains(s, "2/2 files written successfully") {
+		t.Fatalf("batch write summary: %q", s)
 	}
 	for _, p := range []string{filepath.Join(dir, "a.txt"), filepath.Join(dir, "nested", "b.txt")} {
 		if _, err := os.Stat(p); err != nil {
@@ -100,7 +99,7 @@ func TestReadSkill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	if s, ok := listOut.(string); !ok || !strings.Contains(s, "deploy") || !strings.Contains(s, "Deploy the app") {
+	if s := resultText(t, listOut); !strings.Contains(s, "deploy") || !strings.Contains(s, "Deploy the app") {
 		t.Fatalf("catalog: %v", listOut)
 	}
 
@@ -110,7 +109,7 @@ func TestReadSkill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	if s, ok := readOut.(string); !ok || !strings.Contains(s, "Run the deploy script.") {
+	if s := resultText(t, readOut); !strings.Contains(s, "Run the deploy script.") {
 		t.Fatalf("content: %v", readOut)
 	}
 

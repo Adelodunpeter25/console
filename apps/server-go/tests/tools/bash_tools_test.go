@@ -20,8 +20,8 @@ func TestBashSyncSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	s, ok := out.(string)
-	if !ok || !strings.Contains(s, "Exit code: 0") || !strings.Contains(s, "hello") || !strings.Contains(s, "world") {
+	s := resultText(t, out)
+	if resultIsError(out) || !strings.Contains(s, "Exit code: 0") || !strings.Contains(s, "hello") || !strings.Contains(s, "world") {
 		t.Fatalf("output: %v", out)
 	}
 }
@@ -29,8 +29,12 @@ func TestBashSyncSuccess(t *testing.T) {
 func TestBashSyncNonZeroExit(t *testing.T) {
 	bash := tools.NewBashTool(nil, "")
 	args, _ := json.Marshal(map[string]any{"command": "exit 3"})
-	if _, err := bash.Execute(context.Background(), args); err == nil {
-		t.Fatal("expected tool error for non-zero exit")
+	out, err := bash.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !resultIsError(out) {
+		t.Fatalf("expected isError for non-zero exit: %v", out)
 	}
 }
 
@@ -70,7 +74,7 @@ func TestBashJobLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	startStr, _ := startOut.(string)
+	startStr := resultText(t, startOut)
 	if !strings.Contains(startStr, "Started: job_") {
 		t.Fatalf("start output: %v", startOut)
 	}
@@ -81,7 +85,7 @@ func TestBashJobLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait: %v", err)
 	}
-	waitStr, _ := waitOut.(string)
+	waitStr := resultText(t, waitOut)
 	if !strings.Contains(waitStr, "Status: exited") || !strings.Contains(waitStr, "hi") || !strings.Contains(waitStr, "bye") {
 		t.Fatalf("wait output: %v", waitOut)
 	}
@@ -91,7 +95,7 @@ func TestBashJobLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if s, ok := listOut.(string); !ok || !strings.Contains(s, jobID) {
+	if s := resultText(t, listOut); !strings.Contains(s, jobID) {
 		t.Fatalf("list output: %v", listOut)
 	}
 
@@ -113,7 +117,7 @@ func TestBashJobKill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	startStr, _ := startOut.(string)
+	startStr := resultText(t, startOut)
 	jobID := strings.TrimPrefix(strings.SplitN(startStr, "\n", 2)[0], "Started: ")
 
 	killArgs, _ := json.Marshal(map[string]any{"action": "kill", "jobId": jobID})
@@ -121,7 +125,7 @@ func TestBashJobKill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("kill: %v", err)
 	}
-	if s, ok := killOut.(string); !ok || !strings.Contains(s, "Status: killed") {
+	if s := resultText(t, killOut); !strings.Contains(s, "Status: killed") {
 		t.Fatalf("kill output: %v", killOut)
 	}
 }

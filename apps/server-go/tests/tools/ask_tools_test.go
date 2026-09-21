@@ -17,8 +17,8 @@ func TestAskHeadlessWithOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	s, ok := out.(string)
-	if !ok || !strings.Contains(s, "Pick one") || !strings.Contains(s, `"a"`) {
+	s := resultText(t, out)
+	if !strings.Contains(s, "Pick one") || !strings.Contains(s, `"a"`) {
 		t.Fatalf("output: %v", out)
 	}
 }
@@ -29,8 +29,8 @@ func TestAskHeadlessNoOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	s, ok := out.(string)
-	if !ok || !strings.Contains(s, "skipped") {
+	s := resultText(t, out)
+	if !strings.Contains(s, "skipped") {
 		t.Fatalf("output: %v", out)
 	}
 }
@@ -57,8 +57,8 @@ func TestAskWithHandler(t *testing.T) {
 	if captured.Question != "Continue?" || captured.Skippable {
 		t.Fatalf("captured request: %+v", captured)
 	}
-	s, ok := out.(string)
-	if !ok || !strings.Contains(s, `"yes"`) {
+	s := resultText(t, out)
+	if !strings.Contains(s, `"yes"`) {
 		t.Fatalf("output: %v", out)
 	}
 }
@@ -74,8 +74,8 @@ func TestAskManyHeadless(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	s, ok := out.(string)
-	if !ok || !strings.Contains(s, "Q1") || !strings.Contains(s, "Q2") || !strings.Contains(s, `"x"`) {
+	s := resultText(t, out)
+	if !strings.Contains(s, "Q1") || !strings.Contains(s, "Q2") || !strings.Contains(s, `"x"`) {
 		t.Fatalf("output: %v", out)
 	}
 }
@@ -97,8 +97,8 @@ func TestAskManyWithHandlerSharesBatchID(t *testing.T) {
 	if len(batchIDs) != 2 || batchIDs[0] == "" || batchIDs[0] != batchIDs[1] {
 		t.Fatalf("batch ids: %v", batchIDs)
 	}
-	s, ok := out.(string)
-	if !ok || !strings.Contains(s, "Q1:") || !strings.Contains(s, "Q2:") {
+	s := resultText(t, out)
+	if !strings.Contains(s, "Q1:") || !strings.Contains(s, "Q2:") {
 		t.Fatalf("output: %v", out)
 	}
 }
