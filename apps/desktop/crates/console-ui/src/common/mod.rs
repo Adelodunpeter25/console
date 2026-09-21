@@ -4,6 +4,7 @@ pub mod autocomplete;
 pub mod composer_view;
 pub mod copy_button;
 pub mod error_banner;
+pub mod file_mention_chip;
 pub mod image_viewer;
 pub mod input;
 pub mod model_picker;
@@ -29,6 +30,7 @@ pub use autocomplete::{
 pub use composer_view::ComposerView;
 pub use copy_button::{copy_button, copy_button_with_action};
 pub use error_banner::error_banner;
+pub use file_mention_chip::{FILE_MENTION_ICON_SIZE, FILE_MENTION_RADIUS, file_mention_chip, file_mention_colors};
 pub use image_viewer::ImageViewerModal;
 pub use input::*;
 pub use model_picker::{

@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use super::markdown_helpers::assistant_ctx;
 pub(crate) use super::markdown_helpers::render_selectable_markdown;
-use crate::common::{attachment_image, copy_button};
+use crate::common::{attachment_image, copy_button, file_mention_chip};
 use crate::markdown::render::{
     LinkHandler, MarkdownView, Palette, TranscriptSelection,
 };
@@ -30,9 +30,10 @@ enum MessageSegment {
 /// Split `content` into alternating text/pill segments.
 ///
 /// The composer inserts mentions as bare filenames (no `@`) surrounded by
-/// whitespace padding, e.g. `"     .gitignore  "`. We find each label as a
-/// whole-word token (preceded and followed by whitespace or string boundaries)
-/// and absorb the surrounding whitespace into the pill so no stray gaps appear.
+/// whitespace padding, e.g. `"     .gitignore  "`. We find each label — or,
+/// for history entries, the full path — as a whole-word token (preceded and
+/// followed by whitespace or string boundaries) and absorb the surrounding
+/// whitespace into the pill so no stray gaps appear.
 fn split_message_segments(content: &str, context_files: &[String]) -> Vec<MessageSegment> {
     // Build (label, path) pairs.
     let pills: Vec<(String, String)> = context_files
@@ -51,17 +52,23 @@ fn split_message_segments(content: &str, context_files: &[String]) -> Vec<Messag
     let mut remaining = content;
 
     'outer: while !remaining.is_empty() {
-        // Find the earliest label occurrence among all pills.
+        // Find the earliest label-or-path occurrence among all pills.
         let mut earliest: Option<(usize, usize, usize)> = None; // (match_start, match_end, pill_idx)
-        for (pill_idx, (label, _)) in pills.iter().enumerate() {
-            if let Some(pos) = remaining.find(label.as_str()) {
+        for (pill_idx, (label, path)) in pills.iter().enumerate() {
+            for needle in [label.as_str(), path.as_str()] {
+                if needle.is_empty() {
+                    continue;
+                }
+                let Some(pos) = remaining.find(needle) else {
+                    continue;
+                };
                 // Must be surrounded by whitespace or string boundaries.
                 let before_ok = pos == 0
                     || remaining[..pos]
                         .chars()
                         .next_back()
                         .is_some_and(|c| c.is_whitespace());
-                let after_pos = pos + label.len();
+                let after_pos = pos + needle.len();
                 let after_ok = after_pos >= remaining.len()
                     || remaining[after_pos..]
                         .chars()
@@ -79,9 +86,20 @@ fn split_message_segments(content: &str, context_files: &[String]) -> Vec<Messag
                             .find(|c: char| !c.is_whitespace())
                             .unwrap_or(remaining[after_pos..].len());
 
-                    if earliest.is_none() || match_start < earliest.unwrap().0 {
+                    // Prefer the earliest match; break ties with the longer
+                    // needle so a full path wins over its bare filename.
+                    let replace = match earliest {
+                        None => true,
+                        Some((start, end, _)) => {
+                            match_start < start
+                                || (match_start == start
+                                    && (match_end - match_start) > (end - start))
+                        }
+                    };
+                    if replace {
                         earliest = Some((match_start, match_end, pill_idx));
                     }
+                    break;
                 }
             }
         }
@@ -277,26 +295,7 @@ impl RenderOnce for UserMessageBubble {
                                                     .id(ElementId::Name(
                                                         format!("msg-pill-{seg_idx}").into(),
                                                     ))
-                                                    .flex()
-                                                    .items_center()
-                                                    .gap(px(4.0))
-                                                    .px(px(6.0))
-                                                    .py(px(1.0))
-                                                    .rounded(px(5.0))
-                                                    .border_1()
-                                                    .border_color(theme.accent.opacity(0.45))
-                                                    .bg(theme.accent.opacity(0.10))
-                                                    .child(
-                                                        crate::primitives::file_type_icon(
-                                                            &path, 11.0,
-                                                        ),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .text_size(px(12.5))
-                                                            .text_color(theme.accent)
-                                                            .child(label),
-                                                    )
+                                                    .child(file_mention_chip(&path, label, theme))
                                                     .into_any_element(),
                                             },
                                         )),

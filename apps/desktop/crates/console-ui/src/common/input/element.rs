@@ -7,6 +7,7 @@ use gpui::{
 
 use super::text_runs::{SearchPaint, input_text_runs};
 use super::{ComposerInput, FieldMode};
+use crate::common::file_mention_chip::{FILE_MENTION_ICON_SIZE, FILE_MENTION_RADIUS, file_mention_colors};
 use crate::theme::Theme;
 
 pub(crate) fn visual_row_count(layout: &TextLayout) -> usize {
@@ -319,7 +320,7 @@ impl Element for InputElement {
                     &input.mentions
                 },
                 theme.accent,
-                theme.accent.opacity(0.12),
+                file_mention_colors(theme).0,
             );
             let mentions_to_layout =
                 if input.mode == FieldMode::Composer && !input.mentions.is_empty() {
@@ -371,7 +372,10 @@ impl Element for InputElement {
         for mention in mentions_to_layout {
             let mut icon = gpui::div()
                 .absolute()
-                .child(crate::primitives::file_type_icon(&mention.path, 11.0))
+                .child(crate::primitives::file_type_icon(
+                    &mention.path,
+                    FILE_MENTION_ICON_SIZE,
+                ))
                 .into_any_element();
             let icon_layout_id = icon.request_layout(window, cx);
             child_layout_ids.push(icon_layout_id);
@@ -564,6 +568,7 @@ impl Element for InputElement {
                 if mention.range.end <= input.content.len() {
                     let rects =
                         crate::markdown::render::range_rects(layout, &mention.range, 3.0, 1.0);
+                    let (mention_bg, mention_border, _) = file_mention_colors(theme);
                     for (idx, rect) in rects.iter().enumerate() {
                         let mut quad_rect = *rect;
                         if idx == 0 {
@@ -572,10 +577,10 @@ impl Element for InputElement {
                         }
                         window.paint_quad(quad(
                             quad_rect,
-                            px(4.0),
-                            theme.accent.opacity(0.10),
+                            px(FILE_MENTION_RADIUS),
+                            mention_bg,
                             px(1.0),
-                            theme.accent.opacity(0.28),
+                            mention_border,
                             BorderStyle::default(),
                         ));
                     }
