@@ -7,6 +7,7 @@ package providers
 import (
 	"context"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
@@ -71,6 +72,22 @@ func SortModelsByFavorites(models []types.Model, favs []types.ModelFavorite) []t
 		return aFav && !bFav
 	})
 	return out
+}
+
+// FindModel looks up a model by provider and id (case-insensitive),
+// mirroring findModelInProvider.
+func FindModel(providerID, modelID string) (types.Model, bool) {
+	for _, entry := range ListProviders() {
+		if entry.Name != providerID {
+			continue
+		}
+		for _, m := range entry.Models {
+			if strings.EqualFold(m.ID, modelID) {
+				return m, true
+			}
+		}
+	}
+	return types.Model{}, false
 }
 
 // IsCatalogProvider reports whether id is a known catalog provider id
