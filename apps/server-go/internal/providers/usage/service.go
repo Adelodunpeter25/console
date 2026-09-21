@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
 )
 
@@ -79,7 +80,7 @@ func (s *Service) GetUsage(ctx context.Context, provider string) (*Report, error
 	if !IsValidProvider(provider) {
 		return nil, &invalidProviderError{provider}
 	}
-	if provider != "codex" {
+	if provider != "codex" && provider != "claude" {
 		return nil, nil
 	}
 	s.mu.Lock()
@@ -101,7 +102,11 @@ func (s *Service) GetUsage(ctx context.Context, provider string) (*Report, error
 	s.inflight[provider] = c
 	s.mu.Unlock()
 
-	c.report = s.fetchCodex(ctx)
+	if provider == "claude" {
+		c.report = s.fetchClaude(ctx)
+	} else {
+		c.report = s.fetchCodex(ctx)
+	}
 	s.mu.Lock()
 	s.cache[provider] = cacheEntry{report: c.report, fetchedAt: time.Now()}
 	delete(s.inflight, provider)
@@ -126,6 +131,25 @@ func (s *Service) fetchCodex(ctx context.Context) *Report {
 	timeoutCtx, cancel := context.WithTimeout(ctx, upstreamTimeout)
 	defer cancel()
 	report, _ := FetchCodexUsage(timeoutCtx, nil, base, cred.AccessToken, cred.AccountID, cred.Email, cred.ExpiresAtMs)
+	return report
+}
+
+func (s *Service) fetchClaude(ctx context.Context) *Report {
+	cred, err := claude.LoadCredential()
+	if err != nil {
+		return nil
+	}
+	cred, err = claude.RefreshIfNeeded(nil, cred)
+	if err != nil {
+		return nil
+	}
+	base := claude.BaseURL()
+	if s.BaseURL != "" {
+		base = s.BaseURL
+	}
+	timeoutCtx, cancel := context.WithTimeout(ctx, upstreamTimeout)
+	defer cancel()
+	report, _ := FetchClaudeUsage(timeoutCtx, nil, base, cred.AccessToken, cred.Email, cred.ExpiresAtMs)
 	return report
 }
 
