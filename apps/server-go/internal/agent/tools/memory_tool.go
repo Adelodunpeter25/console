@@ -24,11 +24,7 @@ type memoryInput struct {
 // A nil registry reports unavailable (the run service always wires one).
 func NewMemoryTool(projectID string, registry *memory.Registry) Tool {
 	return NewTool("memory",
-		"Manage persistent memory that survives across sessions. Operations: store, recall, list, edit, delete. "+
-			"Use 'store' only when the user explicitly asks you to remember something, or clearly confirms/corrects a "+
-			"non-obvious approach — not for routine task details or anything derivable from the code. Use 'recall' "+
-			"(free-text query and/or tags) or 'list' (browse by tag) to check memory before assuming. Defaults to "+
-			"'project' scope; use 'global' only for facts that aren't tied to this project's code.",
+		"Persistent memory across sessions. Store only what the user explicitly asks to remember; recall or list before assuming. Defaults to project scope.",
 		TierWrite,
 		func(ctx context.Context, in memoryInput) (any, error) {
 			if registry == nil {

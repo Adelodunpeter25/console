@@ -17,13 +17,9 @@ import (
 )
 
 type fetchInput struct {
-	URL           string            `json:"url" jsonschema:"required,description=The URL to fetch"`
-	Method        string            `json:"method,omitempty" jsonschema:"description=HTTP method (default GET)"`
-	Headers       map[string]string `json:"headers,omitempty" jsonschema:"description=HTTP request headers as key-value pairs"`
-	Body          string            `json:"body,omitempty" jsonschema:"description=Request body as a string (for POST/PUT/PATCH)"`
-	TimeoutMs     int               `json:"timeoutMs,omitempty" jsonschema:"description=Request timeout in milliseconds (default 15000)"`
-	MaxBytes      int               `json:"maxBytes,omitempty" jsonschema:"description=Maximum response body size in bytes (default 524288)"`
-	ReturnHeaders bool              `json:"returnHeaders,omitempty" jsonschema:"description=Include response headers in the output"`
+	URL       string `json:"url" jsonschema:"required,description=The URL to fetch"`
+	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema:"description=Request timeout in milliseconds (default 15000)"`
+	MaxBytes  int    `json:"maxBytes,omitempty" jsonschema:"description=Maximum response body size in bytes (default 524288)"`
 }
 
 const (
@@ -52,16 +48,8 @@ func htmlToText(html string) string {
 	return strings.TrimSpace(s)
 }
 
-func isLikelyAPIURL(url string, headers map[string]string) bool {
-	if strings.Contains(url, "/api/") || strings.HasSuffix(url, ".json") {
-		return true
-	}
-	for _, v := range headers {
-		if strings.Contains(v, "application/json") {
-			return true
-		}
-	}
-	return false
+func isLikelyAPIURL(url string) bool {
+	return strings.Contains(url, "/api/") || strings.HasSuffix(url, ".json")
 }
 
 // Fetch performs an HTTP request and returns readable text. GET requests to
@@ -72,10 +60,7 @@ var Fetch = NewTool("webFetch", "Fetch content from a URL or web page as markdow
 		if in.URL == "" {
 			return nil, NewToolError("url is required")
 		}
-		method := in.Method
-		if method == "" {
-			method = http.MethodGet
-		}
+		method := http.MethodGet
 		timeoutMs := in.TimeoutMs
 		if timeoutMs <= 0 {
 			timeoutMs = fetchDefaultTimeoutMs
@@ -88,17 +73,13 @@ var Fetch = NewTool("webFetch", "Fetch content from a URL or web page as markdow
 		reqCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 		defer cancel()
 
-		isGet := method == http.MethodGet && in.Body == ""
-		if isGet && !isLikelyAPIURL(in.URL, in.Headers) {
-			markdown, title, sourceURL, statusCode, ok, err := firecrawlScrape(reqCtx, in.URL)
+		if !isLikelyAPIURL(in.URL) {
+			markdown, title, _, statusCode, ok, err := firecrawlScrape(reqCtx, in.URL)
 			if err == nil && ok {
 				sections := []string{
 					fmt.Sprintf("URL: %s", in.URL),
 					fmt.Sprintf("Status: %d OK (via Firecrawl)", statusCode),
 					fmt.Sprintf("Title: %s", title),
-				}
-				if in.ReturnHeaders {
-					sections = append(sections, fmt.Sprintf("SourceURL: %s", sourceURL))
 				}
 				sections = append(sections, "", "Body (markdown):", markdown)
 				return strings.Join(sections, "\n"), nil
@@ -106,16 +87,9 @@ var Fetch = NewTool("webFetch", "Fetch content from a URL or web page as markdow
 			// Firecrawl error or empty result — fall through to direct fetch.
 		}
 
-		var bodyReader io.Reader
-		if in.Body != "" {
-			bodyReader = strings.NewReader(in.Body)
-		}
-		req, err := http.NewRequestWithContext(reqCtx, method, in.URL, bodyReader)
+		req, err := http.NewRequestWithContext(reqCtx, method, in.URL, nil)
 		if err != nil {
 			return nil, NewToolError("Invalid request: %v", err)
-		}
-		for k, v := range in.Headers {
-			req.Header.Set(k, v)
 		}
 
 		resp, err := http.DefaultClient.Do(req)
@@ -161,15 +135,6 @@ var Fetch = NewTool("webFetch", "Fetch content from a URL or web page as markdow
 			fmt.Sprintf("URL: %s", in.URL),
 			fmt.Sprintf("Status: %d %s", resp.StatusCode, http.StatusText(resp.StatusCode)),
 			fmt.Sprintf("Content-Type: %s", contentType),
-		}
-		if in.ReturnHeaders {
-			var headerLines []string
-			for k, values := range resp.Header {
-				headerLines = append(headerLines, fmt.Sprintf("  %s: %s", k, strings.Join(values, ", ")))
-			}
-			if len(headerLines) > 0 {
-				sections = append(sections, "Headers:\n"+strings.Join(headerLines, "\n"))
-			}
 		}
 		sections = append(sections, "", "Body:", formattedBody)
 

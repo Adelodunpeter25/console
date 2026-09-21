@@ -147,7 +147,7 @@ type globInput struct {
 	MaxResults int    `json:"maxResults,omitempty" jsonschema:"description=Maximum number of results to return (default 200)"`
 }
 
-var Glob = NewTool("glob", "Find files matching a glob pattern (e.g. 'src/**/*.ts', '**/*.json'). fff-powered when available.", TierRead,
+var Glob = NewTool("glob", "Find files matching a glob pattern (e.g. 'src/**/*.ts', '**/*.json').", TierRead,
 	func(ctx context.Context, in globInput) (any, error) {
 		if in.Pattern == "" {
 			return nil, NewToolError("pattern is required")
@@ -204,7 +204,7 @@ type grepMatch struct {
 	Text string `json:"text"`
 }
 
-var Grep = NewTool("grep", "Search file contents by pattern. Use for finding definitions, usages, or references. fff-powered when available.", TierRead,
+var Grep = NewTool("grep", "Search file contents by pattern. Use for finding definitions, usages, or references.", TierRead,
 	func(ctx context.Context, in grepInput) (any, error) {
 		if in.Pattern == "" {
 			return nil, NewToolError("pattern is required")

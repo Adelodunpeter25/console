@@ -5,7 +5,6 @@ package tests
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -64,23 +63,22 @@ func TestWebFetchErrorStatus(t *testing.T) {
 	}
 }
 
-func TestWebFetchPost(t *testing.T) {
+func TestWebFetchGet(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("expected POST, got %s", r.Method)
+		if r.Method != http.MethodGet {
+			t.Errorf("expected GET, got %s", r.Method)
 		}
-		body, _ := io.ReadAll(r.Body)
-		w.Write([]byte("received: " + string(body)))
+		w.Write([]byte("hello"))
 	}))
 	defer srv.Close()
 
-	args, _ := json.Marshal(map[string]any{"url": srv.URL, "method": "POST", "body": "hello"})
+	args, _ := json.Marshal(map[string]any{"url": srv.URL})
 	out, err := tools.Fetch.Execute(context.Background(), args)
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
 	s, ok := out.(string)
-	if !ok || !strings.Contains(s, "received: hello") {
+	if !ok || !strings.Contains(s, "hello") {
 		t.Fatalf("output: %v", out)
 	}
 }

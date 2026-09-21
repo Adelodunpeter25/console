@@ -54,7 +54,7 @@ func shellArgv(command string) []string {
 // NewBashTool builds the "bash" tool bound to jobs (for background=true
 // runs). A nil manager disables background mode (headless singleton).
 func NewBashTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
-	return NewTool("bash", "Run a shell command and return output. Use for builds, tests, or git; prefer dedicated tools for reading/editing files. For long-running commands (builds), pass background=true to start a managed job and poll it with bashJob — the start response only confirms the process started, not success.", TierExec,
+	return NewTool("bash", "Run a shell command and return output. Use for builds, tests, or git — not for reading or editing files. Long-running commands: background=true starts a managed job (poll with bashJob); the start response only confirms the process started.", TierExec,
 		func(ctx context.Context, in bashInput) (any, error) {
 			if in.Command == "" {
 				return nil, NewToolError("command is required")
