@@ -105,7 +105,20 @@ pub struct TerminalHandle {
     pub backend: Arc<tokio::sync::Mutex<TermyBackend>>,
     pub notify: Arc<tokio::sync::Notify>,
     sender: mpsc::UnboundedSender<TerminalClientMessage>,
+    /// Wheel-tick coalescing: accumulates deltas for ~8ms so fast scrolling
+    /// applies once + notifies once instead of one task per tick.
+    scroll_pending: Arc<std::sync::Mutex<i32>>,
+    scroll_scheduled: Arc<std::sync::atomic::AtomicBool>,
     _task: tokio::task::JoinHandle<()>,
+}
+
+/// Snapshot plus the metadata the renderer needs, collected under a single
+/// backend lock so damage stays in sync with the grid.
+pub struct TerminalSnapshotFull {
+    pub snapshot: TerminalGridSnapshot,
+    pub damage: termy_core::TerminalDamageSnapshot,
+    pub mouse_mode: termy_core::TerminalMouseMode,
+    pub is_alt_screen: bool,
 }
 
 impl TerminalHandle {
@@ -135,15 +148,43 @@ impl TerminalHandle {
     }
 
     pub fn scroll(&self, delta: i32) {
+        if delta == 0 {
+            return;
+        }
+        {
+            let mut pending = self.scroll_pending.lock().unwrap();
+            *pending = pending.saturating_add(delta);
+        }
+        // A flush is already scheduled — it will pick up this delta.
+        if self
+            .scroll_scheduled
+            .swap(true, std::sync::atomic::Ordering::AcqRel)
+        {
+            return;
+        }
         let backend = self.backend.clone();
         let notify = self.notify.clone();
         let sender = self.sender.clone();
+        let pending = self.scroll_pending.clone();
+        let scheduled = self.scroll_scheduled.clone();
         tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(8)).await;
+            let delta = {
+                let mut p = pending.lock().unwrap();
+                let d = *p;
+                *p = 0;
+                d
+            };
+            scheduled.store(false, std::sync::atomic::Ordering::Release);
+            if delta == 0 {
+                return;
+            }
             let mut b = backend.lock().await;
             if b.is_alt_screen() {
                 let key = if delta > 0 { "\x1b[A" } else { "\x1b[B" };
-                let count = (delta.abs() as usize).min(5);
+                let count = (delta.abs() as usize).min(10);
                 let input = key.repeat(count);
+                drop(b);
                 let _ = sender.send(TerminalClientMessage::Input { data: input });
             } else {
                 b.scroll(delta);
@@ -158,9 +199,27 @@ impl TerminalHandle {
         b.snapshot()
     }
 
+    /// Snapshot + damage + mouse mode + alt flag under one lock. Prefer
+    /// this over separate `snapshot()` / `damage_snapshot()` calls: damage
+    /// clears on read, so separate locks can desync grid and dirty rows.
+    pub async fn snapshot_full(&self) -> TerminalSnapshotFull {
+        let b = self.backend.lock().await;
+        let snapshot = b.snapshot();
+        let damage = b.take_damage_snapshot();
+        let mouse_mode = b.mouse_mode();
+        let is_alt_screen = b.is_alt_screen();
+        TerminalSnapshotFull {
+            snapshot,
+            damage,
+            mouse_mode,
+            is_alt_screen,
+        }
+    }
+
     /// Damage since the last call: `Full` (repaint everything) or the dirty
     /// row spans. Must be collected alongside each snapshot — the backend
     /// clears dirty tracking when read, so snapshot and damage stay in sync.
+    /// Prefer `snapshot_full()` for new code.
     pub async fn damage_snapshot(&self) -> termy_core::TerminalDamageSnapshot {
         let b = self.backend.lock().await;
         b.take_damage_snapshot()
@@ -339,6 +398,8 @@ impl TerminalService {
             backend,
             notify,
             sender: tx,
+            scroll_pending: Arc::new(std::sync::Mutex::new(0)),
+            scroll_scheduled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             _task: task,
         })
     }
