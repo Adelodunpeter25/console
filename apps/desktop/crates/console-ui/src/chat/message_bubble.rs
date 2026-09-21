@@ -27,6 +27,21 @@ enum MessageSegment {
     FilePill { path: String, label: String },
 }
 
+/// One flow item in the bubble's single wrapping row.
+enum BubbleItem {
+    Segment {
+        line_idx: usize,
+        seg_idx: usize,
+        segment: MessageSegment,
+    },
+    /// Full-width zero-height item forcing a wrap at a source newline.
+    /// Zero min-width, so unlike one-row-per-line it never stretches short
+    /// lines across the card or leaves trailing emptiness behind pills.
+    LineBreak { line_idx: usize },
+    /// Full-width fixed-height item preserving a blank source line.
+    BlankLine { line_idx: usize },
+}
+
 /// Split `content` into alternating text/pill segments.
 ///
 /// The composer inserts mentions as bare filenames (no `@`) surrounded by
@@ -257,22 +272,39 @@ impl RenderOnce for UserMessageBubble {
             (self.content.clone(), context_files)
         };
 
-        // Build inline segments per visual line: text runs interleaved with
-        // file pills. A flex row cannot flow text around a pill, so each
-        // newline-delimited line gets its own wrapping row — otherwise
-        // multiline messages collapse into side-by-side columns and pills
-        // drift to the row baseline instead of sitting with their line.
+        // Single wrapping flow: text runs + pills share one row so the card
+        // hugs the widest visual line. Newlines are preserved with
+        // full-width break items; blank lines get a fixed-height spacer.
+        // (One flex row per source line stretched short lines across the
+        // card and left trailing emptiness behind their pills.)
         // When there are no context files each line renders as-is.
-        let line_segments: Vec<Vec<MessageSegment>> = display_content
-            .split('\n')
-            .map(|line| {
-                if effective_files.is_empty() || line.trim().is_empty() {
-                    vec![MessageSegment::Text(line.to_string())]
-                } else {
-                    split_message_segments(line, &effective_files)
+        let mut items: Vec<BubbleItem> = Vec::new();
+        for (line_idx, line) in display_content.split('\n').enumerate() {
+            if line_idx > 0 {
+                items.push(BubbleItem::LineBreak { line_idx });
+            }
+            if line.trim().is_empty() {
+                // A whitespace-only line carries no segments; keep it as a
+                // blank visual line instead of letting it collapse.
+                items.push(BubbleItem::BlankLine { line_idx });
+            } else if effective_files.is_empty() {
+                items.push(BubbleItem::Segment {
+                    line_idx,
+                    seg_idx: 0,
+                    segment: MessageSegment::Text(line.to_string()),
+                });
+            } else {
+                for (seg_idx, segment) in
+                    split_message_segments(line, &effective_files).into_iter().enumerate()
+                {
+                    items.push(BubbleItem::Segment {
+                        line_idx,
+                        seg_idx,
+                        segment,
+                    });
                 }
-            })
-            .collect();
+            }
+        }
         let has_content = !display_content.is_empty() || !effective_files.is_empty();
 
         div()
@@ -340,62 +372,62 @@ impl RenderOnce for UserMessageBubble {
                                 .border_1()
                                 .border_color(theme.user_bubble_border)
                                 .child(
-                                    // One wrapping row per line: text runs + file
-                                    // pills sharing the row, top-aligned so a
-                                    // leading pill sits with its first line.
+                                    // One wrapping flow for the whole message:
+                                    // text runs + file pills share the row and
+                                    // top-align, so pills sit with their line.
                                     div()
                                         .flex()
-                                        .flex_col()
+                                        .flex_wrap()
+                                        .items_start()
+                                        .gap_x(px(4.0))
                                         .gap_y(px(4.0))
                                         .text_size(px(14.0))
                                         .line_height(px(20.0))
                                         .text_color(theme.text)
-                                        .children(line_segments.into_iter().enumerate().map(
-                                            |(line_idx, segs)| {
-                                                if segs.len() == 1
-                                                    && matches!(
-                                                        &segs[0],
-                                                        MessageSegment::Text(t) if t.trim().is_empty()
-                                                    )
-                                                {
-                                                    return div().h(px(20.0)).into_any_element();
-                                                }
-                                                div()
-                                                    .flex()
-                                                    .flex_wrap()
-                                                    .items_start()
-                                                    .gap_x(px(4.0))
-                                                    .gap_y(px(4.0))
-                                                    .children(segs.into_iter().enumerate().map(
-                                                        |(seg_idx, segment)| match segment {
-                                                            MessageSegment::Text(text) => div()
-                                                                .id(ElementId::Name(
-                                                                    format!(
-                                                                        "msg-{line_idx}-text-{seg_idx}"
-                                                                    )
-                                                                    .into(),
-                                                                ))
-                                                                .child(text)
-                                                                .into_any_element(),
-                                                            MessageSegment::FilePill {
-                                                                path,
-                                                                label,
-                                                            } => div()
-                                                                .id(ElementId::Name(
-                                                                    format!(
-                                                                        "msg-{line_idx}-pill-{seg_idx}"
-                                                                    )
-                                                                    .into(),
-                                                                ))
-                                                                .child(file_mention_chip(
-                                                                    &path, label, theme,
-                                                                ))
-                                                                .into_any_element(),
-                                                        },
+                                        .children(items.into_iter().map(|item| match item {
+                                            BubbleItem::Segment {
+                                                line_idx,
+                                                seg_idx,
+                                                segment,
+                                            } => match segment {
+                                                MessageSegment::Text(text) => div()
+                                                    .id(ElementId::Name(
+                                                        format!(
+                                                            "msg-{line_idx}-text-{seg_idx}"
+                                                        )
+                                                        .into(),
                                                     ))
-                                                    .into_any_element()
+                                                    .child(text)
+                                                    .into_any_element(),
+                                                MessageSegment::FilePill { path, label } => {
+                                                    div()
+                                                        .id(ElementId::Name(
+                                                            format!(
+                                                                "msg-{line_idx}-pill-{seg_idx}"
+                                                            )
+                                                            .into(),
+                                                        ))
+                                                        .child(file_mention_chip(
+                                                            &path, label, theme,
+                                                        ))
+                                                        .into_any_element()
+                                                }
                                             },
-                                        )),
+                                            BubbleItem::LineBreak { line_idx } => div()
+                                                .id(ElementId::Name(
+                                                    format!("msg-{line_idx}-break").into(),
+                                                ))
+                                                .w_full()
+                                                .h(px(0.))
+                                                .into_any_element(),
+                                            BubbleItem::BlankLine { line_idx } => div()
+                                                .id(ElementId::Name(
+                                                    format!("msg-{line_idx}-blank").into(),
+                                                ))
+                                                .w_full()
+                                                .h(px(20.0))
+                                                .into_any_element(),
+                                        })),
                                 ),
                         )
                     }),
