@@ -25,6 +25,26 @@ func (s *Service) bumpSessionUpdated(sessionID string, now int64, delta int) {
 		now, delta, sessionID)
 }
 
+// ProjectByDir is the exported wrapper for create/update project inference.
+func (s *Service) ProjectByDir(dir string) (string, error) {
+	return s.projectByDir(dir)
+}
+
+// projectByDir mirrors Projects.getProjectByDir: exact dir match, empty
+// string when no project owns the directory.
+func (s *Service) projectByDir(dir string) (string, error) {
+	var id string
+	err := s.manager.Global().QueryRow(
+		`SELECT id FROM projects WHERE dir = ?`, dir).Scan(&id)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
 func derefString(p *string) string {
 	if p == nil {
 		return ""

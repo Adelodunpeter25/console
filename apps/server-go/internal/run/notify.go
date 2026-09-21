@@ -126,7 +126,7 @@ func lastAssistantExcerpt(sessions *services.SessionService, sessionID string) s
 		return ""
 	}
 	for i := len(loaded.Messages) - 1; i >= 0; i-- {
-		msg, ok := decodeAssistantText(loaded.Messages[i].Data)
+		msg, ok := decodeAssistantText(loaded.Messages[i])
 		if ok && msg != "" {
 			return msg
 		}

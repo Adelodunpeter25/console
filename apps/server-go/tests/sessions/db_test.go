@@ -7,6 +7,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -67,9 +68,10 @@ func TestSessionLifecycle(t *testing.T) {
 		t.Fatalf("unexpected header: %+v", header)
 	}
 
-	// Messages persist to the per-session DB with role and raw JSON.
+	// Messages persist to the per-session DB as content JSON; load returns
+	// the stored object with createdAt injected (desktop shape).
 	msg := types.AgentMessage{ID: "m1", Role: "user"}
-	msg.Data, _ = json.Marshal(map[string]string{"text": "hello"})
+	msg.Data, _ = json.Marshal(map[string]string{"role": "user", "text": "hello"})
 	if err := sessions.AppendMessage(header.ID, msg); err != nil {
 		t.Fatalf("append: %v", err)
 	}
@@ -78,8 +80,18 @@ func TestSessionLifecycle(t *testing.T) {
 	if err != nil || loaded == nil {
 		t.Fatalf("load: %v", err)
 	}
-	if len(loaded.Messages) != 1 || loaded.Messages[0].Role != "user" {
+	if len(loaded.Messages) != 1 {
 		t.Fatalf("unexpected messages: %+v", loaded.Messages)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(loaded.Messages[0], &decoded); err != nil {
+		t.Fatalf("message not JSON: %v", err)
+	}
+	if decoded["role"] != "user" || decoded["text"] != "hello" {
+		t.Fatalf("unexpected message content: %v", decoded)
+	}
+	if _, ok := decoded["createdAt"]; !ok {
+		t.Fatalf("createdAt not injected: %v", decoded)
 	}
 	if loaded.Header.MessageCount != 1 {
 		t.Fatalf("message count = %d, want 1", loaded.Header.MessageCount)
@@ -101,7 +113,7 @@ func TestSessionLifecycle(t *testing.T) {
 	if got, _ := sessions.Load(header.ID, 0, 0); got != nil {
 		t.Fatal("deleted session should not load")
 	}
-	if list, _ := sessions.List(0); len(list) != 0 {
+	if list, _ := sessions.ListFiltered(session.ListFilter{}); len(list) != 0 {
 		t.Fatal("deleted session should not list")
 	}
 }
@@ -147,7 +159,7 @@ func TestDeleteProjectRemovesSessions(t *testing.T) {
 	if err != nil || !deleted {
 		t.Fatalf("delete: %v %v", err, deleted)
 	}
-	if list, _ := sessions.List(0); len(list) != 0 {
+	if list, _ := sessions.ListFiltered(session.ListFilter{}); len(list) != 0 {
 		t.Fatal("project session still listed")
 	}
 }

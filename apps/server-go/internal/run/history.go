@@ -9,34 +9,33 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
-func decodeHistory(stored []types.AgentMessage) []any {
+func decodeHistory(stored []json.RawMessage) []any {
 	out := make([]any, 0, len(stored))
-	for _, m := range stored {
-		if len(m.Data) == 0 {
+	for _, raw := range stored {
+		if len(raw) == 0 {
 			continue
 		}
 		var probe struct {
 			Role string `json:"role"`
 		}
-		if err := json.Unmarshal(m.Data, &probe); err != nil {
+		if err := json.Unmarshal(raw, &probe); err != nil {
 			continue
 		}
 		switch probe.Role {
 		case string(loop.RoleUser):
 			var user loop.UserMessage
-			if err := json.Unmarshal(m.Data, &user); err == nil {
+			if err := json.Unmarshal(raw, &user); err == nil {
 				out = append(out, user)
 			}
 		case string(loop.RoleAssistant):
-			if assistant, ok := decodeAssistant(m.Data); ok {
+			if assistant, ok := decodeAssistant(raw); ok {
 				out = append(out, assistant)
 			}
 		case string(loop.RoleToolResult):
 			var result loop.ToolResultMessage
-			if err := json.Unmarshal(m.Data, &result); err == nil {
+			if err := json.Unmarshal(raw, &result); err == nil {
 				out = append(out, result)
 			}
 		}

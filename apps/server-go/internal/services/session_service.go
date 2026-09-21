@@ -21,20 +21,56 @@ func (s *SessionService) Create(opts types.CreateSessionOptions) (types.SessionH
 	return s.inner.Create(opts)
 }
 
-func (s *SessionService) List(minUpdatedAt int64) ([]types.SessionHeader, error) {
-	return s.inner.List(minUpdatedAt)
+func (s *SessionService) ListFiltered(f session.ListFilter) ([]types.SessionHeader, error) {
+	return s.inner.ListFiltered(f)
 }
 
 func (s *SessionService) Load(sessionID string, limit int64, before int64) (*types.LoadedSession, error) {
 	return s.inner.Load(sessionID, limit, before)
 }
 
+func (s *SessionService) Header(sessionID string) (*types.SessionHeader, error) {
+	return s.inner.Header(sessionID)
+}
+
 func (s *SessionService) SoftDelete(sessionID string) (bool, error) {
 	return s.inner.SoftDelete(sessionID)
 }
 
+func (s *SessionService) Restore(sessionID string) (bool, error) {
+	return s.inner.Restore(sessionID)
+}
+
+func (s *SessionService) PermanentDelete(sessionID string) (bool, error) {
+	return s.inner.PermanentDelete(sessionID)
+}
+
 func (s *SessionService) UpdateTitle(sessionID, title string) error {
 	return s.inner.UpdateTitle(sessionID, title)
+}
+
+func (s *SessionService) UpdateModel(sessionID, modelID, provider string) error {
+	return s.inner.UpdateModel(sessionID, modelID, provider)
+}
+
+func (s *SessionService) UpdateCwd(sessionID, cwd string, projectID *string) error {
+	return s.inner.UpdateCwd(sessionID, cwd, projectID)
+}
+
+func (s *SessionService) UpdateApprovalMode(sessionID, approvalMode string) error {
+	return s.inner.UpdateApprovalMode(sessionID, approvalMode)
+}
+
+func (s *SessionService) UpdateStatus(sessionID, status string) error {
+	return s.inner.UpdateStatus(sessionID, status)
+}
+
+func (s *SessionService) GetSubagents(sessionID string) ([]types.SubagentInfo, error) {
+	return s.inner.GetSubagents(sessionID)
+}
+
+func (s *SessionService) ProjectByDir(dir string) (string, error) {
+	return s.inner.ProjectByDir(dir)
 }
 
 // Message operations
