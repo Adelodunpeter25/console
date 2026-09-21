@@ -4,7 +4,7 @@ package commands
 import (
 	"fmt"
 
-	"github.com/Adelodunpeter25/console/apps/cli-go/internal/daemon"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
 )
 
 // RestartOptions mirrors the TS RestartOptions. Dev pins dev storage;

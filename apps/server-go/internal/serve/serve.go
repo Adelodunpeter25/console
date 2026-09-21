@@ -1,0 +1,64 @@
+// Package serve runs the agent server (Fiber API with graceful shutdown).
+// It backs both cmd/server and the CONSOLE_SERVE=1 mode of the multi-call
+// console binary.
+package serve
+
+import (
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+)
+
+// Run starts the server and blocks until SIGINT/SIGTERM. It returns nil on
+// clean shutdown and a non-nil error when startup fails.
+func Run() error {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
+	manager, err := db.Open(db.OpenOptions{})
+	if err != nil {
+		slog.Error("failed to open database", "error", err)
+		return err
+	}
+	defer manager.Close()
+
+	watch, err := services.NewFsWatchService()
+	if err != nil {
+		slog.Error("failed to start fs watcher", "error", err)
+		return err
+	}
+	defer watch.Close()
+
+	ports := services.NewPortRegistry()
+	defer ports.CloseAll()
+	ports.StartReaper(5 * time.Second)
+	notifications := services.NewNotificationService()
+
+	app := routes.New(routes.Config{DB: manager, Watch: watch, Ports: ports, Notifications: notifications})
+
+	addr := ":3000"
+	if p := os.Getenv("PORT"); p != "" {
+		addr = ":" + p
+	}
+
+	go func() {
+		slog.Info("server listening", "addr", addr)
+		if err := app.Listen(addr); err != nil {
+			slog.Error("server stopped", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
+	slog.Info("shutting down")
+	_ = app.ShutdownWithTimeout(5 * time.Second)
+	return nil
+}

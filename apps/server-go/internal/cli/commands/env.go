@@ -11,7 +11,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/Adelodunpeter25/console/apps/cli-go/internal/daemon"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
 )
 
 // serviceKey is a known service and the env var it reads.

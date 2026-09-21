@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"time"
 
-	"github.com/Adelodunpeter25/console/apps/cli-go/internal/daemon"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
 )
 
 // StartOptions mirrors the TS StartOptions: port/host save-and-reuse,
@@ -22,42 +21,23 @@ type StartOptions struct {
 
 // serverLaunch is how to spawn the server process.
 type serverLaunch struct {
-	cmd  string
-	args []string
+	cmd       string
+	args      []string
+	serveSelf bool
 }
 
-// resolveServerLaunch mirrors the TS resolveServerLaunch with one
-// Go-specific difference: the Go CLI binary cannot re-exec itself as the
-// server (separate module), so lookup order is CONSOLE_SERVER_BIN override,
-// then a sibling server binary, then the TS dev fallback (bun
-// apps/server/index.ts) while the TS server is still source of truth.
+// resolveServerLaunch mirrors the old TS multi-call behavior: the CLI binary
+// re-executes itself as the server (CONSOLE_SERVE=1), with an explicit
+// CONSOLE_SERVER_BIN path as an escape hatch.
 func resolveServerLaunch() (serverLaunch, error) {
 	if envBin := os.Getenv("CONSOLE_SERVER_BIN"); envBin != "" {
 		return serverLaunch{cmd: envBin}, nil
 	}
-	if exe, err := os.Executable(); err == nil {
-		dir := filepath.Dir(exe)
-		for _, name := range []string{"console-server-go", "server-go", "server"} {
-			if p := filepath.Join(dir, name); isExecutableFile(p) {
-				return serverLaunch{cmd: p}, nil
-			}
-		}
+	exe, err := os.Executable()
+	if err != nil {
+		return serverLaunch{}, fmt.Errorf("resolve server binary: %w", err)
 	}
-	for _, candidate := range []string{"../server/index.ts", "apps/server/index.ts"} {
-		if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
-			abs, _ := filepath.Abs(candidate)
-			return serverLaunch{cmd: "bun", args: []string{abs}}, nil
-		}
-	}
-	return serverLaunch{}, fmt.Errorf("no server binary found (set CONSOLE_SERVER_BIN)")
-}
-
-func isExecutableFile(p string) bool {
-	st, err := os.Stat(p)
-	if err != nil || st.IsDir() {
-		return false
-	}
-	return st.Mode()&0o111 != 0
+	return serverLaunch{cmd: exe, serveSelf: true}, nil
 }
 
 // mergedEnv returns the daemon environment: ~/.console/env under explicit
@@ -129,9 +109,13 @@ func StartDaemon(options StartOptions) error {
 		return err
 	}
 
-	env := mergedEnv(map[string]string{
+	overrides := map[string]string{
 		"PORT": port, "HOST": host, "CONSOLE_DAEMON": "true",
-	})
+	}
+	if launch.serveSelf {
+		overrides["CONSOLE_SERVE"] = "1"
+	}
+	env := mergedEnv(overrides)
 
 	if options.Daemon {
 		fmt.Println("Starting console agent daemon...")

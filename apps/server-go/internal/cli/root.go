@@ -1,9 +1,8 @@
-// Console Agent CLI - daemon management interface.
-//
-// Commands mirror apps/cli/index.ts: start, stop, status, logs, restart,
-// upgrade, env. One deliberate flag divergence: `-h` stays the help flag
-// (Go convention), so host is long-only `--host`.
-package main
+// Package cli is the Console Agent management CLI (start, stop, status,
+// logs, restart, upgrade, env). It backs the default mode of the multi-call
+// console binary; the agent server runs in the same binary under
+// CONSOLE_SERVE=1.
+package cli
 
 import (
 	"fmt"
@@ -11,10 +10,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Adelodunpeter25/console/apps/cli-go/internal/commands"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/commands"
 )
 
-func main() {
+// Execute runs the CLI. One deliberate flag divergence from the old TS CLI:
+// `-h` stays the help flag (Go convention), so host is long-only `--host`.
+func Execute() {
 	root := &cobra.Command{
 		Use:     "console",
 		Short:   "Console Agent - AI coding agent daemon",

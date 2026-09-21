@@ -4,7 +4,7 @@ package commands
 import (
 	"fmt"
 
-	"github.com/Adelodunpeter25/console/apps/cli-go/internal/daemon"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
 )
 
 // StatusDaemon prints whether the daemon is running.

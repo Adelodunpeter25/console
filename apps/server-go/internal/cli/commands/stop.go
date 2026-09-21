@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Adelodunpeter25/console/apps/cli-go/internal/daemon"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
 )
 
 // StopDaemon terminates the running daemon.

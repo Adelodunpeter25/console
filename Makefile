@@ -12,7 +12,7 @@ dev-server:
 ##          make dev-console PORT=3001  (prod: port 3001, ~/.console storage)
 ## Dev (default port) sets CONSOLE_ENV=dev so daemon paths resolve
 ## ~/.console-dev, matching the desktop's separate dev bundle identifier.
-## Builds the Go binaries first so the CLI finds its sibling server binary.
+## Builds the Go binary first.
 dev-console: build-server
 	CONSOLE_ENV=$(if $(PORT),,dev) ./console start -p $(if $(PORT),$(PORT),3000)
 
@@ -38,11 +38,10 @@ build-desktop:
 desktop-check:
 	cargo check --locked --manifest-path apps/desktop/Cargo.toml
 
-## build-server: Compile the Go `console` CLI + `console-server-go` agent server
-## (`console start` launches the sibling server binary in the same directory)
+## build-server: Compile the multi-call `console` binary (Go CLI + agent server)
+## (`console start` re-executes itself with CONSOLE_SERVE=1 to BE the daemon)
 build-server:
-	go -C apps/cli-go build -o ../../console ./cmd/console
-	go -C apps/server-go build -o ../../console-server-go ./cmd/server
+	go -C apps/server-go build -o ../../console ./cmd/console
 
 ## build-android: Build the native Android app for release
 build-android:
@@ -66,7 +65,7 @@ help:
 	@echo "  make package-desktop   - Package the GPUI desktop app for production (.app bundle)"
 	@echo "  make build-desktop     - Build the GPUI desktop app for production"
 	@echo "  make desktop-check     - Fast typecheck of the GPUI desktop app"
-	@echo "  make build-server      - Compile the Go console CLI and server binaries"
+	@echo "  make build-server      - Compile the multi-call console binary (CLI + server)"
 	@echo "  make build-android     - Build the native Android app for release"
 	@echo "  make typecheck         - Run TypeScript typechecking"
 	@echo "  make check             - Run code format and lint checks"

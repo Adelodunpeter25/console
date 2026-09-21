@@ -1,12 +1,12 @@
-# Builds the Go `console` CLI and `console-server-go` agent server for every
-# platform on each push to main, then uploads them to a rolling GitHub Release
-# tagged `console-server` (latest always wins).
+# Builds the multi-call Go `console` binary (management CLI + agent server in
+# one executable) for every platform on each push to main, then uploads them
+# to a rolling GitHub Release tagged `console-server` (latest always wins).
 #
-# Assets per platform: console-<suffix> + console-server-go-<suffix> +
-# libfff_c-<suffix>.{so,dylib} sidecar (fff file-search native lib, dlopened at
-# runtime — same assets as apps/server-go/scripts/fetch-fff-lib.sh, which only
-# covers the host). `console start` launches the sibling console-server-go
-# binary, so install/upgrade must place both binaries side by side.
+# Assets per platform: console-<suffix> + libfff_c-<suffix>.{so,dylib} sidecar
+# (fff file-search native lib, dlopened at runtime — same assets as
+# apps/server-go/scripts/fetch-fff-lib.sh, which only covers the host).
+# `console start` re-executes the same binary with CONSOLE_SERVE=1, so one
+# installed file both manages and IS the daemon.
 name: Build console
 
 on:
@@ -48,29 +48,18 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.25"
-          cache-dependency-path: |
-            apps/server-go/go.sum
-            apps/cli-go/go.sum
+          cache-dependency-path: apps/server-go/go.sum
 
-      # server-go uses cgo (fff dlopen bindings); cli-go is pure Go.
+      # server-go uses cgo (fff dlopen bindings).
       # Flags: -trimpath for reproducible builds; -s -w strips debug info.
-      - name: Build console CLI
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 1
-        run: >
-          go -C apps/cli-go build -trimpath -ldflags="-s -w"
-          -o ../../console-${{ matrix.os-suffix }} ./cmd/console
-
-      - name: Build console-server-go
+      - name: Build console binary
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 1
         run: >
           go -C apps/server-go build -trimpath -ldflags="-s -w"
-          -o ../../console-server-go-${{ matrix.os-suffix }} ./cmd/server
+          -o ../../console-${{ matrix.os-suffix }} ./cmd/console
 
       # Fetch the target platform's libfff_c from fff releases
       # (fetch-fff-lib.sh only covers the runner's own platform).
@@ -85,7 +74,6 @@ jobs:
           name: console-${{ matrix.os-suffix }}
           path: |
             console-${{ matrix.os-suffix }}
-            console-server-go-${{ matrix.os-suffix }}
             ${{ matrix.lib-asset }}
           if-no-files-found: error
 
@@ -124,11 +112,8 @@ jobs:
             make_latest: true
             files: |
               dist/console-linux-x64
-              dist/console-server-go-linux-x64
               dist/libfff_c-linux-x64.so
               dist/console-macos-x64
-              dist/console-server-go-macos-x64
               dist/libfff_c-macos-x64.dylib
               dist/console-macos-arm64
-              dist/console-server-go-macos-arm64
               dist/libfff_c-macos-arm64.dylib

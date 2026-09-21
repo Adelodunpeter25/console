@@ -13,7 +13,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/Adelodunpeter25/console/apps/cli-go/internal/daemon"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
 )
 
 const (

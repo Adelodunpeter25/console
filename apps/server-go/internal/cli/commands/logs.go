@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"os/signal"
 
-	"github.com/Adelodunpeter25/console/apps/cli-go/internal/daemon"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
 )
 
 // LogsOptions mirrors the TS LogsOptions: follow streams, lines caps output.
