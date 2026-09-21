@@ -94,6 +94,18 @@ fn message_text_with_mentions(
                     text.push_str(&remaining[..start]);
                 }
                 let (label, path) = &pills[pill_idx];
+                // Submitted prompts are trimmed before the bubble is created,
+                // so a mention at the start of a line loses the composer's
+                // invisible five-space reservation. Restore that reservation
+                // before painting the chip's left icon overhang.
+                let line_start = text.rfind('\n').map_or(0, |index| index + 1);
+                let line_prefix = &text[line_start..];
+                if line_prefix.chars().all(char::is_whitespace) {
+                    let padding = 5usize.saturating_sub(line_prefix.chars().count());
+                    for _ in 0..padding {
+                        text.push(' ');
+                    }
+                }
                 let mention_start = text.len();
                 text.push_str(label);
                 mentions.push(InlineFileMention {
@@ -129,8 +141,28 @@ fn is_path_like_token(token: &str) -> bool {
 
 fn clean_path_token(token: &str) -> String {
     token
-        .trim_matches(|c: char| matches!(c, '"' | '\'' | '`' | '(' | ')' | ',' | ';' | '.'))
+        .trim_matches(|c: char| matches!(c, '"' | '\'' | '`' | '(' | ')' | ',' | ';'))
+        .trim_end_matches('.')
         .to_string()
+}
+
+/// Relative refs can be bare filenames (`.gitignore`, `Makefile`) or
+/// directory names (`packages`), so a slash is not required when the token is
+/// also present as a complete filename in the prompt body.
+fn is_bare_context_ref(token: &str, body: &str) -> bool {
+    if token.is_empty()
+        || token.contains("://")
+        || token.contains('/')
+        || token.contains('\\')
+        || token.chars().any(char::is_whitespace)
+    {
+        return false;
+    }
+
+    body.split_whitespace().any(|body_token| {
+        body_token.trim_matches(|c: char| matches!(c, '"' | '\'' | '`' | '(' | ')' | ',' | ';'))
+            == token
+    })
 }
 
 /// Split reloaded server content into its prompt body and embedded file refs.
@@ -152,7 +184,14 @@ fn extract_embedded_context_files(content: &str) -> (String, Vec<String>) {
         .map(clean_path_token)
         .filter(|t| !t.is_empty())
         .collect();
-    if tokens.is_empty() || !tokens.iter().all(|t| is_path_like_token(t)) {
+    let all_path_like = !tokens.is_empty() && tokens.iter().all(|t| is_path_like_token(t));
+    let generated_relative_refs = footnote.starts_with("   ")
+        && footnote.chars().last().is_some_and(|c| c.is_whitespace())
+        && !tokens.is_empty()
+        && tokens
+            .iter()
+            .all(|token| is_path_like_token(token) || is_bare_context_ref(token, body));
+    if !all_path_like && !generated_relative_refs {
         return (content.to_string(), Vec::new());
     }
     (body.trim_end().to_string(), tokens)
