@@ -16,6 +16,9 @@ func TestAuthStatusLoggedOut(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("CODEX_CREDENTIALS_PATH", filepath.Join(dir, "missing.json"))
 	t.Setenv("OPENAI_CODEX_OAUTH_TOKEN", "")
+	t.Setenv("CLAUDE_CREDENTIALS_PATH", filepath.Join(dir, "missing.json"))
+	t.Setenv("CLAUDE_OAUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_OAUTH_TOKEN", "")
 	status := auth.NewAuthService().GetStatus()
 	if status.Codex.LoggedIn {
 		t.Fatal("must be logged out without credentials")
