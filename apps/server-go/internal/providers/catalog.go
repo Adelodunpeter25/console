@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
@@ -30,11 +31,18 @@ func DefaultCodexModels() []types.Model {
 
 // ListProviders returns catalog entries for implemented providers.
 func ListProviders() []types.ProviderEntry {
-	return []types.ProviderEntry{{
-		Name: "codex", DisplayName: "OpenAI Codex",
-		Description: "ChatGPT subscription models through the Codex Responses API",
-		Models:      DefaultCodexModels(), AuthMethod: "oauth",
-	}}
+	return []types.ProviderEntry{
+		{
+			Name: "codex", DisplayName: "OpenAI Codex",
+			Description: "ChatGPT subscription models through the Codex Responses API",
+			Models:      DefaultCodexModels(), AuthMethod: "oauth",
+		},
+		{
+			Name: "claude", DisplayName: "Claude",
+			Description: "Anthropic subscription models through the Messages API",
+			Models:      DefaultClaudeModels(), AuthMethod: "oauth",
+		},
+	}
 }
 
 // CodexModels returns live Codex models when logged in, else the static
@@ -53,6 +61,30 @@ func CodexModels(ctx context.Context) []types.Model {
 		return discovered
 	}
 	return DefaultCodexModels()
+}
+
+// DefaultClaudeModels mirrors DEFAULT_CLAUDE_MODELS: offline seed
+// refreshed from the live list after login.
+func DefaultClaudeModels() []types.Model {
+	return claude.DefaultModels()
+}
+
+// ClaudeModels returns live Claude models when logged in, else the static
+// seed. Mirrors fetchModelsForProvider's discover-or-fallback rule.
+func ClaudeModels(ctx context.Context) []types.Model {
+	cred, err := claude.LoadCredential()
+	if err != nil {
+		return DefaultClaudeModels()
+	}
+	if refreshed, err := claude.RefreshIfNeeded(nil, cred); err == nil {
+		cred = refreshed
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if discovered, err := claude.FetchModels(ctx, nil, "", cred); err == nil && len(discovered) > 0 {
+		return discovered
+	}
+	return DefaultClaudeModels()
 }
 
 // SortModelsByFavorites moves favorited models first (stable), mirroring

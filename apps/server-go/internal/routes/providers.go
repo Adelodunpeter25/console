@@ -32,7 +32,13 @@ func registerProviderRoutes(app *fiber.App, favorites *services.FavoriteService)
 				models = providers.SortModelsByFavorites(models, favs)
 			}
 			return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"provider": id, "models": models}})
-		case "antigravity", "claude":
+		case "claude":
+			models := providers.ClaudeModels(c.Context())
+			if favs, err := favorites.List(); err == nil {
+				models = providers.SortModelsByFavorites(models, favs)
+			}
+			return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"provider": id, "models": models}})
+		case "antigravity":
 			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{"success": false, "error": "Model discovery for '" + id + "' is not supported by the Go server yet."})
 		default:
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid provider '" + id + "'."})

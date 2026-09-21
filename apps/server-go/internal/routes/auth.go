@@ -27,13 +27,13 @@ func registerAuthRoutes(app *fiber.App, authSvc *auth.AuthService) {
 			req.Provider = "codex"
 		}
 		switch req.Provider {
-		case "codex":
-			result, err := authSvc.GetLoginURL()
+		case "codex", "claude":
+			result, err := authSvc.GetLoginURLFor(req.Provider)
 			if err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
 			}
 			return c.JSON(fiber.Map{"success": true, "data": result})
-		case "antigravity", "devin", "claude":
+		case "antigravity", "devin":
 			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{"success": false, "error": "OAuth login for '" + req.Provider + "' is not supported by the Go server yet."})
 		default:
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid OAuth provider."})
@@ -53,16 +53,16 @@ func registerAuthRoutes(app *fiber.App, authSvc *auth.AuthService) {
 			req.Provider = "codex"
 		}
 		switch req.Provider {
-		case "codex":
+		case "codex", "claude":
 			if req.Code == "" {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Authorization 'code' is required."})
 			}
-			result, err := authSvc.HandleCallback(req.Code, req.State)
+			result, err := authSvc.HandleCallbackFor(req.Provider, req.Code, req.State)
 			if err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
 			}
 			return c.JSON(fiber.Map{"success": true, "data": result})
-		case "antigravity", "devin", "claude":
+		case "antigravity", "devin":
 			return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{"success": false, "error": "OAuth login for '" + req.Provider + "' is not supported by the Go server yet."})
 		default:
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid OAuth provider."})
