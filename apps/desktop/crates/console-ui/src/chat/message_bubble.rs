@@ -8,8 +8,7 @@ use super::markdown_helpers::assistant_ctx;
 pub(crate) use super::markdown_helpers::render_selectable_markdown;
 use crate::common::{attachment_image, copy_button};
 use crate::markdown::render::{
-    self as markdown, Ctx as MarkdownCtx, LinkHandler, MarkdownView, Metrics, Palette,
-    TranscriptSelection,
+    LinkHandler, MarkdownView, Palette, TranscriptSelection,
 };
 use crate::theme::Theme;
 use crate::utils::format_message_time;
@@ -18,9 +17,76 @@ use super::ThinkingBlock;
 use base64::Engine as _;
 use console_core::{AssistantContentPart, ImageAttachment};
 use gpui::{
-    App, ElementId, FontWeight, IntoElement, ParentElement, RenderOnce, Styled, Window, div, img,
+    App, ElementId, IntoElement, ParentElement, RenderOnce, Styled, Window, div, img,
     prelude::*, px,
 };
+
+/// A segment of a user message — either a plain-text run or an inline file pill.
+enum MessageSegment {
+    Text(String),
+    FilePill { path: String, label: String },
+}
+
+/// Split `content` into alternating text/pill segments.
+///
+/// For each context file we look for `@<filename>` in the content (the label
+/// the autocomplete inserted). Unmatched files are ignored — they won't appear
+/// in the content string anyway. The plain text between mentions is preserved
+/// verbatim so the rest of the message renders exactly as typed.
+fn split_message_segments(content: &str, context_files: &[String]) -> Vec<MessageSegment> {
+    // Build (label, path) pairs — label is the bare filename the composer inserted.
+    let mut pills: Vec<(String, String)> = context_files
+        .iter()
+        .map(|path| {
+            let label = Path::new(path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(path)
+                .to_string();
+            (label, path.clone())
+        })
+        .collect();
+
+    // Deduplicate by label so we don't try to match the same token twice.
+    pills.dedup_by(|a, b| a.0 == b.0);
+
+    let mut segments: Vec<MessageSegment> = Vec::new();
+    let mut remaining = content;
+
+    'outer: while !remaining.is_empty() {
+        // Find the earliest `@<label>` occurrence among all pills.
+        let mut earliest: Option<(usize, usize, usize)> = None; // (start, end, pill_index)
+        for (pill_idx, (label, _)) in pills.iter().enumerate() {
+            let needle = format!("@{}", label);
+            if let Some(pos) = remaining.find(&needle) {
+                let end = pos + needle.len();
+                if earliest.is_none() || pos < earliest.unwrap().0 {
+                    earliest = Some((pos, end, pill_idx));
+                }
+            }
+        }
+
+        match earliest {
+            None => {
+                // No more pills — push the rest as plain text.
+                if !remaining.is_empty() {
+                    segments.push(MessageSegment::Text(remaining.to_string()));
+                }
+                break 'outer;
+            }
+            Some((start, end, pill_idx)) => {
+                if start > 0 {
+                    segments.push(MessageSegment::Text(remaining[..start].to_string()));
+                }
+                let (label, path) = pills[pill_idx].clone();
+                segments.push(MessageSegment::FilePill { path, label });
+                remaining = &remaining[end..];
+            }
+        }
+    }
+
+    segments
+}
 
 /// Invoked with the decoded image when the user clicks an image in a message,
 /// opening the app's image preview modal.
@@ -92,24 +158,19 @@ impl RenderOnce for UserMessageBubble {
         let group_name = format!("user-message-{}", self.selection_row);
         let copy_content = self.content.clone();
         let timestamp = format_message_time(self.created_at);
-        let palette = Palette::from_theme(&theme);
-        let selection = self.selection.clone().unwrap_or_default();
-        let markdown_ctx = MarkdownCtx::new(
-            self.selection_row.clone(),
-            &palette,
-            Metrics::USER_MESSAGE,
-            selection,
-        );
-        let selectable_content = markdown::plain_text(
-            self.content.clone(),
-            markdown::SANS_FAMILY,
-            FontWeight::NORMAL,
-            theme.text,
-            &markdown_ctx,
-        );
 
         let preview_handler = self.on_preview_image.clone();
         let context_files = self.context_files;
+
+        // Build inline segments: text runs interleaved with file pills.
+        // When there are no context files the content renders as-is.
+        let segments = if context_files.is_empty() {
+            vec![MessageSegment::Text(self.content.clone())]
+        } else {
+            split_message_segments(&self.content, &context_files)
+        };
+        let has_content = !self.content.is_empty() || !context_files.is_empty();
+
         div()
             .w_full()
             .flex()
@@ -117,8 +178,7 @@ impl RenderOnce for UserMessageBubble {
             .items_end()
             .gap(px(3.0))
             .group(group_name.clone())
-            // Message: image(s) pinned to the top, user bubble card below
-            // with attached file chips and message content contained inside.
+            // Message: image(s) pinned to the top, user bubble card below.
             .child(
                 div()
                     .max_w(px(540.0))
@@ -165,7 +225,7 @@ impl RenderOnce for UserMessageBubble {
                                 )),
                         )
                     })
-                    .when(!self.content.is_empty() || !context_files.is_empty(), |element| {
+                    .when(has_content, |element| {
                         element.child(
                             div()
                                 .max_w(px(540.0))
@@ -175,60 +235,53 @@ impl RenderOnce for UserMessageBubble {
                                 .bg(theme.user_bubble)
                                 .border_1()
                                 .border_color(theme.user_bubble_border)
-                                .flex()
-                                .flex_col()
-                                .gap(px(6.0))
-                                .when(!context_files.is_empty(), |bubble| {
-                                    bubble.child(
-                                        div()
-                                            .flex()
-                                            .flex_wrap()
-                                            .gap(px(6.0))
-                                            .children(context_files.into_iter().enumerate().map(
-                                                |(index, path)| {
-                                                    let filename = Path::new(&path)
-                                                        .file_name()
-                                                        .and_then(|n| n.to_str())
-                                                        .unwrap_or(&path)
-                                                        .to_string();
-                                                    div()
-                                                        .id(ElementId::Name(
-                                                            format!("user-ctx-file-chip-{index}")
-                                                                .into(),
-                                                        ))
-                                                        .flex()
-                                                        .items_center()
-                                                        .gap(px(4.0))
-                                                        .px(px(7.0))
-                                                        .h(px(22.0))
-                                                        .rounded(px(5.0))
-                                                        .border_1()
-                                                        .border_color(theme.user_bubble_border)
-                                                        .bg(theme.user_bubble.opacity(0.6))
-                                                        .child(
-                                                            crate::primitives::file_type_icon(
-                                                                &path, 11.0,
-                                                            ),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .text_size(px(11.5))
-                                                                .text_color(theme.text_secondary)
-                                                                .child(filename),
-                                                        )
-                                                },
-                                            )),
-                                    )
-                                })
-                                .when(!self.content.is_empty(), |bubble| {
-                                    bubble.child(
-                                        div()
-                                            .text_size(px(14.0))
-                                            .line_height(px(20.0))
-                                            .text_color(theme.text)
-                                            .child(selectable_content),
-                                    )
-                                }),
+                                .child(
+                                    // Inline flow: text runs + file pills in a wrapping row.
+                                    div()
+                                        .flex()
+                                        .flex_wrap()
+                                        .items_baseline()
+                                        .gap_x(px(4.0))
+                                        .gap_y(px(4.0))
+                                        .text_size(px(14.0))
+                                        .line_height(px(20.0))
+                                        .text_color(theme.text)
+                                        .children(segments.into_iter().enumerate().map(
+                                            |(seg_idx, segment)| match segment {
+                                                MessageSegment::Text(text) => div()
+                                                    .id(ElementId::Name(
+                                                        format!("msg-text-{seg_idx}").into(),
+                                                    ))
+                                                    .child(text)
+                                                    .into_any_element(),
+                                                MessageSegment::FilePill { path, label } => div()
+                                                    .id(ElementId::Name(
+                                                        format!("msg-pill-{seg_idx}").into(),
+                                                    ))
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap(px(4.0))
+                                                    .px(px(6.0))
+                                                    .py(px(1.0))
+                                                    .rounded(px(5.0))
+                                                    .border_1()
+                                                    .border_color(theme.accent.opacity(0.45))
+                                                    .bg(theme.accent.opacity(0.10))
+                                                    .child(
+                                                        crate::primitives::file_type_icon(
+                                                            &path, 11.0,
+                                                        ),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .text_size(px(12.5))
+                                                            .text_color(theme.accent)
+                                                            .child(label),
+                                                    )
+                                                    .into_any_element(),
+                                            },
+                                        )),
+                                ),
                         )
                     }),
             )
