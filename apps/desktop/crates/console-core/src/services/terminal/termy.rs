@@ -123,10 +123,14 @@ impl TerminalBackend for TermyBackend {
         // filesystem canonicalization) per cell, which is dead weight for the
         // common case and has pathological behavior for links that soft-wrap
         // across rows. Only http/https/www URLs are surfaced — file paths and
-        // OSC 8 targets are ignored on purpose.
+        // OSC 8 targets are ignored on purpose. Skipped entirely on the
+        // alt-screen (TUIs like btop redraw constantly and links are useless
+        // there).
         let mut detected_links = Vec::new();
-        for (r, row) in out_rows.iter().enumerate() {
-            detect_url_links(row, r, &mut detected_links);
+        if !self.term.alternate_screen_mode() {
+            for (r, row) in out_rows.iter().enumerate() {
+                detect_url_links(row, r, &mut detected_links);
+            }
         }
 
         let cursor = frame.cursor;
@@ -218,13 +222,18 @@ impl TermyBackend {
     }
 }
 
-/// Case-insensitive prefix check for the ASCII URL schemes we detect.
-fn starts_with_ignore_case(chars: &[char], prefix: &str) -> bool {
-    chars.len() >= prefix.len()
-        && chars[..prefix.len()]
-            .iter()
-            .zip(prefix.chars())
-            .all(|(a, b)| a.to_ascii_lowercase() == b)
+/// Case-insensitive prefix check directly on grid cells (no allocation).
+fn cell_starts_with(row: &[TerminalCell], at: usize, prefix: &str) -> bool {
+    let bytes = prefix.as_bytes();
+    if at + bytes.len() > row.len() {
+        return false;
+    }
+    for (i, &b) in bytes.iter().enumerate() {
+        if row[at + i].c.to_ascii_lowercase() as u8 != b.to_ascii_lowercase() {
+            return false;
+        }
+    }
+    true
 }
 
 /// Scan one rendered grid row for URL tokens and append links for each.
@@ -232,16 +241,16 @@ fn starts_with_ignore_case(chars: &[char], prefix: &str) -> bool {
 /// Only `http://`, `https://`, and `www.` tokens count as links; file paths,
 /// bare domains, and OSC 8 hyperlinks are deliberately ignored. Detection is
 /// per-row: a URL soft-wrapped across the terminal edge is not linked (the
-/// same tradeoff termy's own heuristics make).
+/// same tradeoff termy's own heuristics make). Works directly on cells —
+/// no per-row `Vec<char>` allocation.
 fn detect_url_links(row: &[TerminalCell], row_idx: usize, links: &mut Vec<TerminalLink>) {
     const PREFIXES: [(&str, usize); 3] = [("https://", 8), ("http://", 7), ("www.", 4)];
 
-    let chars: Vec<char> = row.iter().map(|cell| cell.c).collect();
     let mut c = 0usize;
-    while c < chars.len() {
+    while c < row.len() {
         let scheme_len = PREFIXES
             .iter()
-            .find(|(prefix, _)| starts_with_ignore_case(&chars[c..], prefix))
+            .find(|(prefix, _)| cell_starts_with(row, c, prefix))
             .map(|(_, len)| *len);
         let Some(scheme_len) = scheme_len else {
             c += 1;
@@ -250,15 +259,15 @@ fn detect_url_links(row: &[TerminalCell], row_idx: usize, links: &mut Vec<Termin
 
         // Token ends at whitespace, quotes, or brackets.
         let mut end = c + scheme_len;
-        while end < chars.len() {
-            let ch = chars[end];
+        while end < row.len() {
+            let ch = row[end].c;
             if ch.is_whitespace() || matches!(ch, '"' | '\'' | '<' | '>' | '[' | ']' | '(' | ')') {
                 break;
             }
             end += 1;
         }
         // Trim punctuation commonly glued to URLs in prose/shell output.
-        while end > c + scheme_len && matches!(chars[end - 1], '.' | ',' | ';' | ':' | '!' | '?') {
+        while end > c + scheme_len && matches!(row[end - 1].c, '.' | ',' | ';' | ':' | '!' | '?') {
             end -= 1;
         }
 
@@ -268,7 +277,7 @@ fn detect_url_links(row: &[TerminalCell], row_idx: usize, links: &mut Vec<Termin
             continue;
         }
 
-        let mut target: String = chars[c..end].iter().collect();
+        let mut target: String = row[c..end].iter().map(|cell| cell.c).collect();
         if target.len() >= 4 && target[..4].eq_ignore_ascii_case("www.") {
             target = format!("https://{target}");
         }

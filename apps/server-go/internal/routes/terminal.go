@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"sync"
 
 	"github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v2"
@@ -23,7 +24,20 @@ const (
 	terminalOutputFrameTag = 0x01
 	terminalInputFrameTag  = 0x01
 	maxTerminalFrameBytes  = 1024 * 1024
+	// Mirror Bun's write() guard: one giant paste must not become one giant
+	// ptmx write.
+	maxTerminalInputBytes = 256 * 1024
 )
+
+// Pooled binary frame buffers (payload + 1 tag byte). Coalesced flushes cap
+// payloads at 64KB, so pooled buffers stay bounded and per-read allocations
+// disappear under burst output.
+var terminalFramePool = sync.Pool{
+	New: func() any {
+		buf := make([]byte, 0, 64*1024+1)
+		return &buf
+	},
+}
 
 var upgrader = websocket.FastHTTPUpgrader{
 	CheckOrigin: func(ctx *fasthttp.RequestCtx) bool { return true },
@@ -51,9 +65,30 @@ func registerTerminalRoutes(app *fiber.App, ptyManager *services.PtyManager) {
 func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, params types.TerminalSpawnParams) {
 	defer conn.Close()
 
+	// fasthttp/websocket conns are not safe for concurrent writers: the PTY
+	// read pump and the exit path both write, so serialize all writes.
+	var writeMu sync.Mutex
 	sendJSON := func(msg any) {
 		data, _ := json.Marshal(msg)
+		writeMu.Lock()
 		_ = conn.WriteMessage(websocket.TextMessage, data)
+		writeMu.Unlock()
+	}
+	sendBinary := func(chunk []byte) {
+		bufPtr := terminalFramePool.Get().(*[]byte)
+		buf := *bufPtr
+		if cap(buf) < len(chunk)+1 {
+			buf = make([]byte, len(chunk)+1)
+		} else {
+			buf = buf[:len(chunk)+1]
+		}
+		buf[0] = terminalOutputFrameTag
+		copy(buf[1:], chunk)
+		writeMu.Lock()
+		_ = conn.WriteMessage(websocket.BinaryMessage, buf)
+		writeMu.Unlock()
+		*bufPtr = buf[:0]
+		terminalFramePool.Put(bufPtr)
 	}
 
 	session, err := ptyManager.Spawn(params)
@@ -65,19 +100,26 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, p
 	}
 	defer ptyManager.Kill(session.ID)
 
-	session.OnData = func(chunk []byte) {
+	// JSON compat: stream-decode PTY bytes to text so multibyte sequences
+	// split across coalesced frames survive (mirrors Bun's TextDecoder
+	// stream mode). Binary clients skip decoding entirely.
+	// Backpressure: WS writes are synchronous, so a slow client throttles
+	// flushes directly; the session queue itself is bounded at 8MB with
+	// oldest-drop, and Pause/Resume remain available for explicit control.
+	decoder := services.NewUTF8Decoder()
+
+	session.SetCallbacks(func(chunk []byte) {
 		if params.Binary {
-			frame := make([]byte, len(chunk)+1)
-			frame[0] = terminalOutputFrameTag
-			copy(frame[1:], chunk)
-			_ = conn.WriteMessage(websocket.BinaryMessage, frame)
+			sendBinary(chunk)
 		} else {
-			sendJSON(fiber.Map{"type": "output", "data": sanitizeUTF8(chunk)})
+			text := decoder.Decode(chunk)
+			if text != "" {
+				sendJSON(fiber.Map{"type": "output", "data": text})
+			}
 		}
-	}
-	session.OnExit = func(code int) {
+	}, func(code int) {
 		sendJSON(types.TerminalExitMessage{Type: "exit", Code: code})
-	}
+	})
 	sendJSON(types.TerminalSpawnedMessage{
 		Type: "spawned", ID: session.ID, Cwd: params.Cwd, Shell: params.Shell,
 		Label: params.Label, Cols: params.Cols, Rows: params.Rows,
@@ -103,7 +145,12 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, p
 				continue
 			}
 			if data[0] == terminalInputFrameTag {
-				_ = session.Write(data[1:])
+				payload := data[1:]
+				if len(payload) > maxTerminalInputBytes {
+					sendJSON(types.TerminalErrorMessage{Type: "error", Message: "Input too large."})
+					continue
+				}
+				_ = session.Write(payload)
 			} else {
 				sendJSON(types.TerminalErrorMessage{Type: "error", Message: fmt.Sprintf("Unknown binary frame tag: %d", data[0])})
 			}
@@ -115,6 +162,10 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, p
 			}
 			switch frame.Type {
 			case "input":
+				if len(frame.Data) > maxTerminalInputBytes {
+					sendJSON(types.TerminalErrorMessage{Type: "error", Message: "Input too large."})
+					continue
+				}
 				_ = session.Write([]byte(frame.Data))
 			case "resize":
 				_ = session.Resize(frame.Cols, frame.Rows)

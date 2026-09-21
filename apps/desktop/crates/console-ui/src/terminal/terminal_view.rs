@@ -83,7 +83,15 @@ struct CellRun {
 pub struct TerminalView {
     focus: FocusHandle,
     handle: Option<Arc<console_core::services::terminal::TerminalHandle>>,
-    snapshot: Option<console_core::types::terminal::TerminalGridSnapshot>,
+    /// Shared snapshot: cloned as `Arc` (refcount bump) per render instead of
+    /// a deep grid clone, so idle frames stay O(1) before paint.
+    snapshot: Option<Arc<console_core::types::terminal::TerminalGridSnapshot>>,
+    /// Damage paired with `snapshot` (same backend lock). Lets the renderer
+    /// skip clean rows before shaping/hashing.
+    snapshot_damage: termy_core::TerminalDamageSnapshot,
+    /// Mouse mode paired with `snapshot` — cached here so mousemove/scroll
+    /// never touch the backend lock per event.
+    cached_mouse_mode: termy_core::TerminalMouseMode,
     status: TerminalStatus,
     error: Option<String>,
     size: TerminalSize,
@@ -128,6 +136,8 @@ impl TerminalView {
             focus,
             handle: None,
             snapshot: None,
+            snapshot_damage: termy_core::TerminalDamageSnapshot::Full,
+            cached_mouse_mode: termy_core::TerminalMouseMode::default(),
             status: TerminalStatus::Spawning,
             error: None,
             size,
@@ -188,23 +198,27 @@ impl TerminalView {
             // thread would stall the UI behind the parser during output bursts
             // (e.g. `git push` progress), so run the whole lock-and-snapshot on
             // the background executor and only hop back to the main thread to
-            // apply the result.
-            let (initial_snapshot, initial_status, initial_error) = cx
+            // apply the result. Snapshot + damage + mouse mode come from one
+            // lock via `snapshot_full` so dirty rows stay in sync with the grid
+            // and mouse events never touch the backend lock.
+            let (initial_snapshot, initial_damage, initial_mouse, initial_status, initial_error) = cx
                 .background_executor()
                 .spawn({
                     let handle = handle.clone();
                     async move {
-                        let snapshot = handle.snapshot().await;
+                        let full = handle.snapshot_full().await;
                         let status = handle.status().await;
                         let error = handle.error.read().await.clone();
-                        (snapshot, status, error)
+                        (full.snapshot, full.damage, full.mouse_mode, status, error)
                     }
                 })
                 .await;
 
             let _ = this.update(cx, |view, cx| {
                 view.handle = Some(handle);
-                view.snapshot = Some(initial_snapshot);
+                view.snapshot = Some(Arc::new(initial_snapshot));
+                view.snapshot_damage = initial_damage;
+                view.cached_mouse_mode = initial_mouse;
                 view.status = initial_status;
                 view.error = initial_error;
                 cx.notify();
@@ -223,17 +237,19 @@ impl TerminalView {
                     // snapshot above): termy's blocking mutex must never be
                     // awaited on the main thread.
                     let handle_for_snapshot = handle_for_watch.clone();
-                    let (snapshot, status, error) = cx
+                    let (snapshot, damage, mouse_mode, status, error) = cx
                         .background_executor()
                         .spawn(async move {
-                            let snapshot = handle_for_snapshot.snapshot().await;
+                            let full = handle_for_snapshot.snapshot_full().await;
                             let status = handle_for_snapshot.status().await;
                             let error = handle_for_snapshot.error.read().await.clone();
-                            (snapshot, status, error)
+                            (full.snapshot, full.damage, full.mouse_mode, status, error)
                         })
                         .await;
                     let _ = this_watch.update(cx, |view, cx| {
-                        view.snapshot = Some(snapshot);
+                        view.snapshot = Some(Arc::new(snapshot));
+                        view.snapshot_damage = damage;
+                        view.cached_mouse_mode = mouse_mode;
                         view.status = status;
                         view.error = error;
                         cx.notify();
@@ -419,13 +435,11 @@ impl TerminalView {
         }
     }
 
-    /// Mouse-reporting mode of the live backend (default = disabled). TUIs
-    /// like btop/opencode enable it via DECSET 1000/1002/1003/1006.
+    /// Mouse-reporting mode, cached per snapshot (see `snapshot_full`).
+    /// TUIs like btop/opencode enable it via DECSET 1000/1002/1003/1006.
+    /// Cached so mousemove/scroll never touch the backend lock per event.
     fn mouse_mode(&self) -> termy_core::TerminalMouseMode {
-        self.handle
-            .as_ref()
-            .and_then(|h| h.backend.try_lock().ok().map(|b| b.mouse_mode()))
-            .unwrap_or_default()
+        self.cached_mouse_mode
     }
 
     /// Forward a mouse event to the PTY when the running TUI has enabled
@@ -868,34 +882,49 @@ impl Render for TerminalView {
                     )
                     .child(
                         gpui::canvas(
-                            move |bounds, window, _cx| {
-                                let pad_x = px(8.0);
-                                let pad_y = px(8.0);
-                                let avail_w = (bounds.size.width - pad_x * 2.0).max(px(0.0));
-                                let avail_h = (bounds.size.height - pad_y * 2.0).max(px(0.0));
+                            {
+                                // Measure once: the font is fixed (12px mono), so reuse
+                                // the last measured cell metrics instead of shaping
+                                // "0123456789" on every layout pass.
+                                let cached_metrics = self.cell_metrics;
+                                move |bounds, window, _cx| {
+                                    let pad_x = px(8.0);
+                                    let pad_y = px(8.0);
+                                    let avail_w = (bounds.size.width - pad_x * 2.0).max(px(0.0));
+                                    let avail_h = (bounds.size.height - pad_y * 2.0).max(px(0.0));
 
-                                let run = gpui::TextRun {
-                                    len: 10,
-                                    font: gpui::font(crate::markdown::render::MONO_FAMILY),
-                                    color: gpui::white(),
-                                    ..Default::default()
-                                };
-                                let sample = window.text_system().shape_line(
-                                    SharedString::from("0123456789"),
-                                    px(12.0),
-                                    &[run],
-                                    None,
-                                );
-                                let cell_w = (sample.width / 10.0).max(px(1.0));
-                                let cell_h = px(16.0);
+                                    let (cell_w, cell_h) = if let Some((w, h)) = cached_metrics {
+                                        (w, h)
+                                    } else {
+                                        let run = gpui::TextRun {
+                                            len: 10,
+                                            font: gpui::font(crate::markdown::render::MONO_FAMILY),
+                                            color: gpui::white(),
+                                            ..Default::default()
+                                        };
+                                        let sample = window.text_system().shape_line(
+                                            SharedString::from("0123456789"),
+                                            px(12.0),
+                                            &[run],
+                                            None,
+                                        );
+                                        let w = (sample.width / 10.0).max(px(1.0));
+                                        // Derive row height from the shaped line
+                                        // metrics so mouse mapping never drifts
+                                        // from the painted grid.
+                                        let h = (sample.ascent + sample.descent).max(px(1.0));
+                                        (w, h)
+                                    };
 
-                                let cols = ((avail_w / cell_w).floor() as u16).max(20);
-                                let rows = ((avail_h / cell_h).floor() as u16).max(5);
+                                    let cols = ((avail_w / cell_w).floor() as u16).max(20);
+                                    let rows = ((avail_h / cell_h).floor() as u16).max(5);
 
-                                (cols, rows, cell_w, cell_h)
+                                    (cols, rows, cell_w, cell_h)
+                                }
                             },
                             {
                                 let snapshot = snapshot.clone();
+                                let damage = self.snapshot_damage.clone();
                                 let paint_cache = paint_cache.clone();
                                 let view_for_canvas = view_handle.clone();
                                 let focus_for_canvas = self.focus.clone();
@@ -926,7 +955,8 @@ impl Render for TerminalView {
                                         rows,
                                         cell_w,
                                         cell_h,
-                                        snapshot.as_ref(),
+                                        snapshot.as_deref(),
+                                        &damage,
                                         selection_range,
                                         render_cursor,
                                         &paint_cache,
@@ -957,6 +987,7 @@ fn render_canvas_grid(
     cell_w: gpui::Pixels,
     cell_h: gpui::Pixels,
     snapshot: Option<&console_core::types::terminal::TerminalGridSnapshot>,
+    damage: &termy_core::TerminalDamageSnapshot,
     selection_range: Option<(TerminalCellPos, TerminalCellPos)>,
     render_cursor: bool,
     paint_cache: &Rc<RefCell<HashMap<u16, CachedRowPaint>>>,
@@ -984,11 +1015,54 @@ fn render_canvas_grid(
         }
     };
 
+    // Damage → dirty rows. `Full` repaints everything; `Partial` lets clean
+    // cached rows skip run-building + hashing entirely.
+    let dirty_rows: Option<std::collections::HashSet<u16>> = match damage {
+        termy_core::TerminalDamageSnapshot::Full => None,
+        termy_core::TerminalDamageSnapshot::Partial(spans) => {
+            Some(spans.iter().map(|s| s.row as u16).collect())
+        }
+    };
+    let is_row_dirty = |row: u16| match &dirty_rows {
+        None => true,
+        Some(set) => set.contains(&row),
+    };
+
     for (row_idx, row) in snap.rows.iter().enumerate() {
         if row_idx as u16 >= rows {
             break;
         }
         let y = origin.y + cell_h * row_idx as f32;
+        let row_u16 = row_idx as u16;
+
+        let selection_here = match selection_range {
+            Some((start, end)) => row_u16 >= start.row && row_u16 <= end.row,
+            None => false,
+        };
+        // Cursor no longer poisons the cache: rows shape without cursor
+        // styling and the cursor paints as a one-cell overlay below, so
+        // full-screen TUIs that move the cursor every frame still hit the
+        // cache. Selection still bypasses (that state isn't in the hash).
+        let cacheable = !selection_here;
+        let cursor_here =
+            cursor.visible && cursor.row == row_u16 && (cursor.col as usize) < row.len();
+
+        // Fast path: clean + cached → repaint stored quads without building
+        // runs or hashing. Falls through when the cache has no entry (first
+        // paint, theme change) so the cache gets populated.
+        if cacheable && !is_row_dirty(row_u16) {
+            let hit = paint_cache.borrow().contains_key(&row_u16);
+            if hit {
+                if let Some(entry) = paint_cache.borrow().get(&row_u16) {
+                    paint_cached_entry(origin, cell_w, cell_h, y, entry, theme.background, window, cx);
+                }
+                paint_cursor_overlay(
+                    origin, cell_w, cell_h, y, snap, row_u16, cursor_here, cursor, theme,
+                    window, cx,
+                );
+                continue;
+            }
+        }
 
         // Collect the links overlapping this row once per row instead of
         // scanning the full link list for every cell (O(cells × links) →
@@ -1041,12 +1115,8 @@ fn render_canvas_grid(
                 fg = bg;
             }
 
-            let is_cursor =
-                cursor.visible && row_idx as u16 == cursor.row && col_idx as u16 == cursor.col;
-            if is_cursor {
-                bg = theme.cursor;
-                fg = theme.cursor_text;
-            }
+            // NOTE: no cursor override here — the cursor paints as an overlay
+            // after the row so cursor motion never invalidates the row cache.
 
             let c = if cell.flags.wide_char_spacer {
                 ' '
@@ -1101,15 +1171,8 @@ fn render_canvas_grid(
         }
 
         // Shape cache: unchanged rows repaint stored quads + shaped lines
-        // without shaping. Cursor/selection rows bypass (that state isn't in
-        // the hash).
-        let row_u16 = row_idx as u16;
-        let cursor_here = cursor.visible && row_u16 == cursor.row;
-        let selection_here = match selection_range {
-            Some((start, end)) => row_u16 >= start.row && row_u16 <= end.row,
-            None => false,
-        };
-        let cacheable = !cursor_here && !selection_here;
+        // without shaping. Selection rows bypass (that state isn't in
+        // the hash); cursor rows stay cached via the overlay below.
         let row_hash: Option<u64> = if cacheable {
             Some(hash_cell_runs(&runs))
         } else {
@@ -1123,26 +1186,12 @@ fn render_canvas_grid(
                 .unwrap_or(false);
             if hit {
                 if let Some(entry) = paint_cache.borrow().get(&row_u16) {
-                    for (start_col, count, bg) in &entry.bg_runs {
-                        if *bg != theme.background {
-                            let bg_quad = gpui::Bounds {
-                                origin: gpui::point(origin.x + cell_w * *start_col as f32, y),
-                                size: gpui::size(cell_w * *count as f32, cell_h),
-                            };
-                            window.paint_quad(gpui::fill(bg_quad, *bg));
-                        }
-                    }
-                    for text in &entry.text_runs {
-                        let _ = text.shaped.paint(
-                            gpui::point(origin.x + cell_w * text.start_col as f32, y),
-                            cell_h,
-                            gpui::TextAlign::Left,
-                            None,
-                            window,
-                            cx,
-                        );
-                    }
+                    paint_cached_entry(origin, cell_w, cell_h, y, entry, theme.background, window, cx);
                 }
+                paint_cursor_overlay(
+                    origin, cell_w, cell_h, y, snap, row_u16, cursor_here, cursor, theme,
+                    window, cx,
+                );
                 continue;
             }
         }
@@ -1232,6 +1281,126 @@ fn render_canvas_grid(
                     text_runs: cached_text,
                 },
             );
+        }
+        paint_cursor_overlay(
+            origin, cell_w, cell_h, y, snap, row_u16, cursor_here, cursor, theme,
+            window, cx,
+        );
+    }
+}
+
+/// Repaint a cache-hit row without shaping.
+fn paint_cached_entry(
+    origin: gpui::Point<Pixels>,
+    cell_w: Pixels,
+    cell_h: Pixels,
+    y: Pixels,
+    entry: &CachedRowPaint,
+    background: gpui::Hsla,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    for (start_col, count, bg) in &entry.bg_runs {
+        if *bg != background {
+            let bg_quad = gpui::Bounds {
+                origin: gpui::point(origin.x + cell_w * *start_col as f32, y),
+                size: gpui::size(cell_w * *count as f32, cell_h),
+            };
+            window.paint_quad(gpui::fill(bg_quad, *bg));
+        }
+    }
+    for text in &entry.text_runs {
+        let _ = text.shaped.paint(
+            gpui::point(origin.x + cell_w * text.start_col as f32, y),
+            cell_h,
+            gpui::TextAlign::Left,
+            None,
+            window,
+            cx,
+        );
+    }
+}
+
+/// Paint the cursor as a one-cell overlay so cursor motion never invalidates
+/// the row paint cache. Shapes only the cursor cell per frame instead of the
+/// whole row.
+fn paint_cursor_overlay(
+    origin: gpui::Point<Pixels>,
+    cell_w: Pixels,
+    cell_h: Pixels,
+    y: Pixels,
+    snap: &console_core::types::terminal::TerminalGridSnapshot,
+    row: u16,
+    cursor_here: bool,
+    cursor: console_core::types::terminal::CursorPosition,
+    theme: TerminalTheme,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    if !cursor_here {
+        return;
+    }
+    let Some(cells) = snap.rows.get(row as usize) else {
+        return;
+    };
+    let Some(cell) = cells.get(cursor.col as usize) else {
+        return;
+    };
+    let ch = if cell.flags.wide_char_spacer {
+        ' '
+    } else {
+        cell.c
+    };
+    let cursor_x = origin.x + cell_w * cursor.col as f32;
+    window.paint_quad(gpui::fill(
+        gpui::Bounds {
+            origin: gpui::point(cursor_x, y),
+            size: gpui::size(cell_w, cell_h),
+        },
+        theme.cursor,
+    ));
+    // Shape just the cursor cell with the cursor colors. An empty/blank cell
+    // still needs the bg quad above; skip shaping whitespace.
+    if ch == ' ' && !cell.flags.underline {
+        return;
+    }
+    let text_run = gpui::TextRun {
+        len: ch.len_utf8(),
+        font: gpui::Font {
+            family: SharedString::from(crate::markdown::render::MONO_FAMILY),
+            weight: if cell.flags.bold {
+                gpui::FontWeight::BOLD
+            } else {
+                gpui::FontWeight::NORMAL
+            },
+            style: if cell.flags.italic {
+                gpui::FontStyle::Italic
+            } else {
+                gpui::FontStyle::Normal
+            },
+            features: Default::default(),
+            fallbacks: None,
+        },
+        color: theme.cursor_text,
+        background_color: None,
+        underline: None,
+        strikethrough: None,
+    };
+    let shaped = window.text_system().shape_line(
+        SharedString::from(ch.to_string()),
+        px(12.0),
+        &[text_run],
+        None,
+    );
+    let _ = shaped.paint(
+        gpui::point(cursor_x, y),
+        cell_h,
+        gpui::TextAlign::Left,
+        None,
+        window,
+        cx,
+    );
+}
         }
     }
 }
