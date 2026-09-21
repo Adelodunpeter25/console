@@ -916,10 +916,18 @@ impl ConsoleDesktopApp {
                                                         let attachments = (*this
                                                             .attachments_for_pane(&q_pane))
                                                         .clone();
+                                                        let context_files = this
+                                                            .composer_for_pane(&q_pane)
+                                                            .read(cx)
+                                                            .mentions()
+                                                            .iter()
+                                                            .map(|mention| mention.path.clone())
+                                                            .collect();
                                                         this.queue_prompt_for_pane(
                                                             q_pane.clone(),
                                                             prompt,
                                                             attachments,
+                                                            context_files,
                                                             cx,
                                                         );
                                                         return;
@@ -932,11 +940,23 @@ impl ConsoleDesktopApp {
                                                     let attachments = (*this
                                                         .attachments_for_pane(&submit_pane_id))
                                                     .clone();
+                                                    let context_files = this
+                                                        .composer_for_pane(&submit_pane_id)
+                                                        .read(cx)
+                                                        .mentions()
+                                                        .iter()
+                                                        .map(|mention| mention.path.clone())
+                                                        .collect();
                                                     this.active_pane_id =
                                                         Some(submit_pane_id.clone());
                                                     this.selected_session_id = this
                                                         .active_session_for_pane(&submit_pane_id);
-                                                    this.submit_prompt(prompt, attachments, cx);
+                                                    this.submit_prompt_with_context(
+                                                        prompt,
+                                                        attachments,
+                                                        context_files,
+                                                        cx,
+                                                    );
                                                 });
                                             }
                                         }
@@ -1007,7 +1027,20 @@ impl ConsoleDesktopApp {
                                                 let prompt =
                                                     this.composer_for_pane(&pane).read(cx).content().to_string();
                                                 let atts = (*this.attachments_for_pane(&pane)).clone();
-                                                this.queue_prompt_for_pane(pane, prompt, atts, cx);
+                                                let context_files = this
+                                                    .composer_for_pane(&pane)
+                                                    .read(cx)
+                                                    .mentions()
+                                                    .iter()
+                                                    .map(|mention| mention.path.clone())
+                                                    .collect();
+                                                this.queue_prompt_for_pane(
+                                                    pane,
+                                                    prompt,
+                                                    atts,
+                                                    context_files,
+                                                    cx,
+                                                );
                                             });
                                         }
                                     }

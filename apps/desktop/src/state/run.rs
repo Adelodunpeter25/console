@@ -50,6 +50,7 @@ impl ConsoleDesktopApp {
         pane_id: String,
         prompt: String,
         attachments: Vec<ImageAttachment>,
+        context_files: Vec<String>,
         cx: &mut Context<Self>,
     ) {
         if prompt.trim().is_empty() {
@@ -58,11 +59,16 @@ impl ConsoleDesktopApp {
         let Some(session_id) = self.active_session_for_pane(&pane_id) else {
             // No session yet — a fresh chat cannot have a running turn to queue behind.
             // Fall through to a normal turn instead.
-            self.submit_prompt(prompt, attachments, cx);
+            self.submit_prompt_with_context(prompt, attachments, context_files, cx);
             return;
         };
         let dq = RunPromptDto {
             prompt: prompt.clone(),
+            context_files: if context_files.is_empty() {
+                None
+            } else {
+                Some(context_files.clone())
+            },
             model_id: self
                 .pane_selected_model(&pane_id)
                 .as_ref()
@@ -83,6 +89,7 @@ impl ConsoleDesktopApp {
             id: format!("queued-{}", chrono::Utc::now().timestamp_micros()),
             session_id: session_id.clone(),
             prompt: prompt.clone(),
+            context_files: dq.context_files.clone(),
             model_id: dq.model_id.clone(),
             provider: dq.provider.clone(),
             approval_mode: dq.approval_mode.clone(),
@@ -157,6 +164,7 @@ impl ConsoleDesktopApp {
             let next = remaining[0].clone();
             let dq = console_core::RunPromptDto {
                 prompt: next.prompt,
+                context_files: next.context_files,
                 model_id: next.model_id,
                 provider: next.provider,
                 approval_mode: next.approval_mode,
@@ -184,9 +192,12 @@ impl ConsoleDesktopApp {
         };
         let prompt = queued.prompt.clone();
         let attachments = queued.attachments.clone().unwrap_or_default();
+        let context_files = queued.context_files.clone().unwrap_or_default();
         // Restore into composer for editing, then discard the queue entry.
         self.composer_for_pane(&pane_id)
-            .update(cx, |input, cx| input.set_content(prompt.clone(), cx));
+            .update(cx, |input, cx| {
+                input.set_content_with_context_files(prompt.clone(), context_files, cx)
+            });
         if !attachments.is_empty() {
             self.set_attachments_for_pane(&pane_id, attachments);
         }
@@ -202,6 +213,7 @@ impl ConsoleDesktopApp {
             let next = remaining[0].clone();
             let dq = console_core::RunPromptDto {
                 prompt: next.prompt,
+                context_files: next.context_files,
                 model_id: next.model_id,
                 provider: next.provider,
                 approval_mode: next.approval_mode,
@@ -229,6 +241,7 @@ impl ConsoleDesktopApp {
         };
         let dto = RunPromptDto {
             prompt: queued.prompt.clone(),
+            context_files: queued.context_files.clone(),
             model_id: queued.model_id.clone().or_else(|| {
                 self.pane_selected_model(&pane_id)
                     .as_ref()
@@ -272,6 +285,7 @@ impl ConsoleDesktopApp {
         &mut self,
         pane_id: String,
         prompt: String,
+        context_files: Vec<String>,
         cx: &mut Context<Self>,
     ) {
         if let Some(queued) = self.queued_prompt_for_pane(&pane_id) {
@@ -285,7 +299,7 @@ impl ConsoleDesktopApp {
         }
         // No staged prompt: behave like a normal queue (POST /queue, no abort).
         let attachments = (*self.attachments_for_pane(&pane_id)).clone();
-        self.queue_prompt_for_pane(pane_id, prompt, attachments, cx);
+        self.queue_prompt_for_pane(pane_id, prompt, attachments, context_files, cx);
     }
 
     pub fn submit_prompt(
@@ -326,19 +340,8 @@ impl ConsoleDesktopApp {
                 input.record_prompt_history(prompt.clone(), cx);
             });
 
-        // Append context file references to the prompt so the server sees them
-        let full_prompt = if context_files.is_empty() {
-            prompt.clone()
-        } else {
-            let refs = context_files
-                .iter()
-                .map(|p| format!("   {p} "))
-                .collect::<String>();
-            format!("{prompt}\n{refs}")
-        };
-
-        // Push user message bubble — show the raw prompt (filename chips inline)
-        // without the server-facing path footnotes that full_prompt carries.
+        // Push the clean prompt and structured paths into the optimistic
+        // transcript. The server receives the same two fields separately.
         let user_msg = AgentMessage::User {
             content: prompt.clone(),
             attachments: if attachments.is_empty() {
@@ -401,7 +404,7 @@ impl ConsoleDesktopApp {
                         project_id: session_project_id,
                         model_id: model_id.clone(),
                         provider: provider.clone(),
-                        title: Some(full_prompt.chars().take(30).collect()),
+                        title: Some(prompt.chars().take(30).collect()),
                         approval_mode: approval_mode.clone(),
                         thinking_level,
                     }).await {
@@ -452,7 +455,12 @@ impl ConsoleDesktopApp {
             let run_session_id = session_id.clone();
 
             let run_dto = RunPromptDto {
-                prompt: full_prompt,
+                prompt,
+                context_files: if context_files.is_empty() {
+                    None
+                } else {
+                    Some(context_files)
+                },
                 model_id,
                 provider,
                 approval_mode,
@@ -901,7 +909,7 @@ impl ConsoleDesktopApp {
                         let user_msg = console_core::AgentMessage::User {
                             content: popped.prompt,
                             attachments: popped.attachments,
-                            context_files: None,
+                            context_files: popped.context_files,
                             created_at: Some(chrono::Utc::now().timestamp()),
                         };
                         if pane_shows_run {
@@ -919,6 +927,7 @@ impl ConsoleDesktopApp {
                             let sid = run_session_id.to_string();
                             let dq = console_core::RunPromptDto {
                                 prompt: next.prompt,
+                                context_files: next.context_files,
                                 model_id: next.model_id,
                                 provider: next.provider,
                                 approval_mode: next.approval_mode,

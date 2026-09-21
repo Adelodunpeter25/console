@@ -120,6 +120,7 @@ impl ConsoleDesktopApp {
                             submit_pane_id.clone(),
                             prompt.clone(),
                             attachments,
+                            context_files.clone(),
                             cx,
                         );
                         return;
@@ -129,8 +130,13 @@ impl ConsoleDesktopApp {
                     let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
                     this.submit_prompt_with_context(prompt.clone(), attachments, context_files, cx);
                 }
-                ComposerEvent::SubmitSteer(prompt) => {
-                    this.submit_steer_for_pane(steer_pane_id.clone(), prompt.clone(), cx);
+                ComposerEvent::SubmitSteer(prompt, context_files) => {
+                    this.submit_steer_for_pane(
+                        steer_pane_id.clone(),
+                        prompt.clone(),
+                        context_files.clone(),
+                        cx,
+                    );
                 }
                 ComposerEvent::Edited => {
                     // Save raw text for crash safety; does NOT update sidebar_draft_ids.

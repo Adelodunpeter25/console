@@ -724,7 +724,13 @@ impl ConsoleDesktopApp {
                         if this.is_active_session_running_for_pane(&pane_id) {
                             // Turn is running: queue behind it instead of starting a parallel run.
                             let attachments = (*this.attachments_for_pane(&pane_id)).clone();
-                            this.queue_prompt_for_pane(pane_id, prompt.clone(), attachments, cx);
+                            this.queue_prompt_for_pane(
+                                pane_id,
+                                prompt.clone(),
+                                attachments,
+                                context_files.clone(),
+                                cx,
+                            );
                             return;
                         }
                         // Deep-copy only at the submit boundary; the Rc
@@ -732,10 +738,15 @@ impl ConsoleDesktopApp {
                         let attachments = (*this.attachments_for_pane("pane-main")).clone();
                         this.submit_prompt_with_context(prompt.clone(), attachments, context_files, cx);
                     }
-                    ComposerEvent::SubmitSteer(prompt) => {
+                    ComposerEvent::SubmitSteer(prompt, context_files) => {
                         this.active_pane_id = Some("pane-main".to_string());
                         this.selected_session_id = this.active_session_for_pane("pane-main");
-                        this.submit_steer_for_pane("pane-main".to_string(), prompt.clone(), cx);
+                        this.submit_steer_for_pane(
+                            "pane-main".to_string(),
+                            prompt.clone(),
+                            context_files.clone(),
+                            cx,
+                        );
                     }
                     ComposerEvent::Edited => {
                         // Save raw text for crash safety; does NOT update sidebar_draft_ids.

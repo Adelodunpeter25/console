@@ -12,6 +12,7 @@ type QueuedPrompt struct {
 	ID           string             `json:"id"`
 	SessionID    string             `json:"sessionId"`
 	Prompt       string             `json:"prompt"`
+	ContextFiles []string           `json:"contextFiles,omitempty"`
 	Attachments  []QueuedAttachment `json:"attachments,omitempty"`
 	ModelID      string             `json:"modelId,omitempty"`
 	Provider     string             `json:"provider,omitempty"`

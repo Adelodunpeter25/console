@@ -3,6 +3,8 @@
 package tests
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
@@ -30,20 +32,31 @@ func TestQueuePersistence(t *testing.T) {
 	if qp, err := svc.QueuedPrompt(header.ID); err != nil || qp != nil {
 		t.Fatalf("empty queue: %+v %v", qp, err)
 	}
-	staged, err := svc.QueuePrompt(header.ID, run.Prompt{Text: "later", ModelID: "m1"})
+	contextFiles := []string{"apps/mobile", "README.md"}
+	staged, err := svc.QueuePrompt(header.ID, run.Prompt{Text: "later", ModelID: "m1", ContextFiles: contextFiles})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if staged.Prompt != "later" || staged.SessionID != header.ID || staged.ID == "" {
 		t.Fatalf("staged: %+v", staged)
 	}
+	if !reflect.DeepEqual(staged.ContextFiles, contextFiles) {
+		t.Fatalf("staged context files: %v", staged.ContextFiles)
+	}
 	fetched, err := svc.QueuedPrompt(header.ID)
 	if err != nil || fetched == nil || fetched.ID != staged.ID {
 		t.Fatalf("fetched: %+v %v", fetched, err)
 	}
-	edited, err := svc.EditQueuedPrompt(header.ID, run.Prompt{Text: "edited"})
+	if !reflect.DeepEqual(fetched.ContextFiles, contextFiles) {
+		t.Fatalf("fetched context files: %v", fetched.ContextFiles)
+	}
+	editedFiles := []string{"packages/console"}
+	edited, err := svc.EditQueuedPrompt(header.ID, run.Prompt{Text: "edited", ContextFiles: editedFiles})
 	if err != nil || edited == nil || edited.Prompt != "edited" || edited.ID != staged.ID {
 		t.Fatalf("edited: %+v %v", edited, err)
+	}
+	if !reflect.DeepEqual(edited.ContextFiles, editedFiles) {
+		t.Fatalf("edited context files: %v", edited.ContextFiles)
 	}
 	had, err := svc.ClearQueuedPrompt(header.ID)
 	if err != nil || !had {
@@ -82,7 +95,7 @@ func TestQueueDrainsNextTurn(t *testing.T) {
 	defer hub.Unsubscribe(subID)
 	// Stage while the first turn runs; it must drain as turn two on the
 	// same hub (sequence keeps increasing, single terminal frame).
-	if _, err := svc.QueuePrompt(header.ID, run.Prompt{Text: "two"}); err != nil {
+	if _, err := svc.QueuePrompt(header.ID, run.Prompt{Text: "two", ContextFiles: []string{"apps/mobile"}}); err != nil {
 		t.Fatal(err)
 	}
 	helpers.WaitSettled(t, hub)
@@ -118,6 +131,13 @@ func TestQueueDrainsNextTurn(t *testing.T) {
 	}
 	if len(loaded.Messages) != 4 {
 		t.Fatalf("persisted messages: %d", len(loaded.Messages))
+	}
+	var drained loop.UserMessage
+	if err := json.Unmarshal(loaded.Messages[2], &drained); err != nil {
+		t.Fatal(err)
+	}
+	if drained.Content != "two" || !reflect.DeepEqual(drained.ContextFiles, []string{"apps/mobile"}) {
+		t.Fatalf("drained user message: %+v", drained)
 	}
 }
 

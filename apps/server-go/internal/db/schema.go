@@ -1,5 +1,5 @@
-// SQLite schema. Single canonical DDL — no migration compatibility; a
-// schema change rewrites the tables here and storage is recreated.
+// SQLite schema. The DDL is idempotent, with small additive migrations for
+// fields introduced after an existing session database was created.
 package db
 
 import "database/sql"
@@ -128,6 +128,7 @@ func InitSessionDB(db *sql.DB, path string) error {
 			id INTEGER PRIMARY KEY CHECK (id = 1),
 			queue_id TEXT NOT NULL,
 			prompt TEXT NOT NULL,
+			context_files TEXT,
 			attachments TEXT,
 			model_id TEXT,
 			provider TEXT,
@@ -135,5 +136,33 @@ func InitSessionDB(db *sql.DB, path string) error {
 			created_at INTEGER NOT NULL
 		);
 	`)
+	if err != nil {
+		return err
+	}
+
+	rows, err := db.Query(`PRAGMA table_info(session_queued_prompt)`)
+	if err != nil {
+		return err
+	}
+	hasContextFiles := false
+	for rows.Next() {
+		var cid int
+		var name, columnType string
+		var notNull, primaryKey int
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			rows.Close()
+			return err
+		}
+		if name == "context_files" {
+			hasContextFiles = true
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if !hasContextFiles {
+		_, err = db.Exec(`ALTER TABLE session_queued_prompt ADD COLUMN context_files TEXT`)
+	}
 	return err
 }

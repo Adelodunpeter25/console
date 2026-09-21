@@ -120,82 +120,8 @@ fn message_text_with_mentions(
     (text, mentions)
 }
 
-/// Whether a whitespace-separated token looks like an embedded file path.
-/// Matches the server-facing footnotes (`"   /full/path "`) as well as
-/// relative paths like `apps/android/.../certificate.svg`, while ignoring
-/// URLs and plain words.
-fn is_path_like_token(token: &str) -> bool {
-    let token = token.trim_matches(|c: char| matches!(c, '"' | '\'' | '`' | '(' | ')' | ',' | ';'));
-    if token.is_empty() || token.contains("://") {
-        return false;
-    }
-    if !(token.contains('/') || token.contains('\\')) {
-        return false;
-    }
-    if token.len() < 3 {
-        return false;
-    }
-    let last_segment = token.rsplit(['/', '\\']).next().unwrap_or(token);
-    last_segment.contains('.')
-}
-
-fn clean_path_token(token: &str) -> String {
-    token
-        .trim_matches(|c: char| matches!(c, '"' | '\'' | '`' | '(' | ')' | ',' | ';'))
-        .trim_end_matches('.')
-        .to_string()
-}
-
-/// Relative refs can be bare filenames (`.gitignore`, `Makefile`) or
-/// directory names (`packages`), so a slash is not required when the token is
-/// also present as a complete filename in the prompt body.
-fn is_bare_context_ref(token: &str, body: &str) -> bool {
-    if token.is_empty()
-        || token.contains("://")
-        || token.contains('/')
-        || token.contains('\\')
-        || token.chars().any(char::is_whitespace)
-    {
-        return false;
-    }
-
-    body.split_whitespace().any(|body_token| {
-        body_token.trim_matches(|c: char| matches!(c, '"' | '\'' | '`' | '(' | ')' | ',' | ';'))
-            == token
-    })
-}
-
-/// Split reloaded server content into its prompt body and embedded file refs.
-///
-/// The client sends the server `{prompt}\n{refs}` where refs are
-/// space-separated full paths, but the reloaded message carries no
-/// `context_files`. When the trailing line after the last newline consists
-/// solely of path-like tokens, treat it as the footnote and hide it — the
-/// body keeps the bare filename for pill rendering.
-fn extract_embedded_context_files(content: &str) -> (String, Vec<String>) {
-    let Some(newline) = content.rfind('\n') else {
-        return (content.to_string(), Vec::new());
-    };
-    let (body, footnote) = content.split_at(newline);
-    // Skip the newline itself.
-    let footnote = &footnote[1..];
-    let tokens: Vec<String> = footnote
-        .split_whitespace()
-        .map(clean_path_token)
-        .filter(|t| !t.is_empty())
-        .collect();
-    let all_path_like = !tokens.is_empty() && tokens.iter().all(|t| is_path_like_token(t));
-    let generated_relative_refs = footnote.starts_with("   ")
-        && footnote.chars().last().is_some_and(|c| c.is_whitespace())
-        && !tokens.is_empty()
-        && tokens
-            .iter()
-            .all(|token| is_path_like_token(token) || is_bare_context_ref(token, body));
-    if !all_path_like && !generated_relative_refs {
-        return (content.to_string(), Vec::new());
-    }
-    (body.trim_end().to_string(), tokens)
-}
+/// File paths come from structured context metadata and are never guessed
+/// from the message text on reload.
 /// Invoked with the decoded image when the user clicks an image in a message,
 /// opening the app's image preview modal.
 type PreviewImageHandler = Rc<dyn Fn(Arc<gpui::Image>, &mut Window, &mut App) + 'static>;
@@ -268,19 +194,9 @@ impl RenderOnce for UserMessageBubble {
         let timestamp = format_message_time(self.created_at);
 
         let preview_handler = self.on_preview_image.clone();
-        let context_files = self.context_files;
-
-        // Reloaded server messages carry no `context_files`; their content is
-        // `{prompt}\n{refs}` with space-separated full paths appended.
-        // Re-derive pills from that footnote and hide it so reopen matches live.
-        let (display_content, effective_files) = if context_files.is_empty() {
-            extract_embedded_context_files(&self.content)
-        } else {
-            (self.content.clone(), context_files)
-        };
 
         let (message_text, mentions) =
-            message_text_with_mentions(&display_content, &effective_files);
+            message_text_with_mentions(&self.content, &self.context_files);
         let has_content = !message_text.is_empty();
 
         div()

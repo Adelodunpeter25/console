@@ -30,18 +30,27 @@ func (s *Service) SaveQueuedPrompt(sessionID string, qp types.QueuedPrompt) erro
 		}
 		attachments = string(raw)
 	}
+	var contextFiles any
+	if len(qp.ContextFiles) > 0 {
+		raw, err := json.Marshal(qp.ContextFiles)
+		if err != nil {
+			return err
+		}
+		contextFiles = string(raw)
+	}
 	createdAt, err := time.Parse(time.RFC3339, qp.CreatedAt)
 	if err != nil {
 		createdAt = time.Now()
 	}
 	_, err = conn.Exec(
-		`INSERT INTO session_queued_prompt (id, queue_id, prompt, attachments, model_id, provider, approval_mode, created_at)
-		 VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO session_queued_prompt (id, queue_id, prompt, context_files, attachments, model_id, provider, approval_mode, created_at)
+		 VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET queue_id = excluded.queue_id, prompt = excluded.prompt,
+		 context_files = excluded.context_files,
 		 attachments = excluded.attachments, model_id = excluded.model_id,
 		 provider = excluded.provider, approval_mode = excluded.approval_mode,
 		 created_at = excluded.created_at`,
-		qp.ID, qp.Prompt, attachments, nullString(qp.ModelID), nullString(qp.Provider),
+		qp.ID, qp.Prompt, contextFiles, attachments, nullString(qp.ModelID), nullString(qp.Provider),
 		nullString(qp.ApprovalMode), createdAt.UnixMilli())
 	return err
 }
@@ -62,6 +71,7 @@ func (s *Service) GetQueuedPrompt(sessionID string) (*types.QueuedPrompt, error)
 	var row struct {
 		queueID      string
 		prompt       string
+		contextFiles sql.NullString
 		attachments  sql.NullString
 		modelID      sql.NullString
 		provider     sql.NullString
@@ -69,9 +79,9 @@ func (s *Service) GetQueuedPrompt(sessionID string) (*types.QueuedPrompt, error)
 		createdAt    int64
 	}
 	err = conn.QueryRow(
-		`SELECT queue_id, prompt, attachments, model_id, provider, approval_mode, created_at
+		`SELECT queue_id, prompt, context_files, attachments, model_id, provider, approval_mode, created_at
 		 FROM session_queued_prompt WHERE id = 1`).Scan(
-		&row.queueID, &row.prompt, &row.attachments, &row.modelID,
+		&row.queueID, &row.prompt, &row.contextFiles, &row.attachments, &row.modelID,
 		&row.provider, &row.approvalMode, &row.createdAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -88,6 +98,11 @@ func (s *Service) GetQueuedPrompt(sessionID string) (*types.QueuedPrompt, error)
 	if row.attachments.Valid && row.attachments.String != "" {
 		if err := json.Unmarshal([]byte(row.attachments.String), &qp.Attachments); err != nil {
 			qp.Attachments = nil
+		}
+	}
+	if row.contextFiles.Valid && row.contextFiles.String != "" {
+		if err := json.Unmarshal([]byte(row.contextFiles.String), &qp.ContextFiles); err != nil {
+			qp.ContextFiles = nil
 		}
 	}
 	return qp, nil
