@@ -214,6 +214,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	// stay valid (mirrors the TS cache-identity rotation rule).
 	agent.ConversationID = fmt.Sprintf("%s:%s:%s", sessionID, providerID, modelID)
 	agent.ThinkingLevel = dto.Thinking
+	agent.Compaction = s.compactionHooks(sessionID, model, prompt.SystemPrompt, registry.Definitions())
 
 	// First user turn on a placeholder title: generate one in the
 	// background (TS session-title flow). Only applied if still generic.

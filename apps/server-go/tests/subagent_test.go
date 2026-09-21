@@ -96,7 +96,7 @@ func TestSubagentAborted(t *testing.T) {
 }
 
 type recordingProvider struct {
-	mock *mockProvider
+	mock  *mockProvider
 	names [][]string
 }
 

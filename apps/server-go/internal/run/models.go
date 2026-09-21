@@ -7,10 +7,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/compaction"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/roles"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/titles"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -68,6 +71,51 @@ func (s *Service) resolveVision(model types.Model) (types.Model, bool) {
 // roleRef reads one configured model-role reference from settings.
 func (s *Service) roleRef(role string) string {
 	return services.NewSettingsService().Load().ModelRoles[role]
+}
+
+// compactionHooks builds the per-turn context management hooks: payload
+// threshold checks with structural summaries, smol-model narratives when
+// configured, and emergency recovery on context overflow.
+func (s *Service) compactionHooks(sessionID string, model types.Model, systemPrompt string, defs []tools.Definition) *loop.CompactionHooks {
+	options := compaction.Options{}
+	emergencyChars := compaction.EmergencyChars
+	return &loop.CompactionHooks{
+		PreTurn: func(ctx context.Context, history []any) []any {
+			if !compaction.ShouldCompact(history, model.ContextWindow, options, systemPrompt, defs) {
+				return history
+			}
+			result := compaction.CompactHistory(history, options)
+			if summary, ok := s.summarizeCompaction(ctx, model, history); ok {
+				result = compaction.CompactHistoryWithSummary(history, options, summary)
+			}
+			return result.CompactedMessages
+		},
+		IsOverflow: compaction.IsContextOverflowError,
+		Emergency: func(history []any) []any {
+			shaken := compaction.ShakeConversation(history, emergencyChars, len(history), true)
+			options.KeepRecentTokens = 20000
+			return compaction.CompactHistory(shaken, options).CompactedMessages
+		},
+	}
+}
+
+// summarizeCompaction produces an smol-model narrative summary when a smol
+// role is configured; false keeps the structural summary.
+func (s *Service) summarizeCompaction(ctx context.Context, model types.Model, history []any) (string, bool) {
+	ref := s.roleRef(roles.Smol)
+	if strings.TrimSpace(ref) == "" {
+		return "", false
+	}
+	smol := roles.ResolveRoleModel(roles.Smol, model, ref)
+	provider, err := s.Lookup(smol.Provider)
+	if err != nil {
+		return "", false
+	}
+	summary, err := compaction.SummarizeWithProvider(ctx, provider, smol.ID, history, "")
+	if err != nil || strings.TrimSpace(summary) == "" {
+		return "", false
+	}
+	return strings.TrimSpace(summary), true
 }
 
 // userMessageRecord wraps a user message for storage (same shape the

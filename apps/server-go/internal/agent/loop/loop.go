@@ -16,7 +16,9 @@ import (
 
 // Provider is the Phase 3 seam: a streaming model backend. The loop only
 // depends on this interface, so real providers (claude, codex...) plug in
-// without loop changes.
+// without loop changes. Contract: RunTurn must terminate the stream via
+// Complete (success) or Fail (error) before returning; otherwise the turn
+// blocks forever waiting for events.
 type Provider interface {
 	// RunTurn streams one assistant turn for the given history. Events
 	// arrive in order; the final event determines the stop reason.
@@ -83,6 +85,18 @@ type Event struct {
 // streamOf is a thin alias over the generic stream for loop events.
 type streamOf = stream.Stream[Event]
 
+// CompactionHooks plugs context management into turns without importing
+// the compaction package (which operates on loop types). All fields
+// optional; nil Compaction disables the behavior.
+type CompactionHooks struct {
+	// PreTurn rewrites history before the provider call.
+	PreTurn func(ctx context.Context, history []any) []any
+	// IsOverflow reports context-window failures for emergency recovery.
+	IsOverflow func(err error) bool
+	// Emergency rewrites history after an overflow (single retry).
+	Emergency func(history []any) []any
+}
+
 // Agent runs the loop for one user prompt: provider turns + tool execution
 // until the model stops, persisting every message into the session.
 type Agent struct {
@@ -97,6 +111,8 @@ type Agent struct {
 	CacheRetention CacheRetention
 	ConversationID string
 	ThinkingLevel  string
+	// Compaction optionally rewrites history before each turn.
+	Compaction *CompactionHooks
 }
 
 func New(provider Provider, executor *Executor, sessions *services.SessionService) *Agent {
@@ -169,8 +185,32 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 }
 
 // turn runs one provider streaming turn, accumulating parts into an
-// AssistantMessage and re-emitting stream events.
+// AssistantMessage and re-emitting stream events. A context-overflow
+// failure triggers emergency compaction and exactly one retry.
 func (a *Agent) turn(ctx context.Context, sessionID string, history []any, toolsList []tools.Definition, events *stream.Stream[Event]) (AssistantMessage, error) {
+	overflowRetried := false
+	for {
+		working := history
+		if a.Compaction != nil && a.Compaction.PreTurn != nil {
+			working = a.Compaction.PreTurn(ctx, history)
+		}
+		assistant, err := a.turnOnce(ctx, sessionID, working, toolsList, events)
+		if err == nil {
+			return assistant, nil
+		}
+		if overflowRetried || ctx.Err() != nil || a.Compaction == nil ||
+			a.Compaction.IsOverflow == nil || a.Compaction.Emergency == nil ||
+			!a.Compaction.IsOverflow(err) {
+			return assistant, err
+		}
+		overflowRetried = true
+		history = a.Compaction.Emergency(history)
+	}
+}
+
+// turnOnce streams a single attempt, persisting the assistant turn only on
+// success.
+func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, toolsList []tools.Definition, events *stream.Stream[Event]) (AssistantMessage, error) {
 	assistant := AssistantMessage{Role: RoleAssistant, ID: newMessageID(), Content: []any{}}
 	turnStream := stream.New[Event]()
 	done := make(chan error, 1)
