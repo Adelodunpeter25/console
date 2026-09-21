@@ -243,8 +243,8 @@ impl Element for InlineFileMentionText {
         let icon_size = px(FILE_MENTION_ICON_SIZE);
         let extra_left = px(14.0);
         for mention_icon in &mut layout_state.mention_icons {
-            let Some(first_rect) = range_rects(&layout, &mention_icon.range, 3.0, 1.0).first()
-            else {
+            let rects = range_rects(&layout, &mention_icon.range, 3.0, 1.0);
+            let Some(first_rect) = rects.first() else {
                 continue;
             };
             let icon_origin = point(
