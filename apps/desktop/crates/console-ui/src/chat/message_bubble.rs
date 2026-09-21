@@ -6,10 +6,8 @@ use std::sync::Arc;
 
 use super::markdown_helpers::assistant_ctx;
 pub(crate) use super::markdown_helpers::render_selectable_markdown;
-use crate::common::{attachment_image, copy_button, file_mention_chip};
-use crate::markdown::render::{
-    LinkHandler, MarkdownView, Palette, TranscriptSelection,
-};
+use crate::common::{InlineFileMention, InlineFileMentionText, attachment_image, copy_button};
+use crate::markdown::render::{LinkHandler, MarkdownView, Palette, TranscriptSelection};
 use crate::theme::Theme;
 use crate::utils::format_message_time;
 
@@ -17,39 +15,17 @@ use super::ThinkingBlock;
 use base64::Engine as _;
 use console_core::{AssistantContentPart, ImageAttachment};
 use gpui::{
-    App, ElementId, IntoElement, ParentElement, RenderOnce, Styled, Window, div, img,
-    prelude::*, px,
+    App, ElementId, IntoElement, ParentElement, RenderOnce, Styled, Window, div, img, prelude::*,
+    px,
 };
 
-/// A segment of a user message — either a plain-text run or an inline file pill.
-enum MessageSegment {
-    Text(String),
-    FilePill { path: String, label: String },
-}
-
-/// One flow item in the bubble's single wrapping row.
-enum BubbleItem {
-    Segment {
-        line_idx: usize,
-        seg_idx: usize,
-        segment: MessageSegment,
-    },
-    /// Full-width zero-height item forcing a wrap at a source newline.
-    /// Zero min-width, so unlike one-row-per-line it never stretches short
-    /// lines across the card or leaves trailing emptiness behind pills.
-    LineBreak { line_idx: usize },
-    /// Full-width fixed-height item preserving a blank source line.
-    BlankLine { line_idx: usize },
-}
-
-/// Split `content` into alternating text/pill segments.
-///
-/// The composer inserts mentions as bare filenames (no `@`) surrounded by
-/// whitespace padding, e.g. `"     .gitignore  "`. We find each label — or,
-/// for history entries, the full path — as a whole-word token (preceded and
-/// followed by whitespace or string boundaries) and absorb the surrounding
-/// whitespace into the pill so no stray gaps appear.
-fn split_message_segments(content: &str, context_files: &[String]) -> Vec<MessageSegment> {
+/// Keep the message as one flat string and return the ranges that should be
+/// painted as file mentions. Separate flex children cannot wrap text around a
+/// pill like the composer does.
+fn message_text_with_mentions(
+    content: &str,
+    context_files: &[String],
+) -> (String, Vec<InlineFileMention>) {
     // Build (label, path) pairs.
     let pills: Vec<(String, String)> = context_files
         .iter()
@@ -63,10 +39,11 @@ fn split_message_segments(content: &str, context_files: &[String]) -> Vec<Messag
         })
         .collect();
 
-    let mut segments: Vec<MessageSegment> = Vec::new();
+    let mut text = String::new();
+    let mut mentions = Vec::new();
     let mut remaining = content;
 
-    'outer: while !remaining.is_empty() {
+    while !remaining.is_empty() {
         // Find the earliest label-or-path occurrence among all pills.
         let mut earliest: Option<(usize, usize, usize)> = None; // (match_start, match_end, pill_idx)
         for (pill_idx, (label, path)) in pills.iter().enumerate() {
@@ -91,28 +68,16 @@ fn split_message_segments(content: &str, context_files: &[String]) -> Vec<Messag
                         .is_some_and(|c| c.is_whitespace());
 
                 if before_ok && after_ok {
-                    // Absorb surrounding whitespace so no padding gaps remain.
-                    let match_start = remaining[..pos]
-                        .rfind(|c: char| !c.is_whitespace())
-                        .map(|i| i + remaining[i..].chars().next().map(|c| c.len_utf8()).unwrap_or(1))
-                        .unwrap_or(0);
-                    let match_end = after_pos
-                        + remaining[after_pos..]
-                            .find(|c: char| !c.is_whitespace())
-                            .unwrap_or(remaining[after_pos..].len());
-
                     // Prefer the earliest match; break ties with the longer
                     // needle so a full path wins over its bare filename.
                     let replace = match earliest {
                         None => true,
                         Some((start, end, _)) => {
-                            match_start < start
-                                || (match_start == start
-                                    && (match_end - match_start) > (end - start))
+                            pos < start || (pos == start && (after_pos - pos) > (end - start))
                         }
                     };
                     if replace {
-                        earliest = Some((match_start, match_end, pill_idx));
+                        earliest = Some((pos, after_pos, pill_idx));
                     }
                     break;
                 }
@@ -121,23 +86,26 @@ fn split_message_segments(content: &str, context_files: &[String]) -> Vec<Messag
 
         match earliest {
             None => {
-                if !remaining.is_empty() {
-                    segments.push(MessageSegment::Text(remaining.to_string()));
-                }
-                break 'outer;
+                text.push_str(remaining);
+                break;
             }
             Some((start, end, pill_idx)) => {
                 if start > 0 {
-                    segments.push(MessageSegment::Text(remaining[..start].to_string()));
+                    text.push_str(&remaining[..start]);
                 }
-                let (label, path) = pills[pill_idx].clone();
-                segments.push(MessageSegment::FilePill { path, label });
+                let (label, path) = &pills[pill_idx];
+                let mention_start = text.len();
+                text.push_str(label);
+                mentions.push(InlineFileMention {
+                    range: mention_start..text.len(),
+                    path: path.clone(),
+                });
                 remaining = &remaining[end..];
             }
         }
     }
 
-    segments
+    (text, mentions)
 }
 
 /// Whether a whitespace-separated token looks like an embedded file path.
@@ -272,40 +240,9 @@ impl RenderOnce for UserMessageBubble {
             (self.content.clone(), context_files)
         };
 
-        // Single wrapping flow: text runs + pills share one row so the card
-        // hugs the widest visual line. Newlines are preserved with
-        // full-width break items; blank lines get a fixed-height spacer.
-        // (One flex row per source line stretched short lines across the
-        // card and left trailing emptiness behind their pills.)
-        // When there are no context files each line renders as-is.
-        let mut items: Vec<BubbleItem> = Vec::new();
-        for (line_idx, line) in display_content.split('\n').enumerate() {
-            if line_idx > 0 {
-                items.push(BubbleItem::LineBreak { line_idx });
-            }
-            if line.trim().is_empty() {
-                // A whitespace-only line carries no segments; keep it as a
-                // blank visual line instead of letting it collapse.
-                items.push(BubbleItem::BlankLine { line_idx });
-            } else if effective_files.is_empty() {
-                items.push(BubbleItem::Segment {
-                    line_idx,
-                    seg_idx: 0,
-                    segment: MessageSegment::Text(line.to_string()),
-                });
-            } else {
-                for (seg_idx, segment) in
-                    split_message_segments(line, &effective_files).into_iter().enumerate()
-                {
-                    items.push(BubbleItem::Segment {
-                        line_idx,
-                        seg_idx,
-                        segment,
-                    });
-                }
-            }
-        }
-        let has_content = !display_content.is_empty() || !effective_files.is_empty();
+        let (message_text, mentions) =
+            message_text_with_mentions(&display_content, &effective_files);
+        let has_content = !message_text.is_empty();
 
         div()
             .w_full()
@@ -371,64 +308,10 @@ impl RenderOnce for UserMessageBubble {
                                 .bg(theme.user_bubble)
                                 .border_1()
                                 .border_color(theme.user_bubble_border)
-                                .child(
-                                    // One wrapping flow for the whole message:
-                                    // text runs + file pills share the row and
-                                    // top-align, so pills sit with their line.
-                                    div()
-                                        .flex()
-                                        .flex_wrap()
-                                        .items_start()
-                                        .gap_x(px(4.0))
-                                        .gap_y(px(4.0))
-                                        .text_size(px(14.0))
-                                        .line_height(px(20.0))
-                                        .text_color(theme.text)
-                                        .children(items.into_iter().map(|item| match item {
-                                            BubbleItem::Segment {
-                                                line_idx,
-                                                seg_idx,
-                                                segment,
-                                            } => match segment {
-                                                MessageSegment::Text(text) => div()
-                                                    .id(ElementId::Name(
-                                                        format!(
-                                                            "msg-{line_idx}-text-{seg_idx}"
-                                                        )
-                                                        .into(),
-                                                    ))
-                                                    .child(text)
-                                                    .into_any_element(),
-                                                MessageSegment::FilePill { path, label } => {
-                                                    div()
-                                                        .id(ElementId::Name(
-                                                            format!(
-                                                                "msg-{line_idx}-pill-{seg_idx}"
-                                                            )
-                                                            .into(),
-                                                        ))
-                                                        .child(file_mention_chip(
-                                                            &path, label, theme,
-                                                        ))
-                                                        .into_any_element()
-                                                }
-                                            },
-                                            BubbleItem::LineBreak { line_idx } => div()
-                                                .id(ElementId::Name(
-                                                    format!("msg-{line_idx}-break").into(),
-                                                ))
-                                                .w_full()
-                                                .h(px(0.))
-                                                .into_any_element(),
-                                            BubbleItem::BlankLine { line_idx } => div()
-                                                .id(ElementId::Name(
-                                                    format!("msg-{line_idx}-blank").into(),
-                                                ))
-                                                .w_full()
-                                                .h(px(20.0))
-                                                .into_any_element(),
-                                        })),
-                                ),
+                                .text_size(px(14.0))
+                                .line_height(px(20.0))
+                                .text_color(theme.text)
+                                .child(InlineFileMentionText::new(message_text, mentions)),
                         )
                     }),
             )
