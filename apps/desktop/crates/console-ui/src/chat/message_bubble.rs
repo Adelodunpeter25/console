@@ -257,13 +257,22 @@ impl RenderOnce for UserMessageBubble {
             (self.content.clone(), context_files)
         };
 
-        // Build inline segments: text runs interleaved with file pills.
-        // When there are no context files the content renders as-is.
-        let segments = if effective_files.is_empty() {
-            vec![MessageSegment::Text(display_content.clone())]
-        } else {
-            split_message_segments(&display_content, &effective_files)
-        };
+        // Build inline segments per visual line: text runs interleaved with
+        // file pills. A flex row cannot flow text around a pill, so each
+        // newline-delimited line gets its own wrapping row — otherwise
+        // multiline messages collapse into side-by-side columns and pills
+        // drift to the row baseline instead of sitting with their line.
+        // When there are no context files each line renders as-is.
+        let line_segments: Vec<Vec<MessageSegment>> = display_content
+            .split('\n')
+            .map(|line| {
+                if effective_files.is_empty() || line.trim().is_empty() {
+                    vec![MessageSegment::Text(line.to_string())]
+                } else {
+                    split_message_segments(line, &effective_files)
+                }
+            })
+            .collect();
         let has_content = !display_content.is_empty() || !effective_files.is_empty();
 
         div()
@@ -331,33 +340,60 @@ impl RenderOnce for UserMessageBubble {
                                 .border_1()
                                 .border_color(theme.user_bubble_border)
                                 .child(
-                                    // Inline flow: text runs + file pills in a wrapping row.
+                                    // One wrapping row per line: text runs + file
+                                    // pills sharing the row, top-aligned so a
+                                    // leading pill sits with its first line.
                                     div()
                                         .flex()
-                                        .flex_wrap()
-                                        .items_baseline()
-                                        .gap_x(px(4.0))
+                                        .flex_col()
                                         .gap_y(px(4.0))
                                         .text_size(px(14.0))
                                         .line_height(px(20.0))
                                         .text_color(theme.text)
-                                        .children(segments.into_iter().enumerate().map(
-                                            |(seg_idx, segment)| match segment {
-                                                MessageSegment::Text(text) => div()
-                                                    .id(ElementId::Name(
-                                                        format!("msg-text-{seg_idx}").into(),
+                                        .children(line_segments.into_iter().enumerate().map(
+                                            |(line_idx, segs)| {
+                                                if segs.len() == 1
+                                                    && matches!(
+                                                        &segs[0],
+                                                        MessageSegment::Text(t) if t.trim().is_empty()
+                                                    )
+                                                {
+                                                    return div().h(px(20.0)).into_any_element();
+                                                }
+                                                div()
+                                                    .flex()
+                                                    .flex_wrap()
+                                                    .items_start()
+                                                    .gap_x(px(4.0))
+                                                    .gap_y(px(4.0))
+                                                    .children(segs.into_iter().enumerate().map(
+                                                        |(seg_idx, segment)| match segment {
+                                                            MessageSegment::Text(text) => div()
+                                                                .id(ElementId::Name(
+                                                                    format!(
+                                                                        "msg-{line_idx}-text-{seg_idx}"
+                                                                    )
+                                                                    .into(),
+                                                                ))
+                                                                .child(text)
+                                                                .into_any_element(),
+                                                            MessageSegment::FilePill {
+                                                                path,
+                                                                label,
+                                                            } => div()
+                                                                .id(ElementId::Name(
+                                                                    format!(
+                                                                        "msg-{line_idx}-pill-{seg_idx}"
+                                                                    )
+                                                                    .into(),
+                                                                ))
+                                                                .child(file_mention_chip(
+                                                                    &path, label, theme,
+                                                                ))
+                                                                .into_any_element(),
+                                                        },
                                                     ))
-                                                    .flex_1()
-                                                    .min_w(px(48.0))
-                                                    .child(text)
-                                                    .into_any_element(),
-                                                MessageSegment::FilePill { path, label } => div()
-                                                    .id(ElementId::Name(
-                                                        format!("msg-pill-{seg_idx}").into(),
-                                                    ))
-                                                    .flex_none()
-                                                    .child(file_mention_chip(&path, label, theme))
-                                                    .into_any_element(),
+                                                    .into_any_element()
                                             },
                                         )),
                                 ),
