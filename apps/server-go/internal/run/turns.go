@@ -154,7 +154,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	if effectiveThinking == "" {
 		effectiveThinking = model.DefaultThinking
 	}
-	user := loop.UserMessage{Role: loop.RoleUser, Content: dto.Text}
+	user := loop.UserMessage{
+		Role:         loop.RoleUser,
+		Content:      dto.Text,
+		ContextFiles: dto.ContextFiles,
+	}
 	for _, a := range dto.Attachments {
 		user.Attachments = append(user.Attachments, loop.ImageAttachment{Data: a.Data, MimeType: a.MimeType})
 	}

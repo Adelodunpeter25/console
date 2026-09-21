@@ -20,6 +20,21 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
+type contextRecordingProvider struct {
+	request loop.TurnRequest
+}
+
+func (p *contextRecordingProvider) RunTurn(
+	ctx context.Context,
+	request loop.TurnRequest,
+	events *stream.Stream[loop.Event],
+) error {
+	p.request = request
+	events.Push(loop.Event{Kind: loop.EventText, Text: "done"})
+	events.Complete()
+	return nil
+}
+
 // resultText extracts the text of the first MCP content block from a
 // tool's successful return value, unwrapping tools.Envelope when present.
 func resultText(t *testing.T, out any) string {
@@ -289,6 +304,70 @@ func TestAgentLoopToolRoundTrip(t *testing.T) {
 	}
 	if len(loaded.Messages) != 4 {
 		t.Fatalf("persisted messages: %d", len(loaded.Messages))
+	}
+}
+
+func TestContextFilesMaterializeForAgentButPersistClean(t *testing.T) {
+	manager, err := db.Open(db.OpenOptions{Path: ":memory:"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(manager.Close)
+	sessions := services.NewSessionService(manager)
+	header, err := sessions.Create(types.CreateSessionOptions{
+		Cwd: "/tmp/context-files-test", ModelID: "mock", Provider: "mock",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	provider := &contextRecordingProvider{}
+	registry := tools.NewRegistry()
+	executor := loop.NewExecutor(registry, permissions.FullAccess, helpers.AutoApprover{})
+	agent := loop.New(provider, executor, sessions)
+	user := loop.UserMessage{
+		Role:         loop.RoleUser,
+		Content:      "inspect the selected context",
+		ContextFiles: []string{"apps/mobile", "README.md"},
+	}
+	events, err := agent.RunWithHistory(context.Background(), header.ID, nil, user, registry.Definitions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		_, eventErr, ok := events.Next()
+		if !ok {
+			if eventErr != nil {
+				t.Fatalf("stream error: %v", eventErr)
+			}
+			break
+		}
+	}
+
+	if len(provider.request.Messages) != 1 {
+		t.Fatalf("provider history length = %d, want 1", len(provider.request.Messages))
+	}
+	materialized, ok := provider.request.Messages[0].(loop.UserMessage)
+	if !ok {
+		t.Fatalf("provider message type = %T", provider.request.Messages[0])
+	}
+	if !strings.Contains(materialized.Content, "apps/mobile") || !strings.Contains(materialized.Content, "README.md") {
+		t.Fatalf("provider did not receive context paths: %q", materialized.Content)
+	}
+
+	loaded, err := sessions.Load(header.ID, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var persisted loop.UserMessage
+	if err := json.Unmarshal(loaded.Messages[0], &persisted); err != nil {
+		t.Fatal(err)
+	}
+	if persisted.Content != user.Content {
+		t.Fatalf("persisted content = %q, want clean %q", persisted.Content, user.Content)
+	}
+	if len(persisted.ContextFiles) != 2 || persisted.ContextFiles[0] != "apps/mobile" || persisted.ContextFiles[1] != "README.md" {
+		t.Fatalf("persisted context files = %v", persisted.ContextFiles)
 	}
 }
 

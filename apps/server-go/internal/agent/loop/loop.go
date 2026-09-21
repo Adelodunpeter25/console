@@ -178,7 +178,8 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 		return
 	}
 
-	history = append(append([]any{}, history...), user)
+	history = MaterializeHistory(history)
+	history = append(history, MaterializeUserMessage(user))
 	for {
 		assistant, err := a.turn(ctx, sessionID, history, toolsList, events)
 		if err != nil {

@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 pub struct RunPromptDto {
     pub prompt: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_files: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider: Option<String>,

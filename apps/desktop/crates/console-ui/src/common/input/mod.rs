@@ -7,6 +7,7 @@ pub mod mentions;
 pub mod text_runs;
 
 use std::ops::Range;
+use std::path::Path;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -113,7 +114,7 @@ pub enum ComposerEvent {
     Submit(String, Vec<String>),
     /// Primary modifier + Enter: deliver the message into the running turn instead of queueing
     /// it behind the turn. Only composer-mode fields emit this.
-    SubmitSteer(String),
+    SubmitSteer(String, Vec<String>),
     /// The field took focus. A code editor uses this to re-read its file, so
     /// clicking back into it picks up changes made on disk meanwhile.
     Focus,
@@ -729,6 +730,52 @@ impl ComposerInput {
         cx.notify();
     }
 
+    /// Restore a queued prompt together with its structured file mentions.
+    /// Queued prompts persist paths but not editor ranges, so recover the
+    /// visible basename tokens before the composer becomes editable again.
+    pub fn set_content_with_context_files(
+        &mut self,
+        content: impl Into<SharedString>,
+        context_files: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let content = content.into();
+        let mut mentions = Vec::new();
+        let mut search_from = 0;
+        for path in &context_files {
+            let label = Path::new(path)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or(path)
+                .to_string();
+            let Some(relative_start) = content[search_from..].find(&label) else {
+                continue;
+            };
+            let start = search_from + relative_start;
+            let end = start + label.len();
+            let before_ok = start == 0
+                || content[..start]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|character| character.is_whitespace());
+            let after_ok = end >= content.len()
+                || content[end..]
+                    .chars()
+                    .next()
+                    .is_some_and(|character| character.is_whitespace());
+            if before_ok && after_ok {
+                mentions.push(ComposerMention {
+                    range: start..end,
+                    path: path.clone(),
+                    label,
+                });
+                search_from = end;
+            }
+        }
+        self.context_files = context_files;
+        self.set_content_with_mentions(content, mentions, cx);
+    }
+
     fn on_focus(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         // Regaining focus is a gesture boundary — Zed finalizes its last
         // transaction here too — so edits from separate visits never merge
@@ -1132,8 +1179,10 @@ impl ComposerInput {
         }
         let value = self.content.trim().to_owned();
         if !value.is_empty() {
+            let context_files: Vec<String> =
+                self.mentions.iter().map(|mention| mention.path.clone()).collect();
             self.prompt_history.record(value.clone());
-            cx.emit(ComposerEvent::SubmitSteer(value));
+            cx.emit(ComposerEvent::SubmitSteer(value, context_files));
             self.clear(cx);
         }
     }

@@ -75,7 +75,11 @@ func TestSessionLifecycle(t *testing.T) {
 	// Messages persist to the per-session DB as content JSON; load returns
 	// the stored object with createdAt injected (desktop shape).
 	msg := types.AgentMessage{ID: "m1", Role: "user"}
-	msg.Data, _ = json.Marshal(map[string]string{"role": "user", "text": "hello"})
+	msg.Data, _ = json.Marshal(map[string]any{
+		"role":         "user",
+		"content":      "hello",
+		"contextFiles": []string{"apps/mobile", "README.md"},
+	})
 	if err := sessions.AppendMessage(header.ID, msg); err != nil {
 		t.Fatalf("append: %v", err)
 	}
@@ -91,8 +95,12 @@ func TestSessionLifecycle(t *testing.T) {
 	if err := json.Unmarshal(loaded.Messages[0], &decoded); err != nil {
 		t.Fatalf("message not JSON: %v", err)
 	}
-	if decoded["role"] != "user" || decoded["text"] != "hello" {
+	if decoded["role"] != "user" || decoded["content"] != "hello" {
 		t.Fatalf("unexpected message content: %v", decoded)
+	}
+	files, ok := decoded["contextFiles"].([]any)
+	if !ok || len(files) != 2 || files[0] != "apps/mobile" || files[1] != "README.md" {
+		t.Fatalf("context files did not round-trip: %v", decoded["contextFiles"])
 	}
 	if _, ok := decoded["createdAt"]; !ok {
 		t.Fatalf("createdAt not injected: %v", decoded)

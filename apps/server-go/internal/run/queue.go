@@ -24,7 +24,7 @@ func (s *Service) QueuePrompt(sessionID string, dto Prompt) (*types.QueuedPrompt
 		return nil, ErrNoSession
 	}
 	qp := &types.QueuedPrompt{
-		ID: utils.RandomID(), SessionID: sessionID, Prompt: dto.Text,
+		ID: utils.RandomID(), SessionID: sessionID, Prompt: dto.Text, ContextFiles: dto.ContextFiles,
 		ModelID: dto.ModelID, Provider: dto.Provider, ApprovalMode: dto.ApprovalMode,
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
@@ -58,6 +58,7 @@ func (s *Service) EditQueuedPrompt(sessionID string, dto Prompt) (*types.QueuedP
 		existing = &types.QueuedPrompt{ID: utils.RandomID(), SessionID: sessionID, CreatedAt: time.Now().UTC().Format(time.RFC3339)}
 	}
 	existing.Prompt = dto.Text
+	existing.ContextFiles = dto.ContextFiles
 	existing.ModelID = dto.ModelID
 	existing.Provider = dto.Provider
 	existing.ApprovalMode = dto.ApprovalMode
@@ -146,7 +147,7 @@ func (s *Service) takeStaged(sessionID string) (Prompt, bool) {
 	}
 	_ = s.sessions.ClearQueuedPrompt(sessionID)
 	out := Prompt{
-		Text: stored.Prompt, ModelID: stored.ModelID, Provider: stored.Provider,
+		Text: stored.Prompt, ContextFiles: stored.ContextFiles, ModelID: stored.ModelID, Provider: stored.Provider,
 		ApprovalMode: stored.ApprovalMode,
 	}
 	for _, a := range stored.Attachments {

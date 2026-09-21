@@ -31,6 +31,7 @@ type Attachment struct {
 // Prompt mirrors RunPromptDto: one user turn request.
 type Prompt struct {
 	Text         string
+	ContextFiles []string
 	ModelID      string
 	Provider     string
 	ApprovalMode string

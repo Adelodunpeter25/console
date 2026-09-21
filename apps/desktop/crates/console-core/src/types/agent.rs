@@ -168,6 +168,8 @@ pub struct QueuedPrompt {
     pub session_id: String,
     pub prompt: String,
     #[serde(default)]
+    pub context_files: Option<Vec<String>>,
+    #[serde(default)]
     pub attachments: Option<Vec<ImageAttachment>>,
     #[serde(default)]
     pub model_id: Option<String>,

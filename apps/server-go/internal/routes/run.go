@@ -15,11 +15,12 @@ import (
 )
 
 type runPromptBody struct {
-	Prompt       string `json:"prompt"`
-	ModelID      string `json:"modelId"`
-	Provider     string `json:"provider"`
-	ApprovalMode string `json:"approvalMode"`
-	Thinking     string `json:"thinkingLevel"`
+	Prompt       string   `json:"prompt"`
+	ContextFiles []string `json:"contextFiles"`
+	ModelID      string   `json:"modelId"`
+	Provider     string   `json:"provider"`
+	ApprovalMode string   `json:"approvalMode"`
+	Thinking     string   `json:"thinkingLevel"`
 	Attachments  []struct {
 		Data     string `json:"data"`
 		MimeType string `json:"mimeType"`
@@ -28,7 +29,8 @@ type runPromptBody struct {
 
 func bodyToPrompt(body runPromptBody) run.Prompt {
 	dto := run.Prompt{
-		Text: strings.TrimSpace(body.Prompt), ModelID: body.ModelID, Provider: body.Provider,
+		Text: strings.TrimSpace(body.Prompt), ContextFiles: body.ContextFiles,
+		ModelID: body.ModelID, Provider: body.Provider,
 		ApprovalMode: body.ApprovalMode, Thinking: body.Thinking,
 	}
 	for _, a := range body.Attachments {
