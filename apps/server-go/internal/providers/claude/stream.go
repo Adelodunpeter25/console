@@ -335,11 +335,13 @@ func (p *Provider) doRequest(ctx context.Context, url string, headers map[string
 func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *stream.Stream[loop.Event]) error {
 	cred, err := p.loadCredential()
 	if err != nil {
+		events.Fail(err)
 		return err
 	}
 	body := BuildRequestBody(req.Model, req.SystemPrompt, req.Messages, req.Tools, req.CacheRetention, req.ThinkingLevel)
 	resp, err := p.doRequest(ctx, MessagesURL(p.baseURL()), buildHeaders(cred.AccessToken), body)
 	if err != nil {
+		events.Fail(err)
 		return err
 	}
 	defer resp.Body.Close()
