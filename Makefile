@@ -1,4 +1,8 @@
-.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop package-desktop build-server build-android typecheck check help
+.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop package-desktop build-server install build-android typecheck check help
+
+# Where `console upgrade` and this target install the binary (matches
+# resolveUpgradeTarget's CONSOLE_INSTALL_DIR fallback in upgrade.go).
+INSTALL_DIR ?= $(HOME)/.local/bin
 
 # Default target
 .DEFAULT_GOAL := help
@@ -43,6 +47,27 @@ desktop-check:
 build-server:
 	go -C apps/server-go build -ldflags="-s -w" -trimpath -o ../../console ./cmd/console
 
+## install: Build the Go server from source and swap it into $(INSTALL_DIR)
+##   (default ~/.local/bin), stopping and restarting the daemon around the
+##   swap. Same effect as `console upgrade` but from your local checkout
+##   instead of downloading a release — for testing unreleased fixes.
+install: build-server
+	@mkdir -p "$(INSTALL_DIR)"
+	@was_running=0; \
+	if [ -x "$(INSTALL_DIR)/console" ] && "$(INSTALL_DIR)/console" status | grep -q "is running"; then \
+		was_running=1; \
+		echo "Stopping running daemon..."; \
+		"$(INSTALL_DIR)/console" stop; \
+	fi; \
+	mv ./console "$(INSTALL_DIR)/console"; \
+	echo "Installed $(INSTALL_DIR)/console"; \
+	if [ "$$was_running" = "1" ]; then \
+		echo "Restarting daemon on the new binary..."; \
+		"$(INSTALL_DIR)/console" start; \
+	else \
+		echo "Daemon was not running. Run 'console start' to launch it."; \
+	fi
+
 ## build-android: Build the native Android app for release
 build-android:
 	cd apps/android && ./gradlew assembleRelease
@@ -66,6 +91,7 @@ help:
 	@echo "  make build-desktop     - Build the GPUI desktop app for production"
 	@echo "  make desktop-check     - Fast typecheck of the GPUI desktop app"
 	@echo "  make build-server      - Compile the multi-call console binary (CLI + server)"
+	@echo "  make install           - Build from source and install/restart the local console daemon (INSTALL_DIR=path)"
 	@echo "  make build-android     - Build the native Android app for release"
 	@echo "  make typecheck         - Run TypeScript typechecking"
 	@echo "  make check             - Run code format and lint checks"
