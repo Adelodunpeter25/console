@@ -44,7 +44,3 @@ func registerFavoriteRoutes(app *fiber.App, favorites *services.FavoriteService)
 		}})
 	})
 }
-
-func fail400(c *fiber.Ctx, err error) error {
-	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": err.Error()})
-}

@@ -52,6 +52,10 @@ func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs 
 		if err != nil {
 			return fail400(c, err)
 		}
+		// Ensure we always return a valid response even if no items found
+		if items == nil {
+			items = []types.FsTreeEntry{}
+		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
 			"root": root, "query": query, "items": items,
 		}})
