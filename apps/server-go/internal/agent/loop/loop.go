@@ -236,8 +236,32 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 		}
 		switch event.Kind {
 		case EventText:
+			if event.Text == "" {
+				break
+			}
+			// Coalesce consecutive text deltas into a single TextPart.
+			// Without this each streamed word persists as its own part,
+			// and clients render every part as a separate vertical
+			// markdown block (one word per line). Mirrors TS streamOneTurn.
+			if n := len(assistant.Content); n > 0 {
+				if last, ok := assistant.Content[n-1].(TextPart); ok {
+					last.Text += event.Text
+					assistant.Content[n-1] = last
+					break
+				}
+			}
 			assistant.Content = append(assistant.Content, TextPart{Type: "text", Text: event.Text})
 		case EventThinking:
+			if event.Text == "" {
+				break
+			}
+			if n := len(assistant.Content); n > 0 {
+				if last, ok := assistant.Content[n-1].(ThinkingPart); ok {
+					last.Text += event.Text
+					assistant.Content[n-1] = last
+					break
+				}
+			}
 			assistant.Content = append(assistant.Content, ThinkingPart{Type: "thinking", Text: event.Text})
 		case EventToolCall:
 			if event.Call != nil {
