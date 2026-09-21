@@ -1401,9 +1401,6 @@ fn paint_cursor_overlay(
         cx,
     );
 }
-        }
-    }
-}
 
 pub fn estimate_size(width: f32, height: f32, font_size: f32) -> TerminalSize {
     let cols = (width / (font_size * 0.62)).floor() as u16;
