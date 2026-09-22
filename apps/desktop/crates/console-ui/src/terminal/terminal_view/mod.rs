@@ -46,9 +46,6 @@ pub struct TerminalView {
     /// Shared snapshot: cloned as `Arc` (refcount bump) per render instead of
     /// a deep grid clone, so idle frames stay O(1) before paint.
     snapshot: Option<Arc<console_core::types::terminal::TerminalGridSnapshot>>,
-    /// Damage paired with `snapshot` (same backend lock). Lets the renderer
-    /// skip clean rows before shaping/hashing.
-    snapshot_damage: termy_core::TerminalDamageSnapshot,
     /// Mouse mode paired with `snapshot` — cached here so mousemove/scroll
     /// never touch the backend lock per event.
     cached_mouse_mode: termy_core::TerminalMouseMode,
@@ -67,6 +64,9 @@ pub struct TerminalView {
     /// (resolved colors are baked into cached runs).
     paint_cache: Rc<RefCell<HashMap<u16, CachedRowPaint>>>,
     cache_theme: Option<(gpui::Hsla, gpui::Hsla)>,
+    /// Display offset the paint cache was last aligned to. Scrolling moves
+    /// viewport content between rows; shifting cached entries with the
+    /// offset avoids re-shaping every row per scroll step.
     /// Measured cell metrics from the last canvas paint. Mouse→cell mapping
     /// must use these (not constants) or clicks land on the wrong cells.
     cell_metrics: Option<(Pixels, Pixels)>,
@@ -109,7 +109,6 @@ impl TerminalView {
             focus,
             handle: None,
             snapshot: None,
-            snapshot_damage: termy_core::TerminalDamageSnapshot::Full,
             cached_mouse_mode: termy_core::TerminalMouseMode::default(),
             status: TerminalStatus::Spawning,
             error: None,
@@ -120,6 +119,7 @@ impl TerminalView {
             scrollback_offset: 0,
             paint_cache: Rc::new(RefCell::new(HashMap::new())),
             cache_theme: None,
+            painted_scroll_offset: 0,
             cell_metrics: None,
             grid_origin: None,
             last_click: None,
@@ -178,7 +178,7 @@ impl TerminalView {
             // apply the result. Snapshot + damage + mouse mode come from one
             // lock via `snapshot_full` so dirty rows stay in sync with the grid
             // and mouse events never touch the backend lock.
-            let (initial_snapshot, initial_damage, initial_mouse, initial_scroll, initial_alt, initial_status, initial_error) = cx
+            let (initial_snapshot, initial_mouse, initial_scroll, initial_alt, initial_status, initial_error) = cx
                 .background_executor()
                 .spawn({
                     let handle = handle.clone();
@@ -186,7 +186,11 @@ impl TerminalView {
                         let full = handle.snapshot_full().await;
                         let status = handle.status().await;
                         let error = handle.error.read().await.clone();
-                        (full.snapshot, full.damage, full.mouse_mode, full.scroll_state, full.is_alt_screen, status, error)
+                        // `full.damage` is intentionally dropped: damage is
+                        // consumed per snapshot and can go stale when the
+                        // watch loop takes two snapshots between paints, so
+                        // the renderer validates rows by content hash instead.
+                        (full.snapshot, full.mouse_mode, full.scroll_state, full.is_alt_screen, status, error)
                     }
                 })
                 .await;
@@ -194,7 +198,6 @@ impl TerminalView {
             let _ = this.update(cx, |view, cx| {
                 view.handle = Some(handle);
                 view.snapshot = Some(Arc::new(initial_snapshot));
-                view.snapshot_damage = initial_damage;
                 view.cached_mouse_mode = initial_mouse;
                 view.cached_scroll = initial_scroll;
                 view.cached_alt_screen = initial_alt;
@@ -210,24 +213,23 @@ impl TerminalView {
                     // Coalesce output bursts (paste, `cat`, prompt redraws) into a
                     // single snapshot + re-render pass instead of one per frame.
                     cx.background_executor()
-                        .timer(std::time::Duration::from_millis(8))
+                        .timer(std::time::Duration::from_millis(4))
                         .await;
                     // Snapshot on the background executor (see the initial
                     // snapshot above): termy's blocking mutex must never be
                     // awaited on the main thread.
                     let handle_for_snapshot = handle_for_watch.clone();
-                    let (snapshot, damage, mouse_mode, scroll_state, is_alt_screen, status, error) = cx
+                    let (snapshot, mouse_mode, scroll_state, is_alt_screen, status, error) = cx
                         .background_executor()
                         .spawn(async move {
                             let full = handle_for_snapshot.snapshot_full().await;
                             let status = handle_for_snapshot.status().await;
                             let error = handle_for_snapshot.error.read().await.clone();
-                            (full.snapshot, full.damage, full.mouse_mode, full.scroll_state, full.is_alt_screen, status, error)
+                            (full.snapshot, full.mouse_mode, full.scroll_state, full.is_alt_screen, status, error)
                         })
                         .await;
                     let _ = this_watch.update(cx, |view, cx| {
                         view.snapshot = Some(Arc::new(snapshot));
-                        view.snapshot_damage = damage;
                         view.cached_mouse_mode = mouse_mode;
                         view.cached_scroll = scroll_state;
                         view.cached_alt_screen = is_alt_screen;
@@ -504,6 +506,25 @@ impl Render for TerminalView {
         if self.cache_theme != Some((ttheme.background, ttheme.foreground)) {
             self.paint_cache.borrow_mut().clear();
             self.cache_theme = Some((ttheme.background, ttheme.foreground));
+        }
+        // Scrolling shifts viewport content between rows. Move cached
+        // entries with the display offset so only rows entering the
+        // viewport re-shape; the per-row hash check below keeps this safe
+        // even when output changed rows mid-scroll (mismatch → re-shape).
+        let now_offset = self.cached_scroll.0;
+        if self.painted_scroll_offset != now_offset {
+            let delta = now_offset as i64 - self.painted_scroll_offset as i64;
+            let max_rows = self.size.rows.max(1) as i64;
+            let mut cache = self.paint_cache.borrow_mut();
+            let shifted: Vec<(u16, CachedRowPaint)> = cache
+                .drain()
+                .filter_map(|(k, v)| {
+                    let nk = k as i64 + delta;
+                    (nk >= 0 && nk < max_rows).then_some((nk as u16, v))
+                })
+                .collect();
+            cache.extend(shifted);
+            self.painted_scroll_offset = now_offset;
         }
         let paint_cache = self.paint_cache.clone();
         let view_for_drop = view_handle.clone();
@@ -962,7 +983,6 @@ impl Render for TerminalView {
                             },
                             {
                                 let snapshot = snapshot.clone();
-                                let damage = self.snapshot_damage.clone();
                                 let paint_cache = paint_cache.clone();
                                 let view_for_canvas = view_handle.clone();
                                 let focus_for_canvas = self.focus.clone();
@@ -994,7 +1014,6 @@ impl Render for TerminalView {
                                         cell_w,
                                         cell_h,
                                         snapshot.as_deref(),
-                                        &damage,
                                         selection_range,
                                         render_cursor,
                                         &paint_cache,

@@ -71,7 +71,6 @@ pub(super) fn render_canvas_grid(
     cell_w: gpui::Pixels,
     cell_h: gpui::Pixels,
     snapshot: Option<&console_core::types::terminal::TerminalGridSnapshot>,
-    damage: &termy_core::TerminalDamageSnapshot,
     selection_range: Option<(TerminalCellPos, TerminalCellPos)>,
     render_cursor: bool,
     paint_cache: &Rc<RefCell<HashMap<u16, CachedRowPaint>>>,
@@ -99,19 +98,14 @@ pub(super) fn render_canvas_grid(
         }
     };
 
-    // Damage → dirty rows. `Full` repaints everything; `Partial` lets clean
-    // cached rows skip run-building + hashing entirely.
-    let dirty_rows: Option<std::collections::HashSet<u16>> = match damage {
-        termy_core::TerminalDamageSnapshot::Full => None,
-        termy_core::TerminalDamageSnapshot::Partial(spans) => {
-            Some(spans.iter().map(|s| s.row as u16).collect())
-        }
-    };
-    let is_row_dirty = |row: u16| match &dirty_rows {
-        None => true,
-        Some(set) => set.contains(&row),
-    };
-
+    // Cache validity is content-addressed: every row rebuilds its runs and
+    // hashes them, and a hash match repaints the stored shaped line without
+    // re-shaping. This deliberately ignores termy's damage spans — damage is
+    // consumed per snapshot_full, but GPUI can drop a frame's snapshot when
+    // the watch loop takes two snapshots between paints (output bursts). A
+    // damage-gated fast path then repainted stale rows ("disappearing text");
+    // comparing hashes against the actual grid cannot go stale. Run-building
+    // + hashing a row costs microseconds; shaping is what we're avoiding.
     for (row_idx, row) in snap.rows.iter().enumerate() {
         if row_idx as u16 >= rows {
             break;
@@ -130,23 +124,6 @@ pub(super) fn render_canvas_grid(
         let cacheable = !selection_here;
         let cursor_here =
             cursor.visible && cursor.row == row_u16 && (cursor.col as usize) < row.len();
-
-        // Fast path: clean + cached → repaint stored quads without building
-        // runs or hashing. Falls through when the cache has no entry (first
-        // paint, theme change) so the cache gets populated.
-        if cacheable && !is_row_dirty(row_u16) {
-            let hit = paint_cache.borrow().contains_key(&row_u16);
-            if hit {
-                if let Some(entry) = paint_cache.borrow().get(&row_u16) {
-                    paint_cached_entry(origin, cell_w, cell_h, y, entry, theme.background, window, cx);
-                }
-                paint_cursor_overlay(
-                    origin, cell_w, cell_h, y, snap, row_u16, cursor_here, cursor, theme,
-                    window, cx,
-                );
-                continue;
-            }
-        }
 
         // Collect the links overlapping this row once per row instead of
         // scanning the full link list for every cell (O(cells × links) →

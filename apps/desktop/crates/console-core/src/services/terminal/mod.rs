@@ -169,7 +169,9 @@ impl TerminalHandle {
         let pending = self.scroll_pending.clone();
         let scheduled = self.scroll_scheduled.clone();
         tokio::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(8)).await;
+            // Coalesce wheel bursts into one backend scroll; the watch loop
+            // below adds its own short delay before snapshotting.
+            tokio::time::sleep(std::time::Duration::from_millis(4)).await;
             let delta = {
                 let mut p = pending.lock().unwrap();
                 let d = *p;
