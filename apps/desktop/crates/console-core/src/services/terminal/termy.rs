@@ -220,6 +220,17 @@ impl TermyBackend {
     pub fn mouse_mode(&self) -> termy_core::TerminalMouseMode {
         self.term.mouse_mode()
     }
+
+    /// Scrollback viewport state: (display_offset, history_size).
+    /// `display_offset` is 0 at the live prompt, >0 when scrolled up.
+    pub fn scroll_state(&self) -> (usize, usize) {
+        self.term.scroll_state()
+    }
+
+    /// Jump the scrollback viewport back to the live prompt.
+    pub fn scroll_to_bottom(&self) -> bool {
+        self.term.scroll_to_bottom()
+    }
 }
 
 /// Case-insensitive prefix check directly on grid cells (no allocation).

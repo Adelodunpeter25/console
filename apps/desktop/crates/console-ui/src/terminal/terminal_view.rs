@@ -1,8 +1,8 @@
 use console_core::ConsoleClient;
 use console_core::types::terminal::{TerminalSize, TerminalSpawnParams, TerminalStatus};
 use gpui::{
-    App, Bounds, Context, ElementInputHandler, EntityInputHandler, FocusHandle, Focusable,
-    IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    App, Bounds, Context, ElementInputHandler, EntityInputHandler, ExternalPaths, FocusHandle,
+    Focusable, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
     ParentElement, Pixels, Render, ScrollWheelEvent, SharedString, Styled, UTF16Selection, Window,
     div, prelude::*, px,
 };
@@ -114,11 +114,24 @@ pub struct TerminalView {
     /// the last paint. Mouse events are window-relative; without subtracting
     /// this, every click lands offset by wherever the pane sits on screen.
     grid_origin: Option<gpui::Point<Pixels>>,
-    /// Last mouse-down for double-click-to-open detection.
-    last_click: Option<(std::time::Instant, TerminalCellPos)>,
+    /// Last mouse-down for multi-click detection (double = word, triple =
+    /// line). Count cycles 1 → 2 → 3 on same-cell clicks within 500ms.
+    last_click: Option<(std::time::Instant, TerminalCellPos, u8)>,
     /// Button currently held while the PTY has mouse reporting enabled —
     /// drives drag/motion reports. `None` when reporting is off.
     mouse_down: Option<TerminalMouseButton>,
+    /// Scrollback state paired with `snapshot`: (display_offset, history).
+    /// Offset 0 is the live prompt; the scrollbar renders from this so it
+    /// never touches the backend lock per frame.
+    cached_scroll: (usize, usize),
+    /// Alt-screen paired with `snapshot` — hides the scrollbar and local
+    /// scrollback while a TUI owns the viewport.
+    cached_alt_screen: bool,
+    /// Window-space bounds of the scrollbar track from the last paint, for
+    /// mapping scrollbar clicks/drags to scroll offsets.
+    scrollbar_bounds: Option<gpui::Bounds<Pixels>>,
+    /// A scrollbar thumb drag is in progress.
+    scrollbar_dragging: bool,
 }
 
 impl TerminalView {
@@ -151,6 +164,10 @@ impl TerminalView {
             grid_origin: None,
             last_click: None,
             mouse_down: None,
+            cached_scroll: (0, 0),
+            cached_alt_screen: false,
+            scrollbar_bounds: None,
+            scrollbar_dragging: false,
         };
 
         this.spawn(params, client, cx);
@@ -201,7 +218,7 @@ impl TerminalView {
             // apply the result. Snapshot + damage + mouse mode come from one
             // lock via `snapshot_full` so dirty rows stay in sync with the grid
             // and mouse events never touch the backend lock.
-            let (initial_snapshot, initial_damage, initial_mouse, initial_status, initial_error) = cx
+            let (initial_snapshot, initial_damage, initial_mouse, initial_scroll, initial_alt, initial_status, initial_error) = cx
                 .background_executor()
                 .spawn({
                     let handle = handle.clone();
@@ -209,7 +226,7 @@ impl TerminalView {
                         let full = handle.snapshot_full().await;
                         let status = handle.status().await;
                         let error = handle.error.read().await.clone();
-                        (full.snapshot, full.damage, full.mouse_mode, status, error)
+                        (full.snapshot, full.damage, full.mouse_mode, full.scroll_state, full.is_alt_screen, status, error)
                     }
                 })
                 .await;
@@ -219,6 +236,8 @@ impl TerminalView {
                 view.snapshot = Some(Arc::new(initial_snapshot));
                 view.snapshot_damage = initial_damage;
                 view.cached_mouse_mode = initial_mouse;
+                view.cached_scroll = initial_scroll;
+                view.cached_alt_screen = initial_alt;
                 view.status = initial_status;
                 view.error = initial_error;
                 cx.notify();
@@ -237,19 +256,21 @@ impl TerminalView {
                     // snapshot above): termy's blocking mutex must never be
                     // awaited on the main thread.
                     let handle_for_snapshot = handle_for_watch.clone();
-                    let (snapshot, damage, mouse_mode, status, error) = cx
+                    let (snapshot, damage, mouse_mode, scroll_state, is_alt_screen, status, error) = cx
                         .background_executor()
                         .spawn(async move {
                             let full = handle_for_snapshot.snapshot_full().await;
                             let status = handle_for_snapshot.status().await;
                             let error = handle_for_snapshot.error.read().await.clone();
-                            (full.snapshot, full.damage, full.mouse_mode, status, error)
+                            (full.snapshot, full.damage, full.mouse_mode, full.scroll_state, full.is_alt_screen, status, error)
                         })
                         .await;
                     let _ = this_watch.update(cx, |view, cx| {
                         view.snapshot = Some(Arc::new(snapshot));
                         view.snapshot_damage = damage;
                         view.cached_mouse_mode = mouse_mode;
+                        view.cached_scroll = scroll_state;
+                        view.cached_alt_screen = is_alt_screen;
                         view.status = status;
                         view.error = error;
                         cx.notify();
@@ -469,6 +490,265 @@ impl TerminalView {
         self.send_input(String::from_utf8_lossy(&bytes).into_owned());
         true
     }
+
+    /// Jump back to the live prompt, locally and in the backend. Any fresh
+    /// input (keys, paste, drops) calls this so the viewport follows output.
+    pub fn scroll_to_bottom(&mut self) {
+        self.scrollback_offset = 0;
+        if let Some(h) = &self.handle {
+            h.scroll_to_bottom();
+        }
+    }
+
+    /// Scroll the backend so `frac` (0.0 = top of history, 1.0 = live
+    /// prompt) sits at the viewport. Drives the scrollbar thumb/track.
+    fn scroll_to_frac(&mut self, frac: f32) {
+        let (offset, history) = self.cached_scroll;
+        if history == 0 {
+            return;
+        }
+        let target = ((1.0 - frac.clamp(0.0, 1.0)) * history as f32).round() as usize;
+        if target == offset {
+            return;
+        }
+        let delta = target as i32 - offset as i32;
+        if let Some(h) = &self.handle {
+            h.scroll(delta);
+        }
+        self.scrollback_offset = (self.scrollback_offset + delta).max(0);
+    }
+
+    /// Select the whole viewport grid.
+    pub fn select_all(&mut self) -> bool {
+        let snapshot = match self.snapshot.as_ref() {
+            Some(s) => s,
+            None => return false,
+        };
+        if snapshot.rows.is_empty() {
+            return false;
+        }
+        let last_row = (snapshot.rows.len() as u16).saturating_sub(1);
+        let last_col = snapshot
+            .rows
+            .last()
+            .map(|r| (r.len() as u16).saturating_sub(1))
+            .unwrap_or(0);
+        self.selection_anchor = Some(TerminalCellPos { col: 0, row: 0 });
+        self.selection_head = Some(TerminalCellPos {
+            col: last_col,
+            row: last_row,
+        });
+        self.selection_dragging = false;
+        true
+    }
+
+    /// Double-click: select the word token under a cell. Classes mirror
+    /// termy (`whitespace | [alnum + _] | other`) with wide-spacer handling.
+    /// Returns false when there is nothing selectable (e.g. trailing space),
+    /// letting the caller fall through to a fresh single-click selection.
+    pub fn select_token_at_cell(&mut self, pos: TerminalCellPos) -> bool {
+        let snapshot = match self.snapshot.as_ref() {
+            Some(s) => s,
+            None => return false,
+        };
+        let row = match snapshot.rows.get(pos.row as usize) {
+            Some(r) => r,
+            None => return false,
+        };
+        if row.is_empty() || pos.col as usize >= row.len() {
+            return false;
+        }
+        // Spacer cells stand for the wide glyph to their left.
+        let line: Vec<Option<char>> = row
+            .iter()
+            .map(|c| {
+                if c.flags.wide_char_spacer {
+                    None
+                } else {
+                    Some(c.c)
+                }
+            })
+            .collect();
+        let mut col = pos.col as usize;
+        if line[col].is_none() && col > 0 {
+            col -= 1;
+        }
+        let Some(ch) = line[col] else {
+            return false;
+        };
+        let class = selection_char_class(ch);
+        if class == 0 {
+            // Whitespace past the last printable cell is not selectable.
+            let Some(last) = line
+                .iter()
+                .rposition(|c| c.is_some_and(|c| !c.is_whitespace()))
+            else {
+                return false;
+            };
+            if col > last {
+                return false;
+            }
+        }
+        let mut start = col;
+        while start > 0 {
+            match line[start - 1] {
+                None if start >= 2
+                    && line[start - 2].is_some_and(|c| selection_char_class(c) == class) =>
+                {
+                    start -= 1;
+                }
+                Some(c) if selection_char_class(c) == class => start -= 1,
+                _ => break,
+            }
+        }
+        let mut end = col;
+        while end + 1 < line.len() {
+            match line[end + 1] {
+                None if end + 2 < line.len()
+                    && line[end + 2].is_some_and(|c| selection_char_class(c) == class) =>
+                {
+                    end += 1;
+                }
+                Some(c) if selection_char_class(c) == class => end += 1,
+                _ => break,
+            }
+        }
+        // Cover the trailing spacer of a wide glyph at the token end.
+        if end + 1 < line.len() && line[end + 1].is_none() {
+            end += 1;
+        }
+        self.selection_anchor = Some(TerminalCellPos {
+            col: start as u16,
+            row: pos.row,
+        });
+        self.selection_head = Some(TerminalCellPos {
+            col: end as u16,
+            row: pos.row,
+        });
+        self.selection_dragging = false;
+        true
+    }
+
+    /// Triple-click: select the full viewport row.
+    pub fn select_line_at_row(&mut self, row: u16) -> bool {
+        let snapshot = match self.snapshot.as_ref() {
+            Some(s) => s,
+            None => return false,
+        };
+        let row_cells = match snapshot.rows.get(row as usize) {
+            Some(r) => r,
+            None => return false,
+        };
+        let last_col = (row_cells.len() as u16).saturating_sub(1);
+        self.selection_anchor = Some(TerminalCellPos { col: 0, row });
+        self.selection_head = Some(TerminalCellPos {
+            col: last_col,
+            row,
+        });
+        self.selection_dragging = false;
+        true
+    }
+}
+
+/// Word-select character class: 0 = whitespace, 1 = word (`alnum | _`),
+/// 2 = everything else (runs of punctuation select together).
+fn selection_char_class(c: char) -> u8 {
+    if c.is_whitespace() {
+        0
+    } else if c.is_alphanumeric() || c == '_' {
+        1
+    } else {
+        2
+    }
+}
+
+/// Quote a path for pasting into a shell: `'...'` with embedded quotes
+/// escaped. Mirrors termy's `shell_quote_path`.
+fn shell_quote_path(path: &std::path::Path) -> String {
+    let s = path.to_string_lossy();
+    let mut quoted = String::with_capacity(s.len() + 2);
+    quoted.push('\'');
+    quoted.push_str(&s.replace('\'', "'\\''"));
+    quoted.push('\'');
+    quoted
+}
+
+/// Dropped files become space-joined quoted paths plus a trailing space,
+/// ready to type at the prompt. Mirrors termy's drop input.
+fn dropped_paths_input(paths: &[std::path::PathBuf]) -> Option<String> {
+    if paths.is_empty() {
+        return None;
+    }
+    let mut text = paths
+        .iter()
+        .map(|p| shell_quote_path(p))
+        .collect::<Vec<_>>()
+        .join(" ");
+    text.push(' ');
+    Some(text)
+}
+
+fn clipboard_image_extension(format: gpui::ImageFormat) -> &'static str {
+    match format {
+        gpui::ImageFormat::Png => "png",
+        gpui::ImageFormat::Jpeg => "jpg",
+        gpui::ImageFormat::Webp => "webp",
+        gpui::ImageFormat::Gif => "gif",
+        gpui::ImageFormat::Svg => "svg",
+        gpui::ImageFormat::Bmp => "bmp",
+        gpui::ImageFormat::Tiff => "tiff",
+        gpui::ImageFormat::Ico => "ico",
+        gpui::ImageFormat::Pnm => "pnm",
+    }
+}
+
+fn write_clipboard_image_to_temp_file(image: &gpui::Image) -> std::io::Result<std::path::PathBuf> {
+    let dir = std::env::temp_dir().join("console-clipboard-images");
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join(format!(
+        "clipboard-image-{}.{}",
+        image.id(),
+        clipboard_image_extension(image.format)
+    ));
+    if !path.exists() {
+        std::fs::write(&path, &image.bytes)?;
+    }
+    Ok(path)
+}
+
+/// Paste bytes for a clipboard item. Finder file copies become quoted paths
+/// (safer than the raw text fallback for paths with spaces); plain text is
+/// bracketed-paste framed when the shell opted in; bare images are staged to
+/// a temp file and pasted as a quoted path.
+fn paste_input_for_clipboard(
+    item: &gpui::ClipboardItem,
+    bracketed_paste: bool,
+) -> Option<String> {
+    let dropped: Vec<std::path::PathBuf> = item
+        .entries()
+        .iter()
+        .filter_map(|entry| match entry {
+            gpui::ClipboardEntry::ExternalPaths(paths) => Some(paths.paths().iter().cloned()),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    if let Some(text) = dropped_paths_input(&dropped) {
+        return Some(text);
+    }
+    if let Some(text) = item.text() {
+        if bracketed_paste {
+            return Some(format!("\x1b[200~{text}\x1b[201~"));
+        }
+        return Some(text);
+    }
+    let image = item.entries().iter().find_map(|entry| match entry {
+        gpui::ClipboardEntry::Image(image) => Some(image),
+        _ => None,
+    })?;
+    write_clipboard_image_to_temp_file(image)
+        .ok()
+        .map(|path| shell_quote_path(&path))
 }
 
 /// Open a URL in the user's default browser. Fire-and-forget: a failure to
@@ -538,6 +818,7 @@ impl EntityInputHandler for TerminalView {
     ) {
         if !text.is_empty() {
             self.send_input(text.to_string());
+            self.scroll_to_bottom();
             let _ = self.clear_selection();
             cx.notify();
         }
@@ -609,6 +890,107 @@ impl Render for TerminalView {
             self.cache_theme = Some((ttheme.background, ttheme.foreground));
         }
         let paint_cache = self.paint_cache.clone();
+        let view_for_drop = view_handle.clone();
+        let focus_for_drop = self.focus.clone();
+
+        // Scrollbar state paired with the snapshot (no backend lock per
+        // frame). Hidden on the alt-screen where TUIs own the viewport.
+        let (scroll_offset, scroll_history) = self.cached_scroll;
+        let show_scrollbar = !self.cached_alt_screen && scroll_history > 0;
+        let scrollbar_viewport_rows = self.size.rows.max(1) as f32;
+        let scrollbar_track = theme.border.opacity(0.5);
+        let scrollbar_thumb = theme.text_ghost.opacity(0.7);
+        let scrollbar = {
+            let view_for_bar = view_handle.clone();
+            div()
+                .w(px(10.0))
+                .h_full()
+                .py(px(4.0))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(
+                        move |this, event: &MouseDownEvent, _window, cx| {
+                            // Click-to-jump: the grab point becomes the thumb
+                            // position, then motion drags it.
+                            if let Some(bounds) = this.scrollbar_bounds {
+                                let height = f32::from(bounds.size.height);
+                                if height > 0.0 {
+                                    let frac = (f32::from(event.position.y)
+                                        - f32::from(bounds.origin.y))
+                                        / height;
+                                    this.scroll_to_frac(frac);
+                                    this.scrollbar_dragging = true;
+                                    cx.notify();
+                                }
+                            }
+                            cx.stop_propagation();
+                        },
+                    ),
+                )
+                .on_mouse_move(cx.listener(
+                    move |this, event: &MouseMoveEvent, _window, cx| {
+                        if this.scrollbar_dragging {
+                            if let Some(bounds) = this.scrollbar_bounds {
+                                let height = f32::from(bounds.size.height);
+                                if height > 0.0 {
+                                    let frac = (f32::from(event.position.y)
+                                        - f32::from(bounds.origin.y))
+                                        / height;
+                                    this.scroll_to_frac(frac);
+                                    cx.notify();
+                                }
+                            }
+                        }
+                    },
+                ))
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(move |this, _event: &MouseUpEvent, _window, cx| {
+                        if this.scrollbar_dragging {
+                            this.scrollbar_dragging = false;
+                            cx.notify();
+                        }
+                    }),
+                )
+                .child(
+                    gpui::canvas(
+                        move |_bounds, _window, _cx| (),
+                        move |bounds, _, window, cx| {
+                            view_for_bar.update(cx, |view, _| {
+                                view.scrollbar_bounds = Some(bounds);
+                            });
+                            let total = scroll_history as f32 + scrollbar_viewport_rows;
+                            let height = f32::from(bounds.size.height);
+                            if height <= 0.0 || total <= 0.0 {
+                                return;
+                            }
+                            window.paint_quad(gpui::fill(bounds, scrollbar_track));
+                            // `min` before `max`: `clamp` would panic on a
+                            // track shorter than the minimum thumb.
+                            let thumb_h = (height * scrollbar_viewport_rows / total)
+                                .min(height)
+                                .max(8.0);
+                            let max_top = (height - thumb_h).max(0.0);
+                            let frac = if scroll_history == 0 {
+                                0.0
+                            } else {
+                                (scroll_offset as f32 / scroll_history as f32).clamp(0.0, 1.0)
+                            };
+                            let thumb_top = max_top * (1.0 - frac);
+                            let width = f32::from(bounds.size.width);
+                            let thumb = gpui::Bounds {
+                                origin: gpui::point(
+                                    bounds.origin.x + px(3.0),
+                                    bounds.origin.y + px(thumb_top),
+                                ),
+                                size: gpui::size(px((width - 6.0).max(2.0)), px(thumb_h)),
+                            };
+                            window.paint_quad(gpui::fill(thumb, scrollbar_thumb));
+                        },
+                    )
+                    .size_full(),
+                )
+        };
 
         div()
             .id("terminal-view")
@@ -654,16 +1036,34 @@ impl Render for TerminalView {
                             && event.keystroke.key == "v");
                     if is_paste {
                         if let Some(clipboard) = cx.read_from_clipboard() {
-                            if let Some(text) = clipboard.text() {
-                                if let Some(h) = &handle_for_key {
-                                    if bracketed_paste {
-                                        h.send_input(format!("\x1b[200~{}\x1b[201~", text));
-                                    } else {
-                                        h.send_input(text);
-                                    }
+                            if let Some(h) = &handle_for_key {
+                                if let Some(input) =
+                                    paste_input_for_clipboard(&clipboard, bracketed_paste)
+                                {
+                                    h.send_input(input);
                                 }
                             }
                         }
+                        view_for_key.update(cx, |view, cx| {
+                            view.scroll_to_bottom();
+                            cx.notify();
+                        });
+                        cx.stop_propagation();
+                        return;
+                    }
+
+                    // Select-all: Cmd+A (macOS) / Ctrl+Shift+A. Ctrl+A alone
+                    // still goes to the shell (line start in readline).
+                    let is_select_all = (event.keystroke.modifiers.platform
+                        && event.keystroke.key == "a")
+                        || (event.keystroke.modifiers.control
+                            && event.keystroke.modifiers.shift
+                            && event.keystroke.key == "a");
+                    if is_select_all {
+                        view_for_key.update(cx, |view, cx| {
+                            view.select_all();
+                            cx.notify();
+                        });
                         cx.stop_propagation();
                         return;
                     }
@@ -689,7 +1089,7 @@ impl Render for TerminalView {
                             h.send_input(bytes);
                         }
                         view_for_key.update(cx, |view, cx| {
-                            view.scrollback_offset = 0;
+                            view.scroll_to_bottom();
                             if view.clear_selection() {
                                 cx.notify();
                             }
@@ -749,8 +1149,28 @@ impl Render for TerminalView {
                     .min_h_0()
                     .w_full()
                     .overflow_hidden()
-                    .on_mouse_down(
-                        MouseButton::Left,
+                    .flex()
+                    .flex_row()
+                    .on_drop(move |paths: &ExternalPaths, window, cx| {
+                        // Finder drops become quoted paths typed at the
+                        // prompt, mirroring termy's file-drop behavior.
+                        if let Some(input) = dropped_paths_input(paths.paths()) {
+                            view_for_drop.update(cx, |view, cx| {
+                                view.send_input(input);
+                                view.scroll_to_bottom();
+                                cx.notify();
+                            });
+                            window.focus(&focus_for_drop, cx);
+                        }
+                    })
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .min_h_0()
+                            .overflow_hidden()
+                            .on_mouse_down(
+                                MouseButton::Left,
                         cx.listener(move |this, event: &MouseDownEvent, _window, cx| {
                             let pos = this.cell_at_point(event.position.x, event.position.y);
 
@@ -771,31 +1191,33 @@ impl Render for TerminalView {
                                 return;
                             }
 
-                            // Double-click opens whatever termy resolved at
-                            // the cell (OSC 8 hyperlink, file path, URL) —
-                            // richer than the URL-regex list used for
-                            // single Cmd+Click highlighting.
+                            // Multi-click selection: double-click selects the
+                            // word token, triple-click the full row. Count
+                            // cycles 1 → 2 → 3 on same-cell clicks within
+                            // 500ms. Links still open via Cmd+Click below.
                             let now = std::time::Instant::now();
-                            let is_double = matches!(this.last_click, Some((t, p))
-                                if p == pos && now.duration_since(t).as_millis() < 500);
-                            this.last_click = Some((now, pos));
-                            if is_double {
-                                this.clear_selection();
-                                if let Some(h) = this.handle.clone() {
-                                    if let Ok(b) = h.backend.try_lock() {
-                                        if let Some(link) =
-                                            b.link_at(pos.row as usize, pos.col as usize)
-                                        {
-                                            let target = link.target.clone();
-                                            drop(b);
-                                            cx.notify();
-                                            open_url_in_browser(&target);
-                                            return;
-                                        }
-                                    }
+                            let count = match this.last_click {
+                                Some((t, p, c))
+                                    if p == pos
+                                        && now.duration_since(t).as_millis() < 500 =>
+                                {
+                                    (c % 3) + 1
                                 }
-                                cx.notify();
-                                return;
+                                _ => 1,
+                            };
+                            this.last_click = Some((now, pos, count));
+                            if count == 2 {
+                                if this.select_token_at_cell(pos) {
+                                    cx.notify();
+                                    return;
+                                }
+                                // Nothing word-like under the cursor — fall
+                                // through to a fresh single-click selection.
+                            } else if count == 3 {
+                                if this.select_line_at_row(pos.row) {
+                                    cx.notify();
+                                    return;
+                                }
                             }
 
                             // Cmd+Click (Ctrl+Click elsewhere) on a URL opens
@@ -969,6 +1391,8 @@ impl Render for TerminalView {
                         )
                         .size_full(),
                     ),
+                )
+                .when(show_scrollbar, |el| el.child(scrollbar)),
             )
     }
 }

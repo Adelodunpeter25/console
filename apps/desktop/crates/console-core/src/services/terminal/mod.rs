@@ -119,6 +119,7 @@ pub struct TerminalSnapshotFull {
     pub damage: termy_core::TerminalDamageSnapshot,
     pub mouse_mode: termy_core::TerminalMouseMode,
     pub is_alt_screen: bool,
+    pub scroll_state: (usize, usize),
 }
 
 impl TerminalHandle {
@@ -208,11 +209,13 @@ impl TerminalHandle {
         let damage = b.take_damage_snapshot();
         let mouse_mode = b.mouse_mode();
         let is_alt_screen = b.is_alt_screen();
+        let scroll_state = b.scroll_state();
         TerminalSnapshotFull {
             snapshot,
             damage,
             mouse_mode,
             is_alt_screen,
+            scroll_state,
         }
     }
 
@@ -223,6 +226,19 @@ impl TerminalHandle {
     pub async fn damage_snapshot(&self) -> termy_core::TerminalDamageSnapshot {
         let b = self.backend.lock().await;
         b.take_damage_snapshot()
+    }
+
+    /// Jump the scrollback viewport back to the live prompt. The UI also
+    /// mirrors this in its local `scrollback_offset` (see `TerminalView`).
+    pub fn scroll_to_bottom(&self) {
+        let backend = self.backend.clone();
+        let notify = self.notify.clone();
+        tokio::spawn(async move {
+            let b = backend.lock().await;
+            b.scroll_to_bottom();
+            drop(b);
+            notify.notify_one();
+        });
     }
 
     /// Full link metadata (OSC 8, file paths, URLs) at a viewport cell.
