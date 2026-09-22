@@ -67,6 +67,7 @@ func New(cfg Config) (*fiber.App, *run.Service) {
 	runSvc.SetMemories(memory.NewRegistry(""))
 	runSvc.SetBashJobs(services.NewBashJobManager(cfg.Ports))
 	registerSessionRoutes(app, services.NewSessionService(cfg.DB), runSvc)
+	registerWorktreeRoutes(app, services.NewSessionService(cfg.DB), services.NewWorktreeService())
 	fffManager := fff.NewManager()
 	if fffManager.Enabled() {
 		slog.Info("fff file-search index enabled")

@@ -66,6 +66,22 @@ func GlobalDBPath() string {
 	return filepath.Join(ConsoleStorageDir(), "console-global.db")
 }
 
+// WorktreesDir is the central root for session worktrees
+// ($HOME/console/worktrees/<id>). Centralized here — like ConsoleStorageDir —
+// so dev and prod differ: CONSOLE_WORKTREES_DIR wins when set, otherwise
+// ~/console-dev in dev mode, ~/console in production.
+func WorktreesDir() string {
+	if override := os.Getenv("CONSOLE_WORKTREES_DIR"); override != "" {
+		return override
+	}
+	home, _ := os.UserHomeDir()
+	folder := "console"
+	if ConsoleMode() == "dev" {
+		folder = "console-dev"
+	}
+	return filepath.Join(home, folder, "worktrees")
+}
+
 func ProjectStorageDir(storageDir, projectID string) string {
 	return filepath.Join(storageDir, "projects", projectID)
 }

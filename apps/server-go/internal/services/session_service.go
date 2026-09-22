@@ -3,9 +3,14 @@
 package services
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
+
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 type SessionService struct {
@@ -16,9 +21,54 @@ func NewSessionService(manager *db.DB) *SessionService {
 	return &SessionService{inner: session.New(manager)}
 }
 
+// ErrWorktreeScratchpad rejects a worktree spec on a scratchpad session:
+// scratchpads own a sandboxed dir, not a repo checkout.
+var ErrWorktreeScratchpad = errors.New("worktree requires a project directory, not a scratchpad session")
+
+// ErrWorktreeNeedsCwd rejects a worktree spec without an explicit repo dir.
+var ErrWorktreeNeedsCwd = errors.New("worktree requires an explicit cwd pointing at a git repository")
+
 // Core operations
 func (s *SessionService) Create(opts types.CreateSessionOptions) (types.SessionHeader, error) {
+	provisioned := false
+	var wtRepo, wtPath string
+	if opts.Worktree != nil {
+		if opts.ProjectNull {
+			return types.SessionHeader{}, ErrWorktreeScratchpad
+		}
+		if opts.Cwd == "" {
+			return types.SessionHeader{}, ErrWorktreeNeedsCwd
+		}
+		wtRepo = opts.Cwd
+		if opts.ID == "" {
+			opts.ID = utils.RandomID()
+		}
+		branch := opts.Worktree.Branch
+		if branch == "" {
+			branch = SlugBranch(opts.Title, opts.ID)
+		}
+		root, err := DefaultRoot()
+		if err != nil {
+			return types.SessionHeader{}, err
+		}
+		wtPath = filepath.Join(root, opts.ID)
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			return types.SessionHeader{}, err
+		}
+		if err := NewWorktreeService().WorktreeAdd(wtRepo, wtPath, branch); err != nil {
+			return types.SessionHeader{}, err
+		}
+		provisioned = true
+		opts.Cwd = wtPath
+		opts.ResolvedWorktree = &types.SessionWorktree{Path: wtPath, Branch: branch, Repo: wtRepo}
+	}
 	header, err := s.inner.Create(opts)
+	if err != nil && provisioned {
+		// Roll back the provisioned worktree so a half-created session
+		// never lingers.
+		_ = NewWorktreeService().WorktreeRemove(wtRepo, wtPath, true)
+		return types.SessionHeader{}, err
+	}
 	if err == nil && header.Cwd != "" && manager != nil {
 		// A new session means its project was just opened: start the
 		// file-search index scan now so the first @-mention/grep is warm.
@@ -57,7 +107,23 @@ func (s *SessionService) ExpiredDeletedSessions(cutoffMillis int64) ([]string, e
 }
 
 func (s *SessionService) PermanentDelete(sessionID string) (bool, error) {
+	wt, err := s.inner.WorktreeOf(sessionID)
+	if err != nil {
+		return false, err
+	}
+	if wt != nil {
+		// Owned worktree goes first: dirty blocks the whole delete.
+		if err := NewWorktreeService().WorktreeRemove(wt.Repo, wt.Path, false); err != nil {
+			return false, err
+		}
+	}
 	return s.inner.PermanentDelete(sessionID)
+}
+
+// OwnedWorktreePaths lists worktree dirs claimed by session rows (trash
+// included) for orphan detection.
+func (s *SessionService) OwnedWorktreePaths() ([]string, error) {
+	return s.inner.OwnedWorktreePaths()
 }
 
 func (s *SessionService) UpdateTitle(sessionID, title string) error {

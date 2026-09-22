@@ -3,7 +3,7 @@
 
 use std::rc::Rc;
 
-use console_core::{ProjectInfo, UpdateSessionDto};
+use console_core::{CreateSessionDto, CreateWorktreeSpec, ProjectInfo, UpdateSessionDto};
 use gpui::Context;
 
 use super::ConsoleDesktopApp;
@@ -464,6 +464,83 @@ impl ConsoleDesktopApp {
                             }
                             Err(error) => {
                                 this.set_error(format!("Unable to switch branch: {error}"), cx)
+                            }
+                        }
+                        cx.notify();
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// "New worktree…" in the branch dropdown. Unlike branch checkout, a
+    /// worktree can't re-root the current session (cwd is locked from
+    /// creation) — this spawns a brand-new session rooted in a fresh
+    /// worktree/branch (server auto-derives the branch name) and opens it
+    /// in this pane, mirroring `create_new_chat`.
+    pub fn new_worktree_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
+        let Some(path) = self
+            .selected_project_for_pane(&pane_id)
+            .map(|project| project.path.clone())
+        else {
+            return;
+        };
+        let session_project_id = self.pane_project_id(&pane_id);
+        let approval_mode = self.pane_approval_mode(&pane_id);
+        let thinking_level = self.pane_thinking_level(&pane_id);
+        let selected_model = self.pane_selected_model(&pane_id);
+
+        if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
+            state.branch_pending = true;
+        }
+        cx.notify();
+
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            let result = client
+                .sessions
+                .create(CreateSessionDto {
+                    cwd: Some(path),
+                    project_id: session_project_id,
+                    model_id: selected_model.as_ref().map(|model| model.model_id.clone()),
+                    provider: selected_model.as_ref().map(|model| model.provider.clone()),
+                    title: Some("New Chat".into()),
+                    approval_mode: Some(approval_mode.value().to_string()),
+                    thinking_level,
+                    worktree: Some(CreateWorktreeSpec::default()),
+                })
+                .await;
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
+                            state.branch_pending = false;
+                        }
+                        match result {
+                            Ok(new_session) => {
+                                this.save_transcript_scroll_position(cx);
+                                this.apply_session_header_for_pane(&pane_id, &new_session, cx);
+                                this.clear_error_for_pane(&pane_id, cx);
+                                if this.active_pane_id.as_deref() == Some(pane_id.as_str()) {
+                                    this.selected_session_id = Some(new_session.id.clone());
+                                }
+                                Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
+                                this.open_chat_tab_in_pane(
+                                    &pane_id,
+                                    new_session.id.clone(),
+                                    "New Chat",
+                                );
+                                this.sync_workspace_webviews(cx);
+                                this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
+                                    t.set_messages(Vec::new(), cx);
+                                });
+                            }
+                            Err(error) => {
+                                this.set_error(
+                                    format!("Unable to create a worktree session: {error}"),
+                                    cx,
+                                );
                             }
                         }
                         cx.notify();

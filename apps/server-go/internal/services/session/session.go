@@ -80,9 +80,14 @@ func (s *Service) Create(opts types.CreateSessionOptions) (types.SessionHeader, 
 
 	if _, err := s.manager.Global().Exec(`
 		INSERT INTO sessions
-			(id, title, cwd, project_id, model_id, provider, message_count, status, approval_mode, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, 0, 'idle', ?, ?, ?)`,
+			(id, title, cwd, project_id, model_id, provider, message_count, status, approval_mode, created_at, updated_at,
+				worktree_path, worktree_branch, worktree_repo)
+		VALUES (?, ?, ?, ?, ?, ?, 0, 'idle', ?, ?, ?,
+			?, ?, ?)`,
 		id, title, cwd, projectID, modelID, provider, approvalMode, now, now,
+		worktreeCol(opts.ResolvedWorktree, func(w *types.SessionWorktree) string { return w.Path }),
+		worktreeCol(opts.ResolvedWorktree, func(w *types.SessionWorktree) string { return w.Branch }),
+		worktreeCol(opts.ResolvedWorktree, func(w *types.SessionWorktree) string { return w.Repo }),
 	); err != nil {
 		return types.SessionHeader{}, err
 	}
@@ -104,7 +109,17 @@ func (s *Service) Create(opts types.CreateSessionOptions) (types.SessionHeader, 
 		ID: id, Title: title, Cwd: cwd, ProjectID: projectID,
 		ModelID: modelID, Provider: provider, ApprovalMode: approvalMode,
 		CreatedAt: now, UpdatedAt: now, MessageCount: 0, Status: "idle",
+		Worktree: opts.ResolvedWorktree,
 	}, nil
+}
+
+// worktreeCol extracts one worktree column for INSERT, or nil (NULL) when
+// the session owns no worktree.
+func worktreeCol(w *types.SessionWorktree, pick func(*types.SessionWorktree) string) any {
+	if w == nil {
+		return nil
+	}
+	return pick(w)
 }
 
 // ListFilter mirrors the TS listSessions options.
@@ -128,17 +143,20 @@ func (s *Service) ListFiltered(f ListFilter) ([]types.SessionHeader, error) {
 	case f.Cwd != "":
 		rows, err = s.manager.Global().Query(`
 			SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-				created_at, updated_at, message_count, status, deleted_at
+				created_at, updated_at, message_count, status, deleted_at,
+				worktree_path, worktree_branch, worktree_repo
 			FROM sessions WHERE cwd = ? AND `+deletedCondition+` ORDER BY updated_at DESC LIMIT ?`, f.Cwd, limit)
 	case f.ProjectID != "":
 		rows, err = s.manager.Global().Query(`
 			SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-				created_at, updated_at, message_count, status, deleted_at
+				created_at, updated_at, message_count, status, deleted_at,
+				worktree_path, worktree_branch, worktree_repo
 			FROM sessions WHERE project_id = ? AND `+deletedCondition+` ORDER BY updated_at DESC LIMIT ?`, f.ProjectID, limit)
 	default:
 		rows, err = s.manager.Global().Query(`
 			SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-				created_at, updated_at, message_count, status, deleted_at
+				created_at, updated_at, message_count, status, deleted_at,
+				worktree_path, worktree_branch, worktree_repo
 			FROM sessions WHERE `+deletedCondition+` ORDER BY updated_at DESC LIMIT ?`, limit)
 	}
 	if err != nil {
@@ -148,14 +166,39 @@ func (s *Service) ListFiltered(f ListFilter) ([]types.SessionHeader, error) {
 	return scanSessionRows(rows)
 }
 
+// OwnedWorktreePaths lists every worktree_path claimed by a session row
+// (including soft-deleted ones — trash still owns its worktree). Used for
+// orphan detection: dirs under the worktree root with no owner are orphans.
+func (s *Service) OwnedWorktreePaths() ([]string, error) {
+	rows, err := s.manager.Global().Query(
+		`SELECT DISTINCT worktree_path FROM sessions WHERE worktree_path IS NOT NULL`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]string, 0)
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out, rows.Err()
+}
+
 func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 	out := make([]types.SessionHeader, 0)
 	for rows.Next() {
 		var h types.SessionHeader
 		var projectID sql.NullString
 		var deletedAt sql.NullInt64
+		var wtPath, wtBranch, wtRepo sql.NullString
 		if err := rows.Scan(&h.ID, &h.Title, &h.Cwd, &projectID, &h.ModelID, &h.Provider,
-			&h.ApprovalMode, &h.CreatedAt, &h.UpdatedAt, &h.MessageCount, &h.Status, &deletedAt); err != nil {
+			&h.ApprovalMode, &h.CreatedAt, &h.UpdatedAt, &h.MessageCount, &h.Status, &deletedAt,
+			&wtPath, &wtBranch, &wtRepo); err != nil {
 			return nil, err
 		}
 		if projectID.Valid && projectID.String != "" && projectID.String != "scratch" {
@@ -165,6 +208,13 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 		if deletedAt.Valid {
 			v := deletedAt.Int64
 			h.DeletedAt = &v
+		}
+		if wtPath.Valid && wtPath.String != "" {
+			h.Worktree = &types.SessionWorktree{
+				Path:   wtPath.String,
+				Branch: wtBranch.String,
+				Repo:   wtRepo.String,
+			}
 		}
 		out = append(out, h)
 	}
@@ -178,7 +228,8 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 func (s *Service) Load(sessionID string, limit int64, before int64) (*types.LoadedSession, error) {
 	rows, err := s.manager.Global().Query(`
 		SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-			created_at, updated_at, message_count, status, deleted_at
+			created_at, updated_at, message_count, status, deleted_at,
+			worktree_path, worktree_branch, worktree_repo
 		FROM sessions WHERE id = ?`, sessionID)
 	if err != nil {
 		return nil, err

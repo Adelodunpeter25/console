@@ -27,10 +27,9 @@ cleanup discipline are the whole feature.
   per project): `docs/plan/github-git-credentials-plan.md`,
   `docs/plan/new-project-dialog-plan.md`.
 
-## 2 UX Proposal
-- New-session flow offers "Isolate in worktree" (default on for agent runs?
-  default off for scratch chats — decide in implementation, keep it one
-  checkbox): server creates `<branch>` + worktree, session cwd points at it.
+## 2 UX Proposal (after backend — server first, UX later)
+- New-session flow offers "Isolate in worktree" (**default off, always**):
+  server creates `<branch>` + worktree, session cwd points at it.
   Branch name auto-derived from the session title (slug + short id), editable.
 - The session otherwise looks and behaves identically — same terminal, same
   agent, same @-mention search. The only visible difference: the session shows
@@ -43,19 +42,51 @@ cleanup discipline are the whole feature.
 - Out of scope: merge/rebase UI, PR creation, worktree-vs-worktree diffing,
   bare repos, multiple worktrees per session.
 
-## 3 Server Design
-- `GitService` additions in `git_service.go`, all via `runGit`:
+## 3 Server Design (as built)
+- `WorktreeService` in its own file
+  (`apps/server-go/internal/services/worktree_service.go`) — worktree code
+  does NOT live in `GitService`/`git_service.go`. Modularity: git stays
+  status/diff/branches/checkout, worktrees stay in the worktree service
+  (reuses the same git-running helper, owns nothing else).
   - `WorktreeAdd(repoDir, path, branch)` — `git worktree add -b <branch> <path>`.
+    Refuses non-repos (`ErrNotGitRepo`) and unborn HEAD (`ErrUnbornHEAD`).
   - `WorktreeList(repoDir)` — `git worktree list --porcelain`, parsed.
-  - `WorktreeRemove(repoDir, path, force)` — refuses when dirty unless forced.
+  - `WorktreeRemove(repoDir, path, force)` — refuses when dirty unless forced;
+    a path already gone from disk prunes metadata and succeeds.
   - `WorktreePrune(repoDir)` — `git worktree prune` for stale metadata.
+  - `BranchOf`, `MainRepoDir`, `ScanOrphans(root, owned)`, `RemoveOrphan`
+    (containment-enforced, dirty-aware) back the orphan endpoints.
+  - `SlugBranch(title, id)` → `slug(title)-<6-char-id>`; `DefaultRoot()` →
+    centralized `utils.WorktreesDir()` (`$HOME/console/worktrees`,
+    `$HOME/console-dev/worktrees` in dev, `CONSOLE_WORKTREES_DIR` override).
+- Ownership: `worktree_path/branch/repo` columns on the global `sessions`
+  table (additive migration for pre-worktree DBs); `Worktree` on
+  `SessionHeader`, opt-in `worktree: {branch?}` on create, resolved values
+  carried in a client-invisible field.
+- Session create with worktree: branch resolved (explicit or slug-derived),
+  worktree provisioned under `<root>/<session-id>`, session row written with
+  `cwd = worktree path`. Row failure rolls back via forced remove.
+  Scratchpad + worktree and empty/non-git cwd fail loudly (400s).
+- Session permanent delete: owned worktree removed first (no force); dirty
+  → 409 Conflict, session kept. Branch always left in place (v1).
+- Routes: `POST /api/sessions` maps worktree request errors to 400;
+  `DELETE /api/sessions/:id/permanent` maps dirty to 409; new
+  `/api/worktrees/` group (`GET /` inventory, `GET /orphans`,
+  `DELETE /orphans {path, force?}`).
+- Worktree location (decided): central `$HOME/console/worktrees/<id>`
+  (non-hidden `console` dir in the user's home — not `~/.console`, not
+  in-repo). Keeps repos clean; one known root for orphan recovery.
+- Refuse unborn HEAD: a repo with no commits yet cannot back a worktree
+  (`git worktree add -b` has no base) — creation fails with a clear error
+  telling the user to commit first. Not supported in v1.
 - Session create accepts an optional worktree spec `{branch?}`: when present,
   create branch + worktree first, then set `header.cwd` to the worktree dir.
   Failure rolls back (remove the worktree) so a half-created session never
   lingers.
 - Session permanent delete: if the session owns a worktree, remove it
   (blocked when dirty — surface the error, keep the session). The branch is
-  left in place; branch cleanup stays explicit (see §8).
+  always left in place in v1 (leave-always cleanup policy — branches
+  accumulate, deletion stays explicit).
 - Dirty check before removal: `git status --porcelain` in the worktree must be
   empty (untracked files count — an agent's half-written work is still work).
 
@@ -65,12 +96,13 @@ cleanup discipline are the whole feature.
 - One orphan list (project settings or session list overflow): worktree path,
   branch, dirty/clean, remove action. Nothing fancier in v1.
 
-## 5 Implementation Steps
-- 1: `GitService` worktree ops with tests (add/list/remove/prune, dirty
-  refusal, rollback on create failure).
-- 2: session create worktree spec + permanent-delete cleanup.
-- 3: client: new-session checkbox + indicator + orphan list.
-- 4: docs: branch naming, dirty-block behavior, orphan recovery.
+## 5 Implementation Steps (server only first — §4 client/UX after backend lands)
+- 1: `WorktreeService` worktree ops with tests (add/list/remove/prune, dirty
+  refusal, unborn-HEAD refusal, rollback on create failure). Done.
+- 2: session create worktree spec + permanent-delete cleanup + orphan
+  endpoints + migration. Done.
+- 3 (later): client: new-session checkbox + indicator + orphan list.
+- 4: docs: branch naming, dirty-block behavior, orphan recovery. Done (§3).
 
 ## 6 Verification
 - New session with worktree: branch exists, worktree dir exists, session cwd
@@ -88,11 +120,10 @@ cleanup discipline are the whole feature.
 - More than one worktree per session.
 - Auto-deleting branches (explicit only, see below).
 
-## 8 Open Questions
-- Worktree location: central `~/.console/worktrees/<id>` vs
-  `<repo>/.worktrees/<name>`? Central keeps repos clean; in-repo keeps
-  everything together on disk and survives console reinstalls.
-- Branch cleanup policy: leave always (safe, accumulates) vs delete on
-  worktree removal when fully merged? Prefer leave-always in v1.
-- Default-on for agent sessions, default-off for human scratch chats?
-- Worktree for a repo with no commits yet (unborn HEAD) — supported or refused?
+## 8 Decisions (locked for v1)
+- Worktree location: central `$HOME/console/worktrees/<id>` (prod),
+  `$HOME/console-dev/worktrees/<id>` in dev, `CONSOLE_WORKTREES_DIR`
+  override — all via `utils.WorktreesDir()`. Decided.
+- Branch cleanup: leave always. Decided.
+- Default: off always. Decided.
+- Unborn HEAD (repo with no commits): refused with a clear error. Decided.

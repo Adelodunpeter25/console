@@ -2,6 +2,7 @@ package routes
 
 import (
 	"encoding/json"
+	"errors"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -42,6 +43,13 @@ func registerSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		req.ProjectNull = bodyFieldIsNull(c.Body(), "projectId")
 		header, err := sessions.Create(req)
 		if err != nil {
+			// Worktree request errors are client errors, not 500s.
+			if errors.Is(err, services.ErrWorktreeScratchpad) ||
+				errors.Is(err, services.ErrWorktreeNeedsCwd) ||
+				errors.Is(err, services.ErrNotGitRepo) ||
+				errors.Is(err, services.ErrUnbornHEAD) {
+				return sessionError(c, fiber.StatusBadRequest, err.Error())
+			}
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
 		return c.JSON(fiber.Map{"success": true, "data": header})
@@ -191,6 +199,10 @@ func registerSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		id := c.Params("id")
 		deleted, err := sessions.PermanentDelete(id)
 		if err != nil {
+			// Dirty worktree blocks the delete: conflict, session kept.
+			if errors.Is(err, services.ErrWorktreeDirty) {
+				return sessionError(c, fiber.StatusConflict, err.Error())
+			}
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
 		if !deleted {
