@@ -36,9 +36,14 @@ type Request struct {
 }
 
 // Resolve maps (mode, tier) to a policy.
+//
+// PlanMode is treated the same as FullAccess at the tool-permission layer
+// (mirrors apps/server/agent/src/permissions/approval.ts). The restriction
+// on writes/exec in plan mode is communicated to the model only via the
+// system prompt instructions, not enforced as a hard deny here.
 func Resolve(mode Mode, tier tools.ToolTier) Policy {
 	switch mode {
-	case FullAccess:
+	case FullAccess, PlanMode:
 		return Allow
 	case AcceptEdits:
 		switch tier {
@@ -46,15 +51,6 @@ func Resolve(mode Mode, tier tools.ToolTier) Policy {
 			return Allow
 		case tools.TierExec:
 			return Prompt
-		default:
-			return Allow
-		}
-	case PlanMode:
-		switch tier {
-		case tools.TierExec:
-			return Deny
-		case tools.TierWrite:
-			return Deny
 		default:
 			return Allow
 		}

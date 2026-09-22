@@ -217,8 +217,8 @@ func TestPermissionMatrix(t *testing.T) {
 		{permissions.FullAccess, tools.TierExec, permissions.Allow},
 		{permissions.AcceptEdits, tools.TierWrite, permissions.Allow},
 		{permissions.AcceptEdits, tools.TierExec, permissions.Prompt},
-		{permissions.PlanMode, tools.TierExec, permissions.Deny},
-		{permissions.PlanMode, tools.TierWrite, permissions.Deny},
+		{permissions.PlanMode, tools.TierExec, permissions.Allow},
+		{permissions.PlanMode, tools.TierWrite, permissions.Allow},
 		{permissions.AlwaysAsk, tools.TierRead, permissions.Allow},
 		{permissions.AlwaysAsk, tools.TierWrite, permissions.Prompt},
 	}
@@ -402,7 +402,7 @@ func TestStreamNoEventLoss(t *testing.T) {
 	}
 }
 
-func TestExecutorDeniesInPlanMode(t *testing.T) {
+func TestExecutorAllowsWriteInPlanMode(t *testing.T) {
 	registry := tools.NewRegistry(tools.WriteFile)
 	executor := loop.NewExecutor(registry, permissions.PlanMode, helpers.AutoApprover{})
 	result, err := executor.Execute(context.Background(), tools.ToolCall{
@@ -412,7 +412,7 @@ func TestExecutorDeniesInPlanMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.IsError {
-		t.Fatal("write_file must be denied in plan mode")
+	if result.IsError {
+		t.Fatalf("write_file must be allowed in plan mode (gate is system-prompt only): %#v", result)
 	}
 }
