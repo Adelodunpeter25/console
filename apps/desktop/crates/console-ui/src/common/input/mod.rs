@@ -240,6 +240,10 @@ pub struct ComposerInput {
     pub(crate) context_menu: ContextMenuHandle,
     pub(crate) mentions: Vec<ComposerMention>,
     pub(crate) context_files: Vec<String>,
+    /// Tracks `window.is_window_active()` at the last activation change, so
+    /// focus handling can skip starting the blink loop for a backgrounded
+    /// window whose caret is never painted.
+    pub(crate) window_active_for_blink: bool,
     pub(crate) blink_cursor: Entity<BlinkCursor>,
     pub(crate) _subscriptions: Vec<Subscription>,
 }
@@ -251,6 +255,7 @@ impl ComposerInput {
         let _subscriptions = vec![
             cx.observe(&blink_cursor, |_, _, cx| cx.notify()),
             cx.observe_window_activation(window, |input, window, cx| {
+                input.window_active_for_blink = window.is_window_active();
                 if window.is_window_active()
                     && (input.focus_handle.is_focused(window)
                         || input.context_menu_preserves_visual_focus())
@@ -307,6 +312,7 @@ impl ComposerInput {
             },
             mentions: Vec::new(),
             context_files: Vec::new(),
+            window_active_for_blink: window.is_window_active(),
             blink_cursor,
             _subscriptions,
         }
@@ -781,7 +787,13 @@ impl ComposerInput {
         // transaction here too — so edits from separate visits never merge
         // into one undo step.
         self.history.seal();
-        self.blink_cursor.update(cx, |cursor, cx| cursor.start(cx));
+        // Programmatic focus can land while the window is backgrounded (async
+        // session restore, draft refocus). The paint path hides the caret in
+        // inactive windows, so starting the blink loop here would only burn
+        // repaints; `observe_window_activation` starts it on real activation.
+        if self.window_active_for_blink {
+            self.blink_cursor.update(cx, |cursor, cx| cursor.start(cx));
+        }
         cx.emit(ComposerEvent::Focus);
     }
 

@@ -45,12 +45,17 @@ impl ConsoleDesktopApp {
                                 let body = event.body.clone();
                                 let _ = cx.update(|cx| {
                                     if let Some(app) = entity.upgrade() {
-                                        app.update(cx, |this, cx| {
+                                        app.update(cx, |this, _cx| {
                                             // Suppress the banner when the user is already
                                             // viewing this session and the window is active —
                                             // silent in-app update, matching mobile. If the window
                                             // is in the background, we notify even for the active tab.
                                             // Same identifier replaces the previous banner instead of stacking.
+                                            //
+                                            // Deliberately no `cx.notify()` here: the decision's
+                                            // effects are all OS-side (UNUserNotificationCenter
+                                            // banner + dock badge), so re-rendering the whole
+                                            // window per SSE event would be pure waste.
                                             let viewing = if this.is_window_active {
                                                 this.active_pane_id.as_deref().and_then(|pane| {
                                                     this.active_session_for_pane(pane)
@@ -77,7 +82,6 @@ impl ConsoleDesktopApp {
                                                 }
                                                 NotificationDecision::SkipEmpty => {}
                                             }
-                                            cx.notify();
                                         });
                                     }
                                 });
