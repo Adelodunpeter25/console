@@ -263,8 +263,9 @@ func NormalizeUsage(input, output map[string]any, retention loop.CacheRetention)
 	}
 }
 
-// doRequest posts one Messages request with retry on 429/529 (mirroring
-// fetchClaudeWithRetry, including the Haiku fallback for high-tier 429s).
+// doRequest posts one Messages request with retry on 429/529. A 429 that
+// survives the retry budget is surfaced to the caller as-is: the selected
+// model is the only model that answers.
 // Headers are rebuilt on every attempt (cheap) so a version adopted via
 // AdoptRequiredClaudeCodeVersion mid-loop is picked up immediately.
 func (p *Provider) doRequest(ctx context.Context, url, accessToken, sessionID string, body map[string]any) (*http.Response, error) {
@@ -305,24 +306,6 @@ func (p *Provider) doRequest(ctx context.Context, url, accessToken, sessionID st
 			continue
 		}
 		if !retryable || attemptN == 2 {
-			// High-tier 429 falls back to Haiku before failing.
-			modelID, _ := body["model"].(string)
-			low := strings.ToLower(modelID)
-			if resp.StatusCode == 429 && !strings.Contains(low, "haiku") &&
-				(strings.Contains(low, "sonnet") || strings.Contains(low, "opus") || strings.Contains(low, "fable")) {
-				fallback := map[string]any{}
-				for k, v := range body {
-					fallback[k] = v
-				}
-				fallback["model"] = "claude-haiku-4-5-20251001"
-				fallbackRaw, _ := json.Marshal(fallback)
-				if fbResp, fbErr := attempt(fallbackRaw); fbErr == nil {
-					if fbResp.StatusCode >= 200 && fbResp.StatusCode < 300 {
-						return fbResp, nil
-					}
-					fbResp.Body.Close()
-				}
-			}
 			return nil, shared.HTTPError("Claude", resp.StatusCode, resp.Status, strings.NewReader(string(raw)))
 		}
 		wait := time.Duration(1000*(1<<attemptN)) * time.Millisecond
