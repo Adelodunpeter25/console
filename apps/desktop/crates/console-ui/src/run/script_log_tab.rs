@@ -43,6 +43,13 @@ impl RenderOnce for ScriptLogTab {
             .flex()
             .flex_col()
             .bg(theme.canvas)
-            .child(div().flex_1().min_h_0().overflow_hidden().child(body))
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_hidden()
+                    .pb(px(10.0))
+                    .child(body),
+            )
     }
 }
