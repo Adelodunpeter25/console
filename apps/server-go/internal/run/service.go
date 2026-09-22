@@ -177,7 +177,6 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 	s.active[sessionID] = &activeRun{hub: hub, cancel: cancel, done: done}
 	s.mu.Unlock()
 
-	slog.Info("run started", "session", sessionID, "provider", providerID)
 	go s.execute(ctx, sessionID, dto, firstProvider, providerID, hub, done)
 	go s.watchRun(sessionID, hub, done)
 	return hub, nil
