@@ -2,6 +2,8 @@
 package tests
 
 import (
+	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +16,11 @@ import (
 )
 
 func newScriptService(t *testing.T) (*services.ProjectScriptsService, string, string) {
+	scripts, _, projectID, root := newScriptServiceWithPorts(t)
+	return scripts, projectID, root
+}
+
+func newScriptServiceWithPorts(t *testing.T) (*services.ProjectScriptsService, *services.PortRegistry, string, string) {
 	t.Helper()
 	manager, err := db.Open(db.OpenOptions{Path: ":memory:"})
 	if err != nil {
@@ -26,7 +33,9 @@ func newScriptService(t *testing.T) (*services.ProjectScriptsService, string, st
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	return services.NewProjectScriptsService(projects), proj.ID, root
+	ports := services.NewPortRegistry()
+	t.Cleanup(ports.CloseAll)
+	return services.NewProjectScriptsService(projects, ports), ports, proj.ID, root
 }
 
 func writeConsoleToml(t *testing.T, root, content string) {
@@ -118,7 +127,6 @@ command = "echo m"
 		}
 	}
 }
-
 
 func TestListMissingConfig(t *testing.T) {
 	scripts, projectID, _ := newScriptService(t)
@@ -226,4 +234,58 @@ func TestScriptEnvStripsDaemonPort(t *testing.T) {
 
 func scriptOutputContains(haystack, needle string) bool {
 	return strings.Contains(haystack, needle)
+}
+
+// Killing (or stopping) a script run must drop its detected ports from the
+// registry immediately via owner removal — mirroring the TS service — not on
+// the next liveness sweep, which used to leave stale rows in the dropdown.
+func TestStopRemovesDetectedPorts(t *testing.T) {
+	scripts, ports, projectID, root := newScriptServiceWithPorts(t)
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	writeConsoleToml(t, root, fmt.Sprintf(`
+[scripts.serve]
+label = "Serve"
+command = "echo http://127.0.0.1:%d/ && sleep 30"
+`, port))
+
+	run, err := scripts.Run(projectID, "serve")
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	// The output line registers the port; wait for the snapshot to include it.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		found := false
+		for _, p := range ports.Snapshot("localhost", "") {
+			if p.Port == port {
+				found = true
+			}
+		}
+		if found {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("port %d never registered: %+v", port, ports.Snapshot("localhost", ""))
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if !scripts.Stop(projectID, run.RunID) {
+		t.Fatal("stop returned false")
+	}
+
+	// Owner removal must drop the entry immediately, not after a sweep.
+	for _, p := range ports.Snapshot("localhost", "") {
+		if p.Port == port {
+			t.Fatalf("port %d still present after stop: %+v", port, ports.Snapshot("localhost", ""))
+		}
+	}
 }

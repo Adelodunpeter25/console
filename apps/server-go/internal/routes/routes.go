@@ -57,7 +57,7 @@ func New(cfg Config) (*fiber.App, *run.Service) {
 		}
 		return project.ID
 	}))
-	registerScriptRoutes(app, services.NewProjectScriptsService(services.NewProjectService(cfg.DB)))
+	registerScriptRoutes(app, services.NewProjectScriptsService(services.NewProjectService(cfg.DB), cfg.Ports))
 	registerProjectRoutes(app, services.NewProjectService(cfg.DB))
 	registerUsageRoutes(app, usage.NewService())
 	registerAuthRoutes(app, auth.NewAuthService())

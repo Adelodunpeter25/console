@@ -114,7 +114,13 @@ func (r *PortRegistry) ObserveOutput(owner PortOwner, text, projectID string) {
 }
 
 func isListening(port int) bool {
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), probeTimeout)
+	// Newer Node/Vite builds bind the IPv6 loopback ([::1]) on macOS while
+	// older ones bind 127.0.0.1 — probe both before declaring the port dead.
+	if conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), probeTimeout); err == nil {
+		conn.Close()
+		return true
+	}
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort("[::1]", strconv.Itoa(port)), probeTimeout)
 	if err != nil {
 		return false
 	}
@@ -349,11 +355,20 @@ func (r *PortRegistry) reap() {
 		ports = append(ports, p)
 	}
 	r.mu.Unlock()
+	// Probe concurrently so one slow port (filtered connection, 2s dial
+	// timeout) can't stretch the whole sweep — sequential probing let
+	// removals lag far behind the reaper interval.
+	var wg sync.WaitGroup
 	for _, p := range ports {
-		if !isListening(p) {
-			r.Remove(p, "")
-		}
+		wg.Add(1)
+		go func(port int) {
+			defer wg.Done()
+			if !isListening(port) {
+				r.Remove(port, "")
+			}
+		}(p)
 	}
+	wg.Wait()
 	r.mu.Lock()
 	r.reaping = false
 	r.mu.Unlock()

@@ -90,6 +90,7 @@ func BuildScriptEnv() []string {
 
 type ProjectScriptsService struct {
 	projects *ProjectService
+	ports    *PortRegistry
 
 	mu   sync.Mutex
 	runs map[string]*managedRun
@@ -101,9 +102,10 @@ type ProjectScriptsService struct {
 	}
 }
 
-func NewProjectScriptsService(projects *ProjectService) *ProjectScriptsService {
+func NewProjectScriptsService(projects *ProjectService, ports *PortRegistry) *ProjectScriptsService {
 	return &ProjectScriptsService{
 		projects: projects,
+		ports:    ports,
 		runs:     make(map[string]*managedRun),
 		configCache: make(map[string]struct {
 			expires time.Time
@@ -219,14 +221,28 @@ func (s *ProjectScriptsService) Run(projectID, scriptID string) (types.ScriptRun
 	s.mu.Unlock()
 	run.publish(types.ScriptRunEvent{Type: "status", Status: "running"})
 
+	// Script-run dev servers expose their ports through the registry like
+	// any other job owner; on exit the owner is removed so the dropdown
+	// updates immediately instead of waiting for the liveness reaper.
+	var observe func(text string)
+	var clearPorts func()
+	if s.ports != nil {
+		owner := PortOwner{Kind: "job", ID: run.RunID}
+		projectID := run.ProjectID
+		observe = func(text string) {
+			s.ports.ObserveOutput(owner, text, projectID)
+		}
+		clearPorts = func() { s.ports.RemoveOwner(owner) }
+	}
+
 	go func() {
 		// cmd.Wait must not run until both StdoutPipe/StderrPipe readers
 		// have drained (see os/exec docs); otherwise the run can flip to a
 		// terminal status before its output is fully captured.
 		var pumps sync.WaitGroup
 		pumps.Add(2)
-		go func() { defer pumps.Done(); pumpOutput(run, stdout, "stdout") }()
-		go func() { defer pumps.Done(); pumpOutput(run, stderr, "stderr") }()
+		go func() { defer pumps.Done(); pumpOutput(run, stdout, "stdout", observe) }()
+		go func() { defer pumps.Done(); pumpOutput(run, stderr, "stderr", observe) }()
 		pumps.Wait()
 		err := cmd.Wait()
 		run.mu.Lock()
@@ -250,11 +266,14 @@ func (s *ProjectScriptsService) Run(projectID, scriptID string) (types.ScriptRun
 			run.subscribers = make(map[chan types.ScriptRunEvent]bool)
 		}
 		run.mu.Unlock()
+		if clearPorts != nil {
+			clearPorts()
+		}
 	}()
 	return run.snapshot(), nil
 }
 
-func pumpOutput(run *managedRun, file interface{ Read([]byte) (int, error) }, stream string) {
+func pumpOutput(run *managedRun, file interface{ Read([]byte) (int, error) }, stream string, observe func(string)) {
 	buf := make([]byte, 32*1024)
 	decoder := newUTF8Decoder()
 	for {
@@ -263,6 +282,9 @@ func pumpOutput(run *managedRun, file interface{ Read([]byte) (int, error) }, st
 			text := decoder.decode(buf[:n])
 			run.appendOutput(stream, text)
 			run.publish(types.ScriptRunEvent{Type: "output", Stream: stream, Text: text})
+			if observe != nil {
+				observe(text)
+			}
 		}
 		if err != nil {
 			return
@@ -320,6 +342,9 @@ func (s *ProjectScriptsService) Stop(projectID, runID string) bool {
 	run.mu.Lock()
 	run.subscribers = make(map[chan types.ScriptRunEvent]bool)
 	run.mu.Unlock()
+	if s.ports != nil {
+		s.ports.RemoveOwner(PortOwner{Kind: "job", ID: runID})
+	}
 	return true
 }
 
