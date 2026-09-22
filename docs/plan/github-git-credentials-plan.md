@@ -7,18 +7,20 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
 "Connect GitHub" step during mobile onboarding provisions it.
 
 ## 1 Current State
-- Server `GitService` (`apps/server/api/src/services/git.service.ts`) runs git
-  via `execShell` (`apps/server/api/src/utils/exec.ts`), which inherits the
-  server process env. No credential configuration of any kind today.
-- Interactive shells spawn in `TerminalPtyManager.startShell`
-  (`apps/server/api/src/terminal/pty.manager.ts`) with `{...process.env,
-  TERM, CONSOLE_TERMINAL}` — they inherit whatever the daemon had at boot.
+- Server `GitService` (`apps/server-go/internal/services/git_service.go`) runs git
+  via the `runGit` helper (`os/exec`, which inherits the
+  server process env). No credential configuration of any kind today.
+- Interactive shells spawn in `PtyManager.Spawn`
+  (`apps/server-go/internal/services/pty_manager.go`) with the cached process
+  env plus `TERM`, `CONSOLE_TERMINAL`, `CONSOLE_TERMINAL_ID` — they inherit whatever the daemon had at boot.
 - Both paths therefore pick up one shared mechanism for free if the server
   process (and its children) is taught the GitHub token.
-- Provider OAuth precedent exists: `AuthService.getLoginUrl/handleCallback`
-  (`apps/server/api/src/services/auth.service.ts`), token files under
-  `~/.console/<type>-creds.json` via `token-store.ts` (0600-style, server-side
-  only, never sent to clients), per-provider config via `provider-config.ts`.
+- Provider OAuth precedent exists: `auth.AuthService.GetLoginURLFor/HandleCallbackFor`
+  (`apps/server-go/internal/auth/auth.go`), token files under
+  `~/.console/<type>-creds.json` via the `providers/shared` credential helpers
+  (`CredentialPath`/`SaveCredentialFile`, dir 0700/file 0600, server-side
+  only, never sent to clients), per-provider config via each provider's
+  `constants.go` (e.g. `apps/server-go/internal/providers/claude/constants.go`).
 - Mobile onboarding (`apps/mobile/index.tsx` `OnboardingScreen`) takes a
   backend URL via `useServerConnection`; post-connect auth lives in Account
   Settings (`apps/mobile/screens/settings/account-settings.tsx`) keyed off the
@@ -40,15 +42,17 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
   v1 — the deliverable is purely that the git CLI works everywhere.
 
 ## 3 Server Design
-- New `github.ts` provider module mirroring the antigravity/codex structure:
-  device-flow start (`POST https://github.com/login/device/code`), poll
+- New `internal/providers/github/` package mirroring the claude/codex structure
+  (`oauth.go` + `constants.go`): device-flow start
+  (`POST https://github.com/login/device/code`), poll
   (`POST .../login/oauth/access_token` with `grant_type=device_code`), token
-  stored at `~/.console/github-creds.json` via the existing token-store
-  pattern, file mode 0600.
-- New `AuthService` surface + routes under `/api/auth/github/*`:
+  stored at `~/.console/github-creds.json` via the existing `providers/shared`
+  credential helpers, file mode 0600.
+- New `auth.AuthService` surface + routes under `/api/auth/github/*`
+  (in `apps/server-go/internal/routes/auth.go`, `registerAuthRoutes`):
   `device/start`, `device/status` (poll result, with expiry/denied mapping),
   `status` (validate cached token against `api.github.com/user`, return
-  `@username` + scopes, fold into `getAuthStatus`), `logout` (delete file),
+  `@username` + scopes, fold into `GetStatus`), `logout` (delete file),
   `pat` (accept + validate + store a pasted fine-grained PAT).
 - Credential injection via a **git credential-helper script**, not
   `GIT_ASKPASS` alone: a helper is consulted before any prompt in both TTY
@@ -57,11 +61,12 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
   at runtime) reads the creds file and answers
   `username=x-access-token / password=<token>` for `github.com` hosts only.
 - Wiring points:
-  - `execShell`/`spawnCapture` env: add `GIT_CONFIG_COUNT=1`,
+  - `runGit` env (`apps/server-go/internal/services/git_service.go`, plus
+    `BashJobManager.Start` env for agent-run shell commands): add `GIT_CONFIG_COUNT=1`,
     `GIT_CONFIG_KEY_0=credential.helper`,
     `GIT_CONFIG_VALUE_0=!<helper-path>` so agent git calls authenticate
     without touching global `~/.gitconfig`.
-  - `pty.manager.ts startShell` env: same three vars, so every interactive
+  - `PtyManager.Spawn` env (`apps/server-go/internal/services/pty_manager.go`): same three vars, so every interactive
     terminal inherits working git auth.
   - *(Optional — skip if you only use HTTPS URLs, no SSH setup needed)* `url."https://github.com/".insteadOf git@github.com:` via the same
     `GIT_CONFIG_*` channel so a pasted `git@github.com:org/repo` SSH-style URL also works over HTTPS with the same PAT. No SSH keys, `~/.ssh`, or `ssh-agent` needed — purely an HTTPS rewrite. Safe to omit.
@@ -88,10 +93,10 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
 ## 5 Implementation Steps
 - 1: server provider module — device start/poll exchange, creds file
   read/write/validate/delete, username lookup.
-- 2: `AuthService` + `/api/auth/github/*` routes + `getAuthStatus` extension,
+- 2: `auth.AuthService` + `/api/auth/github/*` routes (`routes/auth.go`) + `GetStatus` extension,
   with unit tests for state/expiry/error mapping.
-- 3: credential-helper script + `GIT_CONFIG_*` wiring in `exec.ts` env path
-  and `pty.manager.ts startShell`; verify both agent git and PTY git pick it
+- 3: credential-helper script + `GIT_CONFIG_*` wiring in `runGit`'s env and
+  `PtyManager.Spawn`; verify both agent git and PTY git pick it
   up, and that missing-creds behaves as today.
 - 4: SSH-URL rewrite via the same channel; test `git@github.com:org/repo`
   clone over HTTPS.
@@ -124,7 +129,7 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
 
 ## 8 Open Questions
 - Who owns the shared GitHub OAuth App (client ID baked into the server like
-  the Antigravity constants)? Device flow needs no client secret, but the App
+  the existing provider constants, e.g. `apps/server-go/internal/providers/claude/constants.go`)? Device flow needs no client secret, but the App
   needs a home account/org. Alternative: bring-your-own client ID via env.
 - Fine-grained PAT vs classic `repo` scope for the paste fallback — recommend
   fine-grained with repository access, validate `X-OAuth-Scopes`/permissions
