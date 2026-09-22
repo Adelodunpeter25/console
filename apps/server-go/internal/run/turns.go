@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
@@ -23,6 +25,7 @@ import (
 // (not auto-runs, not drops) any staged prompt. One hub spans the whole
 // chain so subscribers keep gap-free sequence numbers.
 func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, firstProvider loop.Provider, firstProviderID string, hub *Hub, done chan struct{}) {
+	start := time.Now()
 	defer close(done)
 	defer func() {
 		s.decisions.RejectAllForSession(sessionID, "Run ended")
@@ -38,6 +41,9 @@ func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, f
 	for {
 		turnErr := s.runOneTurn(currentCtx, sessionID, current, hub, &currentProvider, &currentProviderID)
 		runErr = turnErr
+		if turnErr != nil && !errors.Is(turnErr, context.Canceled) {
+			slog.Warn("run turn error", "session", sessionID, "error", turnErr)
+		}
 		next, hasNext := s.nextTurn(currentCtx, turnErr, sessionID, hub)
 		if !hasNext {
 			// Terminal frame mirrors the TS finally: sessionEnd always
@@ -53,8 +59,10 @@ func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, f
 			}
 			hub.Broadcast(loop.Event{Kind: loop.EventSessionEnd})
 			if currentCtx.Err() != nil {
+				slog.Info("run ended", "session", sessionID, "outcome", OutcomeAborted, "duration", time.Since(start))
 				hub.Close(OutcomeAborted)
 			} else {
+				slog.Info("run ended", "session", sessionID, "outcome", OutcomeDone, "duration", time.Since(start))
 				hub.Close(OutcomeDone)
 				if runErr == nil {
 					s.notifyDone(sessionID)

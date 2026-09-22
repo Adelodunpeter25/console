@@ -97,6 +97,19 @@ func SpawnCapture(ctx context.Context, argv []string, opts SpawnCaptureOptions) 
 		}
 		pid := cmd.Process.Pid
 		safeKillGroup(pid)
+		// safeKillGroup escalates to SIGKILL after 300ms, but a grandchild
+		// that re-parented outside this process group (e.g. a double-forked
+		// daemon) can still hold the stdout/stderr pipe fds open — the
+		// tracked process is dead, yet readCapped's Read() below never sees
+		// EOF, wg.Wait() never returns, and SpawnCapture (and whatever
+		// turn/session is waiting on it) hangs forever. Force-close our
+		// read ends shortly after the kill so a stray fd holder can never
+		// wedge the caller past this bound; Close unblocks a concurrent
+		// blocking Read with an error.
+		time.AfterFunc(time.Second, func() {
+			_ = stdout.Close()
+			_ = stderr.Close()
+		})
 	}
 
 	var timer *time.Timer

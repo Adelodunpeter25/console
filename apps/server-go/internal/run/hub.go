@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"sync"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 )
@@ -35,6 +36,9 @@ type Hub struct {
 	done   chan struct{}
 	// Outcome is set by Close: "done" or "aborted".
 	Outcome string
+	// lastAt is the last Broadcast time; the run watchdog uses it to spot
+	// turns that went silent.
+	lastAt time.Time
 }
 
 const hubBuffer = 500
@@ -42,7 +46,7 @@ const subBuffer = 256
 
 // NewHub creates a broadcast hub (exported for tests and attach flows).
 func NewHub() *Hub {
-	return &Hub{subs: map[string]chan Frame{}, done: make(chan struct{})}
+	return &Hub{subs: map[string]chan Frame{}, done: make(chan struct{}), lastAt: time.Now()}
 }
 
 // Broadcast assigns the next sequence number and delivers to subscribers.
@@ -53,6 +57,7 @@ func (h *Hub) Broadcast(event loop.Event) {
 		return
 	}
 	h.seq++
+	h.lastAt = time.Now()
 	frame := Frame{Seq: h.seq, Event: event}
 	h.buf = append(h.buf, frame)
 	if len(h.buf) > hubBuffer {
@@ -119,6 +124,14 @@ func (h *Hub) Close(outcome string) {
 
 // Done closes when the run settles.
 func (h *Hub) Done() <-chan struct{} { return h.done }
+
+// IdleSince reports how long ago the last event was broadcast. The run
+// watchdog uses it to spot turns that went silent.
+func (h *Hub) IdleSince() time.Duration {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return time.Since(h.lastAt)
+}
 
 func newSubID() string {
 	b := make([]byte, 8)

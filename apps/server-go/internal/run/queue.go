@@ -5,6 +5,7 @@
 package run
 
 import (
+	"log/slog"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
@@ -116,14 +117,14 @@ func (s *Service) Steer(sessionID string, dto Prompt) (bool, error) {
 		return false, err
 	}
 	// Abort without clearing: the staged prompt must survive to drain.
-	s.mu.Lock()
-	ar, ok := s.active[sessionID]
-	s.mu.Unlock()
-	if !ok {
+	// cancelActive cancels under the service lock — reading ar.cancel after
+	// unlocking would race execute()'s turn-boundary swap (turns.go) and
+	// could cancel the wrong (not-yet-started) turn's context instead.
+	if !s.cancelActive(sessionID) {
 		return false, nil
 	}
-	ar.cancel()
 	s.decisions.RejectAllForSession(sessionID, "Run steered")
+	slog.Info("run steered", "session", sessionID)
 	return true, nil
 }
 

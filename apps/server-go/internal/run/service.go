@@ -6,7 +6,9 @@ package run
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/memory"
@@ -58,6 +60,9 @@ type Service struct {
 	bashJobs  *services.BashJobManager
 	// Lookup resolves a provider id to a backend (overridable in tests).
 	Lookup func(id string) (loop.Provider, error)
+	// WatchdogTimeout overrides defaultWatchdogTimeout. Zero uses the
+	// default; negative disables the watchdog (tests only).
+	WatchdogTimeout time.Duration
 }
 
 func NewService(sessions *services.SessionService) *Service {
@@ -172,7 +177,9 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 	s.active[sessionID] = &activeRun{hub: hub, cancel: cancel, done: done}
 	s.mu.Unlock()
 
+	slog.Info("run started", "session", sessionID, "provider", providerID)
 	go s.execute(ctx, sessionID, dto, firstProvider, providerID, hub, done)
+	go s.watchRun(sessionID, hub, done)
 	return hub, nil
 }
 
@@ -180,14 +187,11 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 // lifecycle, so the entry is removed when it settles — never here, or a
 // second run could start on a still-draining session.
 func (s *Service) Abort(sessionID string) bool {
-	s.mu.Lock()
-	ar, ok := s.active[sessionID]
-	s.mu.Unlock()
-	if !ok {
+	if !s.cancelActive(sessionID) {
 		return false
 	}
-	ar.cancel()
 	s.decisions.RejectAllForSession(sessionID, "Run aborted")
+	slog.Info("run aborted", "session", sessionID)
 	return true
 }
 
