@@ -12,6 +12,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
 type runPromptBody struct {
@@ -313,6 +314,8 @@ func wireFrame(e loop.Event) (string, any, bool) {
 		return "askQuestion", fiber.Map{"type": "askQuestion", "request": e.Ask}, false
 	case loop.EventPermissionRequest:
 		return "permissionRequest", fiber.Map{"type": "permissionRequest", "request": e.Permission}, false
+	case loop.EventTodoUpdate:
+		return "todoUpdate", fiber.Map{"type": "todoUpdate", "items": nonNilTodos(e.Items), "action": e.Action}, false
 	case loop.EventSubagentStart, loop.EventSubagentActivity, loop.EventSubagentEnd:
 		body, ok := subagentWire(e)
 		if !ok {
@@ -340,6 +343,14 @@ func subagentWire(e loop.Event) (any, bool) {
 	}
 	body["type"] = string(e.Kind)
 	return body, true
+}
+
+// nonNilTodos keeps the todo list as [] (never null) for the desktop card.
+func nonNilTodos(items []types.TodoItem) []types.TodoItem {
+	if items == nil {
+		return []types.TodoItem{}
+	}
+	return items
 }
 
 // nonNilCalls/nonNilResults keep array fields as [] (never null) for the

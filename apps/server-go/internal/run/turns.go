@@ -15,6 +15,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/systemprompt"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/titles"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
 // execute drives one turn per loop iteration, draining a staged prompt as
@@ -40,7 +41,16 @@ func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, f
 		next, hasNext := s.nextTurn(currentCtx, turnErr, sessionID, hub)
 		if !hasNext {
 			// Terminal frame mirrors the TS finally: sessionEnd always
-			// closes the wire stream, on done and on abort alike.
+			// closes the wire stream, on done and on abort alike. A finished
+			// (all-completed) todo list is cleared first so the next run
+			// starts fresh, with an empty todoUpdate so the card clears too.
+			if todos, err := s.sessions.GetSessionTodos(sessionID); err == nil && len(todos) > 0 {
+				if err := s.sessions.ClearCompletedTodos(sessionID); err == nil {
+					if cleared, err := s.sessions.GetSessionTodos(sessionID); err == nil && len(cleared) == 0 {
+						hub.Broadcast(loop.Event{Kind: loop.EventTodoUpdate, Items: []types.TodoItem{}, Action: "updated"})
+					}
+				}
+			}
 			hub.Broadcast(loop.Event{Kind: loop.EventSessionEnd})
 			if currentCtx.Err() != nil {
 				hub.Close(OutcomeAborted)
@@ -191,9 +201,14 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	})
 
 	askHandler := s.decisions.AskHandlerFor(sessionID, hub)
+	onTodoUpdate := func(items []types.TodoItem, action string) {
+		hub.Broadcast(loop.Event{Kind: loop.EventTodoUpdate, Items: items, Action: action})
+	}
 	toolList := make([]tools.Tool, 0, len(tools.DefaultTools())+1)
 	for _, t := range tools.DefaultTools() {
 		switch t.Name() {
+		case "todo":
+			toolList = append(toolList, tools.NewTodoToolWithUpdate(sessionID, s.sessions, onTodoUpdate))
 		case "ask":
 			toolList = append(toolList, tools.NewAskTool(askHandler))
 		case "askMany":

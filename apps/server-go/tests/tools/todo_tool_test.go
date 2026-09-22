@@ -195,3 +195,54 @@ func TestClearCompletedTodos(t *testing.T) {
 		t.Fatalf("fully-completed list must be wiped: %+v", gone)
 	}
 }
+
+// TestTodoOnUpdateActions covers the live-update hook the run service uses
+// to broadcast todoUpdate: action names ("created"/"updated") match the TS
+// tool, and delivered snapshots are copies the tool cannot mutate later.
+func TestTodoOnUpdateActions(t *testing.T) {
+	type update struct {
+		items  []types.TodoItem
+		action string
+	}
+	var got []update
+	todo := tools.NewTodoToolWithUpdate("", nil, func(items []types.TodoItem, action string) {
+		got = append(got, update{items: items, action: action})
+	})
+	ctx := context.Background()
+	exec := func(op string, extra map[string]any) {
+		t.Helper()
+		args := map[string]any{"op": op}
+		for k, v := range extra {
+			args[k] = v
+		}
+		if _, err := todo.Execute(ctx, helpers.MustJSONRaw(t, args)); err != nil {
+			t.Fatalf("%s: %v", op, err)
+		}
+	}
+	exec("init", map[string]any{"tasks": []string{"a"}})
+	exec("append", map[string]any{"tasks": []string{"b"}})
+	exec("start", map[string]any{"index": 1})
+	exec("done", map[string]any{"index": 1})
+	exec("view", nil)
+
+	want := []string{"created", "created", "updated", "updated", "updated"}
+	if len(got) != len(want) {
+		t.Fatalf("expected %d updates, got %d", len(want), len(got))
+	}
+	for i, w := range want {
+		if got[i].action != w {
+			t.Fatalf("update %d: expected action %q, got %q", i, w, got[i].action)
+		}
+	}
+	if len(got[0].items) != 1 || got[0].items[0].Content != "a" {
+		t.Fatalf("init snapshot: %+v", got[0].items)
+	}
+	if len(got[4].items) != 2 || got[4].items[0].Status != "completed" {
+		t.Fatalf("final snapshot: %+v", got[4].items)
+	}
+	// The init snapshot must still read pending even though item 1 was
+	// completed afterwards — delivered slices are copies.
+	if got[0].items[0].Status != "pending" {
+		t.Fatalf("snapshot was mutated by later ops: %+v", got[0].items)
+	}
+}

@@ -90,6 +90,8 @@ const (
 	EventTurnEnd EventKind = "turnEnd"
 	// EventSessionEnd closes a run.
 	EventSessionEnd EventKind = "sessionEnd"
+	// EventTodoUpdate carries the session todo list ({items, action}).
+	EventTodoUpdate EventKind = "todoUpdate"
 )
 
 type Event struct {
@@ -105,6 +107,9 @@ type Event struct {
 	Queued     *types.QueuedPrompt       `json:"queuedPrompt,omitempty"`
 	Title      string                    `json:"title,omitempty"`
 	Subagent   any                       `json:"subagent,omitempty"`
+	// Items/Action carry the session todo list for EventTodoUpdate.
+	Items  []types.TodoItem `json:"items,omitempty"`
+	Action string           `json:"action,omitempty"`
 	// Part carries a rendered model-stream part ({text}|{thinking}|{toolCall})
 	// for EventModelStreamPart. Calls/Results accumulate a tool phase for
 	// EventToolExecutionStart/End. All three are consumed by the SSE layer

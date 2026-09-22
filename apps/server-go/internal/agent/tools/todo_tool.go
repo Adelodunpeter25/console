@@ -50,7 +50,18 @@ func renderTodoList(title string, items []types.TodoItem) []map[string]any {
 // through store. A nil store (used by the DefaultTools() singleton, which
 // has no session context) falls back to in-memory-only state for the
 // process lifetime — mirrors TS's unbound `createTodoTool()` default.
+// TodoUpdateHandler mirrors the TS TodoUpdateHandler: fired with a snapshot
+// copy after every op ("created" for init/append, "updated" for
+// start/done/view). The run service uses it to broadcast todoUpdate.
+type TodoUpdateHandler func(items []types.TodoItem, action string)
+
 func NewTodoTool(sessionID string, store TodoStore) Tool {
+	return NewTodoToolWithUpdate(sessionID, store, nil)
+}
+
+// NewTodoToolWithUpdate builds a session-bound todo tool that also reports
+// every mutation through onUpdate (nil disables reporting).
+func NewTodoToolWithUpdate(sessionID string, store TodoStore, onUpdate TodoUpdateHandler) Tool {
 	var mu sync.Mutex
 	var items []types.TodoItem
 	loaded := false
@@ -72,6 +83,14 @@ func NewTodoTool(sessionID string, store TodoStore) Tool {
 		copy(snapshot, items)
 		_ = store.SaveSessionTodos(sessionID, snapshot)
 	}
+	publish := func(action string) {
+		if onUpdate == nil {
+			return
+		}
+		snapshot := make([]types.TodoItem, len(items))
+		copy(snapshot, items)
+		onUpdate(snapshot, action)
+	}
 
 	return NewTool("todo", "Manage the session task list for multi-step work. Operations: init, start, done, append, view.", TierRead,
 		func(ctx context.Context, in todoInput) (any, error) {
@@ -89,6 +108,7 @@ func NewTodoTool(sessionID string, store TodoStore) Tool {
 					items[i] = types.TodoItem{ID: i + 1, Content: content, Status: "pending"}
 				}
 				persist()
+				publish("created")
 				return renderTodoList("Initialized task list", items), nil
 
 			case "append":
@@ -100,6 +120,7 @@ func NewTodoTool(sessionID string, store TodoStore) Tool {
 					items = append(items, types.TodoItem{ID: startID + i, Content: content, Status: "pending"})
 				}
 				persist()
+				publish("created")
 				return renderTodoList("Appended tasks", items), nil
 
 			case "start", "done":
@@ -122,9 +143,11 @@ func NewTodoTool(sessionID string, store TodoStore) Tool {
 					return nil, NewToolError("Task index %d not found.", in.Index)
 				}
 				persist()
+				publish("updated")
 				return renderTodoList(fmt.Sprintf("Marked task #%d as %s", in.Index, statusOf(items, in.Index)), items), nil
 
 			default: // "view" or unspecified
+				publish("updated")
 				return renderTodoList("Current task list status", items), nil
 			}
 		})
