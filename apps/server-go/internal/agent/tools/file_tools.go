@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/fff"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 // fffManager is set once at startup (see SetFffManager) so glob/grep can use
@@ -370,7 +371,7 @@ var Grep = NewTool("grep", "Search file contents by pattern. Use for finding def
 				return filepath.SkipAll
 			}
 			if d.IsDir() {
-				if strings.HasPrefix(d.Name(), ".") || d.Name() == "node_modules" {
+				if strings.HasPrefix(d.Name(), ".") || utils.IsPathIgnored(d.Name()) {
 					if path != root {
 						return filepath.SkipDir
 					}

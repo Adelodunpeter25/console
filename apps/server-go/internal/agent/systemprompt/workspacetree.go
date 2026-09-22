@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 const (
@@ -14,13 +16,6 @@ const (
 	treeDefaultPerDirLimit = 12
 	treeDefaultLineCap     = 120
 )
-
-var treeSkipDirs = map[string]bool{
-	"node_modules": true, ".git": true, ".hg": true, ".svn": true,
-	"dist": true, "build": true, "out": true, "coverage": true,
-	".next": true, ".turbo": true, ".cache": true, "__pycache__": true,
-	".venv": true, "venv": true, "target": true,
-}
 
 // WorkspaceTree is the rendered directory listing shown in the prompt.
 type WorkspaceTree struct {
@@ -46,7 +41,7 @@ func readTreeChildren(dir string, depth, maxDepth, perDirLimit int, showHidden b
 		if !showHidden && strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
-		if e.IsDir() && treeSkipDirs[e.Name()] {
+		if e.IsDir() && utils.IsPathIgnored(e.Name()) {
 			continue
 		}
 		filtered = append(filtered, e)

@@ -486,7 +486,7 @@ func (i *Instance) Destroy() {
 // never evicted, so a long-running server would accumulate one watcher set
 // per project and burn CPU on all of them concurrently. Keeping only the
 // most recently used roots warm bounds that to a fixed thread/CPU budget.
-const maxInstances = 3
+const maxInstances = 2
 
 // Manager owns one Instance per project root, created lazily and evicted
 // least-recently-used once more than maxInstances are warm.
