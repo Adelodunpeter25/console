@@ -74,6 +74,52 @@ command = "y"
 	}
 }
 
+// The TS server surfaces scripts in console.toml document order
+// (Object.entries insertion order); the Go port must match instead of
+// exposing Go's randomized map iteration order.
+func TestParseProjectScriptsDocumentOrder(t *testing.T) {
+	tomlText := `
+[scripts.zeta]
+label = "Zeta"
+command = "echo z"
+
+[scripts.alpha]
+label = "Alpha"
+command = "echo a"
+
+[scripts.mid]
+label = "Mid"
+command = "echo m"
+`
+	scripts, err := services.ParseProjectScriptsForTest(tomlText)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	want := []string{"zeta", "alpha", "mid"}
+	if len(scripts) != len(want) {
+		t.Fatalf("ids: %+v", scripts)
+	}
+	for i, s := range scripts {
+		if s.ID != want[i] {
+			t.Fatalf("document order not preserved: got %+v, want %v", scripts, want)
+		}
+	}
+
+	// Cache refreshes re-parse the file; order must be stable every time.
+	for i := 0; i < 10; i++ {
+		again, err := services.ParseProjectScriptsForTest(tomlText)
+		if err != nil {
+			t.Fatalf("parse %d: %v", i, err)
+		}
+		for j, s := range again {
+			if s.ID != want[j] {
+				t.Fatalf("parse %d unstable: %+v", i, again)
+			}
+		}
+	}
+}
+
+
 func TestListMissingConfig(t *testing.T) {
 	scripts, projectID, _ := newScriptService(t)
 	result, err := scripts.List(projectID)

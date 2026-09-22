@@ -5,6 +5,7 @@ package services
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -38,11 +39,41 @@ func parseProjectScripts(text string) ([]types.ProjectScript, error) {
 		return fmt.Errorf("Invalid console.toml: %s", msg)
 	}
 	var doc scriptDoc
-	if _, err := toml.Decode(text, &doc); err != nil {
+	md, err := toml.Decode(text, &doc)
+	if err != nil {
 		return nil, fail(err.Error())
 	}
-	scripts := make([]types.ProjectScript, 0)
-	for id, entry := range doc.Scripts {
+	// Mirror the TS server's Object.entries order: @iarna/toml builds a JS
+	// object in document order, so script ids come back in the order their
+	// [scripts.*] tables appear in console.toml. Go maps have no order, so
+	// range doc.Scripts would reshuffle the panel on every cache refresh —
+	// MetaData.Keys() reports the same document order instead.
+	ordered := make([]string, 0, len(doc.Scripts))
+	seen := make(map[string]bool, len(doc.Scripts))
+	for _, key := range md.Keys() {
+		if len(key) == 2 && key[0] == "scripts" && !seen[key[1]] {
+			if _, ok := doc.Scripts[key[1]]; ok {
+				ordered = append(ordered, key[1])
+				seen[key[1]] = true
+			}
+		}
+	}
+	// Safety net: any table the key walk missed still parses — sorted so the
+	// fallback is deterministic rather than map-order random.
+	if len(ordered) < len(doc.Scripts) {
+		leftover := make([]string, 0, len(doc.Scripts)-len(ordered))
+		for id := range doc.Scripts {
+			if !seen[id] {
+				leftover = append(leftover, id)
+			}
+		}
+		sort.Strings(leftover)
+		ordered = append(ordered, leftover...)
+	}
+
+	scripts := make([]types.ProjectScript, 0, len(ordered))
+	for _, id := range ordered {
+		entry := doc.Scripts[id]
 		if !scriptIDPattern.MatchString(id) {
 			return nil, fail(fmt.Sprintf("script identifier '%s' contains unsupported characters.", id))
 		}
