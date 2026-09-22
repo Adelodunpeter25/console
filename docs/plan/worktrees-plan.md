@@ -42,16 +42,36 @@ cleanup discipline are the whole feature.
 - Out of scope: merge/rebase UI, PR creation, worktree-vs-worktree diffing,
   bare repos, multiple worktrees per session.
 
-## 3 Server Design
-- New `WorktreeService` in its own file
+## 3 Server Design (as built)
+- `WorktreeService` in its own file
   (`apps/server-go/internal/services/worktree_service.go`) — worktree code
   does NOT live in `GitService`/`git_service.go`. Modularity: git stays
   status/diff/branches/checkout, worktrees stay in the worktree service
   (reuses the same git-running helper, owns nothing else).
   - `WorktreeAdd(repoDir, path, branch)` — `git worktree add -b <branch> <path>`.
+    Refuses non-repos (`ErrNotGitRepo`) and unborn HEAD (`ErrUnbornHEAD`).
   - `WorktreeList(repoDir)` — `git worktree list --porcelain`, parsed.
-  - `WorktreeRemove(repoDir, path, force)` — refuses when dirty unless forced.
+  - `WorktreeRemove(repoDir, path, force)` — refuses when dirty unless forced;
+    a path already gone from disk prunes metadata and succeeds.
   - `WorktreePrune(repoDir)` — `git worktree prune` for stale metadata.
+  - `BranchOf`, `MainRepoDir`, `ScanOrphans(root, owned)`, `RemoveOrphan`
+    (containment-enforced, dirty-aware) back the orphan endpoints.
+  - `SlugBranch(title, id)` → `slug(title)-<6-char-id>`; `DefaultRoot()` →
+    `$HOME/console/worktrees`.
+- Ownership: `worktree_path/branch/repo` columns on the global `sessions`
+  table (additive migration for pre-worktree DBs); `Worktree` on
+  `SessionHeader`, opt-in `worktree: {branch?}` on create, resolved values
+  carried in a client-invisible field.
+- Session create with worktree: branch resolved (explicit or slug-derived),
+  worktree provisioned under `<root>/<session-id>`, session row written with
+  `cwd = worktree path`. Row failure rolls back via forced remove.
+  Scratchpad + worktree and empty/non-git cwd fail loudly (400s).
+- Session permanent delete: owned worktree removed first (no force); dirty
+  → 409 Conflict, session kept. Branch always left in place (v1).
+- Routes: `POST /api/sessions` maps worktree request errors to 400;
+  `DELETE /api/sessions/:id/permanent` maps dirty to 409; new
+  `/api/worktrees/` group (`GET /` inventory, `GET /orphans`,
+  `DELETE /orphans {path, force?}`).
 - Worktree location (decided): central `$HOME/console/worktrees/<id>`
   (non-hidden `console` dir in the user's home — not `~/.console`, not
   in-repo). Keeps repos clean; one known root for orphan recovery.
@@ -77,10 +97,11 @@ cleanup discipline are the whole feature.
 
 ## 5 Implementation Steps (server only first — §4 client/UX after backend lands)
 - 1: `WorktreeService` worktree ops with tests (add/list/remove/prune, dirty
-  refusal, unborn-HEAD refusal, rollback on create failure).
-- 2: session create worktree spec + permanent-delete cleanup.
+  refusal, unborn-HEAD refusal, rollback on create failure). Done.
+- 2: session create worktree spec + permanent-delete cleanup + orphan
+  endpoints + migration. Done.
 - 3 (later): client: new-session checkbox + indicator + orphan list.
-- 4: docs: branch naming, dirty-block behavior, orphan recovery.
+- 4: docs: branch naming, dirty-block behavior, orphan recovery. Done (§3).
 
 ## 6 Verification
 - New session with worktree: branch exists, worktree dir exists, session cwd

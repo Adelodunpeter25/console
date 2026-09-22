@@ -20,6 +20,8 @@ var (
 	// ErrUnbornHEAD is returned when creating a worktree in a repo with
 	// no commits yet — git has no base to branch from.
 	ErrUnbornHEAD = errors.New("repository has no commits yet; commit first")
+	// ErrNotGitRepo is returned when the target dir is not a git repo.
+	ErrNotGitRepo = errors.New("not a git repository")
 )
 
 type WorktreeService struct{}
@@ -34,6 +36,14 @@ type WorktreeInfo struct {
 	Bare   bool
 }
 
+// WorktreeEntry is the API-facing worktree description (owned or orphan).
+type WorktreeEntry struct {
+	Path   string `json:"path"`
+	Branch string `json:"branch"`
+	Dirty  bool   `json:"dirty"`
+	Owned  bool   `json:"owned"`
+}
+
 // DefaultRoot returns the central worktree root: $HOME/console/worktrees.
 // Decided in docs/plan/worktrees-plan.md §8 (not ~/.console, not in-repo).
 func DefaultRoot() (string, error) {
@@ -44,9 +54,18 @@ func DefaultRoot() (string, error) {
 	return filepath.Join(home, "console", "worktrees"), nil
 }
 
+// isGitRepo reports whether dir is inside a git work tree.
+func isGitRepo(dir string) bool {
+	out, err := runGit(dir, "rev-parse", "--is-inside-work-tree")
+	return err == nil && strings.TrimSpace(out) == "true"
+}
+
 // WorktreeAdd creates <branch> and checks it out at path.
-// Refuses repos with no commits yet (unborn HEAD).
+// Refuses non-repos loudly and repos with no commits yet (unborn HEAD).
 func (s *WorktreeService) WorktreeAdd(repoDir, path, branch string) error {
+	if !isGitRepo(repoDir) {
+		return ErrNotGitRepo
+	}
 	if _, err := runGit(repoDir, "rev-parse", "--verify", "HEAD"); err != nil {
 		return ErrUnbornHEAD
 	}
@@ -99,8 +118,14 @@ func (s *WorktreeService) IsDirty(path string) (bool, error) {
 }
 
 // WorktreeRemove removes the worktree at path. Refuses dirty worktrees
-// unless force is true — never silently destroys work.
+// unless force is true — never silently destroys work. A path that no
+// longer exists on disk is already gone: prune stale metadata and succeed
+// so permanent delete can never get stuck behind a missing dir.
 func (s *WorktreeService) WorktreeRemove(repoDir, path string, force bool) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		_, _ = runGit(repoDir, "worktree", "prune")
+		return nil
+	}
 	if !force {
 		dirty, err := s.IsDirty(path)
 		if err != nil {
@@ -118,9 +143,150 @@ func (s *WorktreeService) WorktreeRemove(repoDir, path string, force bool) error
 	return err
 }
 
+// SlugBranch derives a branch name from a session title:
+// slug(title)-shortid, e.g. "fix-login-bug-a1b2c3". Falls back to
+// "session-<shortid>" for empty titles.
+func SlugBranch(title, id string) string {
+	var b strings.Builder
+	prevDash := true
+	for _, r := range strings.ToLower(title) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+			prevDash = false
+		default:
+			if !prevDash {
+				b.WriteRune('-')
+				prevDash = true
+			}
+		}
+	}
+	slug := strings.Trim(b.String(), "-")
+	if len(slug) > 40 {
+		slug = strings.Trim(slug[:40], "-")
+	}
+	short := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			return r
+		}
+		return -1
+	}, strings.ToLower(id))
+	if len(short) > 6 {
+		short = short[:6]
+	}
+	if slug == "" {
+		slug = "session"
+	}
+	if short == "" {
+		return slug
+	}
+	return slug + "-" + short
+}
+
 // WorktreePrune clears stale worktree metadata (e.g. after a crash left
 // a worktree dir behind without its admin files).
 func (s *WorktreeService) WorktreePrune(repoDir string) error {
 	_, err := runGit(repoDir, "worktree", "prune")
 	return err
+}
+
+// BranchOf returns the checked-out branch of the worktree at path,
+// or "" when detached.
+func (s *WorktreeService) BranchOf(path string) (string, error) {
+	out, err := runGit(path, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	branch := strings.TrimSpace(out)
+	if branch == "HEAD" {
+		return "", nil
+	}
+	return branch, nil
+}
+
+// MainRepoDir resolves the main worktree of the repo backing path
+// (first entry of `git worktree list`).
+func (s *WorktreeService) MainRepoDir(path string) (string, error) {
+	infos, err := s.WorktreeList(path)
+	if err != nil {
+		return "", err
+	}
+	if len(infos) == 0 {
+		return "", errors.New("no worktrees found")
+	}
+	return infos[0].Path, nil
+}
+
+// ScanOrphans lists dirs directly under root that no session owns.
+// Unreadable dirs are reported with empty branch, clean=false certainty off
+// (Dirty=false) — deletion without force still refuses when state cannot
+// be verified (see RemoveOrphan).
+func (s *WorktreeService) ScanOrphans(root string, owned []string) ([]WorktreeEntry, error) {
+	ownedSet := make(map[string]bool, len(owned))
+	for _, p := range owned {
+		if abs, err := filepath.Abs(p); err == nil {
+			ownedSet[abs] = true
+		}
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []WorktreeEntry{}, nil
+		}
+		return nil, err
+	}
+	out := make([]WorktreeEntry, 0)
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		abs, err := filepath.Abs(filepath.Join(root, e.Name()))
+		if err != nil {
+			continue
+		}
+		if ownedSet[abs] {
+			continue
+		}
+		entry := WorktreeEntry{Path: abs}
+		if branch, err := s.BranchOf(abs); err == nil {
+			entry.Branch = branch
+		}
+		if dirty, err := s.IsDirty(abs); err == nil {
+			entry.Dirty = dirty
+		}
+		out = append(out, entry)
+	}
+	return out, nil
+}
+
+// RemoveOrphan removes a worktree dir with no owning session. The path must
+// live under root (containment — never touch dirs outside the worktree
+// root). Dirty still blocks without force; force on an unreadable worktree
+// falls back to deleting the dir.
+func (s *WorktreeService) RemoveOrphan(root, path string, force bool) error {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return err
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(absRoot, absPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return errors.New("path is outside the worktree root")
+	}
+	repoDir, err := s.MainRepoDir(absPath)
+	if err != nil {
+		if !force {
+			return err
+		}
+		_ = os.RemoveAll(absPath)
+		return nil
+	}
+	if err := s.WorktreeRemove(repoDir, absPath, force); err != nil {
+		return err
+	}
+	_, _ = runGit(repoDir, "worktree", "prune")
+	return nil
 }

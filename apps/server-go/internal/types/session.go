@@ -16,6 +16,15 @@ type SessionHeader struct {
 	MessageCount int     `json:"messageCount"`
 	Status       string  `json:"status"`
 	DeletedAt    *int64  `json:"deletedAt,omitempty"`
+	// Worktree is non-nil when the session lives in its own git worktree.
+	Worktree *SessionWorktree `json:"worktree,omitempty"`
+}
+
+// SessionWorktree records the worktree a session owns.
+type SessionWorktree struct {
+	Path   string `json:"path"`
+	Branch string `json:"branch"`
+	Repo   string `json:"repo"`
 }
 
 type CreateSessionOptions struct {
@@ -30,6 +39,18 @@ type CreateSessionOptions struct {
 	// distinct from an omitted key (infer from cwd). Set by the route, which
 	// is the only JSON decoder for this struct.
 	ProjectNull bool `json:"-"`
+	// Worktree, when non-nil, asks for a fresh worktree + branch backing
+	// this session (opt-in; default off).
+	Worktree *CreateWorktreeSpec `json:"worktree,omitempty"`
+	// ResolvedWorktree carries the provisioned worktree into Create. Set by
+	// the service facade after WorktreeAdd succeeds — never by clients.
+	ResolvedWorktree *SessionWorktree `json:"-"`
+}
+
+// CreateWorktreeSpec is the client-facing worktree request. An empty Branch
+// auto-derives slug(title)-shortid.
+type CreateWorktreeSpec struct {
+	Branch string `json:"branch,omitempty"`
 }
 
 type LoadedSession struct {

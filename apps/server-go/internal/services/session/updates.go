@@ -136,11 +136,32 @@ func statFile(path string) bool {
 	return err == nil && !st.IsDir()
 }
 
+// WorktreeOf returns the worktree a session owns, or nil when it owns
+// none or the id is unknown. Unlike Header it sees soft-deleted rows —
+// permanent delete runs on trashed sessions.
+func (s *Service) WorktreeOf(sessionID string) (*types.SessionWorktree, error) {
+	var wtPath, wtBranch, wtRepo sql.NullString
+	err := s.manager.Global().QueryRow(
+		`SELECT worktree_path, worktree_branch, worktree_repo FROM sessions WHERE id = ?`,
+		sessionID,
+	).Scan(&wtPath, &wtBranch, &wtRepo)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !wtPath.Valid || wtPath.String == "" {
+		return nil, nil
+	}
+	return &types.SessionWorktree{Path: wtPath.String, Branch: wtBranch.String, Repo: wtRepo.String}, nil
+}
 // Header returns the indexed header, or nil for unknown/deleted sessions.
 func (s *Service) Header(sessionID string) (*types.SessionHeader, error) {
 	rows, err := s.manager.Global().Query(`
 		SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-			created_at, updated_at, message_count, status, deleted_at
+			created_at, updated_at, message_count, status, deleted_at,
+			worktree_path, worktree_branch, worktree_repo
 		FROM sessions WHERE id = ?`, sessionID)
 	if err != nil {
 		return nil, err

@@ -112,3 +112,76 @@ func TestWorktreePrune(t *testing.T) {
 		t.Fatalf("WorktreePrune: %v", err)
 	}
 }
+
+func TestSlugBranch(t *testing.T) {
+	cases := map[string]string{
+		"Fix login bug!": "fix-login-bug",
+		"  spaced   out  ": "spaced-out",
+		"UPPER_and-mi.xed": "upper-and-mi-xed",
+		"":                "session",
+		"!!!":             "session",
+	}
+	for title, slug := range cases {
+		got := services.SlugBranch(title, "a1b2c3d4")
+		want := slug + "-a1b2c3"
+		if got != want {
+			t.Fatalf("SlugBranch(%q) = %q; want %q", title, got, want)
+		}
+	}
+	if got := services.SlugBranch("x", ""); got != "x" {
+		t.Fatalf("SlugBranch empty id = %q; want x", got)
+	}
+}
+
+func TestWorktreeAddNotGitRepo(t *testing.T) {
+	svc := services.NewWorktreeService()
+	err := svc.WorktreeAdd(t.TempDir(), filepath.Join(t.TempDir(), "wt"), "b")
+	if !errors.Is(err, services.ErrNotGitRepo) {
+		t.Fatalf("non-repo add = %v; want ErrNotGitRepo", err)
+	}
+}
+
+func TestBranchOfAndOrphans(t *testing.T) {
+	svc := services.NewWorktreeService()
+	repo := initRepo(t, true)
+	root := t.TempDir()
+	wt := filepath.Join(root, "lonely")
+	if err := svc.WorktreeAdd(repo, wt, "lonely-branch"); err != nil {
+		t.Fatalf("WorktreeAdd: %v", err)
+	}
+	if branch, err := svc.BranchOf(wt); err != nil || branch != "lonely-branch" {
+		t.Fatalf("BranchOf = %q, %v", branch, err)
+	}
+	// Unowned dir scans as orphan, clean.
+	orphans, err := svc.ScanOrphans(root, nil)
+	if err != nil || len(orphans) != 1 || orphans[0].Owned || orphans[0].Dirty {
+		t.Fatalf("orphans = %+v, %v", orphans, err)
+	}
+	// Owned dir is excluded.
+	orphans, err = svc.ScanOrphans(root, []string{wt})
+	if err != nil || len(orphans) != 0 {
+		t.Fatalf("owned excluded: %+v, %v", orphans, err)
+	}
+	// Dirty orphan blocks removal without force.
+	if err := os.WriteFile(filepath.Join(wt, "wip.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	orphans, err = svc.ScanOrphans(root, nil)
+	if err != nil || len(orphans) != 1 || !orphans[0].Dirty {
+		t.Fatalf("dirty orphan = %+v, %v", orphans, err)
+	}
+	if err := svc.RemoveOrphan(root, wt, false); !errors.Is(err, services.ErrWorktreeDirty) {
+		t.Fatalf("remove dirty orphan = %v; want ErrWorktreeDirty", err)
+	}
+	// Outside the root is refused outright.
+	if err := svc.RemoveOrphan(root, repo, true); err == nil {
+		t.Fatalf("remove outside root succeeded")
+	}
+	if err := svc.RemoveOrphan(root, wt, true); err != nil {
+		t.Fatalf("force remove orphan: %v", err)
+	}
+	orphans, err = svc.ScanOrphans(root, nil)
+	if err != nil || len(orphans) != 0 {
+		t.Fatalf("orphans after remove = %+v, %v", orphans, err)
+	}
+}

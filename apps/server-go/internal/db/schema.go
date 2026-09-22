@@ -41,7 +41,10 @@ func InitGlobalDB(db *sql.DB, path string) error {
 			approval_mode TEXT NOT NULL DEFAULT 'always-ask',
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL,
-			deleted_at INTEGER
+			deleted_at INTEGER,
+			worktree_path TEXT,
+			worktree_branch TEXT,
+			worktree_repo TEXT
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_projects_dir ON projects(dir);
@@ -56,7 +59,29 @@ func InitGlobalDB(db *sql.DB, path string) error {
 			PRIMARY KEY (provider, model_id)
 		);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+	// Additive migration for session DBs created before worktrees: add the
+	// ownership columns when missing.
+	for _, col := range []string{
+		"worktree_path TEXT", "worktree_branch TEXT", "worktree_repo TEXT",
+	} {
+		name := col[:len(col)-len(" TEXT")]
+		var count int
+		if err := db.QueryRow(
+			`SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = ?`, name,
+		).Scan(&count); err != nil || count > 0 {
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := db.Exec(`ALTER TABLE sessions ADD COLUMN ` + col); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func InitSessionDB(db *sql.DB, path string) error {
