@@ -202,6 +202,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 )
 
@@ -479,10 +480,20 @@ func (i *Instance) Destroy() {
 	}
 }
 
-// Manager owns one Instance per project root, created lazily.
+// maxInstances caps how many fff instances (each with its own watcher,
+// git-status and fsevents threads) stay resident at once. Every project
+// root ever opened in a session used to get a permanent instance that was
+// never evicted, so a long-running server would accumulate one watcher set
+// per project and burn CPU on all of them concurrently. Keeping only the
+// most recently used roots warm bounds that to a fixed thread/CPU budget.
+const maxInstances = 3
+
+// Manager owns one Instance per project root, created lazily and evicted
+// least-recently-used once more than maxInstances are warm.
 type Manager struct {
 	mu        sync.Mutex
 	instances map[string]*Instance
+	lastUsed  map[string]time.Time
 	creating  map[string]*sync.Once
 	enabled   bool
 }
@@ -490,6 +501,7 @@ type Manager struct {
 func NewManager() *Manager {
 	return &Manager{
 		instances: make(map[string]*Instance),
+		lastUsed:  make(map[string]time.Time),
 		creating:  make(map[string]*sync.Once),
 		enabled:   Available(),
 	}
@@ -498,12 +510,37 @@ func NewManager() *Manager {
 // Enabled reports whether fff was loaded.
 func (m *Manager) Enabled() bool { return m.enabled }
 
+// evictLRULocked destroys the least-recently-used instance(s) until the
+// live set is back at or under maxInstances. Caller must hold m.mu.
+func (m *Manager) evictLRULocked() {
+	for len(m.instances) > maxInstances {
+		var oldestRoot string
+		var oldestTime time.Time
+		first := true
+		for root := range m.instances {
+			t := m.lastUsed[root]
+			if first || t.Before(oldestTime) {
+				oldestRoot, oldestTime, first = root, t, false
+			}
+		}
+		if first {
+			return
+		}
+		if inst, ok := m.instances[oldestRoot]; ok {
+			inst.Destroy()
+		}
+		delete(m.instances, oldestRoot)
+		delete(m.lastUsed, oldestRoot)
+	}
+}
+
 // ensureAsync starts the background index scan for root unless one is
 // already running or complete.
 func (m *Manager) ensureAsync(root string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.instances[root]; ok {
+		m.lastUsed[root] = time.Now()
 		return
 	}
 	if _, started := m.creating[root]; started {
@@ -516,6 +553,8 @@ func (m *Manager) ensureAsync(root string) {
 		m.mu.Lock()
 		if err == nil {
 			m.instances[root] = created
+			m.lastUsed[root] = time.Now()
+			m.evictLRULocked()
 		}
 		delete(m.creating, root)
 		m.mu.Unlock()
@@ -542,6 +581,9 @@ func (m *Manager) SearchAsync(root, query string, limit int) ([]Item, bool) {
 	m.ensureAsync(root)
 	m.mu.Lock()
 	inst, ok := m.instances[root]
+	if ok {
+		m.lastUsed[root] = time.Now()
+	}
 	m.mu.Unlock()
 	if !ok {
 		return nil, false
@@ -562,6 +604,7 @@ func (m *Manager) GetOrCreate(root string) (*Instance, error) {
 	}
 	m.mu.Lock()
 	if inst, ok := m.instances[root]; ok {
+		m.lastUsed[root] = time.Now()
 		m.mu.Unlock()
 		return inst, nil
 	}
@@ -572,11 +615,14 @@ func (m *Manager) GetOrCreate(root string) (*Instance, error) {
 	}
 	m.mu.Lock()
 	if existing, ok := m.instances[root]; ok {
+		m.lastUsed[root] = time.Now()
 		m.mu.Unlock()
 		inst.Destroy()
 		return existing, nil
 	}
 	m.instances[root] = inst
+	m.lastUsed[root] = time.Now()
+	m.evictLRULocked()
 	m.mu.Unlock()
 	return inst, nil
 }
@@ -588,5 +634,6 @@ func (m *Manager) CloseAll() {
 	for root, inst := range m.instances {
 		inst.Destroy()
 		delete(m.instances, root)
+		delete(m.lastUsed, root)
 	}
 }
