@@ -45,7 +45,7 @@ impl TerminalView {
     /// dispatch, so this reconstructs exactly what `on_key_down` would see.
     /// Stops propagation so the global focus-traversal binding never fires
     /// while the terminal is focused.
-    fn send_tab(&mut self, shift: bool, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn send_tab(&mut self, shift: bool, window: &mut Window, cx: &mut Context<Self>) {
         let mut modifiers = window.modifiers();
         modifiers.shift = shift;
         let mode = self
@@ -127,7 +127,7 @@ fn write_clipboard_image_to_temp_file(image: &gpui::Image) -> std::io::Result<st
 /// (safer than the raw text fallback for paths with spaces); plain text is
 /// bracketed-paste framed when the shell opted in; bare images are staged to
 /// a temp file and pasted as a quoted path.
-fn paste_input_for_clipboard(
+pub(super) fn paste_input_for_clipboard(
     item: &gpui::ClipboardItem,
     bracketed_paste: bool,
 ) -> Option<String> {
