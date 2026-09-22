@@ -57,7 +57,8 @@ cleanup discipline are the whole feature.
   - `BranchOf`, `MainRepoDir`, `ScanOrphans(root, owned)`, `RemoveOrphan`
     (containment-enforced, dirty-aware) back the orphan endpoints.
   - `SlugBranch(title, id)` → `slug(title)-<6-char-id>`; `DefaultRoot()` →
-    `$HOME/console/worktrees`.
+    centralized `utils.WorktreesDir()` (`$HOME/console/worktrees`,
+    `$HOME/console-dev/worktrees` in dev, `CONSOLE_WORKTREES_DIR` override).
 - Ownership: `worktree_path/branch/repo` columns on the global `sessions`
   table (additive migration for pre-worktree DBs); `Worktree` on
   `SessionHeader`, opt-in `worktree: {branch?}` on create, resolved values
@@ -120,7 +121,9 @@ cleanup discipline are the whole feature.
 - Auto-deleting branches (explicit only, see below).
 
 ## 8 Decisions (locked for v1)
-- Worktree location: central `$HOME/console/worktrees/<id>`. Decided.
+- Worktree location: central `$HOME/console/worktrees/<id>` (prod),
+  `$HOME/console-dev/worktrees/<id>` in dev, `CONSOLE_WORKTREES_DIR`
+  override — all via `utils.WorktreesDir()`. Decided.
 - Branch cleanup: leave always. Decided.
 - Default: off always. Decided.
 - Unborn HEAD (repo with no commits): refused with a clear error. Decided.

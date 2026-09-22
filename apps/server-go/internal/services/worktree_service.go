@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 var (
@@ -44,14 +46,11 @@ type WorktreeEntry struct {
 	Owned  bool   `json:"owned"`
 }
 
-// DefaultRoot returns the central worktree root: $HOME/console/worktrees.
-// Decided in docs/plan/worktrees-plan.md §8 (not ~/.console, not in-repo).
+// DefaultRoot returns the central worktree root. Centralized in the app
+// paths file (utils.WorktreesDir) so dev and prod differ — see the
+// resolved-decisions note in docs/plan/worktrees-plan.md §8.
 func DefaultRoot() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, "console", "worktrees"), nil
+	return utils.WorktreesDir(), nil
 }
 
 // isGitRepo reports whether dir is inside a git work tree.

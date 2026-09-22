@@ -16,6 +16,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 func openWorktreeManager(t *testing.T) *db.DB {
@@ -253,6 +254,31 @@ func TestPermanentDeletePlainSession(t *testing.T) {
 	deleted, err := sessions.PermanentDelete(header.ID)
 	if err != nil || !deleted {
 		t.Fatalf("PermanentDelete = %v, %v", deleted, err)
+	}
+}
+
+// TestWorktreesDirCentralized verifies the worktree root goes through the
+// central app paths file: prod default, dev variant, explicit override.
+func TestWorktreesDirCentralized(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CONSOLE_ENV", "")
+	t.Setenv("CONSOLE_WORKTREES_DIR", "")
+
+	if got := utils.WorktreesDir(); got != filepath.Join(home, "console", "worktrees") {
+		t.Fatalf("prod root = %q", got)
+	}
+	t.Setenv("CONSOLE_ENV", "dev")
+	if got := utils.WorktreesDir(); got != filepath.Join(home, "console-dev", "worktrees") {
+		t.Fatalf("dev root = %q", got)
+	}
+	t.Setenv("CONSOLE_WORKTREES_DIR", filepath.Join(home, "custom-wt"))
+	if got := utils.WorktreesDir(); got != filepath.Join(home, "custom-wt") {
+		t.Fatalf("override root = %q", got)
+	}
+	root, err := services.DefaultRoot()
+	if err != nil || root != utils.WorktreesDir() {
+		t.Fatalf("DefaultRoot = %q, %v; want %q", root, err, utils.WorktreesDir())
 	}
 }
 
