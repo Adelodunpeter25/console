@@ -67,6 +67,7 @@ pub struct TerminalView {
     /// Display offset the paint cache was last aligned to. Scrolling moves
     /// viewport content between rows; shifting cached entries with the
     /// offset avoids re-shaping every row per scroll step.
+    painted_scroll_offset: usize,
     /// Measured cell metrics from the last canvas paint. Mouse→cell mapping
     /// must use these (not constants) or clicks land on the wrong cells.
     cell_metrics: Option<(Pixels, Pixels)>,
