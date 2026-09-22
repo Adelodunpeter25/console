@@ -94,8 +94,8 @@ a server-side operation launched from the dialog itself.
 - Creating new GitHub repos from console (clone or blank-local only).
 - Repo list browsing / picking (paste-a-URL only in v1).
 - Project templates / scaffolding of any kind.
-- Worktrees (clone once per project, then one worktree per session — a later
-  feature that composes with this one; explicitly not tangled in).
+- Worktrees (clone once per project, then one worktree per session — see
+  `docs/plan/worktrees-plan.md`; explicitly not tangled in).
 
 ## 8 Open Questions
 - Clone progress mechanism: stream `git clone --progress` output, or simple
