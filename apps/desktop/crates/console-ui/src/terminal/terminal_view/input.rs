@@ -7,7 +7,7 @@ use termy_core::{
 use super::TerminalView;
 
 impl TerminalView {
-    fn key_to_bytes(event: &KeyDownEvent, mode: TerminalKeyboardMode) -> Option<String> {
+    pub(super) fn key_to_bytes(event: &KeyDownEvent, mode: TerminalKeyboardMode) -> Option<String> {
         Self::keystroke_to_bytes(
             event.keystroke.key.as_str(),
             event.keystroke.key_char.clone(),
@@ -82,7 +82,7 @@ fn shell_quote_path(path: &std::path::Path) -> String {
 
 /// Dropped files become space-joined quoted paths plus a trailing space,
 /// ready to type at the prompt. Mirrors termy's drop input.
-fn dropped_paths_input(paths: &[std::path::PathBuf]) -> Option<String> {
+pub(super) fn dropped_paths_input(paths: &[std::path::PathBuf]) -> Option<String> {
     if paths.is_empty() {
         return None;
     }

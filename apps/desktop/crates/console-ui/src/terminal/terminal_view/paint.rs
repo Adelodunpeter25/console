@@ -1,6 +1,10 @@
 //! Canvas painting for the terminal grid: row paint cache, run shaping,
 //! cursor overlay.
-use gpui::{SharedString, px};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use gpui::{App, Pixels, SharedString, Window, px};
 
 use crate::terminal::theme::TerminalTheme;
 
@@ -13,7 +17,7 @@ use super::TerminalCellPos;
 /// glyph paint instead of a full text-shaping pass — this is what keeps
 /// constantly-redrawing TUIs (btop, editors) cheap: unchanged rows never
 /// re-shape, no matter how often the frame repaints.
-struct CachedRowPaint {
+pub(super) struct CachedRowPaint {
     hash: u64,
     bg_runs: Vec<(usize, usize, gpui::Hsla)>,
     text_runs: Vec<CachedTextRun>,
@@ -60,7 +64,7 @@ fn color_to_hsla(c: console_core::types::terminal::TerminalColor) -> gpui::Hsla 
     gpui::Rgba { r, g, b, a: 1.0 }.into()
 }
 
-fn render_canvas_grid(
+pub(super) fn render_canvas_grid(
     bounds: gpui::Bounds<gpui::Pixels>,
     cols: u16,
     rows: u16,
