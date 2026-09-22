@@ -16,6 +16,16 @@ pub struct TerminalTabInfo {
     pub script_id: Option<String>,
 }
 
+/// Play/stop control for the header, shown in place of the refresh button
+/// while a script log tab (e.g. "Dev Server") is the active tab.
+#[derive(Clone)]
+pub struct ScriptTabAction {
+    /// True while the script is running or starting: renders a stop icon
+    /// and the click stops it. False renders a play icon that starts it.
+    pub running: bool,
+    pub on_click: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+}
+
 #[derive(IntoElement)]
 pub struct RightSidebarBottomSplit {
     height: f32,
@@ -31,6 +41,7 @@ pub struct RightSidebarBottomSplit {
     on_begin_resize: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static>,
     on_new_terminal: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     on_refresh_run: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+    script_action: Option<ScriptTabAction>,
     on_toggle_collapsed: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
 }
 
@@ -58,6 +69,7 @@ impl RightSidebarBottomSplit {
             on_begin_resize,
             on_new_terminal: None,
             on_refresh_run: None,
+            script_action: None,
             on_toggle_collapsed: None,
         }
     }
@@ -94,6 +106,13 @@ impl RightSidebarBottomSplit {
         callback: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     ) -> Self {
         self.on_refresh_run = Some(callback);
+        self
+    }
+
+    /// Play/stop control for the active script log tab's header. Only
+    /// rendered while a script log tab (not the Scripts tab) is active.
+    pub fn with_script_action(mut self, action: ScriptTabAction) -> Self {
+        self.script_action = Some(action);
         self
     }
 
@@ -337,7 +356,7 @@ impl RenderOnce for RightSidebarBottomSplit {
                                         .on_click(move |_, window, cx| {
                                             (on_new)(window, cx);
                                         })
-                                        .child(app_icon(IconName::Plus, 11.0, theme.text_tertiary)),
+                                        .child(app_icon(IconName::Plus, 11.0, theme.text)),
                                 )
                             })
                             .when_some(
@@ -361,7 +380,42 @@ impl RenderOnce for RightSidebarBottomSplit {
                                             .child(app_icon(
                                                 IconName::Refresh,
                                                 11.0,
-                                                theme.text_tertiary,
+                                                theme.text,
+                                            )),
+                                    )
+                                },
+                            )
+                            .when_some(
+                                self.script_action.filter(|_| !run_tab_active),
+                                |el, action| {
+                                    let on_click = action.on_click;
+                                    el.child(
+                                        div()
+                                            .id("bottom-script-action-btn")
+                                            .size(px(20.0))
+                                            .flex_none()
+                                            .flex_shrink(0.0)
+                                            .rounded(px(4.0))
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .cursor_pointer()
+                                            .hover(|s| s.bg(theme.overlay))
+                                            .on_click(move |_, window, cx| {
+                                                (on_click)(window, cx);
+                                            })
+                                            .child(app_icon(
+                                                if action.running {
+                                                    IconName::StopFilled
+                                                } else {
+                                                    IconName::Play
+                                                },
+                                                11.0,
+                                                if action.running {
+                                                    theme.danger
+                                                } else {
+                                                    theme.text
+                                                },
                                             )),
                                     )
                                 },

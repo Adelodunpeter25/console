@@ -983,6 +983,20 @@ impl Render for ConsoleDesktopApp {
                             .unwrap_or_default();
                         let active_script_log_id: Option<String> = active_term_state
                             .and_then(|state| state.active_script_log.clone());
+                        let active_script_running = active_script_log_id
+                            .as_ref()
+                            .and_then(|id| {
+                                scripts_project_id_for_tabs
+                                    .as_ref()
+                                    .and_then(|pid| self.project_scripts_by_project.get(pid))
+                                    .and_then(|state| state.runs.get(id))
+                            })
+                            .is_some_and(|v| {
+                                v.starting
+                                    || v.run.as_ref().is_some_and(|r| {
+                                        r.status == console_core::ScriptRunStatus::Running
+                                    })
+                            });
 
                         let mut tabs: Vec<TerminalTabInfo> = script_log_ids
                             .iter()
@@ -1233,12 +1247,29 @@ impl Render for ConsoleDesktopApp {
                                 error,
                                 source_missing,
                                 rows,
-                                on_run: on_run_project_script,
-                                on_stop: on_stop_project_script,
+                                on_run: on_run_project_script.clone(),
+                                on_stop: on_stop_project_script.clone(),
                                 on_open_log: on_open_project_script_log,
                             }
                             .into_any_element()
                         };
+
+                        let script_action = active_script_log_id.as_ref().map(|id| {
+                            let id = id.clone();
+                            let on_run = on_run_project_script.clone();
+                            let on_stop = on_stop_project_script.clone();
+                            let running = active_script_running;
+                            console_ui::ScriptTabAction {
+                                running,
+                                on_click: Rc::new(move |window, cx| {
+                                    if running {
+                                        (on_stop)(id.clone(), window, cx);
+                                    } else {
+                                        (on_run)(id.clone(), window, cx);
+                                    }
+                                }),
+                            }
+                        });
 
                         let bottom_split = RightSidebarBottomSplit::new(
                             self.right_sidebar_bottom_height,
@@ -1251,6 +1282,7 @@ impl Render for ConsoleDesktopApp {
                         )
                         .with_run_tab(self.right_sidebar_bottom_run_selected, run_panel_element)
                         .with_refresh_run(on_refresh_project_scripts)
+                        .when_some(script_action, |el, action| el.with_script_action(action))
                         .with_close_tab(on_close_right_sidebar_bottom_tab)
                         .with_new_terminal(on_new_right_sidebar_terminal)
                         .with_toggle_collapsed(on_toggle_right_sidebar_bottom_collapsed);
