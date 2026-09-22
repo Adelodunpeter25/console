@@ -535,6 +535,44 @@ impl ConsoleDesktopApp {
                                 this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
                                     t.set_messages(Vec::new(), cx);
                                 });
+
+                                // The worktree session shares its parent's
+                                // project_id (so it stays grouped in the
+                                // sidebar), which means apply_session_header
+                                // leaves the pane's branch state pointed at
+                                // the original checkout. Reload it against
+                                // the worktree's own cwd so the dropdown
+                                // shows the new branch instead of stale
+                                // state from the main checkout.
+                                if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
+                                    state.branch_loaded = false;
+                                }
+                                let worktree_path = new_session.cwd.clone();
+                                let branch_client = this.client.clone();
+                                let branch_pane_id = pane_id.clone();
+                                cx.spawn(async move |entity, cx| {
+                                    let result =
+                                        branch_client.git.list_branches(Some(&worktree_path)).await;
+                                    cx.update(|cx| {
+                                        if let Some(app) = entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                if let Some(state) = this
+                                                    .workspace_pane_states
+                                                    .get_mut(&branch_pane_id)
+                                                {
+                                                    state.branch_loaded = true;
+                                                    if let Ok(branches) = result {
+                                                        state.branches = Rc::new(branches.branches);
+                                                        state.branch_is_git_repository =
+                                                            branches.is_git_repository;
+                                                    }
+                                                }
+                                                cx.notify();
+                                            });
+                                        }
+                                    });
+                                })
+                                .detach();
                             }
                             Err(error) => {
                                 this.set_error(
