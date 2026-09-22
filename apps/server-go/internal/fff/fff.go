@@ -510,9 +510,15 @@ func NewManager() *Manager {
 // Enabled reports whether fff was loaded.
 func (m *Manager) Enabled() bool { return m.enabled }
 
-// evictLRULocked destroys the least-recently-used instance(s) until the
-// live set is back at or under maxInstances. Caller must hold m.mu.
-func (m *Manager) evictLRULocked() {
+// evictLRULocked removes the least-recently-used instance(s) from the map
+// until the live set is back at or under maxInstances, and returns them for
+// the caller to Destroy() *after releasing m.mu*. Native teardown can block
+// (e.g. waiting on a watcher thread mid-scan), and every other Manager
+// method opens with m.mu.Lock() — destroying here while still holding the
+// lock would stall search/glob/grep/prewarm server-wide until teardown
+// finishes. Caller must hold m.mu.
+func (m *Manager) evictLRULocked() []*Instance {
+	var victims []*Instance
 	for len(m.instances) > maxInstances {
 		var oldestRoot string
 		var oldestTime time.Time
@@ -524,14 +530,15 @@ func (m *Manager) evictLRULocked() {
 			}
 		}
 		if first {
-			return
+			return victims
 		}
 		if inst, ok := m.instances[oldestRoot]; ok {
-			inst.Destroy()
+			victims = append(victims, inst)
 		}
 		delete(m.instances, oldestRoot)
 		delete(m.lastUsed, oldestRoot)
 	}
+	return victims
 }
 
 // ensureAsync starts the background index scan for root unless one is
@@ -551,13 +558,17 @@ func (m *Manager) ensureAsync(root string) {
 	go once.Do(func() {
 		created, err := Create(root)
 		m.mu.Lock()
+		var victims []*Instance
 		if err == nil {
 			m.instances[root] = created
 			m.lastUsed[root] = time.Now()
-			m.evictLRULocked()
+			victims = m.evictLRULocked()
 		}
 		delete(m.creating, root)
 		m.mu.Unlock()
+		for _, v := range victims {
+			v.Destroy()
+		}
 	})
 }
 
@@ -622,8 +633,11 @@ func (m *Manager) GetOrCreate(root string) (*Instance, error) {
 	}
 	m.instances[root] = inst
 	m.lastUsed[root] = time.Now()
-	m.evictLRULocked()
+	victims := m.evictLRULocked()
 	m.mu.Unlock()
+	for _, v := range victims {
+		v.Destroy()
+	}
 	return inst, nil
 }
 
