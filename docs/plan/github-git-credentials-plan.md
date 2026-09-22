@@ -27,19 +27,22 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
   provider catalog's `authMethod`.
 
 ## 2 UX Proposal
-- Onboarding: after a successful backend-URL connect + test, offer an optional
-  "Connect GitHub" card (skippable — public repos keep working without it).
-  Tapping it calls `POST /api/auth/github/device/start`, shows the returned
-  `user_code` big with a "Approve on GitHub" button opening
-  `verification_uri` in the system browser. Poll `device/status` until the
-  user approves; success shows `@username` and continues to the app.
-- Settings → Accounts: new GitHub row showing `@username` + Connected/Not
-  connected, with Connect / Re-login / Disconnect. Same device-flow UI.
-- Fallback: "Use a personal access token instead" link opening a secure paste
-  field; server validates via `GET api.github.com/user` and stores the same
-  way (covers enterprise/SSO users who can't use the shared OAuth App).
-- Scope is `repo` only. No repo browser, no clone UI, no GitHub file views in
-  v1 — the deliverable is purely that the git CLI works everywhere.
+- Accounts is the primary home (desktop and mobile): a GitHub item showing
+  `@username` + Connected/Not connected, with Connect / Re-login / Disconnect.
+  Onboarding-time connect cannot serve existing installs (reinstalling would
+  wipe local data), so the optional "Connect GitHub" onboarding card is a
+  nice-to-have for fresh installs only — Accounts is the path that always works.
+- Two equal connection options, side by side: *Connect with GitHub* (device
+  flow — `POST /api/auth/github/device/start`, big `user_code`, "Approve on
+  GitHub" button opening `verification_uri`, poll `device/status` until
+  approved) and *Use a personal access token* (secure paste field; server
+  validates via `GET api.github.com/user` and stores the same way). Same
+  storage, same status row, same behavior downstream — PAT is an option, not
+  a fallback. It also covers SSO/enterprise users who can't use the shared OAuth App,
+  and anyone who just wants paste-once-and-done.
+- Scope is `repo` only. No repo browser, no GitHub file views in
+  v1 — the deliverable is purely that the git CLI works everywhere. Cloning
+  itself lives in the new-project dialog (see §5, last step), not here.
 
 ## 3 Server Design
 - New `internal/providers/github/` package mirroring the claude/codex structure
@@ -80,15 +83,17 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
   not-connected.
 
 ## 4 Mobile Changes
+- Desktop + mobile Accounts GitHub item (connect / re-login / disconnect, both
+  options) — existing installs connect here, never via reinstall.
 - `packages/api` `githubAuthService`: `deviceStart`, `deviceStatus`,
   `getStatus`, `logout`, `submitPat` clients.
-- Onboarding: post-connect GitHub card in `OnboardingScreen` with code display
+- Onboarding (fresh installs only): post-connect GitHub card in `OnboardingScreen` with code display
   + approve button + polling + Skip. New `useGitHubDeviceLogin` hook owning
   the poll lifecycle (interval + expiry timeout + cancel on unmount).
 - Account Settings: GitHub row driven by extended auth status; reuse the same
   hook for connect/re-login; disconnect with confirm.
-- PAT fallback screen with secure text entry, submitted once, never persisted
-  client-side.
+- PAT screen with secure text entry, submitted once, never persisted
+  client-side — presented as an equal option alongside device flow, not a fallback.
 
 ## 5 Implementation Steps
 - 1: server provider module — device start/poll exchange, creds file
@@ -100,14 +105,19 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
   up, and that missing-creds behaves as today.
 - 4: SSH-URL rewrite via the same channel; test `git@github.com:org/repo`
   clone over HTTPS.
-- 5: mobile API client + `useGitHubDeviceLogin` + onboarding card + Account
-  Settings row + PAT fallback.
+- 5: desktop + mobile Accounts GitHub item + `useGitHubDeviceLogin` +
+  onboarding card (fresh installs only) + PAT screen as an equal option.
 - 6: docs: onboarding copy, token scope note, revocation/re-login path.
+- 7 (last): new-project/clone dialog — see
+  `docs/plan/new-project-dialog-plan.md`. Consumes the credential status and
+  clone operation from this plan (steps 1–4); do it after they land.
 
 ## 6 Verification
 - Fresh VPS: `install.sh` + `console start`, no keys on box. Onboarding →
   Connect GitHub → approve → `git clone <private-https-url>` succeeds in the
   mobile terminal tab AND via an agent run in the same session.
+- Existing install with data: connect via Accounts (no reinstall) → private
+  clone/push works.
 - `git push` from the terminal tab works without any prompt.
 - Pasted SSH remote (`git@github.com:org/private.git`) clones over HTTPS.
 - Restart daemon / reboot box: git still works, no re-login.
@@ -122,6 +132,10 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
 - Server API authentication / pairing tokens, CORS tightening, bind address —
   tracked separately; this plan assumes a trusted network path to the VPS.
 - Any GitHub repo browsing, cloning UI, or commit/push buttons on mobile.
+  (Clone UI lives in the desktop new-project dialog —
+  `docs/plan/new-project-dialog-plan.md`.)
+- Creating new GitHub repos from console (the dialog clones or starts blank
+  locally only).
 - GHE (GitHub Enterprise Server) hosts in v1 — helper answers `github.com`
   only; extend by storing per-host entries later.
 - SSH agent forwarding or deploy keys — explicitly not the mechanism.
@@ -131,6 +145,6 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
 - Who owns the shared GitHub OAuth App (client ID baked into the server like
   the existing provider constants, e.g. `apps/server-go/internal/providers/claude/constants.go`)? Device flow needs no client secret, but the App
   needs a home account/org. Alternative: bring-your-own client ID via env.
-- Fine-grained PAT vs classic `repo` scope for the paste fallback — recommend
+- Fine-grained PAT vs classic `repo` scope for the paste option — recommend
   fine-grained with repository access, validate `X-OAuth-Scopes`/permissions
   on submit.
