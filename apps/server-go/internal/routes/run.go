@@ -265,8 +265,32 @@ func pumpHub(sse *sseStream, hub *run.Hub, since *int64) {
 			return
 		}
 	}
+	if err := sse.Flush(); err != nil {
+		return
+	}
 	for f := range ch {
 		if err := sendFrame(sse, f); err != nil {
+			return
+		}
+		// Drain whatever the run has already queued before paying for a
+		// flush: a burst of model deltas then costs one syscall instead of
+		// one per delta. The buffer is never left holding a frame — the
+		// loop only continues while more frames are immediately available.
+		for more := true; more; {
+			select {
+			case next, ok := <-ch:
+				if !ok {
+					_ = sse.Flush()
+					return
+				}
+				if err := sendFrame(sse, next); err != nil {
+					return
+				}
+			default:
+				more = false
+			}
+		}
+		if err := sse.Flush(); err != nil {
 			return
 		}
 	}
@@ -280,7 +304,16 @@ func sendFrame(sse *sseStream, f run.Frame) error {
 	if drop {
 		return nil
 	}
-	return sse.Send(name, mustJSON(body))
+	return sse.SendJSON(name, body)
+}
+
+// modelStreamPartFrame is the one wire frame emitted per model token, so it
+// is a struct rather than a fiber.Map: encoding/json reflects over maps and
+// sorts their keys on every call, which is measurable at token rates. The
+// other frames stay maps — they fire at most a few times per turn.
+type modelStreamPartFrame struct {
+	Type string `json:"type"`
+	Part any    `json:"part"`
 }
 
 // wireFrame maps a hub event to its SSE event name and JSON body.
@@ -293,7 +326,7 @@ func wireFrame(e loop.Event) (string, any, bool) {
 	case loop.EventModelStreamStart:
 		return "modelStreamStart", fiber.Map{"type": "modelStreamStart", "turnId": e.Text}, false
 	case loop.EventModelStreamPart:
-		return "modelStreamPart", fiber.Map{"type": "modelStreamPart", "part": e.Part}, false
+		return "modelStreamPart", modelStreamPartFrame{Type: "modelStreamPart", Part: e.Part}, false
 	case loop.EventModelStreamEnd:
 		return "modelStreamEnd", fiber.Map{"type": "modelStreamEnd", "turnId": e.Text, "turn": e.Message}, false
 	case loop.EventToolExecutionStart:
