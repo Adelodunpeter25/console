@@ -701,6 +701,7 @@ impl ConsoleDesktopApp {
                 let project_pane_id = pane_id.clone();
                 let clear_project_pane_id = pane_id.clone();
                 let branch_pane_id = pane_id.clone();
+                let new_worktree_pane_id = pane_id.clone();
                 let model_pane_id = pane_id.clone();
                 let picker_pane_id = pane_id.clone();
                 let approval_pane_id = pane_id.clone();
@@ -775,6 +776,17 @@ impl ConsoleDesktopApp {
                                 let pane_id = branch_pane_id.clone();
                                 app.update(cx, |this, cx| {
                                     this.checkout_branch_for_pane(pane_id, name, cx)
+                                });
+                            }
+                        }
+                    },
+                    {
+                        let entity = entity.clone();
+                        move |_w, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                let pane_id = new_worktree_pane_id.clone();
+                                app.update(cx, |this, cx| {
+                                    this.new_worktree_for_pane(pane_id, cx)
                                 });
                             }
                         }

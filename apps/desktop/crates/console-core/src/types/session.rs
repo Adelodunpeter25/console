@@ -69,6 +69,18 @@ pub struct CreateSessionDto {
     pub approval_mode: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking_level: Option<ThinkingLevel>,
+    /// Opt into a fresh worktree + branch backing the new session. An empty
+    /// spec (all fields None) lets the server auto-derive the branch name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worktree: Option<CreateWorktreeSpec>,
+}
+
+/// Client-facing worktree request for `POST /api/sessions`.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateWorktreeSpec {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

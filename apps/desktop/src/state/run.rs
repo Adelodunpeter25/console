@@ -398,6 +398,7 @@ impl ConsoleDesktopApp {
                         title: Some(prompt.chars().take(30).collect()),
                         approval_mode: approval_mode.clone(),
                         thinking_level,
+                        worktree: None,
                     }).await {
                         Ok(s) => {
                             let sid = s.id.clone();

@@ -234,6 +234,7 @@ impl ConsoleDesktopApp {
                     title: Some("New Chat".into()),
                     approval_mode: Some(approval_mode.value().to_string()),
                     thinking_level,
+                    worktree: None,
                 })
                 .await
             {

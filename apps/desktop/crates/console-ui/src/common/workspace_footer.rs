@@ -39,6 +39,7 @@ pub struct WorkspaceFooter {
     on_new_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_no_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_select_branch: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_new_worktree: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
 
 impl WorkspaceFooter {
@@ -60,6 +61,7 @@ impl WorkspaceFooter {
         on_new_project: impl Fn(&mut Window, &mut App) + 'static,
         on_no_project: impl Fn(&mut Window, &mut App) + 'static,
         on_select_branch: impl Fn(String, &mut Window, &mut App) + 'static,
+        on_new_worktree: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
             projects,
@@ -79,6 +81,7 @@ impl WorkspaceFooter {
             on_new_project: Rc::new(on_new_project),
             on_no_project: Rc::new(on_no_project),
             on_select_branch: Rc::new(on_select_branch),
+            on_new_worktree: Rc::new(on_new_worktree),
         }
     }
 
@@ -207,6 +210,7 @@ impl RenderOnce for WorkspaceFooter {
         let branch_selector = if branch_enabled {
             let branches = self.branches.clone();
             let on_select_branch = self.on_select_branch.clone();
+            let on_new_worktree = self.on_new_worktree.clone();
             dropdown_menu(
                 branch_trigger,
                 "workspace-branch-menu",
@@ -226,6 +230,18 @@ impl RenderOnce for WorkspaceFooter {
                         .collect::<Vec<_>>();
                     if items.is_empty() {
                         items.push(MenuItem::new("No branches", |_, _| {}).disabled(true));
+                    } else {
+                        // New worktree spawns a session rooted in a fresh
+                        // worktree (server auto-names the branch) and opens
+                        // it — it never re-roots the current session.
+                        items.push(MenuItem::Separator);
+                        let on_new_worktree = on_new_worktree.clone();
+                        items.push(
+                            MenuItem::new("New worktree…", move |window, cx| {
+                                (on_new_worktree)(window, cx);
+                            })
+                            .icon(IconName::GitBranch.path()),
+                        );
                     }
                     items
                 },
