@@ -188,14 +188,18 @@ impl ConsoleDesktopApp {
                                 this.active_project_shortcuts = shortcut_state.bindings;
                             }
                             for run in runs {
-                                // A live stream already owns running views —
-                                // never clobber its tail with a snapshot.
-                                let owned = state.runs.get(&run.script_id).is_some_and(|view| {
-                                    view.run.as_ref().is_some_and(|current| {
-                                        current.run_id == run.run_id
-                                            && current.status == ScriptRunStatus::Running
-                                    })
-                                });
+                                // A live stream owns running views — skip
+                                // only a same-run running snapshot, which can
+                                // lag the stream's own events. Terminal
+                                // snapshots are server truth and must always
+                                // win over a stale local running view.
+                                let owned = run.status == ScriptRunStatus::Running
+                                    && state.runs.get(&run.script_id).is_some_and(|view| {
+                                        view.run.as_ref().is_some_and(|current| {
+                                            current.run_id == run.run_id
+                                                && current.status == ScriptRunStatus::Running
+                                        })
+                                    });
                                 if !owned {
                                     let output = snapshot_output(&run);
                                     state.runs.insert(
@@ -536,25 +540,55 @@ impl ConsoleDesktopApp {
             }
             // Reconcile with the retained record: covers output that arrived
             // between the backfill fetch and the stream connecting, and
-            // refreshes state after a dropped connection.
-            if !terminal_seen
-                && let Ok(run) = client
+            // refreshes state after a dropped connection. A "not found"
+            // record (daemon restarted) drops the stale running view so the
+            // row returns to "Not run yet" instead of staying stuck.
+            if !terminal_seen {
+                match client
                     .scripts
                     .get_run(&project_id_owned, &run_id_owned)
                     .await
-            {
-                let _ = cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.apply_script_run_snapshot(
-                                &project_id_owned,
-                                &script_id_owned,
-                                &run,
-                            );
-                            cx.notify();
+                {
+                    Ok(run) => {
+                        let _ = cx.update(|cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.apply_script_run_snapshot(
+                                        &project_id_owned,
+                                        &script_id_owned,
+                                        &run,
+                                    );
+                                    cx.notify();
+                                });
+                            }
                         });
                     }
-                });
+                    Err(err) => {
+                        if format!("{err:#}").contains("not found") {
+                            let _ = cx.update(|cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        if let Some(state) = this
+                                            .project_scripts_by_project
+                                            .get_mut(&project_id_owned)
+                                            && let Some(view) =
+                                                state.runs.get_mut(&script_id_owned)
+                                            && view.run.as_ref().is_some_and(|run| {
+                                                run.run_id == run_id_owned
+                                                    && run.status == ScriptRunStatus::Running
+                                            })
+                                        {
+                                            view.run = None;
+                                            view.output.clear();
+                                            view.starting = false;
+                                            cx.notify();
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    }
+                }
             }
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
@@ -577,14 +611,18 @@ impl ConsoleDesktopApp {
 
     fn apply_script_run_snapshot(&mut self, project_id: &str, script_id: &str, run: &ScriptRun) {
         if let Some(state) = self.project_scripts_by_project.get_mut(project_id) {
-            // A live stream owns running views; only snapshots can replace a
-            // finished run or introduce one the watcher hasn't seen.
-            let live = state.runs.get(script_id).is_some_and(|view| {
-                view.run.as_ref().is_some_and(|current| {
-                    current.run_id == run.run_id && current.status == ScriptRunStatus::Running
-                })
-            });
-            if !live {
+            // A live stream owns running views: skip only a same-run
+            // *running* snapshot, which can lag events already applied
+            // from the stream. A terminal snapshot is always server
+            // truth — the stream can end without delivering the final
+            // event — so it replaces even a stale local running view.
+            let stale = run.status == ScriptRunStatus::Running
+                && state.runs.get(script_id).is_some_and(|view| {
+                    view.run.as_ref().is_some_and(|current| {
+                        current.run_id == run.run_id && current.status == ScriptRunStatus::Running
+                    })
+                });
+            if !stale {
                 let output = snapshot_output(run);
                 state.runs.insert(
                     script_id.to_string(),

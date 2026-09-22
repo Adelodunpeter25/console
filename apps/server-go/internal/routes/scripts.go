@@ -80,7 +80,20 @@ func registerScriptRoutes(app *fiber.App, scripts *services.ProjectScriptsServic
 					}
 				case <-poll.C:
 					if !scripts.IsRunning(projectID, runID) {
-						return
+						// The stop/exit path may still have a queued final
+						// event that select has not picked up yet; drain and
+						// send it so the client always sees the terminal
+						// status before the stream ends.
+						for {
+							select {
+							case event := <-events:
+								if err := sse.Send(event.Type, mustJSON(event)); err != nil {
+									return
+								}
+							default:
+								return
+							}
+						}
 					}
 				}
 			}
