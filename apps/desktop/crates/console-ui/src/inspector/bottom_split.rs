@@ -122,7 +122,7 @@ impl RenderOnce for RightSidebarBottomSplit {
             .id("right-sidebar-bottom-split")
             .w_full()
             .when(!is_collapsed, |s| s.h(px(self.height)))
-            .when(is_collapsed, |s| s.h(px(32.0)))
+            .when(is_collapsed, |s| s.h(px(35.0)))
             .flex_none()
             .flex()
             .flex_col()
@@ -153,7 +153,7 @@ impl RenderOnce for RightSidebarBottomSplit {
             // Bottom Bar Header: Chevron ([v] / [^]) + Tabs ([Terminal 1] [Terminal 2] [+])
             .child(
                 div()
-                    .h(px(32.0))
+                    .h(px(35.0))
                     .w_full()
                     .flex_none()
                     .flex()
@@ -203,7 +203,7 @@ impl RenderOnce for RightSidebarBottomSplit {
                                     .id("bottom-tabs-scroll")
                                     .flex_1()
                                     .min_w_0()
-                                    .h(px(31.0))
+                                    .h(px(34.0))
                                     .flex()
                                     .items_center()
                                     .gap(px(4.0))
@@ -213,7 +213,7 @@ impl RenderOnce for RightSidebarBottomSplit {
                                         el.child(
                                             div()
                                                 .id(gpui::ElementId::from("bottom-tab-run"))
-                                                .h(px(31.0))
+                                                .h(px(34.0))
                                                 .flex_none()
                                                 .flex_shrink(0.0)
                                                 .flex()
@@ -226,9 +226,8 @@ impl RenderOnce for RightSidebarBottomSplit {
                                                         .text_color(theme.text)
                                                 })
                                                 .when(!run_tab_active, |s| {
-                                                    s.text_color(theme.text_tertiary).hover(|h| {
-                                                        h.bg(theme.raised).text_color(theme.text)
-                                                    })
+                                                    s.text_color(theme.text_tertiary)
+                                                        .hover(|h| h.text_color(theme.text))
                                                 })
                                                 .text_size(px(11.0))
                                                 .font_weight(if run_tab_active {
@@ -256,7 +255,7 @@ impl RenderOnce for RightSidebarBottomSplit {
 
                                             div()
                                                 .id(gpui::ElementId::from(tab_id))
-                                                .h(px(31.0))
+                                                .h(px(34.0))
                                                 .flex_none()
                                                 .flex_shrink(0.0)
                                                 .flex()
@@ -271,9 +270,8 @@ impl RenderOnce for RightSidebarBottomSplit {
                                                         .text_color(theme.text)
                                                 })
                                                 .when(!is_active, |s| {
-                                                    s.text_color(theme.text_tertiary).hover(|h| {
-                                                        h.bg(theme.raised).text_color(theme.text)
-                                                    })
+                                                    s.text_color(theme.text_tertiary)
+                                                        .hover(|h| h.text_color(theme.text))
                                                 })
                                                 .text_size(px(11.0))
                                                 .font_weight(if is_active {
