@@ -149,7 +149,7 @@ func TestGitStatusAndBranches(t *testing.T) {
 	}
 
 	branches := git.ListBranches(repo)
-	if !branches.IsGitRepository || len(branches.Branches) != 1 || !branches.Branches[0].IsCurrent {
+	if !branches.IsGitRepository || len(branches.Branches) != 1 || !branches.Branches[0].Current {
 		t.Fatalf("branches: %+v", branches)
 	}
 
@@ -176,7 +176,7 @@ func TestGitCheckout(t *testing.T) {
 	branches := git.ListBranches(repo)
 	var current string
 	for _, b := range branches.Branches {
-		if b.IsCurrent {
+		if b.Current {
 			current = b.Name
 		}
 	}
