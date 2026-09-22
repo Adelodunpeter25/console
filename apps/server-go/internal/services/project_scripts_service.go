@@ -33,6 +33,19 @@ func (r *managedRun) publish(event types.ScriptRunEvent) {
 	}
 	r.mu.Unlock()
 	for _, ch := range subs {
+		if event.Type == "exit" {
+			// The exit event is the only signal that flips a script tab out
+			// of "Running" client-side, and subscribers are wiped right
+			// after this call — a dropped exit leaves the client watching a
+			// dead channel until it manually refreshes. Chatty output can
+			// fill the 256-slot buffer before the drop, so give this one a
+			// bounded blocking send instead of the fire-and-forget default.
+			select {
+			case ch <- event:
+			case <-time.After(2 * time.Second):
+			}
+			continue
+		}
 		select {
 		case ch <- event:
 		default:
