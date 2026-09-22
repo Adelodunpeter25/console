@@ -220,10 +220,13 @@ func Load() error {
 			candidates = append(candidates, p)
 		}
 		// Resolve relative to the executable too — the server CWD is not
-		// guaranteed to be the module root.
+		// guaranteed to be the module root. `console upgrade` drops the
+		// sidecar directly next to the binary (no third_party nesting).
 		if exe, err := os.Executable(); err == nil {
 			exeDir := filepath.Dir(exe)
 			candidates = append(candidates,
+				filepath.Join(exeDir, "libfff_c.so"),
+				filepath.Join(exeDir, "libfff_c.dylib"),
 				filepath.Join(exeDir, "third_party/fff/libfff_c.so"),
 				filepath.Join(exeDir, "third_party/fff/libfff_c.dylib"),
 			)
@@ -495,6 +498,40 @@ func NewManager() *Manager {
 // Enabled reports whether fff was loaded.
 func (m *Manager) Enabled() bool { return m.enabled }
 
+// ensureAsync starts the background index scan for root unless one is
+// already running or complete.
+func (m *Manager) ensureAsync(root string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.instances[root]; ok {
+		return
+	}
+	if _, started := m.creating[root]; started {
+		return
+	}
+	once := &sync.Once{}
+	m.creating[root] = once
+	go once.Do(func() {
+		created, err := Create(root)
+		m.mu.Lock()
+		if err == nil {
+			m.instances[root] = created
+		}
+		delete(m.creating, root)
+		m.mu.Unlock()
+	})
+}
+
+// Prewarm kicks off the background index scan for root without blocking.
+// Call when a project/session opens so the first search hits a warm index
+// instead of paying for the initial scan. No-op when fff is unavailable.
+func (m *Manager) Prewarm(root string) {
+	if !m.enabled {
+		return
+	}
+	m.ensureAsync(root)
+}
+
 // SearchAsync returns results when the index is warm; on a cold root it
 // kicks off the background scan and returns ok=false so the caller can fall
 // back to the walk-based search until the index is ready.
@@ -502,27 +539,13 @@ func (m *Manager) SearchAsync(root, query string, limit int) ([]Item, bool) {
 	if !m.enabled {
 		return nil, false
 	}
+	m.ensureAsync(root)
 	m.mu.Lock()
 	inst, ok := m.instances[root]
+	m.mu.Unlock()
 	if !ok {
-		once, started := m.creating[root]
-		if !started {
-			once = &sync.Once{}
-			m.creating[root] = once
-			go once.Do(func() {
-				created, err := Create(root)
-				m.mu.Lock()
-				if err == nil {
-					m.instances[root] = created
-				}
-				delete(m.creating, root)
-				m.mu.Unlock()
-			})
-		}
-		m.mu.Unlock()
 		return nil, false
 	}
-	m.mu.Unlock()
 	items, err := inst.Search(query, limit)
 	if err != nil {
 		return nil, false

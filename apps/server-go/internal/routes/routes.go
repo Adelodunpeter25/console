@@ -68,6 +68,13 @@ func New(cfg Config) (*fiber.App, *run.Service) {
 	runSvc.SetBashJobs(services.NewBashJobManager(cfg.Ports))
 	registerSessionRoutes(app, services.NewSessionService(cfg.DB), runSvc)
 	fffManager := fff.NewManager()
+	if fffManager.Enabled() {
+		slog.Info("fff file-search index enabled")
+	} else if err := fff.Load(); err != nil {
+		slog.Warn("fff file-search index disabled, using walk fallback", "error", err)
+	} else {
+		slog.Warn("fff file-search index disabled, using walk fallback")
+	}
 	services.SetFffManager(fffManager)
 	tools.SetFffManager(fffManager)
 	registerRunRoutes(app, runSvc)

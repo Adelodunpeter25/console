@@ -18,7 +18,13 @@ func NewSessionService(manager *db.DB) *SessionService {
 
 // Core operations
 func (s *SessionService) Create(opts types.CreateSessionOptions) (types.SessionHeader, error) {
-	return s.inner.Create(opts)
+	header, err := s.inner.Create(opts)
+	if err == nil && header.Cwd != "" && manager != nil {
+		// A new session means its project was just opened: start the
+		// file-search index scan now so the first @-mention/grep is warm.
+		manager.Prewarm(header.Cwd)
+	}
+	return header, err
 }
 
 func (s *SessionService) ListFiltered(f session.ListFilter) ([]types.SessionHeader, error) {
@@ -26,7 +32,12 @@ func (s *SessionService) ListFiltered(f session.ListFilter) ([]types.SessionHead
 }
 
 func (s *SessionService) Load(sessionID string, limit int64, before int64) (*types.LoadedSession, error) {
-	return s.inner.Load(sessionID, limit, before)
+	loaded, err := s.inner.Load(sessionID, limit, before)
+	if err == nil && loaded != nil && loaded.Header.Cwd != "" && manager != nil {
+		// Opening an existing session re-opens its project: same warm-up.
+		manager.Prewarm(loaded.Header.Cwd)
+	}
+	return loaded, err
 }
 
 func (s *SessionService) Header(sessionID string) (*types.SessionHeader, error) {
@@ -58,7 +69,12 @@ func (s *SessionService) UpdateModel(sessionID, modelID, provider string) error 
 }
 
 func (s *SessionService) UpdateCwd(sessionID, cwd string, projectID *string) error {
-	return s.inner.UpdateCwd(sessionID, cwd, projectID)
+	err := s.inner.UpdateCwd(sessionID, cwd, projectID)
+	if err == nil && cwd != "" && manager != nil {
+		// Session moved to another project root: warm that index too.
+		manager.Prewarm(cwd)
+	}
+	return err
 }
 
 func (s *SessionService) UpdateApprovalMode(sessionID, approvalMode string) error {
