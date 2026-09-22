@@ -15,6 +15,8 @@ var IgnoredPaths = []string{
 	".turbo", ".vite", ".vite-temp", ".cache", "coverage", ".ds_store",
 	"thumbs.db", ".gemini", "target", "tmp", ".parcel-cache", "out",
 	".output", ".expo", ".gradle", "bin", "obj",
+	".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".tox",
+	".idea", ".vscode", ".terraform", ".yarn",
 }
 
 // IsPathIgnored reports whether any path segment is an ignored entry.
