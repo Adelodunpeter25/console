@@ -83,15 +83,19 @@ func mapStainlessArch(arch string) string {
 	}
 }
 
-func buildHeaders(accessToken string) map[string]string {
-	return map[string]string{
+// buildHeaders assembles the request headers, including the per-session
+// identity (X-Claude-Code-Session-Id) that lets Anthropic distinguish
+// concurrent sessions under one OAuth subscription — mirroring Claude
+// Code's own CLI. sessionID is omitted from the headers when empty.
+func buildHeaders(accessToken, sessionID string) map[string]string {
+	headers := map[string]string{
 		"Authorization":   "Bearer " + accessToken,
 		"Content-Type":    "application/json",
 		"Accept":          "text/event-stream",
 		"anthropic-version": "2023-06-01",
 		"anthropic-beta":    strings.Join(OAuthBetas, ","),
 		"anthropic-dangerous-direct-browser-access": "true",
-		"User-Agent":           UserAgent,
+		"User-Agent":           UserAgent(),
 		"X-Stainless-Arch":     mapStainlessArch(runtime.GOARCH),
 		"X-Stainless-Lang":     "go",
 		"X-Stainless-OS":       mapStainlessOS(runtime.GOOS),
@@ -102,6 +106,10 @@ func buildHeaders(accessToken string) map[string]string {
 		"X-Stainless-Timeout":         "600",
 		"x-app":                       "cli",
 	}
+	if sessionID != "" {
+		headers["X-Claude-Code-Session-Id"] = sessionID
+	}
+	return headers
 }
 
 // MapThinkingLevel maps Console thinking levels to Anthropic output
@@ -257,7 +265,9 @@ func NormalizeUsage(input, output map[string]any, retention loop.CacheRetention)
 
 // doRequest posts one Messages request with retry on 429/529 (mirroring
 // fetchClaudeWithRetry, including the Haiku fallback for high-tier 429s).
-func (p *Provider) doRequest(ctx context.Context, url string, headers map[string]string, body map[string]any) (*http.Response, error) {
+// Headers are rebuilt on every attempt (cheap) so a version adopted via
+// AdoptRequiredClaudeCodeVersion mid-loop is picked up immediately.
+func (p *Provider) doRequest(ctx context.Context, url, accessToken, sessionID string, body map[string]any) (*http.Response, error) {
 	rawBody, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -267,7 +277,7 @@ func (p *Provider) doRequest(ctx context.Context, url string, headers map[string
 		if err != nil {
 			return nil, err
 		}
-		for k, v := range headers {
+		for k, v := range buildHeaders(accessToken, sessionID) {
 			httpReq.Header.Set(k, v)
 		}
 		return p.httpClient().Do(httpReq)
@@ -288,6 +298,12 @@ func (p *Provider) doRequest(ctx context.Context, url string, headers map[string
 			resp.Header.Get("x-should-retry") == "true"
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 		resp.Body.Close()
+		if AdoptRequiredClaudeCodeVersion(string(raw)) && attemptN < 2 {
+			// The pinned wire version is stale; retry immediately with the
+			// server-named version instead of spending the attempt budget
+			// on a rejection that would just repeat.
+			continue
+		}
 		if !retryable || attemptN == 2 {
 			// High-tier 429 falls back to Haiku before failing.
 			modelID, _ := body["model"].(string)
@@ -339,7 +355,10 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 		return err
 	}
 	body := BuildRequestBody(req.Model, req.SystemPrompt, req.Messages, req.Tools, req.CacheRetention, req.ThinkingLevel)
-	resp, err := p.doRequest(ctx, MessagesURL(p.baseURL()), buildHeaders(cred.AccessToken), body)
+	if userID := metadataUserID(req.ConversationID); userID != "" {
+		body["metadata"] = map[string]any{"user_id": userID}
+	}
+	resp, err := p.doRequest(ctx, MessagesURL(p.baseURL()), cred.AccessToken, req.ConversationID, body)
 	if err != nil {
 		events.Fail(err)
 		return err

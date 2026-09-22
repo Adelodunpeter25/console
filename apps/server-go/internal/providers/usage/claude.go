@@ -23,7 +23,7 @@ func claudeHeaders(accessToken string) map[string]string {
 	return map[string]string{
 		"Accept":         "application/json, text/plain, */*",
 		"Content-Type":   "application/json",
-		"User-Agent":     "claude-cli/" + claude.CodeVersion + " (external, cli)",
+		"User-Agent":     claude.UserAgent(),
 		"anthropic-beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27",
 		"Authorization":  "Bearer " + accessToken,
 	}
