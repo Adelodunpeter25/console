@@ -28,7 +28,7 @@ const Scope = "org:create_api_key user:profile user:inference user:sessions:clau
 const RefreshSkewMs = 5 * 60_000
 
 // CodeVersion is the Claude Code CLI version on the Anthropic wire.
-const CodeVersion = "2.1.276"
+const CodeVersion = "2.1.280"
 
 // SDKVersion is the @anthropic-ai/sdk version bundled by Claude Code.
 const SDKVersion = "0.112.1"
