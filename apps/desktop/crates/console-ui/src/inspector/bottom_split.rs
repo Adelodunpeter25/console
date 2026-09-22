@@ -13,6 +13,7 @@ use crate::theme::Theme;
 pub struct TerminalTabInfo {
     pub id: usize,
     pub title: String,
+    pub script_id: Option<String>,
 }
 
 #[derive(IntoElement)]

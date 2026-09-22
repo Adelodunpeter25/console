@@ -161,7 +161,7 @@ pub struct RunPanel {
     pub rows: Vec<RunScriptRow>,
     pub on_run: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     pub on_stop: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    pub on_toggle_expand: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    pub on_open_log: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
 }
 
 fn empty_state(icon: IconName, title: &str, hint: &str, theme: &Theme) -> impl IntoElement {
@@ -264,7 +264,7 @@ impl RenderOnce for RunPanel {
             }
             let on_run = self.on_run.clone();
             let on_stop = self.on_stop.clone();
-            let on_toggle = self.on_toggle_expand.clone();
+            let on_open_log = self.on_open_log.clone();
 
             let mut card = div()
                 .id(ElementId::from(format!("run-row-{script_id}")))
@@ -297,14 +297,10 @@ impl RenderOnce for RunPanel {
                                 .hover(|s| s.bg(theme.overlay))
                                 .on_click(move |_, window, cx| {
                                     cx.stop_propagation();
-                                    (on_toggle)(expand_id.clone(), window, cx);
+                                    (on_open_log)(expand_id.clone(), window, cx);
                                 })
                                 .child(app_icon(
-                                    if row.expanded {
-                                        IconName::ChevronDown
-                                    } else {
-                                        IconName::ChevronRight
-                                    },
+                                    IconName::Plus,
                                     12.0,
                                     theme.text_tertiary,
                                 )),

@@ -392,7 +392,7 @@ impl Render for ConsoleDesktopApp {
                         if tab_idx == 0 {
                             this.select_bottom_run_tab(cx);
                         } else {
-                            this.select_right_sidebar_terminal_tab(tab_idx - 1, cx);
+                            this.select_right_sidebar_bottom_tab(tab_idx - 1, cx);
                         }
                     });
                 }
@@ -407,7 +407,7 @@ impl Render for ConsoleDesktopApp {
                 }
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.close_right_sidebar_terminal(tab_idx - 1, cx);
+                        this.close_right_sidebar_bottom_tab(tab_idx - 1, cx);
                     });
                 }
             })
@@ -452,12 +452,12 @@ impl Render for ConsoleDesktopApp {
                 }
             })
         };
-        let on_toggle_project_script: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+        let on_open_project_script_log: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
             let entity = entity.clone();
             Rc::new(move |script_id, _window, cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.toggle_project_script_expanded(&script_id, cx);
+                        this.open_project_script_log(&script_id, cx);
                     });
                 }
             })
@@ -964,24 +964,141 @@ impl Render for ConsoleDesktopApp {
                             .as_ref()
                             .and_then(|cwd| self.right_sidebar_terminals_by_cwd.get(cwd));
 
-                        let tabs: Vec<TerminalTabInfo> = active_term_state
-                            .map(|state| {
-                                state
-                                    .terminals
-                                    .iter()
-                                    .enumerate()
-                                    .map(|(idx, _)| TerminalTabInfo {
-                                        id: idx,
-                                        title: format!("Terminal {}", idx + 1),
-                                    })
-                                    .collect()
-                            })
-                            .unwrap_or_default();
+                        let scripts_project_id_for_tabs = self.active_scripts_project_id();
+                        let script_label_by_id: std::collections::HashMap<String, String> =
+                            scripts_project_id_for_tabs
+                                .as_ref()
+                                .and_then(|pid| self.project_scripts_by_project.get(pid))
+                                .map(|state| {
+                                    state
+                                        .scripts
+                                        .iter()
+                                        .map(|s| (s.id.clone(), s.label.clone()))
+                                        .collect()
+                                })
+                                .unwrap_or_default();
 
-                        let active_idx = active_term_state.map(|s| s.active_idx).unwrap_or(0);
-                        let terminal_element = active_term_state
-                            .and_then(|state| state.terminals.get(active_idx))
-                            .map(|(_, term)| term.clone().into_any_element());
+                        let script_log_ids: Vec<String> = active_term_state
+                            .map(|state| state.script_logs.clone())
+                            .unwrap_or_default();
+                        let active_script_log_id: Option<String> = active_term_state
+                            .and_then(|state| state.active_script_log.clone());
+
+                        let mut tabs: Vec<TerminalTabInfo> = script_log_ids
+                            .iter()
+                            .map(|id| TerminalTabInfo {
+                                id: 0,
+                                title: script_label_by_id
+                                    .get(id)
+                                    .cloned()
+                                    .unwrap_or_else(|| id.clone()),
+                                script_id: Some(id.clone()),
+                            })
+                            .collect();
+                        tabs.extend(active_term_state.map(|state| {
+                            state
+                                .terminals
+                                .iter()
+                                .enumerate()
+                                .map(|(idx, _)| TerminalTabInfo {
+                                    id: idx,
+                                    title: format!("Terminal {}", idx + 1),
+                                    script_id: None,
+                                })
+                                .collect::<Vec<_>>()
+                        }).unwrap_or_default());
+
+                        let active_idx = if let Some(active_id) = active_script_log_id.as_ref() {
+                            script_log_ids.iter().position(|id| id == active_id).unwrap_or(0)
+                        } else {
+                            script_log_ids.len()
+                                + active_term_state.map(|s| s.active_idx).unwrap_or(0)
+                        };
+
+                        let terminal_element = if let Some(active_id) = active_script_log_id.clone() {
+                            let script_state = scripts_project_id_for_tabs
+                                .as_ref()
+                                .and_then(|pid| self.project_scripts_by_project.get(pid));
+                            let label = script_label_by_id
+                                .get(&active_id)
+                                .cloned()
+                                .unwrap_or_else(|| active_id.clone());
+                            let command = script_state
+                                .and_then(|state| {
+                                    state.scripts.iter().find(|s| s.id == active_id)
+                                })
+                                .map(|s| s.command.clone())
+                                .unwrap_or_default();
+                            let run_view = script_state.and_then(|state| state.runs.get(&active_id));
+                            let status = run_view.and_then(|v| v.run.as_ref().map(|r| r.status));
+                            let exit_code =
+                                run_view.and_then(|v| v.run.as_ref().and_then(|r| r.exit_code));
+                            let starting = run_view.is_some_and(|v| v.starting);
+                            let output = run_view.map(|v| v.output.clone()).unwrap_or_default();
+
+                            let view = if !output.is_empty() {
+                                let lines: Rc<Vec<String>> = Rc::new(
+                                    output.lines().map(|line| line.to_string()).collect(),
+                                );
+                                let count = lines.len().max(1);
+                                let key = format!("log:{}", active_id);
+                                let prev_count = self
+                                    .viewer_list_states
+                                    .get(&key)
+                                    .map(|state| state.item_count());
+                                let list_state = self
+                                    .viewer_list_states
+                                    .entry(key.clone())
+                                    .or_insert_with(|| {
+                                        gpui::ListState::new(
+                                            count,
+                                            gpui::ListAlignment::Top,
+                                            gpui::px(console_ui::ESTIMATED_LOG_ROW_HEIGHT),
+                                        )
+                                    });
+                                if list_state.item_count() != count {
+                                    list_state.reset(count);
+                                }
+                                let list_state = list_state.clone();
+                                let selection = self
+                                    .viewer_markdown_selections
+                                    .entry(key.clone())
+                                    .or_default()
+                                    .clone();
+                                let scrollbar_state = self.viewer_scrollbar_state(&key);
+                                if prev_count != Some(count) {
+                                    let selecting = !selection.selection.borrow().is_empty();
+                                    if !selecting {
+                                        list_state.scroll_to_end();
+                                    }
+                                }
+                                Some(console_ui::RunOutputView {
+                                    lines,
+                                    list_state,
+                                    selection,
+                                    scrollbar_state,
+                                })
+                            } else {
+                                None
+                            };
+
+                            Some(
+                                console_ui::ScriptLogTab {
+                                    label,
+                                    command,
+                                    status,
+                                    exit_code,
+                                    starting,
+                                    output,
+                                    view,
+                                }
+                                .into_any_element(),
+                            )
+                        } else {
+                            active_term_state
+                                .and_then(|state| state.terminals.get(state.active_idx))
+                                .map(|(_, term)| term.clone().into_any_element())
+                        };
 
                         let run_panel_element = {
                             let scripts_project_id = self.active_scripts_project_id();
@@ -1118,7 +1235,7 @@ impl Render for ConsoleDesktopApp {
                                 rows,
                                 on_run: on_run_project_script,
                                 on_stop: on_stop_project_script,
-                                on_toggle_expand: on_toggle_project_script,
+                                on_open_log: on_open_project_script_log,
                             }
                             .into_any_element()
                         };

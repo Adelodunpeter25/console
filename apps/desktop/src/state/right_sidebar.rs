@@ -110,24 +110,68 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    pub fn select_right_sidebar_terminal_tab(&mut self, index: usize, cx: &mut Context<Self>) {
+    pub fn open_project_script_log(&mut self, script_id: &str, cx: &mut Context<Self>) {
         let (_, cwd) = self.active_inspector_target();
-        let Some(cwd) = cwd else {
-            return;
-        };
+        let Some(cwd) = cwd else { return; };
+        let state = self.right_sidebar_terminals_by_cwd.entry(cwd).or_insert_with(|| super::app::WorkspaceTerminalState {
+            terminals: Vec::new(), active_idx: 0, next_id: 1, script_logs: Vec::new(), active_script_log: None,
+        });
+        if !state.script_logs.iter().any(|id| id == script_id) {
+            state.script_logs.push(script_id.to_string());
+        }
+        state.active_script_log = Some(script_id.to_string());
+        self.right_sidebar_bottom_run_selected = false;
         if self.right_sidebar_bottom_collapsed {
             self.right_sidebar_bottom_collapsed = false;
-            self.persist_layout();
         }
-        if let Some(state) = self.right_sidebar_terminals_by_cwd.get_mut(&cwd) {
-            if index < state.terminals.len() {
-                state.active_idx = index;
-                // Leaving the Run tab: the body renders the Run panel while
-                // this flag is set, so it must clear on every terminal select.
-                self.right_sidebar_bottom_run_selected = false;
+        self.persist_workspaces();
+        cx.notify();
+    }
+
+    pub fn select_right_sidebar_bottom_tab(&mut self, index: usize, cx: &mut Context<Self>) {
+        let (_, cwd) = self.active_inspector_target();
+        let Some(cwd) = cwd else { return; };
+        let Some(state) = self.right_sidebar_terminals_by_cwd.get_mut(&cwd) else { return; };
+        if index < state.script_logs.len() {
+            state.active_script_log = state.script_logs.get(index).cloned();
+        } else {
+            state.active_script_log = None;
+            let terminal_index = index - state.script_logs.len();
+            if terminal_index < state.terminals.len() {
+                state.active_idx = terminal_index;
+            }
+        }
+        self.right_sidebar_bottom_run_selected = false;
+        if self.right_sidebar_bottom_collapsed { self.right_sidebar_bottom_collapsed = false; }
+        self.persist_workspaces();
+        cx.notify();
+    }
+
+    /// Close a script log tab or a terminal tab, addressed by the same
+    /// combined index used by `select_right_sidebar_bottom_tab` (script logs
+    /// first, then terminals). Closing a log tab only hides the log view —
+    /// the script keeps running.
+    pub fn close_right_sidebar_bottom_tab(&mut self, index: usize, cx: &mut Context<Self>) {
+        let (_, cwd) = self.active_inspector_target();
+        let Some(cwd) = cwd else { return; };
+        let terminal_index = {
+            let Some(state) = self.right_sidebar_terminals_by_cwd.get_mut(&cwd) else { return; };
+            if index < state.script_logs.len() {
+                let closed_id = state.script_logs.remove(index);
+                if state.active_script_log.as_deref() == Some(closed_id.as_str()) {
+                    state.active_script_log = state.script_logs.first().cloned();
+                }
+                None
+            } else {
+                Some(index - state.script_logs.len())
+            }
+        };
+        match terminal_index {
+            None => {
                 self.persist_workspaces();
                 cx.notify();
             }
+            Some(terminal_index) => self.close_right_sidebar_terminal(terminal_index, cx),
         }
     }
 
@@ -153,6 +197,8 @@ impl ConsoleDesktopApp {
                 terminals: Vec::new(),
                 active_idx: 0,
                 next_id: 1,
+                script_logs: Vec::new(),
+                active_script_log: None,
             });
 
         // Max 5 terminal tabs per workspace
@@ -394,6 +440,8 @@ impl ConsoleDesktopApp {
                 terminals: Vec::new(),
                 active_idx: 0,
                 next_id: 1,
+                script_logs: Vec::new(),
+                active_script_log: None,
             });
 
         // If no terminals exist for this workspace, restore persisted tab count (max 5) or spawn initial Terminal 1

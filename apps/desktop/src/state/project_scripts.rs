@@ -389,17 +389,6 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    pub fn toggle_project_script_expanded(&mut self, script_id: &str, cx: &mut Context<Self>) {
-        if let Some(project_id) = self.active_scripts_project_id()
-            && let Some(state) = self.project_scripts_by_project.get_mut(&project_id)
-        {
-            if !state.expanded.remove(script_id) {
-                state.expanded.insert(script_id.to_string());
-            }
-            cx.notify();
-        }
-    }
-
     /// Rebuild `active_project_shortcuts` from the scripts of whatever
     /// project is currently active. Unique shortcuts stay dispatchable;
     /// duplicated ones stay out of the map (their rows warn instead). Call

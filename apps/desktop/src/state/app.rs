@@ -53,6 +53,10 @@ pub struct WorkspaceTerminalState {
     pub terminals: Vec<(usize, Entity<TerminalView>)>,
     pub active_idx: usize,
     pub next_id: usize,
+    /// Open script log tabs, keyed by script id.
+    pub script_logs: Vec<String>,
+    /// None selects a terminal; Some selects a script log id.
+    pub active_script_log: Option<String>,
 }
 
 #[derive(Clone, Debug)]
