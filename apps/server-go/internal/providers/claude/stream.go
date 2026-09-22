@@ -123,7 +123,14 @@ func MapThinkingLevel(level string) string {
 	}
 }
 
-// BuildRequestBody assembles the Messages request: always-on extended
+// ClaudeCodeSystemInstruction is the identity block Anthropic requires as
+// the first system block on OAuth (subscription) requests. Without it the
+// premium models reject the call with an opaque 429 rate_limit_error;
+// only Haiku answers. Claude Code's own CLI sends the same line.
+const ClaudeCodeSystemInstruction = "You are Claude Code, Anthropic's official CLI for Claude."
+
+// BuildRequestBody assembles the Messages request: the required Claude Code
+// identity block ahead of the caller's system prompt, always-on extended
 // thinking (medium budget, interleaved beta keeps tool use working),
 // optional effort mapping, ephemeral cache breakpoints.
 func BuildRequestBody(modelID, systemPrompt string, messages []any, toolDefs []tools.Definition, retention loop.CacheRetention, thinkingLevel string) map[string]any {
@@ -136,16 +143,15 @@ func BuildRequestBody(modelID, systemPrompt string, messages []any, toolDefs []t
 	if effort := MapThinkingLevel(thinkingLevel); effort != "" {
 		body["output_config"] = map[string]any{"effort": effort}
 	}
+	system := []any{map[string]any{"type": "text", "text": ClaudeCodeSystemInstruction}}
 	if trimmed != "" {
-		if retention == loop.CacheNone {
-			body["system"] = trimmed
-		} else {
-			body["system"] = []any{map[string]any{
-				"type": "text", "text": trimmed,
-				"cache_control": map[string]any{"type": "ephemeral"},
-			}}
+		block := map[string]any{"type": "text", "text": trimmed}
+		if retention != loop.CacheNone {
+			block["cache_control"] = map[string]any{"type": "ephemeral"}
 		}
+		system = append(system, block)
 	}
+	body["system"] = system
 	body["messages"] = ConvertMessages(messages, retention)
 	if converted := ConvertTools(toolDefs, retention); len(converted) > 0 {
 		body["tools"] = converted

@@ -221,8 +221,21 @@ func TestClaudeRequestBody(t *testing.T) {
 		t.Fatalf("output_config = %v", cfg)
 	}
 	sys, _ := body["system"].([]any)
-	if len(sys) != 1 {
+	if len(sys) != 2 {
 		t.Fatalf("system = %v", body["system"])
+	}
+	// Anthropic rejects OAuth requests whose first system block is not the
+	// Claude Code identity line: premium models 429, only Haiku answers.
+	first, _ := sys[0].(map[string]any)
+	if first["text"] != claude.ClaudeCodeSystemInstruction {
+		t.Fatalf("system[0] must be the Claude Code identity: %v", sys[0])
+	}
+	if _, ok := first["cache_control"]; ok {
+		t.Fatalf("identity block must not carry a cache breakpoint: %v", first)
+	}
+	second, _ := sys[1].(map[string]any)
+	if second["text"] != "sys" {
+		t.Fatalf("system[1] must be the caller prompt: %v", sys[1])
 	}
 	noCache := claude.BuildRequestBody("m", "sys", nil, nil, loop.CacheNone, "none")
 	if _, ok := noCache["output_config"]; ok {
