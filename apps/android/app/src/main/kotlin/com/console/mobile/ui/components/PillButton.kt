@@ -20,19 +20,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.ui.theme.ConsoleColors
 
-enum class PillButtonVariant { Filled, Outline }
+enum class PillButtonVariant { Filled, Outline, Destructive }
 
 /**
- * Pill-shaped action button (999dp corners) shared across the app — bottom-sheet
- * primary actions (e.g. environment "Save") and compact inline actions (e.g. account
- * "Login" / "Re-login"). Fully custom (not built on TextButton/Button) so content
- * padding is the only padding applied — no stacked default min-height.
+ * Shared action button — bottom-sheet primary actions (e.g. environment "Save"),
+ * compact inline actions (e.g. account "Login" / "Re-login"), and full-width rows
+ * (e.g. "Disconnect backend"). Fully custom (not built on TextButton/Button) so
+ * content padding is the only padding applied — no stacked default min-height.
+ * Defaults to a 999dp stadium shape; pass `cornerRadius` to match a card's rounding
+ * (e.g. 16dp) instead.
  */
 @Composable
 fun PillButton(
@@ -44,13 +48,15 @@ fun PillButton(
     loading: Boolean = false,
     icon: ImageVector? = null,
     fullWidth: Boolean = false,
-    horizontalPadding: androidx.compose.ui.unit.Dp = 14.dp,
-    verticalPadding: androidx.compose.ui.unit.Dp = 8.dp,
+    cornerRadius: Dp = 999.dp,
+    horizontalPadding: Dp = 14.dp,
+    verticalPadding: Dp = 8.dp,
 ) {
-    val shape = RoundedCornerShape(999.dp)
+    val shape: Shape = RoundedCornerShape(cornerRadius)
     val contentColor = when {
         variant == PillButtonVariant.Filled && enabled -> Color.Black
         variant == PillButtonVariant.Filled -> Color.Black.copy(alpha = 0.4f)
+        variant == PillButtonVariant.Destructive -> ConsoleColors.Destructive
         else -> ConsoleColors.TextPrimary
     }
     var m = modifier
@@ -59,6 +65,7 @@ fun PillButton(
     m = when (variant) {
         PillButtonVariant.Filled -> m.background(if (enabled) Color.White else Color.White.copy(alpha = 0.4f))
         PillButtonVariant.Outline -> m.border(1.dp, ConsoleColors.Border, shape)
+        PillButtonVariant.Destructive -> m.background(ConsoleColors.Destructive.copy(alpha = 0.05f)).border(1.dp, ConsoleColors.Destructive.copy(alpha = 0.3f), shape)
     }
     m = m.clickable(enabled = enabled && !loading, onClick = onClick)
         .padding(horizontal = horizontalPadding, vertical = verticalPadding)

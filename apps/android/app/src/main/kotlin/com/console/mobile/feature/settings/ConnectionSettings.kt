@@ -45,6 +45,8 @@ import com.console.mobile.core.util.normalizeBackendUrl
 import com.console.mobile.core.util.urlHost
 import com.console.mobile.data.store.Environment
 import com.console.mobile.ui.components.ConfirmButton
+import com.console.mobile.ui.components.PillButton
+import com.console.mobile.ui.components.PillButtonVariant
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.ConsoleColors
@@ -131,19 +133,20 @@ fun ConnectionSettings(onBack: () -> Unit) {
                     }
                 }
                 if (envState.activeId != null) {
-                    TextButton(
+                    PillButton(
+                        text = "Disconnect backend",
                         onClick = {
                             confirmAlert("Disconnect Backend", "Are you sure you want to disconnect? This removes all environments and connection data, like a clean install.", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Disconnect", destructive = true, onPress = {
                                 scope.launch { withContext(Dispatchers.IO) { AppContainer.environmentsRepository.deactivate() } }
                             })))
                         },
-                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp).clip(RoundedCornerShape(16.dp)).background(ConsoleColors.Destructive.copy(alpha = 0.05f)).border(1.dp, ConsoleColors.Destructive.copy(alpha = 0.3f), RoundedCornerShape(16.dp)).padding(vertical = 12.dp),
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.LinkOff, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(16.dp))
-                            Text("Disconnect backend", color = ConsoleColors.Destructive, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
-                        }
-                    }
+                        variant = PillButtonVariant.Destructive,
+                        icon = Icons.Filled.LinkOff,
+                        fullWidth = true,
+                        cornerRadius = 16.dp,
+                        verticalPadding = 12.dp,
+                        modifier = Modifier.padding(top = 16.dp),
+                    )
                 }
             }
         }
@@ -179,9 +182,10 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
         OutlinedTextField(value = name, onValueChange = { name = it; if (status != "testing" && status != "saving") status = "idle" }, placeholder = { Text("My server") }, singleLine = true, colors = fieldColors, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp))
         Text("Backend URL", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
         OutlinedTextField(value = url, onValueChange = { url = it; if (status != "testing" && status != "saving") status = "idle" }, placeholder = { Text("http://192.168.1.X:3000") }, singleLine = true, colors = fieldColors, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
-        TextButton(
+        PillButton(
+            text = if (status == "testing") "Testing…" else "Test connection",
             onClick = {
-                val normalized = normalizeBackendUrl(url) ?: return@TextButton
+                val normalized = normalizeBackendUrl(url) ?: return@PillButton
                 status = "testing"
                 scope.launch {
                     val ok = withContext(Dispatchers.IO) {
@@ -195,11 +199,13 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
                 }
             },
             enabled = url.isNotBlank() && status != "testing",
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, ConsoleColors.Border, RoundedCornerShape(12.dp)).padding(vertical = 10.dp),
-        ) {
-            if (status == "testing") CircularProgressIndicator(color = ConsoleColors.TextSecondary, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-            Text(if (status == "testing") "Testing…" else "Test connection", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-        }
+            loading = status == "testing",
+            variant = PillButtonVariant.Outline,
+            fullWidth = true,
+            cornerRadius = 12.dp,
+            verticalPadding = 10.dp,
+            modifier = Modifier.padding(top = 16.dp),
+        )
         if (status == "test-ok") Text("Connection OK", color = Color(0xFF34D399), fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
         else if (status == "test-fail") Text("Could not reach the backend", color = ConsoleColors.Destructive, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
         if (env != null && !isActive) {
