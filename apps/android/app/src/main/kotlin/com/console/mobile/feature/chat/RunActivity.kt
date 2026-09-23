@@ -38,6 +38,7 @@ import com.console.mobile.core.chat.ActivityEvent
 import com.console.mobile.core.chat.RunActivityState
 import com.console.mobile.core.chat.RunStatus
 import com.console.mobile.core.util.formatDurationMs
+import com.console.mobile.core.util.getToolIcon
 import com.console.mobile.core.util.getToolLabel
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
@@ -165,6 +166,12 @@ fun ToolGroupRow(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Icon(
+                getToolIcon(toolName),
+                contentDescription = null,
+                tint = ConsoleColors.TextSecondary,
+                modifier = Modifier.size(13.dp).padding(end = 6.dp),
+            )
             Text(
                 getToolLabel(toolName),
                 color = ConsoleColors.TextSecondary,
