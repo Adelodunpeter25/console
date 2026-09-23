@@ -7,6 +7,7 @@ val ConsoleJson = Json {
     isLenient = true
     coerceInputValues = true
     explicitNulls = false
+    encodeDefaults = true
 }
 
 fun <T> unwrapEnvelope(body: Envelope<T>, action: String): T {
