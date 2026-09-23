@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -119,7 +120,7 @@ fun Composer(
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth().background(ConsoleColors.Background).padding(horizontal = 10.dp).padding(top = 8.dp, bottom = 8.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().background(ConsoleColors.Background).imePadding().padding(horizontal = 10.dp).padding(top = 8.dp, bottom = 8.dp)) {
         if (topBanner != null) topBanner()
         if (attachments.isNotEmpty()) {
             AttachmentStrip(sessionId = sessionId, attachments = attachments)
