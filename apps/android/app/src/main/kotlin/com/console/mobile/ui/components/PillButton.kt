@@ -71,7 +71,7 @@ fun PillButton(
         .padding(horizontal = horizontalPadding, vertical = verticalPadding)
 
     CompositionLocalProvider(LocalContentColor provides contentColor) {
-        Row(modifier = m, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = if (fullWidth) Arrangement.Center else Arrangement.Start) {
+        Row(modifier = m, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
             when {
                 loading -> CircularProgressIndicator(color = contentColor, strokeWidth = 2.dp, modifier = Modifier.size(13.dp))
                 icon != null -> Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(13.dp))

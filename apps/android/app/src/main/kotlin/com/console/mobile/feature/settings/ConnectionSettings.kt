@@ -209,13 +209,18 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
         if (status == "test-ok") Text("Connection OK", color = Color(0xFF34D399), fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
         else if (status == "test-fail") Text("Could not reach the backend", color = ConsoleColors.Destructive, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
         if (env != null && !isActive) {
-            TextButton(
+            PillButton(
+                text = "Set as active",
                 onClick = {
                     scope.launch { withContext(Dispatchers.IO) { AppContainer.environmentsRepository.activateEnvironment(env.id) } }
                     onDone()
                 },
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, ConsoleColors.Border, RoundedCornerShape(12.dp)).padding(vertical = 10.dp),
-            ) { Text("Set as active", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+                variant = PillButtonVariant.Outline,
+                fullWidth = true,
+                cornerRadius = 12.dp,
+                verticalPadding = 10.dp,
+                modifier = Modifier.padding(top = 16.dp),
+            )
         }
         Row(modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
             val doSave: () -> Unit = {
@@ -252,16 +257,18 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
                     }
                 }
             }
-            TextButton(
+            PillButton(
+                text = if (env != null) "Save changes" else "Save",
                 onClick = doSave,
                 enabled = url.isNotBlank() && status != "saving",
-                modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(if (url.isNotBlank()) Color.White else Color.White.copy(alpha = 0.4f)).padding(vertical = 12.dp),
-            ) {
-                if (status == "saving") CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                else Text(if (env != null) "Save changes" else "Save", color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            }
+                loading = status == "saving",
+                cornerRadius = 12.dp,
+                verticalPadding = 12.dp,
+                modifier = Modifier.weight(1f),
+            )
             if (env != null) {
-                TextButton(
+                PillButton(
+                    text = "Delete",
                     onClick = {
                         confirmAlert("Delete environment", "Remove \"${env.name}\" from your environments?", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Delete", destructive = true, onPress = {
                             scope.launch { withContext(Dispatchers.IO) { AppContainer.environmentsRepository.removeEnvironment(env.id) } }
@@ -269,8 +276,11 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
                         })))
                     },
                     enabled = canDelete,
-                    modifier = Modifier.weight(1f).padding(start = 12.dp).clip(RoundedCornerShape(12.dp)).background(ConsoleColors.Destructive.copy(alpha = 0.05f)).border(1.dp, ConsoleColors.Destructive.copy(alpha = 0.3f), RoundedCornerShape(12.dp)).padding(vertical = 12.dp),
-                ) { Text("Delete", color = ConsoleColors.Destructive, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+                    variant = PillButtonVariant.Destructive,
+                    cornerRadius = 12.dp,
+                    verticalPadding = 12.dp,
+                    modifier = Modifier.weight(1f).padding(start = 12.dp),
+                )
             }
         }
     }
