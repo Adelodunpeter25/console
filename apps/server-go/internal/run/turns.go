@@ -173,7 +173,13 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	// thinking validation and the vision fallback below.
 	model := s.resolveModel(providerID, modelID)
 	effectiveThinking := dto.Thinking
-	if effectiveThinking == "" {
+	// OpenCode models are intentionally cataloged without thinking levels for
+	// now. A session can carry a stale level after switching providers, so
+	// discard it instead of failing the run or sending reasoning controls to a
+	// model that does not declare support.
+	if model.Provider == "opencode" && len(model.ThinkingLevels) == 0 {
+		effectiveThinking = ""
+	} else if effectiveThinking == "" {
 		effectiveThinking = model.DefaultThinking
 	}
 	user := loop.UserMessage{
@@ -253,7 +259,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	// Stable per conversation, scoped by provider+model so cached prefixes
 	// stay valid (mirrors the TS cache-identity rotation rule).
 	agent.ConversationID = fmt.Sprintf("%s:%s:%s", sessionID, providerID, modelID)
-	agent.ThinkingLevel = dto.Thinking
+	agent.ThinkingLevel = effectiveThinking
 	agent.Compaction = s.compactionHooks(sessionID, model, prompt.SystemPrompt, registry.Definitions())
 
 	hub.Broadcast(loop.Event{Kind: loop.EventTurnStart, Text: dto.Text})

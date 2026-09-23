@@ -146,13 +146,44 @@ func TestRunRejectsUnsupportedThinking(t *testing.T) {
 	}
 }
 
+func TestOpenCodeIgnoresStaleThinkingLevel(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	rec := &modelRecorder{mock: queueMock("ok")}
+	svc.Lookup = func(id string) (loop.Provider, error) { return rec, nil }
+	header := helpers.CreateRunSession(t, sessions)
+	hub, err := svc.StartRun(header.ID, run.Prompt{
+		Text:     "hi",
+		Provider: "opencode",
+		ModelID:  "muse-spark-1.3-contributor-free",
+		Thinking: "low",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	helpers.WaitSettled(t, hub)
+	if hub.Outcome != run.OutcomeDone {
+		t.Fatalf("outcome: %s", hub.Outcome)
+	}
+	if len(rec.thinkingLevels) == 0 {
+		t.Fatal("OpenCode turn was not started")
+	}
+	for _, level := range rec.thinkingLevels {
+		if level != "" {
+			t.Fatalf("thinking levels sent to OpenCode: %q", rec.thinkingLevels)
+		}
+	}
+}
+
 type modelRecorder struct {
-	models []string
-	mock   *helpers.MockProvider
+	models         []string
+	thinkingLevels []string
+	mock           *helpers.MockProvider
 }
 
 func (r *modelRecorder) RunTurn(ctx context.Context, req loop.TurnRequest, s *stream.Stream[loop.Event]) error {
 	r.models = append(r.models, req.Model)
+	r.thinkingLevels = append(r.thinkingLevels, req.ThinkingLevel)
 	return r.mock.RunTurn(ctx, req, s)
 }
 
