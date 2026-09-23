@@ -58,6 +58,8 @@ import com.console.mobile.data.model.ToolCallPart
 import com.console.mobile.data.model.ToolResult
 import com.console.mobile.data.model.ToolResultMessage
 import com.console.mobile.data.model.UserMessage
+import com.console.mobile.ui.components.ImagePreviewDialog
+import com.console.mobile.ui.components.attachmentBytes
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
@@ -69,6 +71,7 @@ import com.console.mobile.ui.theme.ConsoleMonoFamily
 @Composable
 fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> = emptyList()) {
     val context = LocalContext.current
+    var preview by remember { mutableStateOf<ImagePart?>(null) }
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalAlignment = Alignment.End) {
         Column(
             modifier = Modifier.fillMaxWidth(0.85f).clip(RoundedCornerShape(20.dp))
@@ -77,8 +80,10 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
             if (attachments.isNotEmpty()) {
                 Row(modifier = Modifier.padding(bottom = 6.dp)) {
                     attachments.forEach { att ->
-                        val uri = "data:${att.mimeType};base64,${att.data}"
-                        AsyncImage(model = uri, contentDescription = "Attachment", modifier = Modifier.size(80.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
+                        val bytes = remember(att) { attachmentBytes(att.data) }
+                        if (bytes != null) {
+                            AsyncImage(model = bytes, contentDescription = "Attachment", modifier = Modifier.size(80.dp).clip(RoundedCornerShape(12.dp)).clickable { preview = att }, contentScale = ContentScale.Crop)
+                        }
                     }
                 }
             }
@@ -91,6 +96,13 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
             if (content.isNotEmpty()) {
                 CopyButton(text = content, context = context)
             }
+        }
+    }
+    val current = preview
+    if (current != null && attachments.contains(current)) {
+        val bytes = remember(current) { attachmentBytes(current.data) }
+        if (bytes != null) {
+            ImagePreviewDialog(image = bytes, onDismiss = { preview = null })
         }
     }
 }

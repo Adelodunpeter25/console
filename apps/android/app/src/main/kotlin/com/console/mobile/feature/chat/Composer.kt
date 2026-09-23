@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
@@ -69,6 +70,8 @@ import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.Model
 import com.console.mobile.data.model.ProjectInfo
 import com.console.mobile.data.model.UpdateSessionDto
+import com.console.mobile.ui.components.ImagePreviewDialog
+import com.console.mobile.ui.components.attachmentBytes
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import kotlinx.coroutines.Dispatchers
@@ -155,12 +158,12 @@ fun Composer(
                 },
             )
             if (running) {
-                IconButton(onClick = onStop, modifier = Modifier.size(32.dp).clip(CircleShape).background(Color.White)) {
-                    Icon(Icons.Filled.Stop, contentDescription = "Stop", tint = Color.Black, modifier = Modifier.size(12.dp))
+                IconButton(onClick = onStop, modifier = Modifier.size(28.dp).clip(CircleShape).background(Color.White)) {
+                    Icon(Icons.Filled.Stop, contentDescription = "Stop", tint = Color.Black, modifier = Modifier.size(11.dp))
                 }
             } else {
-                IconButton(onClick = onSend, enabled = canSend, modifier = Modifier.size(32.dp).clip(CircleShape).background(if (canSend) Color.White else Color.White.copy(alpha = 0.08f))) {
-                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = if (canSend) Color.Black else ConsoleColors.TextMuted, modifier = Modifier.size(16.dp))
+                IconButton(onClick = onSend, enabled = canSend, modifier = Modifier.size(28.dp).clip(CircleShape).background(if (canSend) Color.White else Color.White.copy(alpha = 0.08f))) {
+                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = if (canSend) Color.Black else ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
                 }
             }
         }
@@ -170,19 +173,34 @@ fun Composer(
 
 @Composable
 private fun AttachmentStrip(sessionId: String, attachments: List<ImageAttachment>) {
+    var preview by remember { mutableStateOf<ImageAttachment?>(null) }
     Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 8.dp, start = 4.dp)) {
         attachments.forEachIndexed { idx, att ->
-            Box(modifier = Modifier.padding(end = 8.dp).size(56.dp).clip(RoundedCornerShape(12.dp)).background(ConsoleColors.CardAlt).border(1.dp, ConsoleColors.Border, RoundedCornerShape(12.dp))) {
-                coil3.compose.AsyncImage(
-                    model = "data:${att.mimeType};base64,${att.data}",
-                    contentDescription = "Attachment ${idx + 1}",
-                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)),
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                )
+            val bytes = remember(att) { attachmentBytes(att.data) }
+            Box(modifier = Modifier.padding(end = 8.dp).size(56.dp).clip(RoundedCornerShape(12.dp)).background(ConsoleColors.CardAlt).border(1.dp, ConsoleColors.Border, RoundedCornerShape(12.dp)).clickable { preview = att }) {
+                if (bytes != null) {
+                    coil3.compose.AsyncImage(
+                        model = bytes,
+                        contentDescription = "Attachment ${idx + 1}",
+                        modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    )
+                } else {
+                    Box(modifier = Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Image, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(20.dp))
+                    }
+                }
                 Box(modifier = Modifier.align(Alignment.TopEnd).padding(2.dp).size(18.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)).clickable { AppContainer.chatRepository.removeAttachment(sessionId, idx) }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.Close, contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(12.dp))
                 }
             }
+        }
+    }
+    val current = preview
+    if (current != null && attachments.contains(current)) {
+        val bytes = remember(current) { attachmentBytes(current.data) }
+        if (bytes != null) {
+            ImagePreviewDialog(image = bytes, onDismiss = { preview = null })
         }
     }
 }
