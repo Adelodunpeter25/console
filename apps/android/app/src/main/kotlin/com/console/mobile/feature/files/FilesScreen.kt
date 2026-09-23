@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -46,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
+import com.console.mobile.core.util.highlightLine
+import com.console.mobile.core.util.languageForPath
 import com.console.mobile.data.model.FsTreeEntry
 import com.console.mobile.data.model.getFilePreviewBlock
 import com.console.mobile.data.model.isMarkdownPath
@@ -203,7 +207,7 @@ fun FilesScreen(onBack: () -> Unit) {
                                 MarkdownText(content = content)
                             }
                         } else {
-                            CodePreview(content = content)
+                            CodePreview(content = content, path = sel)
                         }
                     }
                 }
@@ -366,18 +370,38 @@ private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expa
 }
 
 @Composable
-private fun CodePreview(content: String) {
-    // Cap render size; VirtualizedCodeView equivalent — mono + h-scroll.
+private fun CodePreview(content: String, path: String?) {
+    // Cap render size; mono + h/v-scroll with gutter + regex highlight.
     val capped = if (content.length > 200_000) content.take(200_000) + "\n…(truncated)" else content
-    Box(modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 8.dp)) {
-        Text(
-            capped,
-            color = Color(0xFFE4E4E7),
-            fontSize = 11.sp,
-            fontFamily = ConsoleMonoFamily,
-            lineHeight = 17.sp,
-            modifier = Modifier.fillMaxSize().hScroll2(),
-        )
+    val language = remember(path) { languageForPath(path) }
+    val lines = remember(capped) { capped.split("\n") }
+    val vScroll = rememberScrollState()
+    val hScroll = rememberScrollState()
+    Box(modifier = Modifier.fillMaxSize().verticalScroll(vScroll).padding(horizontal = 4.dp, vertical = 8.dp)) {
+        Box(modifier = Modifier.horizontalScroll(hScroll)) {
+            Column {
+                lines.forEachIndexed { idx, line ->
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text(
+                            "${idx + 1}",
+                            color = ConsoleColors.TextMuted.copy(alpha = 0.55f),
+                            fontSize = 10.sp,
+                            fontFamily = ConsoleMonoFamily,
+                            lineHeight = 17.sp,
+                            modifier = Modifier.width(32.dp).padding(end = 12.dp),
+                        )
+                        Text(
+                            remember(line, language) { highlightLine(line, language) },
+                            fontSize = 11.sp,
+                            fontFamily = ConsoleMonoFamily,
+                            lineHeight = 17.sp,
+                            softWrap = false,
+                            modifier = Modifier.padding(end = 16.dp),
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

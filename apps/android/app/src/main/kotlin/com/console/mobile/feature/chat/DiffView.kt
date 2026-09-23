@@ -33,6 +33,8 @@ import com.console.mobile.core.util.DiffLine
 import com.console.mobile.core.util.DiffLineType
 import com.console.mobile.core.util.DiffResult
 import com.console.mobile.core.util.getFileName
+import com.console.mobile.core.util.highlightLine
+import com.console.mobile.core.util.languageForPath
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
@@ -43,6 +45,7 @@ import com.console.mobile.ui.theme.ConsoleMonoFamily
 @Composable
 fun DiffView(diff: DiffResult, filePath: String? = null, maxCollapsedLines: Int = 60) {
     var expanded by remember(filePath, diff.lines.size) { mutableStateOf(false) }
+    val language = remember(filePath) { languageForPath(filePath) }
     Column(
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -52,7 +55,7 @@ fun DiffView(diff: DiffResult, filePath: String? = null, maxCollapsedLines: Int 
         val visible = if (!expanded && diff.lines.size > maxCollapsedLines) diff.lines.take(maxCollapsedLines) else diff.lines
         Box(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
             Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                visible.forEachIndexed { i, line -> DiffLineRow(line = line, index = i) }
+                visible.forEachIndexed { i, line -> DiffLineRow(line = line, index = i, language = language) }
             }
         }
         if (!expanded && diff.lines.size > maxCollapsedLines) {
@@ -78,7 +81,7 @@ fun DiffView(diff: DiffResult, filePath: String? = null, maxCollapsedLines: Int 
 }
 
 @Composable
-private fun DiffLineRow(line: DiffLine, index: Int) {
+private fun DiffLineRow(line: DiffLine, index: Int, language: String = "") {
     val isAdded = line.type == DiffLineType.Added
     val isRemoved = line.type == DiffLineType.Removed
     val bg = when {
@@ -92,10 +95,10 @@ private fun DiffLineRow(line: DiffLine, index: Int) {
         else -> Color(0xFFE4E4E7)
     }
     Row(modifier = Modifier.background(bg).padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.Top) {
-        Text(line.oldLineNo?.toString() ?: "", color = ConsoleColors.TextMuted.copy(alpha = 0.4f), fontSize = 10.sp, fontFamily = ConsoleMonoFamily, modifier = Modifier.width(24.dp))
-        Text(line.newLineNo?.toString() ?: "", color = ConsoleColors.TextMuted.copy(alpha = 0.4f), fontSize = 10.sp, fontFamily = ConsoleMonoFamily, modifier = Modifier.width(24.dp))
+        Text(line.oldLineNo?.toString() ?: "", color = ConsoleColors.TextMuted.copy(alpha = 0.75f), fontSize = 10.sp, fontFamily = ConsoleMonoFamily, modifier = Modifier.width(28.dp))
+        Text(line.newLineNo?.toString() ?: "", color = ConsoleColors.TextMuted.copy(alpha = 0.75f), fontSize = 10.sp, fontFamily = ConsoleMonoFamily, modifier = Modifier.width(28.dp))
         Text(if (isAdded) "+" else if (isRemoved) "-" else " ", color = fg, fontSize = 10.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.Bold, modifier = Modifier.width(8.dp))
-        Text(line.text, color = fg.copy(alpha = if (isRemoved) 0.75f else 1f), fontSize = 11.sp, fontFamily = ConsoleMonoFamily, lineHeight = 17.sp, modifier = Modifier.padding(start = 8.dp))
+        Text(remember(line.text, language, fg) { highlightLine(line.text, language, base = fg.copy(alpha = if (isRemoved) 0.75f else 1f)) }, fontSize = 11.sp, fontFamily = ConsoleMonoFamily, lineHeight = 17.sp, softWrap = false, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
