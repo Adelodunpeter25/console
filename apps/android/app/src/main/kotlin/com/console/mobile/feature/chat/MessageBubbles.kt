@@ -71,7 +71,7 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
     val context = LocalContext.current
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalAlignment = Alignment.End) {
         Column(
-            modifier = Modifier.fillMaxWidth(0.85f).clip(RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
+            modifier = Modifier.fillMaxWidth(0.85f).clip(RoundedCornerShape(20.dp))
                 .background(ConsoleColors.SurfaceElevated).padding(horizontal = 16.dp, vertical = 10.dp),
         ) {
             if (attachments.isNotEmpty()) {
