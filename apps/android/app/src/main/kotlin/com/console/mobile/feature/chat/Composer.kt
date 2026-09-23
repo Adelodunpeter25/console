@@ -135,15 +135,15 @@ fun Composer(
             modifier = Modifier.fillMaxWidth().clip(if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
                 .background(ConsoleColors.Card)
                 .border(1.dp, ConsoleColors.Border, if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
-                .padding(horizontal = 6.dp, vertical = 4.dp),
+                .padding(horizontal = 6.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier.size(28.dp).clip(CircleShape)
+                modifier = Modifier.size(32.dp).clip(CircleShape)
                     .clickable(onClickLabel = "Attach image") { pickImages.launch("image/*") },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Add, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.Add, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
             }
             BasicTextField(
                 value = value,
