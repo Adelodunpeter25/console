@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -94,17 +95,19 @@ fun ConnectionSettings(onBack: () -> Unit) {
                 title = "Connection",
                 onBack = onBack,
                 actions = {
-                    TextButton(onClick = { editing = "__create__" }) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.Add, contentDescription = null, tint = ConsoleColors.TextPrimary, modifier = Modifier.size(14.dp))
-                            Text("Add", color = ConsoleColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp))
+                    IconButton(onClick = { editing = "__create__" }, modifier = Modifier.size(40.dp)) {
+                        Box(
+                            modifier = Modifier.size(40.dp).clip(CircleShape).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Filled.Add, contentDescription = "Add environment", tint = ConsoleColors.TextPrimary)
                         }
                     }
                 },
             )
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
                 val cardShape = RoundedCornerShape(16.dp)
-                Column(modifier = Modifier.fillMaxWidth().clip(cardShape).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, cardShape).padding(16.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().clip(cardShape).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, cardShape).padding(horizontal = 4.dp, vertical = 4.dp)) {
                     if (envState.environments.isEmpty()) {
                         Text("No environments yet. Add a backend URL to get started.", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp))
                     } else {
