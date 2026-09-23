@@ -11,9 +11,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -120,7 +124,9 @@ fun Composer(
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth().background(ConsoleColors.Background).imePadding().padding(horizontal = 10.dp).padding(top = 8.dp, bottom = 8.dp)) {
+    // ime minus nav bars: Scaffold already pads the nav bar, so only lift
+    // by the keyboard itself — otherwise the gap doubles when typing.
+    Column(modifier = Modifier.fillMaxWidth().background(ConsoleColors.Background).windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)).padding(horizontal = 10.dp).padding(top = 8.dp, bottom = 8.dp)) {
         if (topBanner != null) topBanner()
         if (attachments.isNotEmpty()) {
             AttachmentStrip(sessionId = sessionId, attachments = attachments)
@@ -129,15 +135,15 @@ fun Composer(
             modifier = Modifier.fillMaxWidth().clip(if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
                 .background(ConsoleColors.Card)
                 .border(1.dp, ConsoleColors.Border, if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
-                .padding(horizontal = 6.dp, vertical = 6.dp),
+                .padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier.size(32.dp).clip(CircleShape)
+                modifier = Modifier.size(28.dp).clip(CircleShape)
                     .clickable(onClickLabel = "Attach image") { pickImages.launch("image/*") },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Add, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.Add, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(18.dp))
             }
             BasicTextField(
                 value = value,
