@@ -1,7 +1,7 @@
 // Provider + model catalog. Port of the catalog slice of
 // apps/server/agent/src/commands/provider-registry.ts: static seeds,
 // provider listing, and dynamic model refresh with favorites-first
-// sorting. Only implemented providers are listed (codex first).
+// sorting. Only implemented providers are listed.
 package providers
 
 import (
@@ -13,6 +13,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/opencode"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -47,6 +48,11 @@ func ListProviders() []types.ProviderEntry {
 			Name: "claude", DisplayName: "Claude",
 			Description: "Anthropic subscription models through the Messages API",
 			Models:      DefaultClaudeModels(), AuthMethod: "oauth",
+		},
+		{
+			Name: "opencode", DisplayName: "OpenCode Zen",
+			Description: "Free-tier models through the direct OpenCode Zen API",
+			Models:      DefaultOpenCodeModels(), AuthMethod: "none",
 		},
 	}
 }
@@ -117,6 +123,21 @@ func ClaudeModels(ctx context.Context) []types.Model {
 	return DefaultClaudeModels()
 }
 
+// DefaultOpenCodeModels returns the offline Zen seed.
+func DefaultOpenCodeModels() []types.Model {
+	return opencode.DefaultModels()
+}
+
+// OpenCodeModels returns live Zen free models, falling back to the seed.
+func OpenCodeModels(ctx context.Context) []types.Model {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if discovered, err := opencode.FetchModels(ctx, nil, ""); err == nil && len(discovered) > 0 {
+		return discovered
+	}
+	return DefaultOpenCodeModels()
+}
+
 // SortModelsByFavorites moves favorited models first (stable), mirroring
 // ProviderService's sorting in the TS server.
 func SortModelsByFavorites(models []types.Model, favs []types.ModelFavorite) []types.Model {
@@ -156,7 +177,7 @@ func FindModel(providerID, modelID string) (types.Model, bool) {
 // (implemented or not).
 func IsCatalogProvider(id string) bool {
 	switch id {
-	case "antigravity", "codex", "claude":
+	case "antigravity", "codex", "claude", "opencode":
 		return true
 	default:
 		return false

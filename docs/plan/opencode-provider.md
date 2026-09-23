@@ -1,6 +1,6 @@
 # Direct OpenCode Zen Provider for the Go Server
 
-Status: **planned; not started**.
+Status: **in progress**.
 
 ## Goal
 

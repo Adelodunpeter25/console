@@ -15,7 +15,7 @@ import (
 
 func TestCatalogListsCodex(t *testing.T) {
 	entries := providers.ListProviders()
-	if len(entries) != 3 {
+	if len(entries) != 4 {
 		t.Fatalf("entries: %+v", entries)
 	}
 	var codexEntry *types.ProviderEntry
@@ -33,6 +33,30 @@ func TestCatalogListsCodex(t *testing.T) {
 	for _, m := range codexEntry.Models {
 		if m.ContextWindow != 272_000 || !m.SupportsImages || m.DefaultThinking != "low" {
 			t.Fatalf("seed model: %+v", m)
+		}
+	}
+}
+
+func TestCatalogListsOpenCode(t *testing.T) {
+	entries := providers.ListProviders()
+	var entry *types.ProviderEntry
+	for i := range entries {
+		if entries[i].Name == "opencode" {
+			entry = &entries[i]
+		}
+	}
+	if entry == nil {
+		t.Fatalf("no opencode entry: %+v", entries)
+	}
+	if entry.AuthMethod != "none" || len(entry.Models) == 0 {
+		t.Fatalf("opencode entry: %+v", entry)
+	}
+	if !providers.IsCatalogProvider("opencode") {
+		t.Fatal("opencode must be a catalog provider")
+	}
+	for _, model := range entry.Models {
+		if model.Provider != "opencode" || model.ContextWindow != 200_000 {
+			t.Fatalf("opencode model: %+v", model)
 		}
 	}
 }
