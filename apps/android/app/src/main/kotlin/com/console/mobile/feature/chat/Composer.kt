@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
@@ -139,7 +140,7 @@ fun Composer(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier.size(32.dp).clip(CircleShape)
+                modifier = Modifier.size(34.dp).clip(CircleShape)
                     .clickable(onClickLabel = "Attach image") { pickImages.launch("image/*") },
                 contentAlignment = Alignment.Center,
             ) {
@@ -170,20 +171,20 @@ fun Composer(
             )
             if (running) {
                 Box(
-                    modifier = Modifier.size(28.dp).clip(CircleShape).background(Color.White)
+                    modifier = Modifier.size(30.dp).clip(CircleShape).background(Color.White)
                         .clickable(onClickLabel = "Stop") { onStop() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Stop, contentDescription = null, tint = Color.Black, modifier = Modifier.size(11.dp))
+                    Icon(Icons.Filled.Stop, contentDescription = null, tint = Color.Black, modifier = Modifier.size(12.dp))
                 }
             } else {
                 Box(
-                    modifier = Modifier.size(28.dp).clip(CircleShape)
+                    modifier = Modifier.size(30.dp).clip(CircleShape)
                         .background(if (canSend) Color.White else Color.White.copy(alpha = 0.08f))
                         .clickable(enabled = canSend, onClickLabel = "Send") { onSend() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.ArrowUpward, contentDescription = null, tint = if (canSend) Color.Black else ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Filled.ArrowUpward, contentDescription = null, tint = if (canSend) Color.Black else ConsoleColors.TextMuted, modifier = Modifier.size(15.dp))
                 }
             }
         }
@@ -362,7 +363,7 @@ private fun ModelPickerSheet(selectedModel: String?, selectedProvider: String?, 
                     }
                 }
             }
-            OutlinedTextField(value = search, onValueChange = { search = it }, placeholder = { Text("Search models…") }, leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp)) }, singleLine = true, colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = ConsoleColors.CardAlt, unfocusedContainerColor = ConsoleColors.CardAlt, focusedBorderColor = ConsoleColors.BorderSubtle, unfocusedBorderColor = ConsoleColors.BorderSubtle, focusedTextColor = ConsoleColors.TextPrimary, unfocusedTextColor = ConsoleColors.TextPrimary, cursorColor = ConsoleColors.TextPrimary), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp))
+            OutlinedTextField(value = search, onValueChange = { search = it }, placeholder = { Text("Search models…") }, leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp)) }, singleLine = true, colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = ConsoleColors.CardAlt, unfocusedContainerColor = ConsoleColors.CardAlt, focusedBorderColor = ConsoleColors.BorderSubtle, unfocusedBorderColor = ConsoleColors.BorderSubtle, focusedTextColor = ConsoleColors.TextPrimary, unfocusedTextColor = ConsoleColors.TextPrimary, cursorColor = ConsoleColors.TextPrimary), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().height(48.dp).padding(bottom = 12.dp))
             val models: List<Model> = activeProvider?.let { providerState.modelsByProvider[it] } ?: emptyList()
             val q = search.trim().lowercase()
             val filtered = if (q.isEmpty()) models else models.filter { it.id.lowercase().contains(q) }
