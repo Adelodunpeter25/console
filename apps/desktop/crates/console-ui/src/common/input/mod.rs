@@ -7,7 +7,6 @@ pub mod mentions;
 pub mod text_runs;
 
 use std::ops::Range;
-use std::path::Path;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -746,38 +745,7 @@ impl ComposerInput {
         cx: &mut Context<Self>,
     ) {
         let content = content.into();
-        let mut mentions = Vec::new();
-        let mut search_from = 0;
-        for path in &context_files {
-            let label = Path::new(path)
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or(path)
-                .to_string();
-            let Some(relative_start) = content[search_from..].find(&label) else {
-                continue;
-            };
-            let start = search_from + relative_start;
-            let end = start + label.len();
-            let before_ok = start == 0
-                || content[..start]
-                    .chars()
-                    .next_back()
-                    .is_some_and(|character| character.is_whitespace());
-            let after_ok = end >= content.len()
-                || content[end..]
-                    .chars()
-                    .next()
-                    .is_some_and(|character| character.is_whitespace());
-            if before_ok && after_ok {
-                mentions.push(ComposerMention {
-                    range: start..end,
-                    path: path.clone(),
-                    label,
-                });
-                search_from = end;
-            }
-        }
+        let mentions = mentions_from_context_files(&content, &context_files);
         self.context_files = context_files;
         self.set_content_with_mentions(content, mentions, cx);
     }
@@ -871,7 +839,12 @@ impl ComposerInput {
     }
 
     fn navigate_prompt_history(&mut self, down: bool, cx: &mut Context<Self>) -> bool {
-        let Some(content) = self.prompt_history.navigate(down, &self.content) else {
+        let current_context_files: Vec<String> =
+            self.mentions.iter().map(|m| m.path.clone()).collect();
+        let Some((content, context_files)) =
+            self.prompt_history
+                .navigate(down, &self.content, &current_context_files)
+        else {
             return false;
         };
         self.content = content.into();
@@ -880,6 +853,7 @@ impl ComposerInput {
         self.selection_reversed = false;
         self.marked_range = None;
         self.vertical_navigation = None;
+        self.mentions = mentions_from_context_files(&self.content, &context_files);
         self.refresh_highlight();
         self.pause_blink_cursor(cx);
         cx.emit(ComposerEvent::Edited);
@@ -890,15 +864,26 @@ impl ComposerInput {
     /// Replace the current composer prompt with one of the submitted user
     /// prompts. Moving down past the newest entry restores the draft captured
     /// when history navigation began.
-    pub fn set_prompt_history(&mut self, entries: Vec<String>, cx: &mut Context<Self>) {
+    pub fn set_prompt_history(
+        &mut self,
+        entries: Vec<(String, Vec<String>)>,
+        cx: &mut Context<Self>,
+    ) {
         self.prompt_history.set_entries(entries);
         cx.notify();
     }
 
     /// Record a prompt submitted by the owning app. Consecutive duplicates are
     /// collapsed, while older repeated prompts remain valid history entries.
-    pub fn record_prompt_history(&mut self, prompt: impl Into<String>, cx: &mut Context<Self>) {
-        self.prompt_history.record(prompt.into());
+    /// `context_files` are the full paths of any inline file mentions the
+    /// prompt carried, so recalling it later can rebuild its mention chips.
+    pub fn record_prompt_history(
+        &mut self,
+        prompt: impl Into<String>,
+        context_files: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.prompt_history.record(prompt.into(), context_files);
         cx.notify();
     }
 
@@ -1165,7 +1150,7 @@ impl ComposerInput {
                 if !value.is_empty() {
                     let context_files: Vec<String> =
                         self.mentions.iter().map(|m| m.path.clone()).collect();
-                    self.prompt_history.record(value.clone());
+                    self.prompt_history.record(value.clone(), context_files.clone());
                     cx.emit(ComposerEvent::Submit(value, context_files));
                     self.clear(cx);
                 }
@@ -1193,7 +1178,7 @@ impl ComposerInput {
         if !value.is_empty() {
             let context_files: Vec<String> =
                 self.mentions.iter().map(|mention| mention.path.clone()).collect();
-            self.prompt_history.record(value.clone());
+            self.prompt_history.record(value.clone(), context_files.clone());
             cx.emit(ComposerEvent::SubmitSteer(value, context_files));
             self.clear(cx);
         }

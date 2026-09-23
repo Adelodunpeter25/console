@@ -24,12 +24,18 @@ use crate::persistence;
 use crate::types::WorkspacePaneState;
 
 /// User prompts in a session, used to populate the composer's up-arrow
-/// history. Shared by `sessions` and `run`.
-pub(crate) fn user_prompt_history(messages: &[AgentMessage]) -> Vec<String> {
+/// history. Shared by `sessions` and `run`. Each entry pairs the prompt text
+/// with the full paths of any file mentions it carried, so recalling an
+/// older prompt from history can rebuild its mention chips.
+pub(crate) fn user_prompt_history(messages: &[AgentMessage]) -> Vec<(String, Vec<String>)> {
     messages
         .iter()
         .filter_map(|message| match message {
-            AgentMessage::User { content, .. } => Some(content.clone()),
+            AgentMessage::User {
+                content,
+                context_files,
+                ..
+            } => Some((content.clone(), context_files.clone().unwrap_or_default())),
             _ => None,
         })
         .collect()
