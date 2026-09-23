@@ -13,20 +13,10 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
-// DefaultModels is the offline seed for catalog startup and discovery failure.
+// DefaultModels is the offline fallback for the stealth model only. The
+// complete catalog must come from the live model-list endpoint.
 func DefaultModels() []types.Model {
-	ids := []string{
-		"big-pickle",
-		"space-bunny-free",
-		"mimo-v2.6-flash-free",
-		"mimo-v2.5-free",
-		"ling-3.0-flash-fin-free",
-		"nemotron-3-ultra-free",
-		"nemotron-3.5-lightning-free",
-		"muse-spark-1.3-contributor-free",
-		"muse-spark-1.2-contributor-free",
-	}
-	return modelsForIDs(ids)
+	return modelsForIDs([]string{"space-bunny-free"})
 }
 
 // IsFreeModelID accepts the regular -free suffix and Zen's big-pickle special

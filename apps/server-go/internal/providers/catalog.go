@@ -123,12 +123,13 @@ func ClaudeModels(ctx context.Context) []types.Model {
 	return DefaultClaudeModels()
 }
 
-// DefaultOpenCodeModels returns the offline Zen seed.
+// DefaultOpenCodeModels returns the single offline fallback model.
 func DefaultOpenCodeModels() []types.Model {
 	return opencode.DefaultModels()
 }
 
-// OpenCodeModels returns live Zen free models, falling back to the seed.
+// OpenCodeModels returns the live Zen model list, falling back only to the
+// stealth model when discovery is unavailable.
 func OpenCodeModels(ctx context.Context) []types.Model {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()

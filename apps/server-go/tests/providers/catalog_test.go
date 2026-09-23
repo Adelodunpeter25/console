@@ -48,8 +48,8 @@ func TestCatalogListsOpenCode(t *testing.T) {
 	if entry == nil {
 		t.Fatalf("no opencode entry: %+v", entries)
 	}
-	if entry.AuthMethod != "none" || len(entry.Models) == 0 {
-		t.Fatalf("opencode entry: %+v", entry)
+	if entry.AuthMethod != "none" || len(entry.Models) != 1 || entry.Models[0].ID != "space-bunny-free" {
+		t.Fatalf("opencode fallback: %+v", entry)
 	}
 	if !providers.IsCatalogProvider("opencode") {
 		t.Fatal("opencode must be a catalog provider")
