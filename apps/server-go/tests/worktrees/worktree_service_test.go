@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
@@ -113,23 +114,17 @@ func TestWorktreePrune(t *testing.T) {
 	}
 }
 
-func TestSlugBranch(t *testing.T) {
-	cases := map[string]string{
-		"Fix login bug!": "fix-login-bug",
-		"  spaced   out  ": "spaced-out",
-		"UPPER_and-mi.xed": "upper-and-mi-xed",
-		"":                "session",
-		"!!!":             "session",
+func TestRandomCodename(t *testing.T) {
+	got := services.RandomCodename("a1b2c3d4")
+	parts := strings.Split(got, "-")
+	if len(parts) != 3 {
+		t.Fatalf("RandomCodename = %q; want adjective-city-shortid", got)
 	}
-	for title, slug := range cases {
-		got := services.SlugBranch(title, "a1b2c3d4")
-		want := slug + "-a1b2c3"
-		if got != want {
-			t.Fatalf("SlugBranch(%q) = %q; want %q", title, got, want)
-		}
+	if parts[2] != "a1b2c3" {
+		t.Fatalf("RandomCodename suffix = %q; want a1b2c3", parts[2])
 	}
-	if got := services.SlugBranch("x", ""); got != "x" {
-		t.Fatalf("SlugBranch empty id = %q; want x", got)
+	if got := services.RandomCodename(""); strings.Contains(got, "-a1b2c3") || strings.Count(got, "-") != 1 {
+		t.Fatalf("RandomCodename empty id = %q; want adjective-city with no suffix", got)
 	}
 }
 

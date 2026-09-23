@@ -58,7 +58,7 @@ func (s *SessionService) Create(opts types.CreateSessionOptions) (types.SessionH
 		}
 		branch := opts.Worktree.Branch
 		if branch == "" {
-			branch = SlugBranch(opts.Title, opts.ID)
+			branch = RandomCodename(opts.ID)
 		}
 		root, err := DefaultRoot()
 		if err != nil {
@@ -121,7 +121,7 @@ func (s *SessionService) AttachWorktree(sessionID string, spec *types.CreateWork
 		branch = spec.Branch
 	}
 	if branch == "" {
-		branch = SlugBranch(header.Title, sessionID)
+		branch = RandomCodename(sessionID)
 	}
 	root, err := DefaultRoot()
 	if err != nil {

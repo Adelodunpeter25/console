@@ -86,8 +86,8 @@ func TestCreateWithWorktree(t *testing.T) {
 	if header.Cwd != header.Worktree.Path {
 		t.Fatalf("cwd %q != worktree path %q", header.Cwd, header.Worktree.Path)
 	}
-	if branch := header.Worktree.Branch; !strings.HasPrefix(branch, "fix-login-bug-") || len(branch) != len("fix-login-bug-")+6 {
-		t.Fatalf("unexpected branch %q", branch)
+	if branch := header.Worktree.Branch; strings.Count(branch, "-") != 2 {
+		t.Fatalf("unexpected branch %q; want adjective-city-shortid", branch)
 	}
 	if header.Worktree.Repo != repo {
 		t.Fatalf("repo %q != %q", header.Worktree.Repo, repo)
