@@ -51,6 +51,10 @@ pub struct TerminalView {
     cached_mouse_mode: termy_core::TerminalMouseMode,
     status: TerminalStatus,
     error: Option<String>,
+    /// Terminal title set via OSC 0/1/2 (shell/app title changes), synced
+    /// from the backend each time a snapshot is pulled. `None` before the
+    /// shell has ever set one.
+    title: Option<String>,
     size: TerminalSize,
     selection_anchor: Option<TerminalCellPos>,
     selection_head: Option<TerminalCellPos>,
@@ -113,6 +117,7 @@ impl TerminalView {
             cached_mouse_mode: termy_core::TerminalMouseMode::default(),
             status: TerminalStatus::Spawning,
             error: None,
+            title: None,
             size,
             selection_anchor: None,
             selection_head: None,
@@ -179,7 +184,7 @@ impl TerminalView {
             // apply the result. Snapshot + damage + mouse mode come from one
             // lock via `snapshot_full` so dirty rows stay in sync with the grid
             // and mouse events never touch the backend lock.
-            let (initial_snapshot, initial_mouse, initial_scroll, initial_alt, initial_status, initial_error) = cx
+            let (initial_snapshot, initial_mouse, initial_scroll, initial_alt, initial_status, initial_error, initial_title) = cx
                 .background_executor()
                 .spawn({
                     let handle = handle.clone();
@@ -191,7 +196,7 @@ impl TerminalView {
                         // consumed per snapshot and can go stale when the
                         // watch loop takes two snapshots between paints, so
                         // the renderer validates rows by content hash instead.
-                        (full.snapshot, full.mouse_mode, full.scroll_state, full.is_alt_screen, status, error)
+                        (full.snapshot, full.mouse_mode, full.scroll_state, full.is_alt_screen, status, error, full.title)
                     }
                 })
                 .await;
@@ -204,6 +209,7 @@ impl TerminalView {
                 view.cached_alt_screen = initial_alt;
                 view.status = initial_status;
                 view.error = initial_error;
+                view.title = initial_title;
                 cx.notify();
             });
 
@@ -220,13 +226,13 @@ impl TerminalView {
                     // snapshot above): termy's blocking mutex must never be
                     // awaited on the main thread.
                     let handle_for_snapshot = handle_for_watch.clone();
-                    let (snapshot, mouse_mode, scroll_state, is_alt_screen, status, error) = cx
+                    let (snapshot, mouse_mode, scroll_state, is_alt_screen, status, error, title) = cx
                         .background_executor()
                         .spawn(async move {
                             let full = handle_for_snapshot.snapshot_full().await;
                             let status = handle_for_snapshot.status().await;
                             let error = handle_for_snapshot.error.read().await.clone();
-                            (full.snapshot, full.mouse_mode, full.scroll_state, full.is_alt_screen, status, error)
+                            (full.snapshot, full.mouse_mode, full.scroll_state, full.is_alt_screen, status, error, full.title)
                         })
                         .await;
                     let _ = this_watch.update(cx, |view, cx| {
@@ -236,6 +242,7 @@ impl TerminalView {
                         view.cached_alt_screen = is_alt_screen;
                         view.status = status;
                         view.error = error;
+                        view.title = title;
                         cx.notify();
                     });
                 }
@@ -266,6 +273,11 @@ impl TerminalView {
 
     pub fn status(&self) -> TerminalStatus {
         self.status
+    }
+
+    /// Terminal title set via OSC 0/1/2 (shell/app title change), if any.
+    pub fn title(&self) -> Option<&str> {
+        self.title.as_deref()
     }
 
     fn theme(&self, cx: &App) -> TerminalTheme {

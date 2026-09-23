@@ -7,6 +7,10 @@ use termy_core::{Terminal, TerminalClipboardTarget, TerminalReplyHost, TerminalS
 pub struct TermyBackend {
     term: Terminal,
     size: TerminalSize,
+    /// Most recent terminal title set via OSC 0/1/2 (or `None` after an
+    /// OSC-reset / before the shell has ever set one). Drained alongside
+    /// PTY output in `advance_and_collect_replies_bytes`.
+    title: Option<String>,
 }
 
 /// Collects the bytes the terminal wants to write back to the PTY. When the
@@ -54,7 +58,11 @@ impl TerminalBackend for TermyBackend {
     fn new(size: TerminalSize) -> Self {
         let tsize = to_termysize(size);
         let term = Terminal::new_display(tsize, None);
-        Self { term, size }
+        Self {
+            term,
+            size,
+            title: None,
+        }
     }
 
     fn resize(&mut self, size: TerminalSize) {
@@ -211,8 +219,21 @@ impl TermyBackend {
         let mut collector = ReplyCollector {
             replies: Vec::new(),
         };
-        let _ = self.term.drain_events(&mut collector);
+        let (events, _) = self.term.drain_events(&mut collector);
+        for event in events {
+            match event {
+                termy_core::TerminalEvent::Title(title) => self.title = Some(title),
+                termy_core::TerminalEvent::ResetTitle => self.title = None,
+                _ => {}
+            }
+        }
         collector.replies
+    }
+
+    /// Most recent terminal title set via OSC 0/1/2, if any. `None` before
+    /// the shell has ever set one or after an OSC title reset.
+    pub fn title(&self) -> Option<&str> {
+        self.title.as_deref()
     }
 
     /// Current xterm mouse-reporting mode (DECSET 1000/1002/1003/1005/1006).
