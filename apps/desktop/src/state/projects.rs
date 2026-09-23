@@ -474,12 +474,24 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// "New worktree…" in the branch dropdown. Unlike branch checkout, a
-    /// worktree can't re-root the current session (cwd is locked from
-    /// creation) — this spawns a brand-new session rooted in a fresh
-    /// worktree/branch (server auto-derives the branch name) and opens it
-    /// in this pane, mirroring `create_new_chat`.
+    /// "New worktree…" in the branch dropdown.
+    ///
+    /// If the pane's current session has no messages yet (the common "New
+    /// Chat" → "New worktree…" flow), convert it in place: attach a fresh
+    /// worktree/branch to the *same* session via `PATCH`-style attach, no
+    /// new session row, no duplicate sidebar entry. Once a chat has
+    /// messages its cwd is locked, so that case falls back to spawning a
+    /// brand-new session rooted in a fresh worktree (server auto-derives
+    /// the branch name) and opens it in this pane, mirroring
+    /// `create_new_chat`.
     pub fn new_worktree_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
+        if !self.session_has_messages(&pane_id) {
+            if let Some(session_id) = self.active_session_for_pane(&pane_id) {
+                self.attach_worktree_for_pane(pane_id, session_id, cx);
+                return;
+            }
+        }
+
         let Some(path) = self
             .selected_project_for_pane(&pane_id)
             .map(|project| project.path.clone())
@@ -544,41 +556,95 @@ impl ConsoleDesktopApp {
                                 // the worktree's own cwd so the dropdown
                                 // shows the new branch instead of stale
                                 // state from the main checkout.
-                                if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
-                                    state.branch_loaded = false;
-                                }
-                                let worktree_path = new_session.cwd.clone();
-                                let branch_client = this.client.clone();
-                                let branch_pane_id = pane_id.clone();
-                                cx.spawn(async move |entity, cx| {
-                                    let result =
-                                        branch_client.git.list_branches(Some(&worktree_path)).await;
-                                    cx.update(|cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                if let Some(state) = this
-                                                    .workspace_pane_states
-                                                    .get_mut(&branch_pane_id)
-                                                {
-                                                    state.branch_loaded = true;
-                                                    if let Ok(branches) = result {
-                                                        state.branches = Rc::new(branches.branches);
-                                                        state.branch_is_git_repository =
-                                                            branches.is_git_repository;
-                                                    }
-                                                }
-                                                cx.notify();
-                                            });
-                                        }
-                                    });
-                                })
-                                .detach();
+                                this.reload_branches_for_pane(pane_id, new_session.cwd, cx);
                             }
                             Err(error) => {
                                 this.set_error(
                                     format!("Unable to create a worktree session: {error}"),
                                     cx,
                                 );
+                            }
+                        }
+                        cx.notify();
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Attach a fresh worktree/branch to `session_id` in place — used when
+    /// the pane's current session is still message-less, so re-rooting its
+    /// cwd is safe (no history to mix with the new checkout).
+    fn attach_worktree_for_pane(
+        &mut self,
+        pane_id: String,
+        session_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
+            state.branch_pending = true;
+        }
+        cx.notify();
+
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            let result = client
+                .sessions
+                .attach_worktree(&session_id, CreateWorktreeSpec::default())
+                .await;
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
+                            state.branch_pending = false;
+                        }
+                        match result {
+                            Ok(updated_session) => {
+                                this.apply_session_header_for_pane(
+                                    &pane_id,
+                                    &updated_session,
+                                    cx,
+                                );
+                                this.clear_error_for_pane(&pane_id, cx);
+                                this.reload_branches_for_pane(
+                                    pane_id,
+                                    updated_session.cwd,
+                                    cx,
+                                );
+                            }
+                            Err(error) => {
+                                this.set_error(
+                                    format!("Unable to create a worktree session: {error}"),
+                                    cx,
+                                );
+                            }
+                        }
+                        cx.notify();
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Reload a pane's branch dropdown state against `cwd` — used after a
+    /// worktree attach/create moves the pane onto a different checkout.
+    fn reload_branches_for_pane(&mut self, pane_id: String, cwd: String, cx: &mut Context<Self>) {
+        if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
+            state.branch_loaded = false;
+        }
+        let branch_client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            let result = branch_client.git.list_branches(Some(&cwd)).await;
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
+                            state.branch_loaded = true;
+                            if let Ok(branches) = result {
+                                state.branches = Rc::new(branches.branches);
+                                state.branch_is_git_repository = branches.is_git_repository;
                             }
                         }
                         cx.notify();

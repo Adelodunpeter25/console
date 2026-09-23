@@ -297,6 +297,34 @@ func relocateSessionDb(fromPath, toPath string) bool {
 	return moved
 }
 
+// UpdateWorktree mirrors UpdateCwd but also stamps the worktree ownership
+// columns. Used to convert a plain session in place into a worktree session
+// (no project relocation — the session keeps its existing project_id).
+func (s *Service) UpdateWorktree(sessionID, cwd, branch, repo string) error {
+	projectID, _, err := s.projectIDBySession(sessionID)
+	if err != nil {
+		return err
+	}
+	now := utils.NowMillis()
+	trimmed := strings.TrimSpace(cwd)
+
+	if s.sessionDBExists(sessionID, projectID) {
+		conn, err := s.manager.Session(sessionID, projectID)
+		if err != nil {
+			return err
+		}
+		if _, err := conn.Exec(
+			`UPDATE session_meta SET cwd = ?, updated_at = ? WHERE id = 1`,
+			trimmed, now); err != nil {
+			return err
+		}
+	}
+	_, err = s.manager.Global().Exec(
+		`UPDATE sessions SET cwd = ?, worktree_path = ?, worktree_branch = ?, worktree_repo = ?, updated_at = ? WHERE id = ?`,
+		trimmed, trimmed, branch, repo, now, sessionID)
+	return err
+}
+
 // UpdateApprovalMode mirrors the TS updateApprovalMode.
 func (s *Service) UpdateApprovalMode(sessionID, approvalMode string) error {
 	projectID, _, err := s.projectIDBySession(sessionID)

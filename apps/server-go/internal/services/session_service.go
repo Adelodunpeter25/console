@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
@@ -27,6 +28,18 @@ var ErrWorktreeScratchpad = errors.New("worktree requires a project directory, n
 
 // ErrWorktreeNeedsCwd rejects a worktree spec without an explicit repo dir.
 var ErrWorktreeNeedsCwd = errors.New("worktree requires an explicit cwd pointing at a git repository")
+
+// ErrWorktreeSessionHasMessages rejects attaching a worktree to a session
+// that already has history: cwd is locked once a chat has messages.
+var ErrWorktreeSessionHasMessages = errors.New("cannot attach a worktree to a session that already has messages")
+
+// ErrWorktreeAlreadyOwned rejects attaching a worktree to a session that
+// already owns one (v1 scope: convert once, no re-rooting).
+var ErrWorktreeAlreadyOwned = errors.New("session already owns a worktree")
+
+// ErrSessionNotFound is returned by session operations that need to load a
+// header first (e.g. AttachWorktree) when the id is unknown or deleted.
+var ErrSessionNotFound = errors.New("session not found")
 
 // Core operations
 func (s *SessionService) Create(opts types.CreateSessionOptions) (types.SessionHeader, error) {
@@ -75,6 +88,67 @@ func (s *SessionService) Create(opts types.CreateSessionOptions) (types.SessionH
 		manager.Prewarm(header.Cwd)
 	}
 	return header, err
+}
+
+// AttachWorktree converts an existing, message-less session in place into a
+// worktree session: provisions <branch> off the session's current cwd and
+// re-points the session at the new worktree path. Unlike Create, the
+// session id and row never change — only its cwd/worktree columns do.
+func (s *SessionService) AttachWorktree(sessionID string, spec *types.CreateWorktreeSpec) (types.SessionHeader, error) {
+	header, err := s.inner.Header(sessionID)
+	if err != nil {
+		return types.SessionHeader{}, err
+	}
+	if header == nil {
+		return types.SessionHeader{}, ErrSessionNotFound
+	}
+	if header.MessageCount > 0 {
+		return types.SessionHeader{}, ErrWorktreeSessionHasMessages
+	}
+	if header.Worktree != nil {
+		return types.SessionHeader{}, ErrWorktreeAlreadyOwned
+	}
+	if header.Cwd == "" {
+		return types.SessionHeader{}, ErrWorktreeNeedsCwd
+	}
+	if strings.HasPrefix(header.Cwd, filepath.Join(utils.ConsoleStorageDir(), "scratch")) {
+		return types.SessionHeader{}, ErrWorktreeScratchpad
+	}
+
+	repoDir := header.Cwd
+	branch := ""
+	if spec != nil {
+		branch = spec.Branch
+	}
+	if branch == "" {
+		branch = SlugBranch(header.Title, sessionID)
+	}
+	root, err := DefaultRoot()
+	if err != nil {
+		return types.SessionHeader{}, err
+	}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return types.SessionHeader{}, err
+	}
+	wtPath := filepath.Join(root, sessionID)
+	if err := NewWorktreeService().WorktreeAdd(repoDir, wtPath, branch); err != nil {
+		return types.SessionHeader{}, err
+	}
+	if err := s.inner.UpdateWorktree(sessionID, wtPath, branch, repoDir); err != nil {
+		_ = NewWorktreeService().WorktreeRemove(repoDir, wtPath, true)
+		return types.SessionHeader{}, err
+	}
+	if manager != nil {
+		manager.Prewarm(wtPath)
+	}
+	updated, err := s.inner.Header(sessionID)
+	if err != nil {
+		return types.SessionHeader{}, err
+	}
+	if updated == nil {
+		return types.SessionHeader{}, ErrSessionNotFound
+	}
+	return *updated, nil
 }
 
 func (s *SessionService) ListFiltered(f session.ListFilter) ([]types.SessionHeader, error) {

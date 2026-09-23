@@ -257,6 +257,89 @@ func TestPermanentDeletePlainSession(t *testing.T) {
 	}
 }
 
+func TestAttachWorktreeToEmptySession(t *testing.T) {
+	isolateHome(t)
+	manager := openWorktreeManager(t)
+	sessions := services.NewSessionService(manager)
+	repo := initWorktreeRepo(t)
+
+	header, err := sessions.Create(types.CreateSessionOptions{Title: "Fix login bug", Cwd: repo})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if header.Worktree != nil {
+		t.Fatalf("plain session already has worktree: %+v", header.Worktree)
+	}
+
+	updated, err := sessions.AttachWorktree(header.ID, &types.CreateWorktreeSpec{})
+	if err != nil {
+		t.Fatalf("AttachWorktree: %v", err)
+	}
+	if updated.ID != header.ID {
+		t.Fatalf("AttachWorktree changed session id: %q != %q", updated.ID, header.ID)
+	}
+	if updated.Worktree == nil {
+		t.Fatalf("updated header missing worktree: %+v", updated)
+	}
+	if updated.Cwd != updated.Worktree.Path {
+		t.Fatalf("cwd %q != worktree path %q", updated.Cwd, updated.Worktree.Path)
+	}
+	if updated.Worktree.Repo != repo {
+		t.Fatalf("repo %q != %q", updated.Worktree.Repo, repo)
+	}
+
+	// No second session row was created.
+	list, err := sessions.ListFiltered(session.ListFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("session count = %d; want 1: %+v", len(list), list)
+	}
+}
+
+func TestAttachWorktreeRejectsSessionWithMessages(t *testing.T) {
+	isolateHome(t)
+	manager := openWorktreeManager(t)
+	sessions := services.NewSessionService(manager)
+	repo := initWorktreeRepo(t)
+
+	header, err := sessions.Create(types.CreateSessionOptions{Title: "has messages", Cwd: repo})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := sessions.AppendMessage(header.ID, types.AgentMessage{}); err != nil {
+		t.Fatalf("AppendMessage: %v", err)
+	}
+
+	_, err = sessions.AttachWorktree(header.ID, &types.CreateWorktreeSpec{})
+	if !errors.Is(err, services.ErrWorktreeSessionHasMessages) {
+		t.Fatalf("err = %v; want ErrWorktreeSessionHasMessages", err)
+	}
+
+	reloaded, err := sessions.Header(header.ID)
+	if err != nil || reloaded == nil {
+		t.Fatalf("Header: %v, %v", reloaded, err)
+	}
+	if reloaded.Worktree != nil || reloaded.Cwd != repo {
+		t.Fatalf("session mutated despite rejection: %+v", reloaded)
+	}
+}
+
+func TestAttachWorktreeRejectsAlreadyOwned(t *testing.T) {
+	isolateHome(t)
+	manager := openWorktreeManager(t)
+	sessions := services.NewSessionService(manager)
+	repo := initWorktreeRepo(t)
+
+	header := createWorkedSession(t, sessions, repo, "already worktree")
+
+	_, err := sessions.AttachWorktree(header.ID, &types.CreateWorktreeSpec{})
+	if !errors.Is(err, services.ErrWorktreeAlreadyOwned) {
+		t.Fatalf("err = %v; want ErrWorktreeAlreadyOwned", err)
+	}
+}
+
 // TestWorktreesDirCentralized verifies the worktree root goes through the
 // central app paths file: prod default, dev variant, explicit override.
 func TestWorktreesDirCentralized(t *testing.T) {

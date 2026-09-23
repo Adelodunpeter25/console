@@ -167,6 +167,38 @@ func registerSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		return c.JSON(fiber.Map{"success": true, "data": updated})
 	})
 
+	// POST /api/sessions/:id/worktree — convert an existing, message-less
+	// session in place into a worktree session (branch off its current cwd,
+	// re-point cwd at the new worktree). Never creates a new session row —
+	// distinct from POST /api/sessions with a worktree spec, which always
+	// mints a fresh session.
+	h.Post("/:id/worktree", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		var spec types.CreateWorktreeSpec
+		if len(c.Body()) > 0 {
+			if err := json.Unmarshal(c.Body(), &spec); err != nil {
+				return sessionError(c, fiber.StatusBadRequest, "Invalid request body.")
+			}
+		}
+		header, err := sessions.AttachWorktree(id, &spec)
+		if err != nil {
+			switch {
+			case errors.Is(err, services.ErrSessionNotFound):
+				return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
+			case errors.Is(err, services.ErrWorktreeSessionHasMessages),
+				errors.Is(err, services.ErrWorktreeAlreadyOwned),
+				errors.Is(err, services.ErrWorktreeScratchpad),
+				errors.Is(err, services.ErrWorktreeNeedsCwd),
+				errors.Is(err, services.ErrNotGitRepo),
+				errors.Is(err, services.ErrUnbornHEAD):
+				return sessionError(c, fiber.StatusBadRequest, err.Error())
+			default:
+				return sessionError(c, fiber.StatusInternalServerError, err.Error())
+			}
+		}
+		return c.JSON(fiber.Map{"success": true, "data": header})
+	})
+
 	// DELETE /api/sessions/:id — soft delete.
 	h.Delete("/:id", func(c *fiber.Ctx) error {
 		id := c.Params("id")

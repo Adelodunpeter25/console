@@ -202,6 +202,44 @@ impl SessionService {
         }
     }
 
+    /// `POST /api/sessions/:id/worktree` — convert an existing, message-less
+    /// session in place into a worktree session (branch off its current cwd,
+    /// re-point cwd at the new worktree). The session id never changes;
+    /// unlike `create` with a worktree spec, this never creates a new row.
+    pub async fn attach_worktree(
+        &self,
+        id: &str,
+        spec: CreateWorktreeSpec,
+    ) -> Result<SessionHeader> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/worktree", id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .json(&spec)
+            .send()
+            .await
+            .context("Failed to attach worktree")?;
+
+        let body: ApiResponse<SessionHeader> = resp
+            .json()
+            .await
+            .context("Failed to parse attach worktree response")?;
+        if body.success {
+            body.data
+                .ok_or_else(|| anyhow!("Attached worktree session data is missing"))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to attach worktree".into())
+            ))
+        }
+    }
+
     pub async fn update(&self, id: &str, payload: UpdateSessionDto) -> Result<SessionHeader> {
         let url = self.transport.url(&format!("/api/sessions/{}", id)).await;
         let resp = self
