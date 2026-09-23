@@ -24,12 +24,18 @@ use crate::persistence;
 use crate::types::WorkspacePaneState;
 
 /// User prompts in a session, used to populate the composer's up-arrow
-/// history. Shared by `sessions` and `run`.
-pub(crate) fn user_prompt_history(messages: &[AgentMessage]) -> Vec<String> {
+/// history. Shared by `sessions` and `run`. Each entry pairs the prompt text
+/// with the full paths of any file mentions it carried, so recalling an
+/// older prompt from history can rebuild its mention chips.
+pub(crate) fn user_prompt_history(messages: &[AgentMessage]) -> Vec<(String, Vec<String>)> {
     messages
         .iter()
         .filter_map(|message| match message {
-            AgentMessage::User { content, .. } => Some(content.clone()),
+            AgentMessage::User {
+                content,
+                context_files,
+                ..
+            } => Some((content.clone(), context_files.clone().unwrap_or_default())),
             _ => None,
         })
         .collect()
@@ -208,6 +214,8 @@ pub struct ConsoleDesktopApp {
     pub right_sidebar_bottom_collapsed: bool,
     pub right_sidebar_terminals_by_cwd: std::collections::HashMap<String, WorkspaceTerminalState>,
     pub(crate) persisted_bottom_terminals: std::collections::HashMap<String, (usize, usize)>,
+    pub(crate) persisted_script_tabs:
+        std::collections::HashMap<String, crate::persistence::PersistedScriptTabs>,
     pub right_sidebar_bottom_run_selected: bool,
     pub project_scripts_by_project:
         std::collections::HashMap<String, super::project_scripts::ProjectScriptsPanelState>,
@@ -375,6 +383,7 @@ impl ConsoleDesktopApp {
         let mut project_workspace_roots = std::collections::HashMap::new();
         let mut project_active_panes = std::collections::HashMap::new();
         let mut persisted_bottom_terminals = std::collections::HashMap::new();
+        let mut persisted_script_tabs = std::collections::HashMap::new();
         for ws in ws_doc.workspaces {
             let mut root = ws.root;
             // Never restore a workspace containing another folder's tabs
@@ -390,7 +399,10 @@ impl ConsoleDesktopApp {
                 if let (Some(count), Some(active_idx)) =
                     (ws.bottom_terminal_tab_count, ws.bottom_terminal_active_idx)
                 {
-                    persisted_bottom_terminals.insert(cwd, (count, active_idx));
+                    persisted_bottom_terminals.insert(cwd.clone(), (count, active_idx));
+                }
+                if let Some(script_tabs) = ws.script_tabs {
+                    persisted_script_tabs.insert(cwd, script_tabs);
                 }
             }
         }
@@ -904,6 +916,7 @@ impl ConsoleDesktopApp {
             right_sidebar_bottom_collapsed,
             right_sidebar_terminals_by_cwd: std::collections::HashMap::new(),
             persisted_bottom_terminals,
+            persisted_script_tabs,
             right_sidebar_bottom_run_selected: false,
             project_scripts_by_project: std::collections::HashMap::new(),
             project_script_streams: std::collections::HashMap::new(),

@@ -176,7 +176,29 @@ impl ConsoleDesktopApp {
                 .as_ref()
                 .and_then(|c| self.right_sidebar_terminals_by_cwd.get(c))
                 .map(|t| (Some(t.terminals.len()), Some(t.active_idx)))
+                .or_else(|| {
+                    cwd.as_ref()
+                        .and_then(|c| self.persisted_bottom_terminals.get(c))
+                        .map(|&(count, idx)| (Some(count), Some(idx)))
+                })
                 .unwrap_or((None, None));
+            let script_tabs = cwd
+                .as_ref()
+                .and_then(|c| self.right_sidebar_terminals_by_cwd.get(c))
+                .and_then(|t| {
+                    if t.script_logs.is_empty() && t.active_script_log.is_none() {
+                        None
+                    } else {
+                        Some(persistence::PersistedScriptTabs {
+                            open_script_ids: t.script_logs.clone(),
+                            active_script_id: t.active_script_log.clone(),
+                        })
+                    }
+                })
+                .or_else(|| {
+                    cwd.as_ref()
+                        .and_then(|c| self.persisted_script_tabs.get(c).cloned())
+                });
             workspaces_map.insert(
                 wid.clone(),
                 persistence::PersistedWorkspace {
@@ -189,6 +211,7 @@ impl ConsoleDesktopApp {
                     active_pane_id: pane_id,
                     bottom_terminal_tab_count: term_count,
                     bottom_terminal_active_idx: term_active_idx,
+                    script_tabs,
                 },
             );
         }
@@ -223,7 +246,31 @@ impl ConsoleDesktopApp {
             .as_ref()
             .and_then(|c| self.right_sidebar_terminals_by_cwd.get(c))
             .map(|t| (Some(t.terminals.len()), Some(t.active_idx)))
+            .or_else(|| {
+                cur_cwd
+                    .as_ref()
+                    .and_then(|c| self.persisted_bottom_terminals.get(c))
+                    .map(|&(count, idx)| (Some(count), Some(idx)))
+            })
             .unwrap_or((None, None));
+        let cur_script_tabs = cur_cwd
+            .as_ref()
+            .and_then(|c| self.right_sidebar_terminals_by_cwd.get(c))
+            .and_then(|t| {
+                if t.script_logs.is_empty() && t.active_script_log.is_none() {
+                    None
+                } else {
+                    Some(persistence::PersistedScriptTabs {
+                        open_script_ids: t.script_logs.clone(),
+                        active_script_id: t.active_script_log.clone(),
+                    })
+                }
+            })
+            .or_else(|| {
+                cur_cwd
+                    .as_ref()
+                    .and_then(|c| self.persisted_script_tabs.get(c).cloned())
+            });
         workspaces_map.insert(
             cur_wid.clone(),
             persistence::PersistedWorkspace {
@@ -236,6 +283,7 @@ impl ConsoleDesktopApp {
                 active_pane_id: cur_pane_id,
                 bottom_terminal_tab_count: cur_term_count,
                 bottom_terminal_active_idx: cur_term_active_idx,
+                script_tabs: cur_script_tabs,
             },
         );
 

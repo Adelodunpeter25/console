@@ -209,23 +209,27 @@ impl EditHistory {
 
 /// Prompt submission history, recalled with Up/Down while the caret is at the
 /// top/bottom of the composer.
+///
+/// Each entry pairs the submitted text with the full paths of any inline
+/// file mentions it carried, so recalling an older prompt can rebuild its
+/// mention chips instead of showing the mention filename as bare text.
 #[derive(Default)]
 pub struct PromptHistory {
-    pub entries: Vec<String>,
+    pub entries: Vec<(String, Vec<String>)>,
     /// Uncommitted draft saved when starting history navigation, restored
     /// when stepping forward past the newest entry.
-    pub draft: Option<String>,
+    pub draft: Option<(String, Vec<String>)>,
     /// Index into `entries` of the entry currently showing. `None` while
     /// editing the draft.
     pub index: Option<usize>,
 }
 
 impl PromptHistory {
-    pub fn set_entries(&mut self, entries: Vec<String>) {
+    pub fn set_entries(&mut self, entries: Vec<(String, Vec<String>)>) {
         self.entries.clear();
-        for entry in entries.into_iter().filter(|entry| !entry.trim().is_empty()) {
-            if self.entries.last() != Some(&entry) {
-                self.entries.push(entry);
+        for (text, context_files) in entries.into_iter().filter(|(text, _)| !text.trim().is_empty()) {
+            if self.entries.last().map(|(last, _)| last) != Some(&text) {
+                self.entries.push((text, context_files));
             }
         }
         self.reset_navigation();
@@ -235,14 +239,14 @@ impl PromptHistory {
         self.index.is_some()
     }
 
-    pub fn record(&mut self, text: String) {
+    pub fn record(&mut self, text: String, context_files: Vec<String>) {
         if text.trim().is_empty() {
             return;
         }
-        if self.entries.last() == Some(&text) {
+        if self.entries.last().map(|(last, _)| last.as_str()) == Some(text.as_str()) {
             return;
         }
-        self.entries.push(text);
+        self.entries.push((text, context_files));
         self.index = None;
         self.draft = None;
     }
@@ -253,8 +257,13 @@ impl PromptHistory {
     }
 
     /// Move up (older, `next = false`) or down (newer, `next = true`) through
-    /// history. Returns the text to display.
-    pub fn navigate(&mut self, next: bool, current: &str) -> Option<String> {
+    /// history. Returns the text and context-file paths to display.
+    pub fn navigate(
+        &mut self,
+        next: bool,
+        current: &str,
+        current_context_files: &[String],
+    ) -> Option<(String, Vec<String>)> {
         if self.entries.is_empty() {
             return None;
         }
@@ -274,7 +283,7 @@ impl PromptHistory {
         let next = match self.index {
             Some(index) => index.saturating_sub(1),
             None => {
-                self.draft = Some(current.to_owned());
+                self.draft = Some((current.to_owned(), current_context_files.to_vec()));
                 self.entries.len() - 1
             }
         };

@@ -27,6 +27,9 @@ func TestProviderRegistry(t *testing.T) {
 	if _, err := providers.Lookup("antigravity"); err != nil {
 		t.Fatalf("antigravity lookup: %v", err)
 	}
+	if _, err := providers.Lookup("opencode"); err != nil {
+		t.Fatalf("opencode lookup: %v", err)
+	}
 	if _, err := providers.Lookup("devin"); err == nil {
 		t.Fatal("unported provider must fail")
 	}

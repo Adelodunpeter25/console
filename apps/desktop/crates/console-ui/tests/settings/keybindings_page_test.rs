@@ -37,6 +37,36 @@ fn test_filter_matches_shortcut_text() {
             "query {query:?} should match BrowserReload"
         );
     }
+
+    for query in ["cmd+shift+t", "ctrl+shift+t"] {
+        let categories = filter_keybinding_categories(query);
+        assert!(
+            categories
+                .iter()
+                .any(|c| c.entries.iter().any(|e| e.action_name == "NewTerminal")),
+            "query {query:?} should match NewTerminal"
+        );
+    }
+
+    for query in ["cmd+shift+b", "ctrl+shift+b"] {
+        let categories = filter_keybinding_categories(query);
+        assert!(
+            categories
+                .iter()
+                .any(|c| c.entries.iter().any(|e| e.action_name == "NewBrowser")),
+            "query {query:?} should match NewBrowser"
+        );
+    }
+
+    for query in ["alt+b", "option+b"] {
+        let categories = filter_keybinding_categories(query);
+        assert!(
+            categories
+                .iter()
+                .any(|c| c.entries.iter().any(|e| e.action_name == "ToggleRightSidebar")),
+            "query {query:?} should match ToggleRightSidebar"
+        );
+    }
 }
 
 #[test]

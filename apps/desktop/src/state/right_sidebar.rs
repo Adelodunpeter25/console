@@ -113,8 +113,22 @@ impl ConsoleDesktopApp {
     pub fn open_project_script_log(&mut self, script_id: &str, cx: &mut Context<Self>) {
         let (_, cwd) = self.active_inspector_target();
         let Some(cwd) = cwd else { return; };
-        let state = self.right_sidebar_terminals_by_cwd.entry(cwd).or_insert_with(|| super::app::WorkspaceTerminalState {
-            terminals: Vec::new(), active_idx: 0, next_id: 1, script_logs: Vec::new(), active_script_log: None,
+        let persisted_script_tabs = self.persisted_script_tabs.get(&cwd).cloned();
+        let state = self.right_sidebar_terminals_by_cwd.entry(cwd).or_insert_with(|| {
+            let open_scripts = persisted_script_tabs
+                .as_ref()
+                .map(|st| st.open_script_ids.clone())
+                .unwrap_or_default();
+            let active_script = persisted_script_tabs
+                .as_ref()
+                .and_then(|st| st.active_script_id.clone());
+            super::app::WorkspaceTerminalState {
+                terminals: Vec::new(),
+                active_idx: 0,
+                next_id: 1,
+                script_logs: open_scripts,
+                active_script_log: active_script,
+            }
         });
         if !state.script_logs.iter().any(|id| id == script_id) {
             state.script_logs.push(script_id.to_string());
@@ -433,15 +447,25 @@ impl ConsoleDesktopApp {
             return;
         };
 
+        let persisted_script_tabs = self.persisted_script_tabs.get(&cwd).cloned();
         let state = self
             .right_sidebar_terminals_by_cwd
             .entry(cwd.clone())
-            .or_insert_with(|| super::app::WorkspaceTerminalState {
-                terminals: Vec::new(),
-                active_idx: 0,
-                next_id: 1,
-                script_logs: Vec::new(),
-                active_script_log: None,
+            .or_insert_with(|| {
+                let open_scripts = persisted_script_tabs
+                    .as_ref()
+                    .map(|st| st.open_script_ids.clone())
+                    .unwrap_or_default();
+                let active_script = persisted_script_tabs
+                    .as_ref()
+                    .and_then(|st| st.active_script_id.clone());
+                super::app::WorkspaceTerminalState {
+                    terminals: Vec::new(),
+                    active_idx: 0,
+                    next_id: 1,
+                    script_logs: open_scripts,
+                    active_script_log: active_script,
+                }
             });
 
         // If no terminals exist for this workspace, restore persisted tab count (max 5) or spawn initial Terminal 1

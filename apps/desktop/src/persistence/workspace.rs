@@ -7,6 +7,15 @@ use super::store::storage_directory;
 
 const WORKSPACES_VERSION: u32 = 1;
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PersistedScriptTabs {
+    #[serde(default)]
+    pub open_script_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_script_id: Option<String>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersistedWorkspace {
@@ -26,6 +35,8 @@ pub struct PersistedWorkspace {
     pub bottom_terminal_tab_count: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bottom_terminal_active_idx: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub script_tabs: Option<PersistedScriptTabs>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

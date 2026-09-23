@@ -142,46 +142,6 @@ func (s *WorktreeService) WorktreeRemove(repoDir, path string, force bool) error
 	return err
 }
 
-// SlugBranch derives a branch name from a session title:
-// slug(title)-shortid, e.g. "fix-login-bug-a1b2c3". Falls back to
-// "session-<shortid>" for empty titles.
-func SlugBranch(title, id string) string {
-	var b strings.Builder
-	prevDash := true
-	for _, r := range strings.ToLower(title) {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			b.WriteRune(r)
-			prevDash = false
-		default:
-			if !prevDash {
-				b.WriteRune('-')
-				prevDash = true
-			}
-		}
-	}
-	slug := strings.Trim(b.String(), "-")
-	if len(slug) > 40 {
-		slug = strings.Trim(slug[:40], "-")
-	}
-	short := strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			return r
-		}
-		return -1
-	}, strings.ToLower(id))
-	if len(short) > 6 {
-		short = short[:6]
-	}
-	if slug == "" {
-		slug = "session"
-	}
-	if short == "" {
-		return slug
-	}
-	return slug + "-" + short
-}
-
 // WorktreePrune clears stale worktree metadata (e.g. after a crash left
 // a worktree dir behind without its admin files).
 func (s *WorktreeService) WorktreePrune(repoDir string) error {

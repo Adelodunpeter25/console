@@ -5,7 +5,8 @@
 //! desktop app registers its top-level menus during startup.
 
 use crate::keybindings::{
-    AddProject, NewWindow, OpenSettings, QuickOpenFile, ToggleLeftSidebar, ToggleRightSidebar,
+    AddProject, NewBrowser, NewChat, NewTerminal, NewWindow, OpenSettings, QuickOpenFile,
+    ToggleLeftSidebar, ToggleRightSidebar,
 };
 use gpui::{App, KeyBinding, Menu, MenuItem, actions};
 
@@ -29,11 +30,14 @@ pub fn init(cx: &mut App) {
         // to our actions (same pattern Zed uses for Open / Go to File).
         Menu::new("File").items([
             MenuItem::action("New Window", NewWindow),
+            MenuItem::action("New Chat", NewChat),
+            MenuItem::action("New Terminal", NewTerminal),
+            MenuItem::action("New Browser Tab", NewBrowser),
             MenuItem::action("Add Project…", AddProject),
             MenuItem::action("Quick Open File…", QuickOpenFile),
         ]),
         Menu::new("Edit"),
-        // View menu owns ⌘B / ⌘⇧B key equivalents so AppKit routes them
+        // View menu owns ⌘B / ⌥B key equivalents so AppKit routes them
         // to our actions (same pattern as File for ⌘O / ⌘P).
         Menu::new("View").items([
             MenuItem::action("Toggle Left Sidebar", ToggleLeftSidebar),

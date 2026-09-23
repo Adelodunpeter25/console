@@ -235,12 +235,65 @@ impl ConsoleDesktopApp {
                         for (pid, sid, rid) in running {
                             this.watch_script_run(&pid, &sid, &rid, cx);
                         }
+                        this.prune_project_script_tabs(&project_id);
                         cx.notify();
                     });
                 }
             });
         })
         .detach();
+    }
+
+    pub(crate) fn prune_project_script_tabs(&mut self, project_id: &str) {
+        let Some(state) = self.project_scripts_by_project.get(project_id) else {
+            return;
+        };
+        let valid_ids: std::collections::HashSet<&str> =
+            state.scripts.iter().map(|s| s.id.as_str()).collect();
+
+        let cwd = self
+            .projects
+            .iter()
+            .find(|p| p.id == project_id)
+            .map(|p| p.path.clone());
+
+        let mut changed = false;
+
+        if let Some(cwd) = &cwd {
+            if let Some(term_state) = self.right_sidebar_terminals_by_cwd.get_mut(cwd) {
+                let prev_len = term_state.script_logs.len();
+                term_state.script_logs.retain(|id| valid_ids.contains(id.as_str()));
+                if term_state.script_logs.len() != prev_len {
+                    changed = true;
+                }
+                if let Some(active_id) = &term_state.active_script_log {
+                    if !valid_ids.contains(active_id.as_str()) {
+                        term_state.active_script_log = term_state.script_logs.first().cloned();
+                        changed = true;
+                    }
+                }
+            }
+
+            if let Some(persisted) = self.persisted_script_tabs.get_mut(cwd) {
+                let prev_len = persisted.open_script_ids.len();
+                persisted
+                    .open_script_ids
+                    .retain(|id| valid_ids.contains(id.as_str()));
+                if persisted.open_script_ids.len() != prev_len {
+                    changed = true;
+                }
+                if let Some(active_id) = &persisted.active_script_id {
+                    if !valid_ids.contains(active_id.as_str()) {
+                        persisted.active_script_id = persisted.open_script_ids.first().cloned();
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        if changed {
+            self.persist_workspaces();
+        }
     }
 
     /// Toggle a script from its keyboard shortcut: stop the latest run

@@ -106,7 +106,7 @@ impl ConsoleDesktopApp {
         self.clear_draft_for_session(Some(&session_id), cx);
         self.revoke_sidebar_draft(&session_id);
         self.composer_for_pane(&pane_id).update(cx, |input, cx| {
-            input.record_prompt_history(prompt.clone(), cx);
+            input.record_prompt_history(prompt.clone(), dq.context_files.clone().unwrap_or_default(), cx);
         });
         let is_first = self.queued_prompts_for_session(&session_id).len() == 1;
         if is_first {
@@ -328,7 +328,7 @@ impl ConsoleDesktopApp {
         }
         self.composer_for_pane(&run_pane_id)
             .update(cx, |input, cx| {
-                input.record_prompt_history(prompt.clone(), cx);
+                input.record_prompt_history(prompt.clone(), context_files.clone(), cx);
             });
 
         // Push the clean prompt and structured paths into the optimistic

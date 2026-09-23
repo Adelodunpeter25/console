@@ -1014,10 +1014,15 @@ impl Render for ConsoleDesktopApp {
                                 .terminals
                                 .iter()
                                 .enumerate()
-                                .map(|(idx, _)| TerminalTabInfo {
-                                    id: idx,
-                                    title: format!("Terminal {}", idx + 1),
-                                    script_id: None,
+                                .map(|(idx, (_, entity))| {
+                                    let dynamic_title = entity.read(cx).title().map(|t| t.to_string());
+                                    TerminalTabInfo {
+                                        id: idx,
+                                        title: dynamic_title
+                                            .filter(|t| !t.is_empty())
+                                            .unwrap_or_else(|| format!("Terminal {}", idx + 1)),
+                                        script_id: None,
+                                    }
                                 })
                                 .collect::<Vec<_>>()
                         }).unwrap_or_default());
