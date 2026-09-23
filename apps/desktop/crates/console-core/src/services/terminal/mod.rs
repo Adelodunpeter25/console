@@ -120,6 +120,8 @@ pub struct TerminalSnapshotFull {
     pub mouse_mode: termy_core::TerminalMouseMode,
     pub is_alt_screen: bool,
     pub scroll_state: (usize, usize),
+    /// Terminal title set via OSC 0/1/2, if any.
+    pub title: Option<String>,
 }
 
 impl TerminalHandle {
@@ -212,12 +214,14 @@ impl TerminalHandle {
         let mouse_mode = b.mouse_mode();
         let is_alt_screen = b.is_alt_screen();
         let scroll_state = b.scroll_state();
+        let title = b.title().map(|s| s.to_string());
         TerminalSnapshotFull {
             snapshot,
             damage,
             mouse_mode,
             is_alt_screen,
             scroll_state,
+            title,
         }
     }
 

@@ -44,6 +44,12 @@ func registerProviderRoutes(app *fiber.App, favorites *services.FavoriteService)
 				models = providers.SortModelsByFavorites(models, favs)
 			}
 			return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"provider": id, "models": models}})
+		case "opencode":
+			models := providers.OpenCodeModels(c.Context())
+			if favs, err := favorites.List(); err == nil {
+				models = providers.SortModelsByFavorites(models, favs)
+			}
+			return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"provider": id, "models": models}})
 		default:
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid provider '" + id + "'."})
 		}

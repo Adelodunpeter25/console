@@ -1,6 +1,6 @@
 # Direct OpenCode Zen Provider for the Go Server
 
-Status: **planned; not started**.
+Status: **in progress**.
 
 ## Goal
 
@@ -122,9 +122,10 @@ Update `apps/server-go/internal/providers/catalog.go` with:
 - a default context window of `200_000` unless the model-list response provides
   a better value;
 - no image support and no selectable thinking levels initially;
-- `DefaultOpenCodeModels()` for offline startup and discovery failure;
+- `DefaultOpenCodeModels()` for offline startup and discovery failure, with
+  only `space-bunny-free` as the fallback;
 - `OpenCodeModels(ctx)` for live discovery with a bounded timeout and a
-  graceful static fallback.
+  fallback to only the stealth model.
 
 Model discovery should:
 
@@ -135,12 +136,10 @@ Model discovery should:
 4. return an empty result plus an error on HTTP, decode, or empty-list failure;
 5. let the catalog route use the static fallback on that error.
 
-The confirmed successful seed set should include only models that are useful
-without a server-side retry at startup, for example `big-pickle`,
-`space-bunny-free`, the two tested Mimo models, Ling, both Nemotron models,
-and both Muse Spark models. Do not seed `deepseek-v4-flash-free` or
-`jev-1.13-free` as usable defaults while their upstream responses remain
-`400`/`500`.
+The complete catalog must come from `GET {baseURL}/models`; do not maintain a
+second hardcoded list in the server. The only offline fallback is the stealth
+model `space-bunny-free`, so a temporary discovery failure still leaves one
+usable selection.
 
 ### Provider route
 
