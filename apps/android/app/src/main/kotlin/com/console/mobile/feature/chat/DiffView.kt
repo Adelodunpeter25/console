@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,12 +29,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.console.mobile.core.util.DiffLine
 import com.console.mobile.core.util.DiffLineType
 import com.console.mobile.core.util.DiffResult
 import com.console.mobile.core.util.getFileName
-import com.console.mobile.core.util.highlightLine
 import com.console.mobile.core.util.languageForPath
+import com.console.mobile.ui.components.CodeViewer
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
@@ -53,11 +52,31 @@ fun DiffView(diff: DiffResult, filePath: String? = null, maxCollapsedLines: Int 
             Text(getFileName(filePath), color = ConsoleColors.TextSecondary, fontSize = 11.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
         }
         val visible = if (!expanded && diff.lines.size > maxCollapsedLines) diff.lines.take(maxCollapsedLines) else diff.lines
-        Box(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-            Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                visible.forEachIndexed { i, line -> DiffLineRow(line = line, index = i, language = language) }
+        val diffText = remember(visible) {
+            visible.joinToString("\n") { line ->
+                when (line.type) {
+                    DiffLineType.Added -> "+ ${line.text}"
+                    DiffLineType.Removed -> "- ${line.text}"
+                    else -> "  ${line.text}"
+                }
             }
         }
+        val addLines = remember(visible) {
+            visible.mapIndexedNotNull { i, line -> if (line.type == DiffLineType.Added) i else null }.toSet()
+        }
+        val removeLines = remember(visible) {
+            visible.mapIndexedNotNull { i, line -> if (line.type == DiffLineType.Removed) i else null }.toSet()
+        }
+        val viewerHeight = remember(visible.size) { ((visible.size * 21 + 16).coerceAtMost(600)).dp }
+        CodeViewer(
+            code = diffText,
+            language = language,
+            modifier = Modifier.fillMaxWidth().height(viewerHeight),
+            showLineNumbers = false,
+            fontSizeSp = 11f,
+            addLines = addLines,
+            removeLines = removeLines,
+        )
         if (!expanded && diff.lines.size > maxCollapsedLines) {
             Row(modifier = Modifier.fillMaxWidth().clickable { expanded = true }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -77,28 +96,6 @@ fun DiffView(diff: DiffResult, filePath: String? = null, maxCollapsedLines: Int 
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun DiffLineRow(line: DiffLine, index: Int, language: String = "") {
-    val isAdded = line.type == DiffLineType.Added
-    val isRemoved = line.type == DiffLineType.Removed
-    val bg = when {
-        isAdded -> Color(0xFF34D399).copy(alpha = 0.1f)
-        isRemoved -> Color(0xFFF87171).copy(alpha = 0.1f)
-        else -> Color.Transparent
-    }
-    val fg = when {
-        isAdded -> Color(0xFF4ADE80)
-        isRemoved -> Color(0xFFF87171)
-        else -> Color(0xFFE4E4E7)
-    }
-    Row(modifier = Modifier.background(bg).padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.Top) {
-        Text(line.oldLineNo?.toString() ?: "", color = ConsoleColors.TextMuted.copy(alpha = 0.75f), fontSize = 10.sp, fontFamily = ConsoleMonoFamily, modifier = Modifier.width(28.dp))
-        Text(line.newLineNo?.toString() ?: "", color = ConsoleColors.TextMuted.copy(alpha = 0.75f), fontSize = 10.sp, fontFamily = ConsoleMonoFamily, modifier = Modifier.width(28.dp))
-        Text(if (isAdded) "+" else if (isRemoved) "-" else " ", color = fg, fontSize = 10.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.Bold, modifier = Modifier.width(8.dp))
-        Text(remember(line.text, language, fg) { highlightLine(line.text, language, base = fg.copy(alpha = if (isRemoved) 0.75f else 1f)) }, fontSize = 11.sp, fontFamily = ConsoleMonoFamily, lineHeight = 17.sp, softWrap = false, modifier = Modifier.padding(start = 8.dp))
     }
 }
 

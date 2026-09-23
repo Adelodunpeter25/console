@@ -2,14 +2,12 @@ package com.console.mobile.feature.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
@@ -38,7 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.console.mobile.core.util.highlightLine
+import com.console.mobile.ui.components.CodeViewer
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import kotlinx.coroutines.delay
@@ -103,7 +101,11 @@ private fun CodeBlock(language: String, code: String) {
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     var copied by remember(code) { mutableStateOf(false) }
-    val lines = remember(code) { code.trimEnd().split("\n") }
+    val capped = remember(code) { code.trimEnd() }
+    val normalizedLang = remember(language) { language.trim().lowercase() }
+    // Fixed height so the Sora view can virtualize inside chat scroll; capped with internal scroll.
+    val lineCount = remember(capped) { capped.count { it == '\n' } + 1 }
+    val viewerHeight = remember(lineCount) { ((lineCount * 20 + 16).coerceAtMost(440)).dp }
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
     ) {
@@ -122,29 +124,13 @@ private fun CodeBlock(language: String, code: String) {
                 else Icon(Icons.Filled.ContentCopy, contentDescription = "Copy code", tint = ConsoleColors.TextSecondary)
             }
         }
-        Box(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp).padding(bottom = 12.dp)) {
-            Column {
-                lines.forEachIndexed { idx, line ->
-                    Row(verticalAlignment = Alignment.Top) {
-                        Text(
-                            "${idx + 1}",
-                            color = ConsoleColors.TextMuted.copy(alpha = 0.55f),
-                            fontSize = 10.sp,
-                            fontFamily = ConsoleMonoFamily,
-                            lineHeight = 19.sp,
-                            modifier = Modifier.width(28.dp).padding(end = 10.dp),
-                        )
-                        Text(
-                            remember(line, language) { highlightLine(line, language) },
-                            fontSize = 12.5.sp,
-                            fontFamily = ConsoleMonoFamily,
-                            lineHeight = 19.sp,
-                            softWrap = false,
-                        )
-                    }
-                }
-            }
-        }
+        CodeViewer(
+            code = capped,
+            language = normalizedLang,
+            modifier = Modifier.fillMaxWidth().height(viewerHeight).padding(horizontal = 14.dp).padding(bottom = 12.dp),
+            showLineNumbers = true,
+            fontSizeSp = 12.5f,
+        )
     }
 }
 

@@ -7,7 +7,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import com.console.mobile.ui.theme.ConsoleColors
 
-private val KEYWORDS = setOf(
+internal val CODE_KEYWORDS = setOf(
     "as", "break", "case", "catch", "class", "const", "continue", "data", "do",
     "else", "enum", "export", "extends", "false", "finally", "for", "from", "fun",
     "if", "implements", "import", "in", "interface", "is", "nil", "null", "object",
@@ -19,7 +19,7 @@ private val KEYWORDS = setOf(
     "boolean", "string", "select", "where", "from", "table", "yes", "no", "on", "off",
 )
 
-private val TOKEN_REGEX = Regex(
+internal val CODE_TOKEN_REGEX = Regex(
     """"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|//.*|#.*|/\*.*?\*/|\b\d[\d_]*(?:\.\d+)?\b|\b[A-Za-z_][A-Za-z0-9_.-]*\b"""
 )
 
@@ -49,7 +49,7 @@ private fun styleForToken(token: String, line: String, matchEnd: Int): SpanStyle
     if (token.firstOrNull()?.isDigit() == true) {
         return SpanStyle(color = syntax.Number)
     }
-    if (KEYWORDS.contains(token)) {
+    if (CODE_KEYWORDS.contains(token)) {
         return SpanStyle(color = syntax.Keyword)
     }
     if (token.firstOrNull()?.isUpperCase() == true) {
@@ -97,7 +97,7 @@ fun highlightLine(line: String, language: String = "", base: Color = ConsoleColo
         } else {
             keyEnd = 0
         }
-        TOKEN_REGEX.findAll(line, startIndex = cursor).forEach { m ->
+        CODE_TOKEN_REGEX.findAll(line, startIndex = cursor).forEach { m ->
             val s = m.range.first
             val e = m.range.last + 1
             if (s > cursor) append(line.substring(cursor, s))

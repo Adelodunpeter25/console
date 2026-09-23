@@ -48,12 +48,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
-import com.console.mobile.core.util.highlightLine
 import com.console.mobile.core.util.languageForPath
 import com.console.mobile.data.model.FsTreeEntry
 import com.console.mobile.data.model.getFilePreviewBlock
 import com.console.mobile.data.model.isMarkdownPath
 import com.console.mobile.feature.chat.MarkdownText
+import com.console.mobile.ui.components.CodeViewer
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.components.ScreenHeader
@@ -371,38 +371,16 @@ private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expa
 
 @Composable
 private fun CodePreview(content: String, path: String?) {
-    // Cap render size; mono + h/v-scroll with gutter + regex highlight.
+    // Cap render size; Sora virtualizes so 2k+ line files stay smooth.
     val capped = if (content.length > 200_000) content.take(200_000) + "\n…(truncated)" else content
     val language = remember(path) { languageForPath(path) }
-    val lines = remember(capped) { capped.split("\n") }
-    val vScroll = rememberScrollState()
-    val hScroll = rememberScrollState()
-    Box(modifier = Modifier.fillMaxSize().verticalScroll(vScroll).padding(horizontal = 4.dp, vertical = 8.dp)) {
-        Box(modifier = Modifier.horizontalScroll(hScroll)) {
-            Column {
-                lines.forEachIndexed { idx, line ->
-                    Row(verticalAlignment = Alignment.Top) {
-                        Text(
-                            "${idx + 1}",
-                            color = ConsoleColors.TextMuted.copy(alpha = 0.55f),
-                            fontSize = 10.sp,
-                            fontFamily = ConsoleMonoFamily,
-                            lineHeight = 17.sp,
-                            modifier = Modifier.width(32.dp).padding(end = 12.dp),
-                        )
-                        Text(
-                            remember(line, language) { highlightLine(line, language) },
-                            fontSize = 11.sp,
-                            fontFamily = ConsoleMonoFamily,
-                            lineHeight = 17.sp,
-                            softWrap = false,
-                            modifier = Modifier.padding(end = 16.dp),
-                        )
-                    }
-                }
-            }
-        }
-    }
+    CodeViewer(
+        code = capped,
+        language = language,
+        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 8.dp),
+        showLineNumbers = true,
+        fontSizeSp = 11f,
+    )
 }
 
 @Composable
