@@ -131,8 +131,12 @@ fun Composer(
                 .padding(horizontal = 6.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { pickImages.launch("image/*") }, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Filled.Add, contentDescription = "Attach image", tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
+            Box(
+                modifier = Modifier.size(32.dp).clip(CircleShape)
+                    .clickable(onClickLabel = "Attach image") { pickImages.launch("image/*") },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
             }
             BasicTextField(
                 value = value,
@@ -158,12 +162,21 @@ fun Composer(
                 },
             )
             if (running) {
-                IconButton(onClick = onStop, modifier = Modifier.size(28.dp).clip(CircleShape).background(Color.White)) {
-                    Icon(Icons.Filled.Stop, contentDescription = "Stop", tint = Color.Black, modifier = Modifier.size(11.dp))
+                Box(
+                    modifier = Modifier.size(28.dp).clip(CircleShape).background(Color.White)
+                        .clickable(onClickLabel = "Stop") { onStop() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.Stop, contentDescription = null, tint = Color.Black, modifier = Modifier.size(11.dp))
                 }
             } else {
-                IconButton(onClick = onSend, enabled = canSend, modifier = Modifier.size(28.dp).clip(CircleShape).background(if (canSend) Color.White else Color.White.copy(alpha = 0.08f))) {
-                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = if (canSend) Color.Black else ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
+                Box(
+                    modifier = Modifier.size(28.dp).clip(CircleShape)
+                        .background(if (canSend) Color.White else Color.White.copy(alpha = 0.08f))
+                        .clickable(enabled = canSend, onClickLabel = "Send") { onSend() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.ArrowUpward, contentDescription = null, tint = if (canSend) Color.Black else ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
                 }
             }
         }
