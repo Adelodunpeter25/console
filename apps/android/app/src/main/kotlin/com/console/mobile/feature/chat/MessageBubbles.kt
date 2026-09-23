@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -74,22 +75,24 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
     val context = LocalContext.current
     var preview by remember { mutableStateOf<ImagePart?>(null) }
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalAlignment = Alignment.End) {
-        Column(
-            modifier = Modifier.fillMaxWidth(0.85f).clip(RoundedCornerShape(20.dp))
-                .background(ConsoleColors.SurfaceElevated).padding(horizontal = 16.dp, vertical = 10.dp),
-        ) {
-            if (attachments.isNotEmpty()) {
-                Row(modifier = Modifier.padding(bottom = 6.dp)) {
-                    attachments.forEach { att ->
-                        val bytes = remember(att) { attachmentBytes(att.data) }
-                        if (bytes != null) {
-                            AsyncImage(model = bytes, contentDescription = "Attachment", modifier = Modifier.size(80.dp).clip(RoundedCornerShape(12.dp)).clickable { preview = att }, contentScale = ContentScale.Crop)
+        androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.align(Alignment.End)) {
+            Column(
+                modifier = Modifier.widthIn(max = maxWidth * 0.85f).clip(RoundedCornerShape(20.dp))
+                    .background(ConsoleColors.SurfaceElevated).padding(horizontal = 16.dp, vertical = 10.dp),
+            ) {
+                if (attachments.isNotEmpty()) {
+                    Row(modifier = Modifier.padding(bottom = 6.dp)) {
+                        attachments.forEach { att ->
+                            val bytes = remember(att) { attachmentBytes(att.data) }
+                            if (bytes != null) {
+                                AsyncImage(model = bytes, contentDescription = "Attachment", modifier = Modifier.size(80.dp).clip(RoundedCornerShape(12.dp)).clickable { preview = att }, contentScale = ContentScale.Crop)
+                            }
                         }
                     }
                 }
-            }
-            if (content.isNotEmpty()) {
-                Text(content, color = ConsoleColors.TextPrimary, fontSize = 15.sp, lineHeight = 22.sp)
+                if (content.isNotEmpty()) {
+                    Text(content, color = ConsoleColors.TextPrimary, fontSize = 15.sp, lineHeight = 22.sp)
+                }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp, end = 2.dp)) {
