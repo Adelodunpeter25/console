@@ -184,14 +184,34 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 
 // Abort cancels the active run. The run goroutine owns hub/session
 // lifecycle, so the entry is removed when it settles — never here, or a
-// second run could start on a still-draining session.
+// second run could start on a still-draining session. Stop means stop
+// everything: any background bash jobs the session started are killed too,
+// not just the in-flight turn.
 func (s *Service) Abort(sessionID string) bool {
 	if !s.cancelActive(sessionID) {
 		return false
 	}
 	s.decisions.RejectAllForSession(sessionID, "Run aborted")
+	if jobs := s.bashJobManager(); jobs != nil {
+		jobs.KillOwnedBy(sessionID)
+	}
 	slog.Info("run aborted", "session", sessionID)
 	return true
+}
+
+// AbortAll cancels every active run (server shutdown). Best-effort: it
+// signals cancellation and returns immediately without waiting for the
+// runs to settle.
+func (s *Service) AbortAll() {
+	s.mu.Lock()
+	ids := make([]string, 0, len(s.active))
+	for id := range s.active {
+		ids = append(ids, id)
+	}
+	s.mu.Unlock()
+	for _, id := range ids {
+		s.Abort(id)
+	}
 }
 
 // ApprovePermission resolves a pending tool approval for a session.

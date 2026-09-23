@@ -361,6 +361,19 @@ func (s *ProjectScriptsService) Stop(projectID, runID string) bool {
 	return true
 }
 
+// StopAll terminates every running managed script (server shutdown).
+func (s *ProjectScriptsService) StopAll() {
+	s.mu.Lock()
+	runs := make([]*managedRun, 0, len(s.runs))
+	for _, run := range s.runs {
+		runs = append(runs, run)
+	}
+	s.mu.Unlock()
+	for _, run := range runs {
+		s.Stop(run.ProjectID, run.RunID)
+	}
+}
+
 // Subscribe replays current status + buffered output, then streams live
 // events until the run finishes. Returns the event channel or nil.
 func (s *ProjectScriptsService) Subscribe(projectID, runID string) (chan types.ScriptRunEvent, bool) {

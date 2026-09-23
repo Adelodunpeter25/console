@@ -451,22 +451,64 @@ func (m *BashJobManager) List(ownerSessionID string) []BashJobSnapshot {
 // KillAll terminates every running job (server shutdown).
 func (m *BashJobManager) KillAll() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	recs := make([]*bashJobRecord, 0, len(m.jobs))
 	for _, rec := range m.jobs {
-		rec.mu.Lock()
-		if rec.Status == BashJobRunning {
-			pid := rec.cmd.Process.Pid
-			jobID := rec.JobID
-			rec.Status = BashJobKilled
-			rec.mu.Unlock()
-			safeKillGroup(pid)
-			if m.ports != nil {
-				m.ports.RemoveOwner(PortOwner{Kind: "job", ID: jobID})
-			}
-			continue
-		}
-		rec.mu.Unlock()
+		recs = append(recs, rec)
 	}
+	m.mu.Unlock()
+	for _, rec := range recs {
+		m.killRecord(rec)
+	}
+}
+
+// KillOwnedBy terminates every running job owned by ownerSessionID (session
+// abort: "stop" means stop everything the session started, including
+// detached background jobs).
+func (m *BashJobManager) KillOwnedBy(ownerSessionID string) {
+	if ownerSessionID == "" {
+		ownerSessionID = "default"
+	}
+	m.mu.Lock()
+	recs := make([]*bashJobRecord, 0)
+	for _, rec := range m.jobs {
+		if rec.ownerSessionID == ownerSessionID {
+			recs = append(recs, rec)
+		}
+	}
+	m.mu.Unlock()
+	for _, rec := range recs {
+		m.killRecord(rec)
+	}
+}
+
+// killRecord terminates rec's process tree if still running, marking it
+// killed/aborted and cleaning up its port ownership. No-op when already
+// settled.
+func (m *BashJobManager) killRecord(rec *bashJobRecord) {
+	rec.mu.Lock()
+	if rec.Status != BashJobRunning {
+		rec.mu.Unlock()
+		return
+	}
+	if rec.timer != nil {
+		rec.timer.Stop()
+	}
+	pid := 0
+	if rec.cmd.Process != nil {
+		pid = rec.cmd.Process.Pid
+	}
+	jobID := rec.JobID
+	rec.Status = BashJobKilled
+	rec.Aborted = true
+	rec.FinishedAt = nowISO()
+	rec.mu.Unlock()
+
+	safeKillGroup(pid)
+	if m.ports != nil {
+		m.ports.RemoveOwner(PortOwner{Kind: "job", ID: jobID})
+	}
+	m.scheduleRetention(rec)
+	m.notify(rec)
 }
 
 func (m *BashJobManager) scheduleRetention(rec *bashJobRecord) {

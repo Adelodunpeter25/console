@@ -69,7 +69,7 @@ func Run() error {
 	ports.StartReaper(5 * time.Second)
 	notifications := services.NewNotificationService()
 
-	app, runs := routes.New(routes.Config{DB: manager, Watch: watch, Ports: ports, Notifications: notifications})
+	app, runs, shutdownAll := routes.New(routes.Config{DB: manager, Watch: watch, Ports: ports, Notifications: notifications})
 
 	// Deleted chats stay restorable for 7 days, then the backend purges
 	// them permanently. The sweep runs once at startup plus once a day.
@@ -94,5 +94,9 @@ func Run() error {
 	<-quit
 	slog.Info("shutting down")
 	_ = app.ShutdownWithTimeout(5 * time.Second)
+	// Stop the server means stop everything it owns: in-flight agent runs,
+	// detached background bash jobs, terminal PTYs, and managed project
+	// scripts — not just the HTTP listener.
+	shutdownAll()
 	return nil
 }

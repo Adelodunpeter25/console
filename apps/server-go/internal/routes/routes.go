@@ -26,7 +26,7 @@ type Config struct {
 	Notifications *services.NotificationService
 }
 
-func New(cfg Config) (*fiber.App, *run.Service) {
+func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	app := fiber.New(fiber.Config{
 		AppName:     "console-server-go",
 		IdleTimeout: 5 * time.Minute,
@@ -50,14 +50,16 @@ func New(cfg Config) (*fiber.App, *run.Service) {
 	registerFsRoutes(app, services.NewFsService(), cfg.Watch)
 	registerGitRoutes(app, services.NewGitService(), cfg.Watch)
 	projects := services.NewProjectService(cfg.DB)
-	registerTerminalRoutes(app, services.NewPtyManager(cfg.Ports, func(cwd string) string {
+	ptyManager := services.NewPtyManager(cfg.Ports, func(cwd string) string {
 		project, err := projects.GetByDir(cwd)
 		if err != nil {
 			return ""
 		}
 		return project.ID
-	}))
-	registerScriptRoutes(app, services.NewProjectScriptsService(services.NewProjectService(cfg.DB), cfg.Ports))
+	})
+	registerTerminalRoutes(app, ptyManager)
+	scriptsSvc := services.NewProjectScriptsService(services.NewProjectService(cfg.DB), cfg.Ports)
+	registerScriptRoutes(app, scriptsSvc)
 	registerProjectRoutes(app, services.NewProjectService(cfg.DB))
 	registerUsageRoutes(app, usage.NewService())
 	registerAuthRoutes(app, auth.NewAuthService())
@@ -65,7 +67,8 @@ func New(cfg Config) (*fiber.App, *run.Service) {
 	runSvc := run.NewService(services.NewSessionService(cfg.DB))
 	runSvc.SetNotifications(cfg.Notifications)
 	runSvc.SetMemories(memory.NewRegistry(""))
-	runSvc.SetBashJobs(services.NewBashJobManager(cfg.Ports))
+	bashJobs := services.NewBashJobManager(cfg.Ports)
+	runSvc.SetBashJobs(bashJobs)
 	registerSessionRoutes(app, services.NewSessionService(cfg.DB), runSvc)
 	registerWorktreeRoutes(app, services.NewSessionService(cfg.DB), services.NewWorktreeService())
 	fffManager := fff.NewManager()
@@ -83,5 +86,15 @@ func New(cfg Config) (*fiber.App, *run.Service) {
 	registerAssistRoutes(app, services.NewSessionService(cfg.DB), services.NewFsService(), services.NewSkillsService())
 
 	slog.Info("api routes registered")
-	return app, runSvc
+	// shutdown stops every process the server owns: in-flight agent runs,
+	// detached background bash jobs, terminal PTYs, and managed project
+	// scripts. Called once, after the HTTP listener drains, so "stop the
+	// server" really means stop everything — not just the API.
+	shutdown := func() {
+		runSvc.AbortAll()
+		bashJobs.KillAll()
+		ptyManager.KillAll()
+		scriptsSvc.StopAll()
+	}
+	return app, runSvc, shutdown
 }
