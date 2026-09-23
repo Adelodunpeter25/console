@@ -101,11 +101,8 @@ private fun CodeBlock(language: String, code: String) {
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     var copied by remember(code) { mutableStateOf(false) }
-    val shape = RoundedCornerShape(12.dp)
     Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp).clip(shape)
-            .background(Color(0xFF101113))
-            .border(1.dp, Color.White.copy(alpha = 0.1f), shape),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),

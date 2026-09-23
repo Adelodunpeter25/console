@@ -369,7 +369,7 @@ private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expa
 private fun CodePreview(content: String) {
     // Cap render size; VirtualizedCodeView equivalent — mono + h-scroll.
     val capped = if (content.length > 200_000) content.take(200_000) + "\n…(truncated)" else content
-    Box(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)).background(Color(0xFF101113)).border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp)).padding(12.dp)) {
+    Box(modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 8.dp)) {
         Text(
             capped,
             color = Color(0xFFE4E4E7),

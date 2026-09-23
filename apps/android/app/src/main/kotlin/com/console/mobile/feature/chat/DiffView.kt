@@ -43,11 +43,8 @@ import com.console.mobile.ui.theme.ConsoleMonoFamily
 @Composable
 fun DiffView(diff: DiffResult, filePath: String? = null, maxCollapsedLines: Int = 60) {
     var expanded by remember(filePath, diff.lines.size) { mutableStateOf(false) }
-    val shape = RoundedCornerShape(12.dp)
     Column(
-        modifier = Modifier.fillMaxWidth().clip(shape)
-            .background(Color(0xFF101113))
-            .border(1.dp, Color.White.copy(alpha = 0.1f), shape),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         if (!filePath.isNullOrBlank()) {
             Text(getFileName(filePath), color = ConsoleColors.TextSecondary, fontSize = 11.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
