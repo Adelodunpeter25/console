@@ -37,6 +37,10 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 		// Agent turns (extended thinking, long tool loops) routinely run
 		// past any fixed window, so leave writes unbounded.
 		WriteTimeout: 0,
+		// Params/body strings otherwise alias fasthttp's reused buffers and
+		// get overwritten by later requests; run goroutines outlive their
+		// handler, so a mutated session id silently dropped persistence.
+		Immutable: true,
 	})
 	app.Use(recover.New())
 

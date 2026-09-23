@@ -4,6 +4,7 @@ package session
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"log/slog"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
@@ -24,6 +25,8 @@ func (s *Service) AppendMessages(sessionID string, messages []types.AgentMessage
 		return err
 	}
 	if !ok {
+		slog.Warn("append messages: unknown session, messages not persisted",
+			"session", sessionID, "count", len(messages))
 		return nil
 	}
 	conn, err := s.manager.Session(sessionID, projectID)
