@@ -77,7 +77,7 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalAlignment = Alignment.End) {
         androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.align(Alignment.End)) {
             Column(
-                modifier = Modifier.widthIn(max = maxWidth * 0.85f).clip(RoundedCornerShape(20.dp))
+                modifier = Modifier.widthIn(min = 64.dp, max = maxWidth * 0.85f).clip(RoundedCornerShape(20.dp))
                     .background(ConsoleColors.SurfaceElevated).padding(horizontal = 16.dp, vertical = 10.dp),
             ) {
                 if (attachments.isNotEmpty()) {
