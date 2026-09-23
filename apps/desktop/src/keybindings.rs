@@ -19,6 +19,10 @@ actions!(
         CloseTab,
         /// Create a chat session in the active pane.
         NewChat,
+        /// Open a new terminal tab in the active pane (cmd-shift-t).
+        NewTerminal,
+        /// Open a new browser tab in the active pane (cmd-shift-b).
+        NewBrowser,
         /// Open the project directory browser palette to add a project (cmd-o).
         AddProject,
         /// Open the quick file search palette scoped to the active pane's project (cmd-p).
@@ -82,6 +86,10 @@ pub fn init(cx: &mut App) {
         // the same platform modifier as "secondary".)
         KeyBinding::new("secondary-shift-n", NewWindow, None),
         KeyBinding::new("secondary-shift-N", NewWindow, None),
+        KeyBinding::new("secondary-shift-t", NewTerminal, None),
+        KeyBinding::new("secondary-shift-T", NewTerminal, None),
+        KeyBinding::new("secondary-shift-b", NewBrowser, None),
+        KeyBinding::new("secondary-shift-B", NewBrowser, None),
         KeyBinding::new("secondary-w", CloseTab, None),
         KeyBinding::new("secondary-n", NewChat, None),
         // cmd-o / cmd-p — same as Zed; our File menu owns the key equivalents
@@ -104,7 +112,8 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("shift-tab", CycleApprovalMode, Some("ComposerInput")),
         KeyBinding::new("secondary-,", OpenSettings, None),
         KeyBinding::new("secondary-b", ToggleLeftSidebar, None),
-        KeyBinding::new("secondary-shift-b", ToggleRightSidebar, None),
+        KeyBinding::new("secondary-alt-b", ToggleRightSidebar, None),
+        KeyBinding::new("secondary-alt-B", ToggleRightSidebar, None),
         KeyBinding::new("secondary-1", SwitchSession1, None),
         KeyBinding::new("secondary-2", SwitchSession2, None),
         KeyBinding::new("secondary-3", SwitchSession3, None),
@@ -154,6 +163,30 @@ pub fn init_handlers(cx: &mut App) {
     cx.on_action(|_: &NewChat, cx| {
         if let Some((_, app)) = crate::window::get_active_window(cx) {
             app.update(cx, |this, cx| this.create_new_chat(cx));
+        }
+    });
+
+    cx.on_action(|_: &NewTerminal, cx| {
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.open_terminal_tab(window, cx));
+                    })
+                    .ok();
+            });
+        }
+    });
+
+    cx.on_action(|_: &NewBrowser, cx| {
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.open_browser_tab(window, cx));
+                    })
+                    .ok();
+            });
         }
     });
 

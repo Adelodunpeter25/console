@@ -72,6 +72,20 @@ pub fn keybinding_categories() -> Vec<KeybindingCategory> {
                     context: "Global",
                 },
                 KeybindingEntry {
+                    action_name: "NewTerminal",
+                    description: "New terminal tab",
+                    macos_keys: &["⇧", "⌘", "T"],
+                    other_keys: &["Ctrl", "Shift", "T"],
+                    context: "Global",
+                },
+                KeybindingEntry {
+                    action_name: "NewBrowser",
+                    description: "New browser tab",
+                    macos_keys: &["⇧", "⌘", "B"],
+                    other_keys: &["Ctrl", "Shift", "B"],
+                    context: "Global",
+                },
+                KeybindingEntry {
                     action_name: "CloseTab",
                     description: "Close active tab",
                     macos_keys: &["⌘", "W"],
@@ -88,8 +102,8 @@ pub fn keybinding_categories() -> Vec<KeybindingCategory> {
                 KeybindingEntry {
                     action_name: "ToggleRightSidebar",
                     description: "Toggle right sidebar",
-                    macos_keys: &["⇧", "⌘", "B"],
-                    other_keys: &["Ctrl", "Shift", "B"],
+                    macos_keys: &["⌥", "⌘", "B"],
+                    other_keys: &["Ctrl", "Alt", "B"],
                     context: "Global",
                 },
                 KeybindingEntry {
@@ -402,7 +416,7 @@ fn shortcut_search_text(entry: &KeybindingEntry) -> String {
         match key {
             "⌘" => "cmd",
             "⇧" => "shift",
-            "⌥" => "alt option",
+            "⌥" => "alt option opt",
             "⌃" => "ctrl",
             "←" => "left arrow",
             "→" => "right arrow",
@@ -418,8 +432,29 @@ fn shortcut_search_text(entry: &KeybindingEntry) -> String {
         .map(|k| normalize_key(k))
         .collect::<Vec<_>>();
     let other = entry.other_keys.join(" ");
+
+    let has_shift = entry.macos_keys.contains(&"⇧") || entry.other_keys.contains(&"Shift");
+    let has_cmd = entry.macos_keys.contains(&"⌘");
+    let has_alt = entry.macos_keys.contains(&"⌥") || entry.other_keys.contains(&"Alt");
+    let key_letter = entry
+        .macos_keys
+        .last()
+        .copied()
+        .unwrap_or("")
+        .to_lowercase();
+
+    let mut extra = String::new();
+    if has_cmd && has_shift {
+        extra.push_str(&format!(" cmd+shift+{key_letter} shift+cmd+{key_letter}"));
+    }
+    if has_cmd && has_alt {
+        extra.push_str(&format!(
+            " cmd+alt+{key_letter} alt+cmd+{key_letter} cmd+opt+{key_letter} opt+cmd+{key_letter} cmd+option+{key_letter} option+cmd+{key_letter}"
+        ));
+    }
+
     format!(
-        "{} {} {} {} {} {} {} {} {}",
+        "{} {} {} {} {} {} {} {} {} {}",
         entry.action_name,
         entry.description,
         entry.context,
@@ -429,6 +464,7 @@ fn shortcut_search_text(entry: &KeybindingEntry) -> String {
         other,
         other.to_lowercase().replace(' ', "+"),
         entry.macos_keys.join("+"),
+        extra,
     )
     .to_lowercase()
 }
