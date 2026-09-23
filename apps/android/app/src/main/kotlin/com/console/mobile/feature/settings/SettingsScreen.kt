@@ -13,14 +13,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Icon
+import com.composables.icons.lucide.ChartBar
+import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.Folder
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Trash2
+import com.composables.icons.lucide.User
+import com.composables.icons.lucide.Wifi
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -80,13 +80,13 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
     ScreenHeader(title = "Settings", onBack = { onBack() })
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 32.dp)) {
         val signedIn = authState.status?.values?.any { it.loggedIn } == true
-        LandingRow(icon = Icons.Filled.Wifi, title = "Connection", summary = if (!appState.backendUrl.isNullOrBlank()) "Connected" else "Not connected") { onOpen(SettingsSection.Connection) }
-        LandingRow(icon = Icons.Filled.Person, title = "Account", summary = if (signedIn) "Signed in" else "No providers connected") { onOpen(SettingsSection.Account) }
-        LandingRow(icon = Icons.Filled.BarChart, title = "Usage", summary = "Quota & limits") { onOpen(SettingsSection.Usage) }
+        LandingRow(icon = Lucide.Wifi, title = "Connection", summary = if (!appState.backendUrl.isNullOrBlank()) "Connected" else "Not connected") { onOpen(SettingsSection.Connection) }
+        LandingRow(icon = Lucide.User, title = "Account", summary = if (signedIn) "Signed in" else "No providers connected") { onOpen(SettingsSection.Account) }
+        LandingRow(icon = Lucide.ChartBar, title = "Usage", summary = "Quota & limits") { onOpen(SettingsSection.Usage) }
         val n = projectState.projects.size
-        LandingRow(icon = Icons.Filled.Folder, title = "Projects", summary = "$n project folder${if (n == 1) "" else "s"}") { onOpen(SettingsSection.Projects) }
+        LandingRow(icon = Lucide.Folder, title = "Projects", summary = "$n project folder${if (n == 1) "" else "s"}") { onOpen(SettingsSection.Projects) }
         val d = projectState.deletedSessions.size
-        LandingRow(icon = Icons.Filled.Delete, title = "Deleted Chats", summary = "$d deleted chat${if (d == 1) "" else "s"}") { onOpen(SettingsSection.DeletedChats) }
+        LandingRow(icon = Lucide.Trash2, title = "Deleted Chats", summary = "$d deleted chat${if (d == 1) "" else "s"}") { onOpen(SettingsSection.DeletedChats) }
     }
 }
 
@@ -111,6 +111,6 @@ private fun LandingRow(icon: ImageVector, title: String, summary: String, onClic
             Text(title, color = ConsoleColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Text(summary, color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
-        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted)
+        Icon(Lucide.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted)
     }
 }
