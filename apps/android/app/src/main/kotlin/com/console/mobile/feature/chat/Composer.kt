@@ -63,24 +63,39 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
+import com.console.mobile.core.util.ComposerTrigger
+import com.console.mobile.core.util.detectComposerTrigger
 import com.console.mobile.core.util.formatModelName
 import com.console.mobile.data.model.ApprovalMode
+import com.console.mobile.data.model.FileSearchResult
 import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.Model
 import com.console.mobile.data.model.ProjectInfo
+import com.console.mobile.data.model.SlashCommandInfo
 import com.console.mobile.data.model.UpdateSessionDto
 import com.console.mobile.ui.components.ImagePreviewDialog
 import com.console.mobile.ui.components.attachmentBytes
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -105,6 +120,45 @@ fun Composer(
     val chatSessions by AppContainer.chatStateHolder.sessions.collectAsStateWithLifecycle()
     val attachments = chatSessions[sessionId]?.attachments ?: emptyList()
     val canSend = value.trim().isNotEmpty() || attachments.isNotEmpty()
+    val sessionViews by AppContainer.sessionStateHolder.views.collectAsStateWithLifecycle()
+    val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
+    val sessionCwd = sessionViews[sessionId]?.sessionCwd
+    val projectRoot = projectState.projects.firstOrNull { p -> sessionCwd != null && (p.path == sessionCwd || sessionCwd.startsWith(p.path + "/")) }?.path ?: sessionCwd
+
+    var fieldValue by remember(sessionId) { mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length))) }
+    if (fieldValue.text != value) {
+        fieldValue = fieldValue.copy(text = value, selection = TextRange(minOf(fieldValue.selection.start, value.length)))
+    }
+    var fieldCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val trigger = remember(fieldValue) { detectComposerTrigger(fieldValue.text, fieldValue.selection.start) }
+
+    var slashCommands by remember(sessionId) { mutableStateOf<List<SlashCommandInfo>>(emptyList()) }
+    LaunchedEffect(sessionId, trigger is ComposerTrigger.Slash) {
+        if (trigger is ComposerTrigger.Slash && slashCommands.isEmpty()) {
+            slashCommands = try { withContext(Dispatchers.IO) { AppContainer.consoleApi.listSlashCommands(sessionId) } } catch (_: Exception) { emptyList() }
+        }
+    }
+    var mentionResults by remember { mutableStateOf<List<FileSearchResult>>(emptyList()) }
+    LaunchedEffect(trigger) {
+        val t = trigger
+        if (t is ComposerTrigger.Mention) {
+            delay(200)
+            mentionResults = try {
+                withContext(Dispatchers.IO) { AppContainer.consoleApi.assistSearchFiles(sessionId, t.query, projectRoot).items }
+            } catch (_: Exception) { emptyList() }
+        } else {
+            mentionResults = emptyList()
+        }
+    }
+
+    fun applySuggestion(insert: String, replaceFrom: Int) {
+        val current = fieldValue.text
+        val cursor = fieldValue.selection.start.coerceIn(0, current.length)
+        val newText = current.substring(0, replaceFrom) + insert + current.substring(cursor)
+        val newCursor = replaceFrom + insert.length
+        fieldValue = TextFieldValue(text = newText, selection = TextRange(newCursor))
+        onChange(newText)
+    }
 
     val pickImages = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
@@ -147,12 +201,16 @@ fun Composer(
                 Icon(Icons.Filled.Add, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
             }
             BasicTextField(
-                value = value,
-                onValueChange = onChange,
+                value = fieldValue,
+                onValueChange = { new ->
+                    fieldValue = new
+                    onChange(new.text)
+                },
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 8.dp)
-                    .heightIn(max = 120.dp),
+                    .heightIn(max = 120.dp)
+                    .onGloballyPositioned { fieldCoordinates = it },
                 textStyle = androidx.compose.ui.text.TextStyle(
                     color = ConsoleColors.TextPrimary,
                     fontSize = 14.sp,
@@ -188,7 +246,73 @@ fun Composer(
                 }
             }
         }
+        val anchor = fieldCoordinates
+        if (anchor != null) {
+            when (val t = trigger) {
+                is ComposerTrigger.Slash -> {
+                    val items = slashCommands.filter { it.name.contains(t.query, ignoreCase = true) }
+                    if (items.isNotEmpty()) {
+                        ComposerAutocompletePopup(anchor = anchor) {
+                            items.take(20).forEach { cmd ->
+                                AutocompleteRow(title = "/${cmd.name}", subtitle = cmd.description) {
+                                    applySuggestion("/${cmd.name} ", t.start)
+                                }
+                            }
+                        }
+                    }
+                }
+                is ComposerTrigger.Mention -> {
+                    if (mentionResults.isNotEmpty()) {
+                        ComposerAutocompletePopup(anchor = anchor) {
+                            mentionResults.take(20).forEach { file ->
+                                AutocompleteRow(title = file.relativePath.substringAfterLast('/'), subtitle = file.relativePath) {
+                                    applySuggestion("@${file.relativePath} ", t.start)
+                                }
+                            }
+                        }
+                    }
+                }
+                null -> {}
+            }
+        }
         ComposerBottomStrip(sessionId = sessionId, projectLocked = projectLocked)
+    }
+}
+
+@Composable
+private fun ComposerAutocompletePopup(anchor: LayoutCoordinates, content: @Composable () -> Unit) {
+    Popup(
+        popupPositionProvider = remember(anchor) {
+            object : PopupPositionProvider {
+                override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: androidx.compose.ui.unit.LayoutDirection, popupContentSize: IntSize): IntOffset {
+                    val bounds = anchor.boundsInWindow()
+                    val x = bounds.left.toInt().coerceIn(0, maxOf(0, windowSize.width - popupContentSize.width))
+                    val y = (bounds.top.toInt() - popupContentSize.height - 8).coerceAtLeast(0)
+                    return IntOffset(x, y)
+                }
+            }
+        },
+        onDismissRequest = {},
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(ConsoleColors.Card)
+                .border(1.dp, ConsoleColors.Border, RoundedCornerShape(14.dp))
+                .padding(vertical = 6.dp),
+        ) { content() }
+    }
+}
+
+@Composable
+private fun AutocompleteRow(title: String, subtitle: String, onClick: () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp)) {
+        Text(title, color = ConsoleColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (subtitle.isNotBlank() && subtitle != title) {
+            Text(subtitle, color = ConsoleColors.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
+        }
     }
 }
 
