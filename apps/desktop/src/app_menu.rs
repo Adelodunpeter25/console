@@ -37,7 +37,7 @@ pub fn init(cx: &mut App) {
             MenuItem::action("Quick Open File…", QuickOpenFile),
         ]),
         Menu::new("Edit"),
-        // View menu owns ⌘B / ⌥⌘B key equivalents so AppKit routes them
+        // View menu owns ⌘B / ⌥B key equivalents so AppKit routes them
         // to our actions (same pattern as File for ⌘O / ⌘P).
         Menu::new("View").items([
             MenuItem::action("Toggle Left Sidebar", ToggleLeftSidebar),
