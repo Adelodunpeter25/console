@@ -6,8 +6,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -62,6 +65,8 @@ fun ComposerAutocompletePopup(anchor: LayoutCoordinates, gap: Dp = 10.dp, conten
                 .clip(RoundedCornerShape(14.dp))
                 .background(ConsoleColors.Card)
                 .border(1.dp, ConsoleColors.Border, RoundedCornerShape(14.dp))
+                .heightIn(max = 260.dp)
+                .verticalScroll(rememberScrollState())
                 .padding(vertical = 6.dp),
         ) { content() }
     }
