@@ -164,7 +164,7 @@ fun TerminalScreen(onBack: () -> Unit) {
             project == null -> EmptyState(title = "No projects yet", description = "Add a project folder in Settings → Projects to open a shell.")
             else -> {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
-                    Box(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)).background(Color.Black).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(8.dp))) {
+                    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
                         if (terminalId == null && spawnError == null) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
