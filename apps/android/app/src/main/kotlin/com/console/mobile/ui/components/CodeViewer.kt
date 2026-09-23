@@ -51,9 +51,12 @@ class ConsoleColorScheme : EditorColorScheme() {
         setColor(ANNOTATION, s.Number.toArgb())
         setColor(LINE_NUMBER, ConsoleColors.TextMuted.copy(alpha = 0.6f).toArgb())
         // Opaque gutter so horizontally-scrolled code slides behind it instead
-        // of bleeding through the pinned line numbers. Matches the screen so
-        // it still looks uniform.
+        // of bleeding through the pinned line numbers. LINE_NUMBER_PANEL is
+        // what 0.21.1 paints for the pinned gutter; BACKGROUND covers the rest.
+        // Both match the screen so it still looks uniform.
         setColor(LINE_NUMBER_BACKGROUND, ConsoleColors.Background.toArgb())
+        setColor(LINE_NUMBER_PANEL, ConsoleColors.Background.toArgb())
+        setColor(LINE_NUMBER_PANEL_TEXT, ConsoleColors.TextMuted.copy(alpha = 0.6f).toArgb())
         setColor(LINE_NUMBER_CURRENT, ConsoleColors.TextSecondary.toArgb())
         setColor(LINE_DIVIDER, ConsoleColors.BorderSubtle.toArgb())
         setColor(CURRENT_LINE, 0x00000000)
