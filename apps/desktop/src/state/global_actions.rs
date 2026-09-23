@@ -184,8 +184,15 @@ fn tab_palette_entry(
                 entry = entry.icon(IconName::Globe);
             }
         }
-        WorkspaceTabConfig::Chat { .. } => {
-            entry = entry.icon(IconName::ChatRoundLine);
+        WorkspaceTabConfig::Chat { provider, .. } => {
+            match provider.as_deref() {
+                Some(p) if !p.is_empty() => {
+                    entry = entry.provider_icon(p.to_string());
+                }
+                _ => {
+                    entry = entry.icon(IconName::ChatRoundLine);
+                }
+            }
         }
         _ => {
             entry = entry.icon(IconName::Terminal);

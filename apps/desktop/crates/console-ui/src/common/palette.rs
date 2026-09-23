@@ -25,7 +25,7 @@ use gpui_component::command::{Command, CommandItem, CommandState};
 
 use crate::IconName;
 use crate::Theme;
-use crate::primitives::{app_icon, file_type_icon};
+use crate::primitives::{app_icon, file_type_icon, provider_app_icon, provider_color};
 
 /// How a palette row draws its leading icon.
 #[derive(Clone)]
@@ -36,6 +36,9 @@ pub enum PaletteIcon {
     FileType(SharedString),
     /// Custom image (e.g., website favicon).
     Image(Arc<Image>),
+    /// Provider brand mark (e.g. Claude, OpenAI) — same icon/colour chat
+    /// tabs use, keyed by provider id (e.g. "claude", "openai").
+    Provider(SharedString),
 }
 
 /// One palette row: a stable id, display label, and the action to run on Enter.
@@ -89,6 +92,14 @@ impl PaletteEntry {
         self
     }
 
+    /// Leading provider brand icon — same mark/colour used on chat tabs.
+    /// Callers should fall back to `.icon(IconName::ChatRoundLine)` when
+    /// there's no known provider.
+    pub fn provider_icon(mut self, provider: impl Into<SharedString>) -> Self {
+        self.icon = Some(PaletteIcon::Provider(provider.into()));
+        self
+    }
+
     /// Keep the palette open after this entry is confirmed. Navigation rows
     /// ("..", …) use this; actions that finish the flow leave it `false`.
     pub fn keep_open(mut self, keep_open: bool) -> Self {
@@ -124,6 +135,10 @@ fn render_entry_row(
             gpui::img(image.clone())
                 .h(px(15.0))
                 .w(px(15.0))
+                .into_any_element()
+        }
+        Some(PaletteIcon::Provider(provider)) => {
+            provider_app_icon(provider.as_ref(), 15.0, provider_color(&theme, provider.as_ref()))
                 .into_any_element()
         }
         None => div().size(px(15.0)).into_any_element(),
