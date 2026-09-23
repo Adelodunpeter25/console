@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.console.mobile.core.util.formatMessageTime
 import com.console.mobile.core.util.getFileName
+import com.console.mobile.core.util.getToolIcon
 import com.console.mobile.core.util.getToolLabel
 import com.console.mobile.core.util.resultText
 import com.console.mobile.core.util.toolCallSummary
@@ -197,7 +198,7 @@ fun ToolActivityRow(name: String, isRunning: Boolean, isError: Boolean, detail: 
             Box(modifier = Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(statusBg), contentAlignment = Alignment.Center) {
                 if (isRunning) CircularProgressIndicator(color = statusColor, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
                 else if (isError) Icon(Icons.Filled.Warning, contentDescription = null, tint = statusColor, modifier = Modifier.size(14.dp))
-                else Icon(Icons.Filled.Check, contentDescription = null, tint = statusColor, modifier = Modifier.size(13.dp))
+                else Icon(getToolIcon(name), contentDescription = null, tint = statusColor, modifier = Modifier.size(14.dp))
             }
             Text(getToolLabel(name), color = ConsoleColors.TextPrimary, fontSize = 13.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp))
             if (isRunning) {
@@ -223,6 +224,7 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
     val shape = RoundedCornerShape(10.dp)
     Column(modifier = Modifier.fillMaxWidth().clip(shape).background(Color.White.copy(alpha = 0.02f)).border(1.dp, Color.White.copy(alpha = 0.06f), shape)) {
         Row(modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(getToolIcon(call.name), contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(13.dp).padding(end = 6.dp))
             Text(getToolLabel(call.name), color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             if (!summary.isNullOrEmpty()) {
                 Text(summary, color = ConsoleColors.TextMuted, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
