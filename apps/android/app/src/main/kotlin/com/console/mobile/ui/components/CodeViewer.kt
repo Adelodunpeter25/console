@@ -50,9 +50,12 @@ class ConsoleColorScheme : EditorColorScheme() {
         setColor(IDENTIFIER_VAR, s.Plain.toArgb())
         setColor(ANNOTATION, s.Number.toArgb())
         setColor(LINE_NUMBER, ConsoleColors.TextMuted.copy(alpha = 0.6f).toArgb())
-        setColor(LINE_NUMBER_BACKGROUND, 0x00000000)
+        // Opaque gutter so horizontally-scrolled code slides behind it instead
+        // of bleeding through the pinned line numbers. Matches the screen so
+        // it still looks uniform.
+        setColor(LINE_NUMBER_BACKGROUND, ConsoleColors.Background.toArgb())
         setColor(LINE_NUMBER_CURRENT, ConsoleColors.TextSecondary.toArgb())
-        setColor(LINE_DIVIDER, 0x00000000)
+        setColor(LINE_DIVIDER, ConsoleColors.BorderSubtle.toArgb())
         setColor(CURRENT_LINE, 0x00000000)
         setColor(SELECTED_TEXT_BACKGROUND, ConsoleColors.TextSecondary.copy(alpha = 0.25f).toArgb())
         setColor(SCROLL_BAR_THUMB, ConsoleColors.TextMuted.copy(alpha = 0.4f).toArgb())
