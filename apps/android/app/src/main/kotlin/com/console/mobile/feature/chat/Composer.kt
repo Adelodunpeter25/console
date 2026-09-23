@@ -64,20 +64,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupPositionProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.ComposerTrigger
@@ -135,7 +129,7 @@ fun Composer(
     var slashCommands by remember(sessionId) { mutableStateOf<List<SlashCommandInfo>>(emptyList()) }
     LaunchedEffect(sessionId, trigger is ComposerTrigger.Slash) {
         if (trigger is ComposerTrigger.Slash && slashCommands.isEmpty()) {
-            slashCommands = try { withContext(Dispatchers.IO) { AppContainer.consoleApi.listSlashCommands(sessionId) } } catch (_: Exception) { emptyList() }
+            slashCommands = AppContainer.assistRepository.listSlashCommands(sessionId)
         }
     }
     var mentionResults by remember { mutableStateOf<List<FileSearchResult>>(emptyList()) }
@@ -143,9 +137,7 @@ fun Composer(
         val t = trigger
         if (t is ComposerTrigger.Mention) {
             delay(200)
-            mentionResults = try {
-                withContext(Dispatchers.IO) { AppContainer.consoleApi.assistSearchFiles(sessionId, t.query, projectRoot).items }
-            } catch (_: Exception) { emptyList() }
+            mentionResults = AppContainer.assistRepository.searchMentionFiles(sessionId, t.query, projectRoot)
         } else {
             mentionResults = emptyList()
         }
@@ -190,6 +182,7 @@ fun Composer(
             modifier = Modifier.fillMaxWidth().clip(if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
                 .background(ConsoleColors.Card)
                 .border(1.dp, ConsoleColors.Border, if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
+                .onGloballyPositioned { fieldCoordinates = it }
                 .padding(horizontal = 6.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -209,8 +202,7 @@ fun Composer(
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 8.dp)
-                    .heightIn(max = 120.dp)
-                    .onGloballyPositioned { fieldCoordinates = it },
+                    .heightIn(max = 120.dp),
                 textStyle = androidx.compose.ui.text.TextStyle(
                     color = ConsoleColors.TextPrimary,
                     fontSize = 14.sp,
@@ -254,7 +246,7 @@ fun Composer(
                     if (items.isNotEmpty()) {
                         ComposerAutocompletePopup(anchor = anchor) {
                             items.take(20).forEach { cmd ->
-                                AutocompleteRow(title = "/${cmd.name}", subtitle = cmd.description) {
+                                SlashCommandSuggestionRow(command = cmd) {
                                     applySuggestion("/${cmd.name} ", t.start)
                                 }
                             }
@@ -265,7 +257,7 @@ fun Composer(
                     if (mentionResults.isNotEmpty()) {
                         ComposerAutocompletePopup(anchor = anchor) {
                             mentionResults.take(20).forEach { file ->
-                                AutocompleteRow(title = file.relativePath.substringAfterLast('/'), subtitle = file.relativePath) {
+                                FileMentionSuggestionRow(file = file) {
                                     applySuggestion("@${file.relativePath} ", t.start)
                                 }
                             }
@@ -276,43 +268,6 @@ fun Composer(
             }
         }
         ComposerBottomStrip(sessionId = sessionId, projectLocked = projectLocked)
-    }
-}
-
-@Composable
-private fun ComposerAutocompletePopup(anchor: LayoutCoordinates, content: @Composable () -> Unit) {
-    Popup(
-        popupPositionProvider = remember(anchor) {
-            object : PopupPositionProvider {
-                override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: androidx.compose.ui.unit.LayoutDirection, popupContentSize: IntSize): IntOffset {
-                    val bounds = anchor.boundsInWindow()
-                    val x = bounds.left.toInt().coerceIn(0, maxOf(0, windowSize.width - popupContentSize.width))
-                    val y = (bounds.top.toInt() - popupContentSize.height - 8).coerceAtLeast(0)
-                    return IntOffset(x, y)
-                }
-            }
-        },
-        onDismissRequest = {},
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(ConsoleColors.Card)
-                .border(1.dp, ConsoleColors.Border, RoundedCornerShape(14.dp))
-                .padding(vertical = 6.dp),
-        ) { content() }
-    }
-}
-
-@Composable
-private fun AutocompleteRow(title: String, subtitle: String, onClick: () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp)) {
-        Text(title, color = ConsoleColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (subtitle.isNotBlank() && subtitle != title) {
-            Text(subtitle, color = ConsoleColors.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
-        }
     }
 }
 
