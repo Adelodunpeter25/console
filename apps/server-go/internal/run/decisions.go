@@ -61,6 +61,8 @@ func NewDecisions() *Decisions {
 }
 
 func (d *Decisions) timeout() time.Duration {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	if d.Timeout > 0 {
 		return d.Timeout
 	}

@@ -222,6 +222,12 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 			return
 		}
 		history = append(history, resultMsg)
+		// Aborted mid-tools: results are persisted (history stays valid for
+		// the next run) but no further provider turn starts.
+		if err := ctx.Err(); err != nil {
+			events.Fail(err)
+			return
+		}
 	}
 }
 

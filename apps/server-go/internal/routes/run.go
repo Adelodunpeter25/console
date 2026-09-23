@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -249,6 +250,9 @@ func parseAnswer(raw any) (tools.AskAnswer, bool) {
 	}
 }
 
+// runPingInterval spaces run-stream heartbeats.
+const runPingInterval = 15 * time.Second
+
 // pumpHub streams live frames until the hub settles, then closes silently:
 // the terminal sessionEnd hub event (mirroring the TS finally) is the
 // desktop's run-completion signal, so no extra terminal frame is needed.
@@ -268,7 +272,25 @@ func pumpHub(sse *sseStream, hub *run.Hub, since *int64) {
 	if err := sse.Flush(); err != nil {
 		return
 	}
-	for f := range ch {
+	// Heartbeat comment frames keep the connection alive through long
+	// silent stretches (a question awaiting the user, slow tools); SSE
+	// parsers ignore comments (TS ": ping" parity).
+	ping := time.NewTicker(runPingInterval)
+	defer ping.Stop()
+	for {
+		var f run.Frame
+		select {
+		case <-ping.C:
+			if err := sse.Ping(); err != nil {
+				return
+			}
+			continue
+		case next, ok := <-ch:
+			if !ok {
+				return
+			}
+			f = next
+		}
 		if err := sendFrame(sse, f); err != nil {
 			return
 		}

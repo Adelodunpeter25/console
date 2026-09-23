@@ -52,7 +52,9 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 		}
 		ok, err := e.approver.Approve(ctx, req)
 		if err != nil {
-			return tools.ToolResult{}, err
+			// Timeout/abort/steer while waiting fails this call only (TS
+			// parity); the loop sees ctx and stops on its own when aborted.
+			return e.errResult(call, e.failureMessage(ctx, err)), nil
 		}
 		if !ok {
 			return tools.ToolResult{
@@ -73,14 +75,15 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 		}, nil
 	}
 
+	if ctx.Err() != nil {
+		return e.errResult(call, abortedMessage), nil
+	}
 	out, err := executeToolCall(ctx, tool, call)
 	if err != nil {
-		var toolErr *tools.ToolError
-		if asToolError(err, &toolErr) {
-			return e.errResult(call, err.Error()), nil
-		}
-		// Unknown (non-tool) errors abort the turn.
-		return tools.ToolResult{}, err
+		// Every tool failure (including ask timeouts and "Run ended"
+		// rejections) becomes an isError result the model can react to,
+		// mirroring the TS executor; it never tears down the whole run.
+		return e.errResult(call, e.failureMessage(ctx, err)), nil
 	}
 	slog.Debug("tool executed", "tool", call.Name, "call", call.ID)
 	content, isError := any(out), false
@@ -103,6 +106,17 @@ func executeToolCall(ctx context.Context, tool tools.Tool, call tools.ToolCall) 
 		return aware.ExecuteCall(ctx, call)
 	}
 	return tool.Execute(ctx, call.Arguments)
+}
+
+const abortedMessage = "Tool execution cancelled by user abort."
+
+// failureMessage prefers the abort message when the run was cancelled so
+// the model (and transcript) sees why, not a raw "context canceled".
+func (e *Executor) failureMessage(ctx context.Context, err error) string {
+	if ctx.Err() != nil {
+		return abortedMessage
+	}
+	return err.Error()
 }
 
 func (e *Executor) errResult(call tools.ToolCall, errMsg string) tools.ToolResult {

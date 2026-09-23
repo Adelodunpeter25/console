@@ -214,6 +214,14 @@ func (s *Service) AbortAll() {
 	}
 }
 
+// SetDecisionTimeout overrides how long question/approval waits block
+// (tests; zero restores the default).
+func (s *Service) SetDecisionTimeout(d time.Duration) {
+	s.decisions.mu.Lock()
+	s.decisions.Timeout = d
+	s.decisions.mu.Unlock()
+}
+
 // ApprovePermission resolves a pending tool approval for a session.
 func (s *Service) ApprovePermission(sessionID, requestID string, allow bool) bool {
 	return s.decisions.ApprovePermission(sessionID, requestID, allow)

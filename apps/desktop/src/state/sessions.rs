@@ -253,7 +253,39 @@ impl ConsoleDesktopApp {
             self.set_pending_question_for_session(&session_id, Some(question));
             return;
         }
+        self.send_question_answer(session_id, question, answer, cx);
+    }
 
+    /// Skip the pending question owned by `session_id`. The server records an
+    /// empty answer as "User skipped this question." Required questions
+    /// (`skippable == false`) cannot be skipped.
+    pub fn skip_pending_question_for_session(
+        &mut self,
+        session_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(question) = self.pending_questions.remove(&session_id) else {
+            return;
+        };
+        if question.skippable == Some(false) {
+            self.set_pending_question_for_session(&session_id, Some(question));
+            return;
+        }
+        self.send_question_answer(
+            session_id,
+            question,
+            serde_json::Value::String(String::new()),
+            cx,
+        );
+    }
+
+    fn send_question_answer(
+        &mut self,
+        session_id: String,
+        question: console_core::AskQuestionRequest,
+        answer: serde_json::Value,
+        cx: &mut Context<Self>,
+    ) {
         self.clear_question_selected_for_session(&session_id);
         self.clear_question_inputs_for_session(&session_id, cx);
         self.clear_error_for_session(&session_id, cx);

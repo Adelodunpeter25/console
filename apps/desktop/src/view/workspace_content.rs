@@ -585,7 +585,10 @@ impl ConsoleDesktopApp {
             let question_input = self.question_input_for_pane(&pane_id);
             let selected = self.question_selected_for_pane(&pane_id);
             let is_multi = question.is_multi_select.unwrap_or(false);
+            let skippable = question.skippable != Some(false);
             let answer_sid = selected_sid.clone();
+            let skip_sid = selected_sid.clone();
+            let entity_for_skip = entity.clone();
             let question_card = QuestionInteractionCard::new(
                 question,
                 true,
@@ -602,7 +605,22 @@ impl ConsoleDesktopApp {
                 },
             )
             .custom_input(question_input.clone())
-            .selected(selected)
+            .selected(selected);
+            let question_card = if skippable {
+                question_card.on_skip(move |_window, cx| {
+                    let Some(sid) = skip_sid.clone() else {
+                        return;
+                    };
+                    if let Some(app) = entity_for_skip.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.skip_pending_question_for_session(sid, cx);
+                        });
+                    }
+                })
+            } else {
+                question_card
+            };
+            let question_card = question_card
             .on_select({
                 // Toggle against the session that owns this card, not whichever
                 // pane holds focus at click time.

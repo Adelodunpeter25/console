@@ -26,10 +26,18 @@ import (
 func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, firstProvider loop.Provider, firstProviderID string, hub *Hub, done chan struct{}) {
 	defer close(done)
 	defer func() {
-		s.decisions.RejectAllForSession(sessionID, "Run ended")
+		// Only tear down state this run still owns: after a watchdog
+		// force-settle a newer run may hold the slot and its decisions.
 		s.mu.Lock()
-		delete(s.active, sessionID)
+		ar, owned := s.active[sessionID]
+		owned = owned && ar.hub == hub
+		if owned {
+			delete(s.active, sessionID)
+		}
 		s.mu.Unlock()
+		if owned {
+			s.decisions.RejectAllForSession(sessionID, "Run ended")
+		}
 	}()
 
 	current, currentCtx := first, ctx
@@ -68,7 +76,7 @@ func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, f
 		}
 		nextCtx, nextCancel := context.WithCancel(context.Background())
 		s.mu.Lock()
-		if ar, ok := s.active[sessionID]; ok {
+		if ar, ok := s.active[sessionID]; ok && ar.hub == hub {
 			ar.cancel = nextCancel
 		} else {
 			nextCancel()
@@ -269,7 +277,13 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	for {
 		event, err, ok := events.Next()
 		if !ok {
+			turner.flushTools()
 			if err != nil {
+				// Abort/steer is a user action, not a failure: no error
+				// frame or attention banner (TS parity).
+				if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+					return context.Canceled
+				}
 				hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
 				s.notifyEvent(ctx, sessionID, loop.Event{Kind: loop.EventError, Text: err.Error()})
 				return err

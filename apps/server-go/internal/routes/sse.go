@@ -50,6 +50,14 @@ func (s *sseStream) Flush() error {
 	return s.w.Flush()
 }
 
+// Ping writes an SSE comment heartbeat and flushes it.
+func (s *sseStream) Ping() error {
+	if _, err := s.w.WriteString(": ping\n\n"); err != nil {
+		return err
+	}
+	return s.w.Flush()
+}
+
 // streamSSE sets SSE headers and runs fn inside the response stream writer;
 // fn must exit when Send reports an error (client gone).
 func streamSSE(c *fiber.Ctx, fn func(*sseStream)) error {
