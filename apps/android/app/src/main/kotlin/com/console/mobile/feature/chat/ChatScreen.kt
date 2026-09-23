@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
@@ -132,6 +133,7 @@ fun ChatScreen(
         val header = AppContainer.projectStateHolder.state.value.sessions.firstOrNull { it.id == sessionId }
         header?.title?.ifBlank { "Chat" } ?: "Chat"
     }
+    val keyboardController = LocalSoftwareKeyboardController.current
     val view = sessionViews[sessionId]
     val cwd = view?.sessionCwd
 
@@ -241,6 +243,7 @@ fun ChatScreen(
                     running = chat.running,
                     projectLocked = hasMessages,
                     onSend = {
+                        keyboardController?.hide()
                         AppContainer.chatRepository.sendMessage(sessionId)
                         scope.launch { try { listState.animateScrollToItem(maxOf(0, displayMessages.size)) } catch (_: Exception) {} }
                     },

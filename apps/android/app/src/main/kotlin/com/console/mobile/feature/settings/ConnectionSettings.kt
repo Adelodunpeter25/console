@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -45,6 +46,8 @@ import com.console.mobile.core.util.normalizeBackendUrl
 import com.console.mobile.core.util.urlHost
 import com.console.mobile.data.store.Environment
 import com.console.mobile.ui.components.ConfirmButton
+import com.console.mobile.ui.components.PillButton
+import com.console.mobile.ui.components.PillButtonVariant
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.ConsoleColors
@@ -92,17 +95,19 @@ fun ConnectionSettings(onBack: () -> Unit) {
                 title = "Connection",
                 onBack = onBack,
                 actions = {
-                    TextButton(onClick = { editing = "__create__" }) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.Add, contentDescription = null, tint = ConsoleColors.TextPrimary, modifier = Modifier.size(14.dp))
-                            Text("Add", color = ConsoleColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp))
+                    IconButton(onClick = { editing = "__create__" }, modifier = Modifier.size(40.dp)) {
+                        Box(
+                            modifier = Modifier.size(40.dp).clip(CircleShape).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Filled.Add, contentDescription = "Add environment", tint = ConsoleColors.TextPrimary)
                         }
                     }
                 },
             )
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
                 val cardShape = RoundedCornerShape(16.dp)
-                Column(modifier = Modifier.fillMaxWidth().clip(cardShape).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, cardShape).padding(16.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().clip(cardShape).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, cardShape).padding(horizontal = 4.dp, vertical = 4.dp)) {
                     if (envState.environments.isEmpty()) {
                         Text("No environments yet. Add a backend URL to get started.", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp))
                     } else {
@@ -131,19 +136,20 @@ fun ConnectionSettings(onBack: () -> Unit) {
                     }
                 }
                 if (envState.activeId != null) {
-                    TextButton(
+                    PillButton(
+                        text = "Disconnect backend",
                         onClick = {
                             confirmAlert("Disconnect Backend", "Are you sure you want to disconnect? This removes all environments and connection data, like a clean install.", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Disconnect", destructive = true, onPress = {
                                 scope.launch { withContext(Dispatchers.IO) { AppContainer.environmentsRepository.deactivate() } }
                             })))
                         },
-                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp).clip(RoundedCornerShape(16.dp)).background(ConsoleColors.Destructive.copy(alpha = 0.05f)).border(1.dp, ConsoleColors.Destructive.copy(alpha = 0.3f), RoundedCornerShape(16.dp)).padding(vertical = 12.dp),
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.LinkOff, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(16.dp))
-                            Text("Disconnect backend", color = ConsoleColors.Destructive, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
-                        }
-                    }
+                        variant = PillButtonVariant.Destructive,
+                        icon = Icons.Filled.LinkOff,
+                        fullWidth = true,
+                        cornerRadius = 16.dp,
+                        verticalPadding = 12.dp,
+                        modifier = Modifier.padding(top = 16.dp),
+                    )
                 }
             }
         }
@@ -179,9 +185,10 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
         OutlinedTextField(value = name, onValueChange = { name = it; if (status != "testing" && status != "saving") status = "idle" }, placeholder = { Text("My server") }, singleLine = true, colors = fieldColors, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp))
         Text("Backend URL", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
         OutlinedTextField(value = url, onValueChange = { url = it; if (status != "testing" && status != "saving") status = "idle" }, placeholder = { Text("http://192.168.1.X:3000") }, singleLine = true, colors = fieldColors, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
-        TextButton(
+        PillButton(
+            text = if (status == "testing") "Testing…" else "Test connection",
             onClick = {
-                val normalized = normalizeBackendUrl(url) ?: return@TextButton
+                val normalized = normalizeBackendUrl(url) ?: return@PillButton
                 status = "testing"
                 scope.launch {
                     val ok = withContext(Dispatchers.IO) {
@@ -195,21 +202,28 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
                 }
             },
             enabled = url.isNotBlank() && status != "testing",
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, ConsoleColors.Border, RoundedCornerShape(12.dp)).padding(vertical = 10.dp),
-        ) {
-            if (status == "testing") CircularProgressIndicator(color = ConsoleColors.TextSecondary, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-            Text(if (status == "testing") "Testing…" else "Test connection", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-        }
+            loading = status == "testing",
+            variant = PillButtonVariant.Outline,
+            fullWidth = true,
+            cornerRadius = 12.dp,
+            verticalPadding = 10.dp,
+            modifier = Modifier.padding(top = 16.dp),
+        )
         if (status == "test-ok") Text("Connection OK", color = Color(0xFF34D399), fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
         else if (status == "test-fail") Text("Could not reach the backend", color = ConsoleColors.Destructive, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
         if (env != null && !isActive) {
-            TextButton(
+            PillButton(
+                text = "Set as active",
                 onClick = {
                     scope.launch { withContext(Dispatchers.IO) { AppContainer.environmentsRepository.activateEnvironment(env.id) } }
                     onDone()
                 },
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, ConsoleColors.Border, RoundedCornerShape(12.dp)).padding(vertical = 10.dp),
-            ) { Text("Set as active", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+                variant = PillButtonVariant.Outline,
+                fullWidth = true,
+                cornerRadius = 12.dp,
+                verticalPadding = 10.dp,
+                modifier = Modifier.padding(top = 16.dp),
+            )
         }
         Row(modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
             val doSave: () -> Unit = {
@@ -246,16 +260,18 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
                     }
                 }
             }
-            TextButton(
+            PillButton(
+                text = if (env != null) "Save changes" else "Save",
                 onClick = doSave,
                 enabled = url.isNotBlank() && status != "saving",
-                modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(if (url.isNotBlank()) Color.White else Color.White.copy(alpha = 0.4f)).padding(vertical = 12.dp),
-            ) {
-                if (status == "saving") CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                else Text(if (env != null) "Save changes" else "Save", color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            }
+                loading = status == "saving",
+                cornerRadius = 12.dp,
+                verticalPadding = 12.dp,
+                modifier = Modifier.weight(1f),
+            )
             if (env != null) {
-                TextButton(
+                PillButton(
+                    text = "Delete",
                     onClick = {
                         confirmAlert("Delete environment", "Remove \"${env.name}\" from your environments?", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Delete", destructive = true, onPress = {
                             scope.launch { withContext(Dispatchers.IO) { AppContainer.environmentsRepository.removeEnvironment(env.id) } }
@@ -263,8 +279,11 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
                         })))
                     },
                     enabled = canDelete,
-                    modifier = Modifier.weight(1f).padding(start = 12.dp).clip(RoundedCornerShape(12.dp)).background(ConsoleColors.Destructive.copy(alpha = 0.05f)).border(1.dp, ConsoleColors.Destructive.copy(alpha = 0.3f), RoundedCornerShape(12.dp)).padding(vertical = 12.dp),
-                ) { Text("Delete", color = ConsoleColors.Destructive, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+                    variant = PillButtonVariant.Destructive,
+                    cornerRadius = 12.dp,
+                    verticalPadding = 12.dp,
+                    modifier = Modifier.weight(1f).padding(start = 12.dp),
+                )
             }
         }
     }

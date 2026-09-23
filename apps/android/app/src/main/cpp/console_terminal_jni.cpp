@@ -198,7 +198,7 @@ uint16_t StyleFlags(const GhosttyStyle& style, bool selected) {
 }  // namespace
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_expo_modules_consoleterminal_GhosttyBridge_nativeCreate(
+Java_com_console_mobile_feature_terminal_native_GhosttyBridge_nativeCreate(
     JNIEnv* env, jclass, jint cols, jint rows, jint cell_width, jint cell_height,
     jint foreground, jint background, jint cursor, jintArray palette) {
   auto* session = new Session();
@@ -226,12 +226,12 @@ Java_expo_modules_consoleterminal_GhosttyBridge_nativeCreate(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_expo_modules_consoleterminal_GhosttyBridge_nativeDestroy(JNIEnv*, jclass, jlong handle) {
+Java_com_console_mobile_feature_terminal_native_GhosttyBridge_nativeDestroy(JNIEnv*, jclass, jlong handle) {
   FreeSession(FromHandle(handle));
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_expo_modules_consoleterminal_GhosttyBridge_nativeFeed(JNIEnv* env, jclass, jlong handle,
+Java_com_console_mobile_feature_terminal_native_GhosttyBridge_nativeFeed(JNIEnv* env, jclass, jlong handle,
                                                        jbyteArray data) {
   auto* session = FromHandle(handle);
   if (session == nullptr || data == nullptr) return env->NewByteArray(0);
@@ -246,7 +246,7 @@ Java_expo_modules_consoleterminal_GhosttyBridge_nativeFeed(JNIEnv* env, jclass, 
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_expo_modules_consoleterminal_GhosttyBridge_nativeResize(
+Java_com_console_mobile_feature_terminal_native_GhosttyBridge_nativeResize(
     JNIEnv* env, jclass, jlong handle, jint cols, jint rows, jint cell_width, jint cell_height) {
   auto* session = FromHandle(handle);
   if (session == nullptr) return env->NewByteArray(0);
@@ -260,7 +260,7 @@ Java_expo_modules_consoleterminal_GhosttyBridge_nativeResize(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_expo_modules_consoleterminal_GhosttyBridge_nativeScroll(JNIEnv*, jclass, jlong handle,
+Java_com_console_mobile_feature_terminal_native_GhosttyBridge_nativeScroll(JNIEnv*, jclass, jlong handle,
                                                          jint rows) {
   auto* session = FromHandle(handle);
   if (session == nullptr || rows == 0) return;
@@ -273,7 +273,7 @@ Java_expo_modules_consoleterminal_GhosttyBridge_nativeScroll(JNIEnv*, jclass, jl
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_expo_modules_consoleterminal_GhosttyBridge_nativeSetTheme(
+Java_com_console_mobile_feature_terminal_native_GhosttyBridge_nativeSetTheme(
     JNIEnv* env, jclass, jlong handle, jint foreground, jint background, jint cursor,
     jintArray palette) {
   auto* session = FromHandle(handle);
@@ -283,7 +283,7 @@ Java_expo_modules_consoleterminal_GhosttyBridge_nativeSetTheme(
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_expo_modules_consoleterminal_GhosttyBridge_nativeSelectWordAt(JNIEnv*, jclass,
+Java_com_console_mobile_feature_terminal_native_GhosttyBridge_nativeSelectWordAt(JNIEnv*, jclass,
                                                                jlong handle, jint x,
                                                                jint y) {
   auto* session = FromHandle(handle);
@@ -305,7 +305,7 @@ Java_expo_modules_consoleterminal_GhosttyBridge_nativeSelectWordAt(JNIEnv*, jcla
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_expo_modules_consoleterminal_GhosttyBridge_nativeExtendSelection(
+Java_com_console_mobile_feature_terminal_native_GhosttyBridge_nativeExtendSelection(
     JNIEnv*, jclass, jlong handle, jint anchor_x, jint anchor_y, jint x, jint y) {
   auto* session = FromHandle(handle);
   if (session == nullptr) return;
@@ -318,7 +318,7 @@ Java_expo_modules_consoleterminal_GhosttyBridge_nativeExtendSelection(
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_expo_modules_consoleterminal_GhosttyBridge_nativeSelectAll(JNIEnv*, jclass,
+Java_com_console_mobile_feature_terminal_native_GhosttyBridge_nativeSelectAll(JNIEnv*, jclass,
                                                             jlong handle) {
   auto* session = FromHandle(handle);
   if (session == nullptr) return JNI_FALSE;
@@ -335,7 +335,7 @@ Java_expo_modules_consoleterminal_GhosttyBridge_nativeSelectAll(JNIEnv*, jclass,
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_expo_modules_consoleterminal_GhosttyBridge_nativeClearSelection(JNIEnv*, jclass,
+Java_com_console_mobile_feature_terminal_native_GhosttyBridge_nativeClearSelection(JNIEnv*, jclass,
                                                                  jlong handle) {
   auto* session = FromHandle(handle);
   if (session == nullptr) return;
@@ -346,7 +346,7 @@ Java_expo_modules_consoleterminal_GhosttyBridge_nativeClearSelection(JNIEnv*, jc
 // Returns the active selection as UTF-8 bytes (soft-wrapped lines unwrapped,
 // trailing whitespace trimmed), or null when there is no selection.
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_expo_modules_consoleterminal_GhosttyBridge_nativeGetSelectionText(JNIEnv* env, jclass,
+Java_com_console_mobile_feature_terminal_native_GhosttyBridge_nativeGetSelectionText(JNIEnv* env, jclass,
                                                                    jlong handle) {
   auto* session = FromHandle(handle);
   if (session == nullptr) return nullptr;
@@ -373,7 +373,7 @@ Java_expo_modules_consoleterminal_GhosttyBridge_nativeGetSelectionText(JNIEnv* e
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_expo_modules_consoleterminal_GhosttyBridge_nativeSnapshot(JNIEnv* env, jclass,
+Java_com_console_mobile_feature_terminal_native_GhosttyBridge_nativeSnapshot(JNIEnv* env, jclass,
                                                            jlong handle) {
   auto* session = FromHandle(handle);
   if (session == nullptr) return env->NewByteArray(0);

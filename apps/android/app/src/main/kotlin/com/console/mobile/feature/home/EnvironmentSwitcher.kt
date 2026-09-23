@@ -25,7 +25,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -46,6 +45,7 @@ import com.console.mobile.AppContainer
 import com.console.mobile.core.util.normalizeBackendUrl
 import com.console.mobile.core.util.urlHost
 import com.console.mobile.data.store.Environment
+import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.theme.ConsoleColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -134,9 +134,10 @@ fun EnvironmentSwitcher(modifier: Modifier = Modifier) {
                     )
                     OutlinedTextField(value = newName, onValueChange = { newName = it }, label = { Text("Name") }, singleLine = true, colors = fieldColors, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp))
                     OutlinedTextField(value = newUrl, onValueChange = { newUrl = it }, label = { Text("http://192.168.1.X:3000") }, singleLine = true, colors = fieldColors, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp))
-                    TextButton(
+                    PillButton(
+                        text = "Save",
                         onClick = {
-                            val normalized = normalizeBackendUrl(newUrl) ?: return@TextButton
+                            val normalized = normalizeBackendUrl(newUrl) ?: return@PillButton
                             scope.launch {
                                 withContext(Dispatchers.IO) {
                                     AppContainer.environmentsRepository.addEnvironment(newName.ifBlank { "Default" }, normalized)
@@ -146,10 +147,9 @@ fun EnvironmentSwitcher(modifier: Modifier = Modifier) {
                             }
                         },
                         enabled = newUrl.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(999.dp)).background(if (newUrl.isNotBlank()) Color.White else Color.White.copy(alpha = 0.4f)).padding(vertical = 12.dp),
-                    ) {
-                        Text("Save", color = Color.Black, fontWeight = FontWeight.Bold)
-                    }
+                        fullWidth = true,
+                        verticalPadding = 12.dp,
+                    )
                 }
             } else {
                 Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 40.dp)) {

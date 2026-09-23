@@ -12,6 +12,7 @@ import com.console.mobile.data.local.TokenStore
 import com.console.mobile.data.repo.AuthRepository
 import com.console.mobile.data.repo.ChatRepository
 import com.console.mobile.data.repo.EnvironmentsRepository
+import com.console.mobile.data.repo.AssistRepository
 import com.console.mobile.data.repo.FsRepository
 import com.console.mobile.data.repo.GitRepository
 import com.console.mobile.data.repo.NotificationRepository
@@ -124,6 +125,7 @@ object AppContainer {
         private set
 
     lateinit var fsRepository: FsRepository
+    lateinit var assistRepository: AssistRepository
         private set
 
     lateinit var usageRepository: UsageRepository
@@ -208,6 +210,7 @@ object AppContainer {
             api = consoleApi,
             fsState = fsStateHolder,
         )
+        assistRepository = AssistRepository(api = consoleApi)
         usageRepository = UsageRepository(
             api = consoleApi,
             usageState = usageStateHolder,

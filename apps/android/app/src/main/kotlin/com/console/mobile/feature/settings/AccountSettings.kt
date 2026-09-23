@@ -22,7 +22,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
+import com.console.mobile.ui.components.PillButton
+import com.console.mobile.ui.components.PillButtonVariant
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.ConsoleColors
@@ -96,7 +97,8 @@ fun AccountSettings(onBack: () -> Unit) {
                                     p.authMethod == "device-code" -> "Pair"
                                     else -> "Login"
                                 }
-                                TextButton(
+                                PillButton(
+                                    text = label,
                                     onClick = {
                                         loggingIn = p.name
                                         scope.launch {
@@ -110,15 +112,10 @@ fun AccountSettings(onBack: () -> Unit) {
                                         }
                                     },
                                     enabled = loggingIn == null,
-                                    modifier = Modifier.clip(RoundedCornerShape(999.dp)).then(if (loggedIn) Modifier.border(1.dp, ConsoleColors.Border, RoundedCornerShape(999.dp)) else Modifier.background(Color.White)).padding(horizontal = 14.dp, vertical = 8.dp),
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (busy) CircularProgressIndicator(color = if (loggedIn) Color.White else Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(13.dp))
-                                        else if (loggedIn) Icon(Icons.Filled.Refresh, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
-                                        else Icon(Icons.Filled.Login, contentDescription = null, tint = Color.Black, modifier = Modifier.size(13.dp))
-                                        Text(label, color = if (loggedIn) Color.White else Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
-                                    }
-                                }
+                                    loading = busy,
+                                    icon = if (loggedIn) Icons.Filled.Refresh else Icons.Filled.Login,
+                                    variant = if (loggedIn) PillButtonVariant.Outline else PillButtonVariant.Filled,
+                                )
                             }
                             if (i < providers.lastIndex) {
                                 Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(ConsoleColors.BorderSubtle))

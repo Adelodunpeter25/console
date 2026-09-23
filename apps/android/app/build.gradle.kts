@@ -144,7 +144,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.browser:browser:1.8.0")
-    implementation("com.composables:icons-lucide-android:2.2.1")
+    implementation("com.composables:icons-lucide-android:1.1.0")
+    implementation("io.github.lyxnx.compose.ui:tabler-icons-android:3.31.0")
     implementation("com.valentinilk.shimmer:compose-shimmer:1.4.0")
 
     implementation("io.coil-kt.coil3:coil-compose:3.0.0")

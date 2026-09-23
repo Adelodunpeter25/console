@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -46,10 +48,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
+import com.console.mobile.core.util.languageForPath
 import com.console.mobile.data.model.FsTreeEntry
 import com.console.mobile.data.model.getFilePreviewBlock
 import com.console.mobile.data.model.isMarkdownPath
 import com.console.mobile.feature.chat.MarkdownText
+import com.console.mobile.ui.components.CodeViewer
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.components.ScreenHeader
@@ -203,7 +207,7 @@ fun FilesScreen(onBack: () -> Unit) {
                                 MarkdownText(content = content)
                             }
                         } else {
-                            CodePreview(content = content)
+                            CodePreview(content = content, path = sel)
                         }
                     }
                 }
@@ -366,19 +370,17 @@ private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expa
 }
 
 @Composable
-private fun CodePreview(content: String) {
-    // Cap render size; VirtualizedCodeView equivalent — mono + h-scroll.
+private fun CodePreview(content: String, path: String?) {
+    // Cap render size; Sora virtualizes so 2k+ line files stay smooth.
     val capped = if (content.length > 200_000) content.take(200_000) + "\n…(truncated)" else content
-    Box(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)).background(Color(0xFF101113)).border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp)).padding(12.dp)) {
-        Text(
-            capped,
-            color = Color(0xFFE4E4E7),
-            fontSize = 11.sp,
-            fontFamily = ConsoleMonoFamily,
-            lineHeight = 17.sp,
-            modifier = Modifier.fillMaxSize().hScroll2(),
-        )
-    }
+    val language = remember(path) { languageForPath(path) }
+    CodeViewer(
+        code = capped,
+        language = language,
+        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 8.dp),
+        showLineNumbers = true,
+        fontSizeSp = 11f,
+    )
 }
 
 @Composable

@@ -118,7 +118,9 @@ class NativeTerminalView(context: Context) : FrameLayout(context) {
 
     override fun onSizeChanged(width: Int, height: Int, oldWidth: Int, oldHeight: Int) {
         super.onSizeChanged(width, height, oldWidth, oldHeight)
-        if (width != oldWidth || height != oldHeight) emitResize()
+        // Fires before child views (terminalCanvas) are laid out on the first pass, so
+        // terminalCanvas.width/height are still 0 here — defer past this layout pass.
+        if (width != oldWidth || height != oldHeight) post { emitResize() }
     }
 
     fun requestKeyboardFocus() {

@@ -11,8 +11,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -26,6 +32,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
@@ -56,22 +63,33 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
+import com.console.mobile.core.util.ComposerTrigger
+import com.console.mobile.core.util.detectComposerTrigger
 import com.console.mobile.core.util.formatModelName
 import com.console.mobile.data.model.ApprovalMode
+import com.console.mobile.data.model.FileSearchResult
 import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.Model
 import com.console.mobile.data.model.ProjectInfo
+import com.console.mobile.data.model.SlashCommandInfo
 import com.console.mobile.data.model.UpdateSessionDto
+import com.console.mobile.ui.components.ImagePreviewDialog
+import com.console.mobile.ui.components.attachmentBytes
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -96,6 +114,43 @@ fun Composer(
     val chatSessions by AppContainer.chatStateHolder.sessions.collectAsStateWithLifecycle()
     val attachments = chatSessions[sessionId]?.attachments ?: emptyList()
     val canSend = value.trim().isNotEmpty() || attachments.isNotEmpty()
+    val sessionViews by AppContainer.sessionStateHolder.views.collectAsStateWithLifecycle()
+    val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
+    val sessionCwd = sessionViews[sessionId]?.sessionCwd
+    val projectRoot = projectState.projects.firstOrNull { p -> sessionCwd != null && (p.path == sessionCwd || sessionCwd.startsWith(p.path + "/")) }?.path ?: sessionCwd
+
+    var fieldValue by remember(sessionId) { mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length))) }
+    if (fieldValue.text != value) {
+        fieldValue = fieldValue.copy(text = value, selection = TextRange(minOf(fieldValue.selection.start, value.length)))
+    }
+    var fieldCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val trigger = remember(fieldValue) { detectComposerTrigger(fieldValue.text, fieldValue.selection.start) }
+
+    var slashCommands by remember(sessionId) { mutableStateOf<List<SlashCommandInfo>>(emptyList()) }
+    LaunchedEffect(sessionId, trigger is ComposerTrigger.Slash) {
+        if (trigger is ComposerTrigger.Slash && slashCommands.isEmpty()) {
+            slashCommands = AppContainer.assistRepository.listSlashCommands(sessionId)
+        }
+    }
+    var mentionResults by remember { mutableStateOf<List<FileSearchResult>>(emptyList()) }
+    LaunchedEffect(trigger) {
+        val t = trigger
+        if (t is ComposerTrigger.Mention) {
+            delay(200)
+            mentionResults = AppContainer.assistRepository.searchMentionFiles(sessionId, t.query, projectRoot)
+        } else {
+            mentionResults = emptyList()
+        }
+    }
+
+    fun applySuggestion(insert: String, replaceFrom: Int) {
+        val current = fieldValue.text
+        val cursor = fieldValue.selection.start.coerceIn(0, current.length)
+        val newText = current.substring(0, replaceFrom) + insert + current.substring(cursor)
+        val newCursor = replaceFrom + insert.length
+        fieldValue = TextFieldValue(text = newText, selection = TextRange(newCursor))
+        onChange(newText)
+    }
 
     val pickImages = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
@@ -116,7 +171,9 @@ fun Composer(
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth().background(ConsoleColors.Background).padding(horizontal = 10.dp).padding(top = 8.dp, bottom = 8.dp)) {
+    // ime minus nav bars: Scaffold already pads the nav bar, so only lift
+    // by the keyboard itself — otherwise the gap doubles when typing.
+    Column(modifier = Modifier.fillMaxWidth().background(ConsoleColors.Background).windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)).padding(horizontal = 10.dp).padding(top = 8.dp, bottom = 8.dp)) {
         if (topBanner != null) topBanner()
         if (attachments.isNotEmpty()) {
             AttachmentStrip(sessionId = sessionId, attachments = attachments)
@@ -125,15 +182,23 @@ fun Composer(
             modifier = Modifier.fillMaxWidth().clip(if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
                 .background(ConsoleColors.Card)
                 .border(1.dp, ConsoleColors.Border, if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
-                .padding(horizontal = 6.dp, vertical = 6.dp),
+                .onGloballyPositioned { fieldCoordinates = it }
+                .padding(horizontal = 6.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { pickImages.launch("image/*") }, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Filled.Add, contentDescription = "Attach image", tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
+            Box(
+                modifier = Modifier.size(34.dp).clip(CircleShape)
+                    .clickable(onClickLabel = "Attach image") { pickImages.launch("image/*") },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
             }
             BasicTextField(
-                value = value,
-                onValueChange = onChange,
+                value = fieldValue,
+                onValueChange = { new ->
+                    fieldValue = new
+                    onChange(new.text)
+                },
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 8.dp)
@@ -155,13 +220,51 @@ fun Composer(
                 },
             )
             if (running) {
-                IconButton(onClick = onStop, modifier = Modifier.size(32.dp).clip(CircleShape).background(Color.White)) {
-                    Icon(Icons.Filled.Stop, contentDescription = "Stop", tint = Color.Black, modifier = Modifier.size(12.dp))
+                Box(
+                    modifier = Modifier.size(30.dp).clip(CircleShape).background(Color.White)
+                        .clickable(onClickLabel = "Stop") { onStop() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.Stop, contentDescription = null, tint = Color.Black, modifier = Modifier.size(12.dp))
                 }
             } else {
-                IconButton(onClick = onSend, enabled = canSend, modifier = Modifier.size(32.dp).clip(CircleShape).background(if (canSend) Color.White else Color.White.copy(alpha = 0.08f))) {
-                    Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = if (canSend) Color.Black else ConsoleColors.TextMuted, modifier = Modifier.size(16.dp))
+                Box(
+                    modifier = Modifier.size(30.dp).clip(CircleShape)
+                        .background(if (canSend) Color.White else Color.White.copy(alpha = 0.08f))
+                        .clickable(enabled = canSend, onClickLabel = "Send") { onSend() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.ArrowUpward, contentDescription = null, tint = if (canSend) Color.Black else ConsoleColors.TextMuted, modifier = Modifier.size(15.dp))
                 }
+            }
+        }
+        val anchor = fieldCoordinates
+        if (anchor != null) {
+            when (val t = trigger) {
+                is ComposerTrigger.Slash -> {
+                    val items = slashCommands.filter { it.name.contains(t.query, ignoreCase = true) }
+                    if (items.isNotEmpty()) {
+                        ComposerAutocompletePopup(anchor = anchor) {
+                            items.take(20).forEach { cmd ->
+                                SlashCommandSuggestionRow(command = cmd) {
+                                    applySuggestion("/${cmd.name} ", t.start)
+                                }
+                            }
+                        }
+                    }
+                }
+                is ComposerTrigger.Mention -> {
+                    if (mentionResults.isNotEmpty()) {
+                        ComposerAutocompletePopup(anchor = anchor) {
+                            mentionResults.take(20).forEach { file ->
+                                FileMentionSuggestionRow(file = file) {
+                                    applySuggestion("@${file.relativePath} ", t.start)
+                                }
+                            }
+                        }
+                    }
+                }
+                null -> {}
             }
         }
         ComposerBottomStrip(sessionId = sessionId, projectLocked = projectLocked)
@@ -170,19 +273,34 @@ fun Composer(
 
 @Composable
 private fun AttachmentStrip(sessionId: String, attachments: List<ImageAttachment>) {
+    var preview by remember { mutableStateOf<ImageAttachment?>(null) }
     Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 8.dp, start = 4.dp)) {
         attachments.forEachIndexed { idx, att ->
-            Box(modifier = Modifier.padding(end = 8.dp).size(56.dp).clip(RoundedCornerShape(12.dp)).background(ConsoleColors.CardAlt).border(1.dp, ConsoleColors.Border, RoundedCornerShape(12.dp))) {
-                coil3.compose.AsyncImage(
-                    model = "data:${att.mimeType};base64,${att.data}",
-                    contentDescription = "Attachment ${idx + 1}",
-                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)),
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                )
+            val bytes = remember(att) { attachmentBytes(att.data) }
+            Box(modifier = Modifier.padding(end = 8.dp).size(56.dp).clip(RoundedCornerShape(12.dp)).background(ConsoleColors.CardAlt).border(1.dp, ConsoleColors.Border, RoundedCornerShape(12.dp)).clickable { preview = att }) {
+                if (bytes != null) {
+                    coil3.compose.AsyncImage(
+                        model = bytes,
+                        contentDescription = "Attachment ${idx + 1}",
+                        modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    )
+                } else {
+                    Box(modifier = Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Image, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(20.dp))
+                    }
+                }
                 Box(modifier = Modifier.align(Alignment.TopEnd).padding(2.dp).size(18.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)).clickable { AppContainer.chatRepository.removeAttachment(sessionId, idx) }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.Close, contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(12.dp))
                 }
             }
+        }
+    }
+    val current = preview
+    if (current != null && attachments.contains(current)) {
+        val bytes = remember(current) { attachmentBytes(current.data) }
+        if (bytes != null) {
+            ImagePreviewDialog(image = bytes, onDismiss = { preview = null })
         }
     }
 }
@@ -324,7 +442,7 @@ private fun ModelPickerSheet(selectedModel: String?, selectedProvider: String?, 
                     }
                 }
             }
-            OutlinedTextField(value = search, onValueChange = { search = it }, placeholder = { Text("Search models…") }, leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp)) }, singleLine = true, colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = ConsoleColors.CardAlt, unfocusedContainerColor = ConsoleColors.CardAlt, focusedBorderColor = ConsoleColors.BorderSubtle, unfocusedBorderColor = ConsoleColors.BorderSubtle, focusedTextColor = ConsoleColors.TextPrimary, unfocusedTextColor = ConsoleColors.TextPrimary, cursorColor = ConsoleColors.TextPrimary), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp))
+            OutlinedTextField(value = search, onValueChange = { search = it }, placeholder = { Text("Search models…") }, leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp)) }, singleLine = true, colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = ConsoleColors.CardAlt, unfocusedContainerColor = ConsoleColors.CardAlt, focusedBorderColor = ConsoleColors.BorderSubtle, unfocusedBorderColor = ConsoleColors.BorderSubtle, focusedTextColor = ConsoleColors.TextPrimary, unfocusedTextColor = ConsoleColors.TextPrimary, cursorColor = ConsoleColors.TextPrimary), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().height(48.dp).padding(bottom = 12.dp))
             val models: List<Model> = activeProvider?.let { providerState.modelsByProvider[it] } ?: emptyList()
             val q = search.trim().lowercase()
             val filtered = if (q.isEmpty()) models else models.filter { it.id.lowercase().contains(q) }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.console.mobile.core.util.formatMessageTime
 import com.console.mobile.core.util.getFileName
+import com.console.mobile.core.util.getToolIcon
 import com.console.mobile.core.util.getToolLabel
 import com.console.mobile.core.util.resultText
 import com.console.mobile.core.util.toolCallSummary
@@ -58,6 +60,8 @@ import com.console.mobile.data.model.ToolCallPart
 import com.console.mobile.data.model.ToolResult
 import com.console.mobile.data.model.ToolResultMessage
 import com.console.mobile.data.model.UserMessage
+import com.console.mobile.ui.components.ImagePreviewDialog
+import com.console.mobile.ui.components.attachmentBytes
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
@@ -69,21 +73,26 @@ import com.console.mobile.ui.theme.ConsoleMonoFamily
 @Composable
 fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> = emptyList()) {
     val context = LocalContext.current
+    var preview by remember { mutableStateOf<ImagePart?>(null) }
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalAlignment = Alignment.End) {
-        Column(
-            modifier = Modifier.fillMaxWidth(0.85f).clip(RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
-                .background(ConsoleColors.SurfaceElevated).padding(horizontal = 16.dp, vertical = 10.dp),
-        ) {
-            if (attachments.isNotEmpty()) {
-                Row(modifier = Modifier.padding(bottom = 6.dp)) {
-                    attachments.forEach { att ->
-                        val uri = "data:${att.mimeType};base64,${att.data}"
-                        AsyncImage(model = uri, contentDescription = "Attachment", modifier = Modifier.size(80.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
+        androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.align(Alignment.End)) {
+            Column(
+                modifier = Modifier.widthIn(min = 64.dp, max = maxWidth * 0.85f).clip(RoundedCornerShape(20.dp))
+                    .background(ConsoleColors.SurfaceElevated).padding(horizontal = 16.dp, vertical = 10.dp),
+            ) {
+                if (attachments.isNotEmpty()) {
+                    Row(modifier = Modifier.padding(bottom = 6.dp)) {
+                        attachments.forEach { att ->
+                            val bytes = remember(att) { attachmentBytes(att.data) }
+                            if (bytes != null) {
+                                AsyncImage(model = bytes, contentDescription = "Attachment", modifier = Modifier.size(80.dp).clip(RoundedCornerShape(12.dp)).clickable { preview = att }, contentScale = ContentScale.Crop)
+                            }
+                        }
                     }
                 }
-            }
-            if (content.isNotEmpty()) {
-                Text(content, color = ConsoleColors.TextPrimary, fontSize = 15.sp, lineHeight = 22.sp)
+                if (content.isNotEmpty()) {
+                    Text(content, color = ConsoleColors.TextPrimary, fontSize = 15.sp, lineHeight = 22.sp)
+                }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp, end = 2.dp)) {
@@ -91,6 +100,13 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
             if (content.isNotEmpty()) {
                 CopyButton(text = content, context = context)
             }
+        }
+    }
+    val current = preview
+    if (current != null && attachments.contains(current)) {
+        val bytes = remember(current) { attachmentBytes(current.data) }
+        if (bytes != null) {
+            ImagePreviewDialog(image = bytes, onDismiss = { preview = null })
         }
     }
 }
@@ -185,7 +201,7 @@ fun ToolActivityRow(name: String, isRunning: Boolean, isError: Boolean, detail: 
             Box(modifier = Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(statusBg), contentAlignment = Alignment.Center) {
                 if (isRunning) CircularProgressIndicator(color = statusColor, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
                 else if (isError) Icon(Icons.Filled.Warning, contentDescription = null, tint = statusColor, modifier = Modifier.size(14.dp))
-                else Icon(Icons.Filled.Check, contentDescription = null, tint = statusColor, modifier = Modifier.size(13.dp))
+                else Icon(getToolIcon(name), contentDescription = null, tint = statusColor, modifier = Modifier.size(14.dp))
             }
             Text(getToolLabel(name), color = ConsoleColors.TextPrimary, fontSize = 13.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp))
             if (isRunning) {
@@ -211,6 +227,7 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
     val shape = RoundedCornerShape(10.dp)
     Column(modifier = Modifier.fillMaxWidth().clip(shape).background(Color.White.copy(alpha = 0.02f)).border(1.dp, Color.White.copy(alpha = 0.06f), shape)) {
         Row(modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(getToolIcon(call.name), contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(13.dp).padding(end = 6.dp))
             Text(getToolLabel(call.name), color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             if (!summary.isNullOrEmpty()) {
                 Text(summary, color = ConsoleColors.TextMuted, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))

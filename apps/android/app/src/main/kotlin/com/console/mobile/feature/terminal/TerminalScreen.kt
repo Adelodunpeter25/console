@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -140,7 +141,7 @@ fun TerminalScreen(onBack: () -> Unit) {
         else -> null
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
+    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background).imePadding()) {
         ScreenHeader(
             title = "Terminal",
             onBack = onBack,
@@ -163,7 +164,7 @@ fun TerminalScreen(onBack: () -> Unit) {
             project == null -> EmptyState(title = "No projects yet", description = "Add a project folder in Settings → Projects to open a shell.")
             else -> {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
-                    Box(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)).background(Color.Black).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(8.dp))) {
+                    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
                         if (terminalId == null && spawnError == null) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {

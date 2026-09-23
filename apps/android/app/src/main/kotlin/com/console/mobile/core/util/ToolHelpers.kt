@@ -1,5 +1,24 @@
 package com.console.mobile.core.util
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.composables.icons.lucide.Brain
+import com.composables.icons.lucide.BookOpen
+import com.composables.icons.lucide.CircleHelp
+import com.composables.icons.lucide.FilePen
+import com.composables.icons.lucide.FilePlus
+import com.composables.icons.lucide.FileText
+import com.composables.icons.lucide.Files
+import com.composables.icons.lucide.Folder
+import com.composables.icons.lucide.FolderSearch
+import com.composables.icons.lucide.Globe
+import com.composables.icons.lucide.ListTodo
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.MessagesSquare
+import com.composables.icons.lucide.Search
+import com.composables.icons.lucide.SquareTerminal
+import com.composables.icons.lucide.Terminal
+import com.composables.icons.lucide.Users
+import com.composables.icons.lucide.Wrench
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
 import kotlinx.serialization.json.JsonArray
@@ -34,10 +53,22 @@ val TOOL_LABELS: Map<String, String> = mapOf(
     "editFile" to "Edit File", "bash" to "Run Command", "bashJob" to "Bash Job",
     "grep" to "Search Code", "glob" to "Find Files", "listDir" to "List Directory",
     "fetch" to "Fetch URL", "webSearch" to "Web Search", "subagent" to "Subagent",
-    "ask" to "Ask Question", "todo" to "Todo"
+    "ask" to "Ask Question", "askMany" to "Ask Questions", "todo" to "Todo",
+    "memory" to "Memory", "readSkill" to "Read Skill",
 )
 
 fun getToolLabel(name: String): String = TOOL_LABELS[name] ?: name
+
+val TOOL_ICONS: Map<String, ImageVector> = mapOf(
+    "readFile" to Lucide.FileText, "writeFile" to Lucide.FilePlus, "batchWrite" to Lucide.Files,
+    "editFile" to Lucide.FilePen, "bash" to Lucide.Terminal, "bashJob" to Lucide.SquareTerminal,
+    "grep" to Lucide.Search, "glob" to Lucide.FolderSearch, "listDir" to Lucide.Folder,
+    "fetch" to Lucide.Globe, "webSearch" to Lucide.Globe, "subagent" to Lucide.Users,
+    "ask" to Lucide.CircleHelp, "askMany" to Lucide.MessagesSquare, "todo" to Lucide.ListTodo,
+    "memory" to Lucide.Brain, "readSkill" to Lucide.BookOpen,
+)
+
+fun getToolIcon(name: String): ImageVector = TOOL_ICONS[name] ?: Lucide.Wrench
 
 fun formatUnknown(v: Any?): String = when (v) {
     null -> "null"
