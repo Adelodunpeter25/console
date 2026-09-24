@@ -159,6 +159,12 @@ type Agent struct {
 	// Usage accumulates token usage across every turn of the agent's runs
 	// (never nil after New; callers may replace it to share a tracker).
 	Usage *UsageTracker
+	// SystemSections optionally labels the system prompt's blocks so
+	// OnRequest breakdowns attribute tokens per section.
+	SystemSections []NamedText
+	// OnRequest, when set, receives an estimated per-source breakdown of
+	// every provider request just before it is sent.
+	OnRequest func(Breakdown)
 }
 
 func New(provider Provider, executor *Executor, sessions *services.SessionService) *Agent {
@@ -274,6 +280,9 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 	// parity) so subscribers get per-turn triplets with the canonical
 	// assistant snapshot — the desktop replaces streamed content with it.
 	turnID := newTurnID()
+	if a.OnRequest != nil {
+		a.OnRequest(EstimateBreakdown(a.SystemSections, a.SystemPrompt, toolsList, history))
+	}
 	events.Push(Event{Kind: EventModelStreamStart, Text: turnID})
 	turnStream := stream.New[Event]()
 	done := make(chan error, 1)

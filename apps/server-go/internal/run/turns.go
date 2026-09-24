@@ -257,6 +257,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	agent := loop.New(provider, executor, s.sessions)
 	agent.Usage = usage
 	agent.SystemPrompt = prompt.SystemPrompt
+	agent.SystemSections = systemSections(prompt.Sections)
 	agent.Model = modelID
 	agent.CacheRetention = loop.CacheShort
 	// Stable per conversation, scoped by provider+model so cached prefixes
@@ -392,4 +393,13 @@ func (t *turnTranslator) translate(event loop.Event) {
 	default:
 		t.hub.Broadcast(event)
 	}
+}
+
+// systemSections labels the built prompt's blocks for request breakdowns.
+func systemSections(sections []systemprompt.Section) []loop.NamedText {
+	out := make([]loop.NamedText, len(sections))
+	for i, section := range sections {
+		out[i] = loop.NamedText{Name: section.Name, Content: section.Content}
+	}
+	return out
 }
