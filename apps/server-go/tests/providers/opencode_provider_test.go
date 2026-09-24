@@ -54,6 +54,7 @@ func TestOpenCodeDiscoveryAndChatProvider(t *testing.T) {
 	provider := &opencode.Provider{BaseURL: server.URL, HTTPClient: server.Client()}
 	events, err := runOpenCodeTurn(provider, loop.TurnRequest{
 		Model:          "space-bunny-free",
+		SystemPrompt:   "system",
 		Messages:       []any{loop.UserMessage{Role: loop.RoleUser, Content: "read it"}},
 		Tools:          openCodeToolDefinitions(),
 		ConversationID: "session:opencode:space-bunny-free",
@@ -66,6 +67,16 @@ func TestOpenCodeDiscoveryAndChatProvider(t *testing.T) {
 	}
 	if got := chatRequest["model"]; got != "space-bunny-free" {
 		t.Fatalf("model: %v", got)
+	}
+	messages, _ := chatRequest["messages"].([]any)
+	if len(messages) != 2 {
+		t.Fatalf("messages: %#v", chatRequest["messages"])
+	}
+	if first, _ := messages[0].(map[string]any); first["role"] != "system" || first["content"] != "system" {
+		t.Fatalf("system message: %#v", messages[0])
+	}
+	if second, _ := messages[1].(map[string]any); second["role"] != "user" {
+		t.Fatalf("user message: %#v", messages[1])
 	}
 	toolNames := chatToolNames(chatRequest["tools"])
 	if !reflect.DeepEqual(toolNames[:6], []string{"edit", "glob", "grep", "question", "read", "shell"}) {

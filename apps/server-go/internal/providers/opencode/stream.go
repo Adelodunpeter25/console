@@ -98,9 +98,13 @@ func (p *Provider) postJSON(ctx context.Context, path string, body map[string]an
 }
 
 func (p *Provider) runChat(ctx context.Context, req loop.TurnRequest, events *stream.Stream[loop.Event]) error {
+	messages := ConvertChatMessages(req.Messages)
+	if strings.TrimSpace(req.SystemPrompt) != "" {
+		messages = append([]map[string]any{{"role": "system", "content": req.SystemPrompt}}, messages...)
+	}
 	body := map[string]any{
 		"model":    req.Model,
-		"messages": ConvertChatMessages(req.Messages),
+		"messages": messages,
 		"stream":   true,
 		"stream_options": map[string]any{
 			"include_usage": true,
