@@ -49,7 +49,6 @@ size, not as targets.
 | Workspace tree | `workspacetree.go` | Depth-limited tree on every request, even though `glob`/`list_dir` exist. |
 | Claude cache | `providers/claude/convert.go:251,316`, `stream.go:150` | Breakpoints on the system block, the last tool, and the last message. The system block is one big string, so any change in date/branch/tree throws away the cache for everything after the tools. |
 | OpenCode cache | `providers/opencode/stream.go` | Responses path sends `prompt_cache_key`. **The Chat path (`runChat`, used by `space-bunny-free`) sends no cache key.** |
-| **OpenCode system prompt** | `providers/opencode/stream.go:100–112` | **Bug: `runChat` never sends `req.SystemPrompt`.** Only `runResponses` sets `instructions`. Chat-model runs today have no system prompt at all. |
 | Usage telemetry | `loop.TurnUsage` (`agent/loop/message.go:66`), each provider's `NormalizeUsage` | Per-turn input, cache read/write and output are recorded on the assistant message, but never added up per task, per tool, or per context source. `run/turns.go:380` swallows `EventUsage`. |
 | File reads | `tools/file_tools.go:120–123` | Every line is numbered (`%*d: `). |
 | Bash output | `tools/bash_tools.go:17,30–34` | Keeps the first 50 KB and drops the rest. Errors usually show up at the **end**, which is the part that gets thrown away. |
@@ -73,9 +72,6 @@ Why Haiku instead of the OpenCode free model:
 - **Explicit cache breakpoints** are already wired up
   (`claude/convert.go:251,316`, `stream.go:150`), so the Phase 2 work is
   measured on the provider it's actually designed for.
-- **The system prompt already reaches the model.** On the OpenCode Chat
-  path it doesn't (see the Phase 0 bug). So the baseline doesn't depend on
-  fixing that first.
 - **Real prices.** Haiku 4.5 list prices (per million tokens) are uncached
   input $1.00, cache read $0.10, cache write (5 min) $1.25, output $5.00.
   The bench reports weighted cost in real dollars using these prices, kept
@@ -105,33 +101,9 @@ Things to know about Haiku and the subscription:
 
 OpenCode's free model (`space-bunny-free`) is an optional **second check**,
 useful to see whether prompt changes still work on a weaker, non-Anthropic
-model. It needs Phase 0 fixed first, and reports cache numbers only where
-Zen returns them.
-
----
-
-## Phase 0: Fix the OpenCode system prompt bug (standalone fix)
-
-This is a real bug for OpenCode users, but it no longer blocks the plan: the
-Haiku bench doesn't depend on it. Do it first anyway, since it's small, and
-it's required before running the optional OpenCode second check.
-
-### Task 0.1: Send the system prompt on the Chat path
-- **File:** `internal/providers/opencode/stream.go` (`runChat`), and
-  `messages.go` if the system message is built there.
-- **Change:** when `req.SystemPrompt` isn't blank, put
-  `{"role":"system","content":req.SystemPrompt}` first in `messages`.
-- **Test:** `tests/providers/opencode_provider_test.go`: add a Chat-model
-  case that checks `messages[0]` is the system message.
-  `cd apps/server-go && go test ./tests/providers/ -run OpenCode`
-- **Rollback:** revert the commit.
-
-### Task 0.2: Send a cache key on the Chat path
-- **Change:** do what `runResponses` does. Send `prompt_cache_key =
-  req.ConversationID` when caching is on. (Zen/OpenAI-compatible servers
-  ignore fields they don't know about. Check that the request isn't
-  rejected; if it is, drop this task.)
-- **Test:** same test file; check the key is present on the Chat body.
+model. Zen does report some cached tokens on the Chat path. If we want better
+cache numbers there, sending `prompt_cache_key` on the Chat path (as the
+Responses path already does) is a small optional follow-up.
 
 ---
 
@@ -214,7 +186,7 @@ Everything after this depends on it.
 
 ### Task 1.6: Record the baseline
 - Run `go run ./cmd/bench --runs 2 --out bench/results/baseline.json`
-  (Claude Haiku). Phase 0 isn't needed for this.
+  (Claude Haiku).
 - Add a short "Baseline" section to this doc: cost share by source × billing
   type, static tokens per request, turns per task, and per-tool usage and
   error rate. Rank the rest of the work with it.
@@ -475,8 +447,8 @@ Also audit `SYSTEM.md` handling and the subagent preamble in the same pass.
 - Record null and negative results in the Results log below. Don't delete
   them.
 - Before flipping any Phase 4 default: one run of the full 12-task set on
-  Haiku. Optionally, a second check on the OpenCode free model (after
-  Phase 0) to see that the change also works on a non-Anthropic model.
+  Haiku. Optionally, a second check on the OpenCode free model to see that
+  the change also works on a non-Anthropic model.
 
 ## Traps to avoid
 
