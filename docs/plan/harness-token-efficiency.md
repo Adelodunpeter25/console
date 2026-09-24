@@ -198,7 +198,7 @@ Everything after this depends on it.
 - **Change:**
   - Before starting, fetch the Claude usage report. Refuse to start if any
     limit (5-hour session, weekly, weekly per-model) is at or above
-    `--max-usage-pct` (default **80%**).
+    `--max-usage-pct` (off by default; pass e.g. `--max-usage-pct 80` to enable).
   - Re-check between tasks (call `Service.Invalidate("claude")` first, so
     the numbers aren't cached). Stop cleanly as soon as the limit is
     crossed, and write partial results marked `"aborted": "budget"`.

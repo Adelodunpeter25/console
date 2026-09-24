@@ -56,7 +56,7 @@ func run() error {
 	taskList := flag.String("tasks", "", "comma-separated task ids (default: all)")
 	taskDir := flag.String("task-dir", "bench/tasks", "task directory")
 	flagList := flag.String("flags", "", "harness feature flags key=value,...")
-	maxPct := flag.Float64("max-usage-pct", 80, "stop when any subscription limit reaches this percent (claude only; 0 disables)")
+	maxPct := flag.Float64("max-usage-pct", 0, "stop when any subscription limit reaches this percent (claude only; 0 = off, the default)")
 	out := flag.String("out", "", "results JSON path")
 	prev := flag.String("prev", "", "previous results file for the cost estimate")
 	yes := flag.Bool("yes", false, "skip the cost-estimate confirmation")
