@@ -10,5 +10,5 @@ pub use file_kind::{
     BLOCKED_FILE_EXTENSIONS, FileKind, MARKDOWN_EXTENSIONS, RASTER_IMAGE_EXTENSIONS,
     file_kind_for_path, is_lock_file,
 };
-pub use http_transport::{HttpTransport, fetch_url_bytes, probe_backend};
+pub use http_transport::{HttpTransport, decode_json_bytes, fetch_url_bytes, probe_backend};
 pub use sse_reader::SseStreamReader;

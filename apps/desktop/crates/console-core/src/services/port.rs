@@ -31,8 +31,9 @@ impl PortService {
             .await
             .context("Failed to fetch forwarded ports")?;
 
-        let body: ApiResponse<Vec<ForwardedPort>> = response
-            .json()
+        let body: ApiResponse<Vec<ForwardedPort>> = self
+            .transport
+            .decode_json(response)
             .await
             .context("Failed to parse ports list")?;
         if body.success {
@@ -51,8 +52,9 @@ impl PortService {
     pub async fn watch(
         &self,
         project_id: Option<&str>,
-    ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<Vec<ForwardedPort>>> + Send>>>
-    {
+    ) -> Result<
+        std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<Vec<ForwardedPort>>> + Send>>,
+    > {
         use eventsource_stream::Eventsource;
         use futures_util::StreamExt;
 
@@ -73,14 +75,19 @@ impl PortService {
             .error_for_status()
             .context("Forwarded ports SSE endpoint returned an error")?;
 
-        let stream = response.bytes_stream().eventsource().filter_map(|item| async {
-            match item {
-                Ok(event) if event.event == "ports" => {
-                    serde_json::from_str::<Vec<ForwardedPort>>(&event.data).ok().map(Ok)
+        let stream = response
+            .bytes_stream()
+            .eventsource()
+            .filter_map(|item| async {
+                match item {
+                    Ok(event) if event.event == "ports" => {
+                        serde_json::from_str::<Vec<ForwardedPort>>(&event.data)
+                            .ok()
+                            .map(Ok)
+                    }
+                    _ => None,
                 }
-                _ => None,
-            }
-        });
+            });
         Ok(Box::pin(stream))
     }
 
@@ -101,8 +108,9 @@ impl PortService {
             .await
             .context("Failed to forward port")?;
 
-        let body: ApiResponse<ForwardedPort> = response
-            .json()
+        let body: ApiResponse<ForwardedPort> = self
+            .transport
+            .decode_json(response)
             .await
             .context("Failed to parse forward port response")?;
         if body.success {
@@ -133,8 +141,9 @@ impl PortService {
             .await
             .context("Failed to unforward port")?;
 
-        let body: ApiResponse<serde_json::Value> = response
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(response)
             .await
             .context("Failed to parse unforward response")?;
         if body.success {

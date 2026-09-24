@@ -27,8 +27,9 @@ impl GitService {
             .await
             .context("Failed to get git status")?;
 
-        let body: ApiResponse<GitStatusSummary> = resp
-            .json()
+        let body: ApiResponse<GitStatusSummary> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse git status response")?;
         if body.success {
@@ -109,8 +110,9 @@ impl GitService {
             .await
             .context("Failed to get git diff")?;
 
-        let body: ApiResponse<GitDiffResponse> = resp
-            .json()
+        let body: ApiResponse<GitDiffResponse> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse git diff response")?;
         if body.success {
@@ -138,8 +140,9 @@ impl GitService {
             .await
             .context("Failed to list git branches")?;
 
-        let body: ApiResponse<GitBranchesResponse> = resp
-            .json()
+        let body: ApiResponse<GitBranchesResponse> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse git branches response")?;
         if body.success {
@@ -167,8 +170,9 @@ impl GitService {
             .await
             .context("Failed to checkout git branch")?;
 
-        let body: ApiResponse<serde_json::Value> = resp
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse checkout response")?;
         if body.success {

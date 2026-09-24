@@ -28,8 +28,9 @@ impl AuthService {
             .await
             .context("Failed to fetch auth status")?;
 
-        let body: ApiResponse<AuthStatusResponse> = resp
-            .json()
+        let body: ApiResponse<AuthStatusResponse> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse auth status response")?;
         if body.success {
@@ -56,8 +57,9 @@ impl AuthService {
             .await
             .context("Failed to request OAuth login URL")?;
 
-        let body: ApiResponse<OAuthLoginUrlResponse> = resp
-            .json()
+        let body: ApiResponse<OAuthLoginUrlResponse> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse login URL response")?;
         if body.success {
@@ -94,8 +96,9 @@ impl AuthService {
             .await
             .context("Failed to send OAuth callback")?;
 
-        let body: ApiResponse<serde_json::Value> = resp
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse OAuth callback response")?;
         if body.success {
@@ -128,8 +131,9 @@ impl AuthService {
             .await
             .context("Failed to save project id")?;
 
-        let body: ApiResponse<serde_json::Value> = resp
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse save project id response")?;
         if body.success {
@@ -157,8 +161,9 @@ impl AuthService {
             .await
             .context("Failed to fetch project id")?;
 
-        let body: ApiResponse<ProjectIdPayload> = resp
-            .json()
+        let body: ApiResponse<ProjectIdPayload> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse project id response")?;
         if body.success {

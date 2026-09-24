@@ -112,24 +112,29 @@ impl ConsoleDesktopApp {
 
     pub fn open_project_script_log(&mut self, script_id: &str, cx: &mut Context<Self>) {
         let (_, cwd) = self.active_inspector_target();
-        let Some(cwd) = cwd else { return; };
+        let Some(cwd) = cwd else {
+            return;
+        };
         let persisted_script_tabs = self.persisted_script_tabs.get(&cwd).cloned();
-        let state = self.right_sidebar_terminals_by_cwd.entry(cwd).or_insert_with(|| {
-            let open_scripts = persisted_script_tabs
-                .as_ref()
-                .map(|st| st.open_script_ids.clone())
-                .unwrap_or_default();
-            let active_script = persisted_script_tabs
-                .as_ref()
-                .and_then(|st| st.active_script_id.clone());
-            super::app::WorkspaceTerminalState {
-                terminals: Vec::new(),
-                active_idx: 0,
-                next_id: 1,
-                script_logs: open_scripts,
-                active_script_log: active_script,
-            }
-        });
+        let state = self
+            .right_sidebar_terminals_by_cwd
+            .entry(cwd)
+            .or_insert_with(|| {
+                let open_scripts = persisted_script_tabs
+                    .as_ref()
+                    .map(|st| st.open_script_ids.clone())
+                    .unwrap_or_default();
+                let active_script = persisted_script_tabs
+                    .as_ref()
+                    .and_then(|st| st.active_script_id.clone());
+                super::app::WorkspaceTerminalState {
+                    terminals: Vec::new(),
+                    active_idx: 0,
+                    next_id: 1,
+                    script_logs: open_scripts,
+                    active_script_log: active_script,
+                }
+            });
         if !state.script_logs.iter().any(|id| id == script_id) {
             state.script_logs.push(script_id.to_string());
         }
@@ -144,8 +149,12 @@ impl ConsoleDesktopApp {
 
     pub fn select_right_sidebar_bottom_tab(&mut self, index: usize, cx: &mut Context<Self>) {
         let (_, cwd) = self.active_inspector_target();
-        let Some(cwd) = cwd else { return; };
-        let Some(state) = self.right_sidebar_terminals_by_cwd.get_mut(&cwd) else { return; };
+        let Some(cwd) = cwd else {
+            return;
+        };
+        let Some(state) = self.right_sidebar_terminals_by_cwd.get_mut(&cwd) else {
+            return;
+        };
         if index < state.script_logs.len() {
             state.active_script_log = state.script_logs.get(index).cloned();
         } else {
@@ -156,7 +165,9 @@ impl ConsoleDesktopApp {
             }
         }
         self.right_sidebar_bottom_run_selected = false;
-        if self.right_sidebar_bottom_collapsed { self.right_sidebar_bottom_collapsed = false; }
+        if self.right_sidebar_bottom_collapsed {
+            self.right_sidebar_bottom_collapsed = false;
+        }
         self.persist_workspaces();
         cx.notify();
     }
@@ -167,9 +178,13 @@ impl ConsoleDesktopApp {
     /// the script keeps running.
     pub fn close_right_sidebar_bottom_tab(&mut self, index: usize, cx: &mut Context<Self>) {
         let (_, cwd) = self.active_inspector_target();
-        let Some(cwd) = cwd else { return; };
+        let Some(cwd) = cwd else {
+            return;
+        };
         let terminal_index = {
-            let Some(state) = self.right_sidebar_terminals_by_cwd.get_mut(&cwd) else { return; };
+            let Some(state) = self.right_sidebar_terminals_by_cwd.get_mut(&cwd) else {
+                return;
+            };
             if index < state.script_logs.len() {
                 let closed_id = state.script_logs.remove(index);
                 if state.active_script_log.as_deref() == Some(closed_id.as_str()) {
@@ -690,9 +705,18 @@ impl ConsoleDesktopApp {
 
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
-            match client.fs.get_entries(&cwd, Some(25), Some(false)).await {
-                Ok(entries) => {
-                    let tree = console_ui::build_tree_from_entries(&entries);
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    client
+                        .fs
+                        .get_entries(&cwd, Some(25), Some(false))
+                        .await
+                        .map(|entries| console_ui::build_tree_from_entries(&entries))
+                })
+                .await;
+            match result {
+                Ok(tree) => {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {

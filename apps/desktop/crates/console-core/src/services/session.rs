@@ -40,8 +40,9 @@ impl SessionService {
             .await
             .context("Failed to list sessions")?;
 
-        let body: ApiResponse<Vec<SessionHeader>> = resp
-            .json()
+        let body: ApiResponse<Vec<SessionHeader>> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse sessions response")?;
         if body.success {
@@ -85,8 +86,9 @@ impl SessionService {
             .await
             .context("Failed to get session")?;
 
-        let body: ApiResponse<SessionDetailResponse> = resp
-            .json()
+        let body: ApiResponse<SessionDetailResponse> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse session response")?;
         if body.success {
@@ -113,8 +115,9 @@ impl SessionService {
             .await
             .context("Failed to get session changes")?;
 
-        let body: ApiResponse<Vec<SessionFileChange>> = resp
-            .json()
+        let body: ApiResponse<Vec<SessionFileChange>> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse session changes response")?;
         if body.success {
@@ -143,8 +146,9 @@ impl SessionService {
             .await
             .context("Failed to get session todos")?;
 
-        let body: ApiResponse<Vec<TodoItem>> = resp
-            .json()
+        let body: ApiResponse<Vec<TodoItem>> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse session todos response")?;
         if body.success {
@@ -187,8 +191,9 @@ impl SessionService {
             .await
             .context("Failed to create session")?;
 
-        let body: ApiResponse<SessionHeader> = resp
-            .json()
+        let body: ApiResponse<SessionHeader> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse create session response")?;
         if body.success {
@@ -225,8 +230,9 @@ impl SessionService {
             .await
             .context("Failed to attach worktree")?;
 
-        let body: ApiResponse<SessionHeader> = resp
-            .json()
+        let body: ApiResponse<SessionHeader> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse attach worktree response")?;
         if body.success {
@@ -252,8 +258,9 @@ impl SessionService {
             .await
             .context("Failed to update session")?;
 
-        let body: ApiResponse<SessionHeader> = resp
-            .json()
+        let body: ApiResponse<SessionHeader> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse update session response")?;
         if body.success {
@@ -278,8 +285,9 @@ impl SessionService {
             .await
             .context("Failed to delete session")?;
 
-        let body: ApiResponse<serde_json::Value> = resp
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse delete session response")?;
         if body.success {
@@ -311,8 +319,9 @@ impl SessionService {
             .await
             .context("Failed to list deleted sessions")?;
 
-        let body: ApiResponse<Vec<SessionHeader>> = resp
-            .json()
+        let body: ApiResponse<Vec<SessionHeader>> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse deleted sessions response")?;
         if body.success {
@@ -339,8 +348,9 @@ impl SessionService {
             .await
             .context("Failed to restore session")?;
 
-        let body: ApiResponse<serde_json::Value> = resp
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse restore session response")?;
         if body.success {
@@ -369,8 +379,9 @@ impl SessionService {
             .await
             .context("Failed to permanently delete session")?;
 
-        let body: ApiResponse<serde_json::Value> = resp
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse permanent delete response")?;
         if body.success {

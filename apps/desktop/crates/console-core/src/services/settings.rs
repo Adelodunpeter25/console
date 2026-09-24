@@ -22,8 +22,11 @@ impl SettingsService {
             .send()
             .await
             .context("Failed to fetch settings")?;
-        let body: ApiResponse<ConsoleSettings> =
-            response.json().await.context("Failed to parse settings")?;
+        let body: ApiResponse<ConsoleSettings> = self
+            .transport
+            .decode_json(response)
+            .await
+            .context("Failed to parse settings")?;
         if body.success {
             Ok(body.data.unwrap_or_default())
         } else {
@@ -45,8 +48,9 @@ impl SettingsService {
             .send()
             .await
             .context("Failed to save settings")?;
-        let body: ApiResponse<ConsoleSettings> = response
-            .json()
+        let body: ApiResponse<ConsoleSettings> = self
+            .transport
+            .decode_json(response)
             .await
             .context("Failed to parse saved settings")?;
         if body.success {

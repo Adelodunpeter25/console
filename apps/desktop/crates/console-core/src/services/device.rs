@@ -21,7 +21,10 @@ impl DeviceService {
         Self { transport }
     }
 
-    async fn get<T: serde::de::DeserializeOwned>(&self, endpoint: &str) -> Result<T> {
+    async fn get<T: serde::de::DeserializeOwned + Send + 'static>(
+        &self,
+        endpoint: &str,
+    ) -> Result<T> {
         let url = self.transport.url(endpoint).await;
         let response = self
             .transport
@@ -31,8 +34,9 @@ impl DeviceService {
             .send()
             .await
             .with_context(|| format!("Failed to reach {endpoint}"))?;
-        let body: ApiResponse<T> = response
-            .json()
+        let body: ApiResponse<T> = self
+            .transport
+            .decode_json(response)
             .await
             .with_context(|| format!("Failed to parse {endpoint} response"))?;
         if body.success {
@@ -46,7 +50,7 @@ impl DeviceService {
         }
     }
 
-    async fn post<T: serde::de::DeserializeOwned>(
+    async fn post<T: serde::de::DeserializeOwned + Send + 'static>(
         &self,
         endpoint: &str,
         payload: Option<serde_json::Value>,
@@ -64,8 +68,9 @@ impl DeviceService {
             .send()
             .await
             .with_context(|| format!("Failed to POST {endpoint}"))?;
-        let body: ApiResponse<T> = response
-            .json()
+        let body: ApiResponse<T> = self
+            .transport
+            .decode_json(response)
             .await
             .with_context(|| format!("Failed to parse {endpoint} response"))?;
         if body.success {
@@ -106,7 +111,11 @@ impl DeviceService {
 
     /// Power off all running simulators, emulators, and streaming helpers.
     pub async fn shutdown_all(&self) -> Result<()> {
-        let _: Option<serde_json::Value> = self.post("/api/devices/shutdown-all", None).await.ok().flatten();
+        let _: Option<serde_json::Value> = self
+            .post("/api/devices/shutdown-all", None)
+            .await
+            .ok()
+            .flatten();
         Ok(())
     }
 

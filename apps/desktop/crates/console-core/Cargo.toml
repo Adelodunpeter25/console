@@ -40,6 +40,10 @@ name = "local_forward_pipe_test"
 path = "tests/network/local_forward_pipe_test.rs"
 
 [[test]]
+name = "json_decode_test"
+path = "tests/network/json_decode_test.rs"
+
+[[test]]
 name = "ports_test"
 path = "tests/network/ports_test.rs"
 

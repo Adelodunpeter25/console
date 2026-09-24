@@ -26,8 +26,9 @@ impl RunService {
             .await
             .context("Failed to abort run")?;
 
-        let body: ApiResponse<serde_json::Value> = resp
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse abort response")?;
         if body.success {
@@ -58,8 +59,9 @@ impl RunService {
             .await
             .context("Failed to answer question")?;
 
-        let body: ApiResponse<serde_json::Value> = resp
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse answer response")?;
         if body.success {
@@ -91,8 +93,9 @@ impl RunService {
             .await
             .context("Failed to approve tool permission")?;
 
-        let body: ApiResponse<serde_json::Value> = resp
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse permission response")?;
         if body.success {
@@ -184,8 +187,9 @@ impl RunService {
             .await
             .context("Failed to queue prompt")?;
 
-        let body: ApiResponse<QueuedPrompt> = resp
-            .json()
+        let body: ApiResponse<QueuedPrompt> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse queue prompt response")?;
         if body.success {
@@ -213,8 +217,9 @@ impl RunService {
             .await
             .context("Failed to get queued prompt")?;
 
-        let body: ApiResponse<Option<QueuedPrompt>> = resp
-            .json()
+        let body: ApiResponse<Option<QueuedPrompt>> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse queued prompt response")?;
         if body.success {
@@ -246,8 +251,9 @@ impl RunService {
             .await
             .context("Failed to edit queued prompt")?;
 
-        let body: ApiResponse<QueuedPrompt> = resp
-            .json()
+        let body: ApiResponse<QueuedPrompt> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse edit queued prompt response")?;
         if body.success {
@@ -275,8 +281,9 @@ impl RunService {
             .await
             .context("Failed to clear queued prompt")?;
 
-        let body: ApiResponse<serde_json::Value> = resp
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse clear queued prompt response")?;
         if body.success {
@@ -307,8 +314,9 @@ impl RunService {
             .await
             .context("Failed to steer run")?;
 
-        let body: ApiResponse<serde_json::Value> = resp
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse steer response")?;
         if body.success {

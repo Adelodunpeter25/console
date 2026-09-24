@@ -27,8 +27,9 @@ impl UsageService {
             .await
             .context("Failed to fetch all usage reports")?;
 
-        let body: ApiResponse<HashMap<String, Option<UsageReport>>> = resp
-            .json()
+        let body: ApiResponse<HashMap<String, Option<UsageReport>>> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse usage response")?;
 
@@ -57,8 +58,9 @@ impl UsageService {
             .await
             .context("Failed to fetch provider usage")?;
 
-        let body: ApiResponse<Option<UsageReport>> = resp
-            .json()
+        let body: ApiResponse<Option<UsageReport>> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse provider usage response")?;
 

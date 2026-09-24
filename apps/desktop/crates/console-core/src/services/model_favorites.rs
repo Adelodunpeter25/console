@@ -33,8 +33,9 @@ impl ModelFavoriteService {
             .await
             .context("Failed to list model favorites")?;
 
-        let body: ApiResponse<Vec<ModelFavorite>> = response
-            .json()
+        let body: ApiResponse<Vec<ModelFavorite>> = self
+            .transport
+            .decode_json(response)
             .await
             .context("Failed to parse model favorites response")?;
 
@@ -65,8 +66,9 @@ impl ModelFavoriteService {
             .await
             .context("Failed to update model favorite")?;
 
-        let body: ApiResponse<serde_json::Value> = response
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(response)
             .await
             .context("Failed to parse model favorite response")?;
 

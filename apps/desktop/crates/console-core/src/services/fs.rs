@@ -34,8 +34,9 @@ impl FsService {
             .await
             .context("Failed to browse directory")?;
 
-        let body: ApiResponse<BrowseDirectoryResponse> = resp
-            .json()
+        let body: ApiResponse<BrowseDirectoryResponse> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse browse response")?;
         if body.success {
@@ -74,8 +75,9 @@ impl FsService {
             .await
             .context("Failed to get fs entries")?;
 
-        let body: ApiResponse<Vec<FsTreeEntry>> = resp
-            .json()
+        let body: ApiResponse<Vec<FsTreeEntry>> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse fs entries response")?;
         if body.success {
@@ -116,8 +118,9 @@ impl FsService {
             .await
             .context("Failed to get directory tree")?;
 
-        let body: ApiResponse<DirectoryTreeResponse> = resp
-            .json()
+        let body: ApiResponse<DirectoryTreeResponse> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse directory tree response")?;
         if body.success {
@@ -146,8 +149,11 @@ impl FsService {
             .await
             .context("Failed to read file")?;
 
-        let body: ApiResponse<FileContentResponse> =
-            resp.json().await.context("Failed to parse file response")?;
+        let body: ApiResponse<FileContentResponse> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse file response")?;
         if body.success {
             body.data
                 .ok_or_else(|| anyhow!("File content data is missing"))
@@ -175,8 +181,9 @@ impl FsService {
             .await
             .context("Failed to write file")?;
 
-        let body: ApiResponse<serde_json::Value> = resp
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse write response")?;
         if body.success {

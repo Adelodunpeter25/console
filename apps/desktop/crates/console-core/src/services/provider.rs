@@ -23,10 +23,11 @@ impl ProviderService {
             .await
             .context("Failed to list providers")?;
 
-        let body: ApiResponse<Vec<ProviderCatalogEntry>> = resp
-            .json()
-            .await
-            .context("Failed to parse providers response")?;
+        let body: ApiResponse<Vec<ProviderCatalogEntry>> =
+            self.transport
+                .decode_json(resp)
+                .await
+                .context("Failed to parse providers response")?;
         if body.success {
             Ok(body.data.unwrap_or_default())
         } else {
@@ -51,8 +52,9 @@ impl ProviderService {
             .await
             .context("Failed to list provider models")?;
 
-        let body: ApiResponse<ProviderModelsResponse> = resp
-            .json()
+        let body: ApiResponse<ProviderModelsResponse> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse provider models response")?;
         if body.success {

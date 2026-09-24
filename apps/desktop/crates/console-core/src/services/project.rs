@@ -23,8 +23,9 @@ impl ProjectService {
             .await
             .context("Failed to list projects")?;
 
-        let body: ApiResponse<Vec<ProjectInfo>> = resp
-            .json()
+        let body: ApiResponse<Vec<ProjectInfo>> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse projects response")?;
         if body.success {
@@ -51,8 +52,9 @@ impl ProjectService {
             .await
             .context("Failed to add project")?;
 
-        let body: ApiResponse<ProjectInfo> = resp
-            .json()
+        let body: ApiResponse<ProjectInfo> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse add project response")?;
         if body.success {
@@ -76,8 +78,9 @@ impl ProjectService {
             .await
             .context("Failed to remove project")?;
 
-        let body: ApiResponse<serde_json::Value> = resp
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse remove project response")?;
         if body.success {

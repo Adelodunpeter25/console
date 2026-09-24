@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
+use serde::de::DeserializeOwned;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -56,6 +57,34 @@ impl HttpTransport {
     pub fn client(&self) -> &reqwest::Client {
         &self.http
     }
+
+    /// Decode a response without doing serde work on the UI executor.
+    ///
+    /// `reqwest::Response::json()` is lazy: its serde work runs wherever the
+    /// future is polled. Desktop callers frequently poll service futures from
+    /// GPUI's main executor, so the centralized path reads bytes first and
+    /// moves the CPU-heavy decode to Tokio's blocking pool.
+    pub async fn decode_json<T>(&self, response: reqwest::Response) -> Result<T>
+    where
+        T: DeserializeOwned + Send + 'static,
+    {
+        let bytes = response
+            .bytes()
+            .await
+            .context("Failed to read response body")?;
+        decode_json_bytes(bytes.to_vec()).await
+    }
+}
+
+/// Decode already-buffered JSON on Tokio's blocking pool.
+pub async fn decode_json_bytes<T>(bytes: Vec<u8>) -> Result<T>
+where
+    T: DeserializeOwned + Send + 'static,
+{
+    tokio::task::spawn_blocking(move || serde_json::from_slice::<T>(&bytes))
+        .await
+        .context("JSON decode worker failed")?
+        .context("Failed to decode JSON response")
 }
 
 /// Probe an arbitrary backend URL for reachability — used by the settings

@@ -39,8 +39,9 @@ impl ProjectScriptsService {
             .await
             .context("Failed to fetch project scripts")?;
 
-        let body: ApiResponse<ProjectScriptsResult> = response
-            .json()
+        let body: ApiResponse<ProjectScriptsResult> = self
+            .transport
+            .decode_json(response)
             .await
             .context("Failed to parse project scripts")?;
         if body.success {
@@ -72,24 +73,29 @@ impl ProjectScriptsService {
             .await
             .context("Failed to start project script")?;
 
-        let body: ApiResponse<ScriptRun> = response
-            .json()
+        let body: ApiResponse<ScriptRun> = self
+            .transport
+            .decode_json(response)
             .await
             .context("Failed to parse started run")?;
         if body.success {
             body.data
                 .ok_or_else(|| anyhow!("Start run response contained no data"))
         } else {
-            Err(anyhow!(body
-                .error
-                .unwrap_or_else(|| "Failed to start project script".into())))
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to start project script".into())
+            ))
         }
     }
 
     /// List runs the server retains for a project (including active ones,
     /// so a reopened desktop can reconnect).
     pub async fn list_runs(&self, project_id: &str) -> Result<Vec<ScriptRun>> {
-        let url = self.transport.url(&Self::endpoint(project_id, "/runs")).await;
+        let url = self
+            .transport
+            .url(&Self::endpoint(project_id, "/runs"))
+            .await;
         let response = self
             .transport
             .client()
@@ -99,8 +105,9 @@ impl ProjectScriptsService {
             .await
             .context("Failed to fetch project script runs")?;
 
-        let body: ApiResponse<Vec<ScriptRun>> = response
-            .json()
+        let body: ApiResponse<Vec<ScriptRun>> = self
+            .transport
+            .decode_json(response)
             .await
             .context("Failed to parse project script runs")?;
         if body.success {
@@ -130,17 +137,18 @@ impl ProjectScriptsService {
             .await
             .context("Failed to fetch project script run")?;
 
-        let body: ApiResponse<ScriptRun> = response
-            .json()
+        let body: ApiResponse<ScriptRun> = self
+            .transport
+            .decode_json(response)
             .await
             .context("Failed to parse project script run")?;
         if body.success {
             body.data
                 .ok_or_else(|| anyhow!("Run response contained no data"))
         } else {
-            Err(anyhow!(body
-                .error
-                .unwrap_or_else(|| "Failed to fetch project script run".into())))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to fetch project script run".into()
+            })))
         }
     }
 
@@ -163,16 +171,17 @@ impl ProjectScriptsService {
             .await
             .context("Failed to stop project script run")?;
 
-        let body: ApiResponse<serde_json::Value> = response
-            .json()
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(response)
             .await
             .context("Failed to parse stop run response")?;
         if body.success {
             Ok(())
         } else {
-            Err(anyhow!(body
-                .error
-                .unwrap_or_else(|| "Failed to stop project script run".into())))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to stop project script run".into()
+            })))
         }
     }
 

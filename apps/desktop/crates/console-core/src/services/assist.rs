@@ -27,8 +27,9 @@ impl AssistService {
             .await
             .context("Failed to list slash commands")?;
 
-        let body: ApiResponse<Vec<SlashCommandInfo>> = resp
-            .json()
+        let body: ApiResponse<Vec<SlashCommandInfo>> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse commands response")?;
         if body.success {
@@ -71,8 +72,9 @@ impl AssistService {
             .await
             .context("Failed to perform file search")?;
 
-        let body: ApiResponse<FileSearchResponse> = resp
-            .json()
+        let body: ApiResponse<FileSearchResponse> = self
+            .transport
+            .decode_json(resp)
             .await
             .context("Failed to parse file search response")?;
         if body.success {
