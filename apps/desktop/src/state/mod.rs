@@ -34,6 +34,7 @@ mod transcript_scroll;
 mod transcript_wiring;
 mod usage;
 mod workspace_panes;
+mod workspace_tabs;
 
 pub mod types;
 mod app;
