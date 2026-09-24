@@ -178,7 +178,7 @@ func TestBudgetRefusesAboveThreshold(t *testing.T) {
 
 func TestBudgetStopsMidRunWithPartialResults(t *testing.T) {
 	repo := scratchRepo(t)
-	budget := &bench.Budget{Source: &fakeUsage{used: []float64{10, 90}}, MaxPct: 80}
+	budget := &bench.Budget{Source: &fakeUsage{used: []float64{10, 90}}, MaxPct: 80, MinInterval: time.Nanosecond}
 	res, err := bench.Run(context.Background(), bench.Options{
 		Provider: writerProvider(), ProviderID: "mock", Model: "claude-haiku-4-5",
 		Tasks: []bench.Task{{ID: "a", Prompt: "p", Check: "true"}, {ID: "b", Prompt: "p", Check: "true"}},
@@ -208,6 +208,26 @@ func TestBudgetEmptyReport(t *testing.T) {
 	failing := &bench.Budget{Source: &fakeUsage{used: []float64{-1}}, MaxPct: 80, RetryDelay: time.Millisecond}
 	if _, err := failing.Headroom(context.Background()); err == nil {
 		t.Fatal("repeated empty report must stop the bench")
+	}
+}
+
+func TestBudgetThrottlesAndReusesLastGoodReport(t *testing.T) {
+	source := &fakeUsage{used: []float64{20, 99}}
+	cached := &bench.Budget{Source: source, MaxPct: 80}
+	for i := 0; i < 3; i++ {
+		if used, err := cached.Headroom(context.Background()); err != nil || used != 20 {
+			t.Fatalf("check %d: %v %v", i, used, err)
+		}
+	}
+	if source.calls != 1 {
+		t.Fatalf("fetches within MinInterval: %d", source.calls)
+	}
+	// Rate-limited (empty) fetches fall back to the last good report.
+	stale := &bench.Budget{Source: &fakeUsage{used: []float64{20, -1}}, MaxPct: 80,
+		MinInterval: time.Nanosecond, RetryDelay: time.Millisecond}
+	stale.Headroom(context.Background())
+	if used, err := stale.Headroom(context.Background()); err != nil || used != 20 {
+		t.Fatalf("stale fallback: %v %v", used, err)
 	}
 }
 

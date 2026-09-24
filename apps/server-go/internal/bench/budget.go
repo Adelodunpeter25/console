@@ -32,6 +32,16 @@ type Budget struct {
 	MaxPct float64
 	// RetryDelay separates the retry after an empty report (default 3s).
 	RetryDelay time.Duration
+	// MinInterval spaces real fetches (default 3m): the usage endpoint
+	// rate-limits frequent polling, so checks in between reuse the last
+	// good report.
+	MinInterval time.Duration
+	// MaxStale is how long the last good report may stand in for a failed
+	// fetch (default 15m).
+	MaxStale time.Duration
+
+	last   *usage.Report
+	lastAt time.Time
 }
 
 func (b *Budget) retryDelay() time.Duration {
@@ -41,28 +51,29 @@ func (b *Budget) retryDelay() time.Duration {
 	return 3 * time.Second
 }
 
+func (b *Budget) minInterval() time.Duration {
+	if b.MinInterval > 0 {
+		return b.MinInterval
+	}
+	return 3 * time.Minute
+}
+
+func (b *Budget) maxStale() time.Duration {
+	if b.MaxStale > 0 {
+		return b.MaxStale
+	}
+	return 15 * time.Minute
+}
+
 // Headroom returns the highest used percent across limits and an error
 // when it is at or above MaxPct.
 func (b *Budget) Headroom(ctx context.Context) (float64, error) {
 	if b == nil || b.Source == nil {
 		return 0, nil
 	}
-	// The usage service reports fetch failures as a nil report; retry
-	// once, then stop rather than run blind.
-	report, err := b.Source.Fetch(ctx)
-	if err == nil && report == nil {
-		select {
-		case <-time.After(b.retryDelay()):
-		case <-ctx.Done():
-			return 0, ctx.Err()
-		}
-		report, err = b.Source.Fetch(ctx)
-	}
+	report, err := b.fetch(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("usage check failed: %w", err)
-	}
-	if report == nil {
-		return 0, fmt.Errorf("usage check failed: no usage report")
+		return 0, err
 	}
 	highest, label := 0.0, ""
 	for _, limit := range report.Limits {
@@ -77,4 +88,34 @@ func (b *Budget) Headroom(ctx context.Context) (float64, error) {
 		return highest, fmt.Errorf("usage limit %q at %.0f%% (max %.0f%%)", label, highest, b.MaxPct)
 	}
 	return highest, nil
+}
+
+// fetch returns a usage report, reusing the last good one within
+// MinInterval. The usage service reports failures (e.g. a 429) as a nil
+// report: retry once, then fall back to the last good report while it is
+// younger than MaxStale, else stop rather than run blind.
+func (b *Budget) fetch(ctx context.Context) (*usage.Report, error) {
+	if b.last != nil && time.Since(b.lastAt) < b.minInterval() {
+		return b.last, nil
+	}
+	report, err := b.Source.Fetch(ctx)
+	if err == nil && report == nil {
+		select {
+		case <-time.After(b.retryDelay()):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		report, err = b.Source.Fetch(ctx)
+	}
+	if err == nil && report != nil {
+		b.last, b.lastAt = report, time.Now()
+		return report, nil
+	}
+	if b.last != nil && time.Since(b.lastAt) < b.maxStale() {
+		return b.last, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("usage check failed: %w", err)
+	}
+	return nil, fmt.Errorf("usage check failed: no usage report (the usage endpoint may be rate-limiting; retry in a few minutes or pass --max-usage-pct 0)")
 }
