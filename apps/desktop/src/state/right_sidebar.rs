@@ -776,7 +776,7 @@ impl ConsoleDesktopApp {
 
         let client = self.client.clone();
         cx.spawn(
-            async move |entity, cx| match client.sessions.get_changes(&session_id).await {
+            async move |entity, cx| match client.sessions.get_changes(&session_id, None).await {
                 Ok(changes) => {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {

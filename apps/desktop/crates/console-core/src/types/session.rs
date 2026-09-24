@@ -114,5 +114,10 @@ pub struct SessionFileChange {
     pub additions: u64,
     pub deletions: u64,
     pub turn_index: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diff_text: Option<String>,
+    #[serde(default)]
+    pub reviewed: bool,
     pub updated_at: i64,
 }
+

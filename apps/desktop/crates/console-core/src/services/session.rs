@@ -101,11 +101,21 @@ impl SessionService {
         }
     }
 
-    pub async fn get_changes(&self, id: &str) -> Result<Vec<SessionFileChange>> {
-        let url = self
+    /// `GET /api/sessions/:id/changes` — session file changes. When
+    /// `turn_index` is `None`, returns all turns aggregated; otherwise
+    /// scopes to that single turn.
+    pub async fn get_changes(
+        &self,
+        id: &str,
+        turn_index: Option<u64>,
+    ) -> Result<Vec<SessionFileChange>> {
+        let mut url = self
             .transport
             .url(&format!("/api/sessions/{}/changes", id))
             .await;
+        if let Some(turn) = turn_index {
+            url.push_str(&format!("?turnIndex={}", turn));
+        }
         let resp = self
             .transport
             .client()
@@ -129,6 +139,98 @@ impl SessionService {
                     .unwrap_or_else(|| "Failed to load session changes".into())
             ))
         }
+    }
+
+    /// `GET /api/sessions/:id/changes/diff` — cached unified diff text for a
+    /// single file change, scoped to `(path, turn_index)`. Avoids any git
+    /// subprocess call; the diff is served straight from the DB.
+    pub async fn get_change_diff(
+        &self,
+        id: &str,
+        path: &str,
+        turn_index: u64,
+    ) -> Result<String> {
+        let url = self
+            .transport
+            .url(&format!(
+                "/api/sessions/{}/changes/diff?path={}&turnIndex={}",
+                id,
+                urlencoding::encode(path),
+                turn_index
+            ))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to get session change diff")?;
+
+        #[derive(serde::Deserialize)]
+        struct DiffPayload {
+            #[serde(rename = "diffText")]
+            diff_text: String,
+        }
+
+        let body: ApiResponse<DiffPayload> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse session change diff response")?;
+        if body.success {
+            body.data
+                .map(|d| d.diff_text)
+                .ok_or_else(|| anyhow!("Session change diff data is missing"))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to load session change diff".into())
+            ))
+        }
+    }
+
+    /// `POST /api/sessions/:id/changes/reviewed` — mark or unmark a single
+    /// file change as reviewed, scoped to `(path, turn_index)`.
+    pub async fn set_change_reviewed(
+        &self,
+        id: &str,
+        path: &str,
+        turn_index: u64,
+        reviewed: bool,
+    ) -> Result<()> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/changes/reviewed", id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .json(&serde_json::json!({
+                "path": path,
+                "turnIndex": turn_index,
+                "reviewed": reviewed,
+            }))
+            .send()
+            .await
+            .context("Failed to set session change reviewed state")?;
+
+        if resp.status().is_success() {
+            return Ok(());
+        }
+
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse set change reviewed response")?;
+        Err(anyhow!(
+            body.error
+                .unwrap_or_else(|| "Failed to set change reviewed state".into())
+        ))
     }
 
     /// `GET /api/sessions/:id/todos` — persisted todo checklist for a session.

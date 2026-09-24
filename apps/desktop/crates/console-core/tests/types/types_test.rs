@@ -41,6 +41,8 @@ fn test_session_file_change_deserialization() {
         "additions": 10,
         "deletions": 2,
         "turnIndex": 3,
+        "diffText": "--- a/lib.rs\n+++ b/lib.rs\n",
+        "reviewed": true,
         "updatedAt": 1700000000000
     }"#;
 
@@ -50,6 +52,26 @@ fn test_session_file_change_deserialization() {
     assert_eq!(change.additions, 10);
     assert_eq!(change.deletions, 2);
     assert_eq!(change.turn_index, 3);
+    assert_eq!(change.diff_text.as_deref(), Some("--- a/lib.rs\n+++ b/lib.rs\n"));
+    assert!(change.reviewed);
+}
+
+#[test]
+fn test_session_file_change_deserialization_defaults() {
+    // diffText and reviewed are optional/defaulted for backward compat with
+    // any cached payloads predating those fields.
+    let json_data = r#"{
+        "path": "a.rs",
+        "status": "added",
+        "additions": 1,
+        "deletions": 0,
+        "turnIndex": 0,
+        "updatedAt": 1700000000000
+    }"#;
+
+    let change: SessionFileChange = serde_json::from_str(json_data).expect("deserializes change");
+    assert_eq!(change.diff_text, None);
+    assert!(!change.reviewed);
 }
 
 #[test]
