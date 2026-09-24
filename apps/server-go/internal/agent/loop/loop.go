@@ -165,10 +165,13 @@ type Agent struct {
 	// OnRequest, when set, receives an estimated per-source breakdown of
 	// every provider request just before it is sent.
 	OnRequest func(Breakdown)
+	// ToolStats counts calls, errors (by class), and result bytes per tool
+	// (never nil after New).
+	ToolStats *ToolStats
 }
 
 func New(provider Provider, executor *Executor, sessions *services.SessionService) *Agent {
-	return &Agent{provider: provider, executor: executor, sessions: sessions, Usage: &UsageTracker{}}
+	return &Agent{provider: provider, executor: executor, sessions: sessions, Usage: &UsageTracker{}, ToolStats: &ToolStats{}}
 }
 
 // Run processes the user prompt and streams events until the final turn.
@@ -226,6 +229,9 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 					return
 				}
 				results = append(results, result)
+				if a.ToolStats != nil {
+					a.ToolStats.Record(result)
+				}
 				events.Push(Event{Kind: EventToolResult, Result: &result})
 			}
 		}
