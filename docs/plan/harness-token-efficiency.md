@@ -213,6 +213,45 @@ Everything after this depends on it.
 
 ---
 
+## Baseline (2026-09-24, Claude Haiku 4.5, commit 708a7b21)
+
+`apps/server-go/bench/results/baseline.json`: 12 tasks × 2 runs, $1.24 total.
+
+| Metric | Value |
+| --- | --- |
+| Success rate | 67% (16/24) |
+| Median turns per task | 14 |
+| Median cost per successful task | $0.045 |
+| Share of input read from cache | 94% |
+| Cold misses (later turns with no cache read) | 0% |
+| Tool error rate | 12% |
+
+Estimated input tokens by source, summed over every request:
+
+| Source | Share |
+| --- | --- |
+| Tool definitions | 32.0% |
+| `read_file` results | 26.7% |
+| `bash` results | 9.2% |
+| Tool-call arguments in history | 8.7% |
+| `grep` results | 3.9% |
+| System prompt (all sections) | 14.4% (repo-rules 3.9, workspace tree 3.7, skills 3.0, commands 1.4, other 2.4) |
+| Assistant text | 2.7% |
+
+What it tells us:
+- Tool definitions are the largest single cost, and they are sent on every
+  turn. Trimming them (Phase 3/4) is the biggest win.
+- `read_file` output is next: whole files are read and kept in history.
+  Output limits and read ranges (Phase 3) come second.
+- The cache already works well (94%, no cold misses). Phase 2 aims to cut
+  what gets written to the cache, not to fix misses.
+- The 8 failures come from the model, not the harness: Haiku answers without
+  searching (task 02), and edits the old TypeScript server `apps/server`
+  instead of `apps/server-go` (tasks 03, 09). Keep these tasks; a harness
+  change should not make them worse.
+- The same task can take 15 or 39 turns, so compare runs by median, with
+  at least 2 runs per task.
+
 ## Phase 2: Cache layout (change directly)
 
 Keep the reusable prefix byte-for-byte identical across turns, and as long
