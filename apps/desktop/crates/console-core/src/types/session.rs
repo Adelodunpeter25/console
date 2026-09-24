@@ -121,3 +121,69 @@ pub struct SessionFileChange {
     pub updated_at: i64,
 }
 
+/// Turn-scope selector for the Changes tab and review tab. Purely a
+/// client-side filter over an already-fetched (unscoped) change list —
+/// avoids a network round-trip per scope switch.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ChangesScope {
+    ThisTurn,
+    #[default]
+    AllTurns,
+    PreviousTurn,
+}
+
+impl ChangesScope {
+    pub const ALL: [Self; 3] = [Self::ThisTurn, Self::AllTurns, Self::PreviousTurn];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::ThisTurn => "This Turn",
+            Self::AllTurns => "All Turns",
+            Self::PreviousTurn => "Previous Turn",
+        }
+    }
+}
+
+/// Filter a full (all-turns) change list down to the given scope.
+///
+/// `AllTurns` also dedupes to one row per path (keeping the first —
+/// callers pass changes ordered most-recently-updated-first, matching the
+/// server's `ORDER BY updated_at DESC`), since the backend returns raw
+/// per-turn rows rather than a pre-aggregated-by-file view.
+pub fn filter_changes_for_scope(
+    changes: &[SessionFileChange],
+    scope: ChangesScope,
+) -> Vec<SessionFileChange> {
+    if changes.is_empty() {
+        return Vec::new();
+    }
+    let latest_turn = changes.iter().map(|c| c.turn_index).max().unwrap_or(0);
+    match scope {
+        ChangesScope::AllTurns => {
+            let mut seen = std::collections::HashSet::new();
+            changes
+                .iter()
+                .filter(|c| seen.insert(c.path.clone()))
+                .cloned()
+                .collect()
+        }
+        ChangesScope::ThisTurn => changes
+            .iter()
+            .filter(|c| c.turn_index == latest_turn)
+            .cloned()
+            .collect(),
+        ChangesScope::PreviousTurn => {
+            if latest_turn == 0 {
+                Vec::new()
+            } else {
+                changes
+                    .iter()
+                    .filter(|c| c.turn_index == latest_turn - 1)
+                    .cloned()
+                    .collect()
+            }
+        }
+    }
+}
+

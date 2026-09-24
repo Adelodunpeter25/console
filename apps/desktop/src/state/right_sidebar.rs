@@ -336,7 +336,8 @@ impl ConsoleDesktopApp {
             Some(console_core::WorkspaceTabConfig::File { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Diff { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Terminal { project_id, .. })
-            | Some(console_core::WorkspaceTabConfig::Browser { project_id, .. }) => {
+            | Some(console_core::WorkspaceTabConfig::Browser { project_id, .. })
+            | Some(console_core::WorkspaceTabConfig::ChangesReview { project_id, .. }) => {
                 let cwd = project_id
                     .as_ref()
                     .and_then(|pid| {
@@ -793,6 +794,15 @@ impl ConsoleDesktopApp {
             },
         )
         .detach();
+    }
+
+    pub fn set_inspector_changes_scope(
+        &mut self,
+        scope: console_core::types::ChangesScope,
+        cx: &mut Context<Self>,
+    ) {
+        self.inspector_changes_scope = scope;
+        cx.notify();
     }
 
     pub fn fetch_inspector_subagents(&mut self, cx: &mut Context<Self>) {

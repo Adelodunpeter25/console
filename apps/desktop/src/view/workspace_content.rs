@@ -432,6 +432,72 @@ impl ConsoleDesktopApp {
             return console_ui::DiffViewer::new(diff_view).into_any_element();
         }
 
+        // Changes review tab: every changed file in the tab's scope, stacked
+        // with per-file mark-as-reviewed state.
+        if let Some(console_core::WorkspaceTabConfig::ChangesReview {
+            session_id, scope, ..
+        }) = active_tab
+        {
+            let tab_id = active_tab
+                .map(|tab| tab.id())
+                .unwrap_or_default();
+            let changes = self
+                .changes_review_data
+                .get(&tab_id)
+                .cloned()
+                .unwrap_or_else(|| Rc::new(Vec::new()));
+            let collapsed = self
+                .changes_review_collapsed
+                .get(&tab_id)
+                .cloned()
+                .unwrap_or_default();
+
+            let entity = cx.entity().downgrade();
+            let tab_id_for_collapse = tab_id.clone();
+            let on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut gpui::App)> = {
+                let entity = entity.clone();
+                let tab_id = tab_id_for_collapse;
+                Rc::new(move |path: String, _window: &mut Window, cx: &mut gpui::App| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.toggle_changes_review_collapsed(&tab_id, &path, cx);
+                        });
+                    }
+                })
+            };
+            let tab_id_for_reviewed = tab_id.clone();
+            let session_id_for_reviewed = session_id.clone();
+            let on_toggle_reviewed: Rc<dyn Fn(String, u64, &mut Window, &mut gpui::App)> = {
+                let entity = entity.clone();
+                let tab_id = tab_id_for_reviewed;
+                let session_id = session_id_for_reviewed;
+                Rc::new(
+                    move |path: String, turn_index: u64, _window: &mut Window, cx: &mut gpui::App| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.toggle_change_reviewed(
+                                    &tab_id,
+                                    session_id.clone(),
+                                    path,
+                                    turn_index,
+                                    cx,
+                                );
+                            });
+                        }
+                    },
+                )
+            };
+
+            return console_ui::ReviewTab::new(
+                *scope,
+                changes,
+                collapsed,
+                on_toggle_collapsed,
+                on_toggle_reviewed,
+            )
+            .into_any_element();
+        }
+
         let pane_id = pane_id.to_owned();
         self.ensure_workspace_pane_state(&pane_id, window, cx);
         let pane_transcript = self.transcript_for_pane(&pane_id);

@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use console_core::types::{GitFileEntry, SessionFileChange, SubagentInfo};
+use console_core::types::{ChangesScope, GitFileEntry, SessionFileChange, SubagentInfo};
 use gpui::{
     AnyElement, App, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement,
     RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div,
@@ -70,6 +70,8 @@ pub struct RightSidebar {
     tree: Rc<Vec<FileTreeNode>>,
     working_changes: Rc<Vec<GitFileEntry>>,
     session_changes: Rc<Vec<SessionFileChange>>,
+    changes_scope: ChangesScope,
+    changes_scope_menu: ContextMenuHandle,
     subagents: Rc<Vec<SubagentInfo>>,
     expanded_folders: HashSet<String>,
     expanded_subagents: HashSet<String>,
@@ -85,6 +87,8 @@ pub struct RightSidebar {
     on_close_auxiliary_tab: Rc<dyn Fn(AuxiliaryTab, &mut Window, &mut App) + 'static>,
     on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_select_changes_scope: Rc<dyn Fn(ChangesScope, &mut Window, &mut App) + 'static>,
+    on_view_all_changes: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_subagent: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_copy_summary: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -100,6 +104,8 @@ impl RightSidebar {
         tree: Rc<Vec<FileTreeNode>>,
         working_changes: Rc<Vec<GitFileEntry>>,
         session_changes: Rc<Vec<SessionFileChange>>,
+        changes_scope: ChangesScope,
+        changes_scope_menu: ContextMenuHandle,
         subagents: Rc<Vec<SubagentInfo>>,
         expanded_folders: HashSet<String>,
         expanded_subagents: HashSet<String>,
@@ -111,6 +117,8 @@ impl RightSidebar {
         on_close_auxiliary_tab: Rc<dyn Fn(AuxiliaryTab, &mut Window, &mut App) + 'static>,
         on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
         on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+        on_select_changes_scope: Rc<dyn Fn(ChangesScope, &mut Window, &mut App) + 'static>,
+        on_view_all_changes: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
         on_toggle_subagent: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
         on_copy_summary: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
         on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -123,6 +131,8 @@ impl RightSidebar {
             tree,
             working_changes,
             session_changes,
+            changes_scope,
+            changes_scope_menu,
             subagents,
             expanded_folders,
             expanded_subagents,
@@ -138,6 +148,8 @@ impl RightSidebar {
             on_close_auxiliary_tab,
             on_toggle_folder,
             on_select_file,
+            on_select_changes_scope,
+            on_view_all_changes,
             on_toggle_subagent,
             on_copy_summary,
             on_refresh,
@@ -179,7 +191,9 @@ impl RenderOnce for RightSidebar {
         let open_auxiliary = self.open_auxiliary_tabs.clone();
         let on_refresh = self.on_refresh;
         let on_resize = self.on_begin_resize;
-        let changes_count = self.working_changes.len();
+        let changes_count = self.working_changes.len()
+            + console_core::types::filter_changes_for_scope(&self.session_changes, self.changes_scope)
+                .len();
 
         div()
             .id("right-sidebar-shell")
@@ -400,8 +414,12 @@ impl RenderOnce for RightSidebar {
                         InspectorTab::Primary(PrimaryTab::Changes) => ChangesListView::new(
                             self.working_changes,
                             self.session_changes,
+                            self.changes_scope,
+                            self.changes_scope_menu,
                             self.selected_path,
                             self.on_select_file,
+                            self.on_select_changes_scope,
+                            self.on_view_all_changes,
                         )
                         .into_any_element(),
                         InspectorTab::Auxiliary(AuxiliaryTab::Browser) => {

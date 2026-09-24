@@ -190,6 +190,9 @@ impl Render for ConsoleDesktopApp {
                 })
                 | Some(console_core::WorkspaceTabConfig::Browser {
                     title, project_id, ..
+                })
+                | Some(console_core::WorkspaceTabConfig::ChangesReview {
+                    title, project_id, ..
                 }) => {
                     let folder = project_id
                         .as_deref()
@@ -357,6 +360,32 @@ impl Render for ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         this.refresh_inspector(cx);
+                    });
+                }
+            })
+        };
+        let on_select_changes_scope: Rc<
+            dyn Fn(console_core::types::ChangesScope, &mut Window, &mut App) + 'static,
+        > = {
+            let entity = entity.clone();
+            Rc::new(move |scope, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.set_inspector_changes_scope(scope, cx);
+                    });
+                }
+            })
+        };
+        let on_view_all_changes: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+            let entity = entity.clone();
+            Rc::new(move |_w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        let Some(session_id) = this.active_inspector_target().0 else {
+                            return;
+                        };
+                        let scope = this.inspector_changes_scope;
+                        this.open_changes_review_tab(session_id, scope, cx);
                     });
                 }
             })
@@ -1341,6 +1370,8 @@ impl Render for ConsoleDesktopApp {
                                 self.inspector_tree.clone(),
                                 self.inspector_working_changes.clone(),
                                 self.inspector_session_changes.clone(),
+                                self.inspector_changes_scope,
+                                self.inspector_changes_scope_menu.clone(),
                                 subagents,
                                 (*self.inspector_expanded_folders).clone(),
                                 self.expanded_subagents.clone(),
@@ -1352,6 +1383,8 @@ impl Render for ConsoleDesktopApp {
                                 on_close_auxiliary_tab,
                                 on_toggle_inspector_folder,
                                 on_select_inspector_file,
+                                on_select_changes_scope,
+                                on_view_all_changes,
                                 on_toggle_subagent,
                                 on_copy_summary,
                                 on_refresh_inspector,
