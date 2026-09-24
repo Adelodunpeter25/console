@@ -24,6 +24,8 @@ type SubagentContext struct {
 	Approver     Approver
 	// OnEvent receives subagent lifecycle events (start/activity/end).
 	OnEvent func(Event)
+	// Usage, when set, receives each finished subagent run's token usage.
+	Usage *UsageTracker
 }
 
 // SubagentStartInfo opens a subagent run.
@@ -126,6 +128,9 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 	agent := New(c.Provider, NewExecutor(registry, permissions.FullAccess, c.Approver), nil)
 	agent.SystemPrompt = fmt.Sprintf("You are a specialized subagent (%s). Execute the task thoroughly and summarize your findings cleanly.\n%s", role, c.SystemPrompt)
 
+	if c.Usage != nil {
+		defer func() { c.Usage.AddSubagent(agent.Usage.Snapshot()) }()
+	}
 	events, err := agent.Run(ctx, randomSubSession(), prompt, registry.Definitions())
 	if err != nil {
 		emit(EventSubagentEnd, SubagentEndInfo{SubagentID: subagentID, Status: "error", Error: err.Error()})

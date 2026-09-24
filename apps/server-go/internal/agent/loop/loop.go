@@ -120,6 +120,9 @@ type Event struct {
 	// ThoughtSignature accompanies EventText for Gemini's reasoning-
 	// continuity token. Unused by Claude/Codex.
 	ThoughtSignature string `json:"-"`
+	// RunUsage accompanies EventTurnDone with the run's aggregated token
+	// usage (internal accounting; not part of the wire vocabulary).
+	RunUsage *RunUsage `json:"-"`
 }
 
 // streamOf is a thin alias over the generic stream for loop events.
@@ -153,10 +156,13 @@ type Agent struct {
 	ThinkingLevel  string
 	// Compaction optionally rewrites history before each turn.
 	Compaction *CompactionHooks
+	// Usage accumulates token usage across every turn of the agent's runs
+	// (never nil after New; callers may replace it to share a tracker).
+	Usage *UsageTracker
 }
 
 func New(provider Provider, executor *Executor, sessions *services.SessionService) *Agent {
-	return &Agent{provider: provider, executor: executor, sessions: sessions}
+	return &Agent{provider: provider, executor: executor, sessions: sessions, Usage: &UsageTracker{}}
 }
 
 // Run processes the user prompt and streams events until the final turn.
@@ -194,7 +200,12 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 		history = append(history, assistant)
 
 		if assistant.StopReason != StopToolUse {
-			events.Push(Event{Kind: EventTurnDone, StopReason: assistant.StopReason, Message: assistant})
+			var runUsage *RunUsage
+			if a.Usage != nil {
+				snap := a.Usage.Snapshot()
+				runUsage = &snap
+			}
+			events.Push(Event{Kind: EventTurnDone, StopReason: assistant.StopReason, Message: assistant, RunUsage: runUsage})
 			events.Complete()
 			return
 		}
@@ -334,6 +345,9 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 	}
 	if err := <-done; err != nil {
 		return assistant, err
+	}
+	if a.Usage != nil {
+		a.Usage.AddTurn(assistant.Usage)
 	}
 	if assistant.StopReason == "" {
 		assistant.StopReason = StopStop
