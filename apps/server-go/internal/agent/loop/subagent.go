@@ -21,7 +21,9 @@ type SubagentContext struct {
 	Provider     Provider
 	Tools        []tools.Tool
 	SystemPrompt string
-	Approver     Approver
+	// Setup is the parent's per-session setup, sent as a leading message.
+	Setup    string
+	Approver Approver
 	// OnEvent receives subagent lifecycle events (start/activity/end).
 	OnEvent func(Event)
 	// Usage, when set, receives each finished subagent run's token usage.
@@ -127,6 +129,7 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 	registry := tools.NewRegistry(nested...)
 	agent := New(c.Provider, NewExecutor(registry, permissions.FullAccess, c.Approver), nil)
 	agent.SystemPrompt = fmt.Sprintf("You are a specialized subagent (%s). Execute the task thoroughly and summarize your findings cleanly.\n%s", role, c.SystemPrompt)
+	agent.Setup = c.Setup
 
 	if c.Usage != nil {
 		defer func() { c.Usage.AddSubagent(agent.Usage.Snapshot()) }()

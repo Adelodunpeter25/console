@@ -84,6 +84,8 @@ func (s *Service) compactionHooks(sessionID string, model types.Model, systemPro
 			if !compaction.ShouldCompact(history, model.ContextWindow, options, systemPrompt, defs) {
 				return history
 			}
+			// Compaction rewrites the prefix anyway; rebuild setup next run.
+			s.prompts.forget(sessionID)
 			result := compaction.CompactHistory(history, options)
 			if summary, ok := s.summarizeCompaction(ctx, model, history); ok {
 				result = compaction.CompactHistoryWithSummary(history, options, summary)

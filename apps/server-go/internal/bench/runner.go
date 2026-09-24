@@ -222,14 +222,15 @@ func buildAgent(opts Options, dir string, task Task) (*loop.Agent, []tools.Defin
 	for i, t := range toolList {
 		if t.Name() == "subagent" {
 			toolList[i] = loop.NewSubagentTool(&loop.SubagentContext{
-				Provider: opts.Provider, Tools: toolList, SystemPrompt: prompt.SystemPrompt, Usage: usage,
+				Provider: opts.Provider, Tools: toolList, SystemPrompt: prompt.StableSystem, Setup: prompt.Setup, Usage: usage,
 			})
 		}
 	}
 	registry := tools.NewRegistry(toolList...)
 	agent := loop.New(opts.Provider, loop.NewExecutor(registry, permissions.FullAccess, nil), nil)
 	agent.Usage = usage
-	agent.SystemPrompt = prompt.SystemPrompt
+	agent.SystemPrompt = prompt.StableSystem
+	agent.Setup = prompt.Setup
 	for _, s := range prompt.Sections {
 		agent.SystemSections = append(agent.SystemSections, loop.NamedText{Name: s.Name, Content: s.Content})
 	}

@@ -6,6 +6,7 @@ package loop
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
@@ -28,8 +29,12 @@ type Provider interface {
 type TurnRequest struct {
 	Model        string
 	SystemPrompt string
-	Messages     []any // UserMessage | AssistantMessage | ToolResultMessage
-	Tools        []tools.Definition
+	// Setup is the per-session context (rules, tree, workstation). When set,
+	// Messages already starts with it as a <setup> user message; the field
+	// lets providers find that message (e.g. for cache breakpoints).
+	Setup    string
+	Messages []any // UserMessage | AssistantMessage | ToolResultMessage
+	Tools    []tools.Definition
 	// Phase 3 provider options (all optional, zero value = provider default).
 	// BaseURL overrides the provider's default endpoint (e.g. tests).
 	BaseURL string
@@ -149,7 +154,10 @@ type Agent struct {
 	sessions *services.SessionService
 	// Run options forwarded to the provider each turn. Zero values mean
 	// provider defaults; the run service sets them per session/model.
-	SystemPrompt   string
+	SystemPrompt string
+	// Setup, when set, is sent as a leading <setup> user message before the
+	// conversation on every turn. It is never persisted or compacted.
+	Setup          string
 	Model          string
 	CacheRetention CacheRetention
 	ConversationID string
@@ -278,6 +286,21 @@ func (a *Agent) turn(ctx context.Context, sessionID string, history []any, tools
 	}
 }
 
+// SetupMessage wraps per-session setup as the leading user message.
+func SetupMessage(setup string) UserMessage {
+	return UserMessage{Role: RoleUser, Content: "<setup>\n" + setup + "\n</setup>"}
+}
+
+// WithSetup prepends the setup message to history; empty setup is a no-op.
+func WithSetup(setup string, history []any) []any {
+	if strings.TrimSpace(setup) == "" {
+		return history
+	}
+	out := make([]any, 0, len(history)+1)
+	out = append(out, SetupMessage(setup))
+	return append(out, history...)
+}
+
 // turnOnce streams a single attempt, persisting the assistant turn only on
 // success.
 func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, toolsList []tools.Definition, events *stream.Stream[Event]) (AssistantMessage, error) {
@@ -296,7 +319,8 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 		done <- a.provider.RunTurn(ctx, TurnRequest{
 			Model:          a.Model,
 			SystemPrompt:   a.SystemPrompt,
-			Messages:       history,
+			Setup:          a.Setup,
+			Messages:       WithSetup(a.Setup, history),
 			Tools:          toolsList,
 			CacheRetention: a.CacheRetention,
 			ConversationID: a.ConversationID,

@@ -58,6 +58,7 @@ type Service struct {
 	notify    *services.NotificationService
 	memories  *memory.Registry
 	bashJobs  *services.BashJobManager
+	prompts   promptCache
 	// Lookup resolves a provider id to a backend (overridable in tests).
 	Lookup func(id string) (loop.Provider, error)
 	// WatchdogTimeout overrides defaultWatchdogTimeout. Zero uses the

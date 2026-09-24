@@ -212,7 +212,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	}
 
 	history := decodeHistory(loaded.Messages)
-	prompt := systemprompt.BuildSystemPrompt(systemprompt.BuildOptions{
+	prompt := s.prompts.get(sessionID, systemprompt.BuildOptions{
 		Cwd:          header.Cwd,
 		Model:        modelID,
 		ApprovalMode: systemprompt.ApprovalMode(mode),
@@ -248,7 +248,8 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	toolList = replaceTool(toolList, "subagent", loop.NewSubagentTool(&loop.SubagentContext{
 		Provider:     provider,
 		Tools:        toolList,
-		SystemPrompt: prompt.SystemPrompt,
+		SystemPrompt: prompt.StableSystem,
+		Setup:        prompt.Setup,
 		OnEvent:      hub.Broadcast,
 		Usage:        usage,
 	}))
@@ -256,7 +257,8 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	executor := loop.NewExecutor(registry, mode, s.decisions.ApproverFor(sessionID, hub))
 	agent := loop.New(provider, executor, s.sessions)
 	agent.Usage = usage
-	agent.SystemPrompt = prompt.SystemPrompt
+	agent.SystemPrompt = prompt.StableSystem
+	agent.Setup = prompt.Setup
 	agent.SystemSections = systemSections(prompt.Sections)
 	agent.Model = modelID
 	agent.CacheRetention = loop.CacheShort
