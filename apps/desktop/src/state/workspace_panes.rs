@@ -837,13 +837,14 @@ impl ConsoleDesktopApp {
 
         let tid = terminal_id.to_string();
         let sub = cx.observe(&view, move |this, view, cx| {
-            let dynamic_title = view
-                .read(cx)
-                .title()
-                .filter(|t| !t.is_empty())
-                .map(|t| t.to_string());
-            let Some(new_title) = dynamic_title else {
-                return;
+            let tv = view.read(cx);
+            let new_title = if tv.status() == console_core::types::terminal::TerminalStatus::Exited {
+                "Terminal".to_string()
+            } else {
+                tv.title()
+                    .filter(|t| !t.trim().is_empty())
+                    .unwrap_or("Terminal")
+                    .to_string()
             };
             let mut changed = false;
             for leaf in this.workspace_root.leaves_mut() {
