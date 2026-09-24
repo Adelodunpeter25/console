@@ -1,0 +1,4 @@
+kind = "bugfix"
+setup = '''perl -0pi -e "s/return '_'/return '-'/" apps/server-go/internal/providers/shared/dump.go'''
+prompt = "the request dump test started failing, fix it"
+check = 'cd apps/server-go && go test ./tests/providers/ -run DumpRequest -count=1'

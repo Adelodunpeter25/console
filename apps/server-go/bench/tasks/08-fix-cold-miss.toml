@@ -1,0 +1,4 @@
+kind = "bugfix"
+setup = '''perl -0pi -e 's/u\.Turns > 1 && turn\.CacheRead == 0/u.Turns > 0 \&\& turn.CacheRead == 0/' apps/server-go/internal/agent/loop/usage.go'''
+prompt = "run usage tests are red, can you fix"
+check = 'cd apps/server-go && go test ./tests/agent/ -run RunUsage -count=1'

@@ -1,0 +1,6 @@
+kind = "edit"
+prompt = "bench tasks should support an optional label from the toml file"
+check = '''
+grep -qE 'Label +string +`toml:"label"`' apps/server-go/internal/bench/task.go &&
+cd apps/server-go && go build ./...
+'''

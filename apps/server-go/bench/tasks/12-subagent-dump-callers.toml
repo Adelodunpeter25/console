@@ -1,0 +1,5 @@
+kind = "subagent"
+prompt = "use a subagent to find which providers call shared.DumpRequest and give me the list"
+check = '''
+for p in claude codex antigravity opencode; do grep -qi "$p" "$BENCH_ANSWER" || exit 1; done
+'''

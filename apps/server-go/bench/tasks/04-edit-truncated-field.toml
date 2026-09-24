@@ -1,0 +1,6 @@
+kind = "edit"
+prompt = "add a Truncated bool to the subagent end info (json truncated, omitempty)"
+check = '''
+grep -qE 'Truncated +bool +`json:"truncated,omitempty"`' apps/server-go/internal/agent/loop/subagent.go &&
+cd apps/server-go && go build ./...
+'''

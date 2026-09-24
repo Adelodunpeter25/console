@@ -1,0 +1,12 @@
+kind = "edit"
+prompt = "tool errors with 'connection refused' should get their own network error class"
+check = '''
+cd apps/server-go && cat > /tmp/bench_net_test.go <<'GO'
+package tests
+import ("testing"; "github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop")
+func TestBenchNetworkClass(t *testing.T) {
+	if got := loop.ClassifyToolError("dial tcp: connection refused"); got != "network" { t.Fatalf("got %s", got) }
+}
+GO
+cp /tmp/bench_net_test.go tests/agent/bench_net_test.go && go test ./tests/agent/ -run BenchNetworkClass -count=1
+'''

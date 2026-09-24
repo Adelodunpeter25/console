@@ -1,0 +1,3 @@
+kind = "question"
+prompt = "is there a way to see the raw request bodies we send to providers? what do i set"
+check = 'grep -q CONSOLE_DUMP_REQUESTS "$BENCH_ANSWER"'

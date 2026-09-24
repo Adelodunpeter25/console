@@ -1,0 +1,3 @@
+kind = "question"
+prompt = "how many max turns does a subagent report by default?"
+check = 'grep -qw 10 "$BENCH_ANSWER"'

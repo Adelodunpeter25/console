@@ -1,0 +1,6 @@
+kind = "multi"
+prompt = "add a quota error class for 'quota exceeded' messages, cover it in the classify test and run it"
+check = '''
+grep -q "quota exceeded" apps/server-go/tests/agent/toolstats_test.go &&
+cd apps/server-go && go test ./tests/agent/ -run ClassifyToolError -count=1
+'''

@@ -1,0 +1,3 @@
+kind = "question"
+prompt = "where do we put the prompt cache breakpoint for claude requests?"
+check = 'grep -qiE "claude/(convert|stream)\.go" "$BENCH_ANSWER"'

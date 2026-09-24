@@ -1,0 +1,7 @@
+kind = "multi"
+prompt = "rename UnreportedTurns to MissingUsageTurns everywhere, keep tests passing"
+check = '''
+! grep -rq UnreportedTurns apps/server-go --include=*.go &&
+grep -rq MissingUsageTurns apps/server-go/internal/agent/loop/usage.go &&
+cd apps/server-go && go build ./... && go test ./tests/agent/ -run RunUsage -count=1
+'''

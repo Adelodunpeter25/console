@@ -1,0 +1,4 @@
+kind = "long-output"
+setup = '''printf '\nfunc benchBroken() int { return "x" }\n' >> apps/server-go/internal/bench/pricing.go'''
+prompt = "go build is broken in apps/server-go, find it and fix it"
+check = 'cd apps/server-go && go build ./... && go vet ./internal/bench'
