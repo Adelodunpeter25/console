@@ -4,6 +4,7 @@ use std::rc::Rc;
 use console_ui::{AuxiliaryTab, InspectorTab, PrimaryTab};
 use gpui::{AppContext, Context};
 
+use super::types::WorkspaceTerminalState;
 use super::{
     ConsoleDesktopApp, RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT, RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT,
     RIGHT_SIDEBAR_MAX_WIDTH, RIGHT_SIDEBAR_MIN_WIDTH,
@@ -127,7 +128,7 @@ impl ConsoleDesktopApp {
                 let active_script = persisted_script_tabs
                     .as_ref()
                     .and_then(|st| st.active_script_id.clone());
-                super::app::WorkspaceTerminalState {
+                WorkspaceTerminalState {
                     terminals: Vec::new(),
                     active_idx: 0,
                     next_id: 1,
@@ -222,7 +223,7 @@ impl ConsoleDesktopApp {
         let state = self
             .right_sidebar_terminals_by_cwd
             .entry(cwd.clone())
-            .or_insert_with(|| super::app::WorkspaceTerminalState {
+            .or_insert_with(|| WorkspaceTerminalState {
                 terminals: Vec::new(),
                 active_idx: 0,
                 next_id: 1,
@@ -474,7 +475,7 @@ impl ConsoleDesktopApp {
                 let active_script = persisted_script_tabs
                     .as_ref()
                     .and_then(|st| st.active_script_id.clone());
-                super::app::WorkspaceTerminalState {
+                WorkspaceTerminalState {
                     terminals: Vec::new(),
                     active_idx: 0,
                     next_id: 1,
