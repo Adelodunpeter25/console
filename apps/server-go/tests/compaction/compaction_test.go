@@ -170,15 +170,14 @@ func TestCompactHistoryThreshold(t *testing.T) {
 		t.Fatal("zero window must not trigger")
 	}
 	result := compaction.CompactHistory(history, opts)
-	if len(result.CompactedMessages) != 4 {
-		t.Fatalf("compacted count: %d", len(result.CompactedMessages))
+	if result.TokensAfter > result.TokensBefore {
+		t.Fatalf("compaction must not grow tokens: %+v", result)
 	}
-	if user, ok := result.CompactedMessages[0].(loop.UserMessage); !ok ||
-		!strings.Contains(user.Content, "Conversation Checkpoint") {
-		t.Fatalf("summary first: %+v", result.CompactedMessages[0])
+	if len(result.CompactedMessages) != len(history) {
+		t.Fatalf("small history should remain intact: %d -> %d", len(history), len(result.CompactedMessages))
 	}
-	if _, ok := result.CompactedMessages[1].(loop.AssistantMessage); !ok {
-		t.Fatalf("ack second: %+v", result.CompactedMessages[1])
+	if !strings.Contains(result.Summary, "skipped") {
+		t.Fatalf("expected compaction skip reason: %q", result.Summary)
 	}
 	// Token drop on a history dominated by one huge tool result.
 	big := []any{
@@ -198,7 +197,7 @@ func TestCompactHistoryThreshold(t *testing.T) {
 	if bigResult.TokensAfter >= bigResult.TokensBefore {
 		t.Fatalf("tokens must drop: %+v", bigResult)
 	}
-	withSummary := compaction.CompactHistoryWithSummary(history, opts, "custom summary")
+	withSummary := compaction.CompactHistoryWithSummary(big, opts, "custom summary")
 	if withSummary.Summary != "custom summary" {
 		t.Fatalf("summary: %+v", withSummary)
 	}

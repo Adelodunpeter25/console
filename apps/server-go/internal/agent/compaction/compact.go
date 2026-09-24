@@ -99,12 +99,22 @@ func CompactHistory(history []any, options Options) Result {
 	}
 	cut := FindCutPoint(shaken, keepRecent, minRecent)
 	if cut.FirstKeptIndex == 0 || len(history) <= 4 {
+		tokensAfter := EstimateMessageTokens(shaken)
+		if tokensAfter >= tokensBefore {
+			return Result{
+				CompactedMessages: append([]any{}, history...),
+				Summary:           "History too short or cannot be safely partitioned.",
+				OriginalCount:     len(history),
+				TokensBefore:      tokensBefore,
+				TokensAfter:       tokensBefore,
+			}
+		}
 		return Result{
 			CompactedMessages: append([]any{}, shaken...),
 			Summary:           "History too short or cannot be safely partitioned.",
 			OriginalCount:     len(history),
 			TokensBefore:      tokensBefore,
-			TokensAfter:       EstimateMessageTokens(shaken),
+			TokensAfter:       tokensAfter,
 		}
 	}
 	older := shaken[:cut.FirstKeptIndex]
@@ -117,12 +127,32 @@ func CompactHistory(history []any, options Options) Result {
 	} else {
 		compacted = append([]any{summaryUser}, recent...)
 	}
+	tokensAfter := EstimateMessageTokens(compacted)
+	if tokensAfter >= tokensBefore {
+		shakenTokens := EstimateMessageTokens(shaken)
+		if shakenTokens >= tokensBefore {
+			return Result{
+				CompactedMessages: append([]any{}, history...),
+				Summary:           "Compaction skipped: no safe token reduction.",
+				OriginalCount:     len(history),
+				TokensBefore:      tokensBefore,
+				TokensAfter:       tokensBefore,
+			}
+		}
+		return Result{
+			CompactedMessages: append([]any{}, shaken...),
+			Summary:           "Compaction summary skipped: structural summary would not reduce context.",
+			OriginalCount:     len(history),
+			TokensBefore:      tokensBefore,
+			TokensAfter:       shakenTokens,
+		}
+	}
 	return Result{
 		CompactedMessages: compacted,
 		Summary:           summary,
 		OriginalCount:     len(history),
 		TokensBefore:      tokensBefore,
-		TokensAfter:       EstimateMessageTokens(compacted),
+		TokensAfter:       tokensAfter,
 	}
 }
 
