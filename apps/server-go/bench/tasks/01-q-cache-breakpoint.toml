@@ -1,3 +1,4 @@
 kind = "question"
 prompt = "where do we put the prompt cache breakpoint for claude requests?"
-check = 'grep -qiE "claude/(convert|stream)\.go" "$BENCH_ANSWER"'
+# Either server is a correct answer (apps/server-go or the older TS apps/server).
+check = 'grep -qiE "(convert|stream(-fn)?)\.(go|ts)" "$BENCH_ANSWER" && grep -qi cache_control "$BENCH_ANSWER"'
