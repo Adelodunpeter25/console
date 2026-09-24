@@ -36,3 +36,36 @@ type FilePreviewBlock struct {
 	Title   string `json:"title"`
 	Message string `json:"message"`
 }
+
+// GrepMatchRange is a half-open byte range within GrepMatch.LineContent,
+// used by the UI to bold the matched substring in place.
+type GrepMatchRange struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
+}
+
+// GrepMatch is one content-search hit, shaped for the global search panel
+// (grouping by RelPath/FileName, highlighting via MatchRanges).
+type GrepMatch struct {
+	RelPath      string           `json:"relPath"`
+	FileName     string           `json:"fileName"`
+	LineNumber   uint64           `json:"lineNumber"`
+	Column       int              `json:"column"`
+	EndColumn    int              `json:"endColumn"`
+	LineContent  string           `json:"lineContent"`
+	MatchRanges  []GrepMatchRange `json:"matchRanges"`
+	IsBinary     bool             `json:"isBinary,omitempty"`
+	IsDefinition bool             `json:"isDefinition,omitempty"`
+}
+
+// GrepResult is the /api/fs/grep response payload.
+type GrepResult struct {
+	Matches       []GrepMatch `json:"matches"`
+	TotalMatched  int         `json:"totalMatched"`
+	FilesSearched int         `json:"filesSearched"`
+	TotalFiles    int         `json:"totalFiles"`
+	FilteredFiles int         `json:"filteredFiles"`
+	NextCursor    uint32      `json:"nextCursor"`
+	HasMore       bool        `json:"hasMore"`
+	RegexError    string      `json:"regexError,omitempty"`
+}

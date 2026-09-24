@@ -184,3 +184,20 @@ func TestGitCheckout(t *testing.T) {
 		t.Fatalf("current branch = %s, want feature", current)
 	}
 }
+
+// TestFsGrepUnavailableWithoutManager confirms the /api/fs/grep-backing
+// service method fails clearly (rather than panicking or silently returning
+// empty results) when the fff index manager hasn't been wired in, e.g. no
+// native library on this platform.
+func TestFsGrepUnavailableWithoutManager(t *testing.T) {
+	root := t.TempDir()
+	fs := services.NewFsService()
+
+	_, err := fs.Grep(root, "needle", services.GrepOptions{})
+	if err == nil {
+		t.Fatal("expected error when fff manager is not wired")
+	}
+	if err != services.ErrFffUnavailable {
+		t.Fatalf("expected ErrFffUnavailable, got: %v", err)
+	}
+}

@@ -110,26 +110,39 @@ FFF_LIB_PATH="$(pwd)/third_party/fff/libfff_c.dylib" \
 
 ## Remaining work to ship ⌘⇧F in the product
 
-The adapter and tool bridge are done; a user-facing panel is not. To land
-the feature as described ("search across files ... local or cloud
-workspace ... case, whole-word, regex toggles"):
+The adapter and tool bridge are done. Step 1 below has now landed.
 
-1. **HTTP route**: add `GET /api/fs/grep` (or similar) in
-   `internal/routes/fs.go` that calls `fffManager.GetOrCreate` +
-   `Lease.GrepWithOptions` directly (bypassing the agent-tool text
-   formatting), returning structured JSON (`GrepResult` shape) for a UI to
-   render with real match-range highlighting.
+1. **HTTP route** — done. `GET /api/fs/grep` in `internal/routes/fs.go`
+   calls `FsService.Grep` (`internal/services/fs_service.go`), which does
+   `manager.GetOrCreate` + `Lease.GrepWithOptions` directly (bypassing the
+   agent-tool text formatting) and returns a structured `types.GrepResult`
+   JSON payload with per-match `matchRanges` for highlighting, grouped
+   naturally by `relPath`/`fileName` for the UI to bucket into per-file
+   sections. Query params: `root` (required), `q` (required), `mode`
+   (`regex`|`plain`|`fuzzy`, default `regex`), `caseMode`
+   (`smart`|`sensitive`|`insensitive`, default `smart`), `wholeWord`
+   (`true`/`false`), `contextLines`, `limit` (max matches, default 200,
+   capped at 2000), `cursor` (pagination). Returns `503` with
+   `services.ErrFffUnavailable` when the fff index manager isn't wired in
+   for this platform/build, so the UI can render an empty/unavailable state
+   rather than treating it as a query error.
 2. **Desktop UI**: a results panel/dialog in `apps/desktop`, wired to
    ⌘⇧F, with case/whole-word/regex toggles bound to `caseMode`/`wholeWord`/
-   `mode` query params, similar in spirit to `quick_open_palette.rs`.
+   `mode` query params, similar in spirit to `quick_open_palette.rs`. See
+   the mockup notes stored in project memory (tags: `search-ui`,
+   `global-search`) for the target layout — single search box, three
+   inline toggle icons (Aa / ab / .*), "N matches in M files" header,
+   results grouped by file with bold match highlighting from
+   `matchRanges`.
 3. **Cloud workspaces**: confirm the same route works for cloud-backed
    workspaces — likely already true since `fffManager` operates on
    `root` paths and the server owns the filesystem in both local and cloud
    deployments, but worth a smoke test against a cloud session root.
 4. **Debounce/cancel-in-flight**: the UI should cancel a stale in-flight
-   search when the user keeps typing; the HTTP handler should support
-   request cancellation via context so an abandoned query doesn't hold a
-   lease longer than necessary.
+   search when the user keeps typing; the HTTP handler does not yet thread
+   Fiber's request context into the fff call, so a follow-up should confirm
+   an abandoned query doesn't hold a lease longer than necessary.
 
-None of (1)–(4) block on more adapter work — the adapter already returns
-everything needed for a rich search-results UI.
+(2)–(4) don't block on more adapter or route work — the route already
+returns everything needed for a rich search-results UI.
+

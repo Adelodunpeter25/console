@@ -483,3 +483,83 @@ func (s *FsService) SearchFiles(root, query string, limit int, includeDirs bool)
 	})
 	return out, nil
 }
+
+// GrepOptions carries the /api/fs/grep query params, mirroring the global
+// search panel's Aa/ab/.* toggles.
+type GrepOptions struct {
+	Mode         fff.GrepMode
+	Case         fff.CaseMode
+	WholeWord    bool
+	ContextLines int
+	MaxMatches   int
+	Cursor       uint32
+}
+
+// ErrFffUnavailable is returned when the fff index isn't wired in for this
+// server (e.g. missing native library), so the caller can render an empty
+// state instead of a hard error.
+var ErrFffUnavailable = fmt.Errorf("content search index is unavailable")
+
+// Grep serves /api/fs/grep — content search across a workspace root for the
+// global search panel (⌘⇧F). Requires the fff index; there is no filesystem
+// walk fallback here since the panel is a fast/interactive UI, not the
+// agent's best-effort tool.
+func (s *FsService) Grep(root, query string, opts GrepOptions) (types.GrepResult, error) {
+	if manager == nil || !manager.Enabled() {
+		return types.GrepResult{}, ErrFffUnavailable
+	}
+	resolvedRoot, err := filepath.Abs(root)
+	if err != nil {
+		return types.GrepResult{}, err
+	}
+	lease, err := manager.GetOrCreate(resolvedRoot)
+	if err != nil {
+		return types.GrepResult{}, err
+	}
+	defer lease.Release()
+
+	result, err := lease.GrepWithOptions(query, fff.GrepOptions{
+		Mode:         opts.Mode,
+		Case:         opts.Case,
+		WholeWord:    opts.WholeWord,
+		ContextLines: opts.ContextLines,
+		MaxMatches:   opts.MaxMatches,
+		Cursor:       opts.Cursor,
+	})
+	if err != nil {
+		return types.GrepResult{}, err
+	}
+
+	matches := make([]types.GrepMatch, 0, len(result.Matches))
+	for _, m := range result.Matches {
+		ranges := make([]types.GrepMatchRange, 0, len(m.MatchRanges))
+		for _, r := range m.MatchRanges {
+			ranges = append(ranges, types.GrepMatchRange{Start: r.Start, End: r.End})
+		}
+		matches = append(matches, types.GrepMatch{
+			RelPath:      m.RelPath,
+			FileName:     m.FileName,
+			LineNumber:   m.LineNumber,
+			Column:       m.Column,
+			EndColumn:    m.EndColumn,
+			LineContent:  m.LineContent,
+			MatchRanges:  ranges,
+			IsBinary:     m.IsBinary,
+			IsDefinition: m.IsDefinition,
+		})
+	}
+
+	out := types.GrepResult{
+		Matches:       matches,
+		TotalMatched:  result.TotalMatched,
+		FilesSearched: result.FilesSearched,
+		TotalFiles:    result.TotalFiles,
+		FilteredFiles: result.FilteredFiles,
+		NextCursor:    result.NextCursor,
+		HasMore:       result.HasMore,
+	}
+	if result.RegexError != nil {
+		out.RegexError = result.RegexError.Message
+	}
+	return out, nil
+}

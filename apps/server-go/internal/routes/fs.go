@@ -3,6 +3,7 @@
 package routes
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/fff"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
@@ -53,6 +55,46 @@ func registerFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 			return fail(c, fiber.StatusBadRequest, err)
 		}
 		return ok(c, items)
+	})
+
+	// GET /api/fs/grep — content search for the global search panel
+	// (⌘⇧F): Aa case, ab whole-word, .* regex toggles.
+	h.Get("/grep", func(c *fiber.Ctx) error {
+		root := c.Query("root")
+		if root == "" {
+			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Missing required query param: root"))
+		}
+		query := c.Query("q")
+		if query == "" {
+			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Missing required query param: q"))
+		}
+		mode := fff.GrepModeRegex
+		switch c.Query("mode") {
+		case "plain":
+			mode = fff.GrepModePlain
+		case "fuzzy":
+			mode = fff.GrepModeFuzzy
+		}
+		caseMode, err := fff.ParseCaseMode(c.Query("caseMode"))
+		if err != nil {
+			return fail(c, fiber.StatusBadRequest, err)
+		}
+		maxMatches := clampInt(c.QueryInt("limit", 200), 1, 2000)
+		result, err := fs.Grep(root, query, services.GrepOptions{
+			Mode:         mode,
+			Case:         caseMode,
+			WholeWord:    c.Query("wholeWord") == "true",
+			ContextLines: clampInt(c.QueryInt("contextLines", 0), 0, 20),
+			MaxMatches:   maxMatches,
+			Cursor:       uint32(c.QueryInt("cursor", 0)),
+		})
+		if err != nil {
+			if errors.Is(err, services.ErrFffUnavailable) {
+				return fail(c, fiber.StatusServiceUnavailable, err)
+			}
+			return fail(c, fiber.StatusBadRequest, err)
+		}
+		return ok(c, result)
 	})
 
 	// GET /api/fs/entries
