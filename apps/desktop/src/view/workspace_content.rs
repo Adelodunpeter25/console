@@ -1,7 +1,6 @@
 use console_core::{
     ApprovalMode, ApproveToolPermissionDto, SelectedModel, UpdateSessionDto,
 };
-use console_ui::terminal::TerminalView;
 use console_ui::workspace::EmptyChatState;
 use console_ui::{
     ApprovalModeDropdown, ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
@@ -9,7 +8,7 @@ use console_ui::{
     queued_prompts_stack, todo_card,
 };
 use gpui::{
-    App, AppContext, Context, IntoElement, ParentElement, Styled, Window, div,
+    App, Context, IntoElement, ParentElement, Styled, Window, div,
     prelude::FluentBuilder, px,
 };
 use std::rc::Rc;
@@ -52,9 +51,7 @@ impl ConsoleDesktopApp {
                         .child("Select a project to open a terminal")
                         .into_any_element();
                 };
-                let view =
-                    cx.new(|cx| TerminalView::with_cwd(cwd, self.client.clone(), window, cx));
-                self.terminals.insert(terminal_id.clone(), view);
+                self.get_or_create_terminal_view(terminal_id, cwd, window, cx);
             }
             let theme = Theme::current(cx);
             return match self.terminals.get(terminal_id) {

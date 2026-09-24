@@ -803,8 +803,7 @@ impl ConsoleDesktopApp {
             chrono::Utc::now().timestamp_millis(),
             self.terminals.len(),
         );
-        let view = cx.new(|cx| TerminalView::with_cwd(cwd, self.client.clone(), window, cx));
-        self.terminals.insert(terminal_id.clone(), view.clone());
+        let view = self.get_or_create_terminal_view(&terminal_id, cwd, window, cx);
         let tab = WorkspaceTabConfig::Terminal {
             terminal_id: terminal_id.clone(),
             title: "Terminal".into(),
@@ -818,6 +817,81 @@ impl ConsoleDesktopApp {
         // Focus the terminal so keyboard input works immediately
         window.focus(&view.read(cx).focus_handle(cx), cx);
         cx.notify();
+    }
+
+    /// Retrieve an existing `TerminalView` entity for `terminal_id` or instantiate a
+    /// new one, observing its dynamic title updates to synchronize back to the
+    /// workspace tab strip.
+    pub fn get_or_create_terminal_view(
+        &mut self,
+        terminal_id: &str,
+        cwd: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<TerminalView> {
+        if let Some(view) = self.terminals.get(terminal_id) {
+            return view.clone();
+        }
+
+        let view = cx.new(|cx| TerminalView::with_cwd(cwd, self.client.clone(), window, cx));
+
+        let tid = terminal_id.to_string();
+        let sub = cx.observe(&view, move |this, view, cx| {
+            let dynamic_title = view
+                .read(cx)
+                .title()
+                .filter(|t| !t.is_empty())
+                .map(|t| t.to_string());
+            let Some(new_title) = dynamic_title else {
+                return;
+            };
+            let mut changed = false;
+            for leaf in this.workspace_root.leaves_mut() {
+                for tab in &mut leaf.tabs {
+                    if let WorkspaceTabConfig::Terminal {
+                        terminal_id: id,
+                        title,
+                        ..
+                    } = tab
+                    {
+                        if id == &tid {
+                            if *title != new_title {
+                                *title = new_title.clone();
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+            for root in this.project_workspace_roots.values_mut() {
+                for leaf in root.leaves_mut() {
+                    for tab in &mut leaf.tabs {
+                        if let WorkspaceTabConfig::Terminal {
+                            terminal_id: id,
+                            title,
+                            ..
+                        } = tab
+                        {
+                            if id == &tid {
+                                if *title != new_title {
+                                    *title = new_title.clone();
+                                    changed = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if changed {
+                this.persist_workspaces();
+                cx.notify();
+            }
+        });
+        self._subscriptions.push(sub);
+
+        self.terminals
+            .insert(terminal_id.to_string(), view.clone());
+        view
     }
 
     /// Open a new Browser tab in the active pane. No URL yet: the view shows
