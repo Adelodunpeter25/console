@@ -705,16 +705,18 @@ impl ConsoleDesktopApp {
 
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
-            let result = cx
-                .background_executor()
-                .spawn(async move {
-                    client
-                        .fs
-                        .get_entries(&cwd, Some(25), Some(false))
-                        .await
-                        .map(|entries| console_ui::build_tree_from_entries(&entries))
+            // Keep the reqwest future on GPUI's context so it can use the
+            // Tokio runtime entered by `main`. GPUI's background executor is
+            // not a Tokio runtime, and polling reqwest there makes its
+            // connector call `tokio::spawn` without a runtime handle.
+            let result = match client.fs.get_entries(&cwd, Some(25), Some(false)).await {
+                Ok(entries) => tokio::task::spawn_blocking(move || {
+                    console_ui::build_tree_from_entries(&entries)
                 })
-                .await;
+                .await
+                .map_err(anyhow::Error::from),
+                Err(error) => Err(error),
+            };
             match result {
                 Ok(tree) => {
                     cx.update(|cx| {
