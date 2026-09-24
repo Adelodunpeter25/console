@@ -69,3 +69,42 @@ func TestSystemPromptApprovalModeInstructions(t *testing.T) {
 		t.Fatalf("expected plan-mode instructions:\n%s", result.SystemPrompt)
 	}
 }
+
+func TestSystemPromptStableSplitsFromSetup(t *testing.T) {
+	build := func(dir string) systemprompt.Result {
+		if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("Follow the style guide."), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return systemprompt.BuildSystemPrompt(systemprompt.BuildOptions{
+			Cwd: dir, Home: t.TempDir(), SkipWorkspaceTree: true,
+			Model: "m", ApprovalMode: systemprompt.FullAccess,
+		})
+	}
+	dirA, dirB := t.TempDir(), t.TempDir()
+	a, b := build(dirA), build(dirB)
+
+	// Stable part: no per-session values, identical across cwds.
+	for _, volatile := range []string{dirA, "Today is", "Git branch:", "Follow the style guide."} {
+		if strings.Contains(a.StableSystem, volatile) {
+			t.Fatalf("stable system contains %q:\n%s", volatile, a.StableSystem)
+		}
+	}
+	if a.StableSystem != b.StableSystem {
+		t.Fatalf("stable system differs across sessions:\n%s\n---\n%s", a.StableSystem, b.StableSystem)
+	}
+	for _, want := range []string{"You are a coding agent.", "Bypass Permissions", "# Tool inventory", "<critical>"} {
+		if !strings.Contains(a.StableSystem, want) {
+			t.Fatalf("stable system missing %q", want)
+		}
+	}
+	// Setup: per-session context.
+	for _, want := range []string{dirA, "Today is", "Follow the style guide.", "/init:"} {
+		if !strings.Contains(a.Setup, want) {
+			t.Fatalf("setup missing %q:\n%s", want, a.Setup)
+		}
+	}
+	// The joined prompt keeps everything for callers that don't split.
+	if !strings.Contains(a.SystemPrompt, a.StableSystem) || !strings.Contains(a.SystemPrompt, a.Setup) {
+		t.Fatal("SystemPrompt must join stable and setup")
+	}
+}

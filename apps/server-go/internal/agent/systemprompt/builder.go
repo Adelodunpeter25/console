@@ -1,9 +1,13 @@
 // SystemPromptBuilder — assemble the final system prompt from layered
 // sources. Port of apps/server/agent/src/systemprompt/builder.ts.
 //
-// Order: identity/SYSTEM.md, approval-mode instructions, skills inventory +
-// always-apply rules, tool inventory, slash commands, repo context files
-// (AGENTS.md, …), workspace tree, workstation (date/cwd/OS/git/model).
+// The prompt has two parts. StableSystem holds what never changes within a
+// session and is sent as the system prompt: identity/SYSTEM.md,
+// approval-mode instructions, what skills are for, tool inventory, the
+// <critical> block, and any appended prompt. Setup holds the per-session
+// context sent as a leading user message: skills list, rules, slash
+// commands, repo context files (AGENTS.md, …), workspace tree, and
+// workstation info (date/cwd/OS/git/model).
 package systemprompt
 
 import (
@@ -63,15 +67,24 @@ type BuildOptions struct {
 
 // Result is the outcome of BuildSystemPrompt.
 type Result struct {
+	// SystemPrompt is StableSystem and Setup joined, for callers that send
+	// everything as one system prompt.
 	SystemPrompt string
-	Sections     []Section
-	Context      DiscoveredContext
+	// StableSystem has no per-session values (date, cwd, branch, …), so it
+	// is byte-identical across sessions with the same mode and tools.
+	StableSystem string
+	// Setup is the per-session context, sent as a leading user message.
+	Setup    string
+	Sections []Section
+	Context  DiscoveredContext
 }
 
-// Section is one named, non-empty block of the assembled prompt.
+// Section is one named, non-empty block of the assembled prompt. Setup
+// marks blocks that belong to Result.Setup rather than StableSystem.
 type Section struct {
 	Name    string
 	Content string
+	Setup   bool
 }
 
 func section(name, content string) *Section {
@@ -131,14 +144,20 @@ func renderSkills(skills []Skill) string {
 	if len(lines) == 0 {
 		return ""
 	}
-	out := []string{
-		"# Skills",
-		"Skills are specialized knowledge. When one matches the current task, call the `readSkill` tool with the skill name to load its full instructions before proceeding.",
-		"<skills>",
-	}
+	out := []string{"# Skills", "<skills>"}
 	out = append(out, lines...)
 	out = append(out, "</skills>")
 	return strings.Join(out, "\n")
+}
+
+// renderSkillsGuide explains what skills are; the list itself is in setup.
+func renderSkillsGuide(skills []Skill) string {
+	for _, s := range skills {
+		if !s.Hide {
+			return "# Skills\nSkills are specialized knowledge. The available skills are listed in the setup message. When one matches the current task, call the `readSkill` tool with the skill name to load its full instructions before proceeding."
+		}
+	}
+	return ""
 }
 
 func renderAlwaysApplyRules(rules []Rule) string {
@@ -220,7 +239,7 @@ func renderWorkspaceTree(tree WorkspaceTree, skip bool) string {
 	}, "\n")
 }
 
-func renderWorkstation(env EnvironmentInfo, mode ApprovalMode) string {
+func renderWorkstation(env EnvironmentInfo) string {
 	lines := []string{
 		fmt.Sprintf("Date: %s", env.Date),
 		fmt.Sprintf("CWD: %s", env.Cwd),
@@ -234,30 +253,29 @@ func renderWorkstation(env EnvironmentInfo, mode ApprovalMode) string {
 		lines = append(lines, fmt.Sprintf("Model: %s", env.Model))
 	}
 
-	var critical []string
-	if mode == PlanMode {
-		critical = []string{
-			"<critical>",
-			"- Each response MUST advance the task.",
-			"- Default to discussion and questions; do not write files or implement features.",
-			"</critical>",
-		}
-	} else {
-		critical = []string{
-			"<critical>",
-			"- Each response MUST advance the task.",
-			"- Default to informed action; do not ask for confirmation when tools or repo context can answer.",
-			"</critical>",
-		}
-	}
-
 	out := []string{"# Workstation", "<workstation>"}
 	for _, l := range lines {
 		out = append(out, "- "+l)
 	}
-	out = append(out, "</workstation>", fmt.Sprintf("Today is %s. Working directory is '%s'.", env.Date, env.Cwd), "")
-	out = append(out, critical...)
+	out = append(out, "</workstation>", fmt.Sprintf("Today is %s. Working directory is '%s'.", env.Date, env.Cwd))
 	return strings.Join(out, "\n")
+}
+
+func renderCritical(mode ApprovalMode) string {
+	if mode == PlanMode {
+		return strings.Join([]string{
+			"<critical>",
+			"- Each response MUST advance the task.",
+			"- Default to discussion and questions; do not write files or implement features.",
+			"</critical>",
+		}, "\n")
+	}
+	return strings.Join([]string{
+		"<critical>",
+		"- Each response MUST advance the task.",
+		"- Default to informed action; do not ask for confirmation when tools or repo context can answer.",
+		"</critical>",
+	}, "\n")
 }
 
 func renderCommands(commands []SlashCommand) string {
@@ -330,30 +348,50 @@ func BuildSystemPrompt(opts BuildOptions) Result {
 	context := DiscoverContext(opts)
 	identity := renderIdentity(opts, systemMdContent(context.SystemPromptFile))
 
-	var parts []Section
-	add := func(s *Section) {
+	var stable, setup []Section
+	add := func(dst *[]Section, s *Section) {
 		if s != nil {
-			parts = append(parts, *s)
+			*dst = append(*dst, *s)
 		}
 	}
-	add(section("identity", identity))
-	add(section("approval-mode", renderApprovalModeInstruction(opts.ApprovalMode)))
-	add(section("skills", renderSkills(context.Skills)))
-	add(section("always-apply-rules", renderAlwaysApplyRules(context.Rules)))
-	add(section("domain-rules", renderDomainRules(context.Rules)))
-	add(section("tools", renderTools(opts.ToolNames)))
-	add(section("commands", renderCommands(context.Commands)))
-	add(section("repo-rules", renderContextFiles(context.ContextFiles)))
-	add(section("workspace-tree", renderWorkspaceTree(context.WorkspaceTree, opts.SkipWorkspaceTree)))
-	add(section("workstation", renderWorkstation(context.Environment, opts.ApprovalMode)))
-	add(section("append", opts.AppendPrompt))
+	add(&stable, section("identity", identity))
+	add(&stable, section("approval-mode", renderApprovalModeInstruction(opts.ApprovalMode)))
+	add(&stable, section("skills-guide", renderSkillsGuide(context.Skills)))
+	add(&stable, section("tools", renderTools(opts.ToolNames)))
+	add(&stable, section("critical", renderCritical(opts.ApprovalMode)))
+	add(&stable, section("append", opts.AppendPrompt))
 
-	joined := make([]string, len(parts))
-	for i, p := range parts {
-		joined[i] = p.Content
+	add(&setup, section("skills", renderSkills(context.Skills)))
+	add(&setup, section("always-apply-rules", renderAlwaysApplyRules(context.Rules)))
+	add(&setup, section("domain-rules", renderDomainRules(context.Rules)))
+	add(&setup, section("commands", renderCommands(context.Commands)))
+	add(&setup, section("repo-rules", renderContextFiles(context.ContextFiles)))
+	add(&setup, section("workspace-tree", renderWorkspaceTree(context.WorkspaceTree, opts.SkipWorkspaceTree)))
+	add(&setup, section("workstation", renderWorkstation(context.Environment)))
+	for i := range setup {
+		setup[i].Setup = true
 	}
 
-	return Result{SystemPrompt: strings.Join(joined, "\n\n"), Sections: parts, Context: context}
+	stableText, setupText := joinSections(stable), joinSections(setup)
+	full := stableText
+	if setupText != "" {
+		full = strings.TrimSpace(stableText + "\n\n" + setupText)
+	}
+	return Result{
+		SystemPrompt: full,
+		StableSystem: stableText,
+		Setup:        setupText,
+		Sections:     append(stable, setup...),
+		Context:      context,
+	}
+}
+
+func joinSections(sections []Section) string {
+	joined := make([]string, len(sections))
+	for i, p := range sections {
+		joined[i] = p.Content
+	}
+	return strings.Join(joined, "\n\n")
 }
 
 func systemMdContent(f *SystemPromptFile) string {
