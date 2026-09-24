@@ -34,7 +34,16 @@ type readFileInput struct {
 const (
 	readMaxBytes = 512 * 1024
 	readMaxLines = 2000
+	// readDefaultLines caps a read with no startLine/endLine, so a whole
+	// file isn't pulled into history when only part of it is needed.
+	readDefaultLines = 300
 )
+
+// sparseLineNumbers reports whether read_file should number only the first
+// line, every 10th line and the last line (CONSOLE_HARNESS_SPARSE_LINE_NUMBERS=1).
+func sparseLineNumbers() bool {
+	return os.Getenv("CONSOLE_HARNESS_SPARSE_LINE_NUMBERS") == "1"
+}
 
 // textResult wraps a formatted string as the MCP-style content array the TS
 // server always sends over the wire (tool-output.ts normalizeToolOutput
@@ -44,7 +53,7 @@ func textResult(text string) []map[string]any {
 	return []map[string]any{{"type": "text", "text": text}}
 }
 
-var ReadFile = NewTool("read_file", "Read the content of a file on disk. Use startLine/endLine for large files.", TierRead,
+var ReadFile = NewTool("read_file", "Read a file on disk. Without startLine/endLine, returns the first 300 lines; pass a range to read further.", TierRead,
 	func(ctx context.Context, in readFileInput) (any, error) {
 		if in.Path == "" {
 			return nil, NewToolError("path is required")
@@ -87,7 +96,11 @@ var ReadFile = NewTool("read_file", "Read the content of a file on disk. Use sta
 			return textResult(fmt.Sprintf("startLine (%d) must be less than or equal to endLine (%d).", start, naturalEnd)), nil
 		}
 		end := naturalEnd
-		if emitEnd := start + readMaxLines - 1; end > emitEnd {
+		maxLines := readMaxLines
+		if in.StartLine == 0 && in.EndLine == 0 {
+			maxLines = readDefaultLines
+		}
+		if emitEnd := start + maxLines - 1; end > emitEnd {
 			end = emitEnd
 		}
 		truncated := byteCapped || end < naturalEnd
@@ -113,14 +126,21 @@ var ReadFile = NewTool("read_file", "Read the content of a file on disk. Use sta
 			fmt.Sprintf("Size: %d bytes", sizeBytes),
 		}
 		if truncated {
-			header = append(header, fmt.Sprintf("Output truncated at line %d. Resume with startLine=%d.", end, end+1))
+			header = append(header, fmt.Sprintf("Output truncated at line %d of %d. Continue with startLine=%d.", end, totalLines, end+1))
 		}
 		header = append(header, "")
 
 		width := len(fmt.Sprintf("%d", end))
+		sparse := sparseLineNumbers()
+		pad := strings.Repeat(" ", width+2)
 		numbered := make([]string, len(lines))
 		for i, line := range lines {
-			numbered[i] = fmt.Sprintf("%*d: %s", width, start+i, line)
+			n := start + i
+			if sparse && n != start && n != end && n%10 != 0 {
+				numbered[i] = pad + line
+				continue
+			}
+			numbered[i] = fmt.Sprintf("%*d: %s", width, n, line)
 		}
 
 		return textResult(strings.Join(header, "\n") + strings.Join(numbered, "\n")), nil
