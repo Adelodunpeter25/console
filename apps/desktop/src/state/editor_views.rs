@@ -195,4 +195,64 @@ impl ConsoleDesktopApp {
             .insert(path.to_string(), (len, hash, state, view.clone()));
         view
     }
+
+    pub fn viewer_list_state(
+        &mut self,
+        id: &str,
+        count: usize,
+        row_height: f32,
+    ) -> gpui::ListState {
+        let state = self
+            .viewer_list_states
+            .entry(id.to_string())
+            .or_insert_with(|| {
+                gpui::ListState::new(count, gpui::ListAlignment::Top, gpui::px(120.0))
+                    .with_uniform_item_height(gpui::px(row_height))
+            });
+        if state.item_count() != count {
+            state.reset_with_uniform_height(count, gpui::px(row_height));
+        }
+        state.clone()
+    }
+
+    pub fn viewer_scrollbar_state(&mut self, id: &str) -> std::rc::Rc<console_ui::ScrollbarState> {
+        self.viewer_scrollbar_states
+            .entry(id.to_string())
+            .or_insert_with(console_ui::ScrollbarState::new)
+            .clone()
+    }
+
+    pub fn get_or_build_markdown_view(
+        &mut self,
+        path: &str,
+        content: &str,
+    ) -> std::rc::Rc<std::cell::RefCell<console_ui::MarkdownView>> {
+        let mut hasher = DefaultHasher::new();
+        content.hash(&mut hasher);
+        let hash = hasher.finish();
+        let len = content.len();
+
+        if let Some((cached_len, cached_hash, view)) = self.viewer_cached_markdown_views.get(path) {
+            if *cached_len == len && *cached_hash == hash {
+                return view.clone();
+            }
+        }
+
+        let mut view = console_ui::MarkdownView::new();
+        view.set_text(content, false);
+        let rc = std::rc::Rc::new(std::cell::RefCell::new(view));
+        self.viewer_cached_markdown_views
+            .insert(path.to_string(), (len, hash, rc.clone()));
+        rc
+    }
+
+    pub fn viewer_markdown_selection(
+        &mut self,
+        path: &str,
+    ) -> console_ui::markdown::render::TranscriptSelection {
+        self.viewer_markdown_selections
+            .entry(path.to_string())
+            .or_default()
+            .clone()
+    }
 }

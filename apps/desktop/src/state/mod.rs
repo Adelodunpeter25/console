@@ -8,6 +8,7 @@
 mod attachments;
 mod auth;
 mod autocomplete;
+mod bootstrap;
 mod deleted_sessions;
 mod drafts;
 mod editor_views;
