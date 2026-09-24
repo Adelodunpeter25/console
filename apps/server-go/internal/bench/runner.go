@@ -49,6 +49,8 @@ type RunResult struct {
 	Sources  map[string]int           `json:"sources"`
 	WallMs   int64                    `json:"wallMs"`
 	CheckOut string                   `json:"checkOutput,omitempty"`
+	// Answer is the final assistant text (trimmed), for failed checks.
+	Answer string `json:"answer,omitempty"`
 }
 
 // Results is a full bench run, written as JSON.
@@ -119,8 +121,8 @@ func isRateLimited(errText string) bool {
 	return strings.Contains(lower, "429") || strings.Contains(lower, "rate limit")
 }
 
-func runOne(parent context.Context, opts Options, commit string, task Task, run int) RunResult {
-	result := RunResult{Task: task.ID, Run: run, Sources: map[string]int{}}
+func runOne(parent context.Context, opts Options, commit string, task Task, run int) (result RunResult) {
+	result = RunResult{Task: task.ID, Run: run, Sources: map[string]int{}}
 	start := time.Now()
 	defer func() { result.WallMs = time.Since(start).Milliseconds() }()
 
@@ -184,6 +186,7 @@ func runOne(parent context.Context, opts Options, commit string, task Task, run 
 	result.Success = checkErr == nil
 	if !result.Success {
 		result.CheckOut = tail(out)
+		result.Answer = tail(answer)
 	}
 	return result
 }
