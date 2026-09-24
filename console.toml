@@ -2,7 +2,7 @@
 # Listed in the desktop Run tab; run with the repo root as working directory.
 
 [scripts.dev-server]
-label = "Dev Server :3001"
+label = "Dev Server :2003"
 command = "PORT=3001 go -C apps/server-go run ./cmd/server"
 shortcut = "cmd-shift-r"
 persistent = true
