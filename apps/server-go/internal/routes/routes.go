@@ -99,6 +99,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 		bashJobs.KillAll()
 		ptyManager.KillAll()
 		scriptsSvc.StopAll()
+		fffManager.CloseAll()
 	}
 	return app, runSvc, shutdown
 }

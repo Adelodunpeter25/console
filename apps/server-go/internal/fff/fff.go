@@ -135,6 +135,8 @@ typedef struct FffResult *(*fff_wait_for_scan_t)(void *, uint64_t);
 typedef void (*fff_free_result_t)(struct FffResult *);
 typedef void (*fff_free_search_result_t)(struct FffSearchResult *);
 typedef void (*fff_free_grep_result_t)(struct FffGrepResult *);
+typedef void (*fff_free_string_t)(char *);
+typedef struct FffResult *(*fff_health_check_t)(void *, const char *);
 
 static fff_create_instance_with_t p_create;
 static fff_destroy_t p_destroy;
@@ -145,7 +147,7 @@ static fff_wait_for_scan_t p_wait;
 static fff_free_result_t p_free_result;
 static fff_free_search_result_t p_free_search;
 static fff_free_grep_result_t p_free_grep;
-typedef struct FffResult *(*fff_health_check_t)(void *);
+static fff_free_string_t p_free_string;
 static fff_health_check_t p_health;
 
 // bind_all resolves every symbol; returns false on the first miss.
@@ -168,6 +170,8 @@ static bool fff_bind_all(void *dl) {
 	if (!p_free_search) return false;
 	p_free_grep = (fff_free_grep_result_t)dlsym(dl, "fff_free_grep_result");
 	if (!p_free_grep) return false;
+	p_free_string = (fff_free_string_t)dlsym(dl, "fff_free_string");
+	if (!p_free_string) return false;
 	p_health = (fff_health_check_t)dlsym(dl, "fff_health_check");
 	return p_health != NULL;
 }
@@ -192,14 +196,17 @@ static struct FffResult *go_wait(void *h, uint64_t ms) { return p_wait(h, ms); }
 static void go_free_result(struct FffResult *r) { p_free_result(r); }
 static void go_free_search(struct FffSearchResult *r) { p_free_search(r); }
 static void go_free_grep(struct FffGrepResult *r) { p_free_grep(r); }
-static struct FffResult *go_health(void *h) { return p_health(h); }
+static void go_free_string(char *s) { p_free_string(s); }
+static struct FffResult *go_health(void *h) { return p_health(h, NULL); }
 */
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -211,6 +218,8 @@ var (
 	bound    bool
 	loadErr  error
 )
+
+var errManagerClosed = errors.New("fff manager is closed")
 
 // Load resolves the fff C library at runtime. Search paths:
 // FFF_LIB_PATH env, ./third_party/fff/libfff_c.so, /usr/local/lib/libfff_c.so.
@@ -269,19 +278,12 @@ func Available() bool {
 	return Load() == nil
 }
 
-// Item is one search hit.
+// Item is one path-search hit.
 type Item struct {
 	RelPath string
 	Name    string
 	Size    int64
 	IsDir   bool
-}
-
-// GrepMatch is one content-search hit.
-type GrepMatch struct {
-	RelPath     string
-	LineContent string
-	LineNumber  uint64
 }
 
 // GrepMode selects fff's content-search matching strategy.
@@ -293,12 +295,251 @@ const (
 	GrepModeFuzzy GrepMode = 2
 )
 
-// Instance is one indexed directory.
+// CaseMode selects content-search case behavior. Smart is fff's usual mode:
+// lowercase queries are insensitive, while a query containing uppercase text
+// is sensitive.
+type CaseMode string
+
+const (
+	CaseSmart       CaseMode = "smart"
+	CaseSensitive   CaseMode = "sensitive"
+	CaseInsensitive CaseMode = "insensitive"
+)
+
+// ParseCaseMode parses the public case-mode spelling. An empty value defaults
+// to Smart so older callers retain the fff default.
+func ParseCaseMode(value string) (CaseMode, error) {
+	if strings.TrimSpace(value) == "" {
+		return CaseSmart, nil
+	}
+	mode := CaseMode(strings.ToLower(strings.TrimSpace(value)))
+	if !mode.valid() {
+		return "", fmt.Errorf("invalid case mode %q (want smart, sensitive, or insensitive)", value)
+	}
+	return mode, nil
+}
+
+func (m CaseMode) valid() bool {
+	return m == CaseSmart || m == CaseSensitive || m == CaseInsensitive
+}
+
+func (m CaseMode) smartCase() bool {
+	// fff's legacy flag only distinguishes smart from sensitive. Explicit
+	// insensitive mode is represented by the (?i) transform below.
+	return m == CaseSmart
+}
+
+// MatchRange is a half-open byte range within a returned line. Byte offsets,
+// rather than rune indexes, match the fff C ABI and the editor protocol.
+type MatchRange struct {
+	Start int
+	End   int
+}
+
+// GrepMatch is one content-search hit.
+type GrepMatch struct {
+	RelPath             string
+	FileName            string
+	LineContent         string
+	LineNumber          uint64
+	Column              int
+	EndColumn           int
+	ByteOffset          uint64
+	MatchRanges         []MatchRange
+	ContextBefore       []string
+	ContextAfter        []string
+	Size                int64
+	Modified            uint64
+	TotalFrecencyScore  int64
+	AccessFrecencyScore int64
+	ModFrecencyScore    int64
+	FuzzyScore          *uint16
+	IsBinary            bool
+	IsDefinition        bool
+}
+
+// RegexError reports that fff could not compile a regex and fell back to a
+// literal search. The result may still contain matches for the literal text.
+type RegexError struct{ Message string }
+
+func (e *RegexError) Error() string { return e.Message }
+
+// GrepOptions controls one content-search page.
+type GrepOptions struct {
+	Mode                GrepMode
+	Case                CaseMode
+	WholeWord           bool
+	ContextLines        int
+	MaxMatches          int
+	Cursor              uint32
+	TimeBudgetMs        uint64
+	ClassifyDefinitions bool
+}
+
+// GrepResult is a copied, Go-owned view of one native grep result. Copying all
+// pointers out before native cleanup makes the value safe to pass to the UI.
+type GrepResult struct {
+	Matches       []GrepMatch
+	TotalMatched  int
+	FilesSearched int
+	TotalFiles    int
+	FilteredFiles int
+	NextCursor    uint32
+	HasMore       bool
+	RegexError    *RegexError
+}
+
+// TransformQuery applies the adapter's public matching transformations and
+// returns the query/mode that can be passed to fff. Whole-word searches use a
+// regexp boundary wrapper; this also makes plain searches exact when combined
+// with whole-word mode. Explicit insensitive mode uses Rust/fff's inline
+// (?i) flag because the legacy smart_case bit has no third state.
+func TransformQuery(query string, mode GrepMode, caseMode CaseMode, wholeWord bool) (string, GrepMode, error) {
+	if query == "" {
+		return "", mode, errors.New("query is required")
+	}
+	if mode > GrepModeFuzzy {
+		return "", mode, fmt.Errorf("invalid grep mode %d", mode)
+	}
+	if caseMode == "" {
+		caseMode = CaseSmart
+	}
+	if !caseMode.valid() {
+		return "", mode, fmt.Errorf("invalid case mode %q", caseMode)
+	}
+
+	pattern := query
+	if mode == GrepModePlain {
+		pattern = regexp.QuoteMeta(pattern)
+	}
+	if caseMode == CaseInsensitive {
+		pattern = "(?i)" + pattern
+		mode = GrepModeRegex
+	}
+	if wholeWord {
+		pattern = `\b(?:` + pattern + `)\b`
+		mode = GrepModeRegex
+	}
+	return pattern, mode, nil
+}
+
+// Instance is one indexed directory. Calls hold an RW lock so the manager can
+// safely defer native destruction until every in-flight caller has released it.
 type Instance struct {
+	mu     sync.RWMutex
 	handle unsafe.Pointer
 }
 
-// Create indexes basePath with the background watcher enabled.
+// Lease keeps an Instance alive for one user operation. A lease must be
+// released exactly when the caller is done; it is safe to call Close more than
+// once. The manager removes an instance from its LRU map before destroying it,
+// so an existing lease remains valid until Close.
+type Lease struct {
+	mu       sync.Mutex
+	instance *Instance
+	closed   bool
+}
+
+func newLease(instance *Instance) *Lease { return &Lease{instance: instance} }
+
+func (l *Lease) check() error {
+	if l == nil || l.instance == nil {
+		return errors.New("fff lease is nil")
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed {
+		return errors.New("fff lease released")
+	}
+	return nil
+}
+
+// Release releases the native usage lease. Close is an alias for integrations
+// that use the usual resource-closing terminology.
+func (l *Lease) Release() {
+	if l == nil || l.instance == nil {
+		return
+	}
+	l.mu.Lock()
+	if l.closed {
+		l.mu.Unlock()
+		return
+	}
+	l.closed = true
+	instance := l.instance
+	l.mu.Unlock()
+	instance.mu.RUnlock()
+}
+
+func (l *Lease) Close() { l.Release() }
+
+// Search runs a fuzzy path search while the lease is held.
+func (l *Lease) Search(query string, limit int) ([]Item, error) {
+	if err := l.check(); err != nil {
+		return nil, err
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed {
+		return nil, errors.New("fff lease released")
+	}
+	return l.instance.search(query, limit)
+}
+
+// Glob filters indexed paths while the lease is held.
+func (l *Lease) Glob(pattern string, limit int) ([]Item, error) {
+	if err := l.check(); err != nil {
+		return nil, err
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed {
+		return nil, errors.New("fff lease released")
+	}
+	return l.instance.glob(pattern, limit)
+}
+
+// Grep preserves the original adapter call shape for existing internal callers.
+func (l *Lease) Grep(query string, mode GrepMode, caseInsensitive bool, contextLines, maxMatches int) ([]GrepMatch, int, error) {
+	caseMode := CaseSmart
+	if caseInsensitive {
+		caseMode = CaseInsensitive
+	}
+	result, err := l.GrepWithOptions(query, GrepOptions{
+		Mode: mode, Case: caseMode, ContextLines: contextLines, MaxMatches: maxMatches,
+	})
+	return result.Matches, result.FilesSearched, err
+}
+
+// GrepWithOptions runs a content search while the lease is held.
+func (l *Lease) GrepWithOptions(query string, options GrepOptions) (GrepResult, error) {
+	if err := l.check(); err != nil {
+		return GrepResult{}, err
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed {
+		return GrepResult{}, errors.New("fff lease released")
+	}
+	return l.instance.grepWithOptions(query, options)
+}
+
+// Health returns the instance health JSON while the lease is held.
+func (l *Lease) Health() string {
+	if err := l.check(); err != nil {
+		return "{}"
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed {
+		return "{}"
+	}
+	return l.instance.health()
+}
+
+// Create indexes basePath with content indexing and the background watcher
+// enabled. The returned raw instance is intended for short-lived standalone
+// use; Manager users should acquire a Lease instead.
 func Create(basePath string) (*Instance, error) {
 	if err := Load(); err != nil {
 		return nil, err
@@ -306,11 +547,12 @@ func Create(basePath string) (*Instance, error) {
 	cBase := C.CString(basePath)
 	defer C.free(unsafe.Pointer(cBase))
 	opts := C.FffCreateOptions{
-		version:           C.FFF_CREATE_OPTIONS_VERSION,
-		base_path:         cBase,
-		enable_mmap_cache: true,
-		watch:             true,
-		ai_mode:           true,
+		version:                 C.FFF_CREATE_OPTIONS_VERSION,
+		base_path:               cBase,
+		enable_mmap_cache:       true,
+		enable_content_indexing: true,
+		watch:                   true,
+		ai_mode:                 true,
 	}
 	res := C.go_create(&opts)
 	if res == nil {
@@ -318,22 +560,46 @@ func Create(basePath string) (*Instance, error) {
 	}
 	defer C.go_free_result(res)
 	if !bool(res.success) {
-		msg := "unknown error"
-		if res.error != nil {
-			msg = C.GoString(res.error)
-		}
-		return nil, fmt.Errorf("fff_create_instance: %s", msg)
+		return nil, fmt.Errorf("fff_create_instance: %s", cString(res.error))
 	}
 	inst := &Instance{handle: res.handle}
-	// Wait briefly for the initial scan so early searches have results.
-	C.go_wait(inst.handle, 2000)
+	// fff_free_result does not free its handle; the wait result is independent
+	// and must still be released even though we only use it as a warmup signal.
+	waitRes := C.go_wait(inst.handle, 2000)
+	if waitRes != nil {
+		C.go_free_result(waitRes)
+	}
 	return inst, nil
+}
+
+func cString(value *C.char) string {
+	if value == nil {
+		return ""
+	}
+	return C.GoString(value)
+}
+
+func (i *Instance) acquire() (unsafe.Pointer, error) {
+	i.mu.RLock()
+	if i.handle == nil {
+		i.mu.RUnlock()
+		return nil, errors.New("fff instance destroyed")
+	}
+	return i.handle, nil
 }
 
 // Search runs a fuzzy path search with a result limit.
 func (i *Instance) Search(query string, limit int) ([]Item, error) {
+	if _, err := i.acquire(); err != nil {
+		return nil, err
+	}
+	defer i.mu.RUnlock()
+	return i.search(query, limit)
+}
+
+func (i *Instance) search(query string, limit int) ([]Item, error) {
 	if i.handle == nil {
-		return nil, fmt.Errorf("fff instance destroyed")
+		return nil, errors.New("fff instance destroyed")
 	}
 	// Empty query must be "" (NULL is rejected by the C ABI).
 	cQuery := C.CString(strings.TrimSpace(query))
@@ -343,27 +609,36 @@ func (i *Instance) Search(query string, limit int) ([]Item, error) {
 	}
 	res := C.go_search(i.handle, cQuery, nil, 0, 0, C.uint32_t(limit), 0, 0)
 	if res == nil {
-		return nil, fmt.Errorf("fff_search returned null")
+		return nil, errors.New("fff_search returned null")
 	}
 	defer C.go_free_result(res)
 	if !bool(res.success) {
-		msg := "unknown error"
-		if res.error != nil {
-			msg = C.GoString(res.error)
-		}
-		return nil, fmt.Errorf("fff_search: %s", msg)
+		return nil, fmt.Errorf("fff_search: %s", cString(res.error))
 	}
-	sr := (*C.FffSearchResult)(unsafe.Pointer(res.handle))
+	if res.handle == nil {
+		return []Item{}, nil
+	}
+	sr := (*C.FffSearchResult)(res.handle)
+	if sr == nil {
+		return nil, errors.New("fff_search returned a null result payload")
+	}
+	// fff_free_result only frees the envelope. Search payload ownership is
+	// separate and must be released explicitly or every query leaks native
+	// strings, score metadata, and the result arrays.
+	defer C.go_free_search(sr)
 	count := int(sr.count)
 	if count > limit {
 		count = limit
 	}
 	items := make([]Item, 0, count)
-	slice := unsafe.Slice(sr.items, int(sr.count))
-	for _, it := range slice[:count] {
+	if count == 0 || sr.items == nil {
+		return items, nil
+	}
+	slice := unsafe.Slice(sr.items, count)
+	for _, it := range slice {
 		items = append(items, Item{
-			RelPath: C.GoString(it.relative_path),
-			Name:    C.GoString(it.file_name),
+			RelPath: cString(it.relative_path),
+			Name:    cString(it.file_name),
 			Size:    int64(it.size),
 		})
 	}
@@ -373,8 +648,16 @@ func (i *Instance) Search(query string, limit int) ([]Item, error) {
 // Glob filters indexed files by a glob pattern (native fff glob, no query
 // parsing — backs the agent glob tool the same way TS's FileFinder.glob does).
 func (i *Instance) Glob(pattern string, limit int) ([]Item, error) {
+	if _, err := i.acquire(); err != nil {
+		return nil, err
+	}
+	defer i.mu.RUnlock()
+	return i.glob(pattern, limit)
+}
+
+func (i *Instance) glob(pattern string, limit int) ([]Item, error) {
 	if i.handle == nil {
-		return nil, fmt.Errorf("fff instance destroyed")
+		return nil, errors.New("fff instance destroyed")
 	}
 	cPattern := C.CString(pattern)
 	defer C.free(unsafe.Pointer(cPattern))
@@ -383,81 +666,186 @@ func (i *Instance) Glob(pattern string, limit int) ([]Item, error) {
 	}
 	res := C.go_glob(i.handle, cPattern, nil, 0, 0, C.uint32_t(limit))
 	if res == nil {
-		return nil, fmt.Errorf("fff_glob returned null")
+		return nil, errors.New("fff_glob returned null")
 	}
 	defer C.go_free_result(res)
 	if !bool(res.success) {
-		msg := "unknown error"
-		if res.error != nil {
-			msg = C.GoString(res.error)
-		}
-		return nil, fmt.Errorf("fff_glob: %s", msg)
+		return nil, fmt.Errorf("fff_glob: %s", cString(res.error))
 	}
-	sr := (*C.FffSearchResult)(unsafe.Pointer(res.handle))
+	if res.handle == nil {
+		return []Item{}, nil
+	}
+	sr := (*C.FffSearchResult)(res.handle)
+	if sr == nil {
+		return nil, errors.New("fff_glob returned a null result payload")
+	}
 	defer C.go_free_search(sr)
 	count := int(sr.count)
 	if count > limit {
 		count = limit
 	}
 	items := make([]Item, 0, count)
-	slice := unsafe.Slice(sr.items, int(sr.count))
-	for _, it := range slice[:count] {
+	if count == 0 || sr.items == nil {
+		return items, nil
+	}
+	slice := unsafe.Slice(sr.items, count)
+	for _, it := range slice {
 		items = append(items, Item{
-			RelPath: C.GoString(it.relative_path),
-			Name:    C.GoString(it.file_name),
+			RelPath: cString(it.relative_path),
+			Name:    cString(it.file_name),
 			Size:    int64(it.size),
 		})
 	}
 	return items, nil
 }
 
-// Grep runs fff's native content search (backs the agent grep tool the same
-// way TS's FileFinder.grep does).
+// Grep preserves the original adapter call shape for existing internal callers.
 func (i *Instance) Grep(query string, mode GrepMode, caseInsensitive bool, contextLines, maxMatches int) ([]GrepMatch, int, error) {
+	caseMode := CaseSmart
+	if caseInsensitive {
+		caseMode = CaseInsensitive
+	}
+	result, err := i.GrepWithOptions(query, GrepOptions{
+		Mode: mode, Case: caseMode, ContextLines: contextLines, MaxMatches: maxMatches,
+	})
+	return result.Matches, result.FilesSearched, err
+}
+
+// GrepWithOptions runs fff's native content search and copies every useful
+// result field into Go-owned memory before freeing the native result.
+func (i *Instance) GrepWithOptions(query string, options GrepOptions) (GrepResult, error) {
+	if _, err := i.acquire(); err != nil {
+		return GrepResult{}, err
+	}
+	defer i.mu.RUnlock()
+	return i.grepWithOptions(query, options)
+}
+
+func (i *Instance) grepWithOptions(query string, options GrepOptions) (GrepResult, error) {
 	if i.handle == nil {
-		return nil, 0, fmt.Errorf("fff instance destroyed")
+		return GrepResult{}, errors.New("fff instance destroyed")
 	}
-	cQuery := C.CString(query)
+	if options.Case == "" {
+		options.Case = CaseSmart
+	}
+	pattern, effectiveMode, err := TransformQuery(query, options.Mode, options.Case, options.WholeWord)
+	if err != nil {
+		return GrepResult{}, err
+	}
+	if options.MaxMatches <= 0 {
+		options.MaxMatches = 100
+	}
+	if options.ContextLines < 0 {
+		return GrepResult{}, errors.New("context lines must not be negative")
+	}
+
+	cQuery := C.CString(pattern)
 	defer C.free(unsafe.Pointer(cQuery))
-	if maxMatches <= 0 {
-		maxMatches = 100
-	}
-	res := C.go_grep(i.handle, cQuery, C.uint8_t(mode), 0, 0, C.bool(!caseInsensitive),
-		0, C.uint32_t(maxMatches), 0, C.uint32_t(contextLines), C.uint32_t(contextLines), false)
+	res := C.go_grep(i.handle, cQuery, C.uint8_t(effectiveMode), 0, 0,
+		C.bool(options.Case.smartCase()), C.uint32_t(options.Cursor),
+		C.uint32_t(options.MaxMatches), C.uint64_t(options.TimeBudgetMs),
+		C.uint32_t(options.ContextLines), C.uint32_t(options.ContextLines),
+		C.bool(options.ClassifyDefinitions))
 	if res == nil {
-		return nil, 0, fmt.Errorf("fff_live_grep returned null")
+		return GrepResult{}, errors.New("fff_live_grep returned null")
 	}
 	defer C.go_free_result(res)
 	if !bool(res.success) {
-		msg := "unknown error"
-		if res.error != nil {
-			msg = C.GoString(res.error)
-		}
-		return nil, 0, fmt.Errorf("fff_live_grep: %s", msg)
+		return GrepResult{}, fmt.Errorf("fff_live_grep: %s", cString(res.error))
 	}
-	gr := (*C.FffGrepResult)(unsafe.Pointer(res.handle))
+	if res.handle == nil {
+		return GrepResult{}, errors.New("fff_live_grep returned a null result payload")
+	}
+	gr := (*C.FffGrepResult)(res.handle)
+	if gr == nil {
+		return GrepResult{}, errors.New("fff_live_grep returned a null grep payload")
+	}
 	defer C.go_free_grep(gr)
+
+	result := GrepResult{
+		TotalMatched:  int(gr.total_matched),
+		FilesSearched: int(gr.total_files_searched),
+		TotalFiles:    int(gr.total_files),
+		FilteredFiles: int(gr.filtered_file_count),
+		NextCursor:    uint32(gr.next_file_offset),
+		HasMore:       gr.next_file_offset != 0,
+	}
+	if gr.regex_fallback_error != nil {
+		result.RegexError = &RegexError{Message: cString(gr.regex_fallback_error)}
+	}
+
 	count := int(gr.count)
-	if count > maxMatches {
-		count = maxMatches
+	if count > options.MaxMatches {
+		count = options.MaxMatches
 	}
-	matches := make([]GrepMatch, 0, count)
-	if count > 0 {
-		slice := unsafe.Slice(gr.items, int(gr.count))
-		for _, m := range slice[:count] {
-			matches = append(matches, GrepMatch{
-				RelPath:     C.GoString(m.relative_path),
-				LineContent: C.GoString(m.line_content),
-				LineNumber:  uint64(m.line_number),
-			})
+	result.Matches = make([]GrepMatch, 0, count)
+	if count == 0 || gr.items == nil {
+		return result, nil
+	}
+	slice := unsafe.Slice(gr.items, count)
+	for _, m := range slice {
+		match := GrepMatch{
+			RelPath:             cString(m.relative_path),
+			FileName:            cString(m.file_name),
+			LineContent:         cString(m.line_content),
+			LineNumber:          uint64(m.line_number),
+			Column:              int(m.col),
+			ByteOffset:          uint64(m.byte_offset),
+			ContextBefore:       copyCStrings(m.context_before, int(m.context_before_count)),
+			ContextAfter:        copyCStrings(m.context_after, int(m.context_after_count)),
+			Size:                int64(m.size),
+			Modified:            uint64(m.modified),
+			TotalFrecencyScore:  int64(m.total_frecency_score),
+			AccessFrecencyScore: int64(m.access_frecency_score),
+			ModFrecencyScore:    int64(m.modification_frecency_score),
+			IsBinary:            bool(m.is_binary),
+			IsDefinition:        bool(m.is_definition),
 		}
+		if m.match_ranges_count > 0 && m.match_ranges != nil {
+			ranges := unsafe.Slice(m.match_ranges, int(m.match_ranges_count))
+			match.MatchRanges = make([]MatchRange, 0, len(ranges))
+			for _, r := range ranges {
+				match.MatchRanges = append(match.MatchRanges, MatchRange{Start: int(r.start), End: int(r.end)})
+			}
+			if len(match.MatchRanges) > 0 {
+				match.EndColumn = match.MatchRanges[0].End
+			}
+		} else {
+			match.EndColumn = match.Column
+		}
+		if bool(m.has_fuzzy_score) {
+			score := uint16(m.fuzzy_score)
+			match.FuzzyScore = &score
+		}
+		result.Matches = append(result.Matches, match)
 	}
-	return matches, int(gr.total_files_searched), nil
+	return result, nil
 }
 
-// Health returns the instance health JSON (indexed counts etc.). The C ABI
-// returns the string in the FffResult envelope; it is freed with the result.
+func copyCStrings(values **C.char, count int) []string {
+	if values == nil || count <= 0 {
+		return nil
+	}
+	slice := unsafe.Slice(values, count)
+	out := make([]string, 0, count)
+	for _, value := range slice {
+		out = append(out, cString(value))
+	}
+	return out
+}
+
+// Health returns the instance health JSON. The C ABI returns a separately
+// owned C string in the result handle; copying it and freeing that string is
+// required in addition to freeing the envelope.
 func (i *Instance) Health() string {
+	if _, err := i.acquire(); err != nil {
+		return "{}"
+	}
+	defer i.mu.RUnlock()
+	return i.health()
+}
+
+func (i *Instance) health() string {
 	if i.handle == nil {
 		return "{}"
 	}
@@ -469,14 +857,19 @@ func (i *Instance) Health() string {
 	if !bool(res.success) || res.handle == nil {
 		return "{}"
 	}
-	return C.GoString((*C.char)(res.handle))
+	text := cString((*C.char)(res.handle))
+	C.go_free_string((*C.char)(res.handle))
+	return text
 }
 
-// Destroy frees the underlying instance.
+// Destroy waits for active leases and then frees the underlying instance.
 func (i *Instance) Destroy() {
+	i.mu.Lock()
+	defer i.mu.Unlock()
 	if i.handle != nil {
-		C.go_destroy(i.handle)
+		handle := i.handle
 		i.handle = nil
+		C.go_destroy(handle)
 	}
 }
 
@@ -488,35 +881,43 @@ func (i *Instance) Destroy() {
 // most recently used roots warm bounds that to a fixed thread/CPU budget.
 const maxInstances = 1
 
-// Manager owns one Instance per project root, created lazily and evicted
-// least-recently-used once more than maxInstances are warm.
+type createState struct {
+	done chan struct{}
+	err  error
+}
+
+// Manager owns one Instance per project root, creates lazily, and evicts
+// least-recently-used instances once more than maxInstances are warm.
 type Manager struct {
 	mu        sync.Mutex
 	instances map[string]*Instance
 	lastUsed  map[string]time.Time
-	creating  map[string]*sync.Once
+	creating  map[string]*createState
 	enabled   bool
+	closed    bool
 }
 
 func NewManager() *Manager {
 	return &Manager{
 		instances: make(map[string]*Instance),
 		lastUsed:  make(map[string]time.Time),
-		creating:  make(map[string]*sync.Once),
+		creating:  make(map[string]*createState),
 		enabled:   Available(),
 	}
 }
 
 // Enabled reports whether fff was loaded.
-func (m *Manager) Enabled() bool { return m.enabled }
+func (m *Manager) Enabled() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.enabled && !m.closed
+}
 
-// evictLRULocked removes the least-recently-used instance(s) from the map
-// until the live set is back at or under maxInstances, and returns them for
-// the caller to Destroy() *after releasing m.mu*. Native teardown can block
-// (e.g. waiting on a watcher thread mid-scan), and every other Manager
-// method opens with m.mu.Lock() — destroying here while still holding the
-// lock would stall search/glob/grep/prewarm server-wide until teardown
-// finishes. Caller must hold m.mu.
+// evictLRULocked removes the least-recently-used instance(s) from the map until
+// the live set is back at or under maxInstances. The returned instances are
+// destroyed by the caller after releasing m.mu, because native teardown can
+// block while a watcher is finishing a scan. Existing leases keep their native
+// instance alive until they are released.
 func (m *Manager) evictLRULocked() []*Instance {
 	var victims []*Instance
 	for len(m.instances) > maxInstances {
@@ -541,113 +942,183 @@ func (m *Manager) evictLRULocked() []*Instance {
 	return victims
 }
 
-// ensureAsync starts the background index scan for root unless one is
-// already running or complete.
+func (m *Manager) create(root string, state *createState) {
+	created, err := Create(root)
+	m.mu.Lock()
+	if m.closed {
+		state.err = errManagerClosed
+		if err == nil {
+			state.err = nil
+		}
+		delete(m.creating, root)
+		close(state.done)
+		m.mu.Unlock()
+		if created != nil {
+			created.Destroy()
+		}
+		return
+	}
+	if err != nil {
+		state.err = err
+	} else {
+		m.instances[root] = created
+		m.lastUsed[root] = time.Now()
+	}
+	victims := m.evictLRULocked()
+	delete(m.creating, root)
+	close(state.done)
+	m.mu.Unlock()
+
+	if err == nil {
+		for _, victim := range victims {
+			victim.Destroy()
+		}
+	} else if created != nil {
+		created.Destroy()
+	}
+}
+
+// ensureAsync starts the background index scan for root unless one is already
+// running or complete.
 func (m *Manager) ensureAsync(root string) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	if m.closed {
+		m.mu.Unlock()
+		return
+	}
 	if _, ok := m.instances[root]; ok {
 		m.lastUsed[root] = time.Now()
+		m.mu.Unlock()
 		return
 	}
 	if _, started := m.creating[root]; started {
+		m.mu.Unlock()
 		return
 	}
-	once := &sync.Once{}
-	m.creating[root] = once
-	go once.Do(func() {
-		created, err := Create(root)
-		m.mu.Lock()
-		var victims []*Instance
-		if err == nil {
-			m.instances[root] = created
-			m.lastUsed[root] = time.Now()
-			victims = m.evictLRULocked()
-		}
-		delete(m.creating, root)
-		m.mu.Unlock()
-		for _, v := range victims {
-			v.Destroy()
-		}
-	})
+	state := &createState{done: make(chan struct{})}
+	m.creating[root] = state
+	m.mu.Unlock()
+	go m.create(root, state)
 }
 
 // Prewarm kicks off the background index scan for root without blocking.
 // Call when a project/session opens so the first search hits a warm index
 // instead of paying for the initial scan. No-op when fff is unavailable.
 func (m *Manager) Prewarm(root string) {
-	if !m.enabled {
+	if !m.Enabled() {
 		return
 	}
 	m.ensureAsync(root)
 }
 
-// SearchAsync returns results when the index is warm; on a cold root it
-// kicks off the background scan and returns ok=false so the caller can fall
-// back to the walk-based search until the index is ready.
+// SearchAsync returns results when the index is warm; on a cold root it kicks
+// off the background scan and returns ok=false so the caller can fall back.
 func (m *Manager) SearchAsync(root, query string, limit int) ([]Item, bool) {
-	if !m.enabled {
+	if !m.Enabled() {
 		return nil, false
 	}
 	m.ensureAsync(root)
-	m.mu.Lock()
-	inst, ok := m.instances[root]
-	if ok {
-		m.lastUsed[root] = time.Now()
-	}
-	m.mu.Unlock()
-	if !ok {
+	lease, err := m.tryLease(root)
+	if err != nil || lease == nil {
 		return nil, false
 	}
-	items, err := inst.Search(query, limit)
+	defer lease.Release()
+	items, err := lease.Search(query, limit)
 	if err != nil {
 		return nil, false
 	}
 	return items, true
 }
 
-// GetOrCreate returns the instance for root, creating and indexing it
-// synchronously if needed. Unlike SearchAsync (interactive, non-blocking),
-// tool calls (glob/grep) can afford to wait for the initial scan.
-func (m *Manager) GetOrCreate(root string) (*Instance, error) {
-	if !m.enabled {
-		return nil, fmt.Errorf("fff is not available")
-	}
-	m.mu.Lock()
-	if inst, ok := m.instances[root]; ok {
-		m.lastUsed[root] = time.Now()
-		m.mu.Unlock()
-		return inst, nil
-	}
-	m.mu.Unlock()
-	inst, err := Create(root)
-	if err != nil {
-		return nil, err
-	}
-	m.mu.Lock()
-	if existing, ok := m.instances[root]; ok {
-		m.lastUsed[root] = time.Now()
-		m.mu.Unlock()
-		inst.Destroy()
-		return existing, nil
-	}
-	m.instances[root] = inst
-	m.lastUsed[root] = time.Now()
-	victims := m.evictLRULocked()
-	m.mu.Unlock()
-	for _, v := range victims {
-		v.Destroy()
-	}
-	return inst, nil
-}
-
-// CloseAll destroys every instance.
-func (m *Manager) CloseAll() {
+func (m *Manager) tryLease(root string) (*Lease, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.closed {
+		return nil, errManagerClosed
+	}
+	inst, ok := m.instances[root]
+	if !ok {
+		return nil, nil
+	}
+	// Acquire the read lease while holding the manager lock. Eviction also
+	// holds this lock before removing the pointer, so a newly acquired lease
+	// cannot race with Destroy.
+	inst.mu.RLock()
+	if inst.handle == nil {
+		inst.mu.RUnlock()
+		return nil, errors.New("fff instance destroyed")
+	}
+	m.lastUsed[root] = time.Now()
+	return newLease(inst), nil
+}
+
+// GetOrCreate returns a usage lease for root, creating and indexing it
+// synchronously if needed. Callers must release the returned lease.
+func (m *Manager) GetOrCreate(root string) (*Lease, error) {
+	if !m.Enabled() {
+		return nil, errors.New("fff is not available")
+	}
+	m.ensureAsync(root)
+	for {
+		m.mu.Lock()
+		if m.closed {
+			m.mu.Unlock()
+			return nil, errManagerClosed
+		}
+		if inst, ok := m.instances[root]; ok {
+			inst.mu.RLock()
+			if inst.handle == nil {
+				inst.mu.RUnlock()
+				m.mu.Unlock()
+				return nil, errors.New("fff instance destroyed")
+			}
+			m.lastUsed[root] = time.Now()
+			lease := newLease(inst)
+			m.mu.Unlock()
+			return lease, nil
+		}
+		state := m.creating[root]
+		m.mu.Unlock()
+		if state == nil {
+			// The creation may have completed and been evicted between the
+			// checks. Start another attempt; the manager's closed check keeps
+			// this from becoming an infinite loop after shutdown.
+			m.ensureAsync(root)
+			continue
+		}
+		<-state.done
+		if state.err != nil {
+			return nil, state.err
+		}
+	}
+}
+
+// CloseAll stops accepting new work, removes all manager-owned instances, and
+// waits for in-flight leases before native teardown. It is safe to call more
+// than once.
+func (m *Manager) CloseAll() {
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return
+	}
+	m.closed = true
+	victims := make([]*Instance, 0, len(m.instances))
+	states := make([]*createState, 0, len(m.creating))
 	for root, inst := range m.instances {
-		inst.Destroy()
+		victims = append(victims, inst)
 		delete(m.instances, root)
 		delete(m.lastUsed, root)
+	}
+	for _, state := range m.creating {
+		states = append(states, state)
+	}
+	m.mu.Unlock()
+
+	for _, victim := range victims {
+		victim.Destroy()
+	}
+	for _, state := range states {
+		<-state.done
 	}
 }

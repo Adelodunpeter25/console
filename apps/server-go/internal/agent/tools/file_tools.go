@@ -257,8 +257,9 @@ var Glob = NewTool("glob", "Find files matching a glob pattern (e.g. 'src/**/*.t
 		}
 		if fffManager != nil && fffManager.Enabled() {
 			if resolvedRoot, err := filepath.Abs(root); err == nil {
-				if inst, err := fffManager.GetOrCreate(resolvedRoot); err == nil {
-					items, err := inst.Glob(in.Pattern, maxResults)
+				if lease, err := fffManager.GetOrCreate(resolvedRoot); err == nil {
+					defer lease.Release()
+					items, err := lease.Glob(in.Pattern, maxResults)
 					if err == nil {
 						matches := make([]string, 0, len(items))
 						for _, item := range items {
@@ -299,7 +300,9 @@ type grepInput struct {
 	Include         string `json:"include,omitempty" jsonschema:"description=File name glob filter, e.g. *.go"`
 	MaxResults      int    `json:"maxResults,omitempty" jsonschema:"description=Maximum matches to return (default 50)"`
 	Mode            string `json:"mode,omitempty" jsonschema:"description=\"regex\" (default)\\, \"plain\"\\, or \"fuzzy\""`
-	CaseInsensitive bool   `json:"caseInsensitive,omitempty" jsonschema:"description=Case-insensitive search"`
+	CaseInsensitive bool   `json:"caseInsensitive,omitempty" jsonschema:"description=Case-insensitive search (legacy; prefer caseMode)"`
+	CaseMode        string `json:"caseMode,omitempty" jsonschema:"description=Case mode: smart (default)\\, sensitive\\, or insensitive"`
+	WholeWord       bool   `json:"wholeWord,omitempty" jsonschema:"description=Match whole words only (plain and regex modes)"`
 	ContextLines    int    `json:"contextLines,omitempty" jsonschema:"description=Lines of context around each match (default 2)"`
 }
 
@@ -324,7 +327,8 @@ var Grep = NewTool("grep", "Search file contents by pattern. Use for finding def
 		}
 		if fffManager != nil && fffManager.Enabled() {
 			if resolvedRoot, err := filepath.Abs(root); err == nil {
-				if inst, err := fffManager.GetOrCreate(resolvedRoot); err == nil {
+				if lease, err := fffManager.GetOrCreate(resolvedRoot); err == nil {
+					defer lease.Release()
 					mode := fff.GrepModeRegex
 					switch in.Mode {
 					case "plain":
@@ -332,19 +336,36 @@ var Grep = NewTool("grep", "Search file contents by pattern. Use for finding def
 					case "fuzzy":
 						mode = fff.GrepModeFuzzy
 					}
+					caseMode, cmErr := fff.ParseCaseMode(in.CaseMode)
+					if cmErr != nil {
+						return nil, NewToolError("%v", cmErr)
+					}
+					if in.CaseInsensitive && caseMode == fff.CaseSmart {
+						caseMode = fff.CaseInsensitive
+					}
 					contextLines := in.ContextLines
 					if contextLines <= 0 {
 						contextLines = 2
 					}
-					items, filesSearched, err := inst.Grep(in.Pattern, mode, in.CaseInsensitive, contextLines, max)
+					result, err := lease.GrepWithOptions(in.Pattern, fff.GrepOptions{
+						Mode:         mode,
+						Case:         caseMode,
+						WholeWord:    in.WholeWord,
+						ContextLines: contextLines,
+						MaxMatches:   max,
+					})
 					if err == nil {
-						matches := make([]grepMatch, 0, len(items))
-						for _, m := range items {
+						matches := make([]grepMatch, 0, len(result.Matches))
+						for _, m := range result.Matches {
 							matches = append(matches, grepMatch{
 								Path: m.RelPath, Line: int(m.LineNumber), Text: m.LineContent,
 							})
 						}
-						return textResult(formatGrepMatches(matches, filesSearched, max, in.Pattern, root)), nil
+						text := formatGrepMatches(matches, result.FilesSearched, max, in.Pattern, root)
+						if result.RegexError != nil {
+							text += fmt.Sprintf("\nNote: regex was invalid (%s); results are from a literal fallback.", result.RegexError.Message)
+						}
+						return textResult(text), nil
 					}
 				}
 			}

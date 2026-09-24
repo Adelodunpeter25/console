@@ -208,6 +208,69 @@ func TestGlobGrepFff(t *testing.T) {
 	}
 }
 
+// TestGrepCaseModeAndWholeWordFff verifies the case/whole-word options
+// reach the native search and change results, matching the product ask
+// ("case, whole-word, and regex toggles"). Requires FFF_LIB_PATH.
+func TestGrepCaseModeAndWholeWordFff(t *testing.T) {
+	if os.Getenv("FFF_LIB_PATH") == "" {
+		t.Skip("FFF_LIB_PATH not set")
+	}
+	manager := fff.NewManager()
+	if !manager.Enabled() {
+		t.Fatal("fff manager not enabled with FFF_LIB_PATH set")
+	}
+	tools.SetFffManager(manager)
+	t.Cleanup(manager.CloseAll)
+	t.Cleanup(func() { tools.SetFffManager(nil) })
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("Needle in a haystack\nneedler word\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Case-sensitive: "needle" (lowercase) must not match "Needle".
+	sensitiveArgs, _ := json.Marshal(map[string]any{
+		"pattern": "needle", "root": dir, "mode": "plain", "caseMode": "sensitive",
+	})
+	sensitiveOut, err := tools.Grep.Execute(context.Background(), sensitiveArgs)
+	if err != nil {
+		t.Fatalf("sensitive grep execute: %v", err)
+	}
+	sensitiveText := resultText(t, sensitiveOut)
+	if strings.Contains(sensitiveText, "Needle in a haystack") {
+		t.Fatalf("case-sensitive search matched wrong case: %q", sensitiveText)
+	}
+
+	// Case-insensitive: must match "Needle" (uppercase N).
+	insensitiveArgs, _ := json.Marshal(map[string]any{
+		"pattern": "needle", "root": dir, "mode": "plain", "caseMode": "insensitive",
+	})
+	insensitiveOut, err := tools.Grep.Execute(context.Background(), insensitiveArgs)
+	if err != nil {
+		t.Fatalf("insensitive grep execute: %v", err)
+	}
+	insensitiveText := resultText(t, insensitiveOut)
+	if !strings.Contains(insensitiveText, "Needle in a haystack") {
+		t.Fatalf("case-insensitive search missed uppercase match: %q", insensitiveText)
+	}
+
+	// Whole word: "needle" must not match "needler".
+	wholeWordArgs, _ := json.Marshal(map[string]any{
+		"pattern": "needle", "root": dir, "mode": "plain", "caseMode": "insensitive", "wholeWord": true,
+	})
+	wholeWordOut, err := tools.Grep.Execute(context.Background(), wholeWordArgs)
+	if err != nil {
+		t.Fatalf("whole-word grep execute: %v", err)
+	}
+	wholeWordText := resultText(t, wholeWordOut)
+	if strings.Contains(wholeWordText, "needler word") {
+		t.Fatalf("whole-word search matched partial word: %q", wholeWordText)
+	}
+	if !strings.Contains(wholeWordText, "Needle in a haystack") {
+		t.Fatalf("whole-word search missed exact word: %q", wholeWordText)
+	}
+}
+
 func TestPermissionMatrix(t *testing.T) {
 	cases := []struct {
 		mode permissions.Mode
