@@ -58,40 +58,63 @@ size, not as targets.
 | Compaction | `agent/compaction/llm.go:24` | Summary prompt is already short. The full history isn't saved anywhere the agent can search. |
 | Subagent | `agent/loop/subagent.go:129` | Adds a fixed preamble to the parent's **whole** system prompt (tree included). Returns the child's entire streamed text as its "summary". |
 
-## Test setup: OpenCode free model
+## Test setup: Claude Haiku on the Claude Code provider
 
-All cost measurements use the OpenCode Zen provider with a free model
-(`space-bunny-free`, found via `GET /zen/v1/models`), so we can run it as
-often as we want at no cost.
+All cost measurements use the `claude` provider (Claude Code OAuth
+subscription) with **`claude-haiku-4-5`**. That's the model with remaining
+usage on the account.
 
-Caveats:
+Why Haiku instead of the OpenCode free model:
 
-- Free models cost $0, so we compare **price-weighted tokens**. We use a
-  fixed reference price table (per million tokens), kept in the bench tool:
-  - uncached input: 1.00
-  - cached input: 0.10
-  - cache write: 1.25
-  - output: 5.00
+- **Real cache numbers.** Anthropic reports `cache_read_input_tokens` and
+  `cache_creation_input_tokens` on every response, and `NormalizeUsage`
+  (`providers/claude/stream.go:228`) already maps them into `TurnUsage`.
+  We don't need to estimate caching locally.
+- **Explicit cache breakpoints** are already wired up
+  (`claude/convert.go:251,316`, `stream.go:150`), so the Phase 2 work is
+  measured on the provider it's actually designed for.
+- **The system prompt already reaches the model.** On the OpenCode Chat
+  path it doesn't (see the Phase 0 bug). So the baseline doesn't depend on
+  fixing that first.
+- **Real prices.** Haiku 4.5 list prices (per million tokens) are uncached
+  input $1.00, cache read $0.10, cache write (5 min) $1.25, output $5.00.
+  The bench reports weighted cost in real dollars using these prices, kept
+  as a table in the bench tool so it's easy to add other models.
+- More consistent quality than free models, so each run is less noisy.
 
-  Only the ratios matter; they roughly match current frontier pricing.
-- Zen Chat Completions may not report cached tokens
-  (`NormalizeChatUsage` returns `CacheUnsupported`). When it doesn't, the
-  bench tool must also report a **local estimate** of the prefix that would
-  be cacheable: bytes shared with the previous request of the same run,
-  converted with `compaction.EstimatePayloadTokens`. That way cache-layout
-  changes can still be measured on a free model.
-- Free-model quality is lower and noisier than frontier models. Run each task
-  **3 times** and compare medians. Before we ship Phase 4 flags as defaults,
-  do one confirmation run on a paid Claude or Codex model, if one is
-  available.
-- Rate limits: run tasks one after another, with a pause between them.
+Things to know about Haiku and the subscription:
+
+- **Minimum cacheable prefix.** Haiku 4.5 only caches a prefix of at least
+  **4,096 tokens**. A cache breakpoint on a shorter prefix gets no cache
+  hit, even when the prefix is identical. That matters after Phase 4.1
+  trims the prompt: the tools plus stable system block may drop under
+  4,096 tokens. If so, the breakpoint after the setup message (tools +
+  system + setup) is the one that actually caches. Task 2.3 has to check
+  this with real numbers instead of assuming.
+- **The usage limit must not be exceeded.** The subscription limit is a
+  hard ceiling, so the bench has a budget guard (Task 1.7) that checks the
+  Claude usage report before and during a run, and stops early.
+- **Keep runs small.** Default to `--runs 2` on the full 12-task set, and
+  run only the tasks a change affects when checking just that change. Save
+  the full set for the baseline and for final checks before flipping a
+  flag's default.
+- **Rate limits.** `doRequest` already retries on 429 and 529. The bench
+  runs tasks one after another with a short pause between them.
+- **Required identity line.** `ClaudeCodeSystemInstruction` stays as the
+  first system block. Prompt trimming (4.1) never touches it.
+
+OpenCode's free model (`space-bunny-free`) is an optional **second check**,
+useful to see whether prompt changes still work on a weaker, non-Anthropic
+model. It needs Phase 0 fixed first, and reports cache numbers only where
+Zen returns them.
 
 ---
 
-## Phase 0: Fix the OpenCode baseline (prerequisite)
+## Phase 0: Fix the OpenCode system prompt bug (standalone fix)
 
-We can't measure the harness on OpenCode until the system prompt actually
-gets sent.
+This is a real bug for OpenCode users, but it no longer blocks the plan: the
+Haiku bench doesn't depend on it. Do it first anyway, since it's small, and
+it's required before running the optional OpenCode second check.
 
 ### Task 0.1: Send the system prompt on the Chat path
 - **File:** `internal/providers/opencode/stream.go` (`runChat`), and
@@ -120,7 +143,7 @@ Everything after this depends on it.
 - **Files:** `internal/agent/loop/loop.go`, new `internal/agent/loop/usage.go`.
 - **Change:** keep a `RunUsage` on the agent that adds up every
   `TurnUsage` in a run: turns, input, cacheRead, cacheWrite, output,
-  reasoning, plus the reference-weighted cost. At the end of a run, emit it
+  reasoning, plus dollar cost from the bench price table. At the end of a run, emit it
   once as a new internal event, or attach it to `EventTurnDone`. Subagent
   runs add their totals to the parent under a `subagents` field, so we can
   measure the whole tree.
@@ -172,24 +195,49 @@ Everything after this depends on it.
 
   Each task has a `check` command (test, grep, or a file assertion) that
   decides success automatically.
-- **Runner:** for each task, repeated N times (default 3): reset the
-  worktree, run the agent loop in-process with the OpenCode provider and a
-  free model, run `check`, and record success, turns, RunUsage, weighted
-  cost, tool stats, wall time and the estimated cacheable prefix.
-- **Flags:** `--model`, `--runs`, `--tasks`, `--flags key=value,...` (turns
-  on harness feature flags, see Phase 4), `--out results.json`.
+- **Runner:** for each task, repeated N times (default 2): reset the
+  worktree, run the agent loop in-process with the `claude` provider and
+  `claude-haiku-4-5` (using the same credential the app uses,
+  `claude.LoadCredential`), run `check`, and record success, turns,
+  RunUsage, dollar cost, cache hit rate, tool stats and wall time.
+- **Flags:** `--provider` (default `claude`), `--model` (default
+  `claude-haiku-4-5`), `--runs`, `--tasks`, `--flags key=value,...` (turns
+  on harness feature flags, see Phase 4), `--max-usage-pct` (see Task 1.7),
+  `--out results.json`.
 - **Output:** a table per task and overall: success rate, median turns,
-  median weighted cost per **successful** task, tool error rate, cost share
-  by source. Also `bench compare a.json b.json` to show the difference.
+  median dollar cost per **successful** task, cache-read share of input,
+  cold-miss rate (turns after the first with `cacheRead == 0`), tool error
+  rate, and cost share by source. Also `bench compare a.json b.json` to show
+  the difference.
 - **Test:** `tests/bench/bench_test.go` runs the runner with a fake provider
   (no network).
 
 ### Task 1.6: Record the baseline
-- Run `go run ./cmd/bench --runs 3 --out bench/results/baseline.json` after
-  Phase 0.
+- Run `go run ./cmd/bench --runs 2 --out bench/results/baseline.json`
+  (Claude Haiku). Phase 0 isn't needed for this.
 - Add a short "Baseline" section to this doc: cost share by source × billing
   type, static tokens per request, turns per task, and per-tool usage and
   error rate. Rank the rest of the work with it.
+
+### Task 1.7: Usage budget guard for the Claude subscription
+- **Files:** `cmd/bench/budget.go`, reusing `providers/usage`
+  (`Service.GetUsage(ctx, "claude")` → `Report.Limits[].Amount`, which is a
+  utilization percentage).
+- **Change:**
+  - Before starting, fetch the Claude usage report. Refuse to start if any
+    limit (5-hour session, weekly, weekly per-model) is at or above
+    `--max-usage-pct` (default **80%**).
+  - Re-check between tasks (call `Service.Invalidate("claude")` first, so
+    the numbers aren't cached). Stop cleanly as soon as the limit is
+    crossed, and write partial results marked `"aborted": "budget"`.
+  - Estimate how much a run will use before it starts: tasks × runs × the
+    median cost per task from the last results file. Print the estimate,
+    and ask for `--yes` when it's more than 10 percentage points of the
+    remaining budget.
+  - Also stop immediately on a 429 that has already used up its retries,
+    since that means the limit is hit.
+- **Test:** `tests/bench/budget_test.go`, with a fake usage report: refuses
+  above the threshold, stops partway through, and writes partial results.
 
 ---
 
@@ -235,6 +283,11 @@ as possible:
   second breakpoint on the setup user message, and keep the existing one on
   the last message. That's 4 breakpoints in total (tools, stable system,
   setup, tail), which is Anthropic's limit.
+- **Haiku minimum:** caching only works from 4,096 tokens up. Log the token
+  count at each breakpoint, and when it's under 4,096, skip that breakpoint
+  (it's wasted). The bench confirms the first turn shows a
+  `cache_creation_input_tokens` write, and later turns show
+  `cache_read_input_tokens` for tools + system + setup.
 - **Test:** `tests/providers/claude_provider_test.go` checks the breakpoint
   positions.
 
@@ -253,9 +306,10 @@ as possible:
   model. **Proposal only** until measured, because it changes behavior.
 
 ### Validate Phase 2
-Run bench against the baseline. Expect: the same success rate, and a much
-higher cacheable-prefix share from turn 2 onward (locally estimated on Zen).
-Where the provider reports it, expect a higher cache-read share.
+Run bench (Haiku) against the baseline. Expect: the same success rate, a
+higher cache-read share of input from turn 2 onward, and fewer cold misses
+(turns after the first with `cacheRead == 0`). All of these come from real
+Anthropic usage fields.
 
 ---
 
@@ -413,15 +467,16 @@ Also audit `SYSTEM.md` handling and the subagent preamble in the same pass.
 
 ## Validation and shipping rules
 
-- For each Phase 2–4 change: `bench --runs 3` before and after, then
-  `bench compare`.
-- **Ship when** median weighted cost per successful task goes down **and**
+- For each Phase 2–4 change: `bench --runs 2` (Haiku) on the affected tasks
+  before and after, then `bench compare`. Keep the budget guard on.
+- **Ship when** median dollar cost per successful task goes down **and**
   success rate, tool-error rate and median turns don't get worse by more
   than noise (roughly, one task out of 12 swinging either way).
 - Record null and negative results in the Results log below. Don't delete
   them.
-- Before flipping any Phase 4 default: one confirmation run on a paid model,
-  if available.
+- Before flipping any Phase 4 default: one run of the full 12-task set on
+  Haiku. Optionally, a second check on the OpenCode free model (after
+  Phase 0) to see that the change also works on a non-Anthropic model.
 
 ## Traps to avoid
 
@@ -446,6 +501,6 @@ One task per commit, each with a single-line message, for example:
 
 ## Results log
 
-| Date | Change | Runs | Success | Median turns | Weighted cost / success | Notes |
+| Date | Change | Runs | Success | Median turns | $ cost / success (Haiku) | Notes |
 |---|---|---|---|---|---|---|
 | — | baseline | — | — | — | — | fill in after Task 1.6 |
