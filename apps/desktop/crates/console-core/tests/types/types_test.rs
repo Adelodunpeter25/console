@@ -125,3 +125,59 @@ fn test_update_session_project_id_null_vs_omit() {
     let v: serde_json::Value = serde_json::to_value(&link).expect("serializes");
     assert_eq!(v.get("projectId"), Some(&serde_json::json!("proj-1")));
 }
+
+#[test]
+fn test_grep_result_deserialization() {
+    // Mirrors the exact camelCase shape returned by GET /api/fs/grep
+    // (internal/types/fs.go's GrepResult), including the omitted
+    // optional fields the server leaves out when zero/empty.
+    let json_data = r#"{
+        "matches": [
+            {
+                "relPath": "src/client/frontends/desktop/core/src/conductor/FileAPI.ts",
+                "fileName": "FileAPI.ts",
+                "lineNumber": 12,
+                "column": 3,
+                "endColumn": 11,
+                "lineContent": "  useQuery,",
+                "matchRanges": [{"start": 2, "end": 10}]
+            }
+        ],
+        "totalMatched": 7,
+        "filesSearched": 240,
+        "totalFiles": 240,
+        "filteredFiles": 3,
+        "nextCursor": 0,
+        "hasMore": false
+    }"#;
+
+    let result: GrepResult = serde_json::from_str(json_data).expect("deserializes grep result");
+    assert_eq!(result.total_matched, 7);
+    assert_eq!(result.filtered_files, 3);
+    assert!(!result.has_more);
+    assert_eq!(result.regex_error, None);
+    assert_eq!(result.matches.len(), 1);
+    let m = &result.matches[0];
+    assert_eq!(m.file_name, "FileAPI.ts");
+    assert_eq!(m.line_number, 12);
+    assert_eq!(m.match_ranges.len(), 1);
+    assert_eq!(m.match_ranges[0].start, 2);
+    assert_eq!(m.match_ranges[0].end, 10);
+    assert!(!m.is_binary);
+    assert!(!m.is_definition);
+}
+
+#[test]
+fn test_grep_mode_and_case_mode_query_values() {
+    // Query param values must match the server's expected strings exactly
+    // (internal/fff.GrepMode / CaseMode parsing).
+    assert_eq!(GrepMode::Plain.as_query_value(), "plain");
+    assert_eq!(GrepMode::Regex.as_query_value(), "regex");
+    assert_eq!(GrepMode::Fuzzy.as_query_value(), "fuzzy");
+    assert_eq!(GrepMode::default(), GrepMode::Regex);
+
+    assert_eq!(GrepCaseMode::Smart.as_query_value(), "smart");
+    assert_eq!(GrepCaseMode::Sensitive.as_query_value(), "sensitive");
+    assert_eq!(GrepCaseMode::Insensitive.as_query_value(), "insensitive");
+    assert_eq!(GrepCaseMode::default(), GrepCaseMode::Smart);
+}

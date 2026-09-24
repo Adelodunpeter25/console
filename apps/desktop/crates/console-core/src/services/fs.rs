@@ -276,9 +276,61 @@ impl FsService {
             }
         }
     }
-}
+    /// Content search across a workspace root for the global search panel
+    /// (⌘⇧F). Requires the server's fff index; returns an error (surfaced as
+    /// an empty/unavailable state by the caller) when the backend responds
+    /// with 503 because the native library isn't wired in for this build.
+    pub async fn grep(
+        &self,
+        root: &str,
+        query: &str,
+        options: &GrepOptions,
+    ) -> Result<GrepResult> {
+        let mut url = self.transport.url("/api/fs/grep").await;
+        let mut params = vec![
+            format!("root={}", urlencoding::encode(root)),
+            format!("q={}", urlencoding::encode(query)),
+            format!("mode={}", options.mode.as_query_value()),
+            format!("caseMode={}", options.case_mode.as_query_value()),
+            format!("wholeWord={}", options.whole_word),
+        ];
+        if let Some(c) = options.context_lines {
+            params.push(format!("contextLines={}", c));
+        }
+        if let Some(m) = options.max_matches {
+            params.push(format!("limit={}", m));
+        }
+        if let Some(c) = options.cursor {
+            params.push(format!("cursor={}", c));
+        }
+        url.push('?');
+        url.push_str(&params.join("&"));
 
-/// Structured error returned by `GET /api/fs/file/raw` when preview is blocked.
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to search file contents")?;
+
+        let body: ApiResponse<GrepResult> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse grep response")?;
+        if body.success {
+            body.data
+                .ok_or_else(|| anyhow!("Grep result data is missing"))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to search file contents".into())
+            ))
+        }
+    }
+}
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct RawFileError {
     #[serde(default)]
