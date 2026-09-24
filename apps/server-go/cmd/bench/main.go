@@ -104,20 +104,26 @@ func run() error {
 		}
 	}
 
+	save := func(results *bench.Results) {
+		if *out == "" {
+			return
+		}
+		if err := os.MkdirAll(filepath.Dir(*out), 0o755); err == nil {
+			err = bench.WriteResults(*out, results)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "save %s: %v\n", *out, err)
+		}
+	}
 	results, runErr := bench.Run(ctx, bench.Options{
 		Provider: provider, ProviderID: *providerID, Model: *model,
 		Tasks: tasks, Runs: *runs, Repo: repo, Commit: *commit,
-		Flags: flags, Budget: budget,
+		Flags: flags, Budget: budget, OnProgress: save,
 	})
 	if results != nil {
+		save(results)
 		bench.PrintReport(os.Stdout, results)
 		if *out != "" {
-			if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil {
-				return err
-			}
-			if err := bench.WriteResults(*out, results); err != nil {
-				return err
-			}
 			fmt.Fprintf(os.Stderr, "wrote %s\n", *out)
 		}
 	}

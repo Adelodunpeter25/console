@@ -35,6 +35,9 @@ type Options struct {
 	Timeout time.Duration
 	// Log receives progress lines (default os.Stderr).
 	Log io.Writer
+	// OnProgress, when set, receives the results after every run so a
+	// crash or stop never loses finished work.
+	OnProgress func(*Results)
 }
 
 // RunResult is one task attempt.
@@ -103,6 +106,9 @@ func Run(ctx context.Context, opts Options) (*Results, error) {
 			fmt.Fprintf(opts.Log, "[%s run %d] success=%v turns=%d cost=$%.4f %s\n",
 				task.ID, run, result.Success, result.Usage.Total().Turns, result.CostUSD, result.Error)
 			results.Runs = append(results.Runs, result)
+			if opts.OnProgress != nil {
+				opts.OnProgress(results)
+			}
 			if isRateLimited(result.Error) {
 				results.Aborted = ErrBudget.Error()
 				return results, fmt.Errorf("%w: rate limited after retries", ErrBudget)

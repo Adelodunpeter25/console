@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
@@ -145,7 +146,8 @@ func TestShippedTasksParse(t *testing.T) {
 	}
 }
 
-// fakeUsage returns scripted reports, one per Fetch.
+// fakeUsage returns scripted reports, one per Fetch. A negative percent
+// returns a nil report (the usage service's fetch-failure shape).
 type fakeUsage struct {
 	used  []float64
 	calls int
@@ -154,6 +156,9 @@ type fakeUsage struct {
 func (f *fakeUsage) Fetch(ctx context.Context) (*usage.Report, error) {
 	pct := f.used[min(f.calls, len(f.used)-1)]
 	f.calls++
+	if pct < 0 {
+		return nil, nil
+	}
 	return &usage.Report{Limits: []usage.Limit{
 		{Label: "5-hour", Amount: usage.BuildPercentAmount(&pct)},
 		{Label: "credits", Amount: usage.Amount{Unit: "usd"}},
@@ -192,5 +197,29 @@ func TestBudgetStopsMidRunWithPartialResults(t *testing.T) {
 	raw, _ := os.ReadFile(path)
 	if !strings.Contains(string(raw), `"aborted": "budget"`) {
 		t.Fatalf("partial file: %s", raw)
+	}
+}
+
+func TestBudgetEmptyReport(t *testing.T) {
+	retried := &bench.Budget{Source: &fakeUsage{used: []float64{-1, 30}}, MaxPct: 80, RetryDelay: time.Millisecond}
+	if used, err := retried.Headroom(context.Background()); err != nil || used != 30 {
+		t.Fatalf("retry after empty report: %v %v", used, err)
+	}
+	failing := &bench.Budget{Source: &fakeUsage{used: []float64{-1}}, MaxPct: 80, RetryDelay: time.Millisecond}
+	if _, err := failing.Headroom(context.Background()); err == nil {
+		t.Fatal("repeated empty report must stop the bench")
+	}
+}
+
+func TestBenchOnProgressAfterEveryRun(t *testing.T) {
+	repo := scratchRepo(t)
+	var seen []int
+	_, err := bench.Run(context.Background(), bench.Options{
+		Provider: writerProvider(), ProviderID: "mock", Model: "claude-haiku-4-5",
+		Tasks: []bench.Task{{ID: "a", Prompt: "p", Check: "true"}}, Runs: 2, Repo: repo, Log: &bytes.Buffer{},
+		OnProgress: func(r *bench.Results) { seen = append(seen, len(r.Runs)) },
+	})
+	if err != nil || len(seen) != 2 || seen[1] != 2 {
+		t.Fatalf("progress: %v %v", err, seen)
 	}
 }
