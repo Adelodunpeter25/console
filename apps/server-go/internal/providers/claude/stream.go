@@ -279,6 +279,7 @@ func (p *Provider) doRequest(ctx context.Context, url, accessToken, sessionID st
 	if err != nil {
 		return nil, err
 	}
+	shared.DumpRequest("claude", sessionID, rawBody)
 	attempt := func(payload []byte) (*http.Response, error) {
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(payload))
 		if err != nil {

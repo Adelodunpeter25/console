@@ -74,11 +74,12 @@ func (p *Provider) ensureModel(ctx context.Context, modelID string) error {
 	return fmt.Errorf("OpenCode model %q is not available in the free model list", modelID)
 }
 
-func (p *Provider) postJSON(ctx context.Context, path string, body map[string]any) (*http.Response, error) {
+func (p *Provider) postJSON(ctx context.Context, path, conversationID string, body map[string]any) (*http.Response, error) {
 	raw, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
+	shared.DumpRequest("opencode", conversationID, raw)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, path, bytes.NewReader(raw))
 	if err != nil {
 		return nil, err
@@ -114,7 +115,7 @@ func (p *Provider) runChat(ctx context.Context, req loop.TurnRequest, events *st
 	if len(toolDefinitions) > 0 {
 		body["tools"] = ConvertChatTools(toolDefinitions)
 	}
-	resp, err := p.postJSON(ctx, ChatCompletionsURL(p.baseURL()), body)
+	resp, err := p.postJSON(ctx, ChatCompletionsURL(p.baseURL()), req.ConversationID, body)
 	if err != nil {
 		return err
 	}
@@ -197,7 +198,7 @@ func (p *Provider) runResponses(ctx context.Context, req loop.TurnRequest, event
 		body["reasoning"] = map[string]any{"effort": req.ThinkingLevel}
 	}
 
-	resp, err := p.postJSON(ctx, ResponsesURL(p.baseURL()), body)
+	resp, err := p.postJSON(ctx, ResponsesURL(p.baseURL()), req.ConversationID, body)
 	if err != nil {
 		return err
 	}

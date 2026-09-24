@@ -251,6 +251,7 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 		events.Fail(err)
 		return err
 	}
+	shared.DumpRequest("antigravity", req.ConversationID, rawBody)
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", EndpointURL(p.baseURL()), strings.NewReader(string(rawBody)))
 	if err != nil {
 		events.Fail(err)

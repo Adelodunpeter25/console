@@ -334,6 +334,7 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 	if err != nil {
 		return err
 	}
+	shared.DumpRequest("codex", sessionID, rawBody)
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", ResponsesURL(p.baseURL()), bytes.NewReader(rawBody))
 	if err != nil {
 		return err
