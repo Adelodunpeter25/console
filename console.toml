@@ -3,7 +3,7 @@
 
 [scripts.dev-server]
 label = "Dev Server :2003"
-command = "PORT=3001 go -C apps/server-go run ./cmd/server"
+command = "PORT=2003 go -C apps/server-go run ./cmd/server"
 shortcut = "cmd-shift-r"
 persistent = true
 
