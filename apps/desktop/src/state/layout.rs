@@ -27,10 +27,15 @@ const WINDOW_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 fn strip_diff_tabs(mut root: console_core::WorkspaceNode) -> console_core::WorkspaceNode {
     for leaf in root.leaves_mut() {
-        leaf.tabs
-            .retain(|tab| !matches!(tab, console_core::WorkspaceTabConfig::Diff { .. }));
+        leaf.tabs.retain(|tab| {
+            !matches!(
+                tab,
+                console_core::WorkspaceTabConfig::Diff { .. }
+                    | console_core::WorkspaceTabConfig::ChangesReview { .. }
+            )
+        });
         if let Some(active) = &leaf.active_tab_id {
-            if active.starts_with("diff:") {
+            if active.starts_with("diff:") || active.starts_with("changesReview:") {
                 leaf.active_tab_id = leaf.tabs.last().map(|t| t.id());
             }
         }

@@ -172,6 +172,19 @@ impl ConsoleDesktopApp {
                 }
             }
             WorkspaceTabConfig::Chat { .. } => {}
+            WorkspaceTabConfig::ChangesReview { .. } => {
+                let tab_id = tab.id();
+                let still_referenced = self
+                    .workspace_root
+                    .leaves()
+                    .iter()
+                    .flat_map(|leaf| leaf.tabs.iter())
+                    .any(|open_tab| open_tab.id() == tab_id);
+                if !still_referenced {
+                    self.changes_review_data.remove(&tab_id);
+                    self.changes_review_collapsed.remove(&tab_id);
+                }
+            }
         }
     }
 

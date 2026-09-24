@@ -89,11 +89,12 @@ type SubagentInfo struct {
 }
 
 type SessionFileChange struct {
-	Path       string  `json:"path"`
-	TurnIndex  int     `json:"turnIndex"`
-	Status     string  `json:"status"`
-	Additions  int     `json:"additions"`
-	Deletions  int     `json:"deletions"`
-	DiffText   *string `json:"diffText,omitempty"`
-	UpdatedAt  int64   `json:"updatedAt"`
+	Path      string  `json:"path"`
+	TurnIndex int     `json:"turnIndex"`
+	Status    string  `json:"status"`
+	Additions int     `json:"additions"`
+	Deletions int     `json:"deletions"`
+	DiffText  *string `json:"diffText,omitempty"`
+	Reviewed  bool    `json:"reviewed"`
+	UpdatedAt int64   `json:"updatedAt"`
 }

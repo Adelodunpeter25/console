@@ -217,6 +217,19 @@ pub struct ConsoleDesktopApp {
     /// Trailing-debounce latch so bursts of fs events fetch the tree once.
     pub(crate) fs_tree_fetch_pending: bool,
     pub inspector_session_changes: Rc<Vec<console_core::types::SessionFileChange>>,
+    pub inspector_changes_scope: console_core::types::ChangesScope,
+    pub inspector_changes_scope_menu: console_ui::ContextMenuHandle,
+    /// Fetched change list for each open "View all" review tab, keyed by the
+    /// tab id (`changesReview:<sessionId>:<Scope>`). Populated once on open;
+    /// `diffText` per row is already included by the `GET /changes` response
+    /// with a resolved scope, so no per-file follow-up fetch is needed.
+    pub(crate) changes_review_data:
+        std::collections::HashMap<String, Rc<Vec<console_core::types::SessionFileChange>>>,
+    /// Paths collapsed in a given review tab (local UI state, not persisted).
+    /// A file starts collapsed iff it was already reviewed when the tab's
+    /// data was fetched; toggling reviewed flips membership here too.
+    pub(crate) changes_review_collapsed:
+        std::collections::HashMap<String, std::collections::HashSet<String>>,
     pub inspector_expanded_folders: Rc<std::collections::HashSet<String>>,
     pub inspector_selected_path: Option<String>,
     pub session_subagents:

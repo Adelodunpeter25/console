@@ -79,7 +79,8 @@ impl ConsoleDesktopApp {
             Some(console_core::WorkspaceTabConfig::File { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Diff { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Terminal { project_id, .. })
-            | Some(console_core::WorkspaceTabConfig::Browser { project_id, .. }) => {
+            | Some(console_core::WorkspaceTabConfig::Browser { project_id, .. })
+            | Some(console_core::WorkspaceTabConfig::ChangesReview { project_id, .. }) => {
                 project_id.clone()
             }
             None => None,

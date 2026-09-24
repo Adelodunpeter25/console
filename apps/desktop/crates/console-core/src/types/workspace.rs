@@ -68,6 +68,22 @@ pub enum WorkspaceTabConfig {
         #[serde(rename = "lastActiveAtMs")]
         last_active_at_ms: Option<i64>,
     },
+    /// The "View all" session changes review tab (§6 of
+    /// `docs/session-changes-turn-diff-plan.md`): every changed file in the
+    /// given scope, stacked in one scrollable column with per-file
+    /// mark-as-reviewed state.
+    #[serde(rename = "changesReview")]
+    ChangesReview {
+        #[serde(rename = "sessionId")]
+        session_id: String,
+        scope: super::ChangesScope,
+        title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        project_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "lastActiveAtMs")]
+        last_active_at_ms: Option<i64>,
+    },
 }
 
 impl WorkspaceTabConfig {
@@ -79,6 +95,9 @@ impl WorkspaceTabConfig {
             Self::File { path, .. } => format!("file:{path}"),
             Self::Diff { path, .. } => format!("diff:{path}"),
             Self::Browser { browser_id, .. } => format!("browser:{browser_id}"),
+            Self::ChangesReview {
+                session_id, scope, ..
+            } => format!("changesReview:{session_id}:{scope:?}"),
         }
     }
 
@@ -88,7 +107,8 @@ impl WorkspaceTabConfig {
             | Self::Terminal { title, .. }
             | Self::File { title, .. }
             | Self::Diff { title, .. }
-            | Self::Browser { title, .. } => title,
+            | Self::Browser { title, .. }
+            | Self::ChangesReview { title, .. } => title,
         }
     }
 
@@ -99,7 +119,8 @@ impl WorkspaceTabConfig {
             | Self::Terminal { title: t, .. }
             | Self::File { title: t, .. }
             | Self::Diff { title: t, .. }
-            | Self::Browser { title: t, .. } => *t = title,
+            | Self::Browser { title: t, .. }
+            | Self::ChangesReview { title: t, .. } => *t = title,
         }
     }
 
@@ -109,7 +130,8 @@ impl WorkspaceTabConfig {
             | Self::Terminal { project_id, .. }
             | Self::File { project_id, .. }
             | Self::Diff { project_id, .. }
-            | Self::Browser { project_id, .. } => project_id.as_deref(),
+            | Self::Browser { project_id, .. }
+            | Self::ChangesReview { project_id, .. } => project_id.as_deref(),
         }
     }
 
@@ -119,7 +141,8 @@ impl WorkspaceTabConfig {
             | Self::Terminal { project_id: p, .. }
             | Self::File { project_id: p, .. }
             | Self::Diff { project_id: p, .. }
-            | Self::Browser { project_id: p, .. } => *p = project_id,
+            | Self::Browser { project_id: p, .. }
+            | Self::ChangesReview { project_id: p, .. } => *p = project_id,
         }
     }
 
@@ -129,7 +152,8 @@ impl WorkspaceTabConfig {
             | Self::Terminal { last_active_at_ms, .. }
             | Self::File { last_active_at_ms, .. }
             | Self::Diff { last_active_at_ms, .. }
-            | Self::Browser { last_active_at_ms, .. } => *last_active_at_ms,
+            | Self::Browser { last_active_at_ms, .. }
+            | Self::ChangesReview { last_active_at_ms, .. } => *last_active_at_ms,
         }
     }
 
@@ -139,7 +163,8 @@ impl WorkspaceTabConfig {
             | Self::Terminal { last_active_at_ms, .. }
             | Self::File { last_active_at_ms, .. }
             | Self::Diff { last_active_at_ms, .. }
-            | Self::Browser { last_active_at_ms, .. } => *last_active_at_ms = ts_ms,
+            | Self::Browser { last_active_at_ms, .. }
+            | Self::ChangesReview { last_active_at_ms, .. } => *last_active_at_ms = ts_ms,
         }
     }
 }

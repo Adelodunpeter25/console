@@ -131,9 +131,11 @@ fn tab_palette_entries(
                         ),
                     ));
                 }
-                // File and Diff tabs are out of scope for the ⌘⇧P palette;
-                // they're reachable via the tab bar and ⌘P file search.
-                WorkspaceTabConfig::File { .. } | WorkspaceTabConfig::Diff { .. } => {}
+                // File, Diff, and ChangesReview tabs are out of scope for the
+                // ⌘⇧P palette; reachable via the tab bar and ⌘P file search.
+                WorkspaceTabConfig::File { .. }
+                | WorkspaceTabConfig::Diff { .. }
+                | WorkspaceTabConfig::ChangesReview { .. } => {}
             }
         }
     }

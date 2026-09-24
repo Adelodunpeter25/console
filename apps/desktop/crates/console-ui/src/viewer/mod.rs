@@ -5,6 +5,7 @@ pub mod file_viewer;
 pub mod image_preview;
 pub mod logs_viewer;
 pub mod markdown_viewer;
+pub mod review_tab;
 pub mod svg;
 
 pub use blocked_panel::BlockedFilePanel;
@@ -20,6 +21,7 @@ pub use image_preview::{
     ImageMeta, ImagePreview, SvgViewMode, format_bytes, image_dimensions, svg_source_header,
 };
 pub use markdown_viewer::MarkdownViewer;
+pub use review_tab::ReviewTab;
 pub use svg::rasterize_svg;
 pub use editor_ui::{
     DiffState, DiffView as EditorDiffView, EditorState, EditorView, FontConfig, IndentOptions,

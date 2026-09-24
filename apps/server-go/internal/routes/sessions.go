@@ -297,6 +297,25 @@ func registerSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		}
 		return sessionError(c, fiber.StatusNotFound, "file change not found")
 	})
+	// POST /api/sessions/:id/changes/reviewed — mark/unmark a file change as reviewed.
+	h.Post("/:id/changes/reviewed", func(c *fiber.Ctx) error {
+		sessionID := c.Params("id")
+		var body struct {
+			Path      string `json:"path"`
+			TurnIndex int    `json:"turnIndex"`
+			Reviewed  bool   `json:"reviewed"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return sessionError(c, fiber.StatusBadRequest, "invalid request body")
+		}
+		if body.Path == "" {
+			return sessionError(c, fiber.StatusBadRequest, "path is required")
+		}
+		if err := sessions.SetFileChangeReviewed(sessionID, body.Path, body.TurnIndex, body.Reviewed); err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, err.Error())
+		}
+		return c.SendStatus(fiber.StatusNoContent)
+	})
 }
 
 // sessionError mirrors the TS error shape with TS status codes.

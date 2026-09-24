@@ -142,17 +142,14 @@ Data fetching: since this tab needs every file's diff text upfront (not lazy per
    - Add `reviewed` column migration (§3.2).
    - Add `reviewed` to `SessionFileChangeDto` and the `GET /changes` query/response path.
    - Add `POST /api/sessions/:id/changes/reviewed` endpoint.
-5. **Step 5 (Desktop — Changes tab polish)** ⏳ PENDING:
-   - Add aggregate `N files changed +X -Y` header row to `ChangesListView`.
-   - Add scope dropdown (This Turn / All Turns / Previous Turn) driving the existing `turnIndex` query param.
-   - Add "View all" button that opens the new review tab (§6) with the current scope.
-6. **Step 6 (Desktop — View all review tab)** ⏳ PENDING:
-   - New tab variant in `viewer/diff_viewer.rs` (or a new file, e.g. `viewer/review_tab.rs`) rendering the stacked, accordion, mark-as-reviewed flow described in §6.
-   - Reuse `DiffView` per file instead of building a new diff renderer.
-   - Wire `POST /changes/reviewed` on toggle, with optimistic local update.
-7. **Step 7 (Verification)** ⏳ PENDING:
-   - Empty non-git directory: run *"Create a hello.txt file and write 3 lines"* → Changes tab shows `1` badge, `+3` in aggregate header.
-   - Run a second prompt modifying 2 files → "This Turn" shows only those 2; "All Turns" shows the cumulative set with correct aggregate totals.
-   - Open "View all" → verify every file renders with correct diff, mark one as reviewed → verify it collapses/dims and the `reviewed` flag persists across closing and reopening the tab (re-fetch reflects prior state).
-   - Verify marking reviewed on a turn-scoped file, then triggering a new turn that edits the same file again, produces a fresh unreviewed row (new `turn_index`) rather than silently staying marked.
+5. **Step 5 (Desktop — Changes tab polish)** ✅ COMPLETED:
+   - Added aggregate `N files changed +X -Y` header row to `ChangesListView`, computed client-side from the scoped change list.
+   - Added scope dropdown (This Turn / All Turns / Previous Turn) via `console_core::types::ChangesScope` + `filter_changes_for_scope`, filtering the already-fetched (unscoped) change list client-side — no extra network round-trip per scope switch.
+   - Added "View all" button that opens the new review tab (§6) with the current scope.
+6. **Step 6 (Desktop — View all review tab)** ✅ COMPLETED:
+   - New `WorkspaceTabConfig::ChangesReview { sessionId, scope, .. }` tab variant, rendered by `console_ui::ReviewTab` (`viewer/review_tab.rs`).
+   - Reuses `DiffView` per file, fed by `parse_unified_diff(diffText)` from the already-fetched `GET /changes` payload (no extra per-file fetch).
+   - Each file block is individually collapsible; marking reviewed auto-collapses/dims it (opacity + "Reviewed" badge), un-reviewing re-expands it. Collapse state seeded from `reviewed` on fetch, tracked locally in `changes_review_collapsed` (not persisted — matches plan).
+   - Wired `POST /changes/reviewed` on toggle with an optimistic local update to `changes_review_data`, confirmed async against the backend.
+7. **Step 7 (Verification)** ⏳ PENDING — manual verification against a running server not yet performed; automated coverage below.
 8. **Step 8 (Future phase, not scheduled)**: Git commit-history scope in the dropdown (§4.4), requiring real git subprocess diffing — deliberately deferred to avoid reintroducing the lock/volatility problems this whole plan exists to solve.
