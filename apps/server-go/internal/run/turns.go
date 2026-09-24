@@ -247,6 +247,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	usage := &loop.UsageTracker{}
 	toolList = replaceTool(toolList, "subagent", loop.NewSubagentTool(&loop.SubagentContext{
 		Provider:     provider,
+		Model:        modelID,
 		Tools:        toolList,
 		SystemPrompt: prompt.StableSystem,
 		Setup:        prompt.Setup,

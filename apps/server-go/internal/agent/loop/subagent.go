@@ -18,7 +18,10 @@ import (
 // SubagentContext wires a subagent tool run. A nil context yields the
 // simulated no-model response (TS parity for static registration).
 type SubagentContext struct {
-	Provider     Provider
+	Provider Provider
+	// Model is the parent's model ID; the nested run reuses it (providers
+	// such as Claude reject requests with an empty model).
+	Model        string
 	Tools        []tools.Tool
 	SystemPrompt string
 	// Setup is the parent's per-session setup, sent as a leading message.
@@ -130,6 +133,7 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 	agent := New(c.Provider, NewExecutor(registry, permissions.FullAccess, c.Approver), nil)
 	agent.SystemPrompt = fmt.Sprintf("You are a specialized subagent (%s). Execute the task thoroughly and summarize your findings cleanly.\n%s", role, c.SystemPrompt)
 	agent.Setup = c.Setup
+	agent.Model = c.Model
 
 	if c.Usage != nil {
 		defer func() { c.Usage.AddSubagent(agent.Usage.Snapshot()) }()

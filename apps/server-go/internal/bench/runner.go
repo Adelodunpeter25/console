@@ -222,7 +222,7 @@ func buildAgent(opts Options, dir string, task Task) (*loop.Agent, []tools.Defin
 	for i, t := range toolList {
 		if t.Name() == "subagent" {
 			toolList[i] = loop.NewSubagentTool(&loop.SubagentContext{
-				Provider: opts.Provider, Tools: toolList, SystemPrompt: prompt.StableSystem, Setup: prompt.Setup, Usage: usage,
+				Provider: opts.Provider, Model: opts.Model, Tools: toolList, SystemPrompt: prompt.StableSystem, Setup: prompt.Setup, Usage: usage,
 			})
 		}
 	}

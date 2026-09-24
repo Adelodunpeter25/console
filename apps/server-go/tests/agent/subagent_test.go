@@ -146,3 +146,23 @@ func TestSubagentExcludedFromNested(t *testing.T) {
 		}
 	}
 }
+
+type modelCapture struct{ model string }
+
+func (m *modelCapture) RunTurn(ctx context.Context, req loop.TurnRequest, s *stream.Stream[loop.Event]) error {
+	m.model = req.Model
+	s.Push(loop.Event{Kind: loop.EventText, Text: "ok"})
+	s.Complete()
+	return nil
+}
+
+func TestSubagentInheritsModel(t *testing.T) {
+	p := &modelCapture{}
+	tool := loop.NewSubagentTool(&loop.SubagentContext{Provider: p, Model: "claude-haiku-4-5", Tools: tools.DefaultTools()})
+	if _, err := tool.(tools.CallAwareTool).ExecuteCall(context.Background(), subagentCall(t, "inspect")); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if p.model != "claude-haiku-4-5" {
+		t.Fatalf("nested model = %q, want claude-haiku-4-5", p.model)
+	}
+}
