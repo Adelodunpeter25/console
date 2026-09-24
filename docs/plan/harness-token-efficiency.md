@@ -1,6 +1,7 @@
 # Harness Token Efficiency
 
-Status: **planned**.
+Status: **in progress** (paused 2026-09-24). Phase 1 done, Task 3.0 done,
+`sparse_line_numbers` measured once. See "Next steps" under Results log.
 
 ## Goal
 
@@ -532,4 +533,16 @@ One task per commit, each with a single-line message, for example:
 
 | Date | Change | Runs | Success | Median turns | $ cost / success (Haiku) | Notes |
 |---|---|---|---|---|---|---|
-| — | baseline | — | — | — | — | fill in after Task 1.6 |
+| 2026-09-24 | baseline (708a7b21) | 24 | 16/24 | 14 | $0.077 | subagent calls all failed on this commit |
+| 2026-09-24 | read cap 300 lines (bca9d973) | 24 | 19/24 | 15.5 | $0.085 | more reads and turns; different code than baseline |
+| 2026-09-24 | `sparse_line_numbers` (6b064876) | 24 | 19/24 | 13.5 | $0.091 | read output ~19% smaller per call; one runaway run (06 run 2: 69 turns, $0.36) skews cost; subagent fixed |
+
+### Next steps (resume here)
+- The three rows above ran on different commits and only 2 runs per task,
+  so run-to-run noise (often 2x per task) is bigger than the effects. They
+  are not a fair A/B.
+- Redo the A/B on one commit with `--runs 3`: flag off vs
+  `CONSOLE_HARNESS_SPARSE_LINE_NUMBERS=1`, using `--prev` to compare.
+- Env-var flags are not recorded in the results `flags` field; consider
+  saving active `CONSOLE_HARNESS_*` vars in the results file.
+- Then continue with Phase 2 (cache layout).
