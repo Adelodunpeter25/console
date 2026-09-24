@@ -276,6 +276,10 @@ func (s *SessionService) ClearSessionFileChanges(sessionID string) error {
 	return s.inner.ClearSessionFileChanges(sessionID)
 }
 
+func (s *SessionService) SetFileChangeReviewed(sessionID, path string, turnIndex int, reviewed bool) error {
+	return s.inner.SetFileChangeReviewed(sessionID, path, turnIndex, reviewed)
+}
+
 // Queued prompt operations
 func (s *SessionService) SaveQueuedPrompt(sessionID string, qp types.QueuedPrompt) error {
 	return s.inner.SaveQueuedPrompt(sessionID, qp)

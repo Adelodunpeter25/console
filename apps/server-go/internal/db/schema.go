@@ -118,6 +118,7 @@ func InitSessionDB(db *sql.DB, path string) error {
 			additions INTEGER NOT NULL DEFAULT 0,
 			deletions INTEGER NOT NULL DEFAULT 0,
 			diff_text TEXT,
+			reviewed INTEGER NOT NULL DEFAULT 0,
 			updated_at INTEGER NOT NULL,
 			PRIMARY KEY (path, turn_index)
 		);
@@ -187,7 +188,23 @@ func InitSessionDB(db *sql.DB, path string) error {
 		return err
 	}
 	if !hasContextFiles {
-		_, err = db.Exec(`ALTER TABLE session_queued_prompt ADD COLUMN context_files TEXT`)
+		if _, err = db.Exec(`ALTER TABLE session_queued_prompt ADD COLUMN context_files TEXT`); err != nil {
+			return err
+		}
 	}
-	return err
+
+	// Additive migration for session DBs created before per-file review
+	// tracking: add the reviewed column when missing.
+	var reviewedCount int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info('session_file_changes') WHERE name = 'reviewed'`,
+	).Scan(&reviewedCount); err != nil {
+		return err
+	}
+	if reviewedCount == 0 {
+		if _, err := db.Exec(`ALTER TABLE session_file_changes ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+	}
+	return nil
 }

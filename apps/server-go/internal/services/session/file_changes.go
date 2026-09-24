@@ -51,7 +51,7 @@ func (s *Service) GetSessionFileChanges(sessionID string, turnIndex int) ([]type
 		return nil, err
 	}
 
-	query := `SELECT path, turn_index, status, additions, deletions, diff_text, updated_at FROM session_file_changes`
+	query := `SELECT path, turn_index, status, additions, deletions, diff_text, reviewed, updated_at FROM session_file_changes`
 	var args []any
 	if turnIndex >= 0 {
 		query += ` WHERE turn_index = ?`
@@ -69,16 +69,43 @@ func (s *Service) GetSessionFileChanges(sessionID string, turnIndex int) ([]type
 	for rows.Next() {
 		var change types.SessionFileChange
 		var diffText sql.NullString
+		var reviewed int
 		if err := rows.Scan(&change.Path, &change.TurnIndex, &change.Status, &change.Additions,
-			&change.Deletions, &diffText, &change.UpdatedAt); err != nil {
+			&change.Deletions, &diffText, &reviewed, &change.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if diffText.Valid {
 			change.DiffText = &diffText.String
 		}
+		change.Reviewed = reviewed != 0
 		changes = append(changes, change)
 	}
 	return changes, rows.Err()
+}
+
+// SetFileChangeReviewed marks (or unmarks) a single (path, turnIndex) row as
+// reviewed. Idempotent and scoped to the exact row so it can't accidentally
+// affect a different turn's version of the same file.
+func (s *Service) SetFileChangeReviewed(sessionID, path string, turnIndex int, reviewed bool) error {
+	projectID, ok, err := s.projectIDBySession(sessionID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	conn, err := s.manager.Session(sessionID, projectID)
+	if err != nil {
+		return err
+	}
+	reviewedInt := 0
+	if reviewed {
+		reviewedInt = 1
+	}
+	_, err = conn.Exec(
+		`UPDATE session_file_changes SET reviewed = ? WHERE path = ? AND turn_index = ?`,
+		reviewedInt, path, turnIndex)
+	return err
 }
 
 // ClearSessionFileChanges removes all file changes for a session.

@@ -258,6 +258,63 @@ func TestPurgeExpiredDeletedSessions(t *testing.T) {
 	}
 }
 
+// TestSessionFileChangeReviewed covers the reviewed-state column added for
+// the turn-diff review flow: new rows default unreviewed, marking is
+// scoped to the exact (path, turnIndex), and a fresh turn for the same
+// path starts unreviewed again rather than inheriting the flag.
+func TestSessionFileChangeReviewed(t *testing.T) {
+	_, sessions, _, _ := newTestManager(t)
+
+	header, err := sessions.Create(types.CreateSessionOptions{
+		Cwd: "/tmp/console", ModelID: "claude-sonnet-4", Provider: "anthropic",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	if err := sessions.RecordFileChange(header.ID, types.SessionFileChange{
+		Path: "a.go", TurnIndex: 0, Status: "modified", Additions: 3, Deletions: 1,
+	}); err != nil {
+		t.Fatalf("RecordFileChange: %v", err)
+	}
+
+	changes, err := sessions.GetSessionFileChanges(header.ID, -1)
+	if err != nil || len(changes) != 1 {
+		t.Fatalf("GetSessionFileChanges: %v %+v", err, changes)
+	}
+	if changes[0].Reviewed {
+		t.Fatalf("new file change row should default to unreviewed: %+v", changes[0])
+	}
+
+	if err := sessions.SetFileChangeReviewed(header.ID, "a.go", 0, true); err != nil {
+		t.Fatalf("SetFileChangeReviewed: %v", err)
+	}
+	changes, err = sessions.GetSessionFileChanges(header.ID, -1)
+	if err != nil || len(changes) != 1 || !changes[0].Reviewed {
+		t.Fatalf("expected reviewed=true after marking: %v %+v", err, changes)
+	}
+
+	// A fresh turn touching the same path is a new row and starts unreviewed.
+	if err := sessions.RecordFileChange(header.ID, types.SessionFileChange{
+		Path: "a.go", TurnIndex: 1, Status: "modified", Additions: 1, Deletions: 0,
+	}); err != nil {
+		t.Fatalf("RecordFileChange turn 1: %v", err)
+	}
+	changes, err = sessions.GetSessionFileChanges(header.ID, 1)
+	if err != nil || len(changes) != 1 || changes[0].Reviewed {
+		t.Fatalf("new turn's row should be unreviewed: %v %+v", err, changes)
+	}
+
+	// Unmarking is idempotent and scoped to the exact row.
+	if err := sessions.SetFileChangeReviewed(header.ID, "a.go", 0, false); err != nil {
+		t.Fatalf("SetFileChangeReviewed unmark: %v", err)
+	}
+	changes, err = sessions.GetSessionFileChanges(header.ID, 0)
+	if err != nil || len(changes) != 1 || changes[0].Reviewed {
+		t.Fatalf("expected reviewed=false after unmarking turn 0: %v %+v", err, changes)
+	}
+}
+
 // TestOpsOnMissingSessionNoOp mirrors the TS session-*.ts convention: an
 // operation on a session id with no row in the global index silently
 // no-ops (matching `if (projectId === undefined) return;`) instead of
@@ -283,6 +340,9 @@ func TestOpsOnMissingSessionNoOp(t *testing.T) {
 	}
 	if err := sessions.RecordFileChange(missing, types.SessionFileChange{Path: "a.go", TurnIndex: 0, Status: "modified"}); err != nil {
 		t.Fatalf("RecordFileChange on missing session must no-op, got: %v", err)
+	}
+	if err := sessions.SetFileChangeReviewed(missing, "a.go", 0, true); err != nil {
+		t.Fatalf("SetFileChangeReviewed on missing session must no-op, got: %v", err)
 	}
 	if err := sessions.UpdateTitle(missing, "New title"); err != nil {
 		t.Fatalf("UpdateTitle on missing session must no-op, got: %v", err)
