@@ -326,6 +326,24 @@ Anthropic usage fields.
 
 ## Phase 3: Tool output (change directly)
 
+**Order change (2026-09-24):** Phase 2 Tasks 2.3–2.5 are paused. `read_file`
+results (26.7%) are handled before bash output (9.2%).
+
+### Task 3.0: Smaller default reads (done)
+- `read_file` with no `startLine`/`endLine` returns the first 300 lines, with
+  a header like "Output truncated at line 300 of 842. Continue with
+  startLine=301." Ranged reads still go up to the 2,000-line ceiling.
+- Tool descriptions point to our own search tools (`grep`/`glob`), never to
+  searching through the shell.
+- Sparse line numbers (Task 4.3) exist behind
+  `CONSOLE_HARNESS_SPARSE_LINE_NUMBERS=1`, off by default. When it's on, the
+  desktop read-file view shows blanks for unnumbered lines.
+- Replacing outdated copies of a re-read file in history is **deferred**. It
+  rewrites older messages, which breaks the cache from that point on.
+- **Validate:** one bench run against the baseline. Watch success rate, turns
+  per task, and the `read_file` share. If turns go up a lot, raise the cap.
+- **Test:** `tests/tools/read_file_test.go`.
+
 ### Task 3.1: Save large output to a file instead of cutting it off
 - **Files:** `tools/bash_tools.go`, new `tools/spill.go`.
 - **Change:** when stdout or stderr is over the limit (keep 50 KB for now,
