@@ -2,12 +2,14 @@
 package tests
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
 func TestBrowseDirectory(t *testing.T) {
@@ -199,5 +201,38 @@ func TestFsGrepUnavailableWithoutManager(t *testing.T) {
 	}
 	if err != services.ErrFffUnavailable {
 		t.Fatalf("expected ErrFffUnavailable, got: %v", err)
+	}
+}
+
+func TestFsGrepResponseContainsOnlySearchPanelFields(t *testing.T) {
+	payload := types.GrepResult{
+		Matches: []types.GrepMatch{{
+			RelPath:     "src/main.rs",
+			LineNumber:  7,
+			LineContent: "needle here",
+			MatchRanges: []types.GrepMatchRange{{Start: 0, End: 6}},
+		}},
+		TotalMatched:  1,
+		FilteredFiles: 1,
+	}
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var response map[string]any
+	if err := json.Unmarshal(encoded, &response); err != nil {
+		t.Fatal(err)
+	}
+	for _, removed := range []string{"filesSearched", "totalFiles"} {
+		if _, exists := response[removed]; exists {
+			t.Fatalf("response unexpectedly contains %q: %s", removed, encoded)
+		}
+	}
+	match := response["matches"].([]any)[0].(map[string]any)
+	for _, removed := range []string{"fileName", "column", "endColumn", "isBinary", "isDefinition"} {
+		if _, exists := match[removed]; exists {
+			t.Fatalf("match unexpectedly contains %q: %s", removed, encoded)
+		}
 	}
 }

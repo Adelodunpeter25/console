@@ -44,26 +44,21 @@ type GrepMatchRange struct {
 	End   int `json:"end"`
 }
 
-// GrepMatch is one content-search hit, shaped for the global search panel
-// (grouping by RelPath/FileName, highlighting via MatchRanges).
+// GrepMatch is the minimal content-search hit needed by the global search
+// panel: identify and open the file, show its line, and highlight the match.
 type GrepMatch struct {
-	RelPath      string           `json:"relPath"`
-	FileName     string           `json:"fileName"`
-	LineNumber   uint64           `json:"lineNumber"`
-	Column       int              `json:"column"`
-	EndColumn    int              `json:"endColumn"`
-	LineContent  string           `json:"lineContent"`
-	MatchRanges  []GrepMatchRange `json:"matchRanges"`
-	IsBinary     bool             `json:"isBinary,omitempty"`
-	IsDefinition bool             `json:"isDefinition,omitempty"`
+	RelPath     string           `json:"relPath"`
+	LineNumber  uint64           `json:"lineNumber"`
+	LineContent string           `json:"lineContent"`
+	MatchRanges []GrepMatchRange `json:"matchRanges"`
 }
 
-// GrepResult is the /api/fs/grep response payload.
+// GrepResult is the /api/fs/grep response payload. Scanner/index statistics
+// stay inside the fff adapter and agent tool; the HTTP client only needs the
+// displayed totals, page state, and any regex fallback warning.
 type GrepResult struct {
 	Matches       []GrepMatch `json:"matches"`
 	TotalMatched  int         `json:"totalMatched"`
-	FilesSearched int         `json:"filesSearched"`
-	TotalFiles    int         `json:"totalFiles"`
 	FilteredFiles int         `json:"filteredFiles"`
 	NextCursor    uint32      `json:"nextCursor"`
 	HasMore       bool        `json:"hasMore"`

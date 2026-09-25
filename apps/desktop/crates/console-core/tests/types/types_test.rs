@@ -130,22 +130,17 @@ fn test_update_session_project_id_null_vs_omit() {
 fn test_grep_result_deserialization() {
     // Mirrors the exact camelCase shape returned by GET /api/fs/grep
     // (internal/types/fs.go's GrepResult), including the omitted
-    // optional fields the server leaves out when zero/empty.
+    // optional regexError field.
     let json_data = r#"{
         "matches": [
             {
                 "relPath": "src/client/frontends/desktop/core/src/conductor/FileAPI.ts",
-                "fileName": "FileAPI.ts",
                 "lineNumber": 12,
-                "column": 3,
-                "endColumn": 11,
                 "lineContent": "  useQuery,",
                 "matchRanges": [{"start": 2, "end": 10}]
             }
         ],
         "totalMatched": 7,
-        "filesSearched": 240,
-        "totalFiles": 240,
         "filteredFiles": 3,
         "nextCursor": 0,
         "hasMore": false
@@ -158,13 +153,14 @@ fn test_grep_result_deserialization() {
     assert_eq!(result.regex_error, None);
     assert_eq!(result.matches.len(), 1);
     let m = &result.matches[0];
-    assert_eq!(m.file_name, "FileAPI.ts");
+    assert_eq!(
+        m.rel_path,
+        "src/client/frontends/desktop/core/src/conductor/FileAPI.ts"
+    );
     assert_eq!(m.line_number, 12);
     assert_eq!(m.match_ranges.len(), 1);
     assert_eq!(m.match_ranges[0].start, 2);
     assert_eq!(m.match_ranges[0].end, 10);
-    assert!(!m.is_binary);
-    assert!(!m.is_definition);
 }
 
 #[test]

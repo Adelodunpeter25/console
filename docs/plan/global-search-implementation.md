@@ -47,8 +47,10 @@ not a search engine.
 - **Pagination**: `GrepOptions.Cursor` / `GrepResult.NextCursor` /
   `HasMore` so a UI can page through large result sets instead of forcing
   one huge response.
-- **Result totals**: `TotalMatched`, `FilesSearched`, `TotalFiles`,
-  `FilteredFiles` for a results-panel header ("123 matches in 40 files").
+- **Result totals**: The adapter exposes `TotalMatched`, `FilesSearched`,
+  `TotalFiles`, and `FilteredFiles`. The HTTP response returns only
+  `TotalMatched` and `FilteredFiles` for the results-panel header; scanner
+  statistics stay internal to the adapter and agent tool.
 
 ## Lifecycle safety (the part most likely to bite a hand-rolled version)
 
@@ -117,8 +119,11 @@ The adapter and tool bridge are done. Step 1 below has now landed.
    `manager.GetOrCreate` + `Lease.GrepWithOptions` directly (bypassing the
    agent-tool text formatting) and returns a structured `types.GrepResult`
    JSON payload with per-match `matchRanges` for highlighting, grouped
-   naturally by `relPath`/`fileName` for the UI to bucket into per-file
-   sections. Query params: `root` (required), `q` (required), `mode`
+   naturally by `relPath` for the UI to bucket into per-file sections. The
+   response intentionally omits per-match filename/column/classification data
+   and scanner totals; the client derives the filename from `relPath` and
+   `matchRanges` already provides exact highlight offsets. Query params:
+   `root` (required), `q` (required), `mode`
    (`regex`|`plain`|`fuzzy`, default `regex`), `caseMode`
    (`smart`|`sensitive`|`insensitive`, default `smart`), `wholeWord`
    (`true`/`false`), `contextLines`, `limit` (max matches, default 200,

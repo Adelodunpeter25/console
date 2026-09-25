@@ -61,23 +61,15 @@ pub struct GrepMatchRange {
     pub end: usize,
 }
 
-/// One content-search hit from `GET /api/fs/grep`, shaped for the global
-/// search panel: grouping by `rel_path`/`file_name`, highlighting via
-/// `match_ranges`.
+/// One content-search hit from `GET /api/fs/grep`, containing only what the
+/// global search panel needs to group, display, highlight, and open a result.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GrepMatch {
     pub rel_path: String,
-    pub file_name: String,
     pub line_number: u64,
-    pub column: i64,
-    pub end_column: i64,
     pub line_content: String,
     pub match_ranges: Vec<GrepMatchRange>,
-    #[serde(default)]
-    pub is_binary: bool,
-    #[serde(default)]
-    pub is_definition: bool,
 }
 
 /// Response body of `GET /api/fs/grep`.
@@ -86,8 +78,6 @@ pub struct GrepMatch {
 pub struct GrepResult {
     pub matches: Vec<GrepMatch>,
     pub total_matched: usize,
-    pub files_searched: usize,
-    pub total_files: usize,
     pub filtered_files: usize,
     pub next_cursor: u32,
     pub has_more: bool,
@@ -147,4 +137,3 @@ pub struct GrepOptions {
     pub max_matches: Option<u32>,
     pub cursor: Option<u32>,
 }
-

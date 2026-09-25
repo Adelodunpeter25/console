@@ -21,7 +21,7 @@ use gpui::{
 use gpui_component::input::{Input, InputEvent, InputState};
 
 use crate::Theme;
-use crate::primitives::{app_icon, file_type_icon};
+use crate::primitives::{app_icon, base_name, file_type_icon};
 use crate::IconName;
 
 /// Debounce for typed queries.
@@ -63,7 +63,7 @@ fn group_matches(matches: Vec<GrepMatch>) -> Vec<FileGroup> {
         }
         groups.push(FileGroup {
             rel_path: m.rel_path.clone(),
-            file_name: m.file_name.clone(),
+            file_name: base_name(&m.rel_path).to_string(),
             matches: vec![m],
         });
     }
@@ -88,7 +88,6 @@ pub struct GlobalSearchPanel {
     selected_row: Option<usize>,
     total_matched: usize,
     matched_files: usize,
-    files_searched: usize,
     has_searched: bool,
     loading: bool,
     search_generation: u64,
@@ -112,7 +111,6 @@ impl GlobalSearchPanel {
             selected_row: None,
             total_matched: 0,
             matched_files: 0,
-            files_searched: 0,
             has_searched: false,
             loading: false,
             search_generation: 0,
@@ -139,7 +137,6 @@ impl GlobalSearchPanel {
         self.selected_row = None;
         self.total_matched = 0;
         self.matched_files = 0;
-        self.files_searched = 0;
         self.has_searched = false;
         self.loading = false;
         self.search_generation += 1;
@@ -181,7 +178,7 @@ impl GlobalSearchPanel {
             self.rows = Rc::new(Vec::new());
             self.selected_row = None;
             self.total_matched = 0;
-            self.files_searched = 0;
+            self.matched_files = 0;
             self.has_searched = false;
             self.loading = false;
             cx.notify();
@@ -219,7 +216,6 @@ impl GlobalSearchPanel {
                 match result {
                     Ok(res) => {
                         this.total_matched = res.total_matched;
-                        this.files_searched = res.files_searched;
                         let groups = group_matches(res.matches);
                         this.matched_files = if res.filtered_files > 0 {
                             res.filtered_files
@@ -245,7 +241,6 @@ impl GlobalSearchPanel {
                     Err(_) => {
                         this.total_matched = 0;
                         this.matched_files = 0;
-                        this.files_searched = 0;
                         this.groups = Rc::new(Vec::new());
                         this.rows = Rc::new(Vec::new());
                         this.selected_row = None;

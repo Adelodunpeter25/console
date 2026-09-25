@@ -537,23 +537,16 @@ func (s *FsService) Grep(root, query string, opts GrepOptions) (types.GrepResult
 			ranges = append(ranges, types.GrepMatchRange{Start: r.Start, End: r.End})
 		}
 		matches = append(matches, types.GrepMatch{
-			RelPath:      m.RelPath,
-			FileName:     m.FileName,
-			LineNumber:   m.LineNumber,
-			Column:       m.Column,
-			EndColumn:    m.EndColumn,
-			LineContent:  m.LineContent,
-			MatchRanges:  ranges,
-			IsBinary:     m.IsBinary,
-			IsDefinition: m.IsDefinition,
+			RelPath:     m.RelPath,
+			LineNumber:  m.LineNumber,
+			LineContent: m.LineContent,
+			MatchRanges: ranges,
 		})
 	}
 
 	out := types.GrepResult{
 		Matches:       matches,
 		TotalMatched:  result.TotalMatched,
-		FilesSearched: result.FilesSearched,
-		TotalFiles:    result.TotalFiles,
 		FilteredFiles: result.FilteredFiles,
 		NextCursor:    result.NextCursor,
 		HasMore:       result.HasMore,
