@@ -336,48 +336,56 @@ impl Focusable for GlobalSearchPanel {
 fn render_highlighted_line(m: &GrepMatch, theme: &Theme) -> gpui::AnyElement {
     let content = &m.line_content;
     if m.match_ranges.is_empty() {
+        let clean = content.replace(['\n', '\r'], " ");
         return div()
             .text_size(px(12.0))
             .text_color(theme.text_secondary)
-            .child(content.clone())
+            .whitespace_nowrap()
+            .overflow_hidden()
+            .child(clean)
             .into_any_element();
     }
 
+    // Replace linebreaks with spaces 1:1 so byte offsets in match_ranges remain exact.
+    let clean_content = content.replace(['\n', '\r'], " ");
     let mut segments: Vec<gpui::AnyElement> = Vec::new();
     let mut cursor = 0usize;
     for range in &m.match_ranges {
-        let start = range.start.min(content.len());
-        let end = range.end.min(content.len());
+        let start = range.start.min(clean_content.len());
+        let end = range.end.min(clean_content.len());
         if start < cursor || start > end {
             continue;
         }
         if start > cursor {
-            if let Some(text) = content.get(cursor..start) {
+            if let Some(text) = clean_content.get(cursor..start) {
                 segments.push(
                     div()
                         .text_color(theme.text_secondary)
+                        .whitespace_nowrap()
                         .child(text.to_string())
                         .into_any_element(),
                 );
             }
         }
-        if let Some(text) = content.get(start..end) {
+        if let Some(text) = clean_content.get(start..end) {
             segments.push(
                 div()
                     .text_color(theme.text)
                     .font_weight(gpui::FontWeight::BOLD)
                     .bg(theme.accent.opacity(0.18))
+                    .whitespace_nowrap()
                     .child(text.to_string())
                     .into_any_element(),
             );
         }
         cursor = end;
     }
-    if cursor < content.len() {
-        if let Some(text) = content.get(cursor..) {
+    if cursor < clean_content.len() {
+        if let Some(text) = clean_content.get(cursor..) {
             segments.push(
                 div()
                     .text_color(theme.text_secondary)
+                    .whitespace_nowrap()
                     .child(text.to_string())
                     .into_any_element(),
             );
@@ -387,7 +395,9 @@ fn render_highlighted_line(m: &GrepMatch, theme: &Theme) -> gpui::AnyElement {
     div()
         .flex()
         .flex_row()
-        .flex_wrap()
+        .items_center()
+        .overflow_hidden()
+        .whitespace_nowrap()
         .text_size(px(12.0))
         .font_family("monospace")
         .children(segments)
@@ -634,6 +644,7 @@ fn render_search_row(
                         .flex_1()
                         .min_w(px(0.0))
                         .overflow_hidden()
+                        .whitespace_nowrap()
                         .child(render_highlighted_line(m, theme)),
                 )
                 .into_any_element()
