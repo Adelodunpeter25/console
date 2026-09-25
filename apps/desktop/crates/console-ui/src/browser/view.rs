@@ -340,7 +340,8 @@ impl BrowserView {
         if let Ok(msg) = serde_json::from_str::<InspectorIpcMessage>(&payload) {
             match msg {
                 InspectorIpcMessage::ElementInspected(inspection) => {
-                    self.inspecting = false;
+                    // The page script stays in inspect mode so several
+                    // elements can be picked; only Esc / the toggle exit it.
                     self.active_inspection = Some(inspection);
                     cx.notify();
                 }
