@@ -126,14 +126,19 @@ The adapter and tool bridge are done. Step 1 below has now landed.
    `services.ErrFffUnavailable` when the fff index manager isn't wired in
    for this platform/build, so the UI can render an empty/unavailable state
    rather than treating it as a query error.
-2. **Desktop UI**: a results panel/dialog in `apps/desktop`, wired to
-   ⌘⇧F, with case/whole-word/regex toggles bound to `caseMode`/`wholeWord`/
-   `mode` query params, similar in spirit to `quick_open_palette.rs`. See
-   the mockup notes stored in project memory (tags: `search-ui`,
-   `global-search`) for the target layout — single search box, three
-   inline toggle icons (Aa / ab / .*), "N matches in M files" header,
-   results grouped by file with bold match highlighting from
-   `matchRanges`.
+2. **Desktop UI**: shipped as a v1 slice. `GlobalSearchPanel`
+   (`apps/desktop/crates/console-ui/src/common/global_search_panel.rs`) is a
+   hand-rolled modal (not built on `gpui_component::command` — the search
+   field needs an inline toggle row the shared `Command` widget doesn't
+   expose), bound to ⌘⇧F (`ToggleGlobalSearch` in `keybindings.rs`), scoped
+   to the active pane's project root. Results group under their file name
+   with the match substring bolded from `matchRanges`, plus a
+   "N matches in M files" header. Confirming a match opens the file as a
+   workspace tab (via the existing `open_file_tab_in_pane` path). Not yet
+   done: the Aa / ab / .* toggle row (query always uses the default
+   `GrepOptions`), and jumping the opened tab to the matched line (the file
+   viewer has no scroll-to-line API yet) — both are natural follow-ups on
+   top of this slice.
 3. **Cloud workspaces**: confirm the same route works for cloud-backed
    workspaces — likely already true since `fffManager` operates on
    `root` paths and the server owns the filesystem in both local and cloud

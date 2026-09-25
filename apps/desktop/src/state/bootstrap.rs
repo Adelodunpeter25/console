@@ -38,6 +38,30 @@ impl ConsoleDesktopApp {
                 cx,
             );
         });
+
+        let entity = cx.entity().downgrade();
+        self.global_search_panel.update(cx, |panel, cx| {
+            panel.set_on_open_match(
+                move |rel_path, _line_number, _window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            let pane_id = this
+                                .active_pane_id
+                                .clone()
+                                .unwrap_or_else(|| "pane-main".to_string());
+                            let root = this
+                                .selected_project_for_pane(&pane_id)
+                                .map(|project| project.path.clone());
+                            let Some(root) = root else { return };
+                            let absolute =
+                                console_ui::utils::join_path_lexical(&root, rel_path);
+                            this.open_file_tab_in_pane(&pane_id, absolute, cx);
+                        });
+                    }
+                },
+                cx,
+            );
+        });
     }
 
     pub(crate) fn bootstrap_backend(

@@ -32,6 +32,9 @@ actions!(
         /// Toggle the open-tab palette (browser tabs first, then terminals,
         /// then chat tabs sorted by recently-updated).
         ToggleTabPalette,
+        /// Open the global content search panel scoped to the active pane's
+        /// project root (cmd-shift-f).
+        ToggleGlobalSearch,
         /// Move keyboard focus to the active pane's composer.
         FocusComposer,
         /// Toggle the active pane's model picker (cmd-/).
@@ -98,6 +101,8 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-p", QuickOpenFile, None),
         KeyBinding::new("secondary-k", ToggleCommandPalette, None),
         KeyBinding::new("secondary-t", ToggleTabPalette, None),
+        KeyBinding::new("secondary-shift-f", ToggleGlobalSearch, None),
+        KeyBinding::new("secondary-shift-F", ToggleGlobalSearch, None),
         KeyBinding::new("secondary-l", FocusComposer, None),
         KeyBinding::new("secondary-/", ToggleModelPicker, None),
         // Plain `/` refocuses the open picker's search box. Scoped to the
@@ -220,6 +225,18 @@ pub fn init_handlers(cx: &mut App) {
                 window
                     .update(cx, |_, window, cx| {
                         app.update(cx, |this, cx| this.toggle_tab_palette(window, cx));
+                    })
+                    .ok();
+            });
+        }
+    });
+
+    cx.on_action(|_: &ToggleGlobalSearch, cx| {
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.toggle_global_search(window, cx));
                     })
                     .ok();
             });

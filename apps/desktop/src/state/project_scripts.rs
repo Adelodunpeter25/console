@@ -485,6 +485,7 @@ impl ConsoleDesktopApp {
             || self.tab_palette.read(cx).is_open(cx)
             || self.quick_open_palette.read(cx).is_open(cx)
             || self.project_browse_palette.read(cx).is_open(cx)
+            || self.global_search_panel.read(cx).is_open()
     }
 
     pub fn select_bottom_run_tab(&mut self, cx: &mut Context<Self>) {

@@ -5,6 +5,7 @@ pub mod composer_view;
 pub mod copy_button;
 pub mod error_banner;
 pub mod file_mention_chip;
+pub mod global_search_panel;
 pub mod image_viewer;
 pub mod input;
 pub mod model_picker;
@@ -34,6 +35,7 @@ pub use file_mention_chip::{
     FILE_MENTION_ICON_SIZE, FILE_MENTION_RADIUS, file_mention_chip, file_mention_colors,
 };
 pub(crate) use file_mention_chip::{InlineFileMention, InlineFileMentionText};
+pub use global_search_panel::GlobalSearchPanel;
 pub use image_viewer::ImageViewerModal;
 pub use input::*;
 pub use model_picker::{

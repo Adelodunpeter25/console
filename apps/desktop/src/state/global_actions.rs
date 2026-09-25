@@ -357,6 +357,30 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    /// ⌘⇧F — open the global content search panel scoped to the active
+    /// pane's project root. No-op (does nothing visible) when no project is
+    /// selected, since there is no root to search.
+    pub fn toggle_global_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.global_search_panel.read(cx).is_open() {
+            self.global_search_panel.update(cx, |panel, cx| panel.hide(cx));
+            cx.notify();
+            return;
+        }
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".to_string());
+        let root = self
+            .selected_project_for_pane(&pane_id)
+            .map(|project| project.path.clone());
+        if root.is_none() {
+            return;
+        }
+        self.global_search_panel
+            .update(cx, |panel, cx| panel.open(root, window, cx));
+        cx.notify();
+    }
+
     /// ⌘O — open the remote directory browser palette to add a project.
     pub fn open_project_browse(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.close_settings(cx);
@@ -403,6 +427,7 @@ impl ConsoleDesktopApp {
             || self.tab_palette.read(cx).is_open(cx)
             || self.quick_open_palette.read(cx).is_open(cx)
             || self.project_browse_palette.read(cx).is_open(cx)
+            || self.global_search_panel.read(cx).is_open()
         {
             return;
         }

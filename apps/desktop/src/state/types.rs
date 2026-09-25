@@ -12,8 +12,8 @@ use console_ui::markdown::render::TranscriptSelection;
 use console_ui::terminal::TerminalView;
 use console_ui::utils::SessionDateGroup;
 use console_ui::{
-    CommandPalette, ComposerInput, ContextMenuHandle, PickerTab, ProjectBrowsePalette,
-    QuickOpenPalette, TranscriptView,
+    CommandPalette, ComposerInput, ContextMenuHandle, GlobalSearchPanel, PickerTab,
+    ProjectBrowsePalette, QuickOpenPalette, TranscriptView,
 };
 use gpui::{Entity, ListState, Subscription};
 use std::cell::RefCell;
@@ -317,6 +317,8 @@ pub struct ConsoleDesktopApp {
     pub tab_palette: Entity<CommandPalette>,
     /// ⌘P quick file open palette, scoped to the active pane's project root.
     pub quick_open_palette: Entity<QuickOpenPalette>,
+    /// ⌘⇧F global content search panel, scoped to the active pane's project root.
+    pub global_search_panel: Entity<GlobalSearchPanel>,
     /// ⌘O remote directory browser / project picker.
     pub project_browse_palette: Entity<ProjectBrowsePalette>,
     /// Live terminal surfaces keyed by terminal id. Tabs reference these via
