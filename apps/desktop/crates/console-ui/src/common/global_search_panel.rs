@@ -15,8 +15,8 @@ use std::rc::Rc;
 use console_core::{ConsoleClient, GrepMatch, GrepOptions};
 use gpui::{
     App, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
-    KeyBinding, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window,
-    div, prelude::FluentBuilder, px,
+    KeyBinding, ParentElement, Render, SharedString, Styled, Window, div, prelude::FluentBuilder,
+    px, uniform_list,
 };
 use gpui_component::input::{Input, InputEvent, InputState};
 
@@ -26,8 +26,10 @@ use crate::IconName;
 
 /// Debounce for typed queries.
 const SEARCH_DEBOUNCE_MS: u64 = 150;
-/// Server-side cap on returned matches (mirrors `GrepOptions::max_matches`).
-const MAX_MATCHES: u32 = 200;
+/// Fixed row height so `uniform_list` can virtualize without measuring each
+/// row. File-heading rows and match rows share this height (the heading row
+/// simply has more vertical padding around shorter text).
+const ROW_HEIGHT_PX: f32 = 26.0;
 
 const CONTEXT: &str = "GlobalSearchPanel";
 
@@ -71,7 +73,7 @@ fn group_matches(matches: Vec<GrepMatch>) -> Vec<FileGroup> {
 /// A single flattened row: either a file heading or a match line, so the
 /// keyboard selection can move through them uniformly.
 enum SearchRow {
-    Heading,
+    Heading { group_ix: usize },
     Match { group_ix: usize, match_ix: usize },
 }
 
@@ -202,10 +204,7 @@ impl GlobalSearchPanel {
                 return;
             }
 
-            let options = GrepOptions {
-                max_matches: Some(MAX_MATCHES),
-                ..Default::default()
-            };
+            let options = GrepOptions::default();
             let result = client.fs.grep(&root, &query, &options).await;
 
             let _ = this.update(cx, |this, cx| {
@@ -221,7 +220,7 @@ impl GlobalSearchPanel {
                         let groups = group_matches(res.matches);
                         let mut rows = Vec::new();
                         for (group_ix, group) in groups.iter().enumerate() {
-                            rows.push(SearchRow::Heading);
+                            rows.push(SearchRow::Heading { group_ix });
                             for match_ix in 0..group.matches.len() {
                                 rows.push(SearchRow::Match {
                                     group_ix,
@@ -386,7 +385,6 @@ impl Render for GlobalSearchPanel {
         }
 
         let theme = Theme::current(cx);
-        let entity = cx.entity().downgrade();
         let groups = self.groups.clone();
         let rows = self.rows.clone();
         let selected_row = self.selected_row;
@@ -394,84 +392,7 @@ impl Render for GlobalSearchPanel {
         let has_searched = self.has_searched;
         let total_matched = self.total_matched;
         let files_searched = self.files_searched;
-
-        // Flatten rows into elements, matches keep their absolute row index
-        // for click-to-confirm and selection highlighting.
-        let mut row_ix = 0usize;
-        let mut body_children: Vec<gpui::AnyElement> = Vec::new();
-        for (group_ix, group) in groups.iter().enumerate() {
-            let _ = group_ix;
-            body_children.push(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(6.0))
-                    .px(px(10.0))
-                    .py(px(6.0))
-                    .child(file_type_icon(&group.rel_path, 13.0))
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(theme.text)
-                            .child(group.file_name.clone()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(11.0))
-                            .text_color(theme.text_tertiary)
-                            .truncate()
-                            .child(group.rel_path.clone()),
-                    )
-                    .into_any_element(),
-            );
-            row_ix += 1;
-
-            for (match_ix, m) in group.matches.iter().enumerate() {
-                let this_row = row_ix;
-                let selected = selected_row == Some(this_row);
-                let entity = entity.clone();
-                body_children.push(
-                    div()
-                        .id(("global-search-match", this_row))
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap(px(8.0))
-                        .px(px(14.0))
-                        .py(px(3.0))
-                        .cursor_pointer()
-                        .when(selected, |el| el.bg(theme.raised))
-                        .hover(|el| el.bg(theme.raised))
-                        .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
-                            if let Some(panel) = entity.upgrade() {
-                                panel.update(cx, |panel, cx| {
-                                    panel.confirm_row(this_row, window, cx);
-                                });
-                            }
-                        })
-                        .child(
-                            div()
-                                .flex_none()
-                                .w(px(32.0))
-                                .text_size(px(11.0))
-                                .text_color(theme.text_tertiary)
-                                .child(m.line_number.to_string()),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w(px(0.0))
-                                .overflow_hidden()
-                                .child(render_highlighted_line(m, &theme)),
-                        )
-                        .into_any_element(),
-                );
-                let _ = match_ix;
-                row_ix += 1;
-            }
-        }
+        let row_count = rows.len();
 
         let empty_state: Option<gpui::AnyElement> = if !has_searched && !loading {
             Some(
@@ -518,6 +439,26 @@ impl Render for GlobalSearchPanel {
             None
         };
 
+        let entity = cx.entity().downgrade();
+        // Virtualized results: only the visible ~20 rows are ever built into
+        // elements, so a 200-match response stays as cheap to scroll as a
+        // 5-match one. Row content is looked up by index from `groups`/`rows`
+        // inside the closure, which `uniform_list` calls per visible range.
+        let results_list = uniform_list(
+            "global-search-results",
+            row_count,
+            move |range, _window, cx| {
+                let theme = Theme::current(cx);
+                range
+                    .map(|row_ix| {
+                        render_search_row(row_ix, &rows, &groups, selected_row, &theme, &entity)
+                    })
+                    .collect::<Vec<_>>()
+            },
+        )
+        .flex_1()
+        .py(px(4.0));
+
         div()
             .absolute()
             .inset_0()
@@ -547,7 +488,7 @@ impl Render for GlobalSearchPanel {
                         cx.stop_propagation();
                     })
                     .w(px(640.0))
-                    .max_h(px(520.0))
+                    .h(px(520.0))
                     .flex()
                     .flex_col()
                     .rounded(theme_radius(&theme))
@@ -581,17 +522,104 @@ impl Render for GlobalSearchPanel {
                                 .child(text),
                         )
                     })
-                    .child(
-                        div()
-                            .id("global-search-results")
-                            .flex_1()
-                            .overflow_y_scroll()
-                            .py(px(4.0))
-                            .when_some(empty_state, |el, empty| el.child(empty))
-                            .children(body_children),
-                    ),
+                    .when_some(empty_state, |el, empty| el.child(empty))
+                    .when(has_searched && !loading && row_count > 0, |el| {
+                        el.child(results_list)
+                    }),
             )
             .into_any_element()
+    }
+}
+
+/// Render one virtualized row (file heading or match line) by absolute row
+/// index. Called only for the currently visible range by `uniform_list`.
+fn render_search_row(
+    row_ix: usize,
+    rows: &[SearchRow],
+    groups: &[FileGroup],
+    selected_row: Option<usize>,
+    theme: &Theme,
+    entity: &gpui::WeakEntity<GlobalSearchPanel>,
+) -> gpui::AnyElement {
+    let Some(row) = rows.get(row_ix) else {
+        return div().h(px(ROW_HEIGHT_PX)).into_any_element();
+    };
+    match row {
+        SearchRow::Heading { group_ix } => {
+            let Some(group) = groups.get(*group_ix) else {
+                return div().h(px(ROW_HEIGHT_PX)).into_any_element();
+            };
+            div()
+                .h(px(ROW_HEIGHT_PX))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .px(px(10.0))
+                .child(file_type_icon(&group.rel_path, 13.0))
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(theme.text)
+                        .child(group.file_name.clone()),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.0))
+                        .text_color(theme.text_tertiary)
+                        .truncate()
+                        .child(group.rel_path.clone()),
+                )
+                .into_any_element()
+        }
+        SearchRow::Match {
+            group_ix,
+            match_ix,
+        } => {
+            let Some(m) = groups
+                .get(*group_ix)
+                .and_then(|group| group.matches.get(*match_ix))
+            else {
+                return div().h(px(ROW_HEIGHT_PX)).into_any_element();
+            };
+            let selected = selected_row == Some(row_ix);
+            let entity = entity.clone();
+            div()
+                .id(("global-search-match", row_ix))
+                .h(px(ROW_HEIGHT_PX))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(8.0))
+                .px(px(14.0))
+                .cursor_pointer()
+                .when(selected, |el| el.bg(theme.raised))
+                .hover(|el| el.bg(theme.raised))
+                .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
+                    if let Some(panel) = entity.upgrade() {
+                        panel.update(cx, |panel, cx| {
+                            panel.confirm_row(row_ix, window, cx);
+                        });
+                    }
+                })
+                .child(
+                    div()
+                        .flex_none()
+                        .w(px(32.0))
+                        .text_size(px(11.0))
+                        .text_color(theme.text_tertiary)
+                        .child(m.line_number.to_string()),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.0))
+                        .overflow_hidden()
+                        .child(render_highlighted_line(m, theme)),
+                )
+                .into_any_element()
+        }
     }
 }
 
