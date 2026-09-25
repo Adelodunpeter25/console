@@ -264,10 +264,22 @@ impl GlobalSearchPanel {
         };
         let rel_path = m.rel_path.clone();
         let line_number = m.line_number;
-        if let Some(callback) = self.on_open_match.clone() {
-            callback(&rel_path, line_number, window, cx);
-        }
+        let callback = self.on_open_match.clone();
+        let window_handle = window.window_handle();
+
+        // Hide synchronously, but defer opening the file until this panel update
+        // has returned. Opening a tab updates the parent app immediately, and
+        // that update reads this panel to detect open palettes; invoking the
+        // callback inline makes GPUI read the panel while it is still being
+        // updated, which aborts the process.
         self.hide(cx);
+        if let Some(callback) = callback {
+            cx.defer(move |cx| {
+                let _ = window_handle.update(cx, |_, window, cx| {
+                    callback(&rel_path, line_number, window, cx);
+                });
+            });
+        }
     }
 
     fn move_selection(&mut self, delta: isize, cx: &mut Context<Self>) {
