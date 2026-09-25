@@ -47,7 +47,7 @@ func LoadEnvFile() map[string]string {
 }
 
 // UpsertEnvValues inserts or replaces entries in the env file, leaving
-// every other line (comments, blank lines, other keys) byte-identical.
+// every other line (comments, blank lines, other keys) identical.
 // Creates the file at mode 0600.
 func UpsertEnvValues(values map[string]string) error {
 	if err := EnsureConsoleDir(); err != nil {

@@ -94,7 +94,7 @@ export async function loadEnvFile(): Promise<Record<string, string>> {
 
 /**
  * Insert or replace entries, leaving every other line (comments, blank
- * lines, other keys) byte-identical. Creates the file at mode 0600.
+ * lines, other keys) identical. Creates the file at mode 0600.
  */
 export async function upsertEnvValues(values: Record<string, string>): Promise<void> {
   await ensureConsoleDir();
