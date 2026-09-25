@@ -1,49 +1,47 @@
 // Injected script for Console element inspection and annotation.
 (function() {
-  if (window.__consoleInspectorInitialized) return;
-  window.__consoleInspectorInitialized = true;
+  function getOrCreateOverlay() {
+    let overlay = document.getElementById('__console_inspector_overlay');
+    let label = document.getElementById('__console_inspector_label');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = '__console_inspector_overlay';
+      overlay.style.position = 'fixed';
+      overlay.style.pointerEvents = 'none';
+      overlay.style.zIndex = '2147483647';
+      overlay.style.border = '2px solid #007AFF';
+      overlay.style.backgroundColor = 'rgba(0, 122, 255, 0.15)';
+      overlay.style.borderRadius = '3px';
+      overlay.style.display = 'none';
+      overlay.style.boxSizing = 'border-box';
+      overlay.style.transition = 'all 0.05s ease-out';
 
-  let active = false;
-  let hoveredEl = null;
-  let overlay = null;
-  let label = null;
+      label = document.createElement('div');
+      label.id = '__console_inspector_label';
+      label.style.position = 'absolute';
+      label.style.top = '-24px';
+      label.style.left = '0';
+      label.style.backgroundColor = '#007AFF';
+      label.style.color = '#FFFFFF';
+      label.style.fontSize = '11px';
+      label.style.fontFamily = 'monospace';
+      label.style.padding = '2px 6px';
+      label.style.borderRadius = '3px';
+      label.style.whiteSpace = 'nowrap';
+      label.style.pointerEvents = 'none';
+      label.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
 
-  function createOverlay() {
-    if (overlay) return;
-    overlay = document.createElement('div');
-    overlay.id = '__console_inspector_overlay';
-    overlay.style.position = 'fixed';
-    overlay.style.pointerEvents = 'none';
-    overlay.style.zIndex = '2147483647';
-    overlay.style.border = '2px solid #007AFF';
-    overlay.style.backgroundColor = 'rgba(0, 122, 255, 0.15)';
-    overlay.style.borderRadius = '3px';
-    overlay.style.display = 'none';
-    overlay.style.transition = 'all 0.05s ease-out';
-
-    label = document.createElement('div');
-    label.style.position = 'absolute';
-    label.style.top = '-24px';
-    label.style.left = '0';
-    label.style.backgroundColor = '#007AFF';
-    label.style.color = '#FFFFFF';
-    label.style.fontSize = '11px';
-    label.style.fontFamily = 'monospace';
-    label.style.padding = '2px 6px';
-    label.style.borderRadius = '3px';
-    label.style.whiteSpace = 'nowrap';
-    label.style.pointerEvents = 'none';
-    label.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
-
-    overlay.appendChild(label);
-    document.documentElement.appendChild(overlay);
+      overlay.appendChild(label);
+      (document.body || document.documentElement).appendChild(overlay);
+    }
+    return { overlay, label };
   }
 
   function getSelector(el) {
     if (!el || el.nodeType !== Node.ELEMENT_NODE) return '';
     if (el.id) return `#${el.id}`;
     let path = [];
-    while (el && el.nodeType === Node.ELEMENT_NODE && el !== document.documentElement) {
+    while (el && el.nodeType === Node.ELEMENT_NODE && el !== document.documentElement && el !== document.body) {
       let selector = el.tagName.toLowerCase();
       if (el.className && typeof el.className === 'string') {
         const classes = el.className.trim().split(/\s+/).filter(c => c && !c.startsWith('__console'));
@@ -101,6 +99,7 @@
   }
 
   function updateOverlay(el) {
+    const { overlay, label } = getOrCreateOverlay();
     if (!el || !overlay) return;
     const rect = el.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) return;
@@ -116,22 +115,26 @@
     const id = el.id ? `#${el.id}` : '';
     const dim = `${Math.round(rect.width)}×${Math.round(rect.height)}`;
 
-    label.textContent = componentName 
-      ? `<${componentName} /> (${dim})`
-      : `${tag}${id} (${dim})`;
-    
-    // Position label inside if close to top edge
-    if (rect.top < 26) {
-      label.style.top = '2px';
-      label.style.left = '2px';
-    } else {
-      label.style.top = '-24px';
-      label.style.left = '0';
+    if (label) {
+      label.textContent = componentName 
+        ? `<${componentName} /> (${dim})`
+        : `${tag}${id} (${dim})`;
+      
+      // Position label inside if close to top edge
+      if (rect.top < 26) {
+        label.style.top = '2px';
+        label.style.left = '2px';
+      } else {
+        label.style.top = '-24px';
+        label.style.left = '0';
+      }
     }
   }
 
+  let hoveredEl = null;
+
   function onMouseMove(e) {
-    if (!active) return;
+    const { overlay, label } = getOrCreateOverlay();
     const target = document.elementFromPoint(e.clientX, e.clientY);
     if (!target || target === overlay || target === label || overlay?.contains(target)) return;
     hoveredEl = target;
@@ -139,9 +142,13 @@
   }
 
   function onClick(e) {
-    if (!active || !hoveredEl) return;
     e.preventDefault();
     e.stopPropagation();
+
+    if (!hoveredEl) {
+      hoveredEl = document.elementFromPoint(e.clientX, e.clientY);
+    }
+    if (!hoveredEl) return;
 
     const el = hoveredEl;
     const rect = el.getBoundingClientRect();
@@ -173,7 +180,7 @@
   }
 
   function onKeyDown(e) {
-    if (active && (e.key === 'Escape' || e.keyCode === 27)) {
+    if (e.key === 'Escape' || e.keyCode === 27) {
       setInspectActive(false);
       if (window.ipc && window.ipc.postMessage) {
         window.ipc.postMessage(JSON.stringify({ type: 'inspect_cancelled' }));
@@ -182,15 +189,20 @@
   }
 
   function setInspectActive(enable) {
-    active = enable;
-    createOverlay();
+    const { overlay } = getOrCreateOverlay();
     if (!enable) {
       if (overlay) overlay.style.display = 'none';
       hoveredEl = null;
       document.removeEventListener('mousemove', onMouseMove, true);
       document.removeEventListener('click', onClick, true);
       document.removeEventListener('keydown', onKeyDown, true);
+      if (document.body) {
+        document.body.style.cursor = '';
+      }
     } else {
+      if (document.body) {
+        document.body.style.cursor = 'crosshair';
+      }
       document.addEventListener('mousemove', onMouseMove, true);
       document.addEventListener('click', onClick, true);
       document.addEventListener('keydown', onKeyDown, true);

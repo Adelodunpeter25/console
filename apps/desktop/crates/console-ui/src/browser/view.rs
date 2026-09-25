@@ -353,7 +353,8 @@ impl BrowserView {
     pub fn toggle_inspect(&mut self, cx: &mut Context<Self>) {
         self.inspecting = !self.inspecting;
         let script = format!(
-            "if (window.__consoleSetInspectMode) window.__consoleSetInspectMode({});",
+            "{}; if (window.__consoleSetInspectMode) {{ window.__consoleSetInspectMode({}); }}",
+            INSPECTOR_SCRIPT,
             self.inspecting
         );
         if let Some(host) = &self.host {
@@ -761,15 +762,6 @@ impl BrowserView {
             .border_color(theme.border)
             .bg(theme.surface)
             .child(self.toolbar_button(
-                "browser-inspect",
-                IconName::Inspector,
-                has_page,
-                if self.inspecting { "Exit Inspect Mode (Esc)" } else { "Inspect Element" },
-                theme,
-                |this, _, cx| this.toggle_inspect(cx),
-                cx,
-            ))
-            .child(self.toolbar_button(
                 "browser-back",
                 IconName::ArrowLeft,
                 can_go_back,
@@ -858,6 +850,15 @@ impl BrowserView {
                         )
                     }),
             )
+            .child(self.toolbar_button(
+                "browser-inspect",
+                IconName::Inspector,
+                has_page,
+                if self.inspecting { "Exit Inspect Mode (Esc)" } else { "Inspect Element" },
+                theme,
+                |this, _, cx| this.toggle_inspect(cx),
+                cx,
+            ))
             .child(self.toolbar_button(
                 "browser-open-external",
                 IconName::ExternalLink,
