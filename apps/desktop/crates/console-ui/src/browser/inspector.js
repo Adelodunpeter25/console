@@ -10,11 +10,13 @@
       overlay.style.pointerEvents = 'none';
       overlay.style.zIndex = '2147483647';
       overlay.style.border = '2px solid #007AFF';
-      overlay.style.backgroundColor = 'rgba(0, 122, 255, 0.15)';
+      overlay.style.backgroundColor = 'rgba(0, 122, 255, 0.18)';
       overlay.style.borderRadius = '3px';
       overlay.style.display = 'none';
       overlay.style.boxSizing = 'border-box';
-      overlay.style.transition = 'all 0.05s ease-out';
+      overlay.style.margin = '0';
+      overlay.style.padding = '0';
+      overlay.style.transform = 'none';
 
       label = document.createElement('div');
       label.id = '__console_inspector_label';
@@ -136,7 +138,7 @@
   function onMouseMove(e) {
     const { overlay, label } = getOrCreateOverlay();
     const target = document.elementFromPoint(e.clientX, e.clientY);
-    if (!target || target === overlay || target === label || overlay?.contains(target)) return;
+    if (!target || target === overlay || target === label || (overlay && overlay.contains(target))) return;
     hoveredEl = target;
     updateOverlay(hoveredEl);
   }

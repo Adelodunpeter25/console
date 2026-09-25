@@ -352,12 +352,23 @@ impl BrowserView {
 
     pub fn toggle_inspect(&mut self, cx: &mut Context<Self>) {
         self.inspecting = !self.inspecting;
-        let script = format!(
-            "{}; if (window.__consoleSetInspectMode) {{ window.__consoleSetInspectMode({}); }}",
-            INSPECTOR_SCRIPT,
-            self.inspecting
-        );
         if let Some(host) = &self.host {
+            let script = format!(
+                r#"
+                (function() {{
+                    try {{
+                        {}
+                        if (window.__consoleSetInspectMode) {{
+                            window.__consoleSetInspectMode({});
+                        }}
+                    }} catch(e) {{
+                        console.error("Console inspect error:", e);
+                    }}
+                }})();
+                "#,
+                INSPECTOR_SCRIPT,
+                self.inspecting
+            );
             host.evaluate_script(&script);
         }
         cx.notify();
