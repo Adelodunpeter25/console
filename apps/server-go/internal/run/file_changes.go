@@ -3,6 +3,7 @@
 package run
 
 import (
+	"os"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
@@ -33,11 +34,26 @@ func ExtractAndRecordFileChange(
 			return nil
 		}
 		content, _ := args["content"].(string)
-		lineCount := strings.Count(content, "\n") + 1
 
-		// Generate diff for new file (against empty file)
+		// If the file already existed, read its old content so we can produce
+		// a real before/after diff and mark the status as "modified".
+		var oldContent string
+		var status string
+		if existing, err := os.ReadFile(path); err == nil {
+			oldContent = string(existing)
+			status = "modified"
+		} else {
+			status = "added"
+		}
+
+		additions := strings.Count(content, "\n") + 1
+		deletions := strings.Count(oldContent, "\n")
+		if oldContent == "" {
+			deletions = 0
+		}
+
 		var diffText *string
-		patch := createPatch(path, "", content)
+		patch := createPatch(path, oldContent, content)
 		if len(patch) <= maxDiffSize {
 			diffText = &patch
 		}
@@ -45,15 +61,17 @@ func ExtractAndRecordFileChange(
 		return sessions.RecordFileChange(sessionID, types.SessionFileChange{
 			Path:      path,
 			TurnIndex: turnIndex,
-			Status:    "added",
-			Additions: lineCount,
-			Deletions: 0,
+			Status:    status,
+			Additions: additions,
+			Deletions: deletions,
 			DiffText:  diffText,
 			UpdatedAt: 0, // Set by RecordFileChange
 		})
 
 	case "editFile", "edit_file", "replace_file_content":
-		// Handle both snake_case and camelCase parameter names
+		// editFileInput uses "path", "oldContent", "newContent".
+		// Older/alternate tool schemas may use "TargetFile", "TargetContent",
+		// "ReplacementContent" — keep those as fallbacks.
 		var targetPath string
 		if p, ok := args["path"].(string); ok {
 			targetPath = p
@@ -64,12 +82,12 @@ func ExtractAndRecordFileChange(
 		}
 
 		var targetContent, replacementContent string
-		if tc, ok := args["target"].(string); ok {
+		if tc, ok := args["oldContent"].(string); ok {
 			targetContent = tc
 		} else if tc, ok := args["TargetContent"].(string); ok {
 			targetContent = tc
 		}
-		if rc, ok := args["replacement"].(string); ok {
+		if rc, ok := args["newContent"].(string); ok {
 			replacementContent = rc
 		} else if rc, ok := args["ReplacementContent"].(string); ok {
 			replacementContent = rc
