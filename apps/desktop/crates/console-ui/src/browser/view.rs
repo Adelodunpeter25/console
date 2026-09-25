@@ -231,6 +231,8 @@ impl BrowserView {
                 deferred.update(move |this, cx| {
                     this.loading = false;
                     this.navigation_error = None;
+                    // A fresh document starts with inspect mode off.
+                    this.inspecting = false;
                     if let Some(host) = &this.host {
                         if !this.occluded {
                             host.set_visible(true);
@@ -351,6 +353,9 @@ impl BrowserView {
     }
 
     pub fn toggle_inspect(&mut self, cx: &mut Context<Self>) {
+        if !self.inspecting && !self.navigation_requested {
+            return;
+        }
         self.inspecting = !self.inspecting;
         if let Some(host) = &self.host {
             let script = format!(
@@ -853,7 +858,7 @@ impl BrowserView {
                 "browser-inspect",
                 IconName::Inspector,
                 has_page,
-                if self.inspecting { "Exit Inspect Mode (Esc)" } else { "Inspect Element" },
+                if self.inspecting { "Exit Inspect Mode (Esc)" } else { "Inspect Element (⌘⇧C)" },
                 theme,
                 |this, _, cx| this.toggle_inspect(cx),
                 cx,
@@ -1070,8 +1075,17 @@ impl Render for BrowserView {
             .on_action(cx.listener(|this, _: &BrowserForward, _, cx| this.go_forward(cx)))
             .on_action(cx.listener(|this, _: &BrowserReload, _, cx| this.reload(cx)))
             .on_action(cx.listener(|this, _: &BrowserHardReload, _, cx| this.hard_reload(cx)))
-            .on_action(cx.listener(|this, _: &BrowserStop, _, cx| this.stop_loading(cx)))
+            .on_action(cx.listener(|this, _: &BrowserStop, _, cx| {
+                if this.inspecting {
+                    this.toggle_inspect(cx);
+                } else {
+                    this.stop_loading(cx);
+                }
+            }))
             .on_action(cx.listener(|this, _: &BrowserDevtools, _, _| this.toggle_devtools()))
+            .on_action(cx.listener(|this, _: &BrowserToggleInspect, _, cx| {
+                this.toggle_inspect(cx);
+            }))
             .on_action(cx.listener(|this, _: &FocusBrowserAddress, window, cx| {
                 this.focus_address(window, cx);
             }))

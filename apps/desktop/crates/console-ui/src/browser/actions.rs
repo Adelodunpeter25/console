@@ -11,6 +11,7 @@ actions!(
         BrowserHardReload,
         BrowserStop,
         BrowserDevtools,
+        BrowserToggleInspect,
         FocusBrowserAddress,
         BrowserAddressCancel,
         WebviewCopy,
@@ -41,6 +42,8 @@ pub fn init_browser_keybindings(cx: &mut App) {
         KeyBinding::new("ctrl-shift-i", BrowserDevtools, Some(BROWSER_KEY_CONTEXT)),
         KeyBinding::new("ctrl-shift-I", BrowserDevtools, Some(BROWSER_KEY_CONTEXT)),
         KeyBinding::new("cmd-alt-i", BrowserDevtools, Some(BROWSER_KEY_CONTEXT)),
+        KeyBinding::new("cmd-shift-c", BrowserToggleInspect, Some(BROWSER_KEY_CONTEXT)),
+        KeyBinding::new("ctrl-shift-c", BrowserToggleInspect, Some(BROWSER_KEY_CONTEXT)),
         KeyBinding::new("cmd-l", FocusBrowserAddress, Some(BROWSER_KEY_CONTEXT)),
         KeyBinding::new("ctrl-l", FocusBrowserAddress, Some(BROWSER_KEY_CONTEXT)),
         // Address bar escape cancels editing and reverts to current URL

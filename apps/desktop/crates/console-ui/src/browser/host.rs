@@ -421,8 +421,15 @@ mod macos_host {
             unsafe { self.wk().stopLoading() };
         }
 
+        /// Evaluate JS directly on the `WKWebView`. wry's `evaluate_script`
+        /// queues scripts until its own navigation delegate sees the first
+        /// commit, but `ConsoleNavigationDelegate` replaces that delegate, so
+        /// the queue would never flush and every script would be dropped.
         pub fn evaluate_script(&self, script: &str) {
-            let _ = self.webview.evaluate_script(script);
+            unsafe {
+                self.wk
+                    .evaluateJavaScript_completionHandler(&NSString::from_str(script), None);
+            }
         }
 
         pub fn open_devtools(&self) {
