@@ -71,7 +71,7 @@ type Result struct {
 	// everything as one system prompt.
 	SystemPrompt string
 	// StableSystem has no per-session values (date, cwd, branch, …), so it
-	// is byte-identical across sessions with the same mode and tools.
+	// is identical across sessions with the same mode and tools.
 	StableSystem string
 	// Setup is the per-session context, sent as a leading user message.
 	Setup    string

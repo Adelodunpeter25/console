@@ -178,7 +178,7 @@ impl RowVeil {
 }
 
 /// Split runs at veil boundaries and multiply only paint colors by the
-/// current opacity. The text and total run lengths remain byte-identical.
+/// current opacity. The text and total run lengths remain identical.
 pub fn apply_veil(runs: Vec<TextRun>, spans: &[VeilSpan]) -> Vec<TextRun> {
     if spans.is_empty() || spans.iter().all(|(_, opacity)| *opacity >= 1.0) {
         return runs;
