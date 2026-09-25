@@ -8,6 +8,31 @@ pub struct ImageAttachment {
     pub mime_type: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RectDimensions {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserElementAnnotation {
+    pub id: String,
+    pub session_id: Option<String>,
+    pub url: String,
+    pub title: String,
+    pub component_name: Option<String>,
+    pub source_location: Option<String>,
+    pub selector: String,
+    pub html_snippet: String,
+    pub dimensions: RectDimensions,
+    pub user_comment: String,
+    pub screenshot_base64: Option<String>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AssistantMessage {

@@ -7,6 +7,7 @@
 mod actions;
 pub mod address;
 pub mod host;
+pub mod inspector;
 pub mod view;
 
 pub use actions::{
@@ -17,4 +18,5 @@ pub use actions::{
 };
 pub use address::*;
 pub use host::*;
+pub use inspector::*;
 pub use view::*;

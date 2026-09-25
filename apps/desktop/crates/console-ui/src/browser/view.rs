@@ -25,6 +25,7 @@ use super::address::{
     url_host,
 };
 use super::host::{NativeNavigationError, WebviewHost};
+use super::inspector::{BrowserElementInspection, INSPECTOR_SCRIPT, InspectorIpcMessage};
 use crate::common::input::{ComposerEvent, ComposerInput};
 use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon};
@@ -76,6 +77,9 @@ pub struct BrowserView {
     snapshot: Option<Arc<gpui::RenderImage>>,
     snapshot_pending: bool,
     snapshot_epoch: u64,
+    inspecting: bool,
+    active_inspection: Option<BrowserElementInspection>,
+    annotation_input: Entity<ComposerInput>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -144,6 +148,11 @@ impl BrowserView {
             }
         });
 
+        let annotation_input = cx.new(|cx| {
+            ComposerInput::new(window, cx)
+                .placeholder("Ask AI about this element... (Press Enter to attach)")
+        });
+
         let mut this = Self {
             focus_handle,
             address,
@@ -163,6 +172,9 @@ impl BrowserView {
             snapshot: None,
             snapshot_pending: false,
             snapshot_epoch: 0,
+            inspecting: false,
+            active_inspection: None,
+            annotation_input,
             _subscriptions: vec![submit_subscription, focus_in_address, focus_out_surface],
         };
         this.build_webview(window, cx);
@@ -252,6 +264,8 @@ impl BrowserView {
             })
         };
 
+        let on_ipc = deferred.clone();
+
         let built = wry::WebViewBuilder::new()
             .with_bounds(wry::Rect {
                 position: LogicalPosition::new(0.0, 0.0).into(),
@@ -262,6 +276,11 @@ impl BrowserView {
             .with_accept_first_mouse(true)
             .with_devtools(true)
             .with_user_agent(USER_AGENT)
+            .with_initialization_script(INSPECTOR_SCRIPT)
+            .with_ipc_handler(move |request: wry::http::Request<String>| {
+                let body = request.body().clone();
+                on_ipc.update(move |this, cx| this.handle_ipc_message(body, cx));
+            })
             .with_navigation_handler(|_| true)
             .with_document_title_changed_handler(move |title| {
                 on_title.update(move |this, cx| this.title_changed(title, cx));
@@ -313,6 +332,47 @@ impl BrowserView {
             }
         }
         self.was_natively_focused = natively_focused;
+    }
+
+    fn handle_ipc_message(&mut self, payload: String, cx: &mut Context<Self>) {
+        if let Ok(msg) = serde_json::from_str::<InspectorIpcMessage>(&payload) {
+            match msg {
+                InspectorIpcMessage::ElementInspected(inspection) => {
+                    self.inspecting = false;
+                    self.active_inspection = Some(inspection);
+                    cx.notify();
+                }
+                InspectorIpcMessage::InspectCancelled => {
+                    self.inspecting = false;
+                    cx.notify();
+                }
+            }
+        }
+    }
+
+    pub fn toggle_inspect(&mut self, cx: &mut Context<Self>) {
+        self.inspecting = !self.inspecting;
+        let script = format!(
+            "if (window.__consoleSetInspectMode) window.__consoleSetInspectMode({});",
+            self.inspecting
+        );
+        if let Some(host) = &self.host {
+            host.evaluate_script(&script);
+        }
+        cx.notify();
+    }
+
+    pub fn is_inspecting(&self) -> bool {
+        self.inspecting
+    }
+
+    pub fn active_inspection(&self) -> Option<&BrowserElementInspection> {
+        self.active_inspection.as_ref()
+    }
+
+    pub fn clear_active_inspection(&mut self, cx: &mut Context<Self>) {
+        self.active_inspection = None;
+        cx.notify();
     }
 
     fn title_changed(&mut self, title: String, cx: &mut Context<Self>) {
@@ -700,6 +760,15 @@ impl BrowserView {
             .border_b_1()
             .border_color(theme.border)
             .bg(theme.surface)
+            .child(self.toolbar_button(
+                "browser-inspect",
+                IconName::Inspector,
+                has_page,
+                if self.inspecting { "Exit Inspect Mode (Esc)" } else { "Inspect Element" },
+                theme,
+                |this, _, cx| this.toggle_inspect(cx),
+                cx,
+            ))
             .child(self.toolbar_button(
                 "browser-back",
                 IconName::ArrowLeft,
