@@ -341,6 +341,17 @@ impl ConsoleDesktopApp {
 
         let client = self.client.clone();
         let file_path = path.clone();
+        let session_change_diff = self
+            .inspector_session_changes
+            .iter()
+            .rfind(|c| {
+                c.path == file_path
+                    && c.diff_text
+                        .as_deref()
+                        .map(|d| !d.trim().is_empty())
+                        .unwrap_or(false)
+            })
+            .and_then(|c| c.diff_text.clone());
         let cwd = self
             .selected_session_id
             .as_deref()
@@ -354,9 +365,11 @@ impl ConsoleDesktopApp {
             });
 
         cx.spawn(async move |entity, cx| {
-            let mut diff_raw = String::new();
-            if let Ok(resp) = client.git.get_diff(cwd.as_deref(), Some(&file_path)).await {
-                diff_raw = resp.diff;
+            let mut diff_raw = session_change_diff.unwrap_or_default();
+            if diff_raw.trim().is_empty() {
+                if let Ok(resp) = client.git.get_diff(cwd.as_deref(), Some(&file_path)).await {
+                    diff_raw = resp.diff;
+                }
             }
 
             let diff_result = if !diff_raw.trim().is_empty() {

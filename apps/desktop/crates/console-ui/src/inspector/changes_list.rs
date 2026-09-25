@@ -19,6 +19,7 @@ use crate::utils::short_parent_dir;
 
 #[derive(IntoElement)]
 pub struct ChangesListView {
+    #[allow(dead_code)]
     working_changes: Rc<Vec<GitFileEntry>>,
     session_changes: Rc<Vec<SessionFileChange>>,
     scope: ChangesScope,
@@ -62,8 +63,7 @@ impl RenderOnce for ChangesListView {
 
         let scoped_session_changes =
             console_core::types::filter_changes_for_scope(&self.session_changes, self.scope);
-        let has_session_changes = !scoped_session_changes.is_empty();
-        let has_changes = !self.working_changes.is_empty() || has_session_changes;
+        let has_changes = !scoped_session_changes.is_empty();
 
         let total_additions: u64 = scoped_session_changes.iter().map(|c| c.additions).sum();
         let total_deletions: u64 = scoped_session_changes.iter().map(|c| c.deletions).sum();
@@ -83,7 +83,7 @@ impl RenderOnce for ChangesListView {
             .flex()
             .flex_col()
             .overflow_hidden()
-            .when(has_session_changes, |el| {
+            .when(has_changes, |el| {
                 el.child(
                     div()
                         .flex_none()
@@ -192,127 +192,13 @@ impl RenderOnce for ChangesListView {
                             .py(px(32.0))
                             .text_size(px(12.0))
                             .text_color(theme.text_tertiary)
-                            .child("No working tree changes")
+                            .child("No session changes")
                             .into_any_element()
                     } else {
                         div()
                             .flex()
                             .flex_col()
                             .gap(px(2.0))
-                            .children(self.working_changes.iter().map(|entry| {
-                                let on_select = on_select.clone();
-                                let path = entry.path.clone();
-                                let is_selected = selected_path.as_deref() == Some(&path);
-
-                                let (status_label, status_color) = match entry.status.as_str() {
-                                    "M" | "modified" => ("M", theme.warning),
-                                    "A" | "added" => ("A", theme.success),
-                                    "D" | "deleted" => ("D", theme.danger),
-                                    "R" => ("R", theme.accent),
-                                    _ => ("?", theme.text_tertiary),
-                                };
-
-                                let file_name = base_name(&entry.path).to_string();
-                                let short_dir = short_parent_dir(&entry.path);
-                                let tooltip_path = entry.path.clone();
-
-                                div()
-                                    .id(format!("change-row-{}", entry.path))
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .h(px(28.0))
-                                    .w_full()
-                                    .px(px(8.0))
-                                    .rounded(px(4.0))
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(theme.overlay))
-                                    .when(is_selected, |s| s.bg(theme.overlay_strong))
-                                    .tooltip(Tooltip::text(tooltip_path))
-                                    .on_click(move |_, window, cx| {
-                                        (on_select)(path.clone(), window, cx);
-                                    })
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(6.0))
-                                            .min_w_0()
-                                            .flex_1()
-                                            .child(
-                                                div()
-                                                    .text_size(px(11.0))
-                                                    .font_weight(gpui::FontWeight::BOLD)
-                                                    .text_color(status_color)
-                                                    .w(px(14.0))
-                                                    .flex_none()
-                                                    .child(status_label),
-                                            )
-                                            .child(file_icon(file_icon_for_name(&file_name), 14.0))
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .items_baseline()
-                                                    .gap(px(6.0))
-                                                    .min_w_0()
-                                                    .flex_1()
-                                                    .child(
-                                                        div()
-                                                            .flex_none()
-                                                            .text_size(px(12.0))
-                                                            .text_color(if is_selected {
-                                                                theme.text
-                                                            } else {
-                                                                theme.text_secondary
-                                                            })
-                                                            .child(file_name),
-                                                    )
-                                                    .when(!short_dir.is_empty(), |el| {
-                                                        el.child(
-                                                            div()
-                                                                .truncate()
-                                                                .min_w_0()
-                                                                .flex_1()
-                                                                .text_size(px(10.5))
-                                                                .font_family(MONO_FAMILY)
-                                                                .text_color(theme.text_ghost)
-                                                                .child(short_dir.clone()),
-                                                        )
-                                                    }),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(4.0))
-                                            .flex_none()
-                                            .when_some(
-                                                entry.additions.filter(|&a| a > 0),
-                                                |el, adds| {
-                                                    el.child(
-                                                        div()
-                                                            .text_size(px(10.0))
-                                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                                            .text_color(theme.success)
-                                                            .child(format!("+{}", adds)),
-                                                    )
-                                                },
-                                            )
-                                            .when_some(
-                                                entry.deletions.filter(|&d| d > 0),
-                                                |el, dels| {
-                                                    el.child(
-                                                        div()
-                                                            .text_size(px(10.0))
-                                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                                            .text_color(theme.danger)
-                                                            .child(format!("-{}", dels)),
-                                                    )
-                                                },
-                                            ),
-                                    )
-                            }))
                             .children(scoped_session_changes.iter().map(|entry| {
                                 let on_select = on_select.clone();
                                 let path = entry.path.clone();
