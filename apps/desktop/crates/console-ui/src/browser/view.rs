@@ -357,7 +357,9 @@ impl BrowserView {
                 r#"
                 (function() {{
                     try {{
-                        {}
+                        if (!window.__consoleSetInspectMode) {{
+                            {}
+                        }}
                         if (window.__consoleSetInspectMode) {{
                             window.__consoleSetInspectMode({});
                         }}

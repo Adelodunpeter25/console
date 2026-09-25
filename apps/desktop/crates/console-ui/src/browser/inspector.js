@@ -6,32 +6,11 @@
     if (!overlay) {
       overlay = document.createElement('div');
       overlay.id = '__console_inspector_overlay';
-      overlay.style.position = 'fixed';
-      overlay.style.pointerEvents = 'none';
-      overlay.style.zIndex = '2147483647';
-      overlay.style.border = '2px solid #007AFF';
-      overlay.style.backgroundColor = 'rgba(0, 122, 255, 0.18)';
-      overlay.style.borderRadius = '3px';
-      overlay.style.display = 'none';
-      overlay.style.boxSizing = 'border-box';
-      overlay.style.margin = '0';
-      overlay.style.padding = '0';
-      overlay.style.transform = 'none';
+      overlay.style.cssText = 'position:fixed!important;pointer-events:none!important;z-index:2147483647!important;border:2px solid #007AFF!important;background-color:rgba(0,122,255,0.2)!important;border-radius:3px!important;display:none;box-sizing:border-box!important;margin:0!important;padding:0!important;transform:none!important;';
 
       label = document.createElement('div');
       label.id = '__console_inspector_label';
-      label.style.position = 'absolute';
-      label.style.top = '-24px';
-      label.style.left = '0';
-      label.style.backgroundColor = '#007AFF';
-      label.style.color = '#FFFFFF';
-      label.style.fontSize = '11px';
-      label.style.fontFamily = 'monospace';
-      label.style.padding = '2px 6px';
-      label.style.borderRadius = '3px';
-      label.style.whiteSpace = 'nowrap';
-      label.style.pointerEvents = 'none';
-      label.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+      label.style.cssText = 'position:absolute!important;top:-24px;left:0;background-color:#007AFF!important;color:#FFFFFF!important;font-size:11px!important;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace!important;padding:2px 6px!important;border-radius:3px!important;white-space:nowrap!important;pointer-events:none!important;box-shadow:0 2px 4px rgba(0,0,0,0.25)!important;line-height:14px!important;height:auto!important;max-width:none!important;visibility:visible!important;opacity:1!important;';
 
       overlay.appendChild(label);
       (document.body || document.documentElement).appendChild(overlay);
@@ -192,12 +171,16 @@
 
   function setInspectActive(enable) {
     const { overlay } = getOrCreateOverlay();
+    document.removeEventListener('mousemove', onMouseMove, true);
+    document.removeEventListener('click', onClick, true);
+    document.removeEventListener('keydown', onKeyDown, true);
+    window.removeEventListener('mousemove', onMouseMove, true);
+    window.removeEventListener('click', onClick, true);
+    window.removeEventListener('keydown', onKeyDown, true);
+
     if (!enable) {
       if (overlay) overlay.style.display = 'none';
       hoveredEl = null;
-      document.removeEventListener('mousemove', onMouseMove, true);
-      document.removeEventListener('click', onClick, true);
-      document.removeEventListener('keydown', onKeyDown, true);
       if (document.body) {
         document.body.style.cursor = '';
       }
@@ -205,9 +188,9 @@
       if (document.body) {
         document.body.style.cursor = 'crosshair';
       }
-      document.addEventListener('mousemove', onMouseMove, true);
-      document.addEventListener('click', onClick, true);
-      document.addEventListener('keydown', onKeyDown, true);
+      window.addEventListener('mousemove', onMouseMove, true);
+      window.addEventListener('click', onClick, true);
+      window.addEventListener('keydown', onKeyDown, true);
     }
   }
 
