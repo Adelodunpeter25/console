@@ -354,21 +354,7 @@ impl BrowserView {
         self.inspecting = !self.inspecting;
         if let Some(host) = &self.host {
             let script = format!(
-                r#"
-                (function() {{
-                    try {{
-                        if (!window.__consoleSetInspectMode) {{
-                            {}
-                        }}
-                        if (window.__consoleSetInspectMode) {{
-                            window.__consoleSetInspectMode({});
-                        }}
-                    }} catch(e) {{
-                        console.error("Console inspect error:", e);
-                    }}
-                }})();
-                "#,
-                INSPECTOR_SCRIPT,
+                "if (typeof window.__consoleSetInspectMode === 'function') {{ window.__consoleSetInspectMode({}); }}",
                 self.inspecting
             );
             host.evaluate_script(&script);
