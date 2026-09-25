@@ -563,9 +563,10 @@ fn render_search_row(
     match row {
         SearchRow::Heading { group_ix } => {
             let Some(group) = groups.get(*group_ix) else {
-                return div().h(px(ROW_HEIGHT_PX)).into_any_element();
+                return div().w_full().h(px(ROW_HEIGHT_PX)).into_any_element();
             };
             div()
+                .w_full()
                 .h(px(ROW_HEIGHT_PX))
                 .flex()
                 .flex_row()
@@ -597,12 +598,13 @@ fn render_search_row(
                 .get(*group_ix)
                 .and_then(|group| group.matches.get(*match_ix))
             else {
-                return div().h(px(ROW_HEIGHT_PX)).into_any_element();
+                return div().w_full().h(px(ROW_HEIGHT_PX)).into_any_element();
             };
             let selected = selected_row == Some(row_ix);
             let entity = entity.clone();
             div()
                 .id(("global-search-match", row_ix))
+                .w_full()
                 .h(px(ROW_HEIGHT_PX))
                 .flex()
                 .flex_row()
