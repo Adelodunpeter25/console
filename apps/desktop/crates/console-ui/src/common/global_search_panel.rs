@@ -87,6 +87,7 @@ pub struct GlobalSearchPanel {
     rows: Rc<Vec<SearchRow>>,
     selected_row: Option<usize>,
     total_matched: usize,
+    matched_files: usize,
     files_searched: usize,
     has_searched: bool,
     loading: bool,
@@ -110,6 +111,7 @@ impl GlobalSearchPanel {
             rows: Rc::new(Vec::new()),
             selected_row: None,
             total_matched: 0,
+            matched_files: 0,
             files_searched: 0,
             has_searched: false,
             loading: false,
@@ -136,6 +138,7 @@ impl GlobalSearchPanel {
         self.rows = Rc::new(Vec::new());
         self.selected_row = None;
         self.total_matched = 0;
+        self.matched_files = 0;
         self.files_searched = 0;
         self.has_searched = false;
         self.loading = false;
@@ -218,6 +221,11 @@ impl GlobalSearchPanel {
                         this.total_matched = res.total_matched;
                         this.files_searched = res.files_searched;
                         let groups = group_matches(res.matches);
+                        this.matched_files = if res.filtered_files > 0 {
+                            res.filtered_files
+                        } else {
+                            groups.len()
+                        };
                         let mut rows = Vec::new();
                         for (group_ix, group) in groups.iter().enumerate() {
                             rows.push(SearchRow::Heading { group_ix });
@@ -236,6 +244,7 @@ impl GlobalSearchPanel {
                     }
                     Err(_) => {
                         this.total_matched = 0;
+                        this.matched_files = 0;
                         this.files_searched = 0;
                         this.groups = Rc::new(Vec::new());
                         this.rows = Rc::new(Vec::new());
@@ -403,7 +412,7 @@ impl Render for GlobalSearchPanel {
         let loading = self.loading;
         let has_searched = self.has_searched;
         let total_matched = self.total_matched;
-        let files_searched = self.files_searched;
+        let matched_files = self.matched_files;
         let row_count = rows.len();
 
         let empty_state: Option<gpui::AnyElement> = if !has_searched && !loading {
@@ -442,8 +451,8 @@ impl Render for GlobalSearchPanel {
                     "{} match{} in {} file{}",
                     total_matched,
                     if total_matched == 1 { "" } else { "es" },
-                    files_searched,
-                    if files_searched == 1 { "" } else { "s" }
+                    matched_files,
+                    if matched_files == 1 { "" } else { "s" }
                 )
                 .into(),
             )
