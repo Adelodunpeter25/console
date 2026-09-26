@@ -1087,17 +1087,10 @@ impl Render for TranscriptView {
             .child(if self.messages.is_empty() && !is_streaming {
                 empty_state(theme).into_any_element()
             } else {
-                let mut list_column = div()
+                div()
                     .size_full()
                     .flex()
-                    .flex_col();
-                if self.has_more {
-                    let on_load = self.on_load_older.clone();
-                    let loading = self.loading_older;
-                    list_column =
-                        list_column.child(load_older_button(theme, on_load, loading));
-                }
-                list_column
+                    .flex_col()
                     .child(
                         list(self.list_state.clone(), move |index, _window, cx| {
                             transcript_row(entity.clone(), index, cx)
@@ -1276,34 +1269,6 @@ fn is_hidden_tool_transport(message: &AgentMessage) -> bool {
             .any(|part| matches!(part, AssistantContentPart::ToolCall { .. })),
         AgentMessage::User { .. } => false,
     }
-}
-
-fn load_older_button(
-    theme: Theme,
-    on_load: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
-    loading: bool,
-) -> gpui::AnyElement {
-    let label = if loading { "Loading…" } else { "Load older messages" };
-    let mut btn = div()
-        .id("transcript-load-older")
-        .w_full()
-        .py(px(8.0))
-        .flex()
-        .justify_center()
-        .cursor_pointer()
-        .text_color(if loading {
-            theme.text_ghost
-        } else {
-            theme.text_secondary
-        })
-        .hover(|s| s.bg(theme.overlay))
-        .child(label);
-    if !loading {
-        if let Some(handler) = on_load {
-            btn = btn.on_click(move |_, window, cx| (handler)(window, cx));
-        }
-    }
-    btn.into_any_element()
 }
 
 fn selection_input(selection: TranscriptSelection) -> impl IntoElement {
