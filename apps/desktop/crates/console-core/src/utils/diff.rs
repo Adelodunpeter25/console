@@ -38,6 +38,26 @@ impl DiffResult {
     }
 }
 
+/// One file's diff, paired with the path it belongs to.
+///
+/// A tool call can write more than one file (`batchWrite`), and each file needs
+/// its own header and line numbers. Carrying the path here keeps a diff from
+/// being rendered against another file's name.
+#[derive(Clone, Debug, Default)]
+pub struct FileDiff {
+    pub path: String,
+    pub diff: DiffResult,
+}
+
+impl FileDiff {
+    pub fn new(path: impl Into<String>, diff: DiffResult) -> Self {
+        Self {
+            path: path.into(),
+            diff,
+        }
+    }
+}
+
 /// Compute a line-level diff between `old` and `new`.
 ///
 /// Returns a flat list of `DiffLine`s in file order (not the standard
@@ -47,16 +67,31 @@ impl DiffResult {
 /// The `context` parameter controls how many unchanged lines of context to
 /// keep around each changed region. Pass `0` to show only added/removed lines.
 pub fn diff_lines(old: &str, new: &str, context: usize) -> DiffResult {
-    let old_lines: Vec<&str> = if old.is_empty() {
-        Vec::new()
-    } else {
-        old.split('\n').collect()
-    };
-    let new_lines: Vec<&str> = if new.is_empty() {
-        Vec::new()
-    } else {
-        new.split('\n').collect()
-    };
+    fn split_file_lines<'a>(s: &'a str) -> Vec<&'a str> {
+        if s.is_empty() {
+            return Vec::new();
+        }
+        let lines: Vec<&str> = s.split('\n').collect();
+        // A trailing newline yields a final empty element from split('\n')
+        // that is not a real line: "a\nb\n" splits to ["a", "b", ""]. Counting
+        // it inflates additions by one on every file that ends in a newline,
+        // and renders a blank added line at the bottom of the diff. The Go
+        // emitter avoids the same trap in diffLines
+        // (apps/server-go/internal/run/file_changes.go), so dropping it here is
+        // also what keeps the two sides' counts equal.
+        //
+        // Only the final element is dropped. In "a\n\n" the middle "" is a
+        // genuine blank line and must survive.
+        let len = if s.ends_with('\n') {
+            lines.len().saturating_sub(1)
+        } else {
+            lines.len()
+        };
+        lines[..len].to_vec()
+    }
+
+    let old_lines = split_file_lines(old);
+    let new_lines = split_file_lines(new);
 
     // Myers algorithm — O(ND), fast for small changes in large files.
     let ops = capture_diff_slices(Algorithm::Myers, &old_lines, &new_lines);
@@ -178,30 +213,101 @@ pub fn extract_edit_args(arguments: &serde_json::Value) -> Option<(&str, &str)> 
     Some((old, new))
 }
 
+/// Extract every `(path, content)` pair a whole-file write tool call targets.
+///
+/// A `writeFile` carries a single `path`/`content` pair; a `batchWrite` carries
+/// an array under `files`. Every entry is returned, in call order, because the
+/// server records one change per entry — `recordWholeFileChange` is invoked
+/// once per file in apps/server-go/internal/run/file_changes.go. Collapsing a
+/// `batchWrite` to its first file would report a multi-file write as a
+/// single-file one, with no error to hint otherwise.
+///
+/// Entries missing either half are skipped rather than failing the call, so one
+/// malformed element does not blank the whole batch.
+pub fn extract_write_files(arguments: &serde_json::Value) -> Vec<(String, String)> {
+    let Some(obj) = arguments.as_object() else {
+        return Vec::new();
+    };
+
+    if let Some(files) = obj.get("files").and_then(|v| v.as_array()) {
+        return files
+            .iter()
+            .filter_map(|file| {
+                let file = file.as_object()?;
+                let path = file.get("path").and_then(|v| v.as_str())?;
+                let content = file.get("content").and_then(|v| v.as_str())?;
+                Some((path.to_owned(), content.to_owned()))
+            })
+            .collect();
+    }
+
+    let path = ["path", "filePath", "targetFile"]
+        .into_iter()
+        .find_map(|key| obj.get(key).and_then(|v| v.as_str()));
+    match (path, obj.get("content").and_then(|v| v.as_str())) {
+        (Some(path), Some(content)) => vec![(path.to_owned(), content.to_owned())],
+        _ => Vec::new(),
+    }
+}
+
 /// Try to extract file content from a `writeFile` / `batchWrite` tool-call
 /// arguments JSON value. For `writeFile` this returns a single (path, content).
-/// For `batchWrite` this returns the first file. Returns `None` otherwise.
+/// For `batchWrite` this returns the first file — a display fallback for
+/// single-path labels, not a complete view of the call.
+///
+/// Use [`extract_write_files`] wherever every written file matters, such as
+/// rendering a diff per file.
 pub fn extract_write_args(arguments: &serde_json::Value) -> Option<(String, String)> {
-    let obj = arguments.as_object()?;
-    if let (Some(path), Some(content)) = (
-        ["path", "filePath", "targetFile"]
-            .into_iter()
-            .find_map(|key| obj.get(key).and_then(|v| v.as_str())),
-        obj.get("content").and_then(|v| v.as_str()),
+    extract_write_files(arguments).into_iter().next()
+}
+
+/// Build the per-file diffs a file tool call describes, in call order.
+///
+/// `editFile` carries both sides in its arguments, so it yields exactly one
+/// diff. Whole-file write tools (`writeFile`, `batchWrite`) carry only the new
+/// content, so they are diffed against an empty file and every line counts as
+/// an addition — the call cannot know what the file held beforehand. That
+/// differs from the review tab, which diffs against a real pre-write snapshot
+/// taken by the server; this reflects only what the tool arguments state.
+///
+/// Returns an empty vec for calls that are not file tools, so callers can test
+/// the result for emptiness.
+pub fn file_call_diffs(name: &str, arguments: &serde_json::Value) -> Vec<FileDiff> {
+    if matches!(
+        name,
+        "editFile" | "edit_file" | "str_replace"
     ) {
-        return Some((path.to_owned(), content.to_owned()));
+        return extract_edit_args(arguments)
+            .map(|(old, new)| {
+                vec![FileDiff::new(
+                    edit_target_path(arguments).unwrap_or_default(),
+                    diff_lines(old, new, 3),
+                )]
+            })
+            .unwrap_or_default();
     }
-    if let Some(files) = obj.get("files").and_then(|v| v.as_array()) {
-        if let Some(first) = files.first()
-            && let (Some(path), Some(content)) = (
-                first.get("path").and_then(|v| v.as_str()),
-                first.get("content").and_then(|v| v.as_str()),
-            )
-        {
-            return Some((path.to_owned(), content.to_owned()));
-        }
+
+    if matches!(
+        name,
+        "writeFile" | "write_file" | "batchWrite" | "batch_write"
+    ) {
+        return extract_write_files(arguments)
+            .into_iter()
+            .map(|(path, content)| FileDiff::new(path, diff_lines("", &content, 3)))
+            .collect();
     }
-    None
+
+    Vec::new()
+}
+
+/// The path an `editFile`-shaped call targets, across the argument aliases
+/// the server accepts for it.
+fn edit_target_path(arguments: &serde_json::Value) -> Option<String> {
+    let obj = arguments.as_object()?;
+    ["path", "filePath", "targetFile", "absolutePath"]
+        .into_iter()
+        .find_map(|key| obj.get(key).and_then(|v| v.as_str()))
+        .map(str::to_owned)
 }
 
 /// Parse raw unified git diff output into a `DiffResult`.

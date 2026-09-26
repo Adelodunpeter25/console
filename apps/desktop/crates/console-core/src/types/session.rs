@@ -1,3 +1,14 @@
+/// Optional pagination parameters for [`crate::services::SessionService::get`].
+///
+/// The server returns at most `limit` messages per response. With `before`
+/// set to a rowid from a previous response's `next_cursor`, only messages
+/// strictly older than that row are returned.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SessionPageOptions {
+    pub limit: Option<u32>,
+    pub before: Option<i64>,
+}
+
 use super::agent::AgentMessage;
 use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
@@ -47,8 +58,10 @@ pub struct SessionDetailResponse {
     #[serde(alias = "session")]
     pub header: SessionHeader,
     pub messages: Vec<AgentMessage>,
+    /// Whether older messages exist before the oldest row in `messages`.
     #[serde(default)]
     pub has_more: bool,
+    /// Rowid cursor for the next older batch; null when at the start of history.
     #[serde(default)]
     pub next_cursor: Option<i64>,
 }

@@ -3,6 +3,7 @@ use crate::utils::HttpTransport;
 use anyhow::{Context, Result, anyhow};
 use std::time::Duration;
 
+
 #[derive(Clone)]
 pub struct SessionService {
     transport: HttpTransport,
@@ -55,36 +56,32 @@ impl SessionService {
         }
     }
 
-    pub async fn get(&self, id: &str) -> Result<SessionDetailResponse> {
-        self.get_paginated(id, None, None).await
-    }
-
-    pub async fn get_paginated(
+    /// Fetch a session header plus a page of message history.
+    ///
+    /// `options.limit` defaults to 50; `options.before` paginates older
+    /// batches. The returned `next_cursor` is the rowid to pass as `before`
+    /// to fetch the next older page; `has_more` is false when the start of
+    /// the session's history has been reached.
+    pub async fn get(
         &self,
         id: &str,
-        limit: Option<usize>,
-        before: Option<i64>,
+        options: Option<SessionPageOptions>,
     ) -> Result<SessionDetailResponse> {
-        let mut url = self.transport.url(&format!("/api/sessions/{}", id)).await;
-        let mut query = Vec::new();
-        if let Some(l) = limit {
-            query.push(format!("limit={}", l));
-        }
-        if let Some(b) = before {
-            query.push(format!("before={}", b));
-        }
-        if !query.is_empty() {
-            url.push('?');
-            url.push_str(&query.join("&"));
-        }
-        let resp = self
+        let url = self.transport.url(&format!("/api/sessions/{}", id)).await;
+        let mut req = self
             .transport
             .client()
             .get(&url)
-            .headers(self.transport.build_headers().await)
-            .send()
-            .await
-            .context("Failed to get session")?;
+            .headers(self.transport.build_headers().await);
+        if let Some(opts) = options {
+            if let Some(limit) = opts.limit {
+                req = req.query(&[("limit", limit)]);
+            }
+            if let Some(before) = opts.before {
+                req = req.query(&[("before", before)]);
+            }
+        }
+        let resp = req.send().await.context("Failed to get session")?;
 
         let body: ApiResponse<SessionDetailResponse> = self
             .transport
@@ -95,10 +92,25 @@ impl SessionService {
             body.data.ok_or_else(|| anyhow!("Session data is missing"))
         } else {
             Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to load session".into())
+                body.error.unwrap_or_else(|| "Failed to get session".into())
             ))
         }
+    }
+
+    pub async fn get_paginated(
+        &self,
+        id: &str,
+        limit: Option<usize>,
+        before: Option<i64>,
+    ) -> Result<SessionDetailResponse> {
+        self.get(
+            id,
+            Some(SessionPageOptions {
+                limit: limit.and_then(|l| u32::try_from(l).ok()),
+                before,
+            }),
+        )
+        .await
     }
 
     /// `GET /api/sessions/:id/changes` — session file changes. When
@@ -271,7 +283,7 @@ impl SessionService {
         const POLL_INTERVAL: Duration = Duration::from_millis(250);
 
         for attempt in 0..MAX_ATTEMPTS {
-            let detail = self.get(id).await?;
+            let detail = self.get(id, None).await?;
             if detail.header.status != Some(SessionStatus::Working) || attempt + 1 == MAX_ATTEMPTS {
                 return Ok(detail);
             }

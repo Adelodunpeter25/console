@@ -56,5 +56,9 @@ name = "file_kind_test"
 path = "tests/types/file_kind_test.rs"
 
 [[test]]
+name = "write_files_test"
+path = "tests/types/write_files_test.rs"
+
+[[test]]
 name = "worktree_dto_test"
 path = "tests/session/worktree_dto_test.rs"

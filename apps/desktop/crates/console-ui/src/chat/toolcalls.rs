@@ -10,8 +10,8 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use console_core::{
-    ActivityEvent, ToolCall, ToolCallEntry, ToolResult, diff_lines, extract_edit_args,
-    extract_write_args,
+    ActivityEvent, FileDiff, ToolCall, ToolCallEntry, ToolResult, extract_write_args,
+    file_call_diffs,
 };
 use gpui::{
     AnyElement, App, ElementId, FontWeight, IntoElement, ParentElement, RenderOnce, Styled, Window,
@@ -44,8 +44,10 @@ pub struct ToolCallsState {
     /// id. Owned by the transcript so virtualization does not reset a
     /// streaming render when a row remounts.
     pub markdown_views: HashMap<String, Rc<RefCell<MarkdownView>>>,
-    /// Memoized diffs for edit-file tool calls, keyed by call id.
-    pub diff_cache: HashMap<String, (serde_json::Value, Option<console_core::DiffResult>)>,
+    /// Memoized diffs for file tool calls, keyed by call id. A `batchWrite`
+    /// targets several files, so this holds one diff per written file rather
+    /// than a single one; a `writeFile` yields a one-element vec.
+    pub diff_cache: HashMap<String, (serde_json::Value, Vec<FileDiff>)>,
 }
 
 impl ToolCallsState {
@@ -249,6 +251,15 @@ impl ToolCalls {
         if let Some(paths) = object.get("paths").and_then(|value| value.as_array()) {
             return Some(format!("{} files", paths.len()));
         }
+        // A `batchWrite` has no single `path`, so without this its header shows
+        // the bare call label and none of the files it touched. The per-file
+        // diffs below each carry their own name, but the header still needs to
+        // say how many there are.
+        if let Some(files) = object.get("files").and_then(|value| value.as_array())
+            && !files.is_empty()
+        {
+            return Some(format!("{} files", files.len()));
+        }
         if let Some(operations) = object.get("operations").and_then(|value| value.as_array()) {
             return Some(format!("{} operations", operations.len()));
         }
@@ -341,37 +352,29 @@ impl ToolCalls {
             .map(str::to_owned)
             .or_else(|| extract_write_args(&entry.call.arguments).map(|(path, _)| path));
         // Both editFile and writeFile describe a file transition. `editFile`
-        // supplies the old and new contents directly; `writeFile` creates a
-        // new file, so diff it against an empty file. Keeping this in the same
-        // cache/rendering path ensures writeFile gets the same DiffView rather
-        // than falling back to the JSON arguments section.
-        let diff = if is_edit || is_write {
+        // supplies the old and new contents directly; whole-file write tools
+        // carry only the new content, so they are diffed against an empty file.
+        // A `batchWrite` targets several files at once, so this is a per-file
+        // list — rendering only the first would misreport the call.
+        let diffs: Vec<FileDiff> = if is_edit || is_write {
             let mut cache = self.state.borrow_mut();
-            let computed = if let Some((cached_args, cached_diff)) = cache.diff_cache.get(&call_id)
+            if let Some((cached_args, cached)) = cache.diff_cache.get(&call_id)
+                && cached_args == &entry.call.arguments
             {
-                if cached_args == &entry.call.arguments {
-                    cached_diff.clone()
-                } else {
-                    let computed = tool_call_diff(&entry.call);
-                    cache.diff_cache.insert(
-                        call_id.clone(),
-                        (entry.call.arguments.clone(), computed.clone()),
-                    );
-                    computed
-                }
+                cached.clone()
             } else {
-                let computed = tool_call_diff(&entry.call);
-                cache.diff_cache.insert(
-                    call_id.clone(),
-                    (entry.call.arguments.clone(), computed.clone()),
-                );
+                let computed = file_call_diffs(&entry.call.name, &entry.call.arguments);
+                cache
+                    .diff_cache
+                    .insert(call_id.clone(), (entry.call.arguments.clone(), computed.clone()));
                 computed
-            };
-            computed
+            }
         } else {
-            None
+            Vec::new()
         };
-        let has_diff = diff.is_some();
+        let has_diff = !diffs.is_empty();
+        let total_added: usize = diffs.iter().map(|d| d.diff.added).sum();
+        let total_removed: usize = diffs.iter().map(|d| d.diff.removed).sum();
         let header_action = on_action.clone();
         let mut row = div()
             .id(ElementId::Name(format!("tool-call-{call_id}").into()))
@@ -440,7 +443,7 @@ impl ToolCalls {
                                 .child(summary),
                         )
                     })
-                    .when_some(diff.as_ref(), |element, d| {
+                    .when(has_diff, |element| {
                         element.child(
                             div()
                                 .flex()
@@ -451,12 +454,12 @@ impl ToolCalls {
                                 .child(
                                     div()
                                         .text_color(theme.success)
-                                        .child(format!("+{}", d.added)),
+                                        .child(format!("+{}", total_added)),
                                 )
                                 .child(
                                     div()
                                         .text_color(theme.danger)
-                                        .child(format!("-{}", d.removed)),
+                                        .child(format!("-{}", total_removed)),
                                 ),
                         )
                     })
@@ -523,13 +526,16 @@ impl ToolCalls {
                     .flex()
                     .flex_col()
                     .gap(px(6.0))
-                    .when_some(diff, |element, d| {
-                        let mut view = DiffView::new(call_id.clone(), d);
-                        if let Some(path) = &file_path {
-                            view = view.file_path(path.clone());
+                    .children(diffs.iter().enumerate().map(|(i, file_diff)| {
+                        let mut view = DiffView::new(
+                            format!("{call_id}-{i}"),
+                            file_diff.diff.clone(),
+                        );
+                        if !file_diff.path.is_empty() {
+                            view = view.file_path(file_diff.path.clone());
                         }
-                        element.child(view)
-                    })
+                        view
+                    }))
                     .when(!has_diff, |element| {
                         let arguments = serde_json::to_string_pretty(&entry.call.arguments)
                             .unwrap_or_else(|_| entry.call.arguments.to_string());
@@ -1084,18 +1090,6 @@ fn is_write_file(name: &str) -> bool {
 /// those rows keep the tool glyph (e.g. the magnifier for grep).
 fn is_file_target_tool(name: &str) -> bool {
     matches!(name, "readFile" | "read_file") || is_edit_file(name) || is_write_file(name)
-}
-
-/// Build the visual diff for a file transition. A write starts with an empty
-/// file, so every written line is shown as an addition.
-fn tool_call_diff(call: &ToolCall) -> Option<console_core::DiffResult> {
-    if is_edit_file(&call.name) {
-        extract_edit_args(&call.arguments).map(|(old, new)| diff_lines(old, new, 3))
-    } else if is_write_file(&call.name) {
-        extract_write_args(&call.arguments).map(|(_, content)| diff_lines("", &content, 3))
-    } else {
-        None
-    }
 }
 
 /// Whether a tool-call name reads file content into its result.

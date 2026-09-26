@@ -4,7 +4,8 @@ pub mod http_transport;
 pub mod sse_reader;
 
 pub use diff::{
-    DiffLine, DiffLineKind, DiffResult, diff_lines, extract_edit_args, extract_write_args,
+    DiffLine, DiffLineKind, DiffResult, FileDiff, diff_lines, extract_edit_args,
+    extract_write_args, extract_write_files, file_call_diffs,
 };
 pub use file_kind::{
     BLOCKED_FILE_EXTENSIONS, FileKind, MARKDOWN_EXTENSIONS, RASTER_IMAGE_EXTENSIONS,

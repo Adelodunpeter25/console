@@ -907,7 +907,13 @@ impl ConsoleDesktopApp {
         cx.spawn(async move |entity, cx| {
             match client
                 .sessions
-                .get_paginated(&session_id, Some(50), None)
+                .get(
+                    &session_id,
+                    Some(console_core::SessionPageOptions {
+                        limit: Some(50),
+                        before: None,
+                    }),
+                )
                 .await
             {
                 Ok(detail) => {
@@ -1074,4 +1080,7 @@ impl ConsoleDesktopApp {
         })
         .detach();
     }
+
+
+
 }

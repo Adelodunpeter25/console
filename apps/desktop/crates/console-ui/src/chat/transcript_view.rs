@@ -530,6 +530,89 @@ impl TranscriptView {
         cx.notify();
     }
 
+    /// Insert a page of older messages at the front of the transcript.
+    ///
+    /// The viewport is re-anchored to whatever row was at the top before the
+    /// prepend plus the number of new messages, so the user does not see the
+    /// scroll position jump. Empty input is a no-op.
+    pub fn prepend_older_messages(
+        &mut self,
+        older: Vec<AgentMessage>,
+        cx: &mut Context<Self>,
+    ) {
+        if older.is_empty() {
+            return;
+        }
+        // Snapshot the anchor BEFORE the prepend so we can restore the same
+        // visible row afterwards.
+        let anchor = self.scroll_anchor();
+        let prepend_count = older.len();
+
+        // Invalidate markdown caches for the prepended rows so they get fresh
+        // renders (their indices shift by `prepend_count`).
+        self.markdown_cache.borrow_mut().clear();
+        self.presentation_cache.borrow_mut().clear();
+
+        // Bump content revisions for the existing rows so virtualization
+        // knows their layout is now offset by `prepend_count` new rows above.
+        let new_len = self.messages.len() + prepend_count;
+        self.content_revisions = vec![0; new_len];
+
+        // Splice the older messages in front.
+        let mut combined = older;
+        combined.append(&mut self.messages);
+        self.messages = combined;
+
+        // The activity cache is keyed by user index and would now point at
+        // the wrong messages — invalidate it.
+        self.invalidate_activity_cache();
+
+        // Reset the list with the new row count, then restore the anchor.
+        self.list_state.reset(self.row_count());
+        let _ = anchor.map(|(row_index, offset_in_row, at_tail)| {
+            if at_tail {
+                self.list_state.set_follow_mode(FollowMode::Tail);
+                self.list_state.scroll_to_end();
+            } else {
+                self.list_state.set_follow_mode(FollowMode::Normal);
+                let new_row_index = row_index.saturating_add(prepend_count);
+                self.list_state.scroll_to(ListOffset {
+                    item_ix: new_row_index,
+                    offset_in_item: px(offset_in_row),
+                });
+                // Re-apply on the next frame so variable-height Markdown
+                // rows are measured before the offset resolves.
+                self.scroll_restore_generation =
+                    self.scroll_restore_generation.wrapping_add(1);
+                let generation = self.scroll_restore_generation;
+                let entity = cx.entity().downgrade();
+                let row = new_row_index;
+                let off = offset_in_row;
+                cx.spawn(async move |_, cx| {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(16))
+                        .await;
+                    cx.update(|cx| {
+                        if let Some(entity) = entity.upgrade() {
+                            entity.update(cx, |this, _| {
+                                if this.scroll_restore_generation == generation {
+                                    this.list_state.set_follow_mode(FollowMode::Normal);
+                                    this.list_state.scroll_to(ListOffset {
+                                        item_ix: row,
+                                        offset_in_item: px(off),
+                                    });
+                                }
+                            });
+                        }
+                    });
+                })
+                .detach();
+            }
+        });
+        self.loading_older = false;
+        cx.notify();
+    }
+
     pub fn push_message(&mut self, msg: AgentMessage, cx: &mut Context<Self>) {
         self.messages.push(msg);
         self.content_revisions.push(0);
@@ -1004,10 +1087,17 @@ impl Render for TranscriptView {
             .child(if self.messages.is_empty() && !is_streaming {
                 empty_state(theme).into_any_element()
             } else {
-                div()
+                let mut list_column = div()
                     .size_full()
                     .flex()
-                    .flex_col()
+                    .flex_col();
+                if self.has_more {
+                    let on_load = self.on_load_older.clone();
+                    let loading = self.loading_older;
+                    list_column =
+                        list_column.child(load_older_button(theme, on_load, loading));
+                }
+                list_column
                     .child(
                         list(self.list_state.clone(), move |index, _window, cx| {
                             transcript_row(entity.clone(), index, cx)
@@ -1186,6 +1276,34 @@ fn is_hidden_tool_transport(message: &AgentMessage) -> bool {
             .any(|part| matches!(part, AssistantContentPart::ToolCall { .. })),
         AgentMessage::User { .. } => false,
     }
+}
+
+fn load_older_button(
+    theme: Theme,
+    on_load: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+    loading: bool,
+) -> gpui::AnyElement {
+    let label = if loading { "Loading…" } else { "Load older messages" };
+    let mut btn = div()
+        .id("transcript-load-older")
+        .w_full()
+        .py(px(8.0))
+        .flex()
+        .justify_center()
+        .cursor_pointer()
+        .text_color(if loading {
+            theme.text_ghost
+        } else {
+            theme.text_secondary
+        })
+        .hover(|s| s.bg(theme.overlay))
+        .child(label);
+    if !loading {
+        if let Some(handler) = on_load {
+            btn = btn.on_click(move |_, window, cx| (handler)(window, cx));
+        }
+    }
+    btn.into_any_element()
 }
 
 fn selection_input(selection: TranscriptSelection) -> impl IntoElement {
