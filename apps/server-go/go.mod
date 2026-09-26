@@ -9,6 +9,7 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gofiber/fiber/v2 v2.52.9
 	github.com/invopop/jsonschema v0.14.0
+	github.com/pmezard/go-difflib v1.0.0
 	github.com/valyala/fasthttp v1.58.0
 	modernc.org/sqlite v1.38.0
 )

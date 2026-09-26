@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+	"github.com/pmezard/go-difflib/difflib"
 )
 
 const maxDiffSize = 1_000_000 // 1MB limit for diff storage
@@ -226,17 +227,28 @@ func diffTextOrNil(patch string) *string {
 	return &patch
 }
 
-// createUnifiedDiff produces a standard unified diff with @@ hunk headers
-// that parse_unified_diff on the desktop side can consume. Uses a simple
-// line-level LCS via Myers-style patience approach (good enough for our
-// sizes; go-diff was dropped because it produced character-level output
-// without proper hunk headers).
+// createUnifiedDiff produces a standard unified diff with @@ hunk headers,
+// matching the output of jsdiff's createPatch in the TS server this mirrors.
+//
+// It walks difflib's grouped opcodes by hand rather than calling
+// GetUnifiedDiffString for one reason: that helper calls NewMatcher, which
+// hardcodes autoJunk to true, and there is no way to opt out through its API.
+// autoJunk treats any line occurring in >1% of a 200+ line sequence as junk
+// and excludes it from matching. That heuristic is tuned for prose, not
+// source code: in a file full of repeated structural lines (`}` in JS, `end`
+// in Ruby, blank lines) a one-line edit surrounded by them makes the matcher
+// discard every one of those lines as junk and re-emit the entire file as a
+// single rewritten hunk. NewMatcherWithJunk(false, nil) disables it, so the
+// hunk grouping below mirrors WriteUnifiedDiff's format with autoJunk off.
 func createUnifiedDiff(filename, oldText, newText string) string {
-	oldLines := splitLines(oldText)
-	newLines := splitLines(newText)
+	oldLines, newLines := diffLines(oldText), diffLines(newText)
+	if len(oldLines) == 0 && len(newLines) == 0 {
+		return ""
+	}
 
-	hunks := computeHunks(oldLines, newLines, contextLines)
-	if len(hunks) == 0 {
+	m := difflib.NewMatcherWithJunk(oldLines, newLines, false, nil)
+	groups := m.GetGroupedOpCodes(contextLines)
+	if len(groups) == 0 {
 		return ""
 	}
 
@@ -244,20 +256,81 @@ func createUnifiedDiff(filename, oldText, newText string) string {
 	fmt.Fprintf(&b, "--- a/%s\n", filename)
 	fmt.Fprintf(&b, "+++ b/%s\n", filename)
 
-	for _, h := range hunks {
-		oldCount := h.oldEnd - h.oldStart
-		newCount := h.newEnd - h.newStart
-		fmt.Fprintf(&b, "@@ -%d,%d +%d,%d @@\n",
-			h.oldStart+1, oldCount,
-			h.newStart+1, newCount,
+	for _, g := range groups {
+		first, last := g[0], g[len(g)-1]
+		fmt.Fprintf(&b, "@@ -%s +%s @@\n",
+			formatRange(first.I1, last.I2),
+			formatRange(first.J1, last.J2),
 		)
-		for _, line := range h.lines {
-			b.WriteString(line)
-			b.WriteByte('\n')
+		for _, c := range g {
+			switch c.Tag {
+			case 'e':
+				for _, line := range oldLines[c.I1:c.I2] {
+					b.WriteString(" " + line)
+				}
+			case 'r', 'd':
+				for _, line := range oldLines[c.I1:c.I2] {
+					b.WriteString("-" + line)
+				}
+				if c.Tag == 'r' {
+					for _, line := range newLines[c.J1:c.J2] {
+						b.WriteString("+" + line)
+					}
+				}
+			case 'i':
+				for _, line := range newLines[c.J1:c.J2] {
+					b.WriteString("+" + line)
+				}
+			}
 		}
 	}
-
 	return b.String()
+}
+
+// formatRange renders one side of a @@ header. A length of 1 is written
+// without the ",1" suffix and a length of 0 as start-1,0, per the unified diff
+// spec (formatRangeUnified in difflib). The desktop parser accepts both the
+// short and long forms.
+func formatRange(start, stop int) string {
+	beginning := start + 1 // lines are 1-based
+	length := stop - start
+	switch length {
+	case 0:
+		return fmt.Sprintf("%d,0", beginning-1)
+	case 1:
+		return fmt.Sprintf("%d", beginning)
+	default:
+		return fmt.Sprintf("%d,%d", beginning, length)
+	}
+}
+
+// diffLines splits content into lines for difflib, keeping each line's
+// trailing newline.
+//
+// Two details are load-bearing, because difflib's own SplitLines gets both
+// wrong for our purposes:
+//
+//   - SplitLines does strings.SplitAfter(s, "\n") and then unconditionally
+//     appends "\n" to the final element. For input that already ends in a
+//     newline that element is "", so it becomes a lone "\n" — a phantom
+//     trailing blank line. That inflates every hunk header's count by one and
+//     appends a bogus context line to the end of the diff.
+//   - WriteUnifiedDiff writes each body line by prefixing it and writing it
+//     verbatim, so the newline must already be part of the line. A final line
+//     with no newline runs into the next line's prefix and corrupts the diff
+//     ("-b+c"). Normalising the input to end in a newline avoids that.
+func diffLines(s string) []string {
+	if s == "" {
+		return nil
+	}
+	if !strings.HasSuffix(s, "\n") {
+		s += "\n"
+	}
+	lines := strings.SplitAfter(s, "\n")
+	if lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
 }
 
 // countDiffLines counts +/- lines in a unified diff string.
@@ -270,156 +343,4 @@ func countDiffLines(diff string) (adds int, dels int) {
 		}
 	}
 	return
-}
-
-func splitLines(s string) []string {
-	if s == "" {
-		return nil
-	}
-	lines := strings.Split(s, "\n")
-	// Remove trailing empty element from a trailing newline.
-	if len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-	return lines
-}
-
-type hunk struct {
-	oldStart, oldEnd int
-	newStart, newEnd int
-	lines            []string
-}
-
-// computeHunks diffs oldLines vs newLines and groups changes into hunks
-// with ctx lines of context on each side.
-func computeHunks(oldLines, newLines []string, ctx int) []hunk {
-	edits := lcsEdits(oldLines, newLines)
-
-	// Group into hunks.
-	var hunks []hunk
-	i := 0
-	for i < len(edits) {
-		// Skip unchanged lines until we hit a change.
-		if edits[i].kind == ' ' {
-			i++
-			continue
-		}
-		// Found a change — collect context before it.
-		start := i
-		for start > 0 && edits[start-1].kind == ' ' && i-start < ctx {
-			start--
-		}
-		// Walk forward collecting changes + trailing context.
-		end := i
-		for end < len(edits) {
-			if edits[end].kind != ' ' {
-				end++
-				// Collect up to ctx context lines after this change.
-				trail := 0
-				for end < len(edits) && edits[end].kind == ' ' && trail < ctx {
-					end++
-					trail++
-				}
-				continue
-			}
-			// Context line — stop here (already counted above).
-			break
-		}
-
-		// Build hunk.
-		h := hunk{}
-		firstOld, firstNew := -1, -1
-		lastOld, lastNew := -1, -1
-		for _, e := range edits[start:end] {
-			if e.old >= 0 {
-				if firstOld < 0 {
-					firstOld = e.old
-				}
-				lastOld = e.old
-			}
-			if e.new >= 0 {
-				if firstNew < 0 {
-					firstNew = e.new
-				}
-				lastNew = e.new
-			}
-			switch e.kind {
-			case ' ':
-				h.lines = append(h.lines, " "+e.text)
-			case '+':
-				h.lines = append(h.lines, "+"+e.text)
-			case '-':
-				h.lines = append(h.lines, "-"+e.text)
-			}
-		}
-		if firstOld < 0 {
-			firstOld = 0
-		}
-		if firstNew < 0 {
-			firstNew = 0
-		}
-		h.oldStart = firstOld
-		h.oldEnd = lastOld + 1
-		h.newStart = firstNew
-		h.newEnd = lastNew + 1
-		hunks = append(hunks, h)
-
-		i = end
-	}
-	return hunks
-}
-
-type edit struct {
-	kind rune
-	old  int
-	new  int
-	text string
-}
-
-// lcsEdits returns a flat edit list (context/add/remove) via DP LCS.
-// Capped at 5000 lines each side to avoid O(N²) blowup on huge files.
-func lcsEdits(old, new []string) []edit {
-	const cap = 5000
-	if len(old) > cap {
-		old = old[:cap]
-	}
-	if len(new) > cap {
-		new = new[:cap]
-	}
-
-	m, n := len(old), len(new)
-	// dp[i][j] = LCS length of old[:i] and new[:j]
-	dp := make([][]int, m+1)
-	for i := range dp {
-		dp[i] = make([]int, n+1)
-	}
-	for i := m - 1; i >= 0; i-- {
-		for j := n - 1; j >= 0; j-- {
-			if old[i] == new[j] {
-				dp[i][j] = 1 + dp[i+1][j+1]
-			} else if dp[i+1][j] >= dp[i][j+1] {
-				dp[i][j] = dp[i+1][j]
-			} else {
-				dp[i][j] = dp[i][j+1]
-			}
-		}
-	}
-
-	var edits []edit
-	i, j := 0, 0
-	for i < m || j < n {
-		switch {
-		case i < m && j < n && old[i] == new[j]:
-			edits = append(edits, edit{' ', i, j, old[i]})
-			i++
-			j++
-		case j < n && (i >= m || dp[i][j+1] >= dp[i+1][j]):
-			edits = append(edits, edit{'+', -1, j, new[j]})
-			j++
-		default:
-			edits = append(edits, edit{'-', i, -1, old[i]})
-			i++
-		}
-	}
-	return edits
 }
