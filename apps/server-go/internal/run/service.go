@@ -58,6 +58,8 @@ type Service struct {
 	notify    *services.NotificationService
 	memories  *memory.Registry
 	bashJobs  *services.BashJobManager
+	ports     *services.PortRegistry
+	scripts   *services.ProjectScriptsService
 	prompts   promptCache
 	// Lookup resolves a provider id to a backend (overridable in tests).
 	Lookup func(id string) (loop.Provider, error)
@@ -109,6 +111,32 @@ func (s *Service) bashJobManager() *services.BashJobManager {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.bashJobs
+}
+
+// SetPorts attaches the port registry backing the per-run ports tool.
+func (s *Service) SetPorts(p *services.PortRegistry) {
+	s.mu.Lock()
+	s.ports = p
+	s.mu.Unlock()
+}
+
+func (s *Service) portRegistry() *services.PortRegistry {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ports
+}
+
+// SetProjectScripts attaches the scripts service backing the per-run project_scripts tool.
+func (s *Service) SetProjectScripts(scripts *services.ProjectScriptsService) {
+	s.mu.Lock()
+	s.scripts = scripts
+	s.mu.Unlock()
+}
+
+func (s *Service) projectScriptsService() *services.ProjectScriptsService {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.scripts
 }
 
 func (s *Service) notifier() *services.NotificationService {

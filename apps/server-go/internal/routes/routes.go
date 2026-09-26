@@ -73,6 +73,8 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	runSvc.SetMemories(memory.NewRegistry(""))
 	bashJobs := services.NewBashJobManager(cfg.Ports)
 	runSvc.SetBashJobs(bashJobs)
+	runSvc.SetPorts(cfg.Ports)
+	runSvc.SetProjectScripts(scriptsSvc)
 	registerSessionRoutes(app, services.NewSessionService(cfg.DB), runSvc)
 	registerWorktreeRoutes(app, services.NewSessionService(cfg.DB), services.NewWorktreeService())
 	fffManager := fff.NewManager()

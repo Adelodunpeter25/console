@@ -235,6 +235,18 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 			toolList = append(toolList, tools.NewBashTool(s.bashJobManager(), sessionID))
 		case "bashJob":
 			toolList = append(toolList, tools.NewBashJobTool(s.bashJobManager(), sessionID))
+		case "ports":
+			var pid string
+			if header.ProjectID != nil {
+				pid = *header.ProjectID
+			}
+			toolList = append(toolList, tools.NewPortsTool(pid, s.portRegistry()))
+		case "project_scripts":
+			var pid string
+			if header.ProjectID != nil {
+				pid = *header.ProjectID
+			}
+			toolList = append(toolList, tools.NewProjectScriptsTool(pid, s.projectScriptsService()))
 		default:
 			toolList = append(toolList, t)
 		}

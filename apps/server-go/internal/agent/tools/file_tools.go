@@ -491,5 +491,5 @@ func globToRegex(glob string) string {
 
 // DefaultTools is the initial Phase 2 toolset.
 func DefaultTools() []Tool {
-	return []Tool{ReadFile, WriteFile, ListDir, Glob, Grep, EditFile, BatchWrite, ReadSkill, Fetch, WebSearch, Ask, AskMany, Todo, Bash, BashJob, Subagent}
+	return []Tool{ReadFile, WriteFile, ListDir, Glob, Grep, EditFile, BatchWrite, ReadSkill, Fetch, WebSearch, Ask, AskMany, Todo, Bash, BashJob, Subagent, Ports, ProjectScripts}
 }
