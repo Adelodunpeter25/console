@@ -1,6 +1,6 @@
 use super::agent::{
-    AskQuestionRequest, AssistantMessage, ImageAttachment, PermissionRequest, QueuedPrompt,
-    TodoItem, ToolCall, ToolCallPreview, ToolResult,
+    AskQuestionRequest, AssistantMessage, BrowserActionRequest, ImageAttachment, PermissionRequest,
+    QueuedPrompt, TodoItem, ToolCall, ToolCallPreview, ToolResult,
 };
 use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
@@ -79,6 +79,9 @@ pub enum AgentSessionEvent {
     Compaction {
         summary: String,
         original_message_count: usize,
+    },
+    BrowserAction {
+        request: BrowserActionRequest,
     },
     TurnEnd {
         #[serde(rename = "turnId")]

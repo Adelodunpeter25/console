@@ -74,6 +74,40 @@ impl RunService {
         }
     }
 
+    pub async fn resolve_browser_action(
+        &self,
+        session_id: &str,
+        payload: ResolveBrowserActionDto,
+    ) -> Result<()> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/browser-action", session_id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .json(&payload)
+            .send()
+            .await
+            .context("Failed to resolve browser action")?;
+
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse browser action response")?;
+        if body.success {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to resolve browser action".into())
+            ))
+        }
+    }
+
     pub async fn approve_permission(
         &self,
         session_id: &str,
