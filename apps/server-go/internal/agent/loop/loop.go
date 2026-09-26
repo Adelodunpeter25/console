@@ -60,6 +60,8 @@ const (
 	EventUsage      EventKind = "usage"
 	// EventAskQuestion carries an AskQuestionRequest awaiting the answer route.
 	EventAskQuestion EventKind = "askQuestion"
+	// EventBrowserAction carries a BrowserActionRequest awaiting desktop client execution.
+	EventBrowserAction EventKind = "browserAction"
 	// EventPermissionRequest carries a permission Request awaiting approval.
 	EventPermissionRequest EventKind = "permissionRequest"
 	// EventQueueUpdated carries the staged QueuedPrompt (or null).
@@ -108,6 +110,7 @@ type Event struct {
 	Message    any                       `json:"message,omitempty"`
 	Usage      *TurnUsage                `json:"usage,omitempty"`
 	Ask        *tools.AskQuestionRequest `json:"ask,omitempty"`
+	Browser    *tools.BrowserActionRequest `json:"browser,omitempty"`
 	Permission *permissions.Request      `json:"permission,omitempty"`
 	Queued     *types.QueuedPrompt       `json:"queuedPrompt,omitempty"`
 	Title      string                    `json:"title,omitempty"`

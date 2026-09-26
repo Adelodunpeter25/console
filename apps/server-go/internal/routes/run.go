@@ -128,6 +128,23 @@ func registerRunRoutes(app *fiber.App, runs *run.Service) {
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"answered": true}})
 	})
 
+	// POST /api/sessions/:id/browser-action — resolve a pending browser action from the desktop client.
+	app.Post("/api/sessions/:id/browser-action", func(c *fiber.Ctx) error {
+		sessionID := c.Params("id")
+		var body struct {
+			RequestID string `json:"requestId"`
+			Result    string `json:"result"`
+			Error     string `json:"error"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid request body."})
+		}
+		if !runs.ResolveBrowserAction(sessionID, body.RequestID, tools.BrowserActionResult{Result: body.Result, Error: body.Error}) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No pending browser action for requestId '" + body.RequestID + "'."})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"resolved": true}})
+	})
+
 	// POST /api/sessions/:id/approve — approve or deny a pending tool request.
 	app.Post("/api/sessions/:id/approve", func(c *fiber.Ctx) error {
 		sessionID := c.Params("id")
@@ -367,6 +384,8 @@ func wireFrame(e loop.Event) (string, any, bool) {
 		return "queueUpdated", fiber.Map{"type": "queueUpdated", "queuedPrompt": e.Queued}, false
 	case loop.EventAskQuestion:
 		return "askQuestion", fiber.Map{"type": "askQuestion", "request": e.Ask}, false
+	case loop.EventBrowserAction:
+		return "browserAction", fiber.Map{"type": "browserAction", "request": e.Browser}, false
 	case loop.EventPermissionRequest:
 		return "permissionRequest", fiber.Map{"type": "permissionRequest", "request": e.Permission}, false
 	case loop.EventTodoUpdate:

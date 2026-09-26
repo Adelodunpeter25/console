@@ -38,12 +38,23 @@ type pendingQuestion struct {
 	ch        chan questionResult
 }
 
-// Decisions tracks in-flight permission/question requests per session.
+type browserActionResult struct {
+	result tools.BrowserActionResult
+	err    error
+}
+
+type pendingBrowserAction struct {
+	sessionID string
+	ch        chan browserActionResult
+}
+
+// Decisions tracks in-flight permission/question/browser requests per session.
 // All methods are safe for concurrent use.
 type Decisions struct {
-	mu        sync.Mutex
-	approvals map[string]pendingApproval
-	questions map[string]pendingQuestion
+	mu             sync.Mutex
+	approvals      map[string]pendingApproval
+	questions      map[string]pendingQuestion
+	browserActions map[string]pendingBrowserAction
 	// Timeout bounds one decision wait (overridable in tests).
 	Timeout time.Duration
 	// Notify fires after a request broadcasts on the hub (attention
@@ -57,7 +68,12 @@ func newDecisions() *Decisions {
 
 // NewDecisions creates a decision tracker (exported for tests).
 func NewDecisions() *Decisions {
-	return &Decisions{approvals: map[string]pendingApproval{}, questions: map[string]pendingQuestion{}, Timeout: decisionTimeout}
+	return &Decisions{
+		approvals:      map[string]pendingApproval{},
+		questions:      map[string]pendingQuestion{},
+		browserActions: map[string]pendingBrowserAction{},
+		Timeout:        decisionTimeout,
+	}
 }
 
 func (d *Decisions) timeout() time.Duration {
@@ -129,6 +145,36 @@ func (d *Decisions) AskHandlerFor(sessionID string, hub *Hub) tools.AskHandler {
 	}
 }
 
+// BrowserHandlerFor returns a tools.BrowserHandler that broadcasts browserAction on
+// the hub and waits for the desktop client to respond via POST /api/sessions/:id/browser-action.
+func (d *Decisions) BrowserHandlerFor(sessionID string, hub *Hub) tools.BrowserHandler {
+	return func(ctx context.Context, req tools.BrowserActionRequest) (tools.BrowserActionResult, error) {
+		ch := make(chan browserActionResult, 1)
+		d.mu.Lock()
+		d.browserActions[req.RequestID] = pendingBrowserAction{sessionID: sessionID, ch: ch}
+		notify := d.Notify
+		d.mu.Unlock()
+		event := loop.Event{Kind: loop.EventBrowserAction, Browser: &req}
+		hub.Broadcast(event)
+		if notify != nil {
+			notify(ctx, sessionID, event)
+		}
+
+		timer := time.NewTimer(d.timeout())
+		defer timer.Stop()
+		select {
+		case res := <-ch:
+			return res.result, res.err
+		case <-ctx.Done():
+			d.removeBrowserAction(req.RequestID)
+			return tools.BrowserActionResult{}, ctx.Err()
+		case <-timer.C:
+			d.removeBrowserAction(req.RequestID)
+			return tools.BrowserActionResult{}, fmt.Errorf("Browser action timed out waiting for desktop client.")
+		}
+	}
+}
+
 // ApprovePermission resolves a pending approval. Returns false when no
 // such request exists for the session.
 func (d *Decisions) ApprovePermission(sessionID, requestID string, allow bool) bool {
@@ -159,6 +205,21 @@ func (d *Decisions) AnswerQuestion(sessionID, requestID string, answer tools.Ask
 	return true
 }
 
+// ResolveBrowserAction resolves a pending browser action. Returns false when
+// no such request exists for the session.
+func (d *Decisions) ResolveBrowserAction(sessionID, requestID string, result tools.BrowserActionResult) bool {
+	d.mu.Lock()
+	pending, ok := d.browserActions[requestID]
+	if !ok || pending.sessionID != sessionID {
+		d.mu.Unlock()
+		return false
+	}
+	delete(d.browserActions, requestID)
+	d.mu.Unlock()
+	pending.ch <- browserActionResult{result: result}
+	return true
+}
+
 // RejectAllForSession fails every pending decision for a session (abort,
 // run end). Other sessions are unaffected.
 func (d *Decisions) RejectAllForSession(sessionID string, reason string) {
@@ -178,6 +239,13 @@ func (d *Decisions) RejectAllForSession(sessionID string, reason string) {
 		delete(d.questions, id)
 		pending.ch <- questionResult{err: fmt.Errorf("%s", reason)}
 	}
+	for id, pending := range d.browserActions {
+		if pending.sessionID != sessionID {
+			continue
+		}
+		delete(d.browserActions, id)
+		pending.ch <- browserActionResult{err: fmt.Errorf("%s", reason)}
+	}
 }
 
 func (d *Decisions) removeApproval(requestID string) {
@@ -189,6 +257,12 @@ func (d *Decisions) removeApproval(requestID string) {
 func (d *Decisions) removeQuestion(requestID string) {
 	d.mu.Lock()
 	delete(d.questions, requestID)
+	d.mu.Unlock()
+}
+
+func (d *Decisions) removeBrowserAction(requestID string) {
+	d.mu.Lock()
+	delete(d.browserActions, requestID)
 	d.mu.Unlock()
 }
 

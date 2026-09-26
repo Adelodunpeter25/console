@@ -35,7 +35,7 @@ Use the available tools to explore the codebase, edit files, run shell commands,
 var DefaultToolNames = []string{
 	"read_file", "readSkill", "list_dir", "glob", "grep",
 	"write_file", "editFile", "batchWrite", "bash", "bashJob", "webSearch", "webFetch",
-	"todo", "subagent", "ask", "askMany", "memory",
+	"todo", "subagent", "ask", "askMany", "memory", "ports", "project_scripts", "browser",
 }
 
 // DiscoveredContext is everything discovery found for one build.

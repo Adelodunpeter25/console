@@ -266,3 +266,8 @@ func (s *Service) ApprovePermission(sessionID, requestID string, allow bool) boo
 func (s *Service) AnswerQuestion(sessionID, requestID string, answer tools.AskAnswer) bool {
 	return s.decisions.AnswerQuestion(sessionID, requestID, answer)
 }
+
+// ResolveBrowserAction resolves a pending browser action for a session.
+func (s *Service) ResolveBrowserAction(sessionID, requestID string, result tools.BrowserActionResult) bool {
+	return s.decisions.ResolveBrowserAction(sessionID, requestID, result)
+}
