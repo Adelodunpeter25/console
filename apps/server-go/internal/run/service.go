@@ -61,6 +61,12 @@ type Service struct {
 	ports     *services.PortRegistry
 	scripts   *services.ProjectScriptsService
 	prompts   promptCache
+	// snapshots holds pre-write file content for whole-file overwrite tools
+	// (write_file, batchWrite), keyed by session then path. Populated just
+	// before such a tool is dispatched and consulted when its result is
+	// recorded, since by then the tool has already written the file. Dropped
+	// when the run settles.
+	snapshots *writeSnapshots
 	// Lookup resolves a provider id to a backend (overridable in tests).
 	Lookup func(id string) (loop.Provider, error)
 	// WatchdogTimeout overrides defaultWatchdogTimeout. Zero uses the
@@ -69,7 +75,7 @@ type Service struct {
 }
 
 func NewService(sessions *services.SessionService) *Service {
-	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup}
+	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots()}
 	s.decisions.Notify = func(ctx context.Context, sessionID string, event loop.Event) {
 		s.notifyEvent(ctx, sessionID, event)
 	}

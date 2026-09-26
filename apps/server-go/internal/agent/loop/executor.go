@@ -23,6 +23,11 @@ type Executor struct {
 	registry *tools.Registry
 	mode     permissions.Mode
 	approver Approver
+	// OnBeforeExecute, when set, runs after permission is granted and
+	// immediately before the tool executes — the last point where the
+	// tool's input files are still untouched. Used by the run service to
+	// capture pre-write content for the session file-change diff. Optional.
+	OnBeforeExecute func(call tools.ToolCall, tool tools.Tool)
 }
 
 func NewExecutor(registry *tools.Registry, mode permissions.Mode, approver Approver) *Executor {
@@ -77,6 +82,9 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 
 	if ctx.Err() != nil {
 		return e.errResult(call, abortedMessage), nil
+	}
+	if e.OnBeforeExecute != nil {
+		e.OnBeforeExecute(call, tool)
 	}
 	out, err := executeToolCall(ctx, tool, call)
 	if err != nil {

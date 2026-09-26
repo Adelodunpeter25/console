@@ -54,8 +54,8 @@ func resultText(t *testing.T, out any) string {
 func TestToolSchemaFromTags(t *testing.T) {
 	registry := tools.NewRegistry(tools.DefaultTools()...)
 	defs := registry.Definitions()
-	if len(defs) != 16 {
-		t.Fatalf("definitions: %d", len(defs))
+	if len(defs) != len(tools.DefaultTools()) {
+		t.Fatalf("definitions: %d, want one per default tool", len(defs))
 	}
 
 	// read_file: required path, properties present.

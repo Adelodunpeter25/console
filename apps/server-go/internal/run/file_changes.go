@@ -1,23 +1,104 @@
-// File change tracking: diff generation and recording for session
-// file changes. Mirrors run-file-changes.ts from the TS server.
+// File-change tracking: pre-write snapshots, diff generation, and recording
+// for session file changes. Mirrors run-file-changes.ts from the TS server.
 package run
 
 import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
 const maxDiffSize = 1_000_000 // 1MB limit for diff storage
 const contextLines = 3        // lines of context around each hunk (matches git default)
 
-// ExtractAndRecordFileChange generates unified diffs for file operations
+// writeSnapshot captures the on-disk content of a path immediately before a
+// write tool touches it.
+//
+// Whole-file overwrite tools (write_file, batchWrite) can only produce a real
+// before/after diff if the prior content is read BEFORE the write lands.
+// Recording runs when the tool result event is observed, which is strictly
+// after the tool already wrote the file — so a read there returns the new
+// content and the file diffs against itself (empty patch, no additions or
+// deletions). The run service therefore snapshots these paths before
+// dispatching the call and hands the captured state back here.
+//
+// A missing file snapshots as ("", false); the bool is what distinguishes a
+// genuinely new file from an existing file that happens to be empty.
+type writeSnapshot struct {
+	Content string
+	Existed bool
+}
+
+// writeSnapshots holds per-session pre-write content keyed by path. Scoped by
+// session so two runs writing the same path concurrently cannot cross
+// contaminate each other's diffs. Dropped when the run settles.
+type writeSnapshots struct {
+	mu     sync.Mutex
+	stores map[string]map[string]writeSnapshot
+}
+
+func newWriteSnapshots() *writeSnapshots {
+	return &writeSnapshots{stores: make(map[string]map[string]writeSnapshot)}
+}
+
+func (s *writeSnapshots) put(sessionID, path string, snap writeSnapshot) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	store, ok := s.stores[sessionID]
+	if !ok {
+		store = make(map[string]writeSnapshot)
+		s.stores[sessionID] = store
+	}
+	store[path] = snap
+}
+
+func (s *writeSnapshots) get(sessionID, path string) (writeSnapshot, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	snap, ok := s.stores[sessionID][path]
+	return snap, ok
+}
+
+func (s *writeSnapshots) drop(sessionID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.stores, sessionID)
+}
+
+// SnapshotWritePaths reads the current content of each path and stores it as
+// the "before" side of the diff for that session. Best-effort: an unreadable
+// path is stored as non-existent, which is right for files being created and
+// harmless for ones that turn out to be unreadable (the tool would fail too).
+//
+// Only whole-file overwrite tools need this — editFile carries
+// oldContent/newContent in its own arguments.
+func (s *writeSnapshots) SnapshotWritePaths(sessionID string, paths []string) {
+	if s == nil || len(paths) == 0 {
+		return
+	}
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		snap := writeSnapshot{}
+		if data, err := os.ReadFile(path); err == nil {
+			snap = writeSnapshot{Content: string(data), Existed: true}
+		}
+		s.put(sessionID, path, snap)
+	}
+}
+
+// generateAndRecordFileChange generates unified diffs for file operations
 // and records them in the session database.
-func ExtractAndRecordFileChange(
-	sessions *services.SessionService,
+//
+// snapshots supplies pre-write content for whole-file overwrite tools. A nil
+// *writeSnapshots is valid and means "no snapshot available", degrading to
+// what the arguments alone can tell us.
+func (s *Service) generateAndRecordFileChange(
+	snapshots *writeSnapshots,
 	sessionID string,
 	toolName string,
 	args map[string]any,
@@ -31,83 +112,11 @@ func ExtractAndRecordFileChange(
 	switch toolName {
 	case "writeFile", "write_file":
 		path, ok := args["path"].(string)
-		if !ok {
+		if !ok || path == "" {
 			return nil
 		}
 		content, _ := args["content"].(string)
-
-		// If the file already existed on disk, produce a real before/after diff
-		// and mark it modified. For brand new files, diff against empty.
-		var oldContent string
-		var status string
-		if existing, err := os.ReadFile(path); err == nil {
-			oldContent = string(existing)
-			status = "modified"
-		} else {
-			status = "added"
-		}
-
-		patch := createUnifiedDiff(path, oldContent, content)
-		adds, dels := countDiffLines(patch)
-
-		var diffText *string
-		if len(patch) <= maxDiffSize {
-			diffText = &patch
-		}
-
-		return sessions.RecordFileChange(sessionID, types.SessionFileChange{
-			Path:      path,
-			TurnIndex: turnIndex,
-			Status:    status,
-			Additions: adds,
-			Deletions: dels,
-			DiffText:  diffText,
-			UpdatedAt: 0,
-		})
-
-	case "editFile", "edit_file", "replace_file_content":
-		// editFileInput uses "path", "oldContent", "newContent".
-		// Older/alternate tool schemas may use "TargetFile", "TargetContent",
-		// "ReplacementContent" — keep those as fallbacks.
-		var targetPath string
-		if p, ok := args["path"].(string); ok {
-			targetPath = p
-		} else if p, ok := args["TargetFile"].(string); ok {
-			targetPath = p
-		} else {
-			return nil
-		}
-
-		var oldContent, newContent string
-		if tc, ok := args["oldContent"].(string); ok {
-			oldContent = tc
-		} else if tc, ok := args["TargetContent"].(string); ok {
-			oldContent = tc
-		}
-		if rc, ok := args["newContent"].(string); ok {
-			newContent = rc
-		} else if rc, ok := args["ReplacementContent"].(string); ok {
-			newContent = rc
-		}
-
-		// For editFile the snippet is the changed region — diff it directly.
-		patch := createUnifiedDiff(targetPath, oldContent, newContent)
-		adds, dels := countDiffLines(patch)
-
-		var diffText *string
-		if len(patch) <= maxDiffSize {
-			diffText = &patch
-		}
-
-		return sessions.RecordFileChange(sessionID, types.SessionFileChange{
-			Path:      targetPath,
-			TurnIndex: turnIndex,
-			Status:    "modified",
-			Additions: adds,
-			Deletions: dels,
-			DiffText:  diffText,
-			UpdatedAt: 0,
-		})
+		return s.recordWholeFileChange(snapshots, sessionID, path, content, turnIndex)
 
 	case "batchWrite", "batch_write":
 		files, ok := args["files"].([]any)
@@ -120,35 +129,101 @@ func ExtractAndRecordFileChange(
 				continue
 			}
 			path, ok := fileMap["path"].(string)
-			if !ok {
+			if !ok || path == "" {
 				continue
 			}
 			content, _ := fileMap["content"].(string)
-
-			patch := createUnifiedDiff(path, "", content)
-			adds, _ := countDiffLines(patch)
-
-			var diffText *string
-			if len(patch) <= maxDiffSize {
-				diffText = &patch
-			}
-
-			if err := sessions.RecordFileChange(sessionID, types.SessionFileChange{
-				Path:      path,
-				TurnIndex: turnIndex,
-				Status:    "added",
-				Additions: adds,
-				Deletions: 0,
-				DiffText:  diffText,
-				UpdatedAt: 0,
-			}); err != nil {
+			if err := s.recordWholeFileChange(snapshots, sessionID, path, content, turnIndex); err != nil {
 				return err
 			}
 		}
 		return nil
+
+	case "editFile", "edit_file", "replace_file_content":
+		// editFileInput uses "path", "oldContent", "newContent".
+		// Older/alternate tool schemas may use "targetFile", "targetContent",
+		// "replacementContent" — keep those as fallbacks.
+		var targetPath string
+		if p, ok := args["path"].(string); ok {
+			targetPath = p
+		} else if p, ok := args["targetFile"].(string); ok {
+			targetPath = p
+		}
+		if targetPath == "" {
+			return nil
+		}
+
+		var oldContent, newContent string
+		if tc, ok := args["oldContent"].(string); ok {
+			oldContent = tc
+		} else if tc, ok := args["targetContent"].(string); ok {
+			oldContent = tc
+		}
+		if rc, ok := args["newContent"].(string); ok {
+			newContent = rc
+		} else if rc, ok := args["replacementContent"].(string); ok {
+			newContent = rc
+		}
+
+		// For editFile the snippet is the changed region — diff it directly.
+		patch := createUnifiedDiff(targetPath, oldContent, newContent)
+		adds, dels := countDiffLines(patch)
+
+		return s.sessions.RecordFileChange(sessionID, types.SessionFileChange{
+			Path:      targetPath,
+			TurnIndex: turnIndex,
+			Status:    "modified",
+			Additions: adds,
+			Deletions: dels,
+			DiffText:  diffTextOrNil(patch),
+			UpdatedAt: 0,
+		})
 	}
 
 	return nil
+}
+
+// recordWholeFileChange diffs a complete file write (write_file, or one entry
+// of a batchWrite) against the content captured before the tool ran.
+//
+// Status comes from the snapshot, not from a post-write read: "added" when
+// the file did not exist before, "modified" when it did. With no snapshot the
+// on-disk content is already the new content and reveals nothing about the
+// before state, so the change is recorded as added against empty rather than
+// diffing the file against itself into a fabricated empty patch.
+func (s *Service) recordWholeFileChange(
+	snapshots *writeSnapshots,
+	sessionID, path, content string,
+	turnIndex int,
+) error {
+	oldContent, status := "", "added"
+	if snapshots != nil {
+		if snap, ok := snapshots.get(sessionID, path); ok && snap.Existed {
+			oldContent, status = snap.Content, "modified"
+		}
+	}
+
+	patch := createUnifiedDiff(path, oldContent, content)
+	adds, dels := countDiffLines(patch)
+
+	return s.sessions.RecordFileChange(sessionID, types.SessionFileChange{
+		Path:      path,
+		TurnIndex: turnIndex,
+		Status:    status,
+		Additions: adds,
+		Deletions: dels,
+		DiffText:  diffTextOrNil(patch),
+		UpdatedAt: 0,
+	})
+}
+
+// diffTextOrNil drops an empty or oversized patch while keeping the row and
+// its counts, so a capped diff still reports which files changed by how much.
+func diffTextOrNil(patch string) *string {
+	if patch == "" || len(patch) > maxDiffSize {
+		return nil
+	}
+	return &patch
 }
 
 // createUnifiedDiff produces a standard unified diff with @@ hunk headers

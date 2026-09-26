@@ -26,6 +26,10 @@ import (
 func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, firstProvider loop.Provider, firstProviderID string, hub *Hub, done chan struct{}) {
 	defer close(done)
 	defer func() {
+		// Pre-write snapshots are only meaningful for the run that captured
+		// them; release them with the run so the map cannot grow unbounded
+		// across a long-lived server.
+		s.snapshots.drop(sessionID)
 		// Only tear down state this run still owns: after a watchdog
 		// force-settle a newer run may hold the slot and its decisions.
 		s.mu.Lock()
@@ -100,6 +104,45 @@ func (s *Service) nextTurn(ctx context.Context, turnErr error, sessionID string,
 	}
 	hub.Broadcast(loop.Event{Kind: loop.EventQueueUpdated})
 	return staged, true
+}
+
+// wholeFileWritePaths returns the files a tool call is about to overwrite in
+// full. Only these need a pre-write snapshot: editFile carries its own
+// oldContent/newContent arguments, and read-only tools touch nothing.
+//
+// Unparseable or empty argument payloads yield no paths, which simply means
+// the later recording step falls back to argument-only information.
+func wholeFileWritePaths(call tools.ToolCall) []string {
+	switch call.Name {
+	case "writeFile", "write_file", "batchWrite", "batch_write":
+	default:
+		return nil
+	}
+	if len(call.Arguments) == 0 {
+		return nil
+	}
+	// Both tools describe their targets the same way: a "path" for
+	// write_file, or "files"[].path for batchWrite. Read both shapes so one
+	// unmarshal serves either tool.
+	var in struct {
+		Path  string `json:"path"`
+		Files []struct {
+			Path string `json:"path"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal(call.Arguments, &in); err != nil {
+		return nil
+	}
+	var paths []string
+	if in.Path != "" {
+		paths = append(paths, in.Path)
+	}
+	for _, f := range in.Files {
+		if f.Path != "" {
+			paths = append(paths, f.Path)
+		}
+	}
+	return paths
 }
 
 // replaceTool swaps a DefaultTools entry for a per-run bound instance
@@ -268,6 +311,12 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	}))
 	registry := tools.NewRegistry(toolList...)
 	executor := loop.NewExecutor(registry, mode, s.decisions.ApproverFor(sessionID, hub))
+	// Capture the pre-write content of every file a whole-file overwrite
+	// tool is about to touch, so the change diff recorded from the result
+	// event (which fires after the write) still has a real "before" side.
+	executor.OnBeforeExecute = func(call tools.ToolCall, _ tools.Tool) {
+		s.snapshots.SnapshotWritePaths(sessionID, wholeFileWritePaths(call))
+	}
 	agent := loop.New(provider, executor, s.sessions)
 	agent.Usage = usage
 	agent.SystemPrompt = prompt.StableSystem
@@ -329,7 +378,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 			if len(event.Result.Args) > 0 {
 				_ = json.Unmarshal(event.Result.Args, &args)
 			}
-			_ = ExtractAndRecordFileChange(s.sessions, sessionID, event.Result.ToolName, args, event.Result.IsError, turnIndex)
+			_ = s.generateAndRecordFileChange(s.snapshots, sessionID, event.Result.ToolName, args, event.Result.IsError, turnIndex)
 		}
 
 		turner.translate(event)
