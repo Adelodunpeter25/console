@@ -43,13 +43,17 @@ impl ConsoleDesktopApp {
                     view.update(cx, |bv, cx| {
                         bv.navigate_to_url(url.clone(), cx);
                     });
-                } else if let Some(window) = cx.active_window() {
+                } else {
                     let url_to_open = url.clone();
                     let entity = cx.entity().downgrade();
-                    let _ = window.update(cx, |_, window, cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.open_browser_tab_with_url(Some(url_to_open), window, cx);
+                    cx.defer(move |cx| {
+                        if let Some(window) = cx.active_window() {
+                            let _ = window.update(cx, |_, window, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.open_browser_tab_with_url(Some(url_to_open), window, cx);
+                                    });
+                                }
                             });
                         }
                     });
