@@ -9,6 +9,7 @@ mod attachments;
 mod auth;
 mod autocomplete;
 mod bootstrap;
+mod browser_actions;
 mod deleted_sessions;
 mod drafts;
 mod editor_views;

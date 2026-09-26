@@ -372,6 +372,12 @@ impl BrowserView {
         self.inspecting
     }
 
+    pub fn evaluate_script(&self, script: &str) {
+        if let Some(host) = &self.host {
+            host.evaluate_script(script);
+        }
+    }
+
     pub fn active_inspection(&self) -> Option<&BrowserElementInspection> {
         self.active_inspection.as_ref()
     }

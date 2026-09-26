@@ -696,6 +696,9 @@ impl ConsoleDesktopApp {
                 self.clear_question_selected_for_session(run_session_id);
                 self.clear_question_inputs_for_session(run_session_id, cx);
             }
+            AgentSessionEvent::BrowserAction { request } => {
+                self.handle_browser_action(run_session_id, request, cx);
+            }
             AgentSessionEvent::ToolExecutionStart { calls } => {
                 if pane_shows_run {
                     self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
@@ -953,7 +956,7 @@ impl ConsoleDesktopApp {
                         let pane = run_pane_id.to_string();
                         let current_token = self.current_run_token_for_session(run_session_id);
                         cx.spawn(async move |entity, cx| {
-                            if let Ok(detail) = client.sessions.get(&sid).await {
+                            if let Ok(detail) = client.sessions.get(&sid, None).await {
                                 let _ = cx.update(|cx| {
                                     if let Some(app) = entity.upgrade() {
                                         app.update(cx, |this, cx| {
