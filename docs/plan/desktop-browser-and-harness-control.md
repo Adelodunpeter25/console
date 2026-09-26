@@ -194,18 +194,20 @@ Allows the agent to interact with scripts configured in `console.toml`.
 
 ## 6. Implementation Milestones
 
-### Milestone 1: Port & Script Tools (`server-go`)
-- Add `ports` tool in Go server querying active session port forward state.
-- Add `project_scripts` tool reading `console.toml` and interacting with the process manager.
+### Milestone 1: Port & Script Tools (`server-go`) [COMPLETED]
+- [x] Add `ports` tool in Go server querying active session port forward state and supporting manual port forwarding.
+- [x] Add `project_scripts` tool reading `console.toml` and interacting with the process manager (`list`, `start`, `stop`, `status`).
+- [x] Register tools in `DefaultTools()` and bind session services in agent turn executor.
+- [x] Unit test suite covering all actions and error handling.
 
 ### Milestone 2: Desktop Client Tool Bridge (`apps/desktop`)
-- Implement desktop RPC handlers for browser actions:
+- [ ] Implement desktop RPC handlers for browser actions:
   - `evaluate_javascript` bridge on `BrowserView`.
   - DOM measurement script injection helper.
   - Native webview screenshot/snapshot export.
   - Auto-opening / focusing `WorkspaceTabConfig::Browser`.
 
 ### Milestone 3: Server Tool Dispatch & System Prompt
-- Add the `browser` tool in `apps/server-go/internal/agent/tools/browser_tool.go`.
-- Wire client-delegated tool calls through the session stream.
-- Update system prompt instructions to guide the agent to use `browser` + `ports` when debugging UI/web layouts.
+- [ ] Add the `browser` tool in `apps/server-go/internal/agent/tools/browser_tool.go`.
+- [ ] Wire client-delegated tool calls through the session stream.
+- [ ] Update system prompt instructions to guide the agent to use `browser` + `ports` when debugging UI/web layouts.
