@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Message
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -168,6 +169,16 @@ fun HomeScreen(
             if (isLoading) {
                 LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                     item { SessionListSkeleton() }
+                }
+            } else if (sections.isEmpty() && projectState.error != null) {
+                LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                    item {
+                        EmptyState(
+                            title = "Couldn't load chats",
+                            description = projectState.error ?: "Failed to load chat sessions.",
+                            icon = { Icon(Icons.Filled.Warning, contentDescription = null, tint = ConsoleColors.Destructive) },
+                        )
+                    }
                 }
             } else if (sections.isEmpty()) {
                 LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {

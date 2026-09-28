@@ -27,8 +27,8 @@ android {
         applicationId = "com.console.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
@@ -136,7 +136,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
     implementation("androidx.navigation:navigation-compose:2.8.4")
 
     implementation("androidx.compose.foundation:foundation")
@@ -171,7 +170,8 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0")
 
     // WebView for Mermaid/markdown fallbacks
-    implementation("androidx.webkit:webkit:1.12.1")
+    // (no WebView is used anywhere in the app — MarkdownText uses the mikepenz
+    // renderer. Kept commented so it's easy to spot if a WebView is ever added.)
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

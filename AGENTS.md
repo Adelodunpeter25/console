@@ -7,14 +7,18 @@
 
 ## Tests & Verification
 - Run only the specific test file relevant to the task, e.g.:
-  `cd apps/server && bun tests/<area>/<name>.test.ts`
+  - `cd apps/server && bun tests/<area>/<name>.test.ts`
+  - `cd apps/server-go && go test ./tests/<area>/ -run <TestName> -v`
+  - `cd apps/desktop && cargo test -p <crate> <test_name>`
 - Never run `run-all-tests.ts` or the full suite unless explicitly asked.
 - If a test fails, fix the cause and re-run the same specific test until it passes before committing.
-- Never write inline `#[cfg(test)]` modules at the bottom of Rust source files; always place tests in dedicated `tests/` files.
-- For mobile bundling verification:
-  `cd apps/mobile && bunx expo export --platform android`
-- For mobile icon generation:
-  `bash apps/mobile/scripts/generate-icons.sh [path/to/icon.png]`
+- Never write inline `#[cfg(test)]` modules at the bottom of Rust source files; always place tests in dedicated `tests/` files. Same rule for Kotlin: no test functions inside `app/src/main` sources.
+- **The Android app is native Kotlin/Compose at `apps/android`** (not Expo). Verify a change with:
+  `cd apps/android && ./gradlew :app:assembleDebug`
+  Run its unit tests (if any) with `cd apps/android && ./gradlew :app:testDebugUnitTest`.
+  `minifyReleaseWithR8` needs `key.properties`, so only run it when explicitly asked.
+- There is currently **no Kotlin test suite** (`apps/android/tests` does not exist) and CI only
+  builds Android on manual dispatch. If you add tests, they won't be enforced automatically.
 
 ## Scope
 - Don't over-engineer. Make the minimal change that satisfies the task.

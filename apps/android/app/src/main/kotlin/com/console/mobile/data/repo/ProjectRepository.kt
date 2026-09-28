@@ -24,11 +24,16 @@ class ProjectRepository(
 ) {
     fun loadProjects() {
         scope.launch {
-            projectState.setProjects(projectState.state.value.projects)
+            projectState.setLoading(true)
+            projectState.setError(null)
             try {
                 val list = withContext(Dispatchers.IO) { api.getProjects() }
                 projectState.setProjects(list)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                // Keep whatever we already had, but say so — an unreachable backend
+                // used to look exactly like a server with no projects.
+                projectState.setLoading(false)
+                projectState.setError(e.message ?: "Failed to load projects")
             }
         }
     }
@@ -53,23 +58,29 @@ class ProjectRepository(
 
     fun loadSessions() {
         scope.launch {
+            projectState.patchSessionsLoading(true)
             try {
                 val list = withContext(Dispatchers.IO) { api.getSessions() }
                 projectState.setSessions(list)
                 sessionState.setStatusesSeed(list.mapNotNull { h ->
                     h.status?.let { h.id to it }
                 }.toMap())
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                projectState.patchSessionsLoading(false)
+                projectState.setError(e.message ?: "Failed to load chat sessions")
             }
         }
     }
 
     fun loadDeletedSessions() {
         scope.launch {
+            projectState.patchDeletedLoading(true)
             try {
                 val list = withContext(Dispatchers.IO) { api.getSessions(onlyDeleted = true) }
                 projectState.setDeleted(list)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                projectState.patchDeletedLoading(false)
+                projectState.setError(e.message ?: "Failed to load deleted chats")
             }
         }
     }
