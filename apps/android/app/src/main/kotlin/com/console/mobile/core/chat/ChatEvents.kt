@@ -125,9 +125,6 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             for (r in results) {
                 s = updateLatestRun(s) { run -> run.copy(events = setToolCallResult(run.events, r)) }
             }
-            s = updateLatestRun(s) { run ->
-                run.copy(status = if (run.status == RunStatus.Working) RunStatus.Completed else run.status, events = finalizePendingToolCalls(run.events))
-            }
             s.copy(activeToolCalls = emptyList())
         }
         "turnStart" -> {
