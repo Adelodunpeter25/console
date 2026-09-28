@@ -142,7 +142,16 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
                 ),
             )
         }
-        "turnEnd", "sessionEnd" -> {
+        "turnEnd" -> {
+            // The server emits turnEnd once per provider round-trip — there can be
+            // several of these within a single run whenever the agent makes tool
+            // calls (turnEnd, then tool execution, then another turnStart/turnEnd).
+            // Only sessionEnd marks the run as actually finished; treating turnEnd
+            // as terminal here flipped the stop button back to idle after the very
+            // first tool call even though the agent kept working.
+            commitStreamingBuffer(session)
+        }
+        "sessionEnd" -> {
             val finalized = updateLatestRun(session) { run ->
                 if (run.status != RunStatus.Working) run
                 else run.copy(status = RunStatus.Completed, events = finalizePendingToolCalls(run.events),
