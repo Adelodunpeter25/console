@@ -445,7 +445,16 @@ impl ConsoleDesktopApp {
     }
 
     pub(crate) fn supported_thinking_levels_for_pane(&self, pane_id: &str) -> Vec<ThinkingLevel> {
-        let Some(selected) = self.pane_selected_model(pane_id) else {
+        self.supported_thinking_levels_for_model(self.pane_selected_model(pane_id).as_ref())
+    }
+
+    /// Thinking levels a given model supports. Shared with the floating
+    /// composer, which has no pane to key off.
+    pub(crate) fn supported_thinking_levels_for_model(
+        &self,
+        selected: Option<&console_core::SelectedModel>,
+    ) -> Vec<ThinkingLevel> {
+        let Some(selected) = selected else {
             return Vec::new();
         };
 

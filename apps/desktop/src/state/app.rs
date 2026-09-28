@@ -9,12 +9,12 @@ use console_ui::markdown::render::TranscriptSelection;
 use console_ui::utils::SessionDateGroup;
 use console_ui::{
     CommandPalette, ComposerAttachmentPaste, ComposerEvent, ComposerInput, ContextMenuHandle,
-    GlobalSearchPanel, PickerTab, ProjectBrowsePalette, QuickOpenPalette, TranscriptView,
+    FloatingComposerState, GlobalSearchPanel, PickerTab, ProjectBrowsePalette, QuickOpenPalette,
+    TranscriptView,
 };
 use gpui::{AppContext, Context, ListAlignment, ListState, Window, px};
 use std::cell::RefCell;
 use std::rc::Rc;
-
 use crate::persistence;
 use crate::types::WorkspacePaneState;
 
@@ -650,6 +650,7 @@ impl ConsoleDesktopApp {
                 .new(|cx| GlobalSearchPanel::new(client_for_palettes.clone(), window, cx)),
             project_browse_palette: cx
                 .new(|cx| ProjectBrowsePalette::new(client_for_palettes.clone(), window, cx)),
+            floating_composer: FloatingComposerState::new(window, cx),
             terminals: std::collections::HashMap::new(),
             browser_views: std::collections::HashMap::new(),
             auth_status: None,
@@ -700,6 +701,7 @@ impl ConsoleDesktopApp {
         app.init_notifications(cx);
 
         app.wire_palette_callbacks(cx);
+        app.wire_floating_composer_input(cx);
 
         app.workspace_pane_states.insert(
             "pane-main".to_string(),

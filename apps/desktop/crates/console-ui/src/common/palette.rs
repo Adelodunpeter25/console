@@ -131,16 +131,16 @@ fn render_entry_row(
             app_icon(*name, 15.0, theme.text_secondary).into_any_element()
         }
         Some(PaletteIcon::FileType(path)) => file_type_icon(path.as_ref(), 15.0).into_any_element(),
-        Some(PaletteIcon::Image(image)) => {
-            gpui::img(image.clone())
-                .h(px(15.0))
-                .w(px(15.0))
-                .into_any_element()
-        }
-        Some(PaletteIcon::Provider(provider)) => {
-            provider_app_icon(provider.as_ref(), 15.0, provider_color(&theme, provider.as_ref()))
-                .into_any_element()
-        }
+        Some(PaletteIcon::Image(image)) => gpui::img(image.clone())
+            .h(px(15.0))
+            .w(px(15.0))
+            .into_any_element(),
+        Some(PaletteIcon::Provider(provider)) => provider_app_icon(
+            provider.as_ref(),
+            15.0,
+            provider_color(&theme, provider.as_ref()),
+        )
+        .into_any_element(),
         None => div().size(px(15.0)).into_any_element(),
     };
 

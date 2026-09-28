@@ -251,21 +251,28 @@ impl ComposerView {
         self.on_autocomplete_dismiss = Rc::new(handler);
         self
     }
+}
 
-    fn render_attachments(
-        attachments: Rc<Vec<ImageAttachment>>,
-        on_remove: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
-        on_preview: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
-        theme: Theme,
-    ) -> impl IntoElement {
-        div()
-            .flex()
-            .flex_wrap()
-            .gap(px(8.0))
-            .px(px(12.0))
-            .pb(px(8.0))
-            .children(attachments.iter().cloned().enumerate().filter_map(
-                move |(index, attachment)| {
+/// The staged-image chip row. Public so the floating composer renders the same
+/// chips the docked one does instead of keeping a second copy.
+pub fn composer_attachment_row(
+    attachments: Rc<Vec<ImageAttachment>>,
+    on_remove: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
+    on_preview: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
+    theme: Theme,
+) -> impl IntoElement {
+    div()
+        .flex()
+        .flex_wrap()
+        .gap(px(8.0))
+        .px(px(12.0))
+        .pb(px(8.0))
+        .children(
+            attachments
+                .iter()
+                .cloned()
+                .enumerate()
+                .filter_map(move |(index, attachment)| {
                     // Decode to bytes so gpui renders the thumbnail; a `data:`
                     // URI string would be fetched as a URL and never show.
                     let image = attachment_image(&attachment)?;
@@ -313,8 +320,18 @@ impl ComposerView {
                                     .child(app_icon(IconName::X, 9.0, theme.on_inverse)),
                             ),
                     )
-                },
-            ))
+                }),
+        )
+}
+
+impl ComposerView {
+    fn render_attachments(
+        attachments: Rc<Vec<ImageAttachment>>,
+        on_remove: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
+        on_preview: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
+        theme: Theme,
+    ) -> impl IntoElement {
+        composer_attachment_row(attachments, on_remove, on_preview, theme)
     }
 }
 
@@ -384,7 +401,10 @@ impl RenderOnce for ComposerView {
         };
 
         let thinking_control = if !self.supported_thinking_levels.is_empty() {
-            let on_cycle = self.on_cycle_thinking.clone().unwrap_or_else(|| Rc::new(|_, _| {}));
+            let on_cycle = self
+                .on_cycle_thinking
+                .clone()
+                .unwrap_or_else(|| Rc::new(|_, _| {}));
             Some(ThinkingStepper::new(
                 self.thinking_level,
                 self.supported_thinking_levels.clone(),

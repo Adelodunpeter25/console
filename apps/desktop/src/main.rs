@@ -48,6 +48,7 @@ fn main() {
         keybindings::init_handlers(cx);
         app_menu::init(cx);
         console_ui::init_autocomplete_keybindings(cx);
+        console_ui::init_floating_composer_keybindings(cx);
         console_ui::init_session_rename_keybindings(cx);
         console_ui::init_code_viewer_keybindings(cx);
         console_ui::terminal::init_terminal_keybindings(cx);

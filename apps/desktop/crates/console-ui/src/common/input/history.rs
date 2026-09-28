@@ -227,7 +227,10 @@ pub struct PromptHistory {
 impl PromptHistory {
     pub fn set_entries(&mut self, entries: Vec<(String, Vec<String>)>) {
         self.entries.clear();
-        for (text, context_files) in entries.into_iter().filter(|(text, _)| !text.trim().is_empty()) {
+        for (text, context_files) in entries
+            .into_iter()
+            .filter(|(text, _)| !text.trim().is_empty())
+        {
             if self.entries.last().map(|(last, _)| last) != Some(&text) {
                 self.entries.push((text, context_files));
             }

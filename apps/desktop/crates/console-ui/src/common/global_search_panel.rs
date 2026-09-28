@@ -20,9 +20,9 @@ use gpui::{
 };
 use gpui_component::input::{Input, InputEvent, InputState};
 
+use crate::IconName;
 use crate::Theme;
 use crate::primitives::{app_icon, base_name, file_type_icon};
-use crate::IconName;
 
 /// Debounce for typed queries.
 const SEARCH_DEBOUNCE_MS: u64 = 150;
@@ -33,7 +33,10 @@ const ROW_HEIGHT_PX: f32 = 26.0;
 
 const CONTEXT: &str = "GlobalSearchPanel";
 
-gpui::actions!(global_search_panel, [Cancel, ConfirmMatch, SelectNext, SelectPrev]);
+gpui::actions!(
+    global_search_panel,
+    [Cancel, ConfirmMatch, SelectNext, SelectPrev]
+);
 
 pub(crate) fn init(cx: &mut App) {
     let context: Option<&str> = Some(CONTEXT);
@@ -226,10 +229,7 @@ impl GlobalSearchPanel {
                         for (group_ix, group) in groups.iter().enumerate() {
                             rows.push(SearchRow::Heading { group_ix });
                             for match_ix in 0..group.matches.len() {
-                                rows.push(SearchRow::Match {
-                                    group_ix,
-                                    match_ix,
-                                });
+                                rows.push(SearchRow::Match { group_ix, match_ix });
                             }
                         }
                         this.selected_row = rows
@@ -253,11 +253,7 @@ impl GlobalSearchPanel {
     }
 
     fn confirm_row(&mut self, row_ix: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(SearchRow::Match {
-            group_ix,
-            match_ix,
-        }) = self.rows.get(row_ix)
-        else {
+        let Some(SearchRow::Match { group_ix, match_ix }) = self.rows.get(row_ix) else {
             return;
         };
         let Some(group) = self.groups.get(*group_ix) else {
@@ -600,10 +596,7 @@ fn render_search_row(
                 )
                 .into_any_element()
         }
-        SearchRow::Match {
-            group_ix,
-            match_ix,
-        } => {
+        SearchRow::Match { group_ix, match_ix } => {
             let Some(m) = groups
                 .get(*group_ix)
                 .and_then(|group| group.matches.get(*match_ix))

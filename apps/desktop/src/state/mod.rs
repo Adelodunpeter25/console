@@ -16,6 +16,7 @@ mod editor_views;
 mod environments;
 mod errors;
 mod execution;
+mod floating_composer;
 mod global_actions;
 mod layout;
 mod macos_notifications;

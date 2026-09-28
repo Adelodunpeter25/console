@@ -22,6 +22,14 @@ impl Render for ConsoleDesktopApp {
         // Keep script-shortcut dispatch aimed at the active project even when
         // the sidebar (and its panel) is hidden.
         self.sync_active_shortcuts_to_active_project();
+        // The card's popup and chip row are derived from live input state, so
+        // they are rebuilt here each frame rather than pushed by events. Skipped
+        // while closed so a hidden card costs nothing.
+        self.refresh_floating_composer(window, cx);
+        // The card's popup and chip row are derived from live input state, so
+        // they are rebuilt here each frame rather than pushed by events. Skipped
+        // while closed so a hidden card costs nothing.
+        self.refresh_floating_composer(window, cx);
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
         let client = self.client.clone();
@@ -1415,6 +1423,8 @@ impl Render for ConsoleDesktopApp {
             .child(self.tab_palette.clone())
             .child(self.quick_open_palette.clone())
             .child(self.project_browse_palette.clone())
+            .when_some(self.floating_composer_view(window, cx), |el, card| el.child(card))
             .child(self.global_search_panel.clone())
+
     }
 }
