@@ -1,7 +1,7 @@
 // MCP credential store: secrets for MCP servers, kept apart from
 // mcp-servers.json in <storageDir>/mcp-credentials.json (file mode 0600),
 // keyed by the tokenRef a server config points at.
-package services
+package mcp
 
 import (
 	"encoding/json"
@@ -14,12 +14,12 @@ import (
 )
 
 const (
-	MCPCredentialStatic = "static"
-	MCPCredentialOAuth  = "oauth2"
+	CredentialStatic = "static"
+	CredentialOAuth  = "oauth2"
 )
 
-// MCPCredential is one stored secret. Only the fields for its Kind are used.
-type MCPCredential struct {
+// Credential is one stored secret. Only the fields for its Kind are used.
+type Credential struct {
 	Kind string `json:"kind"`
 
 	// static: full Authorization header value, e.g. "Bearer x" or "Basic y".
@@ -32,25 +32,25 @@ type MCPCredential struct {
 	ExpiresAt    int64  `json:"expiresAt,omitempty"`
 }
 
-type mcpCredentialFile struct {
-	Credentials map[string]MCPCredential `json:"credentials"`
+type credentialFile struct {
+	Credentials map[string]Credential `json:"credentials"`
 }
 
-type MCPCredentialStore struct {
+type CredentialStore struct {
 	mu   sync.Mutex
 	path string
 }
 
-// NewMCPCredentialStore stores under dir; an empty dir uses the console storage dir.
-func NewMCPCredentialStore(dir string) *MCPCredentialStore {
+// NewCredentialStore stores under dir; an empty dir uses the console storage dir.
+func NewCredentialStore(dir string) *CredentialStore {
 	if dir == "" {
 		dir = utils.ConsoleStorageDir()
 	}
-	return &MCPCredentialStore{path: filepath.Join(dir, "mcp-credentials.json")}
+	return &CredentialStore{path: filepath.Join(dir, "mcp-credentials.json")}
 }
 
-func (s *MCPCredentialStore) load() (mcpCredentialFile, error) {
-	file := mcpCredentialFile{Credentials: map[string]MCPCredential{}}
+func (s *CredentialStore) load() (credentialFile, error) {
+	file := credentialFile{Credentials: map[string]Credential{}}
 	data, err := os.ReadFile(s.path)
 	if os.IsNotExist(err) {
 		return file, nil
@@ -62,12 +62,12 @@ func (s *MCPCredentialStore) load() (mcpCredentialFile, error) {
 		return file, fmt.Errorf("invalid %s: %w", filepath.Base(s.path), err)
 	}
 	if file.Credentials == nil {
-		file.Credentials = map[string]MCPCredential{}
+		file.Credentials = map[string]Credential{}
 	}
 	return file, nil
 }
 
-func (s *MCPCredentialStore) write(file mcpCredentialFile) error {
+func (s *CredentialStore) write(file credentialFile) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 		return err
 	}
@@ -83,28 +83,28 @@ func (s *MCPCredentialStore) write(file mcpCredentialFile) error {
 }
 
 // Get returns the credential for ref; ok is false when none is stored.
-func (s *MCPCredentialStore) Get(ref string) (MCPCredential, bool, error) {
+func (s *CredentialStore) Get(ref string) (Credential, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	file, err := s.load()
 	if err != nil {
-		return MCPCredential{}, false, err
+		return Credential{}, false, err
 	}
 	c, ok := file.Credentials[ref]
 	return c, ok, nil
 }
 
 // Set stores (or replaces) the credential for ref.
-func (s *MCPCredentialStore) Set(ref string, c MCPCredential) error {
-	if !mcpIDPattern.MatchString(ref) {
+func (s *CredentialStore) Set(ref string, c Credential) error {
+	if !idPattern.MatchString(ref) {
 		return fmt.Errorf("credential ref %q must match [A-Za-z0-9_-]+", ref)
 	}
 	switch c.Kind {
-	case MCPCredentialStatic:
+	case CredentialStatic:
 		if c.Header == "" {
 			return fmt.Errorf("static credential %s needs a header value", ref)
 		}
-	case MCPCredentialOAuth:
+	case CredentialOAuth:
 	default:
 		return fmt.Errorf("credential %s: unknown kind %q", ref, c.Kind)
 	}
@@ -120,7 +120,7 @@ func (s *MCPCredentialStore) Set(ref string, c MCPCredential) error {
 
 // Delete removes the credential for ref; it reports whether one existed.
 // Used for "reset auth" — the next connect starts a fresh registration.
-func (s *MCPCredentialStore) Delete(ref string) (bool, error) {
+func (s *CredentialStore) Delete(ref string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	file, err := s.load()

@@ -1,7 +1,7 @@
 // MCP server config store: user-level (not per-project) definitions kept in
 // <storageDir>/mcp-servers.json. Holds no secrets — auth entries only carry a
 // tokenRef pointing into mcp-credentials.json (see mcp_credentials.go).
-package services
+package mcp
 
 import (
 	"encoding/json"
@@ -17,26 +17,26 @@ import (
 )
 
 const (
-	MCPTransportHTTP  = "http"
-	MCPTransportStdio = "stdio"
+	TransportHTTP  = "http"
+	TransportStdio = "stdio"
 
-	MCPAuthNone   = "none"
-	MCPAuthStatic = "static"
-	MCPAuthOAuth2 = "oauth2"
+	AuthNone   = "none"
+	AuthStatic = "static"
+	AuthOAuth2 = "oauth2"
 
-	mcpMaxLabel = 200
+	maxLabel = 200
 )
 
-var mcpIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+var idPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
-// MCPAuthConfig says how to authenticate; the secret itself lives in the
+// AuthConfig says how to authenticate; the secret itself lives in the
 // credential store under TokenRef.
-type MCPAuthConfig struct {
+type AuthConfig struct {
 	Type     string `json:"type"`
 	TokenRef string `json:"tokenRef,omitempty"`
 }
 
-type MCPServerConfig struct {
+type ServerConfig struct {
 	ID            string            `json:"id"`
 	Label         string            `json:"label"`
 	Transport     string            `json:"transport"`
@@ -44,58 +44,58 @@ type MCPServerConfig struct {
 	Command       string            `json:"command,omitempty"`
 	Args          []string          `json:"args,omitempty"`
 	Env           map[string]string `json:"env,omitempty"`
-	Auth          *MCPAuthConfig    `json:"auth,omitempty"`
+	Auth          *AuthConfig       `json:"auth,omitempty"`
 	TierOverrides map[string]string `json:"tierOverrides,omitempty"`
 	Enabled       bool              `json:"enabled"`
 	CreatedAt     int64             `json:"createdAt"`
 	UpdatedAt     int64             `json:"updatedAt"`
 }
 
-type mcpConfigFile struct {
-	Servers map[string]MCPServerConfig `json:"servers"`
+type configFile struct {
+	Servers map[string]ServerConfig `json:"servers"`
 }
 
-// MCPConfigStore persists server configs to a single JSON file.
-type MCPConfigStore struct {
+// ConfigStore persists server configs to a single JSON file.
+type ConfigStore struct {
 	mu   sync.Mutex
 	path string
 }
 
-// NewMCPConfigStore stores under dir; an empty dir uses the console storage dir.
-func NewMCPConfigStore(dir string) *MCPConfigStore {
+// NewConfigStore stores under dir; an empty dir uses the console storage dir.
+func NewConfigStore(dir string) *ConfigStore {
 	if dir == "" {
 		dir = utils.ConsoleStorageDir()
 	}
-	return &MCPConfigStore{path: filepath.Join(dir, "mcp-servers.json")}
+	return &ConfigStore{path: filepath.Join(dir, "mcp-servers.json")}
 }
 
-// ValidateMCPServer checks a config before it is saved.
-func ValidateMCPServer(c MCPServerConfig) error {
-	if !mcpIDPattern.MatchString(c.ID) {
+// ValidateServer checks a config before it is saved.
+func ValidateServer(c ServerConfig) error {
+	if !idPattern.MatchString(c.ID) {
 		return fmt.Errorf("mcp server id %q must match [A-Za-z0-9_-]+", c.ID)
 	}
-	if c.Label == "" || len(c.Label) > mcpMaxLabel {
+	if c.Label == "" || len(c.Label) > maxLabel {
 		return fmt.Errorf("mcp server %s: label must be a non-empty string", c.ID)
 	}
 	switch c.Transport {
-	case MCPTransportHTTP:
+	case TransportHTTP:
 		if c.URL == "" {
 			return fmt.Errorf("mcp server %s: url is required for http transport", c.ID)
 		}
-	case MCPTransportStdio:
+	case TransportStdio:
 		if c.Command == "" {
 			return fmt.Errorf("mcp server %s: command is required for stdio transport", c.ID)
 		}
 	default:
-		return fmt.Errorf("mcp server %s: transport must be %q or %q", c.ID, MCPTransportHTTP, MCPTransportStdio)
+		return fmt.Errorf("mcp server %s: transport must be %q or %q", c.ID, TransportHTTP, TransportStdio)
 	}
 	if c.Auth != nil {
 		switch c.Auth.Type {
-		case MCPAuthNone, MCPAuthStatic, MCPAuthOAuth2:
+		case AuthNone, AuthStatic, AuthOAuth2:
 		default:
 			return fmt.Errorf("mcp server %s: unknown auth type %q", c.ID, c.Auth.Type)
 		}
-		if c.Auth.Type != MCPAuthNone && c.Auth.TokenRef == "" {
+		if c.Auth.Type != AuthNone && c.Auth.TokenRef == "" {
 			return fmt.Errorf("mcp server %s: auth.tokenRef is required for %s auth", c.ID, c.Auth.Type)
 		}
 	}
@@ -109,8 +109,8 @@ func ValidateMCPServer(c MCPServerConfig) error {
 	return nil
 }
 
-func (s *MCPConfigStore) load() (mcpConfigFile, error) {
-	file := mcpConfigFile{Servers: map[string]MCPServerConfig{}}
+func (s *ConfigStore) load() (configFile, error) {
+	file := configFile{Servers: map[string]ServerConfig{}}
 	data, err := os.ReadFile(s.path)
 	if os.IsNotExist(err) {
 		return file, nil
@@ -122,12 +122,12 @@ func (s *MCPConfigStore) load() (mcpConfigFile, error) {
 		return file, fmt.Errorf("invalid %s: %w", filepath.Base(s.path), err)
 	}
 	if file.Servers == nil {
-		file.Servers = map[string]MCPServerConfig{}
+		file.Servers = map[string]ServerConfig{}
 	}
 	return file, nil
 }
 
-func (s *MCPConfigStore) write(file mcpConfigFile) error {
+func (s *ConfigStore) write(file configFile) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 		return err
 	}
@@ -143,14 +143,14 @@ func (s *MCPConfigStore) write(file mcpConfigFile) error {
 }
 
 // List returns all servers sorted by id.
-func (s *MCPConfigStore) List() ([]MCPServerConfig, error) {
+func (s *ConfigStore) List() ([]ServerConfig, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	file, err := s.load()
 	if err != nil {
 		return nil, err
 	}
-	out := make([]MCPServerConfig, 0, len(file.Servers))
+	out := make([]ServerConfig, 0, len(file.Servers))
 	for _, c := range file.Servers {
 		out = append(out, c)
 	}
@@ -159,27 +159,27 @@ func (s *MCPConfigStore) List() ([]MCPServerConfig, error) {
 }
 
 // Get returns one server; ok is false when it doesn't exist.
-func (s *MCPConfigStore) Get(id string) (MCPServerConfig, bool, error) {
+func (s *ConfigStore) Get(id string) (ServerConfig, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	file, err := s.load()
 	if err != nil {
-		return MCPServerConfig{}, false, err
+		return ServerConfig{}, false, err
 	}
 	c, ok := file.Servers[id]
 	return c, ok, nil
 }
 
 // Save validates and upserts a server, preserving CreatedAt on update.
-func (s *MCPConfigStore) Save(c MCPServerConfig) (MCPServerConfig, error) {
-	if err := ValidateMCPServer(c); err != nil {
-		return MCPServerConfig{}, err
+func (s *ConfigStore) Save(c ServerConfig) (ServerConfig, error) {
+	if err := ValidateServer(c); err != nil {
+		return ServerConfig{}, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	file, err := s.load()
 	if err != nil {
-		return MCPServerConfig{}, err
+		return ServerConfig{}, err
 	}
 	now := time.Now().UnixMilli()
 	if prev, ok := file.Servers[c.ID]; ok {
@@ -193,7 +193,7 @@ func (s *MCPConfigStore) Save(c MCPServerConfig) (MCPServerConfig, error) {
 }
 
 // Delete removes a server; it reports whether one existed.
-func (s *MCPConfigStore) Delete(id string) (bool, error) {
+func (s *ConfigStore) Delete(id string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	file, err := s.load()
