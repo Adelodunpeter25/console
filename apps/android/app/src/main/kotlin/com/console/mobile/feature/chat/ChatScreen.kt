@@ -42,8 +42,8 @@ import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.store.MobileTab
 import com.console.mobile.ui.components.ChatScreenSkeleton
+import com.console.mobile.ui.components.EdgeScrollIndicator
 import com.console.mobile.ui.components.EmptyState
-import com.console.mobile.core.util.urlHost
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
 import kotlinx.coroutines.coroutineScope
@@ -148,21 +148,6 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val view = sessionViews[sessionId]
     val cwd = view?.sessionCwd
-    // "folder · server" under the centered title. Folder prefers the matched
-    // project name, falling back to the cwd's last segment; server is the
-    // backend host. Either side may be absent — never show a dangling "·".
-    val chatSubtitle = remember(sessionId, cwd, projectState.projects, appState.backendUrl) {
-        val folder = projectState.projects.firstOrNull { p ->
-            cwd != null && (p.path == cwd || cwd.startsWith(p.path + "/"))
-        }?.name ?: cwd?.substringAfterLast("/")?.ifBlank { null }
-        val server = appState.backendUrl?.let { urlHost(it) }?.ifBlank { null }
-        when {
-            folder != null && server != null -> "$folder · $server"
-            folder != null -> folder
-            server != null -> server
-            else -> null
-        }
-    }
 
     fun jumpToProjectTab(tab: MobileTab) {
         if (cwd != null) {
@@ -245,9 +230,8 @@ fun ChatScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-        ChatHeader(
+        ScreenHeader(
             title = chatTitle,
-            subtitle = chatSubtitle,
             onBack = {
                 AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
                 onBackToHome()
@@ -268,7 +252,8 @@ fun ChatScreen(
             when {
                 loadingMessages && !hasMessages -> ChatScreenSkeleton()
                 !hasMessages && !isStreaming -> EmptyState(title = "Start the conversation", description = "Ask anything about your project.", icon = { Icon(Icons.Filled.Message, contentDescription = null, tint = ConsoleColors.TextMuted) })
-                else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                else -> {
+                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                     itemsIndexed(displayMessages, key = { _, m -> m.id ?: "${m.createdAt}-$sessionId" }) { index, msg ->
                         MessageBubbleItem(item = msg)
                         val runIdx = userRunMap[index]
@@ -293,6 +278,11 @@ fun ChatScreen(
                             ToolActivityRow(name = call.name, isRunning = true, isError = false, detail = "Running")
                         }
                     }
+                    }
+                    EdgeScrollIndicator(
+                        state = listState,
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
+                    )
                 }
             }
             if (showScrollBottom) {
