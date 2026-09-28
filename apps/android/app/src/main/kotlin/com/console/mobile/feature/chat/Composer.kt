@@ -230,12 +230,15 @@ fun Composer(
                 },
             )
             if (running) {
+                // Same 35dp footprint as the send button so the composer doesn't
+                // resize mid-send, and destructive red so the control's meaning
+                // is readable at a glance rather than only from a tiny glyph.
                 Box(
-                    modifier = Modifier.size(30.dp).clip(CircleShape).background(Color.White)
+                    modifier = Modifier.size(35.dp).clip(CircleShape).background(ConsoleColors.Destructive)
                         .clickable(onClickLabel = "Stop") { onStop() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Stop, contentDescription = null, tint = Color.Black, modifier = Modifier.size(12.dp))
+                    Icon(Icons.Filled.Stop, contentDescription = "Stop generating", tint = Color.Black, modifier = Modifier.size(14.dp))
                 }
             } else {
                 Box(
