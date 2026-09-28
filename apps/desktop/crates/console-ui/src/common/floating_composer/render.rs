@@ -6,7 +6,7 @@
 //! through a weak entity reference so a click updates the owner and notifies in
 //! one place.
 
-use gpui::{App, Context, FocusHandle, Focusable, IntoElement, Render, Window, div};
+use gpui::{App, Context, FocusHandle, Focusable, IntoElement, Render, WeakEntity, Window, div};
 
 use super::{FloatingComposer, FloatingComposerView, view};
 use crate::common::ModelDropdownMenu;
@@ -35,7 +35,12 @@ impl FloatingComposer {
 
     /// The model list is rebuilt every frame like the docked composer's, wired
     /// to this entity's own search field and callbacks.
-    fn model_menu_view(&self, data: &view::Data) -> ModelDropdownMenu {
+    ///
+    /// The tab change updates the card *and* the app: the card owns
+    /// `picker_tab`, so without the local write the list would keep painting
+    /// the previous tab; the app owns the model catalog, so without the
+    /// callback a newly-added provider would show only its static fallback.
+    fn model_menu_view(&self, this: WeakEntity<Self>, data: &view::Data) -> ModelDropdownMenu {
         let on_select = self.on_select_model.clone();
         let on_tab = self.on_picker_tab.clone();
         let on_favorite = self.on_favorite.clone();
@@ -53,6 +58,9 @@ impl FloatingComposer {
                 }
             },
             move |tab, _window, cx| {
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| this.set_picker_tab(tab.clone(), cx));
+                }
                 if let Some(cb) = on_tab.clone() {
                     cb(tab, cx);
                 }
@@ -84,7 +92,7 @@ impl Render for FloatingComposer {
         // `AnyElement` rather than trying to unify them at the signature.
         let this = cx.entity().downgrade();
         let data = self.view_data(cx);
-        let model_menu = self.model_menu_view(&data);
+        let model_menu = self.model_menu_view(this.clone(), &data);
 
         FloatingComposerView::new(
             self.input.clone(),
@@ -105,15 +113,31 @@ impl Render for FloatingComposer {
         })
         .on_choose_project({
             let this = this.clone();
-            move |id: String, _window: &mut Window, cx: &mut App| {
+            let project_menu = self.project_menu.clone();
+            move |id: String, window: &mut Window, cx: &mut App| {
+                project_menu.close(window, cx);
                 if let Some(this) = this.upgrade() {
                     this.update(cx, |this, cx| this.choose_project(id, cx));
                 }
             }
         })
+        .on_choose_branch({
+            let this = this.clone();
+            let branch_menu = self.branch_menu.clone();
+            move |choice: super::BranchChoice, window: &mut Window, cx: &mut App| {
+                branch_menu.close(window, cx);
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| this.choose_branch(choice, cx));
+                }
+            }
+        })
         .on_choose_model({
             let this = this.clone();
-            move |provider: String, model_id: String, _window: &mut Window, cx: &mut App| {
+            // Close the popover so the chip underneath is actually visible —
+            // the card re-renders the new model behind an open 400px list.
+            let model_menu = self.model_menu.clone();
+            move |provider: String, model_id: String, window: &mut Window, cx: &mut App| {
+                model_menu.close(window, cx);
                 if let Some(this) = this.upgrade() {
                     this.update(cx, |this, cx| {
                         this.choose_model(console_core::SelectedModel { provider, model_id }, cx)
@@ -123,7 +147,9 @@ impl Render for FloatingComposer {
         })
         .on_choose_thinking({
             let this = this.clone();
-            move |level: console_core::ThinkingLevel, _window: &mut Window, cx: &mut App| {
+            let thinking_menu = self.thinking_menu.clone();
+            move |level: console_core::ThinkingLevel, window: &mut Window, cx: &mut App| {
+                thinking_menu.close(window, cx);
                 if let Some(this) = this.upgrade() {
                     this.update(cx, |this, cx| this.choose_thinking(level, cx));
                 }

@@ -130,28 +130,33 @@ impl ConsoleDesktopApp {
         });
     }
 
-    /// A different project was picked in the card: refetch its branches and
-    /// clear any existing-branch choice that no longer applies.
+    /// A different project was picked in the card. The card has already
+    /// updated its own selection, so this only needs to refetch that project's
+    /// branches and push them back in.
     fn floating_project_changed(&mut self, project_id: String, cx: &mut Context<Self>) {
         self.refresh_branches_for_project(&project_id, cx);
-        let branches = self.branches.clone();
-        self.floating_composer.update(cx, |composer, cx| {
-            composer.set_project_context(Some(project_id), branches, cx)
-        });
     }
 
     /// A different model was picked: which thinking levels exist depends on the
     /// model, so re-seed the card's thinking controls.
+    ///
+    /// Deferred because this runs from inside the composer's own update (a chip
+    /// click → its callback → here), and re-entering the composer to mutate it
+    /// mid-update is not safe.
     fn floating_model_changed(&mut self, model: SelectedModel, cx: &mut Context<Self>) {
         let supported = self.supported_thinking_levels_for_model(Some(&model));
         let current = self.thinking_level;
-        self.floating_composer.update(cx, |composer, cx| {
-            composer.set_thinking_context(current, supported, cx)
+        let composer = self.floating_composer.clone();
+        cx.defer(move |cx| {
+            composer.update(cx, |composer, cx| {
+                composer.set_thinking_context(current, supported, cx)
+            });
         });
     }
 
     /// Switching provider tabs may need that provider's live model list, which
-    /// the static catalog doesn't carry.
+    /// the static catalog doesn't carry. The card has already recorded the new
+    /// tab, so this is only the fetch.
     fn floating_picker_tab_changed(&mut self, tab: PickerTab, cx: &mut Context<Self>) {
         if let PickerTab::Provider(name) = &tab {
             self.load_models_for_provider(name, cx);
@@ -159,9 +164,12 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// Refetch the branch list for `project_id` into the shared `branches`.
+    /// Refetch the branch list for `project_id`, storing it on the app and
+    /// pushing it into the open card.
+    ///
     /// Mirrors the pane-scoped loaders, minus the per-pane bookkeeping: the
-    /// card is the only reader while it is open.
+    /// card is the only reader while it is open. The card is only touched once
+    /// the fetch resolves, which also keeps it out of the composer's update.
     fn refresh_branches_for_project(&mut self, project_id: &str, cx: &mut Context<Self>) {
         let Some(project) = self.projects.iter().find(|p| p.id == project_id) else {
             return;
@@ -179,6 +187,9 @@ impl ConsoleDesktopApp {
                         this.branches = Rc::new(result.branches);
                         this.branch_loaded = true;
                         this.branch_is_git_repository = result.is_git_repository;
+                        this.floating_composer.update(cx, |composer, cx| {
+                            composer.set_branches(this.branches.clone(), cx)
+                        });
                         cx.notify();
                     });
                 }

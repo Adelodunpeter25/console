@@ -273,6 +273,17 @@ impl FloatingComposer {
         cx.notify();
     }
 
+    /// The model picker's tab changed. The card owns the active tab, so it has
+    /// to record it — otherwise the list keeps rendering the previous tab and
+    /// provider switching looks dead. The search box is cleared on switch to
+    /// match the docked picker, where a filter from the old tab would otherwise
+    /// hide the new provider's models.
+    pub fn set_picker_tab(&mut self, tab: PickerTab, cx: &mut Context<Self>) {
+        self.picker_tab = tab;
+        self.model_search.update(cx, |input, cx| input.clear(cx));
+        cx.notify();
+    }
+
     /// Re-seed the thinking controls. Called when the chosen model changes,
     /// since which levels exist depends on the model. A level the new model
     /// doesn't support falls back to its first one.
@@ -290,19 +301,17 @@ impl FloatingComposer {
         cx.notify();
     }
 
-    /// Replace the project/branch lists when the project changes, so the branch
-    /// menu never offers refs from the previously selected project.
-    pub fn set_project_context(
-        &mut self,
-        project_id: Option<String>,
-        branches: Rc<Vec<GitBranchInfo>>,
-        cx: &mut Context<Self>,
-    ) {
-        self.selected_project_id = project_id;
+    /// Hand the card a freshly fetched branch list, for after a project switch.
+    /// The project itself is already set by `choose_project`; this only
+    /// delivers the refs, so the branch menu stops offering the previous
+    /// project's branches.
+    pub fn set_branches(&mut self, branches: Rc<Vec<GitBranchInfo>>, cx: &mut Context<Self>) {
         self.branches = branches;
-        // An existing-branch choice can't survive a project switch.
-        if matches!(self.branch, BranchChoice::FromBranch(_)) {
-            self.branch = BranchChoice::default();
+        // The chosen base may not exist in the new project.
+        if let BranchChoice::FromBranch(name) = &self.branch {
+            if !self.branches.iter().any(|b| &b.name == name) {
+                self.branch = BranchChoice::default();
+            }
         }
         cx.notify();
     }
@@ -340,10 +349,20 @@ impl FloatingComposer {
 
     pub(super) fn choose_project(&mut self, id: String, cx: &mut Context<Self>) {
         self.selected_project_id = Some(id.clone());
+        // An existing-branch base belongs to the previous project, so drop it
+        // here rather than waiting for the app to push a new branch list.
+        if matches!(self.branch, BranchChoice::FromBranch(_)) {
+            self.branch = BranchChoice::default();
+        }
         cx.notify();
         if let Some(cb) = self.on_select_project.clone() {
             cb(id, cx);
         }
+    }
+
+    pub(super) fn choose_branch(&mut self, choice: BranchChoice, cx: &mut Context<Self>) {
+        self.branch = choice;
+        cx.notify();
     }
 
     pub(super) fn choose_model(&mut self, model: SelectedModel, cx: &mut Context<Self>) {
