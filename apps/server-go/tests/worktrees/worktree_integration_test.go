@@ -199,6 +199,65 @@ func TestPermanentDeleteCleansWorktree(t *testing.T) {
 	}
 }
 
+// TestSoftDeleteCleansCleanWorktree verifies the sidebar-delete path
+// (SoftDelete alone, no PermanentDelete call) already removes a clean
+// worktree immediately instead of waiting for permanent delete or the
+// retention sweep.
+func TestSoftDeleteCleansCleanWorktree(t *testing.T) {
+	isolateHome(t)
+	manager := openWorktreeManager(t)
+	sessions := services.NewSessionService(manager)
+	repo := initWorktreeRepo(t)
+
+	header := createWorkedSession(t, sessions, repo, "clean work")
+	path := header.Worktree.Path
+
+	if ok, err := sessions.SoftDelete(header.ID); err != nil || !ok {
+		t.Fatalf("SoftDelete = %v, %v", ok, err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("clean worktree dir still exists after SoftDelete: %s", path)
+	}
+	// Session row itself stays soft-deleted/restorable; only the worktree
+	// checkout on disk is gone (the worktree_path column is untouched until
+	// permanent delete actually removes the row).
+	header2, err := sessions.PermanentDelete(header.ID)
+	if err != nil {
+		t.Fatalf("PermanentDelete after clean soft-delete: %v", err)
+	}
+	if !header2 {
+		t.Fatalf("PermanentDelete should still find and remove the soft-deleted row")
+	}
+}
+
+// TestSoftDeleteLeavesDirtyWorktree verifies the sidebar-delete path never
+// destroys uncommitted work: the session deletes (soft-delete succeeds
+// immediately) but a dirty worktree is left on disk for permanent delete
+// or the retention sweep to deal with later.
+func TestSoftDeleteLeavesDirtyWorktree(t *testing.T) {
+	isolateHome(t)
+	manager := openWorktreeManager(t)
+	sessions := services.NewSessionService(manager)
+	repo := initWorktreeRepo(t)
+
+	header := createWorkedSession(t, sessions, repo, "dirty work")
+	path := header.Worktree.Path
+	if err := os.WriteFile(filepath.Join(path, "wip.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ok, err := sessions.SoftDelete(header.ID)
+	if err != nil || !ok {
+		t.Fatalf("SoftDelete = %v, %v", ok, err)
+	}
+	if _, err := os.Stat(filepath.Join(path, "wip.txt")); err != nil {
+		t.Fatalf("work lost on soft delete: %v", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("dirty worktree dir removed on soft delete: %v", err)
+	}
+}
+
 func TestPermanentDeleteBlockedWhenDirty(t *testing.T) {
 	isolateHome(t)
 	manager := openWorktreeManager(t)
