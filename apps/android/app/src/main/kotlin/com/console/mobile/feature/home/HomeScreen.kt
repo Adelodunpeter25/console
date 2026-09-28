@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -191,7 +192,14 @@ fun HomeScreen(
                     }
                 }
             } else {
-                LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                val listState = rememberLazyListState()
+                // A new query is a different list of rows, so the old offset
+                // lands somewhere arbitrary (or out of bounds once results
+                // shrink). Jump to the top so the first match is visible as
+                // the user types. Instant rather than animated — the content
+                // is swapped out, so a scroll animation would be a lie.
+                LaunchedEffect(searchQuery) { listState.scrollToItem(0) }
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                     sections.forEachIndexed { sIdx, section ->
                         item(key = "header-${section.projectId ?: section.projectName}-$sIdx") {
                             Row(
