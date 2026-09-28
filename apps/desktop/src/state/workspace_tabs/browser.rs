@@ -10,7 +10,7 @@ impl ConsoleDesktopApp {
     /// its start page until the user submits an address or a port-open /
     /// chat-link navigates it via `open_browser_smart`.
     pub fn open_browser_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.open_browser_tab_with_url(None, window, cx);
+        self.open_browser_tab_with_url(None, true, window, cx);
     }
 
     /// Retrieve an existing `BrowserView` entity for `browser_id` or instantiate a
@@ -131,6 +131,7 @@ impl ConsoleDesktopApp {
     pub fn open_browser_tab_with_url(
         &mut self,
         url: Option<String>,
+        focus: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -159,8 +160,10 @@ impl ConsoleDesktopApp {
         self.active_pane_id = Some(pane_id);
         self.sync_workspace_webviews(cx);
         self.persist_workspaces();
-        // Focus the browser so keyboard input works immediately (address bar via ⌘L, etc.)
-        window.focus(&browser_view.read(cx).focus_handle(cx), cx);
+        if focus {
+            // Focus the browser so keyboard input works immediately (address bar via ⌘L, etc.)
+            window.focus(&browser_view.read(cx).focus_handle(cx), cx);
+        }
         cx.notify();
     }
 

@@ -51,7 +51,7 @@ impl ConsoleDesktopApp {
                             let _ = window.update(cx, |_, window, cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
-                                        this.open_browser_tab_with_url(Some(url_to_open), window, cx);
+                                        this.open_browser_tab_with_url(Some(url_to_open), false, window, cx);
                                     });
                                 }
                             });
