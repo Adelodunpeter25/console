@@ -200,6 +200,11 @@ fun CodeViewer(
                 isCursorAnimationEnabled = false
                 isWordwrap = false
                 setPinLineNumber(true)
+                // Sora's pinned line-number panel is composited over each line's
+                // hardware-accelerated RenderNode; that layer isn't invalidated in
+                // step with horizontal scroll, so old and new positions smear
+                // together behind the gutter. Software drawing keeps them in sync.
+                setHardwareAcceleratedDrawAllowed(false)
                 setScrollBarEnabled(true)
                 tabWidth = 4
                 setText(code)
