@@ -190,7 +190,7 @@ fun Composer(
             verticalAlignment = Alignment.Bottom,
         ) {
             Box(
-                modifier = Modifier.size(34.dp).clip(CircleShape)
+                modifier = Modifier.size(37.dp).clip(CircleShape)
                     .clickable(onClickLabel = "Attach image") { pickImages.launch("image/*") },
                 contentAlignment = Alignment.Center,
             ) {
@@ -203,6 +203,7 @@ fun Composer(
                     onChange(new.text)
                 },
                 modifier = Modifier
+                    .align(Alignment.CenterVertically)
                     .weight(1f)
                     .padding(horizontal = 4.dp)
                     .heightIn(max = 120.dp),
@@ -232,7 +233,7 @@ fun Composer(
                 }
             } else {
                 Box(
-                    modifier = Modifier.size(32.dp).clip(CircleShape)
+                    modifier = Modifier.size(35.dp).clip(CircleShape)
                         .background(if (canSend) Color.White else Color.White.copy(alpha = 0.08f))
                         .clickable(enabled = canSend, onClickLabel = "Send") { onSend() },
                     contentAlignment = Alignment.Center,
