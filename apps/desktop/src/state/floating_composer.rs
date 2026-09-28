@@ -10,9 +10,15 @@ use std::rc::Rc;
 
 use console_core::{CreateSessionDto, CreateWorktreeSpec, SelectedModel, ThinkingLevel};
 use console_ui::common::{BranchChoice, FloatingSnapshot, FloatingSubmit, PickerTab};
-use gpui::{Context, Focusable, Window};
+use gpui::{ClipboardEntry, Context, ExternalPaths, Focusable, Window};
 
 use super::ConsoleDesktopApp;
+use super::autocomplete::FLOATING_AUTOCOMPLETE_KEY;
+
+/// Reserved key for the card's staged images. The attachment store is keyed by
+/// owner rather than strictly by pane, so the card claims a key of its own and
+/// never collides with a real pane id.
+const FLOATING_KEY: &str = "__floating_composer__";
 
 impl ConsoleDesktopApp {
     /// ⌘N — open the launcher instead of creating a session immediately.
@@ -126,7 +132,175 @@ impl ConsoleDesktopApp {
                 },
                 cx,
             );
+            // Attachments reuse the pane-keyed stores under a reserved key, so
+            // the same stage/remove/preview code serves both surfaces.
+            composer.set_on_pick_image(
+                {
+                    let app = app.clone();
+                    move |cx: &mut gpui::App| {
+                        if let Some(app) = app.upgrade() {
+                            app.update(cx, |this, cx| this.pick_image(FLOATING_KEY, cx));
+                        }
+                    }
+                },
+                cx,
+            );
+            composer.set_on_paste_attachments(
+                {
+                    let app = app.clone();
+                    move |entries: Vec<ClipboardEntry>, cx: &mut gpui::App| {
+                        if let Some(app) = app.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.stage_clipboard_attachments(FLOATING_KEY, entries, cx)
+                            });
+                        }
+                    }
+                },
+                cx,
+            );
+            composer.set_on_drop_files(
+                {
+                    let app = app.clone();
+                    move |paths: &ExternalPaths, window: &mut Window, cx: &mut gpui::App| {
+                        if let Some(app) = app.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.stage_dropped_files(FLOATING_KEY, paths, window, cx)
+                            });
+                        }
+                    }
+                },
+                cx,
+            );
+            composer.set_on_remove_attachment(
+                {
+                    let app = app.clone();
+                    move |index: usize, cx: &mut gpui::App| {
+                        if let Some(app) = app.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.remove_attachment(FLOATING_KEY, index, cx)
+                            });
+                        }
+                    }
+                },
+                cx,
+            );
+            composer.set_on_preview_attachment(
+                {
+                    let app = app.clone();
+                    move |index: usize, cx: &mut gpui::App| {
+                        if let Some(app) = app.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.preview_attachment(FLOATING_KEY, index, cx)
+                            });
+                        }
+                    }
+                },
+                cx,
+            );
+            composer.set_on_autocomplete_next(
+                {
+                    let app = app.clone();
+                    move |cx: &mut gpui::App| {
+                        if let Some(app) = app.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.move_autocomplete_for_owner(
+                                    FLOATING_AUTOCOMPLETE_KEY,
+                                    true,
+                                    cx,
+                                )
+                            });
+                        }
+                    }
+                },
+                cx,
+            );
+            composer.set_on_autocomplete_previous(
+                {
+                    let app = app.clone();
+                    move |cx: &mut gpui::App| {
+                        if let Some(app) = app.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.move_autocomplete_for_owner(
+                                    FLOATING_AUTOCOMPLETE_KEY,
+                                    false,
+                                    cx,
+                                )
+                            });
+                        }
+                    }
+                },
+                cx,
+            );
+            composer.set_on_autocomplete_confirm(
+                {
+                    let app = app.clone();
+                    let composer = self.floating_composer.clone();
+                    move |cx: &mut gpui::App| {
+                        if let Some(app) = app.upgrade() {
+                            app.update(cx, |this, cx| {
+                                let input = composer.read(cx).input().clone();
+                                this.accept_highlighted_autocomplete_for_owner(
+                                    FLOATING_AUTOCOMPLETE_KEY,
+                                    &input,
+                                    cx,
+                                )
+                            });
+                        }
+                    }
+                },
+                cx,
+            );
+            composer.set_on_autocomplete_dismiss(
+                {
+                    let app = app.clone();
+                    move |cx: &mut gpui::App| {
+                        if let Some(app) = app.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.dismiss_autocomplete_for_owner(FLOATING_AUTOCOMPLETE_KEY, cx)
+                            });
+                        }
+                    }
+                },
+                cx,
+            );
             composer.show(snapshot, window, cx);
+        });
+    }
+
+    /// Rebuild the card's derived state each frame: the @-file / slash-command
+    /// popup follows the prompt's caret, and the chip row follows the shared
+    /// attachment store (a paste stages asynchronously, so it can't be pushed
+    /// at the moment it happens).
+    ///
+    /// Called from the app's render. Does nothing while the card is closed.
+    pub fn refresh_floating_composer(&mut self, window: &Window, cx: &mut Context<Self>) {
+        if !self.floating_composer.read(cx).is_open() {
+            return;
+        }
+
+        let input = self.floating_composer.read(cx).input().clone();
+        // File search is scoped to the card's selected project, which changes
+        // before the app's own `selected_project_id` catches up.
+        let project_root = self
+            .floating_composer
+            .read(cx)
+            .selected_project()
+            .map(|project| project.path.clone())
+            .unwrap_or_default();
+        let autocomplete = self.composer_autocomplete_for_owner(
+            FLOATING_AUTOCOMPLETE_KEY,
+            input,
+            project_root,
+            // No session yet — the launch creates it. Slash commands fall back
+            // to the defaults the server lists without a session.
+            None,
+            window,
+            cx,
+        );
+        let attachments = self.attachments_for_pane(FLOATING_KEY);
+        self.floating_composer.update(cx, |composer, cx| {
+            composer.set_autocomplete(autocomplete, cx);
+            composer.set_attachments(attachments, cx);
         });
     }
 
@@ -209,6 +383,17 @@ impl ConsoleDesktopApp {
         let approval_mode = self.pane_approval_mode(&pane_id);
         let prompt = submit.prompt.clone();
         let title = title_from_prompt(&prompt);
+        // Attachments staged in the card move onto the new session; the card's
+        // own copy is dropped so reopening starts clean.
+        let staged_attachments = (*submit.attachments).clone();
+        self.set_attachments_for_pane(FLOATING_KEY, Vec::new());
+        self.autocomplete_states.remove(FLOATING_AUTOCOMPLETE_KEY);
+        let context_files: Vec<String> = submit
+            .mentions
+            .iter()
+            .map(|mention| mention.path.clone())
+            .collect();
+        let mentions = submit.mentions.clone();
 
         // Only a worktree request provisions anything; a plain project session
         // sends no worktree key at all.
@@ -256,11 +441,14 @@ impl ConsoleDesktopApp {
                             t.set_messages(Vec::new(), cx);
                         });
                         // Seed the new pane's composer with the prompt that
-                        // described it, so it doesn't have to be typed twice.
+                        // described it, plus the mentions and images the card
+                        // carried, so the launch is a single action.
                         this.composer_for_pane(&pane_id).update(cx, |input, cx| {
-                            input.set_content(prompt.clone(), cx);
+                            input.set_content_with_mentions(prompt.clone(), mentions.clone(), cx);
+                            input.set_context_files(context_files.clone());
                             cx.notify();
                         });
+                        this.set_attachments_for_pane(&pane_id, staged_attachments.clone());
                         cx.notify();
                     }
                     Err(error) => {

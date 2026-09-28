@@ -6,7 +6,10 @@
 //! through a weak entity reference so a click updates the owner and notifies in
 //! one place.
 
-use gpui::{App, Context, FocusHandle, Focusable, IntoElement, Render, WeakEntity, Window, div};
+use gpui::{
+    App, Context, ExternalPaths, FocusHandle, Focusable, IntoElement, Render, WeakEntity, Window,
+    div,
+};
 
 use super::{FloatingComposer, FloatingComposerView, view};
 use crate::common::ModelDropdownMenu;
@@ -28,6 +31,8 @@ impl FloatingComposer {
             model_search_query: self.model_search.read(cx).content().to_string(),
             thinking_level: self.thinking_level,
             supported_thinking_levels: self.supported_thinking_levels.clone(),
+            attachments: self.attachments.clone(),
+            autocomplete: self.autocomplete.clone(),
             submitting: self.submitting,
             error: self.error.clone(),
         }
@@ -160,6 +165,110 @@ impl Render for FloatingComposer {
             move |prompt: String, _window: &mut Window, cx: &mut App| {
                 if let Some(this) = this.upgrade() {
                     this.update(cx, |this, cx| this.submit(prompt, cx));
+                }
+            }
+        })
+        .on_pick_image({
+            let this = this.clone();
+            move |_window: &mut Window, cx: &mut App| {
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| {
+                        if let Some(cb) = this.on_pick_image.clone() {
+                            cb(cx);
+                        }
+                    });
+                }
+            }
+        })
+        .on_drop_files({
+            let this = this.clone();
+            move |paths: &ExternalPaths, window: &mut Window, cx: &mut App| {
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| {
+                        if let Some(cb) = this.on_drop_files.clone() {
+                            cb(paths, window, cx);
+                        }
+                    });
+                }
+            }
+        })
+        .on_remove_attachment({
+            let this = this.clone();
+            move |index: usize, _window: &mut Window, cx: &mut App| {
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| {
+                        if let Some(cb) = this.on_remove_attachment.clone() {
+                            cb(index, cx);
+                        }
+                    });
+                }
+            }
+        })
+        .on_preview_attachment({
+            let this = this.clone();
+            move |index: usize, _window: &mut Window, cx: &mut App| {
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| {
+                        if let Some(cb) = this.on_preview_attachment.clone() {
+                            cb(index, cx);
+                        }
+                    });
+                }
+            }
+        })
+        .on_autocomplete_next({
+            let this = this.clone();
+            move |_window: &mut Window, cx: &mut App| {
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| {
+                        if let Some(cb) = this.on_autocomplete_next.clone() {
+                            cb(cx);
+                        }
+                    });
+                }
+            }
+        })
+        .on_autocomplete_previous({
+            let this = this.clone();
+            move |_window: &mut Window, cx: &mut App| {
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| {
+                        if let Some(cb) = this.on_autocomplete_previous.clone() {
+                            cb(cx);
+                        }
+                    });
+                }
+            }
+        })
+        .on_autocomplete_confirm({
+            let this = this.clone();
+            move |_window: &mut Window, cx: &mut App| {
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| {
+                        if let Some(cb) = this.on_autocomplete_confirm.clone() {
+                            cb(cx);
+                        }
+                    });
+                }
+            }
+        })
+        .on_autocomplete_dismiss({
+            let this = this.clone();
+            move |_window: &mut Window, cx: &mut App| {
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| {
+                        if let Some(cb) = this.on_autocomplete_dismiss.clone() {
+                            cb(cx);
+                        }
+                    });
+                }
+            }
+        })
+        .on_cancel({
+            let this = this.clone();
+            move |_window: &mut Window, cx: &mut App| {
+                if let Some(this) = this.upgrade() {
+                    this.update(cx, |this, cx| this.hide(cx));
                 }
             }
         })

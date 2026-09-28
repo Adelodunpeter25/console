@@ -225,7 +225,9 @@ pub fn filter_items(
 /// The popup view. Selection state and backend fetching remain in the desktop
 /// app so the component can be reused by every pane without hidden session
 /// coupling.
-#[derive(IntoElement)]
+/// Clone so a surface that owns the popup across frames (the floating
+/// composer) can keep it in its state and hand a copy to the view.
+#[derive(IntoElement, Clone)]
 pub struct AutocompleteView {
     items: Vec<AutocompleteItem>,
     highlighted: usize,

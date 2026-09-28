@@ -9,15 +9,20 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use console_core::{
-    GitBranchInfo, Model, ProjectInfo, ProviderCatalogEntry, SelectedModel, ThinkingLevel,
+    GitBranchInfo, ImageAttachment, Model, ProjectInfo, ProviderCatalogEntry, SelectedModel,
+    ThinkingLevel,
 };
 use gpui::{
-    App, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    App, Entity, ExternalPaths, FontWeight, InteractiveElement, IntoElement, ParentElement,
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
 use super::BranchChoice;
-use crate::common::{ModelDropdownMenu, PickerTab, format_model_name, provider_svg_path};
+use crate::common::composer_view::composer_attachment_row;
+use crate::common::{
+    AutocompleteConfirm, AutocompleteDismiss, AutocompleteNext, AutocompletePrevious,
+    AutocompleteView, ModelDropdownMenu, PickerTab, format_model_name, provider_svg_path,
+};
 use crate::input::ComposerInput;
 use crate::primitives::{
     ContextMenuHandle, IconName, MenuAlign, MenuChip, MenuItem, app_icon, dropdown_menu, popover,
@@ -38,6 +43,8 @@ pub struct Data {
     pub model_search_query: String,
     pub thinking_level: Option<ThinkingLevel>,
     pub supported_thinking_levels: Vec<ThinkingLevel>,
+    pub attachments: Rc<Vec<ImageAttachment>>,
+    pub autocomplete: Option<AutocompleteView>,
     pub submitting: bool,
     pub error: Option<String>,
 }
@@ -56,6 +63,15 @@ pub struct FloatingComposerView {
     on_choose_model: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     on_choose_thinking: Rc<dyn Fn(ThinkingLevel, &mut Window, &mut App) + 'static>,
     on_submit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_pick_image: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_drop_files: Rc<dyn Fn(&ExternalPaths, &mut Window, &mut App) + 'static>,
+    on_remove_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
+    on_preview_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
+    on_autocomplete_next: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_autocomplete_previous: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_autocomplete_confirm: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_autocomplete_dismiss: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_cancel: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
 
 impl FloatingComposerView {
@@ -87,6 +103,8 @@ impl FloatingComposerView {
                 model_search_query: String::new(),
                 thinking_level: None,
                 supported_thinking_levels: Vec::new(),
+                attachments: Rc::new(Vec::new()),
+                autocomplete: None,
                 submitting: false,
                 error: None,
             },
@@ -96,6 +114,15 @@ impl FloatingComposerView {
             on_choose_model: Rc::new(|_, _, _, _| {}),
             on_choose_thinking: Rc::new(|_, _, _| {}),
             on_submit: Rc::new(|_, _, _| {}),
+            on_pick_image: Rc::new(|_, _| {}),
+            on_drop_files: Rc::new(|_, _, _| {}),
+            on_remove_attachment: Rc::new(|_, _, _| {}),
+            on_preview_attachment: Rc::new(|_, _, _| {}),
+            on_autocomplete_next: Rc::new(|_, _| {}),
+            on_autocomplete_previous: Rc::new(|_, _| {}),
+            on_autocomplete_confirm: Rc::new(|_, _| {}),
+            on_autocomplete_dismiss: Rc::new(|_, _| {}),
+            on_cancel: Rc::new(|_, _| {}),
         }
     }
 
@@ -146,6 +173,60 @@ impl FloatingComposerView {
 
     pub fn on_submit(mut self, f: impl Fn(String, &mut Window, &mut App) + 'static) -> Self {
         self.on_submit = Rc::new(f);
+        self
+    }
+
+    pub fn on_pick_image(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_pick_image = Rc::new(f);
+        self
+    }
+
+    pub fn on_drop_files(
+        mut self,
+        f: impl Fn(&ExternalPaths, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_drop_files = Rc::new(f);
+        self
+    }
+
+    pub fn on_remove_attachment(
+        mut self,
+        f: impl Fn(usize, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_remove_attachment = Rc::new(f);
+        self
+    }
+
+    pub fn on_preview_attachment(
+        mut self,
+        f: impl Fn(usize, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_preview_attachment = Rc::new(f);
+        self
+    }
+
+    pub fn on_autocomplete_next(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_autocomplete_next = Rc::new(f);
+        self
+    }
+
+    pub fn on_autocomplete_previous(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_autocomplete_previous = Rc::new(f);
+        self
+    }
+
+    pub fn on_autocomplete_confirm(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_autocomplete_confirm = Rc::new(f);
+        self
+    }
+
+    pub fn on_autocomplete_dismiss(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_autocomplete_dismiss = Rc::new(f);
+        self
+    }
+
+    pub fn on_cancel(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_cancel = Rc::new(f);
         self
     }
 
@@ -369,9 +450,41 @@ impl FloatingComposerView {
             )
             .child(div().text_size(px(11.0)).text_color(hint_color).child("↵"));
 
+        // ---- staged images ----
+        let attachments = (!data.attachments.is_empty()).then(|| {
+            composer_attachment_row(
+                data.attachments.clone(),
+                self.on_remove_attachment.clone(),
+                self.on_preview_attachment.clone(),
+                theme,
+            )
+        });
+
+        // ---- attach button ----
+        let on_pick = self.on_pick_image.clone();
+        let attach_button = div()
+            .id("floating-attach")
+            .p(px(5.0))
+            .rounded(px(6.0))
+            .cursor_default()
+            .hover(|style| style.bg(theme.overlay))
+            .on_click(move |_, window, cx| {
+                on_pick(window, cx);
+            })
+            .child(app_icon(IconName::Plus, 13.0, theme.text_tertiary));
+
         // ---- assemble ----
         let on_dismiss = self.on_dismiss.clone();
+        let on_drop_files = self.on_drop_files.clone();
         let input = self.input.clone();
+        let autocomplete = data.autocomplete.clone();
+        let autocomplete_open = autocomplete.is_some();
+        let autocomplete_anchor = autocomplete.as_ref().map(AutocompleteView::anchor_cell);
+        let on_autocomplete_next = self.on_autocomplete_next.clone();
+        let on_autocomplete_previous = self.on_autocomplete_previous.clone();
+        let on_autocomplete_confirm = self.on_autocomplete_confirm.clone();
+        let on_autocomplete_dismiss = self.on_autocomplete_dismiss.clone();
+        let on_cancel = self.on_cancel.clone();
 
         div()
             .absolute()
@@ -387,6 +500,13 @@ impl FloatingComposerView {
             .child(
                 div()
                     .occlude()
+                    .key_context(super::CONTEXT)
+                    .track_focus(&self.input.read(cx).focus())
+                    .on_action(
+                        move |_: &super::Cancel, window: &mut Window, cx: &mut App| {
+                            on_cancel(window, cx)
+                        },
+                    )
                     .w(px(560.0))
                     .rounded(px(13.0))
                     .bg(theme.composer)
@@ -394,6 +514,16 @@ impl FloatingComposerView {
                     .border_color(theme.border_strong)
                     .shadow_lg()
                     .overflow_hidden()
+                    // Dropping image files stages them as chips; the card
+                    // highlights while a drag hovers over it.
+                    .drag_over::<ExternalPaths>(move |style, _, _, _| {
+                        style
+                            .bg(theme.composer.opacity(1.0))
+                            .border_color(theme.accent)
+                    })
+                    .on_drop(move |paths: &ExternalPaths, window, cx| {
+                        on_drop_files(paths, window, cx);
+                    })
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
                         cx.stop_propagation();
                     })
@@ -409,6 +539,8 @@ impl FloatingComposerView {
                             .border_color(theme.border)
                             .child(project_control),
                     )
+                    // staged images
+                    .when_some(attachments, |el, attachments| el.child(attachments))
                     // prompt
                     .child(
                         div()
@@ -417,8 +549,36 @@ impl FloatingComposerView {
                             .px(px(14.0))
                             .pt(px(10.0))
                             .pb(px(6.0))
-                            .child(input),
+                            .relative()
+                            // The suggestion popup is anchored to the caret via
+                            // a bounds probe, so it needs this element to be
+                            // the positioning parent.
+                            .when_some(autocomplete_anchor, |el, anchor_bounds| {
+                                el.child(AutocompleteView::bounds_probe(anchor_bounds))
+                            })
+                            .when(autocomplete_open, |el| {
+                                el.key_context(crate::common::AUTOCOMPLETE_CONTEXT)
+                                    .on_action(move |_: &AutocompleteNext, window, cx| {
+                                        on_autocomplete_next(window, cx);
+                                        cx.stop_propagation();
+                                    })
+                                    .on_action(move |_: &AutocompletePrevious, window, cx| {
+                                        on_autocomplete_previous(window, cx);
+                                        cx.stop_propagation();
+                                    })
+                                    .on_action(move |_: &AutocompleteConfirm, window, cx| {
+                                        on_autocomplete_confirm(window, cx);
+                                        cx.stop_propagation();
+                                    })
+                                    .on_action(move |_: &AutocompleteDismiss, window, cx| {
+                                        on_autocomplete_dismiss(window, cx);
+                                        cx.stop_propagation();
+                                    })
+                            })
+                            .child(input.clone()),
                     )
+                    // suggestion popup
+                    .when_some(autocomplete, |el, popup| el.child(popup))
                     // error — a failed launch keeps the card open with the
                     // prompt intact, so this is the retry affordance.
                     .when_some(error, |el, message| {
@@ -440,6 +600,7 @@ impl FloatingComposerView {
                             .flex()
                             .items_center()
                             .gap(px(6.0))
+                            .child(attach_button)
                             .child(branch_control)
                             .child(model_control)
                             .child(thinking_control)

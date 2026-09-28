@@ -21,13 +21,30 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use console_core::{
-    GitBranchInfo, Model, ProjectInfo, ProviderCatalogEntry, SelectedModel, ThinkingLevel,
+    GitBranchInfo, ImageAttachment, Model, ProjectInfo, ProviderCatalogEntry, SelectedModel,
+    ThinkingLevel,
 };
-use gpui::{App, AppContext, Context, Entity, Window};
+use gpui::{App, AppContext, ClipboardEntry, Context, Entity, ExternalPaths, KeyBinding, Window};
 
-use crate::common::PickerTab;
-use crate::input::{ComposerEvent, ComposerInput};
+use crate::common::{AutocompleteView, PickerTab};
+use crate::input::{ComposerAttachmentPaste, ComposerEvent, ComposerInput, ComposerMention};
 use crate::primitives::ContextMenuHandle;
+
+/// The card's own key context. Only Escape is declared here: while a suggestion
+/// popup is open, the prompt field's autocomplete context wins first and
+/// dismisses the popup instead of closing the card. Suggestion navigation needs
+/// no bindings of its own — `autocomplete::init` already binds down/up/enter/tab
+/// for any `ComposerInput`.
+pub(crate) const CONTEXT: &str = "FloatingComposer";
+
+gpui::actions!(floating_composer, [Cancel]);
+
+/// Register the card's key bindings. Called once at app init, like every other
+/// surface's bindings.
+pub fn init(cx: &mut App) {
+    let context: Option<&str> = Some(CONTEXT);
+    cx.bind_keys([KeyBinding::new("escape", Cancel, context)]);
+}
 
 /// Where the new session's checkout comes from.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -56,6 +73,12 @@ impl BranchChoice {
 #[derive(Clone, Default)]
 pub struct FloatingSubmit {
     pub prompt: String,
+    /// The prompt's inline @-file mentions, carried onto the new session so the
+    /// chips the user assembled aren't flattened into plain text.
+    pub mentions: Vec<ComposerMention>,
+    /// Staged images, carried onto the new session so the launch doesn't
+    /// silently drop a pasted screenshot.
+    pub attachments: Rc<Vec<ImageAttachment>>,
     pub project_id: Option<String>,
     pub cwd: Option<String>,
     pub branch: BranchChoice,
@@ -101,12 +124,25 @@ pub struct FloatingComposer {
     selected_model: Option<SelectedModel>,
     thinking_level: Option<ThinkingLevel>,
     supported_thinking_levels: Vec<ThinkingLevel>,
+    /// Staged images, mirrored from the app so the card can paint chips.
+    attachments: Rc<Vec<ImageAttachment>>,
+    /// The @-file / slash-command popup for the prompt field, if any.
+    autocomplete: Option<AutocompleteView>,
     on_submit: Option<Rc<dyn Fn(FloatingSubmit, &mut App) + 'static>>,
     on_select_project: Option<Rc<dyn Fn(String, &mut App) + 'static>>,
     on_select_model: Option<Rc<dyn Fn(SelectedModel, &mut App) + 'static>>,
     on_select_thinking: Option<Rc<dyn Fn(ThinkingLevel, &mut App) + 'static>>,
     on_picker_tab: Option<Rc<dyn Fn(PickerTab, &mut App) + 'static>>,
     on_favorite: Option<Rc<dyn Fn(String, String, &mut App) + 'static>>,
+    on_pick_image: Option<Rc<dyn Fn(&mut App) + 'static>>,
+    on_paste_attachments: Option<Rc<dyn Fn(Vec<ClipboardEntry>, &mut App) + 'static>>,
+    on_drop_files: Option<Rc<dyn Fn(&ExternalPaths, &mut Window, &mut App) + 'static>>,
+    on_remove_attachment: Option<Rc<dyn Fn(usize, &mut App) + 'static>>,
+    on_preview_attachment: Option<Rc<dyn Fn(usize, &mut App) + 'static>>,
+    on_autocomplete_next: Option<Rc<dyn Fn(&mut App) + 'static>>,
+    on_autocomplete_previous: Option<Rc<dyn Fn(&mut App) + 'static>>,
+    on_autocomplete_confirm: Option<Rc<dyn Fn(&mut App) + 'static>>,
+    on_autocomplete_dismiss: Option<Rc<dyn Fn(&mut App) + 'static>>,
 }
 
 impl FloatingComposer {
@@ -116,13 +152,35 @@ impl FloatingComposer {
 
         // Enter is the card's submit key, so reuse the input's own Submit
         // event rather than binding a second handler to the same key.
-        // The subscription lives as long as the entity, so dropping the handle
-        // here is correct — gpui keeps it alive.
+        // The subscriptions live as long as the entity, so dropping the handles
+        // here is correct — gpui keeps them alive.
         let _subscription = cx.subscribe(&input, |this, _input, event: &ComposerEvent, cx| {
-            if let ComposerEvent::Submit(text, _) = event {
-                this.submit(text.clone(), cx);
+            match event {
+                ComposerEvent::Submit(text, _) => this.submit(text.clone(), cx),
+                // Typing and focus changes repaint the card, which owns the
+                // autocomplete popup and the enabled/disabled state of Create.
+                ComposerEvent::Edited | ComposerEvent::Focus => cx.notify(),
+                // Backspace on an empty field removes the last staged image, the
+                // same affordance the docked composer offers.
+                ComposerEvent::BackspaceOnEmpty => {
+                    let count = this.attachments.len();
+                    if count > 0 {
+                        if let Some(cb) = this.on_remove_attachment.clone() {
+                            cb(count - 1, cx);
+                        }
+                    }
+                }
+                _ => {}
             }
         });
+        let _paste_subscription = cx.subscribe(
+            &input,
+            |this, _input, event: &ComposerAttachmentPaste, cx| {
+                if let Some(cb) = this.on_paste_attachments.clone() {
+                    cb(event.0.clone(), cx);
+                }
+            },
+        );
 
         Self {
             input,
@@ -145,12 +203,23 @@ impl FloatingComposer {
             selected_model: None,
             thinking_level: None,
             supported_thinking_levels: Vec::new(),
+            attachments: Rc::new(Vec::new()),
+            autocomplete: None,
             on_submit: None,
             on_select_project: None,
             on_select_model: None,
             on_select_thinking: None,
             on_picker_tab: None,
             on_favorite: None,
+            on_pick_image: None,
+            on_paste_attachments: None,
+            on_drop_files: None,
+            on_remove_attachment: None,
+            on_preview_attachment: None,
+            on_autocomplete_next: None,
+            on_autocomplete_previous: None,
+            on_autocomplete_confirm: None,
+            on_autocomplete_dismiss: None,
         }
     }
 
@@ -188,11 +257,14 @@ impl FloatingComposer {
         self.branch = BranchChoice::default();
         self.submitting = false;
         self.error = None;
+        self.autocomplete = None;
+        self.attachments = Rc::new(Vec::new());
         self.open = true;
 
         self.input.update(cx, |input, cx| {
             input.clear(cx);
             input.set_context_files(Vec::new());
+            input.set_prompt_history(Vec::new(), cx);
         });
         window.focus(&self.input.read(cx).focus(), cx);
         cx.notify();
@@ -284,6 +356,100 @@ impl FloatingComposer {
         cx.notify();
     }
 
+    pub fn set_on_pick_image(
+        &mut self,
+        callback: impl Fn(&mut App) + 'static,
+        _cx: &mut Context<Self>,
+    ) {
+        self.on_pick_image = Some(Rc::new(callback));
+    }
+
+    /// Clipboard images / file paths pasted into the prompt.
+    pub fn set_on_paste_attachments(
+        &mut self,
+        callback: impl Fn(Vec<ClipboardEntry>, &mut App) + 'static,
+        _cx: &mut Context<Self>,
+    ) {
+        self.on_paste_attachments = Some(Rc::new(callback));
+    }
+
+    pub fn set_on_drop_files(
+        &mut self,
+        callback: impl Fn(&ExternalPaths, &mut Window, &mut App) + 'static,
+        _cx: &mut Context<Self>,
+    ) {
+        self.on_drop_files = Some(Rc::new(callback));
+    }
+
+    pub fn set_on_remove_attachment(
+        &mut self,
+        callback: impl Fn(usize, &mut App) + 'static,
+        _cx: &mut Context<Self>,
+    ) {
+        self.on_remove_attachment = Some(Rc::new(callback));
+    }
+
+    pub fn set_on_preview_attachment(
+        &mut self,
+        callback: impl Fn(usize, &mut App) + 'static,
+        _cx: &mut Context<Self>,
+    ) {
+        self.on_preview_attachment = Some(Rc::new(callback));
+    }
+
+    pub fn set_on_autocomplete_next(
+        &mut self,
+        callback: impl Fn(&mut App) + 'static,
+        _cx: &mut Context<Self>,
+    ) {
+        self.on_autocomplete_next = Some(Rc::new(callback));
+    }
+
+    pub fn set_on_autocomplete_previous(
+        &mut self,
+        callback: impl Fn(&mut App) + 'static,
+        _cx: &mut Context<Self>,
+    ) {
+        self.on_autocomplete_previous = Some(Rc::new(callback));
+    }
+
+    pub fn set_on_autocomplete_confirm(
+        &mut self,
+        callback: impl Fn(&mut App) + 'static,
+        _cx: &mut Context<Self>,
+    ) {
+        self.on_autocomplete_confirm = Some(Rc::new(callback));
+    }
+
+    pub fn set_on_autocomplete_dismiss(
+        &mut self,
+        callback: impl Fn(&mut App) + 'static,
+        _cx: &mut Context<Self>,
+    ) {
+        self.on_autocomplete_dismiss = Some(Rc::new(callback));
+    }
+
+    /// Replace the staged-image list the card paints.
+    pub fn set_attachments(
+        &mut self,
+        attachments: Rc<Vec<ImageAttachment>>,
+        cx: &mut Context<Self>,
+    ) {
+        self.attachments = attachments;
+        cx.notify();
+    }
+
+    /// Push the current @-file / slash-command popup, rebuilt each frame by the
+    /// app from the prompt's caret position.
+    pub fn set_autocomplete(
+        &mut self,
+        autocomplete: Option<AutocompleteView>,
+        cx: &mut Context<Self>,
+    ) {
+        self.autocomplete = autocomplete;
+        cx.notify();
+    }
+
     /// Re-seed the thinking controls. Called when the chosen model changes,
     /// since which levels exist depends on the model. A level the new model
     /// doesn't support falls back to its first one.
@@ -299,6 +465,18 @@ impl FloatingComposer {
         };
         self.supported_thinking_levels = supported;
         cx.notify();
+    }
+
+    /// The prompt field, so the app can drive the card's autocomplete against
+    /// it the same way it does for a pane's composer.
+    pub fn input(&self) -> &Entity<ComposerInput> {
+        &self.input
+    }
+
+    /// The project the card currently targets, used to scope @-file search.
+    pub fn selected_project(&self) -> Option<&ProjectInfo> {
+        let id = self.selected_project_id.as_deref()?;
+        self.projects.iter().find(|project| project.id == id)
     }
 
     /// Hand the card a freshly fetched branch list, for after a project switch.
@@ -317,8 +495,15 @@ impl FloatingComposer {
     }
 
     /// Enter, or the Create button. Requires a project and a non-empty prompt.
+    ///
+    /// Enter is claimed by autocomplete while its popup is open — accepting a
+    /// highlighted suggestion is the expected meaning there, so submitting on
+    /// Enter would launch a session with a half-typed `@query`.
     pub(super) fn submit(&mut self, text: String, cx: &mut Context<Self>) {
-        if !self.open || self.submitting || text.trim().is_empty() {
+        if !self.open || self.submitting || self.autocomplete.is_some() {
+            return;
+        }
+        if text.trim().is_empty() {
             return;
         }
         let Some(project_id) = self.selected_project_id.clone() else {
@@ -331,8 +516,13 @@ impl FloatingComposer {
             .iter()
             .find(|p| p.id == project_id)
             .map(|p| p.path.clone());
+        // Mentions and staged images are read here, before the field is
+        // cleared, so the created session inherits what the user attached.
+        let mentions = self.input.read(cx).mentions().to_vec();
         let submit = FloatingSubmit {
             prompt: text,
+            mentions,
+            attachments: self.attachments.clone(),
             project_id: Some(project_id),
             cwd,
             branch: self.branch.clone(),
@@ -341,6 +531,7 @@ impl FloatingComposer {
         };
         self.submitting = true;
         self.error = None;
+        self.autocomplete = None;
         cx.notify();
         if let Some(on_submit) = self.on_submit.clone() {
             on_submit(submit, cx);
