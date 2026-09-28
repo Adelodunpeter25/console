@@ -100,7 +100,9 @@ fun ChatScreen(
 
     val messages = chat.messages
     val displayMessages = visibleMessages(messages)
-    val runs = remember(messages) {
+    // Key on chat.runs too: turnEnd/turnStart/toolExecutionEnd mutate runs without
+    // touching messages, and those mutations drive status + elapsed time.
+    val runs = remember(messages, chat.runs) {
         if (chat.runs.isNotEmpty()) chat.runs else reconstructRuns(messages)
     }
     // Map user-message index → run (tool turns are filtered from display list).
@@ -152,12 +154,15 @@ fun ChatScreen(
             try { listState.animateScrollToItem(maxOf(0, displayMessages.size - 1)) } catch (_: Exception) {}
         }
     }
-    val showScrollBottom by remember {
-        derivedStateOf {
-            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-            last != null && last.index < displayMessages.size - 1 && displayMessages.size > 2
-        }
+    // Only the scroll position belongs in derivedStateOf — it's the one thing here
+    // that is snapshot-tracked. displayMessages is a plain local recomputed each
+    // composition, so reading it inside a remembered derived state froze the
+    // thresholds at first composition and hid the button for the whole session.
+    val lastVisibleIndex by remember {
+        derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
     }
+    val displaySize = displayMessages.size
+    val showScrollBottom = lastVisibleIndex >= 0 && lastVisibleIndex < displaySize - 1 && displaySize > 2
 
     Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
         ScreenHeader(
