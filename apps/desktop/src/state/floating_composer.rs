@@ -393,7 +393,12 @@ impl ConsoleDesktopApp {
             .iter()
             .map(|mention| mention.path.clone())
             .collect();
-        let mentions = submit.mentions.clone();
+        // The card's choices, not the pane's: `submit_prompt_with_context`
+        // reads model/thinking off the pane, so they are pushed in below
+        // before the run starts or the agent would use whatever the focused
+        // pane happened to have.
+        let card_model = submit.model.clone();
+        let card_thinking = submit.thinking_level;
 
         // Only a worktree request provisions anything; a plain project session
         // sends no worktree key at all.
@@ -440,15 +445,28 @@ impl ConsoleDesktopApp {
                         this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
                             t.set_messages(Vec::new(), cx);
                         });
-                        // Seed the new pane's composer with the prompt that
-                        // described it, plus the mentions and images the card
-                        // carried, so the launch is a single action.
-                        this.composer_for_pane(&pane_id).update(cx, |input, cx| {
-                            input.set_content_with_mentions(prompt.clone(), mentions.clone(), cx);
-                            input.set_context_files(context_files.clone());
-                            cx.notify();
-                        });
-                        this.set_attachments_for_pane(&pane_id, staged_attachments.clone());
+                        // Adopt the card's selections for this pane so the run
+                        // below — and the composer it leaves behind — agree
+                        // with what the user chose in the card.
+                        if let Some(model) = card_model.clone() {
+                            this.set_pane_model(&pane_id, Some(model));
+                        }
+                        this.set_pane_thinking_level(&pane_id, card_thinking);
+                        // The run targets the active pane, so make sure the
+                        // pane the session just opened in is the active one.
+                        this.active_pane_id = Some(pane_id.clone());
+                        this.selected_session_id = this.active_session_for_pane(&pane_id);
+                        // Auto-send: the prompt that described the task *is*
+                        // the task, so it goes straight to the agent instead of
+                        // waiting for a second Enter. This also clears the
+                        // composer, stages the attachments, and pushes the
+                        // optimistic user message into the transcript.
+                        this.submit_prompt_with_context(
+                            prompt.clone(),
+                            staged_attachments.clone(),
+                            context_files.clone(),
+                            cx,
+                        );
                         cx.notify();
                     }
                     Err(error) => {
