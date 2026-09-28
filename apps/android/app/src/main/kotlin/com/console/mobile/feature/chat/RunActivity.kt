@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -113,6 +114,9 @@ fun RunActivity(activity: RunActivityState, running: Boolean, cwd: String? = nul
             Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
         }
         if (expanded) {
+            // Single rule under the "Worked for…" row, separating the summary
+            // from the run's thinking/text/tool content.
+            HorizontalDivider(color = ConsoleColors.BorderSubtle, thickness = 1.dp, modifier = Modifier.padding(horizontal = 4.dp).padding(bottom = 4.dp))
             val groups = groupEvents(activity.events)
             groups.forEach { g ->
                 when (g) {

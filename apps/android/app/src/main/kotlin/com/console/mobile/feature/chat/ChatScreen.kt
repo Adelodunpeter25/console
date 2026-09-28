@@ -43,6 +43,7 @@ import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.store.MobileTab
 import com.console.mobile.ui.components.ChatScreenSkeleton
 import com.console.mobile.ui.components.EmptyState
+import com.console.mobile.core.util.urlHost
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
 import kotlinx.coroutines.coroutineScope
@@ -147,6 +148,21 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val view = sessionViews[sessionId]
     val cwd = view?.sessionCwd
+    // "folder · server" under the centered title. Folder prefers the matched
+    // project name, falling back to the cwd's last segment; server is the
+    // backend host. Either side may be absent — never show a dangling "·".
+    val chatSubtitle = remember(sessionId, cwd, projectState.projects, appState.backendUrl) {
+        val folder = projectState.projects.firstOrNull { p ->
+            cwd != null && (p.path == cwd || cwd.startsWith(p.path + "/"))
+        }?.name ?: cwd?.substringAfterLast("/")?.ifBlank { null }
+        val server = appState.backendUrl?.let { urlHost(it) }?.ifBlank { null }
+        when {
+            folder != null && server != null -> "$folder · $server"
+            folder != null -> folder
+            server != null -> server
+            else -> null
+        }
+    }
 
     fun jumpToProjectTab(tab: MobileTab) {
         if (cwd != null) {
@@ -229,8 +245,9 @@ fun ChatScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-        ScreenHeader(
+        ChatHeader(
             title = chatTitle,
+            subtitle = chatSubtitle,
             onBack = {
                 AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
                 onBackToHome()
