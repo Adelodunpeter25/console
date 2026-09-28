@@ -251,6 +251,7 @@ impl FloatingComposerView {
             .unwrap_or_else(|| "Select project".to_owned());
         let project_trigger = MenuChip::new("floating-project-chip")
             .height(px(28.0))
+            .icon(IconName::Folder.path(), theme.text_tertiary)
             .label(project_label)
             .disabled(data.projects.is_empty());
         let on_choose_project = self.on_choose_project.clone();
@@ -274,6 +275,7 @@ impl FloatingComposerView {
                             MenuItem::new(name, move |window, cx| {
                                 on_choose_project(id.clone(), window, cx);
                             })
+                            .icon(IconName::Folder.path())
                             .selected(selected.as_deref() == Some(project.id.as_str()))
                         })
                         .collect()
