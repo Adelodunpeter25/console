@@ -123,6 +123,7 @@ fun Composer(
     val projectRoot = projectState.projects.firstOrNull { p -> sessionCwd != null && (p.path == sessionCwd || sessionCwd.startsWith(p.path + "/")) }?.path ?: sessionCwd
 
     var fieldValue by remember(sessionId) { mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length))) }
+    var visualLines by remember(sessionId) { mutableStateOf(1) }
     if (fieldValue.text != value) {
         fieldValue = fieldValue.copy(text = value, selection = TextRange(minOf(fieldValue.selection.start, value.length)))
     }
@@ -181,10 +182,14 @@ fun Composer(
         if (attachments.isNotEmpty()) {
             AttachmentStrip(sessionId = sessionId, attachments = attachments)
         }
+        // Rounded rect as soon as the bubble grows past one *visual* line.
+        // Keying off "\n" alone missed word-wrap, which adds no newline char,
+        // so wrapped text kept the pill while shift+enter flipped to the rect.
+        val bubbleShape = if (visualLines > 1) RoundedCornerShape(20.dp) else CircleShape
         Row(
-            modifier = Modifier.fillMaxWidth().clip(if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
+            modifier = Modifier.fillMaxWidth().clip(bubbleShape)
                 .background(ConsoleColors.Card)
-                .border(1.dp, ConsoleColors.Border, if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
+                .border(1.dp, ConsoleColors.Border, bubbleShape)
                 .onGloballyPositioned { fieldCoordinates = it }
                 .padding(horizontal = 6.dp, vertical = 6.dp),
             verticalAlignment = Alignment.Bottom,
@@ -214,6 +219,7 @@ fun Composer(
                 ),
                 cursorBrush = SolidColor(ConsoleColors.TextPrimary),
                 maxLines = 6,
+                onTextLayout = { visualLines = it.lineCount },
                 decorationBox = { innerTextField ->
                     Box(contentAlignment = Alignment.CenterStart) {
                         if (value.isEmpty()) {
