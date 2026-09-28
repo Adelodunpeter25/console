@@ -113,10 +113,9 @@ fun RunActivity(activity: RunActivityState, running: Boolean, cwd: String? = nul
             // Collapsed points right (there is more to see), expanded points up.
             Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
         }
+        // Always drawn, collapsed or not — one rule closing each run block.
+        HorizontalDivider(color = ConsoleColors.BorderSubtle, thickness = 1.dp, modifier = Modifier.padding(horizontal = 4.dp).padding(vertical = 4.dp))
         if (expanded) {
-            // Single rule under the "Worked for…" row, separating the summary
-            // from the run's thinking/text/tool content.
-            HorizontalDivider(color = ConsoleColors.BorderSubtle, thickness = 1.dp, modifier = Modifier.padding(horizontal = 4.dp).padding(bottom = 4.dp))
             val groups = groupEvents(activity.events)
             groups.forEach { g ->
                 when (g) {

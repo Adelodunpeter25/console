@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,6 +61,7 @@ fun ScreenHeader(
                 color = ConsoleColors.TextPrimary,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -68,6 +70,7 @@ fun ScreenHeader(
                     text = subtitle,
                     color = ConsoleColors.TextSecondary,
                     fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
