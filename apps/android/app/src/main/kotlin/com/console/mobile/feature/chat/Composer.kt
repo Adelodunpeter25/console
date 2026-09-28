@@ -186,7 +186,7 @@ fun Composer(
                 .background(ConsoleColors.Card)
                 .border(1.dp, ConsoleColors.Border, if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
                 .onGloballyPositioned { fieldCoordinates = it }
-                .padding(horizontal = 6.dp, vertical = 7.dp),
+                .padding(horizontal = 6.dp, vertical = 6.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
             Box(
