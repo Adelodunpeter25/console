@@ -109,7 +109,8 @@ fun RunActivity(activity: RunActivityState, running: Boolean, cwd: String? = nul
                 CircularProgressIndicator(color = ConsoleColors.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(12.dp))
             }
             Text(summary, color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = if (isWorking) 6.dp else 0.dp))
-            Icon(if (expanded) Icons.Filled.ChevronRight else Icons.Filled.ExpandMore, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
+            // Collapsed points right (there is more to see), expanded points up.
+            Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
         }
         if (expanded) {
             val groups = groupEvents(activity.events)
