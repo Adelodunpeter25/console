@@ -191,8 +191,8 @@ impl RenderOnce for RightSidebar {
         let open_auxiliary = self.open_auxiliary_tabs.clone();
         let on_refresh = self.on_refresh;
         let on_resize = self.on_begin_resize;
-        let changes_count = self.working_changes.len()
-            + console_core::types::filter_changes_for_scope(&self.session_changes, self.changes_scope)
+        let changes_count =
+            console_core::types::filter_changes_for_scope(&self.session_changes, self.changes_scope)
                 .len();
 
         div()

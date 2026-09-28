@@ -64,6 +64,13 @@ impl RenderOnce for ChangesListView {
         let scoped_session_changes =
             console_core::types::filter_changes_for_scope(&self.session_changes, self.scope);
         let has_changes = !scoped_session_changes.is_empty();
+        // The header (file count + scope dropdown) should stay visible as
+        // long as the session has *any* recorded changes, even if the
+        // currently selected scope happens to be empty (e.g. "Previous
+        // Turn" with nothing changed). Otherwise the dropdown that lets the
+        // user switch scope disappears along with the empty result, leaving
+        // them stuck on the empty state with no way back.
+        let has_any_changes = !self.session_changes.is_empty();
 
         let total_additions: u64 = scoped_session_changes.iter().map(|c| c.additions).sum();
         let total_deletions: u64 = scoped_session_changes.iter().map(|c| c.deletions).sum();
@@ -83,7 +90,7 @@ impl RenderOnce for ChangesListView {
             .flex()
             .flex_col()
             .overflow_hidden()
-            .when(has_changes, |el| {
+            .when(has_any_changes, |el| {
                 el.child(
                     div()
                         .flex_none()
