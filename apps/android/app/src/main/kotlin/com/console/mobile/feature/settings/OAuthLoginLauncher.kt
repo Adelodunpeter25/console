@@ -1,6 +1,8 @@
 package com.console.mobile.feature.settings
 
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
 import com.console.mobile.data.repo.AuthRepository
@@ -76,10 +78,15 @@ object OAuthLoginLauncher {
             val server = bindLoopback(port)
             try {
                 withContext(Dispatchers.Main) {
-                    CustomTabsIntent.Builder()
+                    val tab = CustomTabsIntent.Builder()
                         .setShowTitle(true)
                         .build()
-                        .launchUrl(context, Uri.parse(result.authUrl))
+                    if (context !is Activity) {
+                        // Non-Activity callers can't start activities at all
+                        // without this; the tab lands in a new task instead.
+                        tab.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    tab.launchUrl(context, Uri.parse(result.authUrl))
                 }
                 val callback = awaitCallback(server, result.state)
                 authRepo.submitCallback(provider, callback.code, callback.state)

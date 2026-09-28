@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
 import com.console.mobile.ui.components.PillButton
@@ -54,6 +55,7 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 fun AccountSettings(onBack: () -> Unit) {
+    val context = LocalContext.current
     val authState by AppContainer.authStateHolder.state.collectAsStateWithLifecycle()
     val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()
     var loggingIn by remember { mutableStateOf<String?>(null) }
@@ -103,7 +105,10 @@ fun AccountSettings(onBack: () -> Unit) {
                                         loggingIn = p.name
                                         scope.launch {
                                             try {
-                                                OAuthLoginLauncher.login(AppContainer.appContext, AppContainer.authRepository, p.name)
+                                                // LocalContext.current here is the hosting Activity,
+                                                // which Custom Tabs requires — the app context can't
+                                                // start activities without FLAG_ACTIVITY_NEW_TASK.
+                                                OAuthLoginLauncher.login(context, AppContainer.authRepository, p.name)
                                             } catch (e: Exception) {
                                                 confirmAlert("Login Failed", e.message ?: "Login failed.")
                                             } finally {
