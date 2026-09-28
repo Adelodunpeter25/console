@@ -48,11 +48,15 @@ fun langFromPath(filePath: String): String? {
     return EXT_LANG_MAP[ext]
 }
 
+// Keys must match the Go server's registered tool names verbatim
+// (apps/server-go/internal/agent/tools/*.go `NewTool("...")` calls) — these are
+// what actually reach the wire in ToolCall.Name / ToolResult.ToolName, not a
+// camelCase convention.
 val TOOL_LABELS: Map<String, String> = mapOf(
-    "readFile" to "Read File", "writeFile" to "Write File", "batchWrite" to "Batch Write",
+    "read_file" to "Read File", "write_file" to "Write File", "batchWrite" to "Batch Write",
     "editFile" to "Edit File", "bash" to "Run Command", "bashJob" to "Bash Job",
-    "grep" to "Search Code", "glob" to "Find Files", "listDir" to "List Directory",
-    "fetch" to "Fetch URL", "webSearch" to "Web Search", "subagent" to "Subagent",
+    "grep" to "Search Code", "glob" to "Find Files", "list_dir" to "List Directory",
+    "webFetch" to "Fetch URL", "webSearch" to "Web Search", "subagent" to "Subagent",
     "ask" to "Ask Question", "askMany" to "Ask Questions", "todo" to "Todo",
     "memory" to "Memory", "readSkill" to "Read Skill",
 )
@@ -60,10 +64,10 @@ val TOOL_LABELS: Map<String, String> = mapOf(
 fun getToolLabel(name: String): String = TOOL_LABELS[name] ?: name
 
 val TOOL_ICONS: Map<String, ImageVector> = mapOf(
-    "readFile" to Lucide.FileText, "writeFile" to Lucide.FilePlus, "batchWrite" to Lucide.Files,
+    "read_file" to Lucide.FileText, "write_file" to Lucide.FilePlus, "batchWrite" to Lucide.Files,
     "editFile" to Lucide.FilePen, "bash" to Lucide.Terminal, "bashJob" to Lucide.SquareTerminal,
-    "grep" to Lucide.Search, "glob" to Lucide.FolderSearch, "listDir" to Lucide.Folder,
-    "fetch" to Lucide.Globe, "webSearch" to Lucide.Globe, "subagent" to Lucide.Users,
+    "grep" to Lucide.Search, "glob" to Lucide.FolderSearch, "list_dir" to Lucide.Folder,
+    "webFetch" to Lucide.Globe, "webSearch" to Lucide.Globe, "subagent" to Lucide.Users,
     "ask" to Lucide.CircleHelp, "askMany" to Lucide.MessagesSquare, "todo" to Lucide.ListTodo,
     "memory" to Lucide.Brain, "readSkill" to Lucide.BookOpen,
 )
