@@ -39,7 +39,7 @@ fun EdgeScrollIndicator(
     state: LazyListState,
     modifier: Modifier = Modifier,
     thickness: Dp = 3.dp,
-    color: Color = ConsoleColors.TextSecondary,
+    color: Color = ConsoleColors.TextMuted.copy(alpha = 0.5f),
     hideDelayMillis: Long = 500L,
 ) {
     var scrolling by remember { mutableStateOf(false) }
