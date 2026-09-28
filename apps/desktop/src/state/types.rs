@@ -12,7 +12,7 @@ use console_ui::markdown::render::TranscriptSelection;
 use console_ui::terminal::TerminalView;
 use console_ui::utils::SessionDateGroup;
 use console_ui::{
-    CommandPalette, ComposerInput, ContextMenuHandle, FloatingComposer, GlobalSearchPanel,
+    CommandPalette, ComposerInput, ContextMenuHandle, FloatingComposerState, GlobalSearchPanel,
     PickerTab, ProjectBrowsePalette, QuickOpenPalette, TranscriptView,
 };
 use gpui::{Entity, ListState, Subscription};
@@ -322,8 +322,9 @@ pub struct ConsoleDesktopApp {
     /// ⌘O remote directory browser / project picker.
     pub project_browse_palette: Entity<ProjectBrowsePalette>,
     /// ⌘N launcher card: describe a task, pick project/branch/model/thinking,
-    /// and spin up the session that runs it.
-    pub floating_composer: Entity<FloatingComposer>,
+    /// and spin up the session that runs it. Plain state, not an `Entity` — the
+    /// app builds its element during its own render.
+    pub floating_composer: FloatingComposerState,
     /// Live terminal surfaces keyed by terminal id. Tabs reference these via
     /// `WorkspaceTabConfig::Terminal { terminal_id }`.
     pub terminals: std::collections::HashMap<String, Entity<TerminalView>>,

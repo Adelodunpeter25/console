@@ -6,8 +6,43 @@ use console_ui::PickerTab;
 use gpui::Context;
 
 use super::app::ConsoleDesktopApp;
+use super::floating_composer::FLOATING_KEY;
 
 impl ConsoleDesktopApp {
+    /// Subscribe to the floating composer's prompt field.
+    ///
+    /// It is a real `ComposerInput` entity even though the card's state lives on
+    /// the app, so it emits the same events as a pane's composer: Enter
+    /// submits, a paste stages images, Backspace on an empty field drops the
+    /// last attachment.
+    pub(crate) fn wire_floating_composer_input(&mut self, cx: &mut Context<Self>) {
+        use console_ui::input::{ComposerAttachmentPaste, ComposerEvent};
+        let input = self.floating_composer.input.clone();
+        self._subscriptions.push(cx.subscribe(
+            &input,
+            |this, _input, event: &ComposerEvent, cx| match event {
+                ComposerEvent::Submit(prompt, _) => {
+                    this.submit_floating_composer(prompt.clone(), cx);
+                }
+                ComposerEvent::BackspaceOnEmpty => {
+                    let count = this.attachments_for_pane(FLOATING_KEY).len();
+                    if count > 0 {
+                        this.remove_attachment(FLOATING_KEY, count - 1, cx);
+                    }
+                    cx.notify();
+                }
+                _ => cx.notify(),
+            },
+        ));
+        self._subscriptions.push(cx.subscribe(
+            &input,
+            |this, _input, event: &ComposerAttachmentPaste, cx| {
+                this.stage_clipboard_attachments(FLOATING_KEY, event.0.clone(), cx);
+                cx.notify();
+            },
+        ));
+    }
+
     pub(crate) fn wire_palette_callbacks(&mut self, cx: &mut Context<Self>) {
         let entity = cx.entity().downgrade();
         self.quick_open_palette.update(cx, |palette, cx| {

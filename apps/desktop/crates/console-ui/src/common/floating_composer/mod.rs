@@ -2,20 +2,24 @@
 //! up the session that runs it.
 //!
 //! Deliberately independent of the docked pane [`crate::common::ComposerView`]:
-//! it owns its own [`ComposerInput`], has no run lifecycle (nothing is running
-//! until you press Enter), and puts its selectors in a header rather than a
-//! footer. Every visual is borrowed from the shared primitives — `MenuChip`,
-//! `dropdown_menu`, `popover`, `ModelDropdownMenu` — so it tracks the docked
-//! composer without sharing any of its state and without costing a change to
-//! it.
+//! it has no run lifecycle (nothing is running until you press Enter), and puts
+//! its selectors in a header rather than a footer. Every visual is borrowed from
+//! the shared primitives — `MenuChip`, `dropdown_menu`, `popover`,
+//! `ModelDropdownMenu` — so it tracks the docked composer without sharing any of
+//! its state.
 //!
-//! This file owns *state*: what's selected and which callbacks are registered.
-//! [`render`] turns that into a frame, and [`view`] paints it.
+//! **This is a plain struct, not a `Render` entity**, and that is load-bearing.
+//! Its popup and chip row are derived from app state that changes every frame,
+//! so they have to be computed while the app is mid-render. An `Entity` child
+//! would be leased by gpui at the same moment the app is computing that data,
+//! and gpui refuses a read of an already-leased entity — the card would have to
+//! choose between a stale popup and a panic. Holding the state on the app and
+//! building [`FloatingComposerView`] in the app's render, like every other
+//! surface in the app, sidesteps the conflict entirely.
 
-mod render;
 mod view;
 
-pub use view::FloatingComposerView;
+pub use view::{Data as FloatingComposerData, FloatingComposerView};
 
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -24,10 +28,10 @@ use console_core::{
     GitBranchInfo, ImageAttachment, Model, ProjectInfo, ProviderCatalogEntry, SelectedModel,
     ThinkingLevel,
 };
-use gpui::{App, AppContext, ClipboardEntry, Context, Entity, ExternalPaths, KeyBinding, Window};
+use gpui::{App, AppContext, Entity, KeyBinding, Window};
 
 use crate::common::{AutocompleteContentKey, AutocompleteView, PickerTab};
-use crate::input::{ComposerAttachmentPaste, ComposerEvent, ComposerInput, ComposerMention};
+use crate::input::{ComposerInput, ComposerMention};
 use crate::primitives::ContextMenuHandle;
 
 /// The card's own key context. Only Escape is declared here: while a suggestion
@@ -99,91 +103,44 @@ pub struct FloatingSnapshot {
     pub supported_thinking_levels: Vec<ThinkingLevel>,
 }
 
-/// The launcher card. Owns its input and its dropdown handles; the app pushes a
-/// snapshot of app state in on open and receives a [`FloatingSubmit`] on Enter.
-pub struct FloatingComposer {
-    input: Entity<ComposerInput>,
-    /// Filter field owned by the model list. Lives here so the query survives
-    /// the per-frame rebuild of the dropdown.
-    model_search: Entity<ComposerInput>,
-    project_menu: ContextMenuHandle,
-    branch_menu: ContextMenuHandle,
-    model_menu: ContextMenuHandle,
-    thinking_menu: ContextMenuHandle,
-    picker_tab: PickerTab,
-    open: bool,
-    submitting: bool,
-    error: Option<String>,
-    projects: Rc<Vec<ProjectInfo>>,
-    selected_project_id: Option<String>,
-    branches: Rc<Vec<GitBranchInfo>>,
-    branch: BranchChoice,
-    providers: Rc<Vec<ProviderCatalogEntry>>,
-    models_by_provider: Rc<HashMap<String, Vec<Model>>>,
-    favorites: Rc<HashSet<String>>,
-    selected_model: Option<SelectedModel>,
-    thinking_level: Option<ThinkingLevel>,
-    supported_thinking_levels: Vec<ThinkingLevel>,
+/// The launcher's state. Lives on the app entity, which builds
+/// [`FloatingComposerView`] from it during the app's own render.
+pub struct FloatingComposerState {
+    pub input: Entity<ComposerInput>,
+    /// Filter field owned by the model list. Held here so the query survives the
+    /// per-frame rebuild of the dropdown.
+    pub model_search: Entity<ComposerInput>,
+    pub project_menu: ContextMenuHandle,
+    pub branch_menu: ContextMenuHandle,
+    pub model_menu: ContextMenuHandle,
+    pub thinking_menu: ContextMenuHandle,
+    pub picker_tab: PickerTab,
+    pub open: bool,
+    pub submitting: bool,
+    pub error: Option<String>,
+    pub projects: Rc<Vec<ProjectInfo>>,
+    pub selected_project_id: Option<String>,
+    pub branches: Rc<Vec<GitBranchInfo>>,
+    pub branch: BranchChoice,
+    pub providers: Rc<Vec<ProviderCatalogEntry>>,
+    pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
+    pub favorites: Rc<HashSet<String>>,
+    pub selected_model: Option<SelectedModel>,
+    pub thinking_level: Option<ThinkingLevel>,
+    pub supported_thinking_levels: Vec<ThinkingLevel>,
     /// Staged images, mirrored from the app so the card can paint chips.
-    attachments: Rc<Vec<ImageAttachment>>,
+    pub attachments: Rc<Vec<ImageAttachment>>,
     /// The @-file / slash-command popup for the prompt field, if any.
-    autocomplete: Option<AutocompleteView>,
+    pub autocomplete: Option<AutocompleteView>,
     /// Content identity of `autocomplete`, so a per-frame rebuild that yields
-    /// the same popup doesn't notify and keep the app rendering forever.
-    autocomplete_key: Option<AutocompleteContentKey>,
-    on_submit: Option<Rc<dyn Fn(FloatingSubmit, &mut App) + 'static>>,
-    on_select_project: Option<Rc<dyn Fn(String, &mut App) + 'static>>,
-    on_select_model: Option<Rc<dyn Fn(SelectedModel, &mut App) + 'static>>,
-    on_select_thinking: Option<Rc<dyn Fn(ThinkingLevel, &mut App) + 'static>>,
-    on_picker_tab: Option<Rc<dyn Fn(PickerTab, &mut App) + 'static>>,
-    on_favorite: Option<Rc<dyn Fn(String, String, &mut App) + 'static>>,
-    on_pick_image: Option<Rc<dyn Fn(&mut App) + 'static>>,
-    on_paste_attachments: Option<Rc<dyn Fn(Vec<ClipboardEntry>, &mut App) + 'static>>,
-    on_drop_files: Option<Rc<dyn Fn(&ExternalPaths, &mut Window, &mut App) + 'static>>,
-    on_remove_attachment: Option<Rc<dyn Fn(usize, &mut App) + 'static>>,
-    on_preview_attachment: Option<Rc<dyn Fn(usize, &mut App) + 'static>>,
-    on_autocomplete_next: Option<Rc<dyn Fn(&mut App) + 'static>>,
-    on_autocomplete_previous: Option<Rc<dyn Fn(&mut App) + 'static>>,
-    on_autocomplete_confirm: Option<Rc<dyn Fn(&mut App) + 'static>>,
-    on_autocomplete_dismiss: Option<Rc<dyn Fn(&mut App) + 'static>>,
+    /// the same popup doesn't churn the card.
+    pub autocomplete_key: Option<AutocompleteContentKey>,
 }
 
-impl FloatingComposer {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+impl FloatingComposerState {
+    pub fn new(window: &mut Window, cx: &mut App) -> Self {
         let input = cx.new(|cx| ComposerInput::new(window, cx).placeholder("Describe a task…"));
         let model_search = cx.new(|cx| ComposerInput::new(window, cx).search_field());
-
-        // Enter is the card's submit key, so reuse the input's own Submit
-        // event rather than binding a second handler to the same key.
-        // The subscriptions live as long as the entity, so dropping the handles
-        // here is correct — gpui keeps them alive.
-        let _subscription = cx.subscribe(&input, |this, _input, event: &ComposerEvent, cx| {
-            match event {
-                ComposerEvent::Submit(text, _) => this.submit(text.clone(), cx),
-                // Typing and focus changes repaint the card, which owns the
-                // autocomplete popup and the enabled/disabled state of Create.
-                ComposerEvent::Edited | ComposerEvent::Focus => cx.notify(),
-                // Backspace on an empty field removes the last staged image, the
-                // same affordance the docked composer offers.
-                ComposerEvent::BackspaceOnEmpty => {
-                    let count = this.attachments.len();
-                    if count > 0 {
-                        if let Some(cb) = this.on_remove_attachment.clone() {
-                            cb(count - 1, cx);
-                        }
-                    }
-                }
-                _ => {}
-            }
-        });
-        let _paste_subscription = cx.subscribe(
-            &input,
-            |this, _input, event: &ComposerAttachmentPaste, cx| {
-                if let Some(cb) = this.on_paste_attachments.clone() {
-                    cb(event.0.clone(), cx);
-                }
-            },
-        );
 
         Self {
             input,
@@ -209,32 +166,12 @@ impl FloatingComposer {
             attachments: Rc::new(Vec::new()),
             autocomplete: None,
             autocomplete_key: None,
-            on_submit: None,
-            on_select_project: None,
-            on_select_model: None,
-            on_select_thinking: None,
-            on_picker_tab: None,
-            on_favorite: None,
-            on_pick_image: None,
-            on_paste_attachments: None,
-            on_drop_files: None,
-            on_remove_attachment: None,
-            on_preview_attachment: None,
-            on_autocomplete_next: None,
-            on_autocomplete_previous: None,
-            on_autocomplete_confirm: None,
-            on_autocomplete_dismiss: None,
         }
     }
 
     /// Push an app-state snapshot in and show the card. Called fresh on every
     /// open so the defaults track whatever the user last had selected.
-    pub fn show(
-        &mut self,
-        snapshot: FloatingSnapshot,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn show(&mut self, snapshot: FloatingSnapshot, window: &mut Window, cx: &mut App) {
         let FloatingSnapshot {
             projects,
             selected_project_id,
@@ -272,206 +209,42 @@ impl FloatingComposer {
             input.set_prompt_history(Vec::new(), cx);
         });
         window.focus(&self.input.read(cx).focus(), cx);
-        cx.notify();
     }
 
-    pub fn hide(&mut self, cx: &mut Context<Self>) {
+    /// Close the card. The caller notifies — this is app state, not an entity.
+    pub fn hide(&mut self) {
         self.open = false;
         self.submitting = false;
         self.error = None;
-        cx.notify();
-    }
-
-    pub fn is_open(&self) -> bool {
-        self.open
-    }
-
-    pub fn set_on_submit(
-        &mut self,
-        callback: impl Fn(FloatingSubmit, &mut App) + 'static,
-        _cx: &mut Context<Self>,
-    ) {
-        self.on_submit = Some(Rc::new(callback));
-    }
-
-    pub fn set_on_select_project(
-        &mut self,
-        callback: impl Fn(String, &mut App) + 'static,
-        _cx: &mut Context<Self>,
-    ) {
-        self.on_select_project = Some(Rc::new(callback));
-    }
-
-    pub fn set_on_select_model(
-        &mut self,
-        callback: impl Fn(SelectedModel, &mut App) + 'static,
-        _cx: &mut Context<Self>,
-    ) {
-        self.on_select_model = Some(Rc::new(callback));
-    }
-
-    pub fn set_on_select_thinking(
-        &mut self,
-        callback: impl Fn(ThinkingLevel, &mut App) + 'static,
-        _cx: &mut Context<Self>,
-    ) {
-        self.on_select_thinking = Some(Rc::new(callback));
-    }
-
-    /// Switching provider tabs may need that provider's live model list, which
-    /// only the app can fetch.
-    pub fn set_on_picker_tab(
-        &mut self,
-        callback: impl Fn(PickerTab, &mut App) + 'static,
-        _cx: &mut Context<Self>,
-    ) {
-        self.on_picker_tab = Some(Rc::new(callback));
-    }
-
-    pub fn set_on_favorite(
-        &mut self,
-        callback: impl Fn(String, String, &mut App) + 'static,
-        _cx: &mut Context<Self>,
-    ) {
-        self.on_favorite = Some(Rc::new(callback));
-    }
-
-    /// Mark the card busy while the create request is in flight.
-    pub fn set_submitting(&mut self, submitting: bool, cx: &mut Context<Self>) {
-        self.submitting = submitting;
-        cx.notify();
-    }
-
-    /// Show an error inside the card. The card stays open so the prompt the
-    /// user typed isn't lost to a failed request.
-    pub fn set_error(&mut self, error: Option<String>, cx: &mut Context<Self>) {
-        self.error = error;
-        self.submitting = false;
-        cx.notify();
-    }
-
-    /// The model picker's tab changed. The card owns the active tab, so it has
-    /// to record it — otherwise the list keeps rendering the previous tab and
-    /// provider switching looks dead. The search box is cleared on switch to
-    /// match the docked picker, where a filter from the old tab would otherwise
-    /// hide the new provider's models.
-    pub fn set_picker_tab(&mut self, tab: PickerTab, cx: &mut Context<Self>) {
-        self.picker_tab = tab;
-        self.model_search.update(cx, |input, cx| input.clear(cx));
-        cx.notify();
-    }
-
-    pub fn set_on_pick_image(
-        &mut self,
-        callback: impl Fn(&mut App) + 'static,
-        _cx: &mut Context<Self>,
-    ) {
-        self.on_pick_image = Some(Rc::new(callback));
-    }
-
-    /// Clipboard images / file paths pasted into the prompt.
-    pub fn set_on_paste_attachments(
-        &mut self,
-        callback: impl Fn(Vec<ClipboardEntry>, &mut App) + 'static,
-        _cx: &mut Context<Self>,
-    ) {
-        self.on_paste_attachments = Some(Rc::new(callback));
-    }
-
-    pub fn set_on_drop_files(
-        &mut self,
-        callback: impl Fn(&ExternalPaths, &mut Window, &mut App) + 'static,
-        _cx: &mut Context<Self>,
-    ) {
-        self.on_drop_files = Some(Rc::new(callback));
-    }
-
-    pub fn set_on_remove_attachment(
-        &mut self,
-        callback: impl Fn(usize, &mut App) + 'static,
-        _cx: &mut Context<Self>,
-    ) {
-        self.on_remove_attachment = Some(Rc::new(callback));
-    }
-
-    pub fn set_on_preview_attachment(
-        &mut self,
-        callback: impl Fn(usize, &mut App) + 'static,
-        _cx: &mut Context<Self>,
-    ) {
-        self.on_preview_attachment = Some(Rc::new(callback));
-    }
-
-    pub fn set_on_autocomplete_next(
-        &mut self,
-        callback: impl Fn(&mut App) + 'static,
-        _cx: &mut Context<Self>,
-    ) {
-        self.on_autocomplete_next = Some(Rc::new(callback));
-    }
-
-    pub fn set_on_autocomplete_previous(
-        &mut self,
-        callback: impl Fn(&mut App) + 'static,
-        _cx: &mut Context<Self>,
-    ) {
-        self.on_autocomplete_previous = Some(Rc::new(callback));
-    }
-
-    pub fn set_on_autocomplete_confirm(
-        &mut self,
-        callback: impl Fn(&mut App) + 'static,
-        _cx: &mut Context<Self>,
-    ) {
-        self.on_autocomplete_confirm = Some(Rc::new(callback));
-    }
-
-    pub fn set_on_autocomplete_dismiss(
-        &mut self,
-        callback: impl Fn(&mut App) + 'static,
-        _cx: &mut Context<Self>,
-    ) {
-        self.on_autocomplete_dismiss = Some(Rc::new(callback));
     }
 
     /// Replace the staged-image list the card paints.
     ///
     /// Idempotent: the app re-derives attachments every frame, so writing an
-    /// equal list must not notify or the card would keep itself dirty forever.
-    /// An empty list is compared by length rather than by `Rc` identity, because
-    /// the store hands back a fresh `Rc` for "no attachments" each time.
-    pub fn set_attachments(
-        &mut self,
-        attachments: Rc<Vec<ImageAttachment>>,
-        cx: &mut Context<Self>,
-    ) {
+    /// equal list must not count as a change. An empty list is compared by
+    /// length rather than by `Rc` identity, because the store hands back a
+    /// fresh `Rc` for "no attachments" each time.
+    pub fn set_attachments(&mut self, attachments: Rc<Vec<ImageAttachment>>) -> bool {
         let unchanged = self.attachments.len() == attachments.len()
             && (attachments.is_empty() || Rc::ptr_eq(&self.attachments, &attachments));
         if unchanged {
-            return;
+            return false;
         }
         self.attachments = attachments;
-        cx.notify();
+        true
     }
 
-    /// Push the current @-file / slash-command popup, rebuilt each frame by the
-    /// app from the prompt's caret position.
-    ///
-    /// Idempotent for the same reason as [`Self::set_attachments`]: the popup is
-    /// rebuilt every frame, so only a change in its *content* may notify. `None`
-    /// compares equal to `None`, which is the steady state before typing.
-    pub fn set_autocomplete(
-        &mut self,
-        autocomplete: Option<AutocompleteView>,
-        cx: &mut Context<Self>,
-    ) {
+    /// Replace the popup. Returns whether it actually changed, so the caller
+    /// can skip a notify. `None` compares equal to `None`, which is the steady
+    /// state before typing.
+    pub fn set_autocomplete(&mut self, autocomplete: Option<AutocompleteView>) -> bool {
         let next_key = autocomplete.as_ref().map(AutocompleteView::content_key);
         if next_key == self.autocomplete_key {
-            return;
+            return false;
         }
         self.autocomplete_key = next_key;
         self.autocomplete = autocomplete;
-        cx.notify();
+        true
     }
 
     /// Re-seed the thinking controls. Called when the chosen model changes,
@@ -481,20 +254,12 @@ impl FloatingComposer {
         &mut self,
         level: Option<ThinkingLevel>,
         supported: Vec<ThinkingLevel>,
-        cx: &mut Context<Self>,
     ) {
         self.thinking_level = match level {
             Some(current) if supported.contains(&current) => Some(current),
             _ => supported.first().copied(),
         };
         self.supported_thinking_levels = supported;
-        cx.notify();
-    }
-
-    /// The prompt field, so the app can drive the card's autocomplete against
-    /// it the same way it does for a pane's composer.
-    pub fn input(&self) -> &Entity<ComposerInput> {
-        &self.input
     }
 
     /// The project the card currently targets, used to scope @-file search.
@@ -503,19 +268,31 @@ impl FloatingComposer {
         self.projects.iter().find(|project| project.id == id)
     }
 
-    /// Hand the card a freshly fetched branch list, for after a project switch.
-    /// The project itself is already set by `choose_project`; this only
-    /// delivers the refs, so the branch menu stops offering the previous
-    /// project's branches.
-    pub fn set_branches(&mut self, branches: Rc<Vec<GitBranchInfo>>, cx: &mut Context<Self>) {
-        self.branches = branches;
-        // The chosen base may not exist in the new project.
-        if let BranchChoice::FromBranch(name) = &self.branch {
-            if !self.branches.iter().any(|b| &b.name == name) {
-                self.branch = BranchChoice::default();
-            }
+    /// One frame of state for the view, cloned out so the view stays a plain
+    /// struct with no back-reference to the card.
+    ///
+    /// `model_search_query` is passed in rather than read here so this doesn't
+    /// need an `App`: the caller already has a context and reads that field
+    /// once for the model dropdown.
+    pub fn view_data(&self, model_search_query: String) -> FloatingComposerData {
+        FloatingComposerData {
+            projects: self.projects.clone(),
+            selected_project_id: self.selected_project_id.clone(),
+            branches: self.branches.clone(),
+            branch: self.branch.clone(),
+            providers: self.providers.clone(),
+            models_by_provider: self.models_by_provider.clone(),
+            favorites: self.favorites.clone(),
+            selected_model: self.selected_model.clone(),
+            picker_tab: self.picker_tab.clone(),
+            model_search_query,
+            thinking_level: self.thinking_level,
+            supported_thinking_levels: self.supported_thinking_levels.clone(),
+            attachments: self.attachments.clone(),
+            autocomplete: self.autocomplete.clone(),
+            submitting: self.submitting,
+            error: self.error.clone(),
         }
-        cx.notify();
     }
 
     /// Enter, or the Create button. Requires a project and a non-empty prompt.
@@ -523,18 +300,14 @@ impl FloatingComposer {
     /// Enter is claimed by autocomplete while its popup is open — accepting a
     /// highlighted suggestion is the expected meaning there, so submitting on
     /// Enter would launch a session with a half-typed `@query`.
-    pub(super) fn submit(&mut self, text: String, cx: &mut Context<Self>) {
+    pub fn submit(&mut self, text: String, cx: &mut App) -> Option<FloatingSubmit> {
         if !self.open || self.submitting || self.autocomplete.is_some() {
-            return;
+            return None;
         }
         if text.trim().is_empty() {
-            return;
+            return None;
         }
-        let Some(project_id) = self.selected_project_id.clone() else {
-            self.error = Some("Pick a project first".into());
-            cx.notify();
-            return;
-        };
+        let project_id = self.selected_project_id.clone()?;
         let cwd = self
             .projects
             .iter()
@@ -556,49 +329,47 @@ impl FloatingComposer {
         self.submitting = true;
         self.error = None;
         self.autocomplete = None;
-        cx.notify();
-        if let Some(on_submit) = self.on_submit.clone() {
-            on_submit(submit, cx);
-        }
+        self.autocomplete_key = None;
+        Some(submit)
     }
 
-    pub(super) fn choose_project(&mut self, id: String, cx: &mut Context<Self>) {
-        self.selected_project_id = Some(id.clone());
+    /// Show an error inside the card. The card stays open so the prompt the
+    /// user typed isn't lost to a failed request.
+    pub fn set_error(&mut self, error: Option<String>) {
+        self.error = error;
+        self.submitting = false;
+    }
+
+    pub fn choose_project(&mut self, id: String) {
+        self.selected_project_id = Some(id);
         // An existing-branch base belongs to the previous project, so drop it
-        // here rather than waiting for the app to push a new branch list.
+        // here rather than waiting for a fresh branch list.
         if matches!(self.branch, BranchChoice::FromBranch(_)) {
             self.branch = BranchChoice::default();
         }
-        cx.notify();
-        if let Some(cb) = self.on_select_project.clone() {
-            cb(id, cx);
+    }
+
+    /// Hand the card a freshly fetched branch list, for after a project switch.
+    /// The project itself is already set by `choose_project`; this only
+    /// delivers the refs, so the branch menu stops offering the previous
+    /// project's branches.
+    pub fn set_branches(&mut self, branches: Rc<Vec<GitBranchInfo>>) {
+        self.branches = branches;
+        // The chosen base may not exist in the new project.
+        if let BranchChoice::FromBranch(name) = &self.branch
+            && !self.branches.iter().any(|b| &b.name == name)
+        {
+            self.branch = BranchChoice::default();
         }
     }
 
-    pub(super) fn choose_branch(&mut self, choice: BranchChoice, cx: &mut Context<Self>) {
-        self.branch = choice;
-        cx.notify();
-    }
-
-    pub(super) fn choose_model(&mut self, model: SelectedModel, cx: &mut Context<Self>) {
-        self.selected_model = Some(model.clone());
-        cx.notify();
-        if let Some(cb) = self.on_select_model.clone() {
-            cb(model, cx);
-        }
-    }
-
-    pub(super) fn choose_thinking(&mut self, level: ThinkingLevel, cx: &mut Context<Self>) {
-        self.thinking_level = Some(level);
-        cx.notify();
-        if let Some(cb) = self.on_select_thinking.clone() {
-            cb(level, cx);
-        }
-    }
-
-    /// A backdrop click closes the card. The choice is local to the card, so
-    /// there is no app round-trip — same as the command palette.
-    pub(super) fn on_scrim_click(&mut self, cx: &mut Context<Self>) {
-        self.hide(cx);
+    /// The model picker's tab changed. The card owns the active tab, so it has
+    /// to record it — otherwise the list keeps rendering the previous tab and
+    /// provider switching looks dead. The search box is cleared on switch to
+    /// match the docked picker, where a filter from the old tab would otherwise
+    /// hide the new provider's models.
+    pub fn set_picker_tab(&mut self, tab: PickerTab, cx: &mut App) {
+        self.picker_tab = tab;
+        self.model_search.update(cx, |input, cx| input.clear(cx));
     }
 }

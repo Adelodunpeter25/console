@@ -41,7 +41,8 @@ pub(crate) use file_mention_chip::{InlineFileMention, InlineFileMentionText};
 /// surface's keys.
 pub use floating_composer::init as init_floating_composer_keybindings;
 pub use floating_composer::{
-    BranchChoice, FloatingComposer, FloatingComposerView, FloatingSnapshot, FloatingSubmit,
+    BranchChoice, FloatingComposerData, FloatingComposerState, FloatingComposerView,
+    FloatingSnapshot, FloatingSubmit,
 };
 pub use global_search_panel::GlobalSearchPanel;
 pub use image_viewer::ImageViewerModal;
