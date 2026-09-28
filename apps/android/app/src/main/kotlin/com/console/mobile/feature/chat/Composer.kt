@@ -204,7 +204,7 @@ fun Composer(
                 },
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 8.dp)
+                    .padding(horizontal = 4.dp)
                     .heightIn(max = 120.dp),
                 textStyle = androidx.compose.ui.text.TextStyle(
                     color = ConsoleColors.TextPrimary,
@@ -232,7 +232,7 @@ fun Composer(
                 }
             } else {
                 Box(
-                    modifier = Modifier.size(30.dp).clip(CircleShape)
+                    modifier = Modifier.size(32.dp).clip(CircleShape)
                         .background(if (canSend) Color.White else Color.White.copy(alpha = 0.08f))
                         .clickable(enabled = canSend, onClickLabel = "Send") { onSend() },
                     contentAlignment = Alignment.Center,
