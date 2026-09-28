@@ -49,6 +49,10 @@ name = "model_picker_test"
 path = "tests/composer/model_picker_test.rs"
 
 [[test]]
+name = "floating_composer_test"
+path = "tests/composer/floating_composer_test.rs"
+
+[[test]]
 name = "keybindings_page_test"
 path = "tests/settings/keybindings_page_test.rs"
 

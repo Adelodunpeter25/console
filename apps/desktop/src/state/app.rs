@@ -9,7 +9,8 @@ use console_ui::markdown::render::TranscriptSelection;
 use console_ui::utils::SessionDateGroup;
 use console_ui::{
     CommandPalette, ComposerAttachmentPaste, ComposerEvent, ComposerInput, ContextMenuHandle,
-    GlobalSearchPanel, PickerTab, ProjectBrowsePalette, QuickOpenPalette, TranscriptView,
+    FloatingComposer, GlobalSearchPanel, PickerTab, ProjectBrowsePalette, QuickOpenPalette,
+    TranscriptView,
 };
 use gpui::{AppContext, Context, ListAlignment, ListState, Window, px};
 use std::cell::RefCell;
@@ -650,6 +651,7 @@ impl ConsoleDesktopApp {
                 .new(|cx| GlobalSearchPanel::new(client_for_palettes.clone(), window, cx)),
             project_browse_palette: cx
                 .new(|cx| ProjectBrowsePalette::new(client_for_palettes.clone(), window, cx)),
+            floating_composer: cx.new(|cx| FloatingComposer::new(window, cx)),
             terminals: std::collections::HashMap::new(),
             browser_views: std::collections::HashMap::new(),
             auth_status: None,

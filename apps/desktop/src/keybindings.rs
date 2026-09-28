@@ -166,8 +166,14 @@ pub fn init_handlers(cx: &mut App) {
     });
 
     cx.on_action(|_: &NewChat, cx| {
-        if let Some((_, app)) = crate::window::get_active_window(cx) {
-            app.update(cx, |this, cx| this.create_new_chat(cx));
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.open_floating_composer(window, cx));
+                    })
+                    .ok();
+            });
         }
     });
 

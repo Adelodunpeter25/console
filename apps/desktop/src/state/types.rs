@@ -12,8 +12,8 @@ use console_ui::markdown::render::TranscriptSelection;
 use console_ui::terminal::TerminalView;
 use console_ui::utils::SessionDateGroup;
 use console_ui::{
-    CommandPalette, ComposerInput, ContextMenuHandle, GlobalSearchPanel, PickerTab,
-    ProjectBrowsePalette, QuickOpenPalette, TranscriptView,
+    CommandPalette, ComposerInput, ContextMenuHandle, FloatingComposer, GlobalSearchPanel,
+    PickerTab, ProjectBrowsePalette, QuickOpenPalette, TranscriptView,
 };
 use gpui::{Entity, ListState, Subscription};
 use std::cell::RefCell;
@@ -321,6 +321,9 @@ pub struct ConsoleDesktopApp {
     pub global_search_panel: Entity<GlobalSearchPanel>,
     /// ⌘O remote directory browser / project picker.
     pub project_browse_palette: Entity<ProjectBrowsePalette>,
+    /// ⌘N launcher card: describe a task, pick project/branch/model/thinking,
+    /// and spin up the session that runs it.
+    pub floating_composer: Entity<FloatingComposer>,
     /// Live terminal surfaces keyed by terminal id. Tabs reference these via
     /// `WorkspaceTabConfig::Terminal { terminal_id }`.
     pub terminals: std::collections::HashMap<String, Entity<TerminalView>>,

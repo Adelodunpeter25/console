@@ -1415,6 +1415,7 @@ impl Render for ConsoleDesktopApp {
             .child(self.tab_palette.clone())
             .child(self.quick_open_palette.clone())
             .child(self.project_browse_palette.clone())
+            .child(self.floating_composer.clone())
             .child(self.global_search_panel.clone())
     }
 }

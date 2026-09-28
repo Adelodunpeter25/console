@@ -5,6 +5,7 @@ pub mod composer_view;
 pub mod copy_button;
 pub mod error_banner;
 pub mod file_mention_chip;
+pub mod floating_composer;
 pub mod global_search_panel;
 pub mod image_viewer;
 pub mod input;
@@ -33,6 +34,9 @@ pub use copy_button::{copy_button, copy_button_with_action};
 pub use error_banner::error_banner;
 pub use file_mention_chip::{
     FILE_MENTION_ICON_SIZE, FILE_MENTION_RADIUS, file_mention_chip, file_mention_colors,
+};
+pub use floating_composer::{
+    BranchChoice, FloatingComposer, FloatingComposerView, FloatingSnapshot, FloatingSubmit,
 };
 pub(crate) use file_mention_chip::{InlineFileMention, InlineFileMentionText};
 pub use global_search_panel::GlobalSearchPanel;
