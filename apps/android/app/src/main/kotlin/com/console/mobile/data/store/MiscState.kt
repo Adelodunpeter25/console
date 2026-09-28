@@ -7,6 +7,7 @@ import com.console.mobile.data.model.UsageReport
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.Serializable
 
 data class AuthState(
@@ -87,14 +88,25 @@ class TerminalStateHolder {
     private val _buffers = MutableStateFlow<Map<String, String>>(emptyMap())
     val buffers: StateFlow<Map<String, String>> = _buffers.asStateFlow()
 
-    fun ensure(record: TerminalRecord) { if (!_terminals.value.containsKey(record.id)) _terminals.value += (record.id to record) }
-    fun set(id: String, record: TerminalRecord) { _terminals.value += (id to record) }
-    fun patch(id: String, fn: (TerminalRecord) -> TerminalRecord) {
-        val cur = _terminals.value[id] ?: return
-        _terminals.value += (id to fn(cur).copy(revision = cur.revision + 1))
+    // Terminal frames arrive on OkHttp's WebSocket reader thread, so every
+    // mutation below must be atomic. A plain read-modify-write on `.value` can
+    // read a stale map and CAS it back over a concurrent update from another
+    // terminal's reader thread, silently dropping that chunk. `update` retries
+    // the transform on contention instead.
+    fun ensure(record: TerminalRecord) {
+        _terminals.update { if (it.containsKey(record.id)) it else it + (record.id to record) }
     }
-    fun remove(id: String) { _terminals.value -= id; _buffers.value -= id }
-    fun appendOutput(id: String, data: String) { _buffers.value += (id to ((_buffers.value[id] ?: "") + data)) }
+    fun set(id: String, record: TerminalRecord) { _terminals.update { it + (id to record) } }
+    fun patch(id: String, fn: (TerminalRecord) -> TerminalRecord) {
+        _terminals.update { m ->
+            val cur = m[id] ?: return@update m
+            m + (id to fn(cur).copy(revision = cur.revision + 1))
+        }
+    }
+    fun remove(id: String) { _terminals.update { it - id }; _buffers.update { it - id } }
+    fun appendOutput(id: String, data: String) {
+        _buffers.update { it + (id to ((it[id] ?: "") + data)) }
+    }
     fun findLive(projectId: String, cwd: String?): String? {
         val cands = _terminals.value.values.filter { it.projectId == projectId && (it.status == TerminalStatus.Spawning || it.status == TerminalStatus.Running) }
         if (cwd != null) cands.firstOrNull { it.cwd == cwd }?.let { return it.id }
