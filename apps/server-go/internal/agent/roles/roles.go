@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/opencode"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -49,6 +50,12 @@ func InferThinkingLevels(provider, modelID string) (levels []string, def string)
 	case "antigravity":
 		if strings.HasPrefix(modelID, "gemini-") || strings.HasPrefix(modelID, "claude-") {
 			return []string{"minimal", "low", "medium", "high"}, "low"
+		}
+	case "opencode":
+		// Zen publishes no capability metadata, so consult the curated table
+		// shared with the OpenCode catalog.
+		if levels := opencode.ThinkingLevelsFor(modelID); len(levels) > 0 {
+			return levels, "medium"
 		}
 	}
 	return nil, ""

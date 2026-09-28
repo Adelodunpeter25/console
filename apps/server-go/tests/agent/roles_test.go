@@ -146,16 +146,18 @@ func TestRunRejectsUnsupportedThinking(t *testing.T) {
 	}
 }
 
-func TestOpenCodeIgnoresStaleThinkingLevel(t *testing.T) {
+func TestOpenCodeStaleThinkingLevelOnUnsupportedModel(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	rec := &modelRecorder{mock: queueMock("ok")}
 	svc.Lookup = func(id string) (loop.Provider, error) { return rec, nil }
 	header := helpers.CreateRunSession(t, sessions)
+	// space-bunny-free declares no thinking levels, so a stale level from a
+	// previous provider must be discarded rather than failing the run.
 	hub, err := svc.StartRun(header.ID, run.Prompt{
 		Text:     "hi",
 		Provider: "opencode",
-		ModelID:  "muse-spark-1.3-contributor-free",
+		ModelID:  "space-bunny-free",
 		Thinking: "low",
 	})
 	if err != nil {
@@ -172,6 +174,92 @@ func TestOpenCodeIgnoresStaleThinkingLevel(t *testing.T) {
 		if level != "" {
 			t.Fatalf("thinking levels sent to OpenCode: %q", rec.thinkingLevels)
 		}
+	}
+}
+
+func TestOpenCodeForwardsDeclaredThinkingLevel(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	rec := &modelRecorder{mock: queueMock("ok")}
+	svc.Lookup = func(id string) (loop.Provider, error) { return rec, nil }
+	header := helpers.CreateRunSession(t, sessions)
+	// Muse Spark declares effort levels, so an explicit level must be honored.
+	hub, err := svc.StartRun(header.ID, run.Prompt{
+		Text:     "hi",
+		Provider: "opencode",
+		ModelID:  "muse-spark-1.3-contributor-free",
+		Thinking: "high",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	helpers.WaitSettled(t, hub)
+	if hub.Outcome != run.OutcomeDone {
+		t.Fatalf("outcome: %s", hub.Outcome)
+	}
+	if len(rec.thinkingLevels) == 0 {
+		t.Fatal("OpenCode turn was not started")
+	}
+	// The last turn is the main run; earlier entries are the title pass.
+	if got := rec.thinkingLevels[len(rec.thinkingLevels)-1]; got != "high" {
+		t.Fatalf("thinking levels sent to OpenCode: %q", rec.thinkingLevels)
+	}
+}
+
+func TestOpenCodeAppliesDefaultThinkingLevel(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	rec := &modelRecorder{mock: queueMock("ok")}
+	svc.Lookup = func(id string) (loop.Provider, error) { return rec, nil }
+	header := helpers.CreateRunSession(t, sessions)
+	// No explicit level: the model default must fill in.
+	hub, err := svc.StartRun(header.ID, run.Prompt{
+		Text:     "hi",
+		Provider: "opencode",
+		ModelID:  "muse-spark-1.3-contributor-free",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	helpers.WaitSettled(t, hub)
+	if hub.Outcome != run.OutcomeDone {
+		t.Fatalf("outcome: %s", hub.Outcome)
+	}
+	if len(rec.thinkingLevels) == 0 {
+		t.Fatal("OpenCode turn was not started")
+	}
+	// The last turn is the main run; earlier entries are the title pass.
+	if got := rec.thinkingLevels[len(rec.thinkingLevels)-1]; got != "medium" {
+		t.Fatalf("default thinking level: %q", rec.thinkingLevels)
+	}
+}
+
+func TestOpenCodeRejectsUnsupportedLevelOnSupportedModel(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	rec := &modelRecorder{mock: queueMock("ok")}
+	svc.Lookup = func(id string) (loop.Provider, error) { return rec, nil }
+	header := helpers.CreateRunSession(t, sessions)
+	// "max" is outside the Muse Spark vocabulary and must be rejected.
+	hub, err := svc.StartRun(header.ID, run.Prompt{
+		Text:     "hi",
+		Provider: "opencode",
+		ModelID:  "muse-spark-1.3-contributor-free",
+		Thinking: "max",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	helpers.WaitSettled(t, hub)
+	if len(rec.thinkingLevels) != 0 {
+		t.Fatalf("rejected run must not reach the provider: %q", rec.thinkingLevels)
+	}
+	loaded, err := sessions.Load(header.ID, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Messages) != 1 {
+		t.Fatalf("failed validation must persist only the user message: %d", len(loaded.Messages))
 	}
 }
 

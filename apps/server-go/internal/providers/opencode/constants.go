@@ -88,6 +88,42 @@ func IsResponsesModel(modelID string) bool {
 		strings.HasPrefix(modelID, "grok-")
 }
 
+// Zen publishes no reasoning metadata: GET /zen/v1/models returns only id,
+// object, created and owned_by for every model. Thinking support therefore has
+// to be a curated table rather than discovery-driven, mirroring
+// codex.CodexThinkingLevels and claude.ClaudeThinkingLevels.
+//
+// Level sets are the effort vocabularies the upstream models accept per
+// models.dev. Only free models are cataloged here, so the table covers the
+// Zen free lineup only; unknown ids deliberately resolve to no levels and keep
+// the existing "provider default" behaviour.
+var (
+	// museThinkingLevels covers Muse Spark 1.2 and 1.3, which share the same
+	// five-step effort vocabulary.
+	museThinkingLevels = []string{"minimal", "low", "medium", "high", "xhigh"}
+	// deepSeekThinkingLevels covers the DeepSeek V4 free lane, which offers
+	// effort levels on top of its native hybrid thinking toggle.
+	deepSeekThinkingLevels = []string{"low", "medium", "high", "xhigh"}
+)
+
+// defaultThinkingLevel is the effort used when a level-capable model receives
+// no explicit level. "medium" is the midpoint of every declared vocabulary, so
+// it is always a member of the level set it defaults for.
+const defaultThinkingLevel = "medium"
+
+// ThinkingLevelsFor reports the effort levels an OpenCode model accepts. It
+// returns nil for models with no tunable reasoning, which callers treat as
+// "unsupported" and fall back to the provider default.
+func ThinkingLevelsFor(modelID string) []string {
+	switch {
+	case strings.HasPrefix(modelID, "muse-"):
+		return museThinkingLevels
+	case strings.HasPrefix(modelID, "deepseek-"):
+		return deepSeekThinkingLevels
+	}
+	return nil
+}
+
 // SetCommonHeaders applies the public Zen identity used by model discovery
 // and inference. The compatibility gate is isolated here so it can be updated
 // without changing the agent loop.

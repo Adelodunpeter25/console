@@ -77,11 +77,7 @@ func FetchModels(ctx context.Context, client *http.Client, baseURL string) ([]ty
 		if contextWindow <= 0 {
 			contextWindow = DefaultContextWindow
 		}
-		out = append(out, types.Model{
-			ID:            id,
-			Provider:      "opencode",
-			ContextWindow: contextWindow,
-		})
+		out = append(out, newModel(id, contextWindow))
 	}
 	return out, nil
 }
@@ -105,11 +101,29 @@ func modelContextWindow(values ...any) int {
 func modelsForIDs(ids []string) []types.Model {
 	out := make([]types.Model, 0, len(ids))
 	for _, id := range ids {
-		out = append(out, types.Model{
-			ID:            id,
-			Provider:      "opencode",
-			ContextWindow: DefaultContextWindow,
-		})
+		out = append(out, newModel(id, DefaultContextWindow))
 	}
 	return out
+}
+
+// newModel builds a catalog entry, attaching thinking levels when the model
+// family has a known effort vocabulary. Sharing this constructor keeps the
+// offline fallback and the live discovery path in agreement about which models
+// expose a thinking level.
+func newModel(id string, contextWindow int) types.Model {
+	levels := ThinkingLevelsFor(id)
+	if len(levels) == 0 {
+		return types.Model{
+			ID:            id,
+			Provider:      "opencode",
+			ContextWindow: contextWindow,
+		}
+	}
+	return types.Model{
+		ID:              id,
+		Provider:        "opencode",
+		ContextWindow:   contextWindow,
+		ThinkingLevels:  levels,
+		DefaultThinking: defaultThinkingLevel,
+	}
 }

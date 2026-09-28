@@ -208,6 +208,143 @@ func TestOpenCodeConversions(t *testing.T) {
 	}
 }
 
+func TestOpenCodeThinkingLevels(t *testing.T) {
+	if got := opencode.ThinkingLevelsFor("muse-spark-1.3-contributor-free"); len(got) != 5 {
+		t.Fatalf("muse levels: %#v", got)
+	}
+	if got := opencode.ThinkingLevelsFor("deepseek-v4-flash-free"); len(got) != 4 {
+		t.Fatalf("deepseek levels: %#v", got)
+	}
+	if got := opencode.ThinkingLevelsFor("space-bunny-free"); got != nil {
+		t.Fatalf("expected no levels for space-bunny, got %#v", got)
+	}
+	if got := opencode.ThinkingLevelsFor("longcat-2.5-preview-free"); got != nil {
+		t.Fatalf("expected no levels for longcat, got %#v", got)
+	}
+}
+
+func TestOpenCodeCatalogAttachesThinkingLevels(t *testing.T) {
+	for _, model := range opencode.DefaultModels() {
+		if len(model.ThinkingLevels) != 0 {
+			t.Fatalf("offline fallback should not invent levels: %#v", model)
+		}
+	}
+	t.Setenv("OPENCODE_USER_AGENT", opencode.DefaultUserAgent)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"id":"space-bunny-free"},{"id":"muse-spark-1.3-contributor-free"},{"id":"deepseek-v4-flash-free"}]}`))
+	}))
+	defer server.Close()
+
+	discovered, err := opencode.FetchModels(t.Context(), server.Client(), server.URL)
+	if err != nil {
+		t.Fatalf("fetch models: %v", err)
+	}
+	if len(discovered) != 3 {
+		t.Fatalf("discovered: %#v", discovered)
+	}
+	byID := map[string]int{}
+	for i, model := range discovered {
+		byID[model.ID] = i
+	}
+	if levels := discovered[byID["space-bunny-free"]].ThinkingLevels; levels != nil {
+		t.Fatalf("space bunny should have no levels: %#v", levels)
+	}
+	muse := discovered[byID["muse-spark-1.3-contributor-free"]]
+	if len(muse.ThinkingLevels) != 5 || muse.DefaultThinking != "medium" {
+		t.Fatalf("muse thinking: %#v", muse)
+	}
+	deepSeek := discovered[byID["deepseek-v4-flash-free"]]
+	if len(deepSeek.ThinkingLevels) != 4 || deepSeek.DefaultThinking != "medium" {
+		t.Fatalf("deepseek thinking: %#v", deepSeek)
+	}
+}
+
+func TestOpenCodeSendsThinkingLevelOnBothRoutes(t *testing.T) {
+	t.Setenv("OPENCODE_USER_AGENT", opencode.DefaultUserAgent)
+	t.Setenv("OPENCODE_SESSION_ID", "ses_test_thinking")
+	var chatBody, responsesBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/models":
+			_, _ = w.Write([]byte(`{"data":[{"id":"space-bunny-free"},{"id":"muse-spark-1.3-contributor-free"}]}`))
+		case "/chat/completions":
+			if err := json.NewDecoder(r.Body).Decode(&chatBody); err != nil {
+				t.Errorf("decode chat: %v", err)
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n"))
+			_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		case "/responses":
+			if err := json.NewDecoder(r.Body).Decode(&responsesBody); err != nil {
+				t.Errorf("decode responses: %v", err)
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = w.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	provider := &opencode.Provider{BaseURL: server.URL, HTTPClient: server.Client()}
+
+	if _, err := runOpenCodeTurn(provider, loop.TurnRequest{
+		Model:         "space-bunny-free",
+		Messages:      []any{loop.UserMessage{Role: loop.RoleUser, Content: "hi"}},
+		ThinkingLevel: "high",
+	}); err != nil {
+		t.Fatalf("chat turn: %v", err)
+	}
+	if chatBody["reasoning_effort"] != "high" {
+		t.Fatalf("chat reasoning_effort: %#v", chatBody)
+	}
+
+	if _, err := runOpenCodeTurn(provider, loop.TurnRequest{
+		Model:         "muse-spark-1.3-contributor-free",
+		Messages:      []any{loop.UserMessage{Role: loop.RoleUser, Content: "hi"}},
+		ThinkingLevel: "xhigh",
+	}); err != nil {
+		t.Fatalf("responses turn: %v", err)
+	}
+	reasoning, _ := responsesBody["reasoning"].(map[string]any)
+	if reasoning["effort"] != "xhigh" {
+		t.Fatalf("responses reasoning: %#v", responsesBody)
+	}
+}
+
+func TestOpenCodeOmitsThinkingWhenUnset(t *testing.T) {
+	t.Setenv("OPENCODE_USER_AGENT", opencode.DefaultUserAgent)
+	t.Setenv("OPENCODE_SESSION_ID", "ses_test_unset")
+	var chatBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/models":
+			_, _ = w.Write([]byte(`{"data":[{"id":"space-bunny-free"}]}`))
+		case "/chat/completions":
+			if err := json.NewDecoder(r.Body).Decode(&chatBody); err != nil {
+				t.Errorf("decode chat: %v", err)
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n"))
+			_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	provider := &opencode.Provider{BaseURL: server.URL, HTTPClient: server.Client()}
+	if _, err := runOpenCodeTurn(provider, loop.TurnRequest{
+		Model:    "space-bunny-free",
+		Messages: []any{loop.UserMessage{Role: loop.RoleUser, Content: "hi"}},
+	}); err != nil {
+		t.Fatalf("chat turn: %v", err)
+	}
+	if _, ok := chatBody["reasoning_effort"]; ok {
+		t.Fatalf("reasoning_effort should be omitted when unset: %#v", chatBody)
+	}
+}
+
 func openCodeToolDefinitions() []tools.Definition {
 	registry := tools.NewRegistry(tools.Glob, tools.Grep, tools.ReadFile, tools.EditFile, tools.Bash, tools.Ask)
 	return append(registry.Definitions(), tools.Definition{Name: "custom_tool", Description: "custom", InputSchema: map[string]any{"type": "object"}})

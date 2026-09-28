@@ -115,6 +115,12 @@ func (p *Provider) runChat(ctx context.Context, req loop.TurnRequest, events *st
 	if len(toolDefinitions) > 0 {
 		body["tools"] = ConvertChatTools(toolDefinitions)
 	}
+	// Chat Completions has no "reasoning" envelope, so the level travels in the
+	// standard effort field. This only fires for models the catalog declares
+	// levels for; everything else omits it and lets Zen choose.
+	if req.ThinkingLevel != "" {
+		body["reasoning_effort"] = req.ThinkingLevel
+	}
 	resp, err := p.postJSON(ctx, ChatCompletionsURL(p.baseURL()), req.ConversationID, body)
 	if err != nil {
 		return err
