@@ -44,6 +44,7 @@ fun ScreenHeader(
     showSettings: Boolean = false,
     onSettingsPress: (() -> Unit)? = null,
     actions: (@Composable RowScope.() -> Unit)? = null,
+    centerTitle: Boolean = true,
 ) {
     Box(
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
@@ -61,15 +62,15 @@ fun ScreenHeader(
             }
         }
         Column(
-            modifier = Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 56.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.align(if (centerTitle) Alignment.Center else Alignment.CenterStart).fillMaxWidth().padding(horizontal = if (centerTitle) 56.dp else 0.dp),
+            horizontalAlignment = if (centerTitle) Alignment.CenterHorizontally else Alignment.Start,
         ) {
             Text(
                 text = title,
                 color = ConsoleColors.TextPrimary,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
+                textAlign = if (centerTitle) TextAlign.Center else TextAlign.Start,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -78,7 +79,7 @@ fun ScreenHeader(
                     text = subtitle,
                     color = ConsoleColors.TextSecondary,
                     fontSize = 12.sp,
-                    textAlign = TextAlign.Center,
+                    textAlign = if (centerTitle) TextAlign.Center else TextAlign.Start,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
