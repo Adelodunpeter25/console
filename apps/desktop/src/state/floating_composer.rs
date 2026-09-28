@@ -123,6 +123,7 @@ impl ConsoleDesktopApp {
     pub fn floating_model_changed(&mut self, model: SelectedModel, cx: &mut Context<Self>) {
         let supported = self.supported_thinking_levels_for_model(Some(&model));
         let current = self.thinking_level;
+        self.floating_composer.selected_model = Some(model);
         self.floating_composer
             .set_thinking_context(current, supported);
         cx.notify();
