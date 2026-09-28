@@ -152,12 +152,12 @@ func TestOpenCodeStaleThinkingLevelOnUnsupportedModel(t *testing.T) {
 	rec := &modelRecorder{mock: queueMock("ok")}
 	svc.Lookup = func(id string) (loop.Provider, error) { return rec, nil }
 	header := helpers.CreateRunSession(t, sessions)
-	// space-bunny-free declares no thinking levels, so a stale level from a
-	// previous provider must be discarded rather than failing the run.
+	// longcat-2.5-preview-free declares no thinking levels, so a stale level
+	// from a previous provider must be discarded rather than failing the run.
 	hub, err := svc.StartRun(header.ID, run.Prompt{
 		Text:     "hi",
 		Provider: "opencode",
-		ModelID:  "space-bunny-free",
+		ModelID:  "longcat-2.5-preview-free",
 		Thinking: "low",
 	})
 	if err != nil {
@@ -174,6 +174,57 @@ func TestOpenCodeStaleThinkingLevelOnUnsupportedModel(t *testing.T) {
 		if level != "" {
 			t.Fatalf("thinking levels sent to OpenCode: %q", rec.thinkingLevels)
 		}
+	}
+}
+
+func TestOpenCodeForwardsSpaceBunnyMaxThinkingLevel(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	rec := &modelRecorder{mock: queueMock("ok")}
+	svc.Lookup = func(id string) (loop.Provider, error) { return rec, nil }
+	header := helpers.CreateRunSession(t, sessions)
+	// space-bunny-free tops out at "max" rather than "xhigh", so its vocabulary
+	// must not be conflated with the Muse Spark one.
+	hub, err := svc.StartRun(header.ID, run.Prompt{
+		Text:     "hi",
+		Provider: "opencode",
+		ModelID:  "space-bunny-free",
+		Thinking: "max",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	helpers.WaitSettled(t, hub)
+	if hub.Outcome != run.OutcomeDone {
+		t.Fatalf("outcome: %s", hub.Outcome)
+	}
+	if len(rec.thinkingLevels) == 0 {
+		t.Fatal("OpenCode turn was not started")
+	}
+	if got := rec.thinkingLevels[len(rec.thinkingLevels)-1]; got != "max" {
+		t.Fatalf("thinking levels sent to OpenCode: %q", rec.thinkingLevels)
+	}
+}
+
+func TestOpenCodeRejectsMuseOnlyMinimalForSpaceBunny(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	rec := &modelRecorder{mock: queueMock("ok")}
+	svc.Lookup = func(id string) (loop.Provider, error) { return rec, nil }
+	header := helpers.CreateRunSession(t, sessions)
+	// "minimal" belongs to the Muse Spark vocabulary and is not valid here.
+	hub, err := svc.StartRun(header.ID, run.Prompt{
+		Text:     "hi",
+		Provider: "opencode",
+		ModelID:  "space-bunny-free",
+		Thinking: "minimal",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	helpers.WaitSettled(t, hub)
+	if len(rec.thinkingLevels) != 0 {
+		t.Fatalf("rejected run must not reach the provider: %q", rec.thinkingLevels)
 	}
 }
 

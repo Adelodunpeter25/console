@@ -104,6 +104,10 @@ var (
 	// deepSeekThinkingLevels covers the DeepSeek V4 free lane, which offers
 	// effort levels on top of its native hybrid thinking toggle.
 	deepSeekThinkingLevels = []string{"low", "medium", "high", "xhigh"}
+	// spaceBunnyThinkingLevels is the Stealth model's own vocabulary. It runs
+	// up to "max" and has no "minimal" step, so it cannot share the Muse Spark
+	// set even though both models expose five levels.
+	spaceBunnyThinkingLevels = []string{"low", "medium", "high", "xhigh", "max"}
 )
 
 // defaultThinkingLevel is the effort used when a level-capable model receives
@@ -120,6 +124,8 @@ func ThinkingLevelsFor(modelID string) []string {
 		return museThinkingLevels
 	case strings.HasPrefix(modelID, "deepseek-"):
 		return deepSeekThinkingLevels
+	case modelID == "space-bunny-free":
+		return spaceBunnyThinkingLevels
 	}
 	return nil
 }

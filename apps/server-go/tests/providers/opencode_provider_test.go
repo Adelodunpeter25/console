@@ -215,8 +215,8 @@ func TestOpenCodeThinkingLevels(t *testing.T) {
 	if got := opencode.ThinkingLevelsFor("deepseek-v4-flash-free"); len(got) != 4 {
 		t.Fatalf("deepseek levels: %#v", got)
 	}
-	if got := opencode.ThinkingLevelsFor("space-bunny-free"); got != nil {
-		t.Fatalf("expected no levels for space-bunny, got %#v", got)
+	if got := opencode.ThinkingLevelsFor("space-bunny-free"); !reflect.DeepEqual(got, []string{"low", "medium", "high", "xhigh", "max"}) {
+		t.Fatalf("space bunny levels: %#v", got)
 	}
 	if got := opencode.ThinkingLevelsFor("longcat-2.5-preview-free"); got != nil {
 		t.Fatalf("expected no levels for longcat, got %#v", got)
@@ -224,9 +224,10 @@ func TestOpenCodeThinkingLevels(t *testing.T) {
 }
 
 func TestOpenCodeCatalogAttachesThinkingLevels(t *testing.T) {
+	// The offline fallback ships space-bunny-free, which now declares levels.
 	for _, model := range opencode.DefaultModels() {
-		if len(model.ThinkingLevels) != 0 {
-			t.Fatalf("offline fallback should not invent levels: %#v", model)
+		if len(model.ThinkingLevels) == 0 {
+			t.Fatalf("offline fallback lost its thinking levels: %#v", model)
 		}
 	}
 	t.Setenv("OPENCODE_USER_AGENT", opencode.DefaultUserAgent)
@@ -246,8 +247,8 @@ func TestOpenCodeCatalogAttachesThinkingLevels(t *testing.T) {
 	for i, model := range discovered {
 		byID[model.ID] = i
 	}
-	if levels := discovered[byID["space-bunny-free"]].ThinkingLevels; levels != nil {
-		t.Fatalf("space bunny should have no levels: %#v", levels)
+	if levels := discovered[byID["space-bunny-free"]].ThinkingLevels; !reflect.DeepEqual(levels, []string{"low", "medium", "high", "xhigh", "max"}) {
+		t.Fatalf("space bunny levels: %#v", levels)
 	}
 	muse := discovered[byID["muse-spark-1.3-contributor-free"]]
 	if len(muse.ThinkingLevels) != 5 || muse.DefaultThinking != "medium" {
