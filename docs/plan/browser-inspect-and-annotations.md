@@ -212,3 +212,60 @@ The agent is instructed to:
 - **Dynamic / Re-rendering Pages**: The highlight overlay uses CSS fixed positioning and recalculates on scroll or window resize.
 - **Sensitive Inputs**: Passwords and `data-private` input values are sanitized before creating the HTML snippet.
 - **Network / URL Changes**: If the user navigates away before attaching, the inspect session resets cleanly.
+
+---
+
+## 8. Status & Next Steps
+
+### 8.1 Done
+- Inspect toggle in the browser toolbar, plus `⌘⇧C` and `Esc` (exit).
+- `WebviewHost::evaluate_script` calls `WKWebView` directly (wry's queue never flushed because `ConsoleNavigationDelegate` replaces wry's delegate).
+- `inspector.js`: hover highlight that tracks scroll/resize, stays active after a pick, blocks page pointer events while inspecting, and re-creates its overlay if the page removes it.
+- On pick, IPC sends component name, source location, selector, 1KB HTML snippet, URL, title and bounds; `BrowserView` stores it as `active_inspection`.
+- `BrowserElementAnnotation` type exists in `console-core` (not yet used).
+
+### 8.2 Not done
+- Hover label lacks class names; pick lacks computed styles and accessibility role/name.
+- No shadow DOM or iframe support; no masking of password / `data-private` values in the snippet.
+- No element screenshot (`bgra_from_bitmap` exists but nothing captures a snapshot).
+- No annotation popover (`annotation_input` is created but never rendered); nothing consumes `active_inspection`.
+- Composer only stages `ImageAttachment`; no annotation chip, drafts, queue or persistence support.
+- Server (`/run`, queue, `UserMessage`) has no annotation field and no `<browser_annotation>` prompt block.
+- Vue/Svelte component names, and the agent `browser` tool (Phase 4), are out of scope for now.
+
+### 8.3 Decisions
+- Comment entry: floating popover anchored to the element.
+- Transport: proper `annotations` field on `/run`, stored on the user message and queued prompt, formatted server-side.
+- Extras in first pass: class names in label, accessibility info, shadow DOM/iframes, element screenshot, computed styles.
+- Agent `browser` tool: later.
+- Post-pick flow (proposed default): inspect pauses while the popover is open with the highlight frozen; Attach stages the chip and resumes inspect; `Esc` closes the popover first, a second `Esc` exits inspect mode.
+
+### 8.4 Plan (order: A → D → C → B)
+
+**A. Page script (`inspector.js`)**
+- Label: tag, id, first 2-3 classes, size.
+- Pick payload adds computed styles (display, position, size, margin, padding, color, background, font, border, radius, gap, flex/grid) and role + accessible name (`aria-label`, `aria-labelledby`, alt, visible text).
+- Shadow DOM: resolve the deepest element through open shadow roots; selectors cross roots.
+- iframes: inject in all frames; same-origin frames report bounds relative to the top page.
+- Mask password fields, `data-private` elements and input values in the snippet.
+
+**D. Server (`server-go`, shared types)**
+- Add `annotations: []BrowserAnnotation` (camelCase) to `/run` body, `run.Prompt`, `QueuedPrompt` (new DB column via `db/schema.go`, like `contextFiles`) and `loop.UserMessage`.
+- `materializeUserMessage` appends one `<browser_annotation>` block per annotation (Section 5 format plus role/name and styles); stored message stays clean.
+- Annotation screenshot is appended as an `ImageAttachment` at materialize time; skipped when the model lacks image support (`run/turns.go`).
+- Count annotations in `agent/loop/breakdown.go` and `agent/compaction/tokens.go`.
+- Update `packages/types` so CLI/mobile stay compatible.
+- Tests under `tests/`: materialize formatting, JSON round-trip, queue save/restore.
+
+**C. Desktop popover and composer chip**
+- `BrowserView` shows a popover next to the picked element: thumbnail, `<Component /> • file:line`, comment input (`annotation_input`), Esc / Attach.
+- The popover overlaps the native webview, so it counts as an open overlay and reuses the existing snapshot-freeze occlusion path.
+- `BrowserView` emits `BrowserAnnotationAttached(BrowserElementAnnotation)`; the app stages it for the active pane (sidebar and workspace-tab browsers).
+- Add `annotations: HashMap<pane, Vec<BrowserElementAnnotation>>` beside `attachments` (avoids turning the image list into a mixed enum); thread through drafts, queued runs and the persistence store.
+- Chip: `Component • file:line ✕` with hover preview (thumbnail + comment). Show chips on sent user messages too.
+
+**B. Element screenshot (`host.rs`)**
+- `takeSnapshotWithConfiguration` cropped to the element bounds, encoded PNG, downscaled to <= 32KB, delivered asynchronously after the pick; popover shows a placeholder until it arrives.
+
+### 8.5 Open Questions
+- Confirm the post-pick flow above before building Phase C.
