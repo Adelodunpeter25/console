@@ -119,9 +119,19 @@ func (t *typedTool[I]) Execute(ctx context.Context, arguments json.RawMessage) (
 	return t.run(ctx, input)
 }
 
+// RawSchemaTool is a Tool whose input schema is arbitrary JSON (e.g. an MCP
+// server's inputSchema) rather than one derived from a Go struct.
+type RawSchemaTool interface {
+	Tool
+	RawSchema() map[string]any
+}
+
 // SchemaMap renders the schema as the JSON-serializable map providers expect
 // ({"type":"object","properties":...,"required":[...]}).
 func SchemaMap(t Tool) (map[string]any, error) {
+	if raw, ok := t.(RawSchemaTool); ok {
+		return raw.RawSchema(), nil
+	}
 	raw, err := json.Marshal(t.Schema())
 	if err != nil {
 		return nil, err

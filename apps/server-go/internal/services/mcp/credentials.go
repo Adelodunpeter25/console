@@ -30,6 +30,10 @@ type Credential struct {
 	AccessToken  string `json:"accessToken,omitempty"`
 	RefreshToken string `json:"refreshToken,omitempty"`
 	ExpiresAt    int64  `json:"expiresAt,omitempty"`
+
+	// oauth2 refresh material, so a restart can refresh without a browser.
+	TokenURL     string `json:"tokenUrl,omitempty"`
+	ClientSecret string `json:"clientSecret,omitempty"`
 }
 
 type credentialFile struct {

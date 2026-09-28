@@ -14,7 +14,27 @@ the rest discoverable on demand — same idea Task 4.4 `lazy_tools` already cove
 our side). That shapes the priority order below: remote HTTP + OAuth ships before
 stdio, because that's what the flagship use case actually needs.
 
-Target layout: `apps/server-go/internal/agent/mcp/`
+Target layout: `apps/server-go/internal/services/mcp/` (as built)
+
+## Implementation status
+
+Phases 1–5 are implemented (built on the official `modelcontextprotocol/go-sdk`); Phase 6
+is partly done (HTTP API only, no desktop UI yet).
+
+- `config.go` / `credentials.go`: `~/.console/mcp-servers.json` and `mcp-credentials.json` (0600).
+- `client.go`: streamable HTTP and stdio transports, tool list/call, static Authorization header.
+- `oauth.go` / `browser.go`: SDK `AuthorizationCodeHandler` (discovery, dynamic registration, PKCE),
+  loopback callback listener, browser opener, token persistence + silent refresh.
+- `manager.go`: lazy per-server connection, status (`needs_auth` exposes `authUrl`), reconnect on demand.
+- `adapter.go`: `mcp__<server>__<tool>` tools, tier resolution (override, readOnly hint, name prefix,
+  default write) and the `loadTools` tool (`group: "mcp:<serverId>"`).
+- `tools.Registry.Add` appends tools mid-run without disturbing the earlier prefix; the agent loop
+  re-reads `Agent.ToolDefs` each turn.
+- Routes in `internal/routes/mcp.go` under `/api/mcp/*` (servers CRUD, connect, disconnect, reset-auth).
+- Tests: `apps/server-go/tests/mcp/`.
+
+Known gaps: no desktop UI, no `probe` endpoint, `loadTools` is only offered when at least one
+enabled server exists at run start, and the system prompt does not yet mention MCP groups.
 
 ---
 

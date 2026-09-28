@@ -6,6 +6,7 @@ package run
 import (
 	"context"
 	"errors"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	"log/slog"
 	"sync"
 	"time"
@@ -60,6 +61,7 @@ type Service struct {
 	bashJobs  *services.BashJobManager
 	ports     *services.PortRegistry
 	scripts   *services.ProjectScriptsService
+	mcp       *mcp.Manager
 	prompts   promptCache
 	// snapshots holds pre-write file content for whole-file overwrite tools
 	// (write_file, batchWrite), keyed by session then path. Populated just
@@ -143,6 +145,19 @@ func (s *Service) projectScriptsService() *services.ProjectScriptsService {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.scripts
+}
+
+// SetMCP attaches the MCP manager backing the per-run loadTools tool.
+func (s *Service) SetMCP(m *mcp.Manager) {
+	s.mu.Lock()
+	s.mcp = m
+	s.mu.Unlock()
+}
+
+func (s *Service) mcpManager() *mcp.Manager {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.mcp
 }
 
 func (s *Service) notifier() *services.NotificationService {

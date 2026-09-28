@@ -17,6 +17,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/usage"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 )
 
 type Config struct {
@@ -75,6 +76,9 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	runSvc.SetBashJobs(bashJobs)
 	runSvc.SetPorts(cfg.Ports)
 	runSvc.SetProjectScripts(scriptsSvc)
+	mcpManager := mcp.NewManager(mcp.NewConfigStore(""), mcp.NewCredentialStore(""), nil)
+	runSvc.SetMCP(mcpManager)
+	registerMCPRoutes(app, mcpManager)
 	registerSessionRoutes(app, services.NewSessionService(cfg.DB), runSvc)
 	registerWorktreeRoutes(app, services.NewSessionService(cfg.DB), services.NewWorktreeService())
 	fffManager := fff.NewManager()
@@ -102,6 +106,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 		ptyManager.KillAll()
 		scriptsSvc.StopAll()
 		fffManager.CloseAll()
+		mcpManager.CloseAll()
 	}
 	return app, runSvc, shutdown
 }

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	"log/slog"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
@@ -313,6 +314,14 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 		Usage:        usage,
 	}))
 	registry := tools.NewRegistry(toolList...)
+	// MCP servers load lazily: only a small loadTools entry is in the list
+	// until the model asks for a group, which then appends that server's
+	// tools (visible from the next turn via agent.ToolDefs).
+	if m := s.mcpManager(); m != nil {
+		if lt := mcp.NewLoadToolsTool(m, registry); lt != nil {
+			registry.Add(lt)
+		}
+	}
 	executor := loop.NewExecutor(registry, mode, s.decisions.ApproverFor(sessionID, hub))
 	// Capture the pre-write content of every file a whole-file overwrite
 	// tool is about to touch, so the change diff recorded from the result
@@ -322,6 +331,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	}
 	agent := loop.New(provider, executor, s.sessions)
 	agent.Usage = usage
+	agent.ToolDefs = registry.Definitions
 	agent.SystemPrompt = prompt.StableSystem
 	agent.Setup = prompt.Setup
 	agent.SystemSections = systemSections(prompt.Sections)

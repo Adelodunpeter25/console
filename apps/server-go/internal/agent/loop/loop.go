@@ -40,6 +40,10 @@ type TurnRequest struct {
 	BaseURL string
 	// CacheRetention controls prompt-cache behavior ("short"|"long"|"none").
 	CacheRetention CacheRetention
+	// ToolDefs, when set, supplies the provider tool list at the start of
+	// every turn (lazy tool groups can grow it mid-run). Nil keeps the
+	// list passed to Run.
+	ToolDefs func() []tools.Definition
 	// ConversationID is the stable per-conversation session id reused
 	// across turns to keep the provider's prompt cache warm.
 	ConversationID string
@@ -102,19 +106,19 @@ const (
 )
 
 type Event struct {
-	Kind       EventKind                 `json:"kind"`
-	Text       string                    `json:"text,omitempty"`
-	Call       *tools.ToolCall           `json:"call,omitempty"`
-	Result     *tools.ToolResult         `json:"result,omitempty"`
-	StopReason StopReason                `json:"stopReason,omitempty"`
-	Message    any                       `json:"message,omitempty"`
-	Usage      *TurnUsage                `json:"usage,omitempty"`
-	Ask        *tools.AskQuestionRequest `json:"ask,omitempty"`
+	Kind       EventKind                   `json:"kind"`
+	Text       string                      `json:"text,omitempty"`
+	Call       *tools.ToolCall             `json:"call,omitempty"`
+	Result     *tools.ToolResult           `json:"result,omitempty"`
+	StopReason StopReason                  `json:"stopReason,omitempty"`
+	Message    any                         `json:"message,omitempty"`
+	Usage      *TurnUsage                  `json:"usage,omitempty"`
+	Ask        *tools.AskQuestionRequest   `json:"ask,omitempty"`
 	Browser    *tools.BrowserActionRequest `json:"browser,omitempty"`
-	Permission *permissions.Request      `json:"permission,omitempty"`
-	Queued     *types.QueuedPrompt       `json:"queuedPrompt,omitempty"`
-	Title      string                    `json:"title,omitempty"`
-	Subagent   any                       `json:"subagent,omitempty"`
+	Permission *permissions.Request        `json:"permission,omitempty"`
+	Queued     *types.QueuedPrompt         `json:"queuedPrompt,omitempty"`
+	Title      string                      `json:"title,omitempty"`
+	Subagent   any                         `json:"subagent,omitempty"`
 	// Items/Action carry the session todo list for EventTodoUpdate.
 	Items  []types.TodoItem `json:"items,omitempty"`
 	Action string           `json:"action,omitempty"`
@@ -160,7 +164,11 @@ type Agent struct {
 	SystemPrompt string
 	// Setup, when set, is sent as a leading <setup> user message before the
 	// conversation on every turn. It is never persisted or compacted.
-	Setup          string
+	Setup string
+	// ToolDefs, when set, supplies the provider tool list at the start of
+	// every turn (lazy tool groups can grow it mid-run). Nil keeps the
+	// list passed to Run.
+	ToolDefs       func() []tools.Definition
 	Model          string
 	CacheRetention CacheRetention
 	ConversationID string
@@ -212,6 +220,10 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 	history = MaterializeHistory(history)
 	history = append(history, MaterializeUserMessage(user))
 	for {
+		if a.ToolDefs != nil {
+			// Re-read each turn so lazily loaded tool groups become visible.
+			toolsList = a.ToolDefs()
+		}
 		assistant, err := a.turn(ctx, sessionID, history, toolsList, events)
 		if err != nil {
 			events.Fail(err)
