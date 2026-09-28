@@ -116,6 +116,21 @@ func (s *AuthService) GetLoginURL() (LoginURL, error) {
 
 // GetLoginURLFor starts a PKCE login for a provider.
 func (s *AuthService) GetLoginURLFor(provider string) (LoginURL, error) {
+	if provider == "antigravity" {
+		state, err := newAntigravityStateToken()
+		if err != nil {
+			return LoginURL{}, err
+		}
+		authURL, redirectURI := antigravity.AuthorizationURL(state)
+		s.mu.Lock()
+		if s.pending == nil {
+			s.pending = map[string]pendingLogin{}
+		}
+		s.sweepLocked()
+		s.pending[state] = pendingLogin{redirectURI: redirectURI, expiresAt: time.Now().Add(pendingTTL)}
+		s.mu.Unlock()
+		return LoginURL{Provider: "antigravity", AuthURL: authURL, State: state, RedirectURI: redirectURI}, nil
+	}
 	state, err := newStateToken()
 	if err != nil {
 		return LoginURL{}, err
@@ -174,6 +189,17 @@ func (s *AuthService) HandleCallbackFor(provider, code, state string) (CallbackR
 	if !ok {
 		return CallbackResult{}, fmt.Errorf("OAuth state is invalid or expired.")
 	}
+	if provider == "antigravity" {
+		configuredProjectID := antigravity.GetConfiguredProjectID()
+		credential, err := antigravity.CompleteAuthFlowWithCode(nil, code, configuredProjectID)
+		if err != nil {
+			return CallbackResult{}, err
+		}
+		if err := antigravity.SaveCredential(credential); err != nil {
+			return CallbackResult{}, err
+		}
+		return CallbackResult{Provider: "antigravity", UserEmail: credential.Email}, nil
+	}
 	if provider == "claude" {
 		credential, err := s.exchangeClaude(code, state, pending.verifier, pending.redirectURI)
 		if err != nil {
@@ -194,6 +220,22 @@ func (s *AuthService) HandleCallbackFor(provider, code, state string) (CallbackR
 	return CallbackResult{Provider: "codex", UserEmail: credential.Email}, nil
 }
 
+// GetProjectID returns the configured project ID for a provider.
+func (s *AuthService) GetProjectID(provider string) (string, error) {
+	if provider != "antigravity" {
+		return "", fmt.Errorf("Invalid provider.")
+	}
+	return antigravity.GetConfiguredProjectID(), nil
+}
+
+// SetProjectID persists the configured project ID for a provider.
+func (s *AuthService) SetProjectID(provider, projectID string) error {
+	if provider != "antigravity" {
+		return fmt.Errorf("Invalid provider.")
+	}
+	return antigravity.SetConfiguredProjectID(projectID)
+}
+
 // sweepLocked drops expired states. Caller must hold s.mu.
 func (s *AuthService) sweepLocked() {
 	now := time.Now()
@@ -206,6 +248,15 @@ func (s *AuthService) sweepLocked() {
 
 func newStateToken() (string, error) {
 	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// newAntigravityStateToken mirrors login.ts randomBytes(16).toString("hex").
+func newAntigravityStateToken() (string, error) {
+	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
