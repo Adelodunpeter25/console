@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -74,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
+import com.console.mobile.core.icons.getProviderIconKey
 import com.console.mobile.core.util.ComposerTrigger
 import com.console.mobile.core.util.detectComposerTrigger
 import com.console.mobile.core.util.formatModelName
@@ -85,6 +87,7 @@ import com.console.mobile.data.model.ProjectInfo
 import com.console.mobile.data.model.SlashCommandInfo
 import com.console.mobile.data.model.UpdateSessionDto
 import com.console.mobile.ui.components.ImagePreviewDialog
+import com.console.mobile.ui.components.ProviderIcon
 import com.console.mobile.ui.components.attachmentBytes
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
@@ -339,7 +342,7 @@ private fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean) {
             }
         }
         item {
-            PickerChip(icon = Icons.Filled.SmartToy, label = modelLabel, modifier = Modifier.padding(end = 8.dp)) {
+            PickerChip(icon = Icons.Filled.SmartToy, label = modelLabel, provider = view?.sessionProvider, modifier = Modifier.padding(end = 8.dp)) {
                 AppContainer.providerRepository.loadProviders()
                 modelSheet = true
             }
@@ -384,12 +387,16 @@ private fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean) {
 }
 
 @Composable
-private fun PickerChip(icon: ImageVector, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun PickerChip(icon: ImageVector, label: String, modifier: Modifier = Modifier, provider: String? = null, onClick: () -> Unit) {
     Row(
         modifier = modifier.clip(RoundedCornerShape(8.dp)).background(ConsoleColors.CardAlt).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(8.dp)).clickable { onClick() }.padding(horizontal = 9.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(13.dp))
+        if (provider != null && getProviderIconKey(provider) != null) {
+            ProviderIcon(provider = provider, sizeDp = 13)
+        } else {
+            Icon(icon, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(13.dp))
+        }
         Text(label, color = ConsoleColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 5.dp))
     }
 }
@@ -454,8 +461,11 @@ private fun ModelPickerSheet(selectedModel: String?, selectedProvider: String?, 
             } else if (filtered.isEmpty()) {
                 Text(if (search.isNotEmpty()) "No matching models found" else "No models available", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 32.dp))
             } else {
-                Column {
-                    filtered.take(100).forEach { m ->
+                // The list must own the remaining sheet height and scroll within it.
+                // A plain Column here grew past the sheet on long provider lists
+                // (antigravity) with no way to reach the overflow items.
+                LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                    items(filtered.take(100), key = { it.id }) { m ->
                         val sel = m.id == selectedModel
                         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp).clip(RoundedCornerShape(12.dp)).background(if (sel) ConsoleColors.CardAlt else Color.Transparent).border(1.dp, if (sel) ConsoleColors.Border else Color.Transparent, RoundedCornerShape(12.dp)).clickable { onSelect(m.id, activeProvider) }.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
