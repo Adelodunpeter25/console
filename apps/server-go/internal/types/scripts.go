@@ -28,6 +28,7 @@ type ScriptRun struct {
 	StartedAt  string          `json:"startedAt"`
 	EndedAt    *string         `json:"endedAt"`
 	ExitCode   *int            `json:"exitCode"`
+	Signal     *string         `json:"signal,omitempty"`
 	Stdout     string          `json:"stdout"`
 	Stderr     string          `json:"stderr"`
 }
@@ -40,5 +41,6 @@ type ScriptRunEvent struct {
 	Stream string `json:"stream,omitempty"` // stdout | stderr
 	Text   string `json:"text,omitempty"`
 	// exit event
-	ExitCode *int `json:"exitCode,omitempty"`
+	ExitCode *int    `json:"exitCode,omitempty"`
+	Signal   *string `json:"signal,omitempty"`
 }

@@ -14,6 +14,7 @@ import (
 type mockPortsProvider struct {
 	ports       []types.ClientPort
 	forwardFunc func(port int, projectID string) (types.ClientPort, error)
+	listening   []int
 }
 
 func (m *mockPortsProvider) List(host, projectID string) []types.ClientPort {
@@ -36,6 +37,20 @@ func (m *mockPortsProvider) Forward(port int, projectID string) (types.ClientPor
 		}
 	}
 	return types.ClientPort{}, fmt.Errorf("Port %d is not listening.", port)
+}
+
+func (m *mockPortsProvider) Unforward(port int, projectID string) bool {
+	for i, p := range m.ports {
+		if p.Port == port && (p.ProjectID == nil || *p.ProjectID == projectID) {
+			m.ports = append(m.ports[:i], m.ports[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+func (m *mockPortsProvider) DetectListening() []int {
+	return m.listening
 }
 
 func TestPortsTool_Unavailable(t *testing.T) {

@@ -346,12 +346,14 @@ func (s *ProjectScriptsService) Stop(projectID, runID string) bool {
 			_ = run.process.Process.Kill()
 		}
 	}
+	sig := "SIGTERM"
+	run.Signal = &sig
 	run.Status = "stopped"
 	ended := nowISO()
 	run.EndedAt = &ended
 	run.mu.Unlock()
 
-	run.publish(types.ScriptRunEvent{Type: "exit", Status: "stopped"})
+	run.publish(types.ScriptRunEvent{Type: "exit", Status: "stopped", Signal: &sig})
 	run.mu.Lock()
 	run.subscribers = make(map[chan types.ScriptRunEvent]bool)
 	run.mu.Unlock()

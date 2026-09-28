@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
@@ -22,6 +24,7 @@ type projectScriptsInput struct {
 	Action   string `json:"action" jsonschema:"required,enum=list,enum=start,enum=stop,enum=status,description=Action to perform on project scripts."`
 	ScriptID string `json:"script_id,omitempty" jsonschema:"description=Script ID from console.toml (e.g.\\, 'dev'\\, 'build'\\, 'test') for 'start' or 'status'."`
 	RunID    string `json:"run_id,omitempty" jsonschema:"description=Specific run ID to stop or inspect (used with 'stop' or 'status')."`
+	WaitMs   int    `json:"wait_ms,omitempty" jsonschema:"description=Optional duration in milliseconds to wait for initial output / readiness after starting (max 10000ms)."`
 }
 
 func NewProjectScriptsTool(projectID string, provider ProjectScriptsProvider) Tool {
@@ -57,11 +60,31 @@ func NewProjectScriptsTool(projectID string, provider ProjectScriptsProvider) To
 				if err != nil {
 					return nil, NewToolError("Failed to start script '%s': %v", input.ScriptID, err)
 				}
+
+				if input.WaitMs > 0 {
+					waitMs := input.WaitMs
+					if waitMs > 10000 {
+						waitMs = 10000
+					}
+					time.Sleep(time.Duration(waitMs) * time.Millisecond)
+					if updated := provider.GetRun(projectID, run.RunID); updated != nil {
+						run = *updated
+					}
+				}
+
 				data, err := json.MarshalIndent(run, "", "  ")
 				if err != nil {
 					return nil, NewToolError("Failed to format script run: %v", err)
 				}
-				return textResult(fmt.Sprintf("Script '%s' started successfully (run_id: %s):\n%s", input.ScriptID, run.RunID, string(data))), nil
+				var sb strings.Builder
+				sb.WriteString(fmt.Sprintf("Script '%s' started successfully (run_id: %s):\n%s", input.ScriptID, run.RunID, string(data)))
+				if run.Stdout != "" {
+					sb.WriteString(fmt.Sprintf("\n\n--- stdout ---\n%s", run.Stdout))
+				}
+				if run.Stderr != "" {
+					sb.WriteString(fmt.Sprintf("\n\n--- stderr ---\n%s", run.Stderr))
+				}
+				return textResult(sb.String()), nil
 
 			case "stop":
 				if input.RunID == "" && input.ScriptID == "" {
@@ -97,7 +120,15 @@ func NewProjectScriptsTool(projectID string, provider ProjectScriptsProvider) To
 					if err != nil {
 						return nil, NewToolError("Failed to format run status: %v", err)
 					}
-					return textResult(string(data)), nil
+					var sb strings.Builder
+					sb.WriteString(string(data))
+					if run.Stdout != "" {
+						sb.WriteString(fmt.Sprintf("\n\n--- stdout ---\n%s", run.Stdout))
+					}
+					if run.Stderr != "" {
+						sb.WriteString(fmt.Sprintf("\n\n--- stderr ---\n%s", run.Stderr))
+					}
+					return textResult(sb.String()), nil
 				}
 
 				runs := provider.ListRuns(projectID)
@@ -109,6 +140,9 @@ func NewProjectScriptsTool(projectID string, provider ProjectScriptsProvider) To
 						}
 					}
 					runs = filtered
+					if len(runs) == 0 {
+						return textResult(fmt.Sprintf("No runs found for script '%s'.", input.ScriptID)), nil
+					}
 				}
 
 				if len(runs) == 0 {

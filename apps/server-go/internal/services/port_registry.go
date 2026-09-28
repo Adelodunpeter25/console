@@ -32,6 +32,14 @@ var (
 	osc8Pattern      = regexp.MustCompile("\x1b]8;[^\x1b\x07]*?(?:\x07|\x1b\\\\)([\\s\\S]*?)\x1b]8;[^\x1b\x07]*?(?:\x07|\x1b\\\\)")
 	oscPattern       = regexp.MustCompile("\x1b][^\x07]*(?:\x07|\x1b\\\\)")
 	csiPattern       = regexp.MustCompile("\x1b\\[[0-?]*[ -/]*[@-~]")
+
+	defaultCandidatePorts = []int{
+		3000, 3001, 3002, 3003, 3004, 3005, 3008,
+		4000, 4001, 4173, 4200, 4321,
+		5000, 5001, 5173, 5174, 5175,
+		8000, 8001, 8080, 8081, 8088, 8888,
+		9000, 9001, 9090, 10000,
+	}
 )
 
 type PortOwner struct {
@@ -298,6 +306,48 @@ func (r *PortRegistry) Remove(port int, projectID string) bool {
 	}
 	r.notify()
 	return true
+}
+
+// Unforward tears down a forwarded port tunnel/proxy for the given project.
+func (r *PortRegistry) Unforward(port int, projectID string) bool {
+	return r.Remove(port, projectID)
+}
+
+// DetectListening scans common dev ports and known entries for active localhost listeners.
+func (r *PortRegistry) DetectListening() []int {
+	seen := make(map[int]bool)
+	for _, p := range defaultCandidatePorts {
+		seen[p] = true
+	}
+	r.mu.Lock()
+	for p := range r.entries {
+		seen[p] = true
+	}
+	r.mu.Unlock()
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var active []int
+
+	for p := range seen {
+		wg.Add(1)
+		go func(port int) {
+			defer wg.Done()
+			if isListening(port) {
+				mu.Lock()
+				active = append(active, port)
+				mu.Unlock()
+			}
+		}(p)
+	}
+	wg.Wait()
+
+	for i := 1; i < len(active); i++ {
+		for j := i; j > 0 && active[j] < active[j-1]; j-- {
+			active[j], active[j-1] = active[j-1], active[j]
+		}
+	}
+	return active
 }
 
 // RemoveOwner drops every entry owned by a terminal/job and bumps its epoch
