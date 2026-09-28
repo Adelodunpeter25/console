@@ -12,51 +12,35 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
-func TestBrowserTool_HeadlessDefaults(t *testing.T) {
+func TestBrowserTool_UnboundFailsExplicitly(t *testing.T) {
 	tool := tools.NewBrowserTool(nil)
 
 	// navigate
 	args := helpers.MustJSONRaw(t, map[string]any{"action": "navigate", "url": "http://localhost:3000"})
-	res, err := tool.Execute(context.Background(), args)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	text := resultText(t, res)
-	if !strings.Contains(text, "Navigated to http://localhost:3000") {
-		t.Fatalf("unexpected output: %s", text)
+	_, err := tool.Execute(context.Background(), args)
+	if err == nil || !strings.Contains(err.Error(), "Desktop browser is unavailable") {
+		t.Fatalf("expected unavailable error, got %v", err)
 	}
 
 	// run_js
 	args = helpers.MustJSONRaw(t, map[string]any{"action": "run_js", "script": "document.title"})
-	res, err = tool.Execute(context.Background(), args)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	text = resultText(t, res)
-	if !strings.Contains(text, "Evaluated script: document.title") {
-		t.Fatalf("unexpected output: %s", text)
+	_, err = tool.Execute(context.Background(), args)
+	if err == nil || !strings.Contains(err.Error(), "Desktop browser is unavailable") {
+		t.Fatalf("expected unavailable error, got %v", err)
 	}
 
 	// screenshot
 	args = helpers.MustJSONRaw(t, map[string]any{"action": "screenshot"})
-	res, err = tool.Execute(context.Background(), args)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	text = resultText(t, res)
-	if !strings.Contains(text, "Screenshot captured") {
-		t.Fatalf("unexpected output: %s", text)
+	_, err = tool.Execute(context.Background(), args)
+	if err == nil || !strings.Contains(err.Error(), "Desktop browser is unavailable") {
+		t.Fatalf("expected unavailable error, got %v", err)
 	}
 
 	// get_content
 	args = helpers.MustJSONRaw(t, map[string]any{"action": "get_content"})
-	res, err = tool.Execute(context.Background(), args)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	text = resultText(t, res)
-	if !strings.Contains(text, "Page content retrieved") {
-		t.Fatalf("unexpected output: %s", text)
+	_, err = tool.Execute(context.Background(), args)
+	if err == nil || !strings.Contains(err.Error(), "Desktop browser is unavailable") {
+		t.Fatalf("expected unavailable error, got %v", err)
 	}
 }
 

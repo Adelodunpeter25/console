@@ -109,6 +109,7 @@ impl ConsoleDesktopApp {
             }
 
             "get_content" => {
+                let selector = req.selector.clone();
                 let view = target_url
                     .as_deref()
                     .and_then(|u| self.find_matching_browser_view(u, cx))
@@ -117,7 +118,10 @@ impl ConsoleDesktopApp {
                 if let Some(view) = view {
                     let page_title = view.read(cx).tab_label().unwrap_or_default();
                     let current_url = view.read(cx).current_url().unwrap_or_default();
-                    let summary = format!("Title: {}\nURL: {}", page_title, current_url);
+                    let mut summary = format!("Title: {}\nURL: {}", page_title, current_url);
+                    if let Some(sel) = selector.as_deref().filter(|s| !s.trim().is_empty()) {
+                        summary.push_str(&format!("\nSelector: {}\nTarget element query active.", sel.trim()));
+                    }
                     self.resolve_browser_action_result(
                         &sess_id,
                         request_id,

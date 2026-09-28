@@ -3,7 +3,6 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
@@ -34,21 +33,6 @@ type browserInput struct {
 	Selector string `json:"selector,omitempty" jsonschema:"description=Optional CSS selector for targeted inspection or DOM query."`
 }
 
-func headlessBrowserResult(in browserInput) string {
-	switch in.Action {
-	case "navigate":
-		return fmt.Sprintf("[Browser (Headless)]: Navigated to %s", in.URL)
-	case "run_js":
-		return fmt.Sprintf("[Browser (Headless)]: Evaluated script: %s", in.Script)
-	case "screenshot":
-		return "[Browser (Headless)]: Screenshot captured."
-	case "get_content":
-		return "[Browser (Headless)]: Page content retrieved."
-	default:
-		return fmt.Sprintf("[Browser (Headless)]: Action %s executed.", in.Action)
-	}
-}
-
 // NewBrowserTool builds the "browser" tool bound to handler.
 func NewBrowserTool(handler BrowserHandler) Tool {
 	return NewTool(
@@ -73,7 +57,7 @@ func NewBrowserTool(handler BrowserHandler) Tool {
 			}
 
 			if handler == nil {
-				return textResult(headlessBrowserResult(in)), nil
+				return nil, NewToolError("Desktop browser is unavailable (no desktop client connected). Use webFetch or webSearch instead.")
 			}
 
 			req := BrowserActionRequest{
@@ -96,5 +80,5 @@ func NewBrowserTool(handler BrowserHandler) Tool {
 	)
 }
 
-// Browser is the unbound default instance used by DefaultTools() (headless).
+// Browser is the unbound default instance used by DefaultTools() (unbound/headless).
 var Browser = NewBrowserTool(nil)
