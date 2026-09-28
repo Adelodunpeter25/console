@@ -49,6 +49,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Scroll position to restore after older messages are prepended. */
+private data class ListAnchor(
+    val index: Int,
+    val offset: Int,
+    val sizeBefore: Int,
+)
+
 /**
  * Port of screens/chat/chat-screen.tsx.
  * Header (title + files/changes/terminal shortcuts) → message list with run
@@ -148,8 +155,11 @@ fun ChatScreen(
         onOpenTab(tab)
     }
 
-    // Auto-follow while streaming.
-    LaunchedEffect(chat.streamingText.length, chat.streamingThinking.length, messages.size, chat.activeToolCalls.size) {
+    // Auto-follow while streaming. Keyed on the latest message's id rather than
+    // the message count: a pagination prepend changes the count without adding
+    // anything new at the bottom, and must not yank the user to the end.
+    val latestMessageId = messages.lastOrNull()?.id
+    LaunchedEffect(chat.streamingText.length, chat.streamingThinking.length, latestMessageId, chat.activeToolCalls.size) {
         if (chat.running || isStreaming) {
             try { listState.animateScrollToItem(maxOf(0, displayMessages.size - 1)) } catch (_: Exception) {}
         }
@@ -163,6 +173,46 @@ fun ChatScreen(
     }
     val displaySize = displayMessages.size
     val showScrollBottom = lastVisibleIndex >= 0 && lastVisibleIndex < displaySize - 1 && displaySize > 2
+
+    // --- Older-message pagination -------------------------------------------
+    // Opening a session only fetches the newest page, so the user scrolls to
+    // the top to walk backwards through history. Derived as a Boolean: a
+    // LaunchedEffect key needs a stable type, and a raw index would relaunch
+    // on every single index change.
+    val atTop = listState.firstVisibleItemIndex <= 0
+
+    // Prepended rows push everything down, so the view would visibly lurch
+    // when the page lands. Snapshot which row the user was looking at plus the
+    // list size at that moment; once the size grows, shift by exactly the
+    // number of new rows and the same message stays under their thumb.
+    var anchor by remember(sessionId) { mutableStateOf<ListAnchor?>(null) }
+    // Set when a page fails, so the effect below doesn't spin retrying against a
+    // failing backend while the user sits at the top. Deliberately not a key:
+    // writing it must not relaunch this effect. Leaving the top re-arms it.
+    var autoLoadBlocked by remember(sessionId) { mutableStateOf(false) }
+
+    LaunchedEffect(atTop, chat.hasMoreMessages, chat.loadingOlder) {
+        if (!atTop) {
+            autoLoadBlocked = false
+            return@LaunchedEffect
+        }
+        if (autoLoadBlocked || !chat.hasMoreMessages || chat.loadingOlder || displaySize <= 0) return@LaunchedEffect
+        anchor = ListAnchor(
+            index = listState.firstVisibleItemIndex,
+            offset = listState.firstVisibleItemScrollOffset,
+            sizeBefore = displaySize,
+        )
+        if (!AppContainer.sessionRepository.loadOlder(sessionId)) autoLoadBlocked = true
+    }
+
+    LaunchedEffect(displaySize) {
+        val a = anchor ?: return@LaunchedEffect
+        val delta = displaySize - a.sizeBefore
+        if (delta > 0) {
+            try { listState.scrollToItem(a.index + delta, a.offset) } catch (_: Exception) {}
+        }
+        anchor = null
+    }
 
     Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
         ScreenHeader(
