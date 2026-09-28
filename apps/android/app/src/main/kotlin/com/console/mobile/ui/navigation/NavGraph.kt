@@ -21,6 +21,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.console.mobile.AppContainer
+import com.console.mobile.core.notification.NotificationPermissionRequest
 import com.console.mobile.feature.changes.ChangesScreen
 import com.console.mobile.feature.chat.ChatScreen
 import com.console.mobile.feature.files.FilesScreen
@@ -54,6 +55,9 @@ fun AppNavGraph() {
         ConfirmDialogHost()
         return
     }
+
+    // Past the onboarding gate, so we only ask once a backend is connected.
+    NotificationPermissionRequest()
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     var pendingChatNav by remember { mutableStateOf<String?>(null) }

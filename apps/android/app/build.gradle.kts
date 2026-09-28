@@ -97,7 +97,9 @@ android {
 
     packaging {
         resources {
-            pickFirsts += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+            // The former "META-INF/versions/9/OSGI-INF/MANIFEST.MF" pickFirst was
+            // removed with bcprov-jdk18on, which was the only jar in this graph
+            // shipping that path. Re-add a pickFirst here if that ever changes.
         }
     }
 
@@ -167,7 +169,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.security:security-crypto:1.1.0")
-    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
 
     // WebView for Mermaid/markdown fallbacks
     implementation("androidx.webkit:webkit:1.12.1")
