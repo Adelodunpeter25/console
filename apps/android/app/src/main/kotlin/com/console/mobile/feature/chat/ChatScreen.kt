@@ -158,15 +158,6 @@ fun ChatScreen(
         onOpenTab(tab)
     }
 
-    // Auto-follow while streaming. Keyed on the latest message's id rather than
-    // the message count: a pagination prepend changes the count without adding
-    // anything new at the bottom, and must not yank the user to the end.
-    val latestMessageId = messages.lastOrNull()?.id
-    LaunchedEffect(chat.streamingText.length, chat.streamingThinking.length, latestMessageId, chat.activeToolCalls.size) {
-        if (chat.running || isStreaming) {
-            try { listState.animateScrollToItem(maxOf(0, displayMessages.size - 1)) } catch (_: Exception) {}
-        }
-    }
     // Only the scroll position belongs in derivedStateOf — it's the one thing here
     // that is snapshot-tracked. displayMessages is a plain local recomputed each
     // composition, so reading it inside a remembered derived state froze the
@@ -176,6 +167,19 @@ fun ChatScreen(
     }
     val displaySize = displayMessages.size
     val showScrollBottom = lastVisibleIndex >= 0 && lastVisibleIndex < displaySize - 1 && displaySize > 2
+
+    // Auto-follow while streaming. Keyed on the latest message's id rather than
+    // the message count: a pagination prepend changes the count without adding
+    // anything new at the bottom, and must not yank the user to the end. Gated on
+    // !showScrollBottom so it stops fighting the user the moment they scroll up
+    // (e.g. to reread earlier tool-call output) instead of yanking them back down
+    // on the next streamed chunk.
+    val latestMessageId = messages.lastOrNull()?.id
+    LaunchedEffect(chat.streamingText.length, chat.streamingThinking.length, latestMessageId, chat.activeToolCalls.size) {
+        if ((chat.running || isStreaming) && !showScrollBottom) {
+            try { listState.animateScrollToItem(maxOf(0, displayMessages.size - 1)) } catch (_: Exception) {}
+        }
+    }
 
     // Opening a session lands on the newest page, so the list has to be jumped
     // to the bottom once that page arrives. The streaming auto-follow above
