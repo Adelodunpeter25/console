@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -26,6 +27,9 @@ import com.console.mobile.ui.theme.ConsoleColors
 /**
  * Port of components/layout/screen-header.tsx.
  * Title (22sp bold) + optional subtitle, back button, settings + headerActions.
+ * The title column centers its content, so short titles sit in the middle of
+ * the available space instead of hugging the back button — while the Row
+ * structure guarantees long titles ellipsize before ever reaching the actions.
  * Safe-area is handled by the Scaffold / WindowInsets — no manual paddingTop.
  */
 @Composable
@@ -37,6 +41,7 @@ fun ScreenHeader(
     showSettings: Boolean = false,
     onSettingsPress: (() -> Unit)? = null,
     actions: (@Composable RowScope.() -> Unit)? = null,
+    centerTitle: Boolean = true,
 ) {
     Row(
         modifier = modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -54,12 +59,16 @@ fun ScreenHeader(
                 }
             }
         }
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = if (centerTitle) Alignment.CenterHorizontally else Alignment.Start,
+        ) {
             Text(
                 text = title,
                 color = ConsoleColors.TextPrimary,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
+                textAlign = if (centerTitle) TextAlign.Center else TextAlign.Start,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -68,6 +77,7 @@ fun ScreenHeader(
                     text = subtitle,
                     color = ConsoleColors.TextSecondary,
                     fontSize = 12.sp,
+                    textAlign = if (centerTitle) TextAlign.Center else TextAlign.Start,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

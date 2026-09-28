@@ -193,33 +193,26 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         http.unwrapOrRaw(raw, JsonElement.serializer(), "delete dir")
     }
 
+    // These three deliberately do NOT swallow failures into a null/empty result.
+    // A null here used to be indistinguishable from "no changes", so a dead backend
+    // rendered as "The working tree is clean." Callers (ChangesScreen,
+    // GitRepository) already handle the throw.
+
     override suspend fun getDiff(repoPath: String, filePath: String?): String? {
         val params = mutableMapOf("repoPath" to repoPath)
         if (filePath != null) params["path"] = filePath
         val raw = http.get("/api/git/diff", params)
-        return try {
-            http.unwrap(raw, GitDiffResponse.serializer().nullable, "load diff")?.diff
-        } catch (_: Exception) {
-            null
-        }
+        return http.unwrap(raw, GitDiffResponse.serializer().nullable, "load diff")?.diff
     }
 
     override suspend fun getGitStatus(path: String): GitStatusSummary? {
         val raw = http.get("/api/git/status", mapOf("path" to path))
-        return try {
-            http.unwrap(raw, GitStatusSummary.serializer().nullable, "load git status")
-        } catch (_: Exception) {
-            null
-        }
+        return http.unwrap(raw, GitStatusSummary.serializer().nullable, "load git status")
     }
 
     override suspend fun listBranches(repoPath: String): GitBranchesResponse? {
         val raw = http.get("/api/git/branches", mapOf("path" to repoPath))
-        return try {
-            http.unwrap(raw, GitBranchesResponse.serializer().nullable, "list git branches")
-        } catch (_: Exception) {
-            null
-        }
+        return http.unwrap(raw, GitBranchesResponse.serializer().nullable, "list git branches")
     }
 
     override suspend fun checkoutBranch(repoPath: String, branch: String) {
@@ -238,11 +231,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
 
     override suspend fun getProviderModels(providerId: String): List<Model> {
         val raw = http.get("/api/providers/${enc(providerId)}/models")
-        return try {
-            http.unwrapOrRaw(raw, ProviderModelsResponse.serializer(), "list provider models").models
-        } catch (_: Exception) {
-            emptyList()
-        }
+        return http.unwrapOrRaw(raw, ProviderModelsResponse.serializer(), "list provider models").models
     }
 
     override suspend fun getApprovalModes(): List<ApprovalModeOption> {
@@ -288,22 +277,18 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         return http.unwrapOrRaw(raw, FileSearchResponse.serializer(), "assist search")
     }
 
+    // Same reasoning as the git endpoints: an empty/null usage result must mean
+    // "genuinely no usage", never "the request failed". UsageRepository already
+    // surfaces thrown ApiExceptions through UsageState.error.
+
     override suspend fun getProviderUsage(providerId: String): UsageReport? {
         val raw = http.get("/api/providers/${enc(providerId)}/usage")
-        return try {
-            http.unwrap(raw, UsageReport.serializer().nullable, "get usage for $providerId")
-        } catch (_: Exception) {
-            null
-        }
+        return http.unwrap(raw, UsageReport.serializer().nullable, "get usage for $providerId")
     }
 
     override suspend fun getAllUsage(): Map<String, UsageReport?> {
         val raw = http.get("/api/usage")
-        return try {
-            http.unwrap(raw, MapSerializer(String.serializer(), UsageReport.serializer().nullable), "get all usage")
-        } catch (_: Exception) {
-            emptyMap()
-        }
+        return http.unwrap(raw, MapSerializer(String.serializer(), UsageReport.serializer().nullable), "get all usage")
     }
 
     override suspend fun listFavorites(): List<ModelFavorite> {

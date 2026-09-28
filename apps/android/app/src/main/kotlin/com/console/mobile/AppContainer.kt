@@ -37,6 +37,8 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
@@ -276,22 +278,32 @@ object AppContainer {
         LocalNotificationPresenter.ensureChannelCreated(app)
 
         val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        // notifications() is a one-shot callbackFlow: the server closing the SSE
+        // connection (idle timeout, restart, brief network drop) completes the flow
+        // and collect() simply returns. Without this loop the app would go silent
+        // for the rest of the process lifetime, so reconnect with backoff.
         appScope.launch {
-            try {
-                notificationRepository.notifications().collect { event ->
-                    val viewingSame = appStateHolder.state.value.activeTab == MobileTab.Chat &&
-                        appStateHolder.state.value.selectedSessionId == event.sessionId
-                    if (!viewingSame) {
-                        LocalNotificationPresenter.showNotification(
-                            app,
-                            event.title,
-                            event.body,
-                            event.sessionId,
-                            event.subtitle,
-                        )
+            var backoffMs = 1_000L
+            while (isActive) {
+                try {
+                    notificationRepository.notifications().collect { event ->
+                        val viewingSame = appStateHolder.state.value.activeTab == MobileTab.Chat &&
+                            appStateHolder.state.value.selectedSessionId == event.sessionId
+                        if (!viewingSame) {
+                            LocalNotificationPresenter.showNotification(
+                                app,
+                                event.title,
+                                event.body,
+                                event.sessionId,
+                                event.subtitle,
+                            )
+                        }
                     }
+                    backoffMs = 1_000L // a clean end-of-stream shouldn't escalate
+                } catch (_: Exception) {
                 }
-            } catch (_: Exception) {
+                delay(backoffMs)
+                backoffMs = (backoffMs * 2).coerceAtMost(30_000L)
             }
         }
     }

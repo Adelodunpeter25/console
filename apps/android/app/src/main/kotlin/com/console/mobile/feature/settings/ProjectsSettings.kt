@@ -16,16 +16,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,13 +51,11 @@ import kotlinx.coroutines.withContext
 
 /**
  * Port of screens/settings/projects-settings.tsx + screens/projects/add-project-screen.tsx.
- * List with remove; add via bottom-sheet folder path entry + server browse.
+ * List with remove; "Add Folder" opens the full-screen folder picker.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProjectsSettings(onBack: () -> Unit) {
+fun ProjectsSettings(onBack: () -> Unit, onAddProject: () -> Unit) {
     val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
-    var showAdd by remember { mutableStateOf(false) }
     var busyId by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -72,7 +66,7 @@ fun ProjectsSettings(onBack: () -> Unit) {
             title = "Projects",
             onBack = onBack,
             actions = {
-                TextButton(onClick = { showAdd = true }) {
+                TextButton(onClick = onAddProject) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Add, contentDescription = null, tint = ConsoleColors.TextPrimary, modifier = Modifier.size(15.dp))
                         Text("Add Folder", color = ConsoleColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp))
@@ -87,6 +81,12 @@ fun ProjectsSettings(onBack: () -> Unit) {
                     Text("Loading projects…", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
                 }
             }
+        } else if (projectState.error != null && projectState.projects.isEmpty()) {
+            EmptyState(
+                title = "Couldn't load projects",
+                description = projectState.error ?: "Failed to load projects.",
+                icon = { Icon(Icons.Filled.Warning, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(32.dp)) },
+            )
         } else if (projectState.projects.isEmpty()) {
             EmptyState(title = "No project folders", description = "Add a project folder from your host filesystem to start creating sessions.", icon = { Icon(Icons.Filled.Folder, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(32.dp)) })
         } else {
@@ -108,9 +108,6 @@ fun ProjectsSettings(onBack: () -> Unit) {
             }
         }
     }
-    if (showAdd) {
-        AddProjectSheet(onClose = { showAdd = false })
-    }
 }
 
 @Composable
@@ -130,74 +127,6 @@ private fun ProjectRow(proj: ProjectInfo, busy: Boolean, onDelete: () -> Unit) {
         IconButton(onClick = onDelete, enabled = !busy, modifier = Modifier.size(32.dp)) {
             if (busy) CircularProgressIndicator(color = ConsoleColors.Destructive, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
             else Icon(Icons.Filled.Delete, contentDescription = "Remove", tint = ConsoleColors.Destructive, modifier = Modifier.size(14.dp))
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AddProjectSheet(onClose: () -> Unit) {
-    val scope = rememberCoroutineScope()
-    var path by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var browsePath by remember { mutableStateOf<String?>(null) }
-    var entries by remember { mutableStateOf<List<com.console.mobile.data.model.FsTreeEntry>>(emptyList()) }
-    var browsing by remember { mutableStateOf(false) }
-
-    ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = ConsoleColors.Background) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 40.dp)) {
-            Text("Add project folder", color = ConsoleColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 4.dp))
-            Text("Enter a folder path on your host filesystem. The server must be able to see it.", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(bottom = 16.dp))
-            OutlinedTextField(
-                value = path,
-                onValueChange = { path = it },
-                label = { Text("/home/user/projects/my-app") },
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = ConsoleColors.Card, unfocusedContainerColor = ConsoleColors.Card, focusedBorderColor = ConsoleColors.Border, unfocusedBorderColor = ConsoleColors.Border, focusedTextColor = ConsoleColors.TextPrimary, unfocusedTextColor = ConsoleColors.TextPrimary, cursorColor = ConsoleColors.TextPrimary),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            )
-            TextButton(
-                onClick = {
-                    busy = true
-                    scope.launch {
-                        try {
-                            withContext(Dispatchers.IO) { AppContainer.projectRepository.addProject(path.trim()) }
-                            onClose()
-                        } catch (e: Exception) {
-                            confirmAlert("Failed", e.message ?: "Unable to add project.")
-                        } finally { busy = false }
-                    }
-                },
-                enabled = path.isNotBlank() && !busy,
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (path.isNotBlank()) Color.White else Color.White.copy(alpha = 0.4f)).padding(vertical = 12.dp),
-            ) {
-                if (busy) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                else Text("Add folder", color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            }
-            TextButton(onClick = {
-                browsing = true
-                scope.launch {
-                    try {
-                        val res = withContext(Dispatchers.IO) { AppContainer.fsRepository.browseDirectory(browsePath) }
-                        browsePath = res.currentPath
-                        entries = res.entries
-                    } catch (e: Exception) {
-                        confirmAlert("Failed", e.message ?: "Unable to browse.")
-                    } finally { browsing = false }
-                }
-            }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                Text(if (browsing) "Browsing…" else "Browse server filesystem", color = ConsoleColors.TextSecondary, fontSize = 13.sp)
-            }
-            if (entries.isNotEmpty()) {
-                Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                    entries.filter { it.isDir }.take(20).forEach { e ->
-                        TextButton(onClick = { path = e.path }, modifier = Modifier.fillMaxWidth()) {
-                            Text(e.path, color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
-                        }
-                    }
-                }
-            }
         }
     }
 }

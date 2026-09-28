@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -74,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
+import com.console.mobile.core.icons.getProviderIconKey
 import com.console.mobile.core.util.ComposerTrigger
 import com.console.mobile.core.util.detectComposerTrigger
 import com.console.mobile.core.util.formatModelName
@@ -85,6 +87,7 @@ import com.console.mobile.data.model.ProjectInfo
 import com.console.mobile.data.model.SlashCommandInfo
 import com.console.mobile.data.model.UpdateSessionDto
 import com.console.mobile.ui.components.ImagePreviewDialog
+import com.console.mobile.ui.components.ProviderIcon
 import com.console.mobile.ui.components.attachmentBytes
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
@@ -120,6 +123,7 @@ fun Composer(
     val projectRoot = projectState.projects.firstOrNull { p -> sessionCwd != null && (p.path == sessionCwd || sessionCwd.startsWith(p.path + "/")) }?.path ?: sessionCwd
 
     var fieldValue by remember(sessionId) { mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length))) }
+    var visualLines by remember(sessionId) { mutableStateOf(1) }
     if (fieldValue.text != value) {
         fieldValue = fieldValue.copy(text = value, selection = TextRange(minOf(fieldValue.selection.start, value.length)))
     }
@@ -178,16 +182,20 @@ fun Composer(
         if (attachments.isNotEmpty()) {
             AttachmentStrip(sessionId = sessionId, attachments = attachments)
         }
+        // Rounded rect as soon as the bubble grows past one *visual* line.
+        // Keying off "\n" alone missed word-wrap, which adds no newline char,
+        // so wrapped text kept the pill while shift+enter flipped to the rect.
+        val bubbleShape = if (visualLines > 1) RoundedCornerShape(20.dp) else CircleShape
         Row(
-            modifier = Modifier.fillMaxWidth().clip(if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
+            modifier = Modifier.fillMaxWidth().clip(bubbleShape)
                 .background(ConsoleColors.Card)
-                .border(1.dp, ConsoleColors.Border, if (value.contains("\n")) RoundedCornerShape(20.dp) else CircleShape)
+                .border(1.dp, ConsoleColors.Border, bubbleShape)
                 .onGloballyPositioned { fieldCoordinates = it }
-                .padding(horizontal = 6.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.Bottom,
         ) {
             Box(
-                modifier = Modifier.size(34.dp).clip(CircleShape)
+                modifier = Modifier.size(37.dp).clip(CircleShape)
                     .clickable(onClickLabel = "Attach image") { pickImages.launch("image/*") },
                 contentAlignment = Alignment.Center,
             ) {
@@ -200,8 +208,9 @@ fun Composer(
                     onChange(new.text)
                 },
                 modifier = Modifier
+                    .align(Alignment.CenterVertically)
                     .weight(1f)
-                    .padding(horizontal = 8.dp)
+                    .padding(horizontal = 4.dp)
                     .heightIn(max = 120.dp),
                 textStyle = androidx.compose.ui.text.TextStyle(
                     color = ConsoleColors.TextPrimary,
@@ -210,6 +219,7 @@ fun Composer(
                 ),
                 cursorBrush = SolidColor(ConsoleColors.TextPrimary),
                 maxLines = 6,
+                onTextLayout = { visualLines = it.lineCount },
                 decorationBox = { innerTextField ->
                     Box(contentAlignment = Alignment.CenterStart) {
                         if (value.isEmpty()) {
@@ -220,16 +230,19 @@ fun Composer(
                 },
             )
             if (running) {
+                // Same 35dp footprint as the send button so the composer doesn't
+                // resize mid-send, and destructive red so the control's meaning
+                // is readable at a glance rather than only from a tiny glyph.
                 Box(
-                    modifier = Modifier.size(30.dp).clip(CircleShape).background(Color.White)
+                    modifier = Modifier.size(35.dp).clip(CircleShape).background(ConsoleColors.Destructive)
                         .clickable(onClickLabel = "Stop") { onStop() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Stop, contentDescription = null, tint = Color.Black, modifier = Modifier.size(12.dp))
+                    Icon(Icons.Filled.Stop, contentDescription = "Stop generating", tint = Color.Black, modifier = Modifier.size(14.dp))
                 }
             } else {
                 Box(
-                    modifier = Modifier.size(30.dp).clip(CircleShape)
+                    modifier = Modifier.size(35.dp).clip(CircleShape)
                         .background(if (canSend) Color.White else Color.White.copy(alpha = 0.08f))
                         .clickable(enabled = canSend, onClickLabel = "Send") { onSend() },
                     contentAlignment = Alignment.Center,
@@ -339,7 +352,7 @@ private fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean) {
             }
         }
         item {
-            PickerChip(icon = Icons.Filled.SmartToy, label = modelLabel, modifier = Modifier.padding(end = 8.dp)) {
+            PickerChip(icon = Icons.Filled.SmartToy, label = modelLabel, provider = view?.sessionProvider, modifier = Modifier.padding(end = 8.dp)) {
                 AppContainer.providerRepository.loadProviders()
                 modelSheet = true
             }
@@ -384,12 +397,16 @@ private fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean) {
 }
 
 @Composable
-private fun PickerChip(icon: ImageVector, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun PickerChip(icon: ImageVector, label: String, modifier: Modifier = Modifier, provider: String? = null, onClick: () -> Unit) {
     Row(
         modifier = modifier.clip(RoundedCornerShape(8.dp)).background(ConsoleColors.CardAlt).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(8.dp)).clickable { onClick() }.padding(horizontal = 9.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(13.dp))
+        if (provider != null && getProviderIconKey(provider) != null) {
+            ProviderIcon(provider = provider, sizeDp = 13)
+        } else {
+            Icon(icon, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(13.dp))
+        }
         Text(label, color = ConsoleColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 5.dp))
     }
 }
@@ -454,8 +471,11 @@ private fun ModelPickerSheet(selectedModel: String?, selectedProvider: String?, 
             } else if (filtered.isEmpty()) {
                 Text(if (search.isNotEmpty()) "No matching models found" else "No models available", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 32.dp))
             } else {
-                Column {
-                    filtered.take(100).forEach { m ->
+                // The list must own the remaining sheet height and scroll within it.
+                // A plain Column here grew past the sheet on long provider lists
+                // (antigravity) with no way to reach the overflow items.
+                LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                    items(filtered.take(100), key = { it.id }) { m ->
                         val sel = m.id == selectedModel
                         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp).clip(RoundedCornerShape(12.dp)).background(if (sel) ConsoleColors.CardAlt else Color.Transparent).border(1.dp, if (sel) ConsoleColors.Border else Color.Transparent, RoundedCornerShape(12.dp)).clickable { onSelect(m.id, activeProvider) }.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {

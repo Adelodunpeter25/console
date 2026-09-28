@@ -198,8 +198,11 @@ fun CodeViewer(
                 isHighlightCurrentBlock = false
                 isHighlightBracketPair = false
                 isCursorAnimationEnabled = false
-                isWordwrap = false
-                setPinLineNumber(true)
+                // Word-wrap instead of horizontal scroll: Sora's pinned line-number
+                // gutter doesn't anchor correctly against horizontal scroll (it
+                // shifts with the scroll offset and smears into the code text), and
+                // this is a read-only viewer where wrapping is an acceptable trade-off.
+                isWordwrap = true
                 setScrollBarEnabled(true)
                 tabWidth = 4
                 setText(code)

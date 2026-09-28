@@ -47,7 +47,7 @@ enum class SettingsSection { Connection, Account, Usage, Projects, DeletedChats 
  * Landing list → sub-screen. Back returns to list, then to home via onBackToHome.
  */
 @Composable
-fun SettingsScreen(onBackToHome: () -> Unit) {
+fun SettingsScreen(onBackToHome: () -> Unit, onAddProject: () -> Unit) {
     var section by remember { mutableStateOf<SettingsSection?>(null) }
     val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
 
@@ -65,7 +65,7 @@ fun SettingsScreen(onBackToHome: () -> Unit) {
             SettingsSection.Connection -> ConnectionSettings(onBack = { section = null })
             SettingsSection.Account -> AccountSettings(onBack = { section = null })
             SettingsSection.Usage -> UsageSettings(onBack = { section = null })
-            SettingsSection.Projects -> ProjectsSettings(onBack = { section = null })
+            SettingsSection.Projects -> ProjectsSettings(onBack = { section = null }, onAddProject = onAddProject)
             SettingsSection.DeletedChats -> DeletedChatsSettings(onBack = { section = null })
         }
     }

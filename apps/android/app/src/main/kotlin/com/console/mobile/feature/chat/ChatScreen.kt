@@ -42,12 +42,19 @@ import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.store.MobileTab
 import com.console.mobile.ui.components.ChatScreenSkeleton
+import com.console.mobile.ui.components.EdgeScrollIndicator
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+
+/** Scroll position to restore after older messages are prepended. */
+private data class ListAnchor(
+    val index: Int,
+    val offset: Int,
+    val sizeBefore: Int,
+)
 
 /**
  * Port of screens/chat/chat-screen.tsx.
@@ -84,14 +91,17 @@ fun ChatScreen(
     val listState = rememberLazyListState()
 
     // Load detail + hydrate todos/subagents on entry; attach to server run if working.
+    // The three fetches are independent, so they run concurrently instead of
+    // as three sequential round trips — that latency was most of the wait on
+    // opening a session.
     LaunchedEffect(sessionId) {
         loadingMessages = AppContainer.chatStateHolder.get(sessionId).messages.isEmpty()
-        withContext(Dispatchers.IO) {
-            try { AppContainer.sessionRepository.loadDetail(sessionId) } catch (_: Exception) {}
+        coroutineScope {
+            launch { AppContainer.sessionRepository.loadDetail(sessionId) }
+            launch { AppContainer.chatRepository.loadTodos(sessionId) }
+            launch { AppContainer.chatRepository.loadSubagents(sessionId) }
         }
         loadingMessages = false
-        AppContainer.chatRepository.loadTodos(sessionId)
-        AppContainer.chatRepository.loadSubagents(sessionId)
         val serverStatus = AppContainer.sessionStateHolder.statuses.value[sessionId]
         if (serverStatus == SessionStatus.Working) {
             AppContainer.chatRepository.attachServerRun(sessionId)
@@ -100,7 +110,9 @@ fun ChatScreen(
 
     val messages = chat.messages
     val displayMessages = visibleMessages(messages)
-    val runs = remember(messages) {
+    // Key on chat.runs too: turnEnd/turnStart/toolExecutionEnd mutate runs without
+    // touching messages, and those mutations drive status + elapsed time.
+    val runs = remember(messages, chat.runs) {
         if (chat.runs.isNotEmpty()) chat.runs else reconstructRuns(messages)
     }
     // Map user-message index → run (tool turns are filtered from display list).
@@ -146,17 +158,79 @@ fun ChatScreen(
         onOpenTab(tab)
     }
 
-    // Auto-follow while streaming.
-    LaunchedEffect(chat.streamingText.length, chat.streamingThinking.length, messages.size, chat.activeToolCalls.size) {
-        if (chat.running || isStreaming) {
+    // Only the scroll position belongs in derivedStateOf — it's the one thing here
+    // that is snapshot-tracked. displayMessages is a plain local recomputed each
+    // composition, so reading it inside a remembered derived state froze the
+    // thresholds at first composition and hid the button for the whole session.
+    val lastVisibleIndex by remember {
+        derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
+    }
+    val displaySize = displayMessages.size
+    val showScrollBottom = lastVisibleIndex >= 0 && lastVisibleIndex < displaySize - 1 && displaySize > 2
+
+    // Auto-follow while streaming. Keyed on the latest message's id rather than
+    // the message count: a pagination prepend changes the count without adding
+    // anything new at the bottom, and must not yank the user to the end. Gated on
+    // !showScrollBottom so it stops fighting the user the moment they scroll up
+    // (e.g. to reread earlier tool-call output) instead of yanking them back down
+    // on the next streamed chunk.
+    val latestMessageId = messages.lastOrNull()?.id
+    LaunchedEffect(chat.streamingText.length, chat.streamingThinking.length, latestMessageId, chat.activeToolCalls.size) {
+        if ((chat.running || isStreaming) && !showScrollBottom) {
             try { listState.animateScrollToItem(maxOf(0, displayMessages.size - 1)) } catch (_: Exception) {}
         }
     }
-    val showScrollBottom by remember {
-        derivedStateOf {
-            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-            last != null && last.index < displayMessages.size - 1 && displayMessages.size > 2
+
+    // Opening a session lands on the newest page, so the list has to be jumped
+    // to the bottom once that page arrives. The streaming auto-follow above
+    // can't do it: it's gated on an active run, and this case is an idle chat.
+    // Keyed on the message count so it fires exactly once per entry — a later
+    // prepend or append must not drag the user back down over their scroll.
+    var settledInitialPage by remember(sessionId) { mutableStateOf(false) }
+    LaunchedEffect(sessionId, displaySize) {
+        if (settledInitialPage || displaySize <= 0) return@LaunchedEffect
+        settledInitialPage = true
+        try { listState.scrollToItem(displaySize - 1) } catch (_: Exception) {}
+    }
+
+    // --- Older-message pagination -------------------------------------------
+    // Opening a session only fetches the newest page, so the user scrolls to
+    // the top to walk backwards through history. Derived as a Boolean: a
+    // LaunchedEffect key needs a stable type, and a raw index would relaunch
+    // on every single index change.
+    val atTop = listState.firstVisibleItemIndex <= 0
+
+    // Prepended rows push everything down, so the view would visibly lurch
+    // when the page lands. Snapshot which row the user was looking at plus the
+    // list size at that moment; once the size grows, shift by exactly the
+    // number of new rows and the same message stays under their thumb.
+    var anchor by remember(sessionId) { mutableStateOf<ListAnchor?>(null) }
+    // Set when a page fails, so the effect below doesn't spin retrying against a
+    // failing backend while the user sits at the top. Deliberately not a key:
+    // writing it must not relaunch this effect. Leaving the top re-arms it.
+    var autoLoadBlocked by remember(sessionId) { mutableStateOf(false) }
+
+    LaunchedEffect(atTop, chat.hasMoreMessages, chat.loadingOlder) {
+        if (!atTop) {
+            autoLoadBlocked = false
+            return@LaunchedEffect
         }
+        if (autoLoadBlocked || !chat.hasMoreMessages || chat.loadingOlder || displaySize <= 0) return@LaunchedEffect
+        anchor = ListAnchor(
+            index = listState.firstVisibleItemIndex,
+            offset = listState.firstVisibleItemScrollOffset,
+            sizeBefore = displaySize,
+        )
+        if (!AppContainer.sessionRepository.loadOlder(sessionId)) autoLoadBlocked = true
+    }
+
+    LaunchedEffect(displaySize) {
+        val a = anchor ?: return@LaunchedEffect
+        val delta = displaySize - a.sizeBefore
+        if (delta > 0) {
+            try { listState.scrollToItem(a.index + delta, a.offset) } catch (_: Exception) {}
+        }
+        anchor = null
     }
 
     Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
@@ -182,7 +256,8 @@ fun ChatScreen(
             when {
                 loadingMessages && !hasMessages -> ChatScreenSkeleton()
                 !hasMessages && !isStreaming -> EmptyState(title = "Start the conversation", description = "Ask anything about your project.", icon = { Icon(Icons.Filled.Message, contentDescription = null, tint = ConsoleColors.TextMuted) })
-                else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                else -> {
+                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                     itemsIndexed(displayMessages, key = { _, m -> m.id ?: "${m.createdAt}-$sessionId" }) { index, msg ->
                         MessageBubbleItem(item = msg)
                         val runIdx = userRunMap[index]
@@ -207,6 +282,11 @@ fun ChatScreen(
                             ToolActivityRow(name = call.name, isRunning = true, isError = false, detail = "Running")
                         }
                     }
+                    }
+                    EdgeScrollIndicator(
+                        state = listState,
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
+                    )
                 }
             }
             if (showScrollBottom) {

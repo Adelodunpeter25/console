@@ -5,7 +5,6 @@ import com.console.mobile.data.api.LoginUrlResult
 import com.console.mobile.data.model.AuthStatusShim
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
-import com.console.mobile.data.model.ProviderAuthStatus
 import com.console.mobile.data.store.AuthState
 import com.console.mobile.data.store.AuthStateHolder
 import kotlinx.coroutines.CoroutineScope
@@ -42,18 +41,10 @@ class AuthRepository(
                     ),
                 )
             } catch (e: Exception) {
-                authState.set(
-                    AuthState(
-                        status = mapOf(
-                            "antigravity" to ProviderAuthStatus(loggedIn = false),
-                            "codex" to ProviderAuthStatus(loggedIn = false),
-                            "devin" to ProviderAuthStatus(loggedIn = false),
-                            "claude" to ProviderAuthStatus(loggedIn = false),
-                        ),
-                        loading = false,
-                        error = e.message ?: "Failed to load auth status",
-                    ),
-                )
+                // Keep the last known status/projectIds. Overwriting them with
+                // all-loggedOut made one transient 500 look like every provider
+                // had been disconnected, and discarded a saved antigravity project.
+                authState.patch { it.copy(loading = false, error = e.message ?: "Failed to load auth status") }
             }
         }
     }

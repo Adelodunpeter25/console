@@ -21,7 +21,9 @@ fun finalizeSessionRun(session: ChatSessionState, hadError: Boolean, nowMs: Long
             elapsedMs = if (latest.startedAt != null) nowMs - latest.startedAt else latest.elapsedMs,
         )
     }
-    return session.copy(running = false, streamingText = "", streamingThinking = "", activeToolCalls = emptyList(), runs = runs)
+    return commitStreamingBuffer(
+        session.copy(running = false, activeToolCalls = emptyList(), runs = runs),
+    )
 }
 
 fun abortSessionRun(session: ChatSessionState, nowMs: Long = System.currentTimeMillis()): ChatSessionState {
@@ -35,5 +37,13 @@ fun abortSessionRun(session: ChatSessionState, nowMs: Long = System.currentTimeM
             )
         }
     }
-    return session.copy(running = false, streamingText = "", streamingThinking = "", pendingQuestions = emptyList(), pendingPermissions = emptyList(), activeToolCalls = emptyList(), runs = runs)
+    return commitStreamingBuffer(
+        session.copy(
+            running = false,
+            pendingQuestions = emptyList(),
+            pendingPermissions = emptyList(),
+            activeToolCalls = emptyList(),
+            runs = runs,
+        ),
+    )
 }

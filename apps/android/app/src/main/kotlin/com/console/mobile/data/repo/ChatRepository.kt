@@ -44,6 +44,13 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
+/**
+ * Stable identity for deduping a prepended page against messages already
+ * held. Prefers the server id and falls back to the timestamp, which is what
+ * the server injects for rows stored without one.
+ */
+private fun messageKey(m: AgentMessage): String = m.id ?: "t${m.createdAt ?: 0L}"
+
 class ChatRepository(
     private val api: ConsoleApi,
     private val apiClient: ConsoleApiClient,
@@ -161,6 +168,40 @@ class ChatRepository(
                 pendingPermissions = emptyList(),
                 runs = reconstructRuns(withIds),
             )
+        }
+    }
+
+    fun setPagination(sessionId: String, hasMore: Boolean, nextCursor: Long?) {
+        chats.update(sessionId) { it.copy(hasMoreMessages = hasMore, nextCursor = nextCursor) }
+    }
+
+    fun setLoadingOlder(sessionId: String, loading: Boolean) {
+        chats.update(sessionId) { it.copy(loadingOlder = loading) }
+    }
+
+    /**
+     * Prepend an older page. Runs are rebuilt from the whole list because
+     * [reconstructRuns] walks messages in order, so runs assembled from a
+     * partial tail would misattribute older tool calls. Existing message ids
+     * are already populated, so [ensureMessageIds] leaves them untouched and
+     * the LazyColumn keys stay stable across the prepend.
+     */
+    fun prependMessages(sessionId: String, older: List<AgentMessage>) {
+        if (older.isEmpty()) return
+        chats.update(sessionId) {
+            // A message that arrived on the first page can also arrive in a
+            // later page if the stream appended it after that page was served,
+            // which would render it twice. Ids win; createdAt is the fallback
+            // for rows the server stored without one.
+            val seen = it.messages.mapTo(HashSet<String>()) { m -> messageKey(m) }
+            val fresh = older.filterNot { m -> messageKey(m) in seen }
+            if (fresh.isEmpty()) return@update it
+            val merged = ensureMessageIds(fresh) + it.messages
+            // Reconstruct so prepended tool calls land in the right run, but
+            // never clobber live run state — a stream can be mid-turn while the
+            // user scrolls back through history. Empty is the only case the
+            // caller can't recover on its own, so that is the only one we fill.
+            it.copy(messages = merged, runs = it.runs.ifEmpty { reconstructRuns(merged) })
         }
     }
 

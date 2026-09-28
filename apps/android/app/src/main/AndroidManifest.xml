@@ -27,13 +27,14 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Deep link parity with apps/mobile/app.json scheme: console:// -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="console" />
-            </intent-filter>
+            <!--
+                No VIEW/deep-link filter: the server registers loopback OAuth
+                redirect URIs with every provider (codex localhost:1455, claude
+                localhost:53692), so the provider redirects to localhost on this
+                device and OAuthLoginLauncher binds that port directly. The
+                notification deep link uses an explicit Intent + extra
+                (LocalNotificationPresenter.EXTRA_THREAD_ID), not a scheme.
+            -->
         </activity>
     </application>
 </manifest>

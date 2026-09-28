@@ -49,6 +49,11 @@ data class ChatSessionState(
     val runs: List<RunActivityState> = emptyList(),
     val attachments: List<ImageAttachment> = emptyList(),
     val draftUpdatedAt: Long? = null,
+    // Message pagination. The session API returns the newest page on open;
+    // `nextCursor` is the rowid to pass back as `before` to walk backwards.
+    val hasMoreMessages: Boolean = false,
+    val nextCursor: Long? = null,
+    val loadingOlder: Boolean = false,
 )
 
 val EMPTY_CHAT_SESSION = ChatSessionState()

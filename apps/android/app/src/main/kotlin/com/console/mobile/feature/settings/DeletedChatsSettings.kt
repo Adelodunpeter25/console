@@ -17,11 +17,11 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,6 +44,8 @@ import com.console.mobile.core.util.formatRelativeTime
 import com.console.mobile.data.model.SessionHeader
 import com.console.mobile.ui.components.ConfirmButton
 import com.console.mobile.ui.components.EmptyState
+import com.console.mobile.ui.components.PillButton
+import com.console.mobile.ui.components.PillButtonVariant
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.ConsoleColors
@@ -120,6 +122,8 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
                     Text("Loading deleted chats…", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
                 }
             }
+        } else if (projectState.error != null && deleted.isEmpty()) {
+            EmptyState(title = "Couldn't load deleted chats", description = projectState.error ?: "Failed to load deleted chats.", icon = { Icon(Icons.Filled.Warning, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(32.dp)) })
         } else if (deleted.isEmpty()) {
             EmptyState(title = "No deleted chats", description = "Chats you delete will appear here until permanently purged.", icon = { Icon(Icons.Filled.Message, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(32.dp)) })
         } else {
@@ -153,19 +157,28 @@ private fun DeletedRow(item: SessionHeader, busy: Boolean, onRestore: () -> Unit
         Text("${folderName(item.cwd)} · Deleted ${formatRelativeTime(ts).ifBlank { "recently" }}", color = ConsoleColors.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.weight(1f))
-            TextButton(onClick = onRestore, enabled = !busy, modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(ConsoleColors.CardAlt).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (busy) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(12.dp))
-                    else Icon(Icons.Filled.Refresh, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
-                    Text("Restore", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp))
-                }
-            }
-            TextButton(onClick = onDelete, enabled = !busy, modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(8.dp)).background(ConsoleColors.Destructive.copy(alpha = 0.1f)).border(1.dp, ConsoleColors.Destructive.copy(alpha = 0.3f), RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Delete, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(12.dp))
-                    Text("Delete", color = ConsoleColors.Destructive, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp))
-                }
-            }
+            PillButton(
+                text = "Restore",
+                onClick = onRestore,
+                enabled = !busy,
+                loading = busy,
+                icon = Icons.Filled.Refresh,
+                variant = PillButtonVariant.Outline,
+                cornerRadius = 8.dp,
+                horizontalPadding = 12.dp,
+                verticalPadding = 6.dp,
+            )
+            PillButton(
+                text = "Delete",
+                onClick = onDelete,
+                enabled = !busy,
+                icon = Icons.Filled.Delete,
+                variant = PillButtonVariant.Destructive,
+                cornerRadius = 8.dp,
+                horizontalPadding = 12.dp,
+                verticalPadding = 6.dp,
+                modifier = Modifier.padding(start = 8.dp),
+            )
         }
     }
 }

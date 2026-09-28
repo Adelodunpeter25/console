@@ -84,6 +84,7 @@ fun ChangesScreen(onBack: () -> Unit) {
     var selectedPath by remember(repoPath) { mutableStateOf<String?>(null) }
     var diffText by remember { mutableStateOf<String?>(null) }
     var diffLoading by remember { mutableStateOf(false) }
+    var diffError by remember { mutableStateOf<String?>(null) }
     val diffCache = remember(repoPath) { mutableMapOf<String, String?>() }
 
     fun refresh() {
@@ -106,6 +107,7 @@ fun ChangesScreen(onBack: () -> Unit) {
     LaunchedEffect(repoPath) {
         selectedPath = null
         diffText = null
+        diffError = null
         refresh()
     }
 
@@ -114,21 +116,28 @@ fun ChangesScreen(onBack: () -> Unit) {
         val rp = repoPath
         if (sp == null || rp == null) {
             diffText = null
+            diffError = null
             diffLoading = false
             return@LaunchedEffect
         }
         if (diffCache.containsKey(sp)) {
             diffText = diffCache[sp]
+            diffError = null
             diffLoading = false
             return@LaunchedEffect
         }
         diffLoading = true
         diffText = null
+        diffError = null
         try {
             val d = withContext(Dispatchers.IO) { AppContainer.gitRepository.getDiff(rp, sp) }
+            // Only cache a real answer. Caching the null that used to stand in for
+            // a failed request pinned the file to "No diff available" until the
+            // repo path changed.
             diffCache[sp] = d
             if (selectedPath == sp) diffText = d
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (selectedPath == sp) diffError = e.message ?: "Failed to load diff."
         } finally {
             if (selectedPath == sp) diffLoading = false
         }
@@ -154,6 +163,9 @@ fun ChangesScreen(onBack: () -> Unit) {
                 when {
                     diffLoading -> Box(modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = ConsoleColors.TextMuted)
+                    }
+                    diffError != null -> Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.4f)).padding(12.dp)) {
+                        Text(diffError ?: "Failed to load diff.", color = ConsoleColors.Destructive, fontSize = 12.sp)
                     }
                     diffText != null -> DiffView(diff = parseUnifiedDiff(diffText ?: ""), filePath = sel)
                     change != null && (change.status == "A" || change.status == "?") -> Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.4f)).padding(12.dp)) {

@@ -22,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -36,6 +37,9 @@ interface TerminalSink {
     fun kill()
     fun close()
 }
+
+/** Upper bound on how long a terminal may take to spawn before we give up. */
+private const val TERMINAL_OPEN_TIMEOUT_MS = 20_000L
 
 class TerminalRepository(
     private val apiClient: ConsoleApiClient,
@@ -56,7 +60,9 @@ class TerminalRepository(
     ): TerminalSpawnedEvent {
         val cacheKey = "$projectId::$cwd"
         val existing = openingDeferreds[cacheKey]
-        if (existing != null) return existing.await()
+        // Bounded too: the first caller owns cleanup, but a joiner must not be
+        // able to hang forever either.
+        if (existing != null) return withTimeout(TERMINAL_OPEN_TIMEOUT_MS) { existing.await() }
 
         val deferred = CompletableDeferred<TerminalSpawnedEvent>()
         openingDeferreds[cacheKey] = deferred
@@ -202,11 +208,32 @@ class TerminalRepository(
                     sinks.remove(id)
                     terminalState.patch(id) { it.copy(status = TerminalStatus.Exited) }
                 }
+                // The socket can close before "spawned" ever arrives — spawn limit
+                // reached, backend restarted, upgrade rejected after accept. Without
+                // completing here, openTerminal() waits forever and, worse, the dead
+                // deferred stays cached under this project::cwd so every later retry
+                // awaits the same never-completing future.
+                if (!deferred.isCompleted) {
+                    openingDeferreds.remove(cacheKey)
+                    deferred.completeExceptionally(
+                        IllegalStateException("Terminal closed before it finished starting (code $code)."),
+                    )
+                }
             }
         }
 
-        httpClient.newWebSocket(reqBuilder.build(), listener)
-        return deferred.await()
+        // Never let a failed or silent open leave a dead deferred cached: clean it
+        // up on any throw, including our own timeout and a bad URL in newWebSocket.
+        return try {
+            httpClient.newWebSocket(reqBuilder.build(), listener)
+            withTimeout(TERMINAL_OPEN_TIMEOUT_MS) { deferred.await() }
+        } catch (e: Throwable) {
+            if (!deferred.isCompleted) {
+                openingDeferreds.remove(cacheKey)
+                deferred.completeExceptionally(e)
+            }
+            throw e
+        }
     }
 
     fun write(terminalId: String, data: String) {
