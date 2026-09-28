@@ -67,7 +67,11 @@ impl RenderOnce for UsageMeter {
             .cursor_default()
             .hover(|element| element.bg(theme.overlay))
             .when(is_open, |element| element.bg(theme.overlay_strong))
-            .child(circular_progress_gauge(percent, theme.border_strong, fill_color));
+            .child(circular_progress_gauge(
+                percent,
+                theme.border_strong,
+                fill_color,
+            ));
 
         let provider = self.provider;
         let usage_report = self.usage_report;
@@ -78,12 +82,8 @@ impl RenderOnce for UsageMeter {
             &self.menu_handle,
             MenuAlign::AboveRight,
             move |_handle, _window, _cx| {
-                UsagePanel::new(
-                    provider.clone(),
-                    usage_report.clone(),
-                    is_loading,
-                )
-                .into_any_element()
+                UsagePanel::new(provider.clone(), usage_report.clone(), is_loading)
+                    .into_any_element()
             },
         )
     }

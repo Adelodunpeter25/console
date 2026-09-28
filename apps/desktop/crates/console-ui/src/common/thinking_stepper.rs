@@ -45,9 +45,7 @@ impl RenderOnce for ThinkingStepper {
         }
 
         let total_steps = self.supported_levels.len();
-        let current = self
-            .current_level
-            .unwrap_or(self.supported_levels[0]);
+        let current = self.current_level.unwrap_or(self.supported_levels[0]);
 
         // Find index of current level in supported levels
         let current_index = self

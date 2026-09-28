@@ -7,7 +7,9 @@ use gpui::{
 
 use super::text_runs::{SearchPaint, input_text_runs};
 use super::{ComposerInput, FieldMode};
-use crate::common::file_mention_chip::{FILE_MENTION_ICON_SIZE, FILE_MENTION_RADIUS, file_mention_colors};
+use crate::common::file_mention_chip::{
+    FILE_MENTION_ICON_SIZE, FILE_MENTION_RADIUS, file_mention_colors,
+};
 use crate::theme::Theme;
 
 pub(crate) fn visual_row_count(layout: &TextLayout) -> usize {

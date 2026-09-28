@@ -395,7 +395,8 @@ impl ComposerInput {
     pub fn code_editor(mut self, language: Option<&str>) -> Self {
         self.mode = FieldMode::Code;
         let reg = syntax::LanguageRegistry::builtin();
-        self.language = language.and_then(|tag| reg.for_name(tag).or_else(|| reg.for_extension(tag)));
+        self.language =
+            language.and_then(|tag| reg.for_name(tag).or_else(|| reg.for_extension(tag)));
         self
     }
 
@@ -446,7 +447,10 @@ impl ComposerInput {
 
         let to_byte = |char_offset: usize| -> usize {
             if let Some(ref table) = char_to_byte {
-                table.get(char_offset).copied().unwrap_or(self.content.len())
+                table
+                    .get(char_offset)
+                    .copied()
+                    .unwrap_or(self.content.len())
             } else {
                 char_offset.min(self.content.len())
             }
@@ -1150,7 +1154,8 @@ impl ComposerInput {
                 if !value.is_empty() {
                     let context_files: Vec<String> =
                         self.mentions.iter().map(|m| m.path.clone()).collect();
-                    self.prompt_history.record(value.clone(), context_files.clone());
+                    self.prompt_history
+                        .record(value.clone(), context_files.clone());
                     cx.emit(ComposerEvent::Submit(value, context_files));
                     self.clear(cx);
                 }
@@ -1176,9 +1181,13 @@ impl ComposerInput {
         }
         let value = self.content.trim().to_owned();
         if !value.is_empty() {
-            let context_files: Vec<String> =
-                self.mentions.iter().map(|mention| mention.path.clone()).collect();
-            self.prompt_history.record(value.clone(), context_files.clone());
+            let context_files: Vec<String> = self
+                .mentions
+                .iter()
+                .map(|mention| mention.path.clone())
+                .collect();
+            self.prompt_history
+                .record(value.clone(), context_files.clone());
             cx.emit(ComposerEvent::SubmitSteer(value, context_files));
             self.clear(cx);
         }

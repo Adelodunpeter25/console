@@ -17,11 +17,7 @@ pub struct UsagePanel {
 }
 
 impl UsagePanel {
-    pub fn new(
-        provider: String,
-        usage_report: Option<UsageReport>,
-        is_loading: bool,
-    ) -> Self {
+    pub fn new(provider: String, usage_report: Option<UsageReport>, is_loading: bool) -> Self {
         Self {
             provider,
             usage_report,
@@ -57,7 +53,10 @@ impl RenderOnce for UsagePanel {
                     div()
                         .font_weight(gpui::FontWeight::SEMIBOLD)
                         .text_color(theme.text)
-                        .child(format!("{} Quota Limits", capitalize_provider(&self.provider))),
+                        .child(format!(
+                            "{} Quota Limits",
+                            capitalize_provider(&self.provider)
+                        )),
                 )
                 .child(
                     div()
@@ -120,7 +119,9 @@ impl RenderOnce for UsagePanel {
 fn render_limit_row(limit: &UsageLimit, theme: &Theme) -> impl IntoElement {
     let percent = resolve_used_percent(limit);
 
-    let status_color = if percent >= 95.0 || matches!(limit.status, Some(console_core::UsageStatus::Exhausted)) {
+    let status_color = if percent >= 95.0
+        || matches!(limit.status, Some(console_core::UsageStatus::Exhausted))
+    {
         theme.danger
     } else if percent >= 80.0 || matches!(limit.status, Some(console_core::UsageStatus::Warning)) {
         theme.warning
@@ -220,7 +221,11 @@ fn format_usage_value(limit: &UsageLimit, percent: f64) -> String {
     let amount = &limit.amount;
     match (amount.used, amount.limit) {
         (Some(used), Some(limit_val)) if amount.unit != UsageUnit::Percent => {
-            format!("{}/{}", format_amount(used, &amount.unit), format_amount(limit_val, &amount.unit))
+            format!(
+                "{}/{}",
+                format_amount(used, &amount.unit),
+                format_amount(limit_val, &amount.unit)
+            )
         }
         (Some(used), None) if amount.unit != UsageUnit::Percent => {
             format!("{} used", format_amount(used, &amount.unit))

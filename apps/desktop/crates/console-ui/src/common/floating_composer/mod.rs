@@ -26,7 +26,7 @@ use console_core::{
 };
 use gpui::{App, AppContext, ClipboardEntry, Context, Entity, ExternalPaths, KeyBinding, Window};
 
-use crate::common::{AutocompleteView, PickerTab};
+use crate::common::{AutocompleteContentKey, AutocompleteView, PickerTab};
 use crate::input::{ComposerAttachmentPaste, ComposerEvent, ComposerInput, ComposerMention};
 use crate::primitives::ContextMenuHandle;
 
@@ -128,6 +128,9 @@ pub struct FloatingComposer {
     attachments: Rc<Vec<ImageAttachment>>,
     /// The @-file / slash-command popup for the prompt field, if any.
     autocomplete: Option<AutocompleteView>,
+    /// Content identity of `autocomplete`, so a per-frame rebuild that yields
+    /// the same popup doesn't notify and keep the app rendering forever.
+    autocomplete_key: Option<AutocompleteContentKey>,
     on_submit: Option<Rc<dyn Fn(FloatingSubmit, &mut App) + 'static>>,
     on_select_project: Option<Rc<dyn Fn(String, &mut App) + 'static>>,
     on_select_model: Option<Rc<dyn Fn(SelectedModel, &mut App) + 'static>>,
@@ -205,6 +208,7 @@ impl FloatingComposer {
             supported_thinking_levels: Vec::new(),
             attachments: Rc::new(Vec::new()),
             autocomplete: None,
+            autocomplete_key: None,
             on_submit: None,
             on_select_project: None,
             on_select_model: None,
@@ -258,6 +262,7 @@ impl FloatingComposer {
         self.submitting = false;
         self.error = None;
         self.autocomplete = None;
+        self.autocomplete_key = None;
         self.attachments = Rc::new(Vec::new());
         self.open = true;
 
@@ -430,22 +435,41 @@ impl FloatingComposer {
     }
 
     /// Replace the staged-image list the card paints.
+    ///
+    /// Idempotent: the app re-derives attachments every frame, so writing an
+    /// equal list must not notify or the card would keep itself dirty forever.
+    /// An empty list is compared by length rather than by `Rc` identity, because
+    /// the store hands back a fresh `Rc` for "no attachments" each time.
     pub fn set_attachments(
         &mut self,
         attachments: Rc<Vec<ImageAttachment>>,
         cx: &mut Context<Self>,
     ) {
+        let unchanged = self.attachments.len() == attachments.len()
+            && (attachments.is_empty() || Rc::ptr_eq(&self.attachments, &attachments));
+        if unchanged {
+            return;
+        }
         self.attachments = attachments;
         cx.notify();
     }
 
     /// Push the current @-file / slash-command popup, rebuilt each frame by the
     /// app from the prompt's caret position.
+    ///
+    /// Idempotent for the same reason as [`Self::set_attachments`]: the popup is
+    /// rebuilt every frame, so only a change in its *content* may notify. `None`
+    /// compares equal to `None`, which is the steady state before typing.
     pub fn set_autocomplete(
         &mut self,
         autocomplete: Option<AutocompleteView>,
         cx: &mut Context<Self>,
     ) {
+        let next_key = autocomplete.as_ref().map(AutocompleteView::content_key);
+        if next_key == self.autocomplete_key {
+            return;
+        }
+        self.autocomplete_key = next_key;
         self.autocomplete = autocomplete;
         cx.notify();
     }

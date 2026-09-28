@@ -395,7 +395,9 @@ impl RenderOnce for ModelDropdownMenu {
                                                                 .child(format!(
                                                                     "{} · {} context",
                                                                     prov_display,
-                                                                    format_context_window(m.context_window)
+                                                                    format_context_window(
+                                                                        m.context_window
+                                                                    )
                                                                 )),
                                                         ),
                                                 ),
@@ -547,7 +549,8 @@ impl RenderOnce for ModelRolePicker {
                         let favs: Vec<_> = providers
                             .iter()
                             .flat_map(|p| {
-                                let models = live.get(&p.name).map(|v| v.as_slice()).unwrap_or(&p.models);
+                                let models =
+                                    live.get(&p.name).map(|v| v.as_slice()).unwrap_or(&p.models);
                                 models.iter().filter_map(|m| {
                                     let key = format!("{}:{}", p.name, m.id);
                                     if favorites.contains(&key) {
@@ -564,7 +567,8 @@ impl RenderOnce for ModelRolePicker {
                         .iter()
                         .find(|p| &p.name == prov)
                         .map(|p| {
-                            let models = live.get(&p.name).map(|v| v.as_slice()).unwrap_or(&p.models);
+                            let models =
+                                live.get(&p.name).map(|v| v.as_slice()).unwrap_or(&p.models);
                             models
                                 .iter()
                                 .map(|m| (p.name.clone(), p.display_name.clone(), m.clone()))
@@ -723,84 +727,103 @@ impl RenderOnce for ModelRolePicker {
                                                 ),
                                         )
                                     })
-                                    .children(visible_models.into_iter().map(|(prov_id, prov_disp, model)| {
-                                        let is_sel = selected_model.as_ref().is_some_and(|s| {
-                                            s.provider == prov_id && s.model_id == model.id
-                                        });
-                                        let on_s = on_select.clone();
-                                        let on_f = on_favorite.clone();
-                                        let p_id = prov_id.clone();
-                                        let m_id = model.id.clone();
-                                        let h = close_handle.clone();
-                                        let fav_key = format!("{}:{}", prov_id, model.id);
-                                        let is_fav = favorites.contains(&fav_key);
-                                        let star_id = format!("role-fav-btn-{}-{}", prov_id, model.id);
+                                    .children(visible_models.into_iter().map(
+                                        |(prov_id, prov_disp, model)| {
+                                            let is_sel = selected_model.as_ref().is_some_and(|s| {
+                                                s.provider == prov_id && s.model_id == model.id
+                                            });
+                                            let on_s = on_select.clone();
+                                            let on_f = on_favorite.clone();
+                                            let p_id = prov_id.clone();
+                                            let m_id = model.id.clone();
+                                            let h = close_handle.clone();
+                                            let fav_key = format!("{}:{}", prov_id, model.id);
+                                            let is_fav = favorites.contains(&fav_key);
+                                            let star_id =
+                                                format!("role-fav-btn-{}-{}", prov_id, model.id);
 
-                                        div()
-                                            .id(ElementId::Name(format!("role-m-{}-{}", prov_id, model.id).into()))
-                                            .px(px(8.0))
-                                            .py(px(6.0))
-                                            .rounded(px(5.0))
-                                            .cursor_pointer()
-                                            .when(is_sel, |el| el.bg(theme.overlay_strong))
-                                            .hover(|el| el.bg(theme.overlay))
-                                            .on_click(move |_, window, cx| {
-                                                h.close(window, cx);
-                                                (on_s)(p_id.clone(), m_id.clone(), window, cx);
-                                            })
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(8.0))
-                                            .child(provider_app_icon(&prov_id, 14.0, provider_color(&theme, &prov_id)))
-                                            .child(
-                                                div()
-                                                    .flex_1()
-                                                    .flex()
-                                                    .flex_col()
-                                                    .min_w_0()
-                                                    .child(
-                                                        div()
-                                                            .text_size(px(12.0))
-                                                            .text_color(theme.text)
-                                                            .truncate()
-                                                            .child(format_model_name(&model.id)),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .text_size(px(10.5))
-                                                            .text_color(theme.text_ghost)
-                                                            .child(prov_disp),
-                                                    ),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(10.5))
-                                                    .text_color(theme.text_ghost)
-                                                    .child(format_context_window(model.context_window)),
-                                            )
-                                            .child({
-                                                let p = prov_id.clone();
-                                                let m = model.id.clone();
-                                                div()
-                                                    .id(ElementId::Name(star_id.into()))
-                                                    .p(px(2.0))
-                                                    .cursor_pointer()
-                                                    .hover(|el| el.bg(theme.overlay))
-                                                    .on_click(move |_, window, cx| {
-                                                        cx.stop_propagation();
-                                                        (on_f)(p.clone(), m.clone(), window, cx);
-                                                    })
-                                                    .child(app_icon(
-                                                        IconName::Star,
-                                                        13.0,
-                                                        if is_fav {
-                                                            theme.warning
-                                                        } else {
-                                                            theme.text_ghost
-                                                        },
-                                                    ))
-                                            })
-                                    })),
+                                            div()
+                                                .id(ElementId::Name(
+                                                    format!("role-m-{}-{}", prov_id, model.id)
+                                                        .into(),
+                                                ))
+                                                .px(px(8.0))
+                                                .py(px(6.0))
+                                                .rounded(px(5.0))
+                                                .cursor_pointer()
+                                                .when(is_sel, |el| el.bg(theme.overlay_strong))
+                                                .hover(|el| el.bg(theme.overlay))
+                                                .on_click(move |_, window, cx| {
+                                                    h.close(window, cx);
+                                                    (on_s)(p_id.clone(), m_id.clone(), window, cx);
+                                                })
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(8.0))
+                                                .child(provider_app_icon(
+                                                    &prov_id,
+                                                    14.0,
+                                                    provider_color(&theme, &prov_id),
+                                                ))
+                                                .child(
+                                                    div()
+                                                        .flex_1()
+                                                        .flex()
+                                                        .flex_col()
+                                                        .min_w_0()
+                                                        .child(
+                                                            div()
+                                                                .text_size(px(12.0))
+                                                                .text_color(theme.text)
+                                                                .truncate()
+                                                                .child(format_model_name(
+                                                                    &model.id,
+                                                                )),
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .text_size(px(10.5))
+                                                                .text_color(theme.text_ghost)
+                                                                .child(prov_disp),
+                                                        ),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_size(px(10.5))
+                                                        .text_color(theme.text_ghost)
+                                                        .child(format_context_window(
+                                                            model.context_window,
+                                                        )),
+                                                )
+                                                .child({
+                                                    let p = prov_id.clone();
+                                                    let m = model.id.clone();
+                                                    div()
+                                                        .id(ElementId::Name(star_id.into()))
+                                                        .p(px(2.0))
+                                                        .cursor_pointer()
+                                                        .hover(|el| el.bg(theme.overlay))
+                                                        .on_click(move |_, window, cx| {
+                                                            cx.stop_propagation();
+                                                            (on_f)(
+                                                                p.clone(),
+                                                                m.clone(),
+                                                                window,
+                                                                cx,
+                                                            );
+                                                        })
+                                                        .child(app_icon(
+                                                            IconName::Star,
+                                                            13.0,
+                                                            if is_fav {
+                                                                theme.warning
+                                                            } else {
+                                                                theme.text_ghost
+                                                            },
+                                                        ))
+                                                })
+                                        },
+                                    )),
                             ),
                     )
                     .into_any_element()

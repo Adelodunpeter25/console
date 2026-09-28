@@ -49,7 +49,10 @@ pub fn reconcile_mentions(mentions: &mut Vec<ComposerMention>, content: &str) {
 /// whitespace-delimited token in `content`. Used when text and paths are
 /// known but editor ranges are not — prompt-history recall and queued-prompt
 /// restore both start from just `(text, paths)`.
-pub fn mentions_from_context_files(content: &str, context_files: &[String]) -> Vec<ComposerMention> {
+pub fn mentions_from_context_files(
+    content: &str,
+    context_files: &[String],
+) -> Vec<ComposerMention> {
     let mut mentions = Vec::new();
     let mut search_from = 0;
     for path in context_files {

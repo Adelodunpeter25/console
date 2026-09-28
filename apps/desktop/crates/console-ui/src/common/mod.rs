@@ -25,9 +25,10 @@ pub mod workspace_footer;
 pub use approval_selector::{ApprovalModeDropdown, ApprovalModeIconExt, ApprovalModeSelector};
 pub use attachment::attachment_image;
 pub use autocomplete::{
-    AUTOCOMPLETE_CONTEXT, AutocompleteConfirm, AutocompleteDismiss, AutocompleteItem,
-    AutocompleteKind, AutocompleteNext, AutocompletePrevious, AutocompleteTrigger,
-    AutocompleteView, detect_trigger, filter_items, init as init_autocomplete_keybindings,
+    AUTOCOMPLETE_CONTEXT, AutocompleteConfirm, AutocompleteContentKey, AutocompleteDismiss,
+    AutocompleteItem, AutocompleteKind, AutocompleteNext, AutocompletePrevious,
+    AutocompleteTrigger, AutocompleteView, detect_trigger, filter_items,
+    init as init_autocomplete_keybindings,
 };
 pub use composer_view::ComposerView;
 pub use copy_button::{copy_button, copy_button_with_action};
@@ -35,13 +36,13 @@ pub use error_banner::error_banner;
 pub use file_mention_chip::{
     FILE_MENTION_ICON_SIZE, FILE_MENTION_RADIUS, file_mention_chip, file_mention_colors,
 };
-pub use floating_composer::{
-    BranchChoice, FloatingComposer, FloatingComposerView, FloatingSnapshot, FloatingSubmit,
-};
+pub(crate) use file_mention_chip::{InlineFileMention, InlineFileMentionText};
 /// The card's Escape binding, registered at app init alongside every other
 /// surface's keys.
 pub use floating_composer::init as init_floating_composer_keybindings;
-pub(crate) use file_mention_chip::{InlineFileMention, InlineFileMentionText};
+pub use floating_composer::{
+    BranchChoice, FloatingComposer, FloatingComposerView, FloatingSnapshot, FloatingSubmit,
+};
 pub use global_search_panel::GlobalSearchPanel;
 pub use image_viewer::ImageViewerModal;
 pub use input::*;

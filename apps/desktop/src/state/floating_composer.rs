@@ -273,6 +273,16 @@ impl ConsoleDesktopApp {
     /// at the moment it happens).
     ///
     /// Called from the app's render. Does nothing while the card is closed.
+    ///
+    /// The card is written through `cx.defer` rather than inline: this runs
+    /// inside a render pass, and mutating an entity mid-render is not a place
+    /// to be borrowing. The defer lands before the next paint, so the popup
+    /// still appears on the frame after the keystroke.
+    ///
+    /// Both setters are idempotent — this runs on every frame, and an
+    /// unconditional write would notify the card, which would schedule another
+    /// frame, which would come back here. That loop never idles and eventually
+    /// exhausts memory.
     pub fn refresh_floating_composer(&mut self, window: &Window, cx: &mut Context<Self>) {
         if !self.floating_composer.read(cx).is_open() {
             return;
@@ -298,9 +308,12 @@ impl ConsoleDesktopApp {
             cx,
         );
         let attachments = self.attachments_for_pane(FLOATING_KEY);
-        self.floating_composer.update(cx, |composer, cx| {
-            composer.set_autocomplete(autocomplete, cx);
-            composer.set_attachments(attachments, cx);
+        let composer = self.floating_composer.clone();
+        cx.defer(move |cx| {
+            composer.update(cx, |composer, cx| {
+                composer.set_autocomplete(autocomplete, cx);
+                composer.set_attachments(attachments, cx);
+            });
         });
     }
 

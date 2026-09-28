@@ -73,6 +73,16 @@ pub enum AutocompleteItem {
     File(FileSearchResult),
 }
 
+/// Comparable identity of an [`AutocompleteView`]'s content. See
+/// [`AutocompleteView::content_key`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct AutocompleteContentKey {
+    pub count: usize,
+    pub highlighted: usize,
+    pub loading: bool,
+    pub ids: u64,
+}
+
 impl AutocompleteItem {
     pub fn insert_text(&self) -> String {
         match self {
@@ -249,6 +259,38 @@ impl AutocompleteView {
 
     pub fn anchor_cell(&self) -> Rc<Cell<Option<Bounds<Pixels>>>> {
         self.anchor_bounds.clone()
+    }
+
+    /// A cheap comparable identity for the popup's *content*.
+    ///
+    /// The popup is rebuilt every frame, so an owner that stores it and
+    /// notifies on every write would re-render forever. Comparing this instead
+    /// lets the owner skip an unchanged popup. The id hash is included because
+    /// a new query routinely returns the same number of rows with different
+    /// paths.
+    pub fn content_key(&self) -> AutocompleteContentKey {
+        let mut ids: u64 = 0;
+        for item in &self.items {
+            let id = match item {
+                AutocompleteItem::Command(command) => &command.name,
+                AutocompleteItem::File(file) => {
+                    if file.relative_path.is_empty() {
+                        &file.absolute_path
+                    } else {
+                        &file.relative_path
+                    }
+                }
+            };
+            for byte in id.as_bytes() {
+                ids = ids.wrapping_mul(31).wrapping_add(*byte as u64);
+            }
+        }
+        AutocompleteContentKey {
+            count: self.items.len(),
+            highlighted: self.highlighted,
+            loading: self.loading,
+            ids,
+        }
     }
 
     pub fn with_anchor_cell(mut self, anchor_bounds: Rc<Cell<Option<Bounds<Pixels>>>>) -> Self {
