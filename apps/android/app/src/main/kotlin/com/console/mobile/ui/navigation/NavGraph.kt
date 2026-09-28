@@ -27,6 +27,7 @@ import com.console.mobile.feature.chat.ChatScreen
 import com.console.mobile.feature.files.FilesScreen
 import com.console.mobile.feature.home.HomeScreen
 import com.console.mobile.feature.onboarding.OnboardingScreen
+import com.console.mobile.feature.settings.AddProjectScreen
 import com.console.mobile.feature.settings.SettingsScreen
 import com.console.mobile.feature.subagents.SubagentDetailsScreen
 import com.console.mobile.feature.subagents.SubagentsScreen
@@ -154,13 +155,22 @@ fun AppNavGraph() {
                 })
             }
             composable<RouteSettings> {
-                SettingsScreen(onBackToHome = {
-                    AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Home)
-                    navController.navigate(RouteHome) {
-                        launchSingleTop = true
-                        popUpTo(RouteHome)
-                    }
-                })
+                SettingsScreen(
+                    onBackToHome = {
+                        AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Home)
+                        navController.navigate(RouteHome) {
+                            launchSingleTop = true
+                            popUpTo(RouteHome)
+                        }
+                    },
+                    onAddProject = { navController.navigate(RouteAddProject) },
+                )
+            }
+            composable<RouteAddProject> {
+                AddProjectScreen(
+                    onBack = { navController.popBackStack() },
+                    onAdded = { navController.popBackStack() },
+                )
             }
             composable<RouteSubagents> {
                 SubagentsScreen(

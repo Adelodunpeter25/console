@@ -15,3 +15,4 @@ import kotlinx.serialization.Serializable
 @Serializable object RouteSubagents
 @Serializable data class RouteSubagentDetails(val subagentId: String)
 @Serializable object RouteSettings
+@Serializable object RouteAddProject
