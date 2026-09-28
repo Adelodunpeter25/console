@@ -45,9 +45,8 @@ import com.console.mobile.ui.components.ChatScreenSkeleton
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /** Scroll position to restore after older messages are prepended. */
 private data class ListAnchor(
@@ -91,14 +90,17 @@ fun ChatScreen(
     val listState = rememberLazyListState()
 
     // Load detail + hydrate todos/subagents on entry; attach to server run if working.
+    // The three fetches are independent, so they run concurrently instead of
+    // as three sequential round trips — that latency was most of the wait on
+    // opening a session.
     LaunchedEffect(sessionId) {
         loadingMessages = AppContainer.chatStateHolder.get(sessionId).messages.isEmpty()
-        withContext(Dispatchers.IO) {
-            try { AppContainer.sessionRepository.loadDetail(sessionId) } catch (_: Exception) {}
+        coroutineScope {
+            launch { AppContainer.sessionRepository.loadDetail(sessionId) }
+            launch { AppContainer.chatRepository.loadTodos(sessionId) }
+            launch { AppContainer.chatRepository.loadSubagents(sessionId) }
         }
         loadingMessages = false
-        AppContainer.chatRepository.loadTodos(sessionId)
-        AppContainer.chatRepository.loadSubagents(sessionId)
         val serverStatus = AppContainer.sessionStateHolder.statuses.value[sessionId]
         if (serverStatus == SessionStatus.Working) {
             AppContainer.chatRepository.attachServerRun(sessionId)
@@ -173,6 +175,18 @@ fun ChatScreen(
     }
     val displaySize = displayMessages.size
     val showScrollBottom = lastVisibleIndex >= 0 && lastVisibleIndex < displaySize - 1 && displaySize > 2
+
+    // Opening a session lands on the newest page, so the list has to be jumped
+    // to the bottom once that page arrives. The streaming auto-follow above
+    // can't do it: it's gated on an active run, and this case is an idle chat.
+    // Keyed on the message count so it fires exactly once per entry — a later
+    // prepend or append must not drag the user back down over their scroll.
+    var settledInitialPage by remember(sessionId) { mutableStateOf(false) }
+    LaunchedEffect(sessionId, displaySize) {
+        if (settledInitialPage || displaySize <= 0) return@LaunchedEffect
+        settledInitialPage = true
+        try { listState.scrollToItem(displaySize - 1) } catch (_: Exception) {}
+    }
 
     // --- Older-message pagination -------------------------------------------
     // Opening a session only fetches the newest page, so the user scrolls to

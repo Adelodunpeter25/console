@@ -26,7 +26,7 @@ class SessionRepository(
 ) {
     companion object {
         /** Newest-page size on open. Mobile viewports are small; start light. */
-        const val FIRST_PAGE = 40
+        const val FIRST_PAGE = 30
         /** Older-page size once the user scrolls to the top. */
         const val OLDER_PAGE = 50
     }
