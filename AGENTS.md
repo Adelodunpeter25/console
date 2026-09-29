@@ -7,7 +7,6 @@
 
 ## Tests & Verification
 - Run only the specific test file relevant to the task, e.g.:
-  - `cd apps/server && bun tests/<area>/<name>.test.ts`
   - `cd apps/server-go && go test ./tests/<area>/ -run <TestName> -v`
   - `cd apps/desktop && cargo test -p <crate> <test_name>`
 - Never run `run-all-tests.ts` or the full suite unless explicitly asked.
@@ -23,6 +22,11 @@
 ## Scope
 - Don't over-engineer. Make the minimal change that satisfies the task.
 - Follow existing code patterns and conventions.
+- No TypeScript in this repo. The stack is Go (`apps/server-go`), Rust
+  (`apps/desktop`), and Kotlin (`apps/android`) only — never add `.ts`,
+  `.tsx`, `package.json`, or `node_modules` files. The `.js` files under
+  `apps/desktop/crates/console-ui/src/browser/` are browser-injected scripts
+  owned by the Rust desktop app, not app code.
 
 ## Working Tree & User Changes
 - **Never discard, checkout, or reset uncommitted user changes** (`git checkout <file>`, `git restore`, `git reset`, etc.).

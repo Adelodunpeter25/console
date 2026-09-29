@@ -1,19 +1,14 @@
-# Dependencies
-apps/console-macos/.build
-/node_modules
-packages/types/node_modules
-apps/cli/node_modules
-apps/web/node_modules
-index.js.map
+# No TypeScript in this repo (Go + Rust + Kotlin only). These patterns are a
+# tripwire so stray .ts/.tsx/package.json files never get committed.
+*.ts
+*.tsx
+tsconfig.json
+bun.lock
+.npmrc
+
 # Logs
 logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-apps/server/node_modules
-packages/api/node_modules
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
@@ -45,24 +40,6 @@ bower_components
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
 
-# Dependency directories
-jspm_packages/
-
-# TypeScript v1 declaration files
-typings/
-
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
-.eslintcache
-
-# Microbundle cache
-.rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
-
 # Optional REPL history
 .node_repl_history
 
@@ -79,21 +56,13 @@ typings/
 # parcel-bundler cache files
 .cache
 
-# Next.js build output
-.next
-out
-
-# Nuxt.js build output
-.nuxt
-
 # dist directory
 /dist
 
-# Electron (desktop app)
+# Desktop app build output
 apps/desktop/dist
 apps/desktop/dist-electron
 apps/desktop/release
-apps/desktop/node_modules
 
 # Reference clone (t3code) - mobile folder only
 t3code/
@@ -105,8 +74,7 @@ t3code/
 console-server
 console-server-*
 
-# Bun compile output & source maps (root-level byproducts)
+# `make build-server` output & source maps (root-level byproducts)
 /console
 /console.exe
 *.js.map
-*.tsbuildinfo

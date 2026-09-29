@@ -1,4 +1,4 @@
-.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop package-desktop build-server install build-android typecheck check help
+.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop package-desktop build-server install build-android check help
 
 # Where `console upgrade` and this target install the binary (matches
 # resolveUpgradeTarget's CONSOLE_INSTALL_DIR fallback in upgrade.go).
@@ -72,13 +72,9 @@ install: build-server
 build-android:
 	cd apps/android && ./gradlew assembleRelease
 
-## typecheck: Run TypeScript check across all monorepo workspaces
-typecheck:
-	bunx tsc --noEmit
-
-## check: Run code formatting and linting
+## check: Vet the Go server
 check:
-	bun run check
+	go -C apps/server-go vet ./...
 
 ## help: Show this help message
 help:
@@ -93,5 +89,4 @@ help:
 	@echo "  make build-server      - Compile the multi-call console binary (CLI + server)"
 	@echo "  make install           - Build from source and install/restart the local console daemon (INSTALL_DIR=path)"
 	@echo "  make build-android     - Build the native Android app for release"
-	@echo "  make typecheck         - Run TypeScript typechecking"
-	@echo "  make check             - Run code format and lint checks"
+	@echo "  make check             - Vet the Go server"

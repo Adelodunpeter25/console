@@ -1,5 +1,9 @@
 # Generic Wire Providers Architecture & Implementation Guide
 
+> Note: written against the old TypeScript server (`apps/server`, since
+> removed). Re-target file paths and verification commands to
+> `apps/server-go` before implementing.
+
 Unifies third-party and user-defined LLM endpoints into a protocol-driven provider system.
 Following the architecture proven in `oh-my-pi`, services like **OpenRouter, DeepSeek, Groq, Mistral, Together, Ollama, LM Studio, vLLM**, and arbitrary private proxies are **not** snowflake providers. They are declarative configurations running on top of a single **OpenAI-Compatible Wire Engine** (and eventually an Anthropic Messages Wire Engine).
 

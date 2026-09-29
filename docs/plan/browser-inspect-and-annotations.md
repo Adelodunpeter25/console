@@ -1,5 +1,9 @@
 # Built-in Browser Element Inspection & Annotation Plan
 
+> Note: written against the old TypeScript server (`apps/server`, since
+> removed). Re-target file paths and verification commands to
+> `apps/server-go` before implementing.
+
 ## 1. Overview & Motivation
 When developing web applications, developers frequently need to point the AI agent to specific UI elements (buttons, headers, layout containers, modal dialogs) to request style fixes, feature additions, or behavior changes.
 

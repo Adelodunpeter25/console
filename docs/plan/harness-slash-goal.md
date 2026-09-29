@@ -1,5 +1,9 @@
 # Autonomous `/goal` Harness Implementation Plan
 
+> Note: written against the old TypeScript server (`apps/server`, since
+> removed). Re-target file paths and verification commands to
+> `apps/server-go` before implementing.
+
 ## Overview
 This plan specifies the architecture and phased implementation for adding the autonomous `/goal` command to the agent harness (mirroring `oh-my-pi` patterns in `apps/server/agent`).
 

@@ -1,5 +1,9 @@
 # Compaction Started Event (deferred — for later discussion)
 
+> Note: written against the old TypeScript server (`apps/server`, since
+> removed). Re-target file paths and verification commands to
+> `apps/server-go` before implementing.
+
 Status: **not started**. Companion to `docs/plan/context-overflow-compaction-resilience-plan.md`, kept separate on purpose.
 
 ## Problem
