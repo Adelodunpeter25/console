@@ -160,7 +160,7 @@ func (s *Service) WorktreeOf(sessionID string) (*types.SessionWorktree, error) {
 func (s *Service) Header(sessionID string) (*types.SessionHeader, error) {
 	rows, err := s.manager.Global().Query(`
 		SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-			created_at, updated_at, message_count, status, deleted_at,
+			thinking_level, created_at, updated_at, message_count, status, deleted_at,
 			worktree_path, worktree_branch, worktree_repo
 		FROM sessions WHERE id = ?`, sessionID)
 	if err != nil {
@@ -346,6 +346,32 @@ func (s *Service) UpdateApprovalMode(sessionID, approvalMode string) error {
 	_, err = s.manager.Global().Exec(
 		`UPDATE sessions SET approval_mode = ?, updated_at = ? WHERE id = ?`,
 		approvalMode, now, sessionID)
+	return err
+}
+
+// UpdateThinkingLevel persists the user-selected thinking level for a session.
+// Mirrors the pattern of UpdateApprovalMode: updates both the global index and
+// the per-session meta DB when the DB file exists.
+func (s *Service) UpdateThinkingLevel(sessionID, thinkingLevel string) error {
+	projectID, _, err := s.projectIDBySession(sessionID)
+	if err != nil {
+		return err
+	}
+	now := utils.NowMillis()
+	if s.sessionDBExists(sessionID, projectID) {
+		conn, err := s.manager.Session(sessionID, projectID)
+		if err != nil {
+			return err
+		}
+		if _, err := conn.Exec(
+			`UPDATE session_meta SET thinking_level = ?, updated_at = ? WHERE id = 1`,
+			thinkingLevel, now); err != nil {
+			return err
+		}
+	}
+	_, err = s.manager.Global().Exec(
+		`UPDATE sessions SET thinking_level = ?, updated_at = ? WHERE id = ?`,
+		thinkingLevel, now, sessionID)
 	return err
 }
 

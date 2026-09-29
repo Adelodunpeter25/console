@@ -80,11 +80,11 @@ func (s *Service) Create(opts types.CreateSessionOptions) (types.SessionHeader, 
 
 	if _, err := s.manager.Global().Exec(`
 		INSERT INTO sessions
-			(id, title, cwd, project_id, model_id, provider, message_count, status, approval_mode, created_at, updated_at,
+			(id, title, cwd, project_id, model_id, provider, message_count, status, approval_mode, thinking_level, created_at, updated_at,
 				worktree_path, worktree_branch, worktree_repo)
 		VALUES (?, ?, ?, ?, ?, ?, 0, 'idle', ?, ?, ?,
 			?, ?, ?)`,
-		id, title, cwd, projectID, modelID, provider, approvalMode, now, now,
+		id, title, cwd, projectID, modelID, provider, approvalMode, opts.ThinkingLevel, now, now,
 		worktreeCol(opts.ResolvedWorktree, func(w *types.SessionWorktree) string { return w.Path }),
 		worktreeCol(opts.ResolvedWorktree, func(w *types.SessionWorktree) string { return w.Branch }),
 		worktreeCol(opts.ResolvedWorktree, func(w *types.SessionWorktree) string { return w.Repo }),
@@ -98,9 +98,9 @@ func (s *Service) Create(opts types.CreateSessionOptions) (types.SessionHeader, 
 	}
 	if _, err := conn.Exec(`
 		INSERT INTO session_meta
-			(id, title, cwd, project_id, model_id, provider, approval_mode, created_at, updated_at)
-		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		title, cwd, projectID, modelID, provider, approvalMode, now, now,
+			(id, title, cwd, project_id, model_id, provider, approval_mode, thinking_level, created_at, updated_at)
+		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		title, cwd, projectID, modelID, provider, approvalMode, opts.ThinkingLevel, now, now,
 	); err != nil {
 		return types.SessionHeader{}, err
 	}
@@ -108,6 +108,7 @@ func (s *Service) Create(opts types.CreateSessionOptions) (types.SessionHeader, 
 	return types.SessionHeader{
 		ID: id, Title: title, Cwd: cwd, ProjectID: projectID,
 		ModelID: modelID, Provider: provider, ApprovalMode: approvalMode,
+		ThinkingLevel: opts.ThinkingLevel,
 		CreatedAt: now, UpdatedAt: now, MessageCount: 0, Status: "idle",
 		Worktree: opts.ResolvedWorktree,
 	}, nil
@@ -143,19 +144,19 @@ func (s *Service) ListFiltered(f ListFilter) ([]types.SessionHeader, error) {
 	case f.Cwd != "":
 		rows, err = s.manager.Global().Query(`
 			SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-				created_at, updated_at, message_count, status, deleted_at,
+				thinking_level, created_at, updated_at, message_count, status, deleted_at,
 				worktree_path, worktree_branch, worktree_repo
 			FROM sessions WHERE cwd = ? AND `+deletedCondition+` ORDER BY updated_at DESC LIMIT ?`, f.Cwd, limit)
 	case f.ProjectID != "":
 		rows, err = s.manager.Global().Query(`
 			SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-				created_at, updated_at, message_count, status, deleted_at,
+				thinking_level, created_at, updated_at, message_count, status, deleted_at,
 				worktree_path, worktree_branch, worktree_repo
 			FROM sessions WHERE project_id = ? AND `+deletedCondition+` ORDER BY updated_at DESC LIMIT ?`, f.ProjectID, limit)
 	default:
 		rows, err = s.manager.Global().Query(`
 			SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-				created_at, updated_at, message_count, status, deleted_at,
+				thinking_level, created_at, updated_at, message_count, status, deleted_at,
 				worktree_path, worktree_branch, worktree_repo
 			FROM sessions WHERE `+deletedCondition+` ORDER BY updated_at DESC LIMIT ?`, limit)
 	}
@@ -194,16 +195,21 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 	for rows.Next() {
 		var h types.SessionHeader
 		var projectID sql.NullString
+		var thinkingLevel sql.NullString
 		var deletedAt sql.NullInt64
 		var wtPath, wtBranch, wtRepo sql.NullString
 		if err := rows.Scan(&h.ID, &h.Title, &h.Cwd, &projectID, &h.ModelID, &h.Provider,
-			&h.ApprovalMode, &h.CreatedAt, &h.UpdatedAt, &h.MessageCount, &h.Status, &deletedAt,
+			&h.ApprovalMode, &thinkingLevel, &h.CreatedAt, &h.UpdatedAt, &h.MessageCount, &h.Status, &deletedAt,
 			&wtPath, &wtBranch, &wtRepo); err != nil {
 			return nil, err
 		}
 		if projectID.Valid && projectID.String != "" && projectID.String != "scratch" {
 			id := projectID.String
 			h.ProjectID = &id
+		}
+		if thinkingLevel.Valid && thinkingLevel.String != "" {
+			v := thinkingLevel.String
+			h.ThinkingLevel = &v
 		}
 		if deletedAt.Valid {
 			v := deletedAt.Int64
@@ -228,7 +234,7 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 func (s *Service) Load(sessionID string, limit int64, before int64) (*types.LoadedSession, error) {
 	rows, err := s.manager.Global().Query(`
 		SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-			created_at, updated_at, message_count, status, deleted_at,
+			thinking_level, created_at, updated_at, message_count, status, deleted_at,
 			worktree_path, worktree_branch, worktree_repo
 		FROM sessions WHERE id = ?`, sessionID)
 	if err != nil {

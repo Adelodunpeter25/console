@@ -39,6 +39,7 @@ func InitGlobalDB(db *sql.DB, path string) error {
 			message_count INTEGER NOT NULL DEFAULT 0,
 			status TEXT NOT NULL DEFAULT 'idle',
 			approval_mode TEXT NOT NULL DEFAULT 'always-ask',
+			thinking_level TEXT,
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL,
 			deleted_at INTEGER,
@@ -66,6 +67,7 @@ func InitGlobalDB(db *sql.DB, path string) error {
 	// ownership columns when missing.
 	for _, col := range []string{
 		"worktree_path TEXT", "worktree_branch TEXT", "worktree_repo TEXT",
+		"thinking_level TEXT",
 	} {
 		name := col[:len(col)-len(" TEXT")]
 		var count int
@@ -97,6 +99,7 @@ func InitSessionDB(db *sql.DB, path string) error {
 			model_id TEXT NOT NULL,
 			provider TEXT NOT NULL,
 			approval_mode TEXT NOT NULL DEFAULT 'always-ask',
+			thinking_level TEXT,
 			repaired INTEGER NOT NULL DEFAULT 0,
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL
@@ -206,5 +209,19 @@ func InitSessionDB(db *sql.DB, path string) error {
 			return err
 		}
 	}
+
+	// Additive migration: add thinking_level to pre-existing session_meta rows.
+	var thinkingCount int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info('session_meta') WHERE name = 'thinking_level'`,
+	).Scan(&thinkingCount); err != nil {
+		return err
+	}
+	if thinkingCount == 0 {
+		if _, err := db.Exec(`ALTER TABLE session_meta ADD COLUMN thinking_level TEXT`); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
