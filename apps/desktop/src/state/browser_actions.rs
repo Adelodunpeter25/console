@@ -38,9 +38,6 @@ enum NavigationState {
 }
 
 /// Waits for the result of a script started with `run_agent_script`.
-/// Largest PNG forwarded to the model (Anthropic caps images at 5 MB).
-const MAX_SCREENSHOT_BYTES: usize = 3 * 1024 * 1024;
-
 async fn poll_script_result(
     this: &WeakEntity<ConsoleDesktopApp>,
     cx: &mut AsyncApp,
@@ -564,13 +561,6 @@ impl ConsoleDesktopApp {
                         }
                     }
                     let _ = this.update(cx, |app, cx| match outcome {
-                        Ok(png) if png.len() > MAX_SCREENSHOT_BYTES => app.resolve_browser_action_result(
-                            &sess_id,
-                            request_id,
-                            None,
-                            Some(format!("[tab {tab_id}] Screenshot too large ({} bytes)", png.len())),
-                            cx,
-                        ),
                         Ok(png) => {
                             use base64::Engine;
                             let b64 = base64::engine::general_purpose::STANDARD.encode(&png);

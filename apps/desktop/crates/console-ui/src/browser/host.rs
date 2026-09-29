@@ -437,7 +437,7 @@ mod macos_host {
         pub fn take_snapshot(&self, slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>) {
             use block2::RcBlock;
             use objc2_app_kit::{NSBitmapImageRep, NSBitmapImageFileType, NSImage};
-            use objc2_foundation::{NSDictionary, NSError, NSNumber};
+            use objc2_foundation::{NSDictionary, NSError};
             use objc2_web_kit::WKSnapshotConfiguration;
 
             let slot_for_error = slot.clone();
@@ -470,8 +470,6 @@ mod macos_host {
             };
             unsafe {
                 let config = WKSnapshotConfiguration::new(mtm);
-                // Cap width (points) so the PNG stays well under provider image limits.
-                config.setSnapshotWidth(Some(&NSNumber::new_f64(1024.0)));
                 self.wk
                     .takeSnapshotWithConfiguration_completionHandler(Some(&config), &handler);
             }
