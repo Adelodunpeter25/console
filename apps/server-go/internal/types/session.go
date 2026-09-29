@@ -4,18 +4,19 @@ package types
 import "encoding/json"
 
 type SessionHeader struct {
-	ID           string  `json:"id"`
-	Title        string  `json:"title"`
-	Cwd          string  `json:"cwd"`
-	ProjectID    *string `json:"projectId,omitempty"`
-	ModelID      string  `json:"modelId"`
-	Provider     string  `json:"provider"`
-	ApprovalMode string  `json:"approvalMode"`
-	CreatedAt    int64   `json:"createdAt"`
-	UpdatedAt    int64   `json:"updatedAt"`
-	MessageCount int     `json:"messageCount"`
-	Status       string  `json:"status"`
-	DeletedAt    *int64  `json:"deletedAt,omitempty"`
+	ID            string  `json:"id"`
+	Title         string  `json:"title"`
+	Cwd           string  `json:"cwd"`
+	ProjectID     *string `json:"projectId,omitempty"`
+	ModelID       string  `json:"modelId"`
+	Provider      string  `json:"provider"`
+	ApprovalMode  string  `json:"approvalMode"`
+	ThinkingLevel *string `json:"thinkingLevel,omitempty"`
+	CreatedAt     int64   `json:"createdAt"`
+	UpdatedAt     int64   `json:"updatedAt"`
+	MessageCount  int     `json:"messageCount"`
+	Status        string  `json:"status"`
+	DeletedAt     *int64  `json:"deletedAt,omitempty"`
 	// Worktree is non-nil when the session lives in its own git worktree.
 	Worktree *SessionWorktree `json:"worktree,omitempty"`
 }
@@ -35,6 +36,7 @@ type CreateSessionOptions struct {
 	ModelID      string  `json:"modelId,omitempty"`
 	Provider     string  `json:"provider,omitempty"`
 	ApprovalMode string  `json:"approvalMode,omitempty"`
+	ThinkingLevel *string `json:"thinkingLevel,omitempty"`
 	// ProjectNull tracks an explicit JSON null for projectId (scratchpad),
 	// distinct from an omitted key (infer from cwd). Set by the route, which
 	// is the only JSON decoder for this struct.

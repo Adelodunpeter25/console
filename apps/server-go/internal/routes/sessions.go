@@ -85,11 +85,12 @@ func registerSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 	h.Patch("/:id", func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		var req struct {
-			Title        *string `json:"title"`
-			ModelID      *string `json:"modelId"`
-			Provider     *string `json:"provider"`
-			ApprovalMode *string `json:"approvalMode"`
-			Cwd          *string `json:"cwd"`
+			Title         *string `json:"title"`
+			ModelID       *string `json:"modelId"`
+			Provider      *string `json:"provider"`
+			ApprovalMode  *string `json:"approvalMode"`
+			ThinkingLevel *string `json:"thinkingLevel"`
+			Cwd           *string `json:"cwd"`
 		}
 		if err := json.Unmarshal(c.Body(), &req); err != nil {
 			return sessionError(c, fiber.StatusBadRequest, "Invalid request body.")
@@ -153,6 +154,11 @@ func registerSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		}
 		if req.ApprovalMode != nil && *req.ApprovalMode != "" {
 			if err := sessions.UpdateApprovalMode(id, *req.ApprovalMode); err != nil {
+				return sessionError(c, fiber.StatusInternalServerError, err.Error())
+			}
+		}
+		if req.ThinkingLevel != nil && *req.ThinkingLevel != "" {
+			if err := sessions.UpdateThinkingLevel(id, *req.ThinkingLevel); err != nil {
 				return sessionError(c, fiber.StatusInternalServerError, err.Error())
 			}
 		}
