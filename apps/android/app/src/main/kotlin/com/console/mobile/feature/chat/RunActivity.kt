@@ -190,17 +190,20 @@ fun ToolGroupRow(
                 modifier = Modifier.padding(start = 6.dp),
             )
             Spacer(modifier = Modifier.weight(1f))
-            if (anyRunning) {
-                CircularProgressIndicator(
-                    color = ConsoleColors.TextMuted,
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.size(13.dp),
-                )
-            } else if (anyError) {
+            // Desktop checks failure before pending (toolcalls.rs group_failed /
+            // group_complete): an errored group shows the alert even if other
+            // calls in it are still running.
+            if (anyError) {
                 Icon(
                     Icons.Filled.Warning,
                     contentDescription = null,
                     tint = Color(0xFFF87171),
+                    modifier = Modifier.size(13.dp),
+                )
+            } else if (anyRunning) {
+                CircularProgressIndicator(
+                    color = ConsoleColors.TextMuted,
+                    strokeWidth = 2.dp,
                     modifier = Modifier.size(13.dp),
                 )
             } else {
