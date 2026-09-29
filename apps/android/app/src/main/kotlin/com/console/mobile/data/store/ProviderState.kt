@@ -15,6 +15,11 @@ data class ProviderState(
     val error: String? = null,
     val approvalModes: List<ApprovalModeOption> = emptyList(),
     val loadingApprovalModes: Boolean = false,
+    /** Model roles ("vision", "smol") -> "provider/model" reference. */
+    val modelRoles: Map<String, String> = emptyMap(),
+    val loadingRoles: Boolean = false,
+    val savingRoles: Boolean = false,
+    val rolesError: String? = null,
 )
 
 class ProviderStateHolder(initial: ProviderState = ProviderState()) {
@@ -29,6 +34,10 @@ class ProviderStateHolder(initial: ProviderState = ProviderState()) {
     fun setLoadingModel(providerId: String, v: Boolean) { _state.value = _state.value.copy(loadingModels = _state.value.loadingModels + (providerId to v)) }
     fun setApprovalModes(v: List<ApprovalModeOption>) { _state.value = _state.value.copy(approvalModes = v, loadingApprovalModes = false) }
     fun setError(e: String?) { _state.value = _state.value.copy(error = e) }
+    fun setModelRoles(v: Map<String, String>) { _state.value = _state.value.copy(modelRoles = v, loadingRoles = false, rolesError = null) }
+    fun setLoadingRoles(v: Boolean) { _state.value = _state.value.copy(loadingRoles = v) }
+    fun setSavingRoles(v: Boolean) { _state.value = _state.value.copy(savingRoles = v) }
+    fun setRolesError(e: String?) { _state.value = _state.value.copy(rolesError = e, savingRoles = false) }
     fun clear() { _state.value = ProviderState() }
 
     fun resolveProvider(modelId: String, fallback: String?): String? {

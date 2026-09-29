@@ -18,6 +18,7 @@ import com.composables.icons.lucide.ChartBar
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Folder
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Settings2
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.User
 import com.composables.icons.lucide.Wifi
@@ -40,7 +41,7 @@ import com.console.mobile.AppContainer
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
 
-enum class SettingsSection { Connection, Account, Usage, Projects, DeletedChats }
+enum class SettingsSection { Connection, Account, Usage, Models, Projects, DeletedChats }
 
 /**
  * Port of screens/settings/settings-screen.tsx.
@@ -65,6 +66,7 @@ fun SettingsScreen(onBackToHome: () -> Unit, onAddProject: () -> Unit) {
             SettingsSection.Connection -> ConnectionSettings(onBack = { section = null })
             SettingsSection.Account -> AccountSettings(onBack = { section = null })
             SettingsSection.Usage -> UsageSettings(onBack = { section = null })
+            SettingsSection.Models -> ModelsSettings(onBack = { section = null })
             SettingsSection.Projects -> ProjectsSettings(onBack = { section = null }, onAddProject = onAddProject)
             SettingsSection.DeletedChats -> DeletedChatsSettings(onBack = { section = null })
         }
@@ -76,6 +78,11 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
     val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
     val authState by AppContainer.authStateHolder.state.collectAsStateWithLifecycle()
     val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
+    val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()
+
+    // The landing row reports how many roles are configured, so the roles have
+    // to be in state before the list renders.
+    LaunchedEffect(Unit) { AppContainer.providerRepository.loadSettings() }
 
     ScreenHeader(title = "Settings", onBack = { onBack() })
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 32.dp)) {
@@ -83,6 +90,8 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
         LandingRow(icon = Lucide.Wifi, title = "Connection", summary = if (!appState.backendUrl.isNullOrBlank()) "Connected" else "Not connected") { onOpen(SettingsSection.Connection) }
         LandingRow(icon = Lucide.User, title = "Account", summary = if (signedIn) "Signed in" else "No providers connected") { onOpen(SettingsSection.Account) }
         LandingRow(icon = Lucide.ChartBar, title = "Usage", summary = "Quota & limits") { onOpen(SettingsSection.Usage) }
+        val roles = providerState.modelRoles.count { it.value.isNotBlank() }
+        LandingRow(icon = Lucide.Settings2, title = "Models", summary = if (roles == 0) "Chat model only" else "$roles role${if (roles == 1) "" else "s"} configured") { onOpen(SettingsSection.Models) }
         val n = projectState.projects.size
         LandingRow(icon = Lucide.Folder, title = "Projects", summary = "$n project folder${if (n == 1) "" else "s"}") { onOpen(SettingsSection.Projects) }
         val d = projectState.deletedSessions.size

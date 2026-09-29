@@ -117,10 +117,10 @@ fun toRelativePath(filePath: String?, cwd: String?): String {
     return p
 }
 
-/// One-line argument summary for a tool row, mirroring the desktop's
-/// `argument_summary` in apps/desktop/crates/console-ui/src/chat/toolcalls.rs:
-/// target path first, then bashJob / memory specifics, then the first of
-/// command/pattern/query/url/directory, then arg-array counts.
+/** One-line argument summary for a tool row, mirroring the desktop's
+ * `argument_summary` in apps/desktop/crates/console-ui/src/chat/toolcalls.rs:
+ * target path first, then bashJob / memory specifics, then the first of
+ * command/pattern/query/url/directory, then arg-array counts. */
 fun toolCallSummary(call: ToolCall, cwd: String? = null): String? {
     val args = call.arguments as? JsonObject ?: return null
     fun s(key: String): String? = (args[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
@@ -162,8 +162,8 @@ fun toolCallSummary(call: ToolCall, cwd: String? = null): String? {
     return null
 }
 
-/// Collapse every whitespace run (newlines, tabs, spaces) to single spaces so
-/// a summary always fits on one line.
+/** Collapse every whitespace run (newlines, tabs, spaces) to single spaces so
+ * a summary always fits on one line. */
 fun singleLine(value: String): String =
     value.split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ")
 
@@ -191,4 +191,115 @@ fun resultText(result: ToolResult): String {
         }
     }
     return c.toString()
+}
+
+// --- File tool classification and diff extraction -------------------------
+// Ports of the file-tool branches in the desktop's
+// apps/desktop/crates/console-ui/src/chat/toolcalls.rs and
+// console-core/src/utils/diff.rs (extract_edit_args / extract_write_files /
+// file_call_diffs), so a tool call renders the same on both clients.
+
+/** An edit that carries both sides of the change (`oldContent` / `newContent`). */
+fun isEditFileTool(name: String): Boolean = name in setOf("editFile", "edit_file", "str_replace")
+
+/** A whole-file write — only the new content is known, so it diffs against "". */
+fun isWriteFileTool(name: String): Boolean = name in setOf("writeFile", "write_file", "batchWrite", "batch_write")
+
+/** A call that reads file content into its result. */
+fun isReadFileTool(name: String): Boolean = name in setOf("read_file", "readFile", "view", "Read")
+
+/** Whether a row for this tool should show the target file's type icon rather
+ * than the generic tool glyph. Search/list tools also carry a `path`, but there
+ * it is only the search scope (often a directory) — those keep the tool glyph. */
+fun isFileTargetTool(name: String): Boolean =
+    isReadFileTool(name) || isEditFileTool(name) || isWriteFileTool(name)
+
+/** Whether the result of this call is prose meant to be read as markdown. */
+fun isSubagentTool(name: String): Boolean = name == "subagent"
+
+/** The target path of a file-oriented call, across the argument aliases. */
+fun argumentPath(call: ToolCall): String? {
+    val obj = call.arguments as? JsonObject ?: return null
+    for (key in listOf("path", "filePath", "targetFile", "absolutePath")) {
+        (obj[key] as? JsonPrimitive)?.takeIf { it.isString }?.let { return it.content }
+    }
+    return null
+}
+
+private fun jsonString(obj: JsonObject, key: String): String? =
+    (obj[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
+
+/** (oldContent, newContent) for an `editFile`-shaped call. */
+fun extractEditArgs(call: ToolCall): Pair<String, String>? {
+    val obj = call.arguments as? JsonObject ?: return null
+    val old = jsonString(obj, "oldContent") ?: return null
+    val new = jsonString(obj, "newContent") ?: return null
+    return old to new
+}
+
+/** Every `(path, content)` pair a whole-file write targets, in call order. A
+ * `writeFile` carries one `path`/`content`; a `batchWrite` carries a `files`
+ * array. Entries missing either half are skipped so one malformed element does
+ * not blank the whole batch. */
+fun extractWriteFiles(call: ToolCall): List<Pair<String, String>> {
+    val obj = call.arguments as? JsonObject ?: return emptyList()
+    (obj["files"] as? JsonArray)?.let { files ->
+        return files.mapNotNull { entry ->
+            val file = entry as? JsonObject ?: return@mapNotNull null
+            val path = jsonString(file, "path") ?: return@mapNotNull null
+            val content = jsonString(file, "content") ?: return@mapNotNull null
+            path to content
+        }
+    }
+    val path = listOf("path", "filePath", "targetFile").firstNotNullOfOrNull { jsonString(obj, it) }
+        ?: return emptyList()
+    val content = jsonString(obj, "content") ?: return emptyList()
+    return listOf(path to content)
+}
+
+/** First written file — a display fallback for single-path labels only. */
+fun extractWriteArgs(call: ToolCall): Pair<String, String>? = extractWriteFiles(call).firstOrNull()
+
+/** One file's diff inside a tool call. */
+data class FileCallDiff(val path: String, val diff: DiffResult)
+
+/** Per-file diffs a file tool call describes, in call order. `editFile` yields
+ * exactly one; whole-file writes yield one per file, diffed against an empty
+ * file because the arguments carry no prior content. Non-file tools yield
+ * nothing, so callers can test for emptiness. */
+fun fileCallDiffs(call: ToolCall): List<FileCallDiff> {
+    if (isEditFileTool(call.name)) {
+        val (old, new) = extractEditArgs(call) ?: return emptyList()
+        return listOf(FileCallDiff(argumentPath(call).orEmpty(), computeLineDiff(old, new)))
+    }
+    if (isWriteFileTool(call.name)) {
+        return extractWriteFiles(call).map { (path, content) ->
+            FileCallDiff(path, computeLineDiff("", content))
+        }
+    }
+    return emptyList()
+}
+
+private val LINE_NUMBER_PREFIX = Regex("""^(\s*)(\d+): ?(.*)$""")
+
+/** Split read-file output into `(gutter numbers, code body)`. Drops a leading
+ * `File:` metadata header, and reuses the tool's own line numbers when most
+ * lines carry a `123: ` prefix (the server truncates long reads, so the printed
+ * numbers are not always 1..n). */
+fun parseReadFileOutput(raw: String): Pair<List<String>, List<String>> {
+    val lines = raw.lines()
+    val headerEnd = if (lines.firstOrNull()?.startsWith("File:") == true) {
+        val firstBlank = (1 until lines.size).firstOrNull { lines[it].isEmpty() } ?: -1
+        if (firstBlank in 1..6) firstBlank + 1 else 0
+    } else {
+        0
+    }
+    val codeLines = lines.drop(headerEnd)
+    val parsed = codeLines.map { LINE_NUMBER_PREFIX.matchEntire(it) }
+    if (parsed.count { it != null } * 2 > codeLines.size) {
+        val numbers = parsed.map { m -> m?.groupValues?.get(2).orEmpty() }
+        val body = parsed.map { m -> m?.groupValues?.get(3) ?: "" }
+        return numbers to body
+    }
+    return codeLines.indices.map { (it + 1).toString() } to codeLines
 }

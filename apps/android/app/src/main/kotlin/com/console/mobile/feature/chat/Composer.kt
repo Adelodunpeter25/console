@@ -435,9 +435,16 @@ private fun ProjectPickerSheet(projects: List<ProjectInfo>, selectedId: String?,
     }
 }
 
+/** Provider → model browser sheet. Shared by the composer and the model-role settings page. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ModelPickerSheet(selectedModel: String?, selectedProvider: String?, onDismiss: () -> Unit, onSelect: (String, String?) -> Unit) {
+fun ModelPickerSheet(
+    title: String = "Select Model",
+    selectedModel: String?,
+    selectedProvider: String?,
+    onDismiss: () -> Unit,
+    onSelect: (String, String?) -> Unit,
+) {
     val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()
     var search by remember { mutableStateOf("") }
     var activeProvider by remember(providerState.providers) {
@@ -448,7 +455,7 @@ private fun ModelPickerSheet(selectedModel: String?, selectedProvider: String?, 
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = ConsoleColors.Background) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 40.dp)) {
-            Text("Select Model", color = ConsoleColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 12.dp))
+            Text(title, color = ConsoleColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 12.dp))
             if (providerState.providers.isNotEmpty()) {
                 LazyRow(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                     items(providerState.providers) { p ->

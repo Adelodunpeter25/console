@@ -4,6 +4,7 @@ import com.console.mobile.data.model.AnswerQuestionDto
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.ApproveToolPermissionDto
 import com.console.mobile.data.model.AuthStatusShim
+import com.console.mobile.data.model.ConsoleSettings
 import com.console.mobile.data.model.CreateSessionDto
 import com.console.mobile.data.model.FileSearchResponse
 import com.console.mobile.data.model.FileSearchResult
@@ -31,12 +32,14 @@ import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 
 class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private fun enc(v: String): String = URLEncoder.encode(v, "UTF-8")
@@ -310,6 +313,25 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         }.toString()
         val raw = http.put("/api/model-favorites", body)
         http.unwrap(raw, JsonElement.serializer(), "update model favorite")
+    }
+
+    override suspend fun getSettings(): ConsoleSettings {
+        val raw = http.get("/api/settings")
+        return http.unwrap(raw, ConsoleSettings.serializer(), "load settings")
+    }
+
+    override suspend fun updateModelRoles(roles: Map<String, String?>): ConsoleSettings {
+        val body = buildJsonObject {
+            putJsonObject("modelRoles") {
+                for ((role, ref) in roles) {
+                    // A null reference clears the role, so it must be sent as
+                    // JSON null rather than dropped from the patch.
+                    if (ref == null) put(role, JsonNull) else put(role, ref)
+                }
+            }
+        }.toString()
+        val raw = http.patch("/api/settings", body)
+        return http.unwrap(raw, ConsoleSettings.serializer(), "save model roles")
     }
 
     private fun ensureOk(raw: String, action: String) {

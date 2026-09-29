@@ -4,6 +4,7 @@ import com.console.mobile.data.model.AnswerQuestionDto
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.ApproveToolPermissionDto
 import com.console.mobile.data.model.AuthStatusShim
+import com.console.mobile.data.model.ConsoleSettings
 import com.console.mobile.data.model.CreateSessionDto
 import com.console.mobile.data.model.FileSearchResponse
 import com.console.mobile.data.model.FsTreeEntry
@@ -82,6 +83,10 @@ interface ConsoleApi {
     // favorites
     suspend fun listFavorites(): List<ModelFavorite>
     suspend fun setFavorite(favorite: ModelFavorite, isFavorite: Boolean)
+    // settings (model roles)
+    suspend fun getSettings(): ConsoleSettings
+    /** PATCH /api/settings — a null reference clears the role. */
+    suspend fun updateModelRoles(roles: Map<String, String?>): ConsoleSettings
 }
 
 @kotlinx.serialization.Serializable

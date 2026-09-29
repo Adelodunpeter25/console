@@ -58,6 +58,34 @@ class ProviderRepository(
         }
     }
 
+    fun loadSettings() {
+        if (providerState.state.value.loadingRoles) return
+        scope.launch {
+            providerState.setLoadingRoles(true)
+            try {
+                val settings = withContext(Dispatchers.IO) { api.getSettings() }
+                providerState.setModelRoles(settings.modelRoles.toRefMap())
+            } catch (e: Exception) {
+                providerState.setLoadingRoles(false)
+                providerState.setRolesError(e.message ?: "Failed to load settings")
+            }
+        }
+    }
+
+    /** PATCH the given roles; a null reference clears that role. */
+    suspend fun saveModelRoles(roles: Map<String, String?>): Boolean {
+        providerState.setSavingRoles(true)
+        return try {
+            val settings = withContext(Dispatchers.IO) { api.updateModelRoles(roles) }
+            providerState.setModelRoles(settings.modelRoles.toRefMap())
+            providerState.setSavingRoles(false)
+            true
+        } catch (e: Exception) {
+            providerState.setRolesError(e.message ?: "Failed to save model roles")
+            false
+        }
+    }
+
     fun resolveProvider(modelId: String, fallback: String? = null): String? =
         providerState.resolveProvider(modelId, fallback)
 
