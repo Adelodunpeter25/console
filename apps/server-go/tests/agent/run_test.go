@@ -172,6 +172,24 @@ func sessionStatus(t *testing.T, sessions *services.SessionService, sessionID st
 	return loaded.Header.Status
 }
 
+// waitSessionStatus polls until the status column equals want, or fails. The
+// run goroutine writes status without signalling the test, so a single read
+// right after a hub frame can observe the previous value.
+func waitSessionStatus(t *testing.T, sessions *services.SessionService, sessionID, want string) string {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	var got string
+	for time.Now().Before(deadline) {
+		got = sessionStatus(t, sessions, sessionID)
+		if got == want {
+			return got
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("session status: %q, want %q", got, want)
+	return got
+}
+
 // A run must publish working/done status transitions. Session lists and the
 // mobile home badge read the indexed status column, so a run that never
 // writes it leaves the session stuck at its "idle" default.
@@ -193,7 +211,7 @@ func TestRunStatusLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-entered
-	if got := sessionStatus(t, sessions, header.ID); got != "working" {
+	if got := waitSessionStatus(t, sessions, header.ID, "working"); got != "working" {
 		t.Fatalf("running status: %q, want working", got)
 	}
 	close(release)

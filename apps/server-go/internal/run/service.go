@@ -82,8 +82,7 @@ func NewService(sessions *services.SessionService) *Service {
 		s.notifyEvent(ctx, sessionID, event)
 		// A pending question/approval pauses the run until the user
 		// answers, so the session reads as needing attention rather than
-		// working. Events are not written here: a stale needs_attention
-		// outliving the decision would misreport a live run.
+		// working. It flips back on resolve — see resolveDecision.
 		if event.Kind == loop.EventAskQuestion || event.Kind == loop.EventPermissionRequest {
 			s.setStatus(sessionID, "needs_attention")
 		}
@@ -279,17 +278,40 @@ func (s *Service) SetDecisionTimeout(d time.Duration) {
 	s.decisions.mu.Unlock()
 }
 
+// resolveDecision flips a session back to working once the user answers a
+// pending decision, so a run that is still going stops reading as
+// "needs attention". Guarded on IsActive: the decision may resolve as the run
+// is settling, and a late flip must not revive a finished session. Runs that
+// stop for another reason (abort, failure) settle at the terminal frame.
+func (s *Service) resolveDecision(sessionID string) {
+	if s.IsActive(sessionID) {
+		s.setStatus(sessionID, "working")
+	}
+}
+
 // ApprovePermission resolves a pending tool approval for a session.
 func (s *Service) ApprovePermission(sessionID, requestID string, allow bool) bool {
-	return s.decisions.ApprovePermission(sessionID, requestID, allow)
+	if !s.decisions.ApprovePermission(sessionID, requestID, allow) {
+		return false
+	}
+	s.resolveDecision(sessionID)
+	return true
 }
 
 // AnswerQuestion resolves a pending ask-question for a session.
 func (s *Service) AnswerQuestion(sessionID, requestID string, answer tools.AskAnswer) bool {
-	return s.decisions.AnswerQuestion(sessionID, requestID, answer)
+	if !s.decisions.AnswerQuestion(sessionID, requestID, answer) {
+		return false
+	}
+	s.resolveDecision(sessionID)
+	return true
 }
 
 // ResolveBrowserAction resolves a pending browser action for a session.
 func (s *Service) ResolveBrowserAction(sessionID, requestID string, result tools.BrowserActionResult) bool {
-	return s.decisions.ResolveBrowserAction(sessionID, requestID, result)
+	if !s.decisions.ResolveBrowserAction(sessionID, requestID, result) {
+		return false
+	}
+	s.resolveDecision(sessionID)
+	return true
 }

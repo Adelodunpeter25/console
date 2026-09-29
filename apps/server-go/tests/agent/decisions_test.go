@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -166,6 +167,56 @@ func TestAskQuestionAnswered(t *testing.T) {
 	}
 	if hub.Outcome != run.OutcomeDone {
 		t.Fatalf("outcome: %s", hub.Outcome)
+	}
+}
+
+// A pending approval marks the session needs_attention; answering it must
+// flip the session back to working while the run continues, so the session
+// list stops advertising an unanswered prompt.
+func TestDecisionResolvesBackToWorking(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	open := func() { releaseOnce.Do(func() { close(release) }) }
+	defer open() // unblock the held turn even if the test fails early
+	target := filepath.Join(t.TempDir(), "held.txt")
+	svc.Lookup = func(id string) (loop.Provider, error) {
+		return &helpers.MockProvider{Turns: []func() []loop.Event{
+			func() []loop.Event {
+				return []loop.Event{{Kind: loop.EventToolCall, Call: &tools.ToolCall{
+					ID: "c1", Name: "write_file", Arguments: writeCallArgs(t, target, "hi"),
+				}}}
+			},
+			// Hold the follow-up turn open so the run is still active when
+			// the status is read after the decision resolves.
+			func() []loop.Event {
+				<-release
+				return []loop.Event{{Kind: loop.EventText, Text: "done"}}
+			},
+		}}, nil
+	}
+	header := helpers.CreateRunSession(t, sessions)
+	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "write hi", Provider: "mock", ModelID: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := waitHubFrame(t, hub, loop.EventPermissionRequest, 10*time.Second)
+	// The request frame is broadcast before the notify callback writes the
+	// status, so poll rather than racing the first read.
+	if got := waitSessionStatus(t, sessions, header.ID, "needs_attention"); got != "needs_attention" {
+		t.Fatalf("awaiting approval status: %q, want needs_attention", got)
+	}
+	if !svc.ApprovePermission(header.ID, req.Permission.RequestID, true) {
+		t.Fatal("approve must resolve")
+	}
+	if got := waitSessionStatus(t, sessions, header.ID, "working"); got != "working" {
+		t.Fatalf("after approval status: %q, want working", got)
+	}
+	open()
+	helpers.WaitSettled(t, hub)
+	if got := sessionStatus(t, sessions, header.ID); got != "done" {
+		t.Fatalf("settled status: %q, want done", got)
 	}
 }
 
