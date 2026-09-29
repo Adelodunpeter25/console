@@ -457,6 +457,11 @@ impl BrowserView {
         self.loading
     }
 
+    /// Why the native webview could not be created, if it failed.
+    pub fn host_error_message(&self) -> Option<&str> {
+        self.host_error.as_deref()
+    }
+
     /// Description of the last failed navigation, if the page failed to load.
     pub fn navigation_error_message(&self) -> Option<String> {
         self.navigation_error

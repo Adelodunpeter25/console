@@ -17,8 +17,12 @@ const BROWSER_POLL_INTERVAL: Duration = Duration::from_millis(150);
 const TAB_LOOKUP_RETRIES: u32 = 20;
 /// How many polls to wait for a page to finish loading (~20s).
 const NAVIGATION_SETTLE_POLLS: u32 = 130;
+/// How many polls to wait for a new tab to appear (~5s) before giving up.
+const TAB_OPEN_POLLS: u32 = 33;
 
 enum NavigationState {
+    /// No tab exists yet for this navigation.
+    NoTab,
     Pending,
     Settled(String),
     Failed(String),
@@ -74,8 +78,10 @@ impl ConsoleDesktopApp {
                 } else {
                     let url_to_open = url.clone();
                     let entity = cx.entity().downgrade();
+                    let main_window = self.main_window_handle;
                     cx.defer(move |cx| {
-                        if let Some(window) = cx.active_window() {
+                        // Prefer the app's own window so this works when it isn't the active one.
+                        if let Some(window) = main_window.or_else(|| cx.active_window()) {
                             let _ = window.update(cx, |_, window, cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
@@ -90,6 +96,7 @@ impl ConsoleDesktopApp {
                 // Reply only once the page has loaded (or failed / timed out).
                 cx.spawn(async move |this, cx| {
                     let mut last = None;
+                    let mut no_tab_polls = 0;
                     for _ in 0..NAVIGATION_SETTLE_POLLS {
                         cx.background_executor().timer(BROWSER_POLL_INTERVAL).await;
                         let Ok(state) = this.update(cx, |app, cx| {
@@ -99,6 +106,17 @@ impl ConsoleDesktopApp {
                         };
                         match state {
                             NavigationState::Pending => continue,
+                            NavigationState::NoTab => {
+                                no_tab_polls += 1;
+                                if no_tab_polls >= TAB_OPEN_POLLS {
+                                    last = Some(NavigationState::Failed(format!(
+                                        "No browser tab could be opened for {}",
+                                        url
+                                    )));
+                                    break;
+                                }
+                                continue;
+                            }
                             other => {
                                 last = Some(other);
                                 break;
@@ -260,9 +278,12 @@ impl ConsoleDesktopApp {
                 .map(|(_, v)| v.clone())
         });
         let Some(view) = view else {
-            return NavigationState::Pending;
+            return NavigationState::NoTab;
         };
         let bv = view.read(cx);
+        if let Some(err) = bv.host_error_message() {
+            return NavigationState::Failed(format!("Browser could not start: {}", err));
+        }
         if bv.is_loading() {
             return NavigationState::Pending;
         }
