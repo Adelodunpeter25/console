@@ -21,10 +21,14 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
   (`CredentialPath`/`SaveCredentialFile`, dir 0700/file 0600, server-side
   only, never sent to clients), per-provider config via each provider's
   `constants.go` (e.g. `apps/server-go/internal/providers/claude/constants.go`).
-- Mobile onboarding (`apps/mobile/index.tsx` `OnboardingScreen`) takes a
-  backend URL via `useServerConnection`; post-connect auth lives in Account
-  Settings (`apps/mobile/screens/settings/account-settings.tsx`) keyed off the
-  provider catalog's `authMethod`.
+- Clients are native and re-implement the API by hand (neither consumes
+  `packages/api`): desktop is Rust/GPUI (`apps/desktop`, Accounts page at
+  `crates/console-ui/src/settings/accounts_page.rs` driven by the provider
+  catalog + auth status, HTTP via `crates/console-core/src/services/`), and
+  Android is Kotlin/Compose (`apps/android`, onboarding under
+  `feature/onboarding`, account settings under `feature/settings`, network via
+  `data/api` + `data/repo`). Shared auth-status DTOs are mirrored by hand on
+  both sides, so any new server status field needs a matching client type.
 
 ## 2 UX Proposal
 - Accounts is the primary home (desktop and mobile): a GitHub item showing
@@ -85,18 +89,23 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
   expire unless revoked); `status` detects revocation and reports
   not-connected.
 
-## 4 Client Changes (desktop + mobile)
+## 4 Client Changes (desktop + Android)
 - Accounts GitHub item (connect / re-login / disconnect) — existing installs
   connect here, never via reinstall. v1 uses the PAT screen; device-flow UI
   plugs into the same item later.
-- `packages/api` `githubAuthService`: `getStatus`, `logout`, `submitPat`
-  clients (`deviceStart`, `deviceStatus` arrive with device flow later).
-- PAT screen with secure text entry, submitted once, never persisted
-  client-side — the v1 connection path.
-- Account Settings: GitHub row driven by extended auth status; disconnect with
-  confirm; re-login reuses the PAT screen in v1.
-- Onboarding card + `useGitHubDeviceLogin` hook (fresh installs only, code
-  display + approve button + polling + Skip): deferred with device flow.
+- Desktop (`apps/desktop`, Rust/GPUI): GitHub row on `AccountsPage`
+  (`crates/console-ui/src/settings/accounts_page.rs`); new `console-core`
+  service for `/api/auth/github/{pat,status,logout}` alongside the existing
+  auth service (`device/*` calls arrive with device flow later). The server's
+  extended auth status must also be added to the hand-mirrored
+  `AuthStatusResponse` in `crates/console-core/src/types/`.
+- Android (`apps/android`, native Kotlin/Compose): GitHub row in settings +
+  PAT screen with secure text entry through the existing `data/api` client;
+  submitted once, never persisted client-side — the v1 connection path. Mirror
+  the new auth-status field in the Kotlin models too.
+- Disconnect with confirm; re-login reuses the PAT screen in v1.
+- Onboarding card (fresh installs only, code display + approve button +
+  polling + Skip): deferred with device flow.
 
 ## 5 Implementation Steps
 - 1: server provider module — PAT accept/validate/store, creds file
@@ -111,8 +120,8 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
   up, and that missing-creds behaves as today.
 - 4: SSH-URL rewrite via the same channel; test `git@github.com:org/repo`
   clone over HTTPS.
-- 5: desktop + mobile Accounts GitHub item + PAT screen (v1); device-flow UI
-  (`useGitHubDeviceLogin` + onboarding card) later.
+- 5: desktop `AccountsPage` + Android settings GitHub item + PAT screen (v1);
+  device-flow UI (status polling + onboarding card) later.
 - 6: docs: onboarding copy, token scope note, revocation/re-login path.
 - 7 (last): new-project/clone dialog — see
   `docs/plan/new-project-dialog-plan.md`. Consumes the credential status and
