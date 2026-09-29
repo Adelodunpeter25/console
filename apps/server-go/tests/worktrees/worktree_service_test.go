@@ -115,16 +115,10 @@ func TestWorktreePrune(t *testing.T) {
 }
 
 func TestRandomCodename(t *testing.T) {
-	got := services.RandomCodename("a1b2c3d4")
+	got := services.RandomCodename()
 	parts := strings.Split(got, "-")
-	if len(parts) != 3 {
-		t.Fatalf("RandomCodename = %q; want adjective-city-shortid", got)
-	}
-	if parts[2] != "a1b2c3" {
-		t.Fatalf("RandomCodename suffix = %q; want a1b2c3", parts[2])
-	}
-	if got := services.RandomCodename(""); strings.Contains(got, "-a1b2c3") || strings.Count(got, "-") != 1 {
-		t.Fatalf("RandomCodename empty id = %q; want adjective-city with no suffix", got)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		t.Fatalf("RandomCodename = %q; want adjective-city", got)
 	}
 }
 
