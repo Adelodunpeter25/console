@@ -39,8 +39,59 @@ data class RunPromptDto(
     val attachments: List<ImageAttachment> = emptyList(),
 )
 
+/**
+ * An image staged in the composer draft.
+ *
+ * Held as raw bytes rather than a base64 [String]: base64 costs an extra 33% of
+ * the image size, and every thumbnail would decode it straight back out again.
+ * [ImageAttachmentSerializer] produces the base64 form only at the two
+ * boundaries — the `/api` request body and the draft cache in SharedPreferences —
+ * so both keep the exact `{"data", "mimeType"}` shape the server expects and
+ * the persisted cache stays readable.
+ *
+ * Identity equality (a ByteArray compares by reference anyway): the composer
+ * strip and the preview dialog both rely on the instance in the list being the
+ * same one the user tapped.
+ */
+@Serializable(with = ImageAttachmentSerializer::class)
+class ImageAttachment(
+    val id: String,
+    val bytes: ByteArray,
+    val mimeType: String,
+)
+
+/** The on-the-wire / on-disk shape of an [ImageAttachment]. */
 @Serializable
-data class ImageAttachment(val data: String, val mimeType: String)
+private data class ImageAttachmentWire(val data: String, val mimeType: String)
+
+object ImageAttachmentSerializer : kotlinx.serialization.KSerializer<ImageAttachment> {
+    private val wire = ImageAttachmentWire.serializer()
+
+    override val descriptor: kotlinx.serialization.descriptors.SerialDescriptor get() = wire.descriptor
+
+    override fun serialize(encoder: kotlinx.serialization.encoding.Encoder, value: ImageAttachment) =
+        wire.serialize(encoder, ImageAttachmentWire(encodeBase64(value.bytes), value.mimeType))
+
+    override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder): ImageAttachment {
+        val w = wire.deserialize(decoder)
+        return ImageAttachment(newAttachmentId(), decodeBase64(w.data), w.mimeType)
+    }
+}
+
+private var attachmentSeq = 0L
+
+internal fun newAttachmentId(): String = "att-${++attachmentSeq}"
+
+internal fun encodeBase64(bytes: ByteArray): String =
+    android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+
+/** Returns an empty array for undecodable input rather than throwing, so one
+ * corrupt cached attachment cannot drop the whole draft. */
+internal fun decodeBase64(data: String): ByteArray = try {
+    if (data.isBlank()) ByteArray(0) else android.util.Base64.decode(data, android.util.Base64.DEFAULT)
+} catch (_: Exception) {
+    ByteArray(0)
+}
 
 @Serializable
 data class QueuedPrompt(

@@ -96,7 +96,7 @@ class ChatPersistence(
                     messages = withIds,
                     runs = partial.runs,
                     input = partial.input,
-                    attachments = partial.attachments.take(2),
+                    attachments = partial.attachments,
                     draftUpdatedAt = partial.draftUpdatedAt,
                 )
             }
@@ -127,7 +127,7 @@ class ChatPersistence(
                     messages = s.messages.takeLast(MAX_PERSISTED_MESSAGES),
                     runs = s.runs,
                     input = s.input,
-                    attachments = s.attachments.take(2),
+                    attachments = s.attachments,
                     draftUpdatedAt = s.draftUpdatedAt,
                 )
             }

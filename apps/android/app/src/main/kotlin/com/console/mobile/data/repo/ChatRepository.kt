@@ -16,7 +16,6 @@ import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.api.ConsoleApiClient
 import com.console.mobile.data.api.ConsoleJson
 import com.console.mobile.data.local.ChatPersistence
-import com.console.mobile.core.chat.trimDraftAttachments
 import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.AgentSessionEvent
 import com.console.mobile.data.model.AskQuestionRequest
@@ -29,6 +28,7 @@ import com.console.mobile.data.model.SubagentInfo
 import com.console.mobile.data.model.TextPart
 import com.console.mobile.data.model.TodoItem
 import com.console.mobile.data.model.UserMessage
+import com.console.mobile.data.model.encodeBase64
 import com.console.mobile.data.store.ChatStateHolder
 import com.console.mobile.data.store.SessionStateHolder
 import com.console.mobile.data.stream.ChatStreamClient
@@ -89,9 +89,8 @@ class ChatRepository(
     fun addAttachments(sessionId: String, attachments: List<ImageAttachment>) {
         if (attachments.isEmpty()) return
         chats.update(sessionId) { current ->
-            val merged = trimDraftAttachments(current.attachments + attachments)
             current.copy(
-                attachments = merged,
+                attachments = current.attachments + attachments,
                 draftUpdatedAt = System.currentTimeMillis(),
             )
         }
@@ -249,8 +248,10 @@ class ChatRepository(
             return
         }
 
+        // ImageAttachment holds raw bytes; the transcript and the request body
+        // are the boundaries where base64 is actually needed.
         val userMessageAttachments = attachments.map {
-            com.console.mobile.data.model.ImagePart(data = it.data, mimeType = it.mimeType)
+            com.console.mobile.data.model.ImagePart(data = encodeBase64(it.bytes), mimeType = it.mimeType)
         }
 
         chats.update(sessionId) {

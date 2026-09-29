@@ -1,22 +1,14 @@
 package com.console.mobile.core.chat
 
 import com.console.mobile.core.util.folderName
-import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.ProjectInfo
 import com.console.mobile.data.model.SessionHeader
 import com.console.mobile.data.model.SessionStatus
-
-const val MAX_DRAFT_IMAGES = 2
 
 fun isDraftSession(state: ChatSessionState): Boolean =
     state.input.trim().isNotEmpty() || state.attachments.isNotEmpty()
 
 fun hasPersistableDraft(state: ChatSessionState): Boolean = isDraftSession(state)
-
-fun trimDraftAttachments(attachments: List<ImageAttachment>): List<ImageAttachment> {
-    if (attachments.size <= MAX_DRAFT_IMAGES) return attachments
-    return attachments.takeLast(MAX_DRAFT_IMAGES)
-}
 
 fun draftPreview(state: ChatSessionState, maxLen: Int = 48): String {
     val text = state.input.trim().replace("\\s+".toRegex(), " ")
