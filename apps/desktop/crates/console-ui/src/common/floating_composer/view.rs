@@ -427,6 +427,9 @@ impl FloatingComposerView {
             let trigger = MenuChip::new("floating-thinking-chip")
                 .height(px(26.0))
                 .outlined()
+                // Same fill as the model and approval chips, so the whole
+                // footer row sits on one surface.
+                .background(theme.composer)
                 .selected(thinking_is_open)
                 .label(level.label());
             let on_choose_thinking = self.on_choose_thinking.clone();
