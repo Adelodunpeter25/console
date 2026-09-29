@@ -38,6 +38,9 @@ enum NavigationState {
 }
 
 /// Waits for the result of a script started with `run_agent_script`.
+/// Largest PNG forwarded to the model (Anthropic caps images at 5 MB).
+const MAX_SCREENSHOT_BYTES: usize = 3 * 1024 * 1024;
+
 async fn poll_script_result(
     this: &WeakEntity<ConsoleDesktopApp>,
     cx: &mut AsyncApp,
@@ -528,13 +531,71 @@ impl ConsoleDesktopApp {
             }
 
             "screenshot" => {
-                self.resolve_browser_action_result(
-                    &sess_id,
-                    request_id,
-                    None,
-                    Some("screenshot is not supported yet. Use get_content or run_js to read the page.".to_string()),
-                    cx,
-                );
+                let entry = match self.pick_browser_view(req.tab_id.as_deref(), req.url.as_deref(), true, cx) {
+                    Ok(entry) => entry,
+                    Err(err) => {
+                        self.resolve_browser_action_result(&sess_id, request_id, None, Some(err), cx);
+                        return;
+                    }
+                };
+                let Some((tab_id, view)) = entry else {
+                    self.retry_browser_action_or_fail(&sess_id, req, retries_left, cx);
+                    return;
+                };
+                let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
+                self.agent_browser_tab = Some(tab_id.clone());
+                let Some(slot) = view.read(cx).start_snapshot() else {
+                    self.resolve_browser_action_result(
+                        &sess_id,
+                        request_id,
+                        None,
+                        Some(format!("[tab {tab_id}] Tab has no live webview to capture (open it first)")),
+                        cx,
+                    );
+                    return;
+                };
+                cx.spawn(async move |this, cx| {
+                    let mut outcome = Err("Snapshot timed out".to_string());
+                    for _ in 0..SCRIPT_RESULT_POLLS {
+                        cx.background_executor().timer(BROWSER_POLL_INTERVAL).await;
+                        if let Some(done) = slot.borrow_mut().take() {
+                            outcome = done;
+                            break;
+                        }
+                    }
+                    let _ = this.update(cx, |app, cx| match outcome {
+                        Ok(png) if png.len() > MAX_SCREENSHOT_BYTES => app.resolve_browser_action_result(
+                            &sess_id,
+                            request_id,
+                            None,
+                            Some(format!("[tab {tab_id}] Screenshot too large ({} bytes)", png.len())),
+                            cx,
+                        ),
+                        Ok(png) => {
+                            use base64::Engine;
+                            let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
+                            let title = view.read(cx).tab_label().unwrap_or_default();
+                            let url = view.read(cx).current_url().unwrap_or_default().to_string();
+                            let note = note.map(|n| format!("{n}\n")).unwrap_or_default();
+                            app.resolve_browser_action_with_image(
+                                &sess_id,
+                                request_id,
+                                Some(format!("{note}Tab: {tab_id}\nTitle: {title}\nURL: {url}\nScreenshot attached.")),
+                                None,
+                                Some(b64),
+                                cx,
+                            );
+                        }
+                        Err(err) => app.resolve_browser_action_result(
+                            &sess_id,
+                            request_id,
+                            None,
+                            Some(format!("[tab {tab_id}] {err}")),
+                            cx,
+                        ),
+                    });
+                })
+                .detach();
             }
 
             other => {
@@ -804,6 +865,18 @@ impl ConsoleDesktopApp {
         error: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        self.resolve_browser_action_with_image(session_id, request_id, result, error, None, cx);
+    }
+
+    fn resolve_browser_action_with_image(
+        &self,
+        session_id: &str,
+        request_id: String,
+        result: Option<String>,
+        error: Option<String>,
+        image_base64: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         let client = self.client.clone();
         let sid = session_id.to_string();
         cx.spawn(async move |_this, _cx| {
@@ -815,6 +888,7 @@ impl ConsoleDesktopApp {
                         request_id,
                         result,
                         error,
+                        image_base64,
                     },
                 )
                 .await;

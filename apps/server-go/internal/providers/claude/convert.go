@@ -42,6 +42,48 @@ func toolResultText(content any) string {
 	return text
 }
 
+// toolResultContent returns the tool_result content: plain text, or a block
+// array when the result carries images (Anthropic accepts image blocks there).
+func toolResultContent(content any) any {
+	var items []map[string]any
+	switch v := content.(type) {
+	case []map[string]any:
+		items = v
+	case []any:
+		for _, it := range v {
+			if m, ok := it.(map[string]any); ok {
+				items = append(items, m)
+			}
+		}
+	}
+	blocks := make([]map[string]any, 0, len(items))
+	hasImage := false
+	for _, it := range items {
+		switch it["type"] {
+		case "image":
+			data, _ := it["data"].(string)
+			mime, _ := it["mimeType"].(string)
+			mediaType := normalizeImageMime(mime)
+			if data == "" || mediaType == "" {
+				continue
+			}
+			hasImage = true
+			blocks = append(blocks, map[string]any{
+				"type":   "image",
+				"source": map[string]any{"type": "base64", "media_type": mediaType, "data": data},
+			})
+		case "text":
+			if t, _ := it["text"].(string); strings.TrimSpace(t) != "" {
+				blocks = append(blocks, map[string]any{"type": "text", "text": t})
+			}
+		}
+	}
+	if !hasImage {
+		return toolResultText(content)
+	}
+	return blocks
+}
+
 func parseToolInput(input any) map[string]any {
 	if m, ok := input.(map[string]any); ok {
 		return m
@@ -173,7 +215,7 @@ func ConvertMessages(messages []any, retention loop.CacheRetention) []ClaudeMess
 			for _, r := range msg.Results {
 				block := map[string]any{
 					"type": "tool_result", "tool_use_id": r.ToolCallID,
-					"content": toolResultText(r.Content),
+					"content": toolResultContent(r.Content),
 				}
 				if r.IsError {
 					block["is_error"] = true

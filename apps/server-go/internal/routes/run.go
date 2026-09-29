@@ -134,14 +134,15 @@ func registerRunRoutes(app *fiber.App, runs *run.Service) {
 	app.Post("/api/sessions/:id/browser-action", func(c *fiber.Ctx) error {
 		sessionID := c.Params("id")
 		var body struct {
-			RequestID string `json:"requestId"`
-			Result    string `json:"result"`
-			Error     string `json:"error"`
+			RequestID   string `json:"requestId"`
+			Result      string `json:"result"`
+			Error       string `json:"error"`
+			ImageBase64 string `json:"imageBase64"`
 		}
 		if err := c.BodyParser(&body); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid request body."})
 		}
-		if !runs.ResolveBrowserAction(sessionID, body.RequestID, tools.BrowserActionResult{Result: body.Result, Error: body.Error}) {
+		if !runs.ResolveBrowserAction(sessionID, body.RequestID, tools.BrowserActionResult{Result: body.Result, Error: body.Error, ImageBase64: body.ImageBase64}) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No pending browser action for requestId '" + body.RequestID + "'."})
 		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"resolved": true}})

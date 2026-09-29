@@ -176,6 +176,9 @@ pub struct BrowserActionResult {
     pub result: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Base64 PNG attached to the tool result (screenshot action).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_base64: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -186,6 +189,9 @@ pub struct ResolveBrowserActionDto {
     pub result: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Base64 PNG attached to the tool result (screenshot action).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_base64: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

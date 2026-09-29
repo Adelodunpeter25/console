@@ -273,3 +273,23 @@ func TestClaudeModelsSeed(t *testing.T) {
 		}
 	}
 }
+
+func TestConvertMessages_ToolResultKeepsImageBlock(t *testing.T) {
+	msgs := claude.ConvertMessages([]any{
+		loop.UserMessage{Role: loop.RoleUser, Content: "look"},
+		loop.AssistantMessage{Role: loop.RoleAssistant, ID: "a", Content: []any{
+			loop.ToolCallPart{Type: "toolCall", Call: tools.ToolCall{ID: "c1", Name: "browser", Arguments: json.RawMessage(`{"action":"screenshot"}`)}},
+		}, StopReason: loop.StopToolUse},
+		loop.ToolResultMessage{Role: loop.RoleToolResult, Results: []tools.ToolResult{{
+			ToolCallID: "c1", ToolName: "browser",
+			Content: []map[string]any{
+				{"type": "text", "text": "Screenshot attached."},
+				{"type": "image", "data": "AAAA", "mimeType": "image/png"},
+			},
+		}}},
+	}, loop.CacheShort)
+	raw, _ := json.Marshal(msgs)
+	if !strings.Contains(string(raw), `"media_type":"image/png"`) || strings.Contains(string(raw), `[Tool result:`) {
+		t.Fatalf("image block missing from tool_result: %s", raw)
+	}
+}

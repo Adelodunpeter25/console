@@ -405,6 +405,15 @@ impl BrowserView {
         self.evaluate_script(&wrap_script(request_id, script));
     }
 
+    /// Start a native PNG snapshot of the visible page. The returned slot
+    /// fills once the webview finishes; `None` when there is no live webview.
+    pub fn start_snapshot(&self) -> Option<std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>> {
+        let host = self.host.as_ref()?;
+        let slot = std::rc::Rc::new(std::cell::RefCell::new(None));
+        host.take_snapshot(slot.clone());
+        Some(slot)
+    }
+
     /// Remove and return the result posted for `request_id`, if it arrived.
     pub fn take_script_result(&mut self, request_id: &str) -> Option<Result<String, String>> {
         self.script_results.remove(request_id)

@@ -44,11 +44,37 @@ func ToolResultText(content any) string {
 	if s, ok := content.(string); ok {
 		return s
 	}
-	raw, err := json.Marshal(content)
+	raw, err := json.Marshal(RedactImages(content))
 	if err != nil {
 		return fmt.Sprint(content)
 	}
 	return string(raw)
+}
+
+// RedactImages swaps inline image parts for a short placeholder so base64
+// never lands in a text-only tool result.
+func RedactImages(content any) any {
+	switch v := content.(type) {
+	case []map[string]any:
+		out := make([]map[string]any, len(v))
+		for i, item := range v {
+			out[i] = item
+			if item["type"] == "image" {
+				out[i] = map[string]any{"type": "text", "text": "[image omitted: provider does not support images in tool results]"}
+			}
+		}
+		return out
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = item
+			if m, ok := item.(map[string]any); ok && m["type"] == "image" {
+				out[i] = map[string]any{"type": "text", "text": "[image omitted: provider does not support images in tool results]"}
+			}
+		}
+		return out
+	}
+	return content
 }
 
 // HTTPError formats a non-2xx response with a capped body snippet.

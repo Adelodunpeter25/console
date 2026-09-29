@@ -432,6 +432,51 @@ mod macos_host {
             }
         }
 
+        /// Capture the visible page as PNG. The completion handler fires on
+        /// the main thread and writes into `slot`, which the caller polls.
+        pub fn take_snapshot(&self, slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>) {
+            use block2::RcBlock;
+            use objc2_app_kit::{NSBitmapImageRep, NSBitmapImageFileType, NSImage};
+            use objc2_foundation::{NSDictionary, NSError, NSNumber};
+            use objc2_web_kit::WKSnapshotConfiguration;
+
+            let slot_for_error = slot.clone();
+            let handler = RcBlock::new(move |image: *mut NSImage, error: *mut NSError| {
+                let result = (|| {
+                    if image.is_null() {
+                        let detail = unsafe { error.as_ref() }
+                            .map(|e| e.localizedDescription().to_string())
+                            .unwrap_or_else(|| "no image returned".to_string());
+                        return Err(format!("Snapshot failed: {detail}"));
+                    }
+                    let image = unsafe { &*image };
+                    let tiff = image
+                        .TIFFRepresentation()
+                        .ok_or_else(|| "Snapshot had no bitmap data".to_string())?;
+                    let rep = NSBitmapImageRep::imageRepWithData(&tiff)
+                        .ok_or_else(|| "Could not decode snapshot bitmap".to_string())?;
+                    let props = NSDictionary::new();
+                    let png = unsafe {
+                        rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &props)
+                    }
+                    .ok_or_else(|| "Could not encode snapshot as PNG".to_string())?;
+                    Ok(png.to_vec())
+                })();
+                *slot.borrow_mut() = Some(result);
+            });
+            let Some(mtm) = MainThreadMarker::new() else {
+                *slot_for_error.borrow_mut() = Some(Err("Snapshot must run on the main thread".to_string()));
+                return;
+            };
+            unsafe {
+                let config = WKSnapshotConfiguration::new(mtm);
+                // Cap width (points) so the PNG stays well under provider image limits.
+                config.setSnapshotWidth(Some(&NSNumber::new_f64(1024.0)));
+                self.wk
+                    .takeSnapshotWithConfiguration_completionHandler(Some(&config), &handler);
+            }
+        }
+
         pub fn open_devtools(&self) {
             unsafe {
                 if let Some(inspector) = self.inspector() {
@@ -565,6 +610,9 @@ impl WebviewHost {
         None
     }
     pub fn evaluate_script(&self, _script: &str) {}
+    pub fn take_snapshot(&self, slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>) {
+        *slot.borrow_mut() = Some(Err("Screenshots are only supported on macOS".to_string()));
+    }
     pub fn open_devtools(&self) {}
     pub fn close_devtools(&self) {}
     pub fn is_devtools_open(&self) -> bool {

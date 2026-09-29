@@ -10,6 +10,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/shared"
 )
 
 // LegacyThoughtSignature is used only for legacy histories created before
@@ -56,7 +57,7 @@ func functionCallPart(name string, args map[string]any, id, thoughtSignature str
 
 func functionResponsePart(name, id string, content any) map[string]any {
 	return map[string]any{"functionResponse": map[string]any{
-		"name": name, "id": id, "response": map[string]any{"content": content},
+		"name": name, "id": id, "response": map[string]any{"content": shared.RedactImages(content)},
 	}}
 }
 

@@ -232,3 +232,21 @@ func TestBrowserTool_SnapshotClickTypeValidateAndForward(t *testing.T) {
 		t.Fatalf("type fields not forwarded: %+v", captured)
 	}
 }
+
+func TestBrowserTool_ScreenshotReturnsImagePart(t *testing.T) {
+	tool := tools.NewBrowserTool(func(ctx context.Context, req tools.BrowserActionRequest) (tools.BrowserActionResult, error) {
+		return tools.BrowserActionResult{Result: "Screenshot attached.", ImageBase64: "iVBORw0KGgo="}, nil
+	})
+	args := helpers.MustJSONRaw(t, map[string]any{"action": "screenshot"})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	parts, ok := out.([]map[string]any)
+	if !ok || len(parts) != 2 {
+		t.Fatalf("expected text + image parts, got %#v", out)
+	}
+	if parts[1]["type"] != "image" || parts[1]["data"] != "iVBORw0KGgo=" || parts[1]["mimeType"] != "image/png" {
+		t.Fatalf("bad image part: %#v", parts[1])
+	}
+}

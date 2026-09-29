@@ -29,6 +29,8 @@ type BrowserActionRequest struct {
 type BrowserActionResult struct {
 	Result string `json:"result,omitempty"`
 	Error  string `json:"error,omitempty"`
+	// ImageBase64 is an optional PNG payload (screenshot action).
+	ImageBase64 string `json:"imageBase64,omitempty"`
 }
 
 // BrowserHandler handles one browser action by delegating to the client.
@@ -111,7 +113,11 @@ func NewBrowserTool(handler BrowserHandler) Tool {
 			if res.Error != "" {
 				return nil, NewToolError("Browser action failed: %s", res.Error)
 			}
-			return textResult(res.Result), nil
+			out := textResult(res.Result)
+			if res.ImageBase64 != "" {
+				out = append(out, map[string]any{"type": "image", "data": res.ImageBase64, "mimeType": "image/png"})
+			}
+			return out, nil
 		},
 	)
 }
