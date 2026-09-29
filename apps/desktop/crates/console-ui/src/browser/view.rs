@@ -457,6 +457,13 @@ impl BrowserView {
         self.loading
     }
 
+    /// Description of the last failed navigation, if the page failed to load.
+    pub fn navigation_error_message(&self) -> Option<String> {
+        self.navigation_error
+            .as_ref()
+            .map(|err| err.localized_description.clone())
+    }
+
     pub fn can_go_back(&self) -> bool {
         self.can_go_back
     }
