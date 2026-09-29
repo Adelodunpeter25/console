@@ -239,9 +239,10 @@
     const id = el.id ? `#${el.id}` : '';
     const dim = `${Math.round(rect.width)}×${Math.round(rect.height)}`;
 
+    const base = `${tag}${id}${classSummary(el)}`;
     label.textContent = componentName
-      ? `<${componentName} /> (${dim})`
-      : `${tag}${id}${classSummary(el)} (${dim})`;
+      ? `${base} · <${componentName} /> (${dim})`
+      : `${base} (${dim})`;
 
     // Position label inside if close to top edge
     if (rect.top < 26) {
