@@ -89,9 +89,22 @@
   };
 
   const snapshot = () => {
-    const root = req.selector ? document.querySelector(req.selector) : document;
-    if (!root) return 'No match for selector: ' + req.selector;
-    const all = Array.from(root.querySelectorAll(SEL)).filter(isVisible);
+    let roots = [document];
+    if (req.selector) {
+      try {
+        roots = Array.from(document.querySelectorAll(req.selector));
+      } catch (e) {
+        return 'Invalid selector: ' + e.message;
+      }
+      if (!roots.length) return 'No match for selector: ' + req.selector;
+    }
+    // Scoped roots may nest or be interactive themselves; keep each element once.
+    const found = new Set();
+    for (const root of roots) {
+      if (root !== document && root.matches(SEL)) found.add(root);
+      root.querySelectorAll(SEL).forEach((el) => found.add(el));
+    }
+    const all = Array.from(found).filter(isVisible);
     const els = new Map();
     const lines = all.slice(0, MAX).map((el, i) => {
       const id = 'e' + (i + 1);
