@@ -262,6 +262,10 @@ func (s *SessionService) UpdateApprovalMode(sessionID, approvalMode string) erro
 	return s.inner.UpdateApprovalMode(sessionID, approvalMode)
 }
 
+func (s *SessionService) UpdateThinkingLevel(sessionID, thinkingLevel string) error {
+	return s.inner.UpdateThinkingLevel(sessionID, thinkingLevel)
+}
+
 func (s *SessionService) UpdateStatus(sessionID, status string) error {
 	return s.inner.UpdateStatus(sessionID, status)
 }
