@@ -26,28 +26,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 
-val EXT_LANG_MAP: Map<String, String> = mapOf(
-    "ts" to "typescript", "tsx" to "typescript", "js" to "javascript", "jsx" to "javascript",
-    "mjs" to "javascript", "cjs" to "javascript", "json" to "json", "html" to "html",
-    "css" to "css", "scss" to "scss", "py" to "python", "rb" to "ruby", "go" to "go",
-    "rs" to "rust", "java" to "java", "kt" to "kotlin", "swift" to "swift",
-    "c" to "c", "h" to "c", "cpp" to "cpp", "hpp" to "cpp", "cs" to "csharp",
-    "php" to "php", "sh" to "bash", "bash" to "bash", "zsh" to "bash",
-    "yml" to "yaml", "yaml" to "yaml", "toml" to "toml", "xml" to "xml",
-    "md" to "markdown", "markdown" to "markdown", "sql" to "sql", "lua" to "lua",
-    "r" to "r", "dart" to "dart", "vue" to "html", "svelte" to "html",
-    "graphql" to "graphql", "dockerfile" to "dockerfile"
-)
-
-fun langFromPath(filePath: String): String? {
-    val basename = filePath.split('/').lastOrNull().orEmpty()
-    if (basename == "Dockerfile") return "dockerfile"
-    if (basename == "Makefile") return "makefile"
-    val ext = basename.substringAfterLast('.', "").lowercase()
-    if (ext.isEmpty()) return null
-    return EXT_LANG_MAP[ext]
-}
-
 // Keys must match the Go server's registered tool names verbatim
 // (apps/server-go/internal/agent/tools/*.go `NewTool("...")` calls) — these are
 // what actually reach the wire in ToolCall.Name / ToolResult.ToolName, not a
