@@ -22,6 +22,13 @@ const TAB_OPEN_POLLS: u32 = 33;
 /// How many polls to wait for a script result (~10s).
 const SCRIPT_RESULT_POLLS: u32 = 67;
 
+/// `wait_for` timeout when the agent gives none, and its upper bound.
+const WAIT_FOR_DEFAULT_MS: u64 = 10_000;
+const WAIT_FOR_MAX_MS: u64 = 60_000;
+/// How many polls (~1.5s) a single `wait_for` condition check may take before
+/// it is treated as "page busy" and retried.
+const WAIT_FOR_CHECK_POLLS: u32 = 10;
+
 enum NavigationState {
     /// No tab exists yet for this navigation.
     NoTab,
@@ -37,7 +44,18 @@ async fn poll_script_result(
     view: &Entity<BrowserView>,
     script_id: &str,
 ) -> Result<String, String> {
-    for _ in 0..SCRIPT_RESULT_POLLS {
+    poll_script_result_within(this, cx, view, script_id, SCRIPT_RESULT_POLLS).await
+}
+
+/// Like `poll_script_result` but gives up after `polls` poll intervals.
+async fn poll_script_result_within(
+    this: &WeakEntity<ConsoleDesktopApp>,
+    cx: &mut AsyncApp,
+    view: &Entity<BrowserView>,
+    script_id: &str,
+    polls: u32,
+) -> Result<String, String> {
+    for _ in 0..polls {
         cx.background_executor().timer(BROWSER_POLL_INTERVAL).await;
         let Ok(found) = this.update(cx, |_, cx| {
             view.update(cx, |bv, _| bv.take_script_result(script_id))
@@ -50,7 +68,7 @@ async fn poll_script_result(
     }
     Err(format!(
         "Script produced no result after {}s (the page may be blocking script evaluation, or the script never finished)",
-        (SCRIPT_RESULT_POLLS as u64 * BROWSER_POLL_INTERVAL.as_millis() as u64) / 1000
+        (polls as u64 * BROWSER_POLL_INTERVAL.as_millis() as u64) / 1000
     ))
 }
 
@@ -205,6 +223,108 @@ impl ConsoleDesktopApp {
                         }
                     };
                     let _ = this.update(cx, |app, cx| {
+                        if let Some((id, _)) = app.navigation_view(matching_view.as_ref(), &known_ids) {
+                            app.agent_browser_tab = Some(id);
+                        }
+                        app.resolve_browser_action_result(&sess_id, request_id, result, error, cx);
+                    });
+                })
+                .detach();
+            }
+
+            "wait_for" => {
+                let selector = req.selector.clone().filter(|s| !s.trim().is_empty());
+                let url_contains = req.url_contains.clone().filter(|s| !s.is_empty());
+                let text = req.text.clone().filter(|s| !s.is_empty());
+                if selector.is_none() && url_contains.is_none() && text.is_none() {
+                    self.resolve_browser_action_result(
+                        &sess_id,
+                        request_id,
+                        None,
+                        Some("wait_for needs at least one of selector, urlContains, or text".to_string()),
+                        cx,
+                    );
+                    return;
+                }
+                let entry = match self.pick_browser_view(req.tab_id.as_deref(), None, false, cx) {
+                    Ok(entry) => entry,
+                    Err(err) => {
+                        self.resolve_browser_action_result(&sess_id, request_id, None, Some(err), cx);
+                        return;
+                    }
+                };
+                let Some((tab_id, view)) = entry else {
+                    self.retry_browser_action_or_fail(&sess_id, req, retries_left, cx);
+                    return;
+                };
+                let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
+                self.agent_browser_tab = Some(tab_id.clone());
+
+                let timeout = Duration::from_millis(
+                    req.timeout_ms.unwrap_or(WAIT_FOR_DEFAULT_MS).clamp(100, WAIT_FOR_MAX_MS),
+                );
+                let script = wait_for_script(selector.as_deref(), url_contains.as_deref(), text.as_deref());
+                cx.spawn(async move |this, cx| {
+                    let started = std::time::Instant::now();
+                    let mut attempt = 0u32;
+                    let mut last_problem: Option<String> = None;
+                    let mut met = false;
+                    // Short one-shot checks (rather than one long in-page promise) so the
+                    // wait survives full page loads that destroy the JS context.
+                    loop {
+                        attempt += 1;
+                        let check_id = format!("{request_id}-wf-{attempt}");
+                        let started_check = this.update(cx, |_, cx| {
+                            view.update(cx, |bv, _| bv.run_agent_script(&check_id, &script))
+                        });
+                        if started_check.is_err() {
+                            return;
+                        }
+                        match poll_script_result_within(&this, cx, &view, &check_id, WAIT_FOR_CHECK_POLLS).await {
+                            Ok(value) if value.contains("WF_OK") => {
+                                met = true;
+                                break;
+                            }
+                            Ok(value) if value.contains("WF_ERR") => {
+                                last_problem = Some(value);
+                                break;
+                            }
+                            Ok(_) => {}
+                            // No result usually means the page is mid-navigation; keep waiting.
+                            Err(_) => {}
+                        }
+                        if started.elapsed() >= timeout {
+                            break;
+                        }
+                        cx.background_executor().timer(BROWSER_POLL_INTERVAL).await;
+                    }
+                    let elapsed_ms = started.elapsed().as_millis();
+                    let (result, error) = this
+                        .update(cx, |_, cx| {
+                            let bv = view.read(cx);
+                            let header = format!(
+                                "Tab: {}\nTitle: {}\nURL: {}",
+                                tab_id,
+                                bv.tab_label().unwrap_or_default(),
+                                bv.current_url().unwrap_or_default()
+                            );
+                            let note = note.map(|n| format!("{n}\n")).unwrap_or_default();
+                            if met {
+                                (Some(format!("{note}Condition met after {elapsed_ms}ms\n{header}")), None)
+                            } else if let Some(problem) = last_problem {
+                                (None, Some(format!("{note}{problem}\n{header}")))
+                            } else {
+                                (
+                                    None,
+                                    Some(format!(
+                                        "{note}Timed out after {}ms waiting for the condition\n{header}",
+                                        timeout.as_millis()
+                                    )),
+                                )
+                            }
+                        })
+                        .unwrap_or((None, Some("Console window closed".to_string())));
+                    let _ = this.update(cx, |app, cx| {
                         app.resolve_browser_action_result(&sess_id, request_id, result, error, cx);
                     });
                 })
@@ -242,12 +362,17 @@ impl ConsoleDesktopApp {
                     return;
                 };
 
+                let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
+                self.agent_browser_tab = Some(tab_id.clone());
                 let script_id = request_id.clone();
                 view.update(cx, |bv, _| bv.run_agent_script(&script_id, &js));
                 cx.spawn(async move |this, cx| {
                     let outcome = poll_script_result(&this, cx, &view, &script_id).await;
                     let (result, error) = match outcome {
-                        Ok(value) if is_js => (Some(format!("Tab: {tab_id}\n{value}")), None),
+                        Ok(value) if is_js => {
+                            let note = note.map(|n| format!("{n}\n")).unwrap_or_default();
+                            (Some(format!("{note}Tab: {tab_id}\n{value}")), None)
+                        }
                         Ok(value) => {
                             let header = this
                                 .update(cx, |_, cx| {
@@ -260,7 +385,8 @@ impl ConsoleDesktopApp {
                                     )
                                 })
                                 .unwrap_or_default();
-                            (Some(format!("{header}\n\n{value}")), None)
+                            let note = note.map(|n| format!("{n}\n")).unwrap_or_default();
+                            (Some(format!("{note}{header}\n\n{value}")), None)
                         }
                         Err(err) => (None, Some(format!("[tab {tab_id}] {err}"))),
                     };
@@ -370,7 +496,29 @@ impl ConsoleDesktopApp {
                 return Ok(Some(entry));
             }
         }
+        // Prefer the tab the agent last worked in: `navigate` opens tabs in the
+        // background, so the visible tab is often not the one the agent means.
+        let last = self.agent_browser_tab.as_ref().and_then(|id| {
+            self.browser_views.get(id).map(|view| (id.clone(), view.clone()))
+        });
+        if last.is_some() {
+            return Ok(last);
+        }
         Ok(self.active_browser_entry())
+    }
+
+    /// Warning shown when several tabs are open and the agent named none, so a
+    /// wrong-tab default is visible at the top of the result.
+    fn tab_choice_note(&self, explicit: bool, chosen: &str, cx: &App) -> Option<String> {
+        if explicit || self.browser_views.len() < 2 {
+            return None;
+        }
+        Some(format!(
+            "Note: {} tabs are open and no tabId was given, so tab '{}' was used (the tab you last navigated or acted on). Pass tabId to target another. Open tabs:\n{}",
+            self.browser_views.len(),
+            chosen,
+            self.describe_browser_tabs(cx)
+        ))
     }
 
     /// The tab a navigation is acting on: the reused one, or the newly opened one.
@@ -493,6 +641,25 @@ impl ConsoleDesktopApp {
         })
         .detach();
     }
+}
+
+/// Page-side one-shot check for `wait_for`. Returns WF_OK when every given
+/// condition holds, WF_NO otherwise, or WF_ERR on an invalid selector.
+fn wait_for_script(selector: Option<&str>, url_contains: Option<&str>, text: Option<&str>) -> String {
+    let q = |v: Option<&str>| {
+        serde_json::to_string(&v.unwrap_or("")).unwrap_or_else(|_| "\"\"".to_string())
+    };
+    format!(
+        "(() => {{ const sel = {}; const u = {}; const t = {}; \
+         try {{ if (sel && !document.querySelector(sel)) return 'WF_NO'; }} \
+         catch (e) {{ return 'WF_ERR: Invalid selector: ' + e.message; }} \
+         if (u && !location.href.includes(u)) return 'WF_NO'; \
+         if (t && !(document.body && document.body.innerText.includes(t))) return 'WF_NO'; \
+         return 'WF_OK'; }})()",
+        q(selector),
+        q(url_contains),
+        q(text)
+    )
 }
 
 /// Page-side script for `get_content`: visible text, or the text of every

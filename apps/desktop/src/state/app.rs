@@ -653,6 +653,7 @@ impl ConsoleDesktopApp {
             floating_composer: FloatingComposerState::new(window, cx),
             terminals: std::collections::HashMap::new(),
             browser_views: std::collections::HashMap::new(),
+            agent_browser_tab: None,
             auth_status: None,
             auth_logging_in: std::collections::HashSet::new(),
             usage_reports: None,

@@ -177,3 +177,27 @@ func TestBrowserTool_TabsAndTabID(t *testing.T) {
 		t.Fatalf("tabId not forwarded: %+v", captured)
 	}
 }
+
+func TestBrowserTool_WaitForValidatesAndForwards(t *testing.T) {
+	var captured tools.BrowserActionRequest
+	handler := func(ctx context.Context, req tools.BrowserActionRequest) (tools.BrowserActionResult, error) {
+		captured = req
+		return tools.BrowserActionResult{Result: "Condition met"}, nil
+	}
+	tool := tools.NewBrowserTool(handler)
+
+	_, err := tool.Execute(context.Background(), helpers.MustJSONRaw(t, map[string]any{"action": "wait_for"}))
+	if err == nil || !strings.Contains(err.Error(), "wait_for") {
+		t.Fatalf("expected wait_for condition error, got %v", err)
+	}
+
+	_, err = tool.Execute(context.Background(), helpers.MustJSONRaw(t, map[string]any{
+		"action": "wait_for", "urlContains": "/s?k=", "text": "results", "selector": "#search", "timeoutMs": 5000,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if captured.URLContains != "/s?k=" || captured.Text != "results" || captured.Selector != "#search" || captured.TimeoutMs != 5000 {
+		t.Fatalf("wait_for fields not forwarded: %+v", captured)
+	}
+}

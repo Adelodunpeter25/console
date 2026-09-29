@@ -16,6 +16,10 @@ type BrowserActionRequest struct {
 	Script    string `json:"script,omitempty"`
 	Selector  string `json:"selector,omitempty"`
 	TabID     string `json:"tabId,omitempty"`
+	// wait_for conditions (all provided conditions must hold).
+	URLContains string `json:"urlContains,omitempty"`
+	Text        string `json:"text,omitempty"`
+	TimeoutMs   int    `json:"timeoutMs,omitempty"`
 }
 
 // BrowserActionResult is the result received from the desktop client.
@@ -28,11 +32,14 @@ type BrowserActionResult struct {
 type BrowserHandler func(ctx context.Context, req BrowserActionRequest) (BrowserActionResult, error)
 
 type browserInput struct {
-	Action   string `json:"action" jsonschema:"required,enum=navigate,enum=run_js,enum=get_content,enum=tabs,enum=screenshot,description=Browser action: 'navigate' to a URL (returns the tab id), 'run_js' to evaluate JavaScript and get its return value, 'get_content' to read page text (or the text of a selector), 'tabs' to list open tabs, or 'screenshot' (not supported yet)."`
-	URL      string `json:"url,omitempty" jsonschema:"description=URL to navigate to (required for 'navigate')."`
-	Script   string `json:"script,omitempty" jsonschema:"description=JavaScript expression or function to evaluate (required for 'run_js'). The value it returns (promises are awaited) is sent back as the result."`
-	Selector string `json:"selector,omitempty" jsonschema:"description=Optional CSS selector for 'get_content'. Returns the text of matching elements, or a no-match message."`
-	TabID    string `json:"tabId,omitempty" jsonschema:"description=Tab id from 'navigate' or 'tabs'. Omit to use the active browser tab (for 'navigate': a tab already on that URL, else a new tab)."`
+	Action      string `json:"action" jsonschema:"required,enum=navigate,enum=run_js,enum=get_content,enum=tabs,enum=wait_for,enum=screenshot,description=Browser action: 'navigate' to a URL (returns the tab id), 'wait_for' until a selector, URL fragment, or text appears (works for client-side navigation), 'run_js' to evaluate JavaScript and get its return value, 'get_content' to read page text (or the text of a selector), 'tabs' to list open tabs, or 'screenshot' (not supported yet)."`
+	URL         string `json:"url,omitempty" jsonschema:"description=URL to navigate to (required for 'navigate')."`
+	Script      string `json:"script,omitempty" jsonschema:"description=JavaScript expression or function to evaluate (required for 'run_js'). The value it returns (promises are awaited) is sent back as the result."`
+	Selector    string `json:"selector,omitempty" jsonschema:"description=Optional CSS selector for 'get_content'. Returns the text of matching elements, or a no-match message."`
+	TabID       string `json:"tabId,omitempty" jsonschema:"description=Tab id from 'navigate' or 'tabs'. Omit to use the tab you last navigated or worked in (for 'navigate': a tab already on that URL, else a new tab). Pass it explicitly when several tabs are open."`
+	URLContains string `json:"urlContains,omitempty" jsonschema:"description=For 'wait_for': substring the tab URL must contain."`
+	Text        string `json:"text,omitempty" jsonschema:"description=For 'wait_for': text the page must contain."`
+	TimeoutMs   int    `json:"timeoutMs,omitempty" jsonschema:"description=For 'wait_for': max wait in milliseconds (default 10000, max 60000)."`
 }
 
 // NewBrowserTool builds the "browser" tool bound to handler.
@@ -52,10 +59,14 @@ func NewBrowserTool(handler BrowserHandler) Tool {
 				if strings.TrimSpace(in.Script) == "" {
 					return nil, NewToolError("Script is required for 'run_js' action.")
 				}
+			case "wait_for":
+				if strings.TrimSpace(in.Selector) == "" && strings.TrimSpace(in.URLContains) == "" && in.Text == "" {
+					return nil, NewToolError("'wait_for' needs at least one of selector, urlContains, or text.")
+				}
 			case "screenshot", "get_content", "tabs":
 				// valid
 			default:
-				return nil, NewToolError("Unknown action: '%s'. Supported actions: navigate, run_js, get_content, tabs, screenshot.", action)
+				return nil, NewToolError("Unknown action: '%s'. Supported actions: navigate, run_js, get_content, tabs, wait_for, screenshot.", action)
 			}
 
 			if handler == nil {
@@ -69,6 +80,10 @@ func NewBrowserTool(handler BrowserHandler) Tool {
 				Script:    in.Script,
 				Selector:  in.Selector,
 				TabID:     in.TabID,
+
+				URLContains: in.URLContains,
+				Text:        in.Text,
+				TimeoutMs:   in.TimeoutMs,
 			}
 
 			res, err := handler(ctx, req)
