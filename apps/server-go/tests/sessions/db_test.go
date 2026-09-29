@@ -105,6 +105,11 @@ func TestSessionLifecycle(t *testing.T) {
 	if _, ok := decoded["createdAt"]; !ok {
 		t.Fatalf("createdAt not injected: %v", decoded)
 	}
+	// The row id rides along with createdAt: the desktop keys composer history
+	// recall off it to re-stage that message's image attachments.
+	if decoded["id"] != "m1" {
+		t.Fatalf("id not injected: %v", decoded)
+	}
 	if loaded.Header.MessageCount != 1 {
 		t.Fatalf("message count = %d, want 1", loaded.Header.MessageCount)
 	}

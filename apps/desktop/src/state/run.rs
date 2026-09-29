@@ -106,7 +106,14 @@ impl ConsoleDesktopApp {
         self.clear_draft_for_session(Some(&session_id), cx);
         self.revoke_sidebar_draft(&session_id);
         self.composer_for_pane(&pane_id).update(cx, |input, cx| {
-            input.record_prompt_history(prompt.clone(), dq.context_files.clone().unwrap_or_default(), cx);
+            // The server assigns the message id, so it is unknown here; the
+            // history is rebuilt from the transcript once the run settles.
+            input.record_prompt_history(
+                prompt.clone(),
+                dq.context_files.clone().unwrap_or_default(),
+                None,
+                cx,
+            );
         });
         let is_first = self.queued_prompts_for_session(&session_id).len() == 1;
         if is_first {
@@ -328,12 +335,16 @@ impl ConsoleDesktopApp {
         }
         self.composer_for_pane(&run_pane_id)
             .update(cx, |input, cx| {
-                input.record_prompt_history(prompt.clone(), context_files.clone(), cx);
+                // Optimistic: this message has no server id yet, so recalling
+                // it restores text and mentions but not images. The rebuilt
+                // history after the run settles carries the real id.
+                input.record_prompt_history(prompt.clone(), context_files.clone(), None, cx);
             });
 
         // Push the clean prompt and structured paths into the optimistic
         // transcript. The server receives the same two fields separately.
         let user_msg = AgentMessage::User {
+            id: None,
             content: prompt.clone(),
             attachments: if attachments.is_empty() {
                 None
@@ -902,6 +913,7 @@ impl ConsoleDesktopApp {
                         let mut list = list;
                         let popped = list.remove(0);
                         let user_msg = console_core::AgentMessage::User {
+                            id: None,
                             content: popped.prompt,
                             attachments: popped.attachments,
                             context_files: popped.context_files,

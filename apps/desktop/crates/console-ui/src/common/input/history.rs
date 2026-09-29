@@ -207,32 +207,53 @@ impl EditHistory {
     }
 }
 
+/// One submitted prompt, as recalled by Up/Down in the composer.
+///
+/// The text is what the field shows; `context_files` are the inline @-mention
+/// paths, kept so a recall can rebuild mention chips instead of leaving bare
+/// filenames in the text. `message_id` points back at the user message this
+/// prompt became, which is how a recall re-stages the image attachments that
+/// message carried — the composer itself never sees attachment bytes, so it
+/// hands the id to the owning app and reads them back out of the transcript.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PromptHistoryEntry {
+    pub text: String,
+    pub context_files: Vec<String>,
+    pub message_id: Option<String>,
+}
+
+impl PromptHistoryEntry {
+    pub fn new(text: String, context_files: Vec<String>, message_id: Option<String>) -> Self {
+        Self {
+            text,
+            context_files,
+            message_id,
+        }
+    }
+}
+
 /// Prompt submission history, recalled with Up/Down while the caret is at the
 /// top/bottom of the composer.
-///
-/// Each entry pairs the submitted text with the full paths of any inline
-/// file mentions it carried, so recalling an older prompt can rebuild its
-/// mention chips instead of showing the mention filename as bare text.
 #[derive(Default)]
 pub struct PromptHistory {
-    pub entries: Vec<(String, Vec<String>)>,
+    pub entries: Vec<PromptHistoryEntry>,
     /// Uncommitted draft saved when starting history navigation, restored
     /// when stepping forward past the newest entry.
-    pub draft: Option<(String, Vec<String>)>,
+    pub draft: Option<PromptHistoryEntry>,
     /// Index into `entries` of the entry currently showing. `None` while
     /// editing the draft.
     pub index: Option<usize>,
 }
 
 impl PromptHistory {
-    pub fn set_entries(&mut self, entries: Vec<(String, Vec<String>)>) {
+    pub fn set_entries(&mut self, entries: Vec<PromptHistoryEntry>) {
         self.entries.clear();
-        for (text, context_files) in entries
+        for entry in entries
             .into_iter()
-            .filter(|(text, _)| !text.trim().is_empty())
+            .filter(|entry| !entry.text.trim().is_empty())
         {
-            if self.entries.last().map(|(last, _)| last) != Some(&text) {
-                self.entries.push((text, context_files));
+            if self.entries.last().map(|last| &last.text) != Some(&entry.text) {
+                self.entries.push(entry);
             }
         }
         self.reset_navigation();
@@ -242,14 +263,15 @@ impl PromptHistory {
         self.index.is_some()
     }
 
-    pub fn record(&mut self, text: String, context_files: Vec<String>) {
+    pub fn record(&mut self, text: String, context_files: Vec<String>, message_id: Option<String>) {
         if text.trim().is_empty() {
             return;
         }
-        if self.entries.last().map(|(last, _)| last.as_str()) == Some(text.as_str()) {
+        let entry = PromptHistoryEntry::new(text, context_files, message_id);
+        if self.entries.last().map(|last| &last.text) == Some(&entry.text) {
             return;
         }
-        self.entries.push((text, context_files));
+        self.entries.push(entry);
         self.index = None;
         self.draft = None;
     }
@@ -260,13 +282,13 @@ impl PromptHistory {
     }
 
     /// Move up (older, `next = false`) or down (newer, `next = true`) through
-    /// history. Returns the text and context-file paths to display.
+    /// history. Returns the entry to display.
     pub fn navigate(
         &mut self,
         next: bool,
         current: &str,
         current_context_files: &[String],
-    ) -> Option<(String, Vec<String>)> {
+    ) -> Option<PromptHistoryEntry> {
         if self.entries.is_empty() {
             return None;
         }
@@ -280,13 +302,17 @@ impl PromptHistory {
                 return Some(self.entries[next].clone());
             }
             self.index = None;
-            return Some(self.draft.take().unwrap_or_default());
+            return Some(self.draft.clone().unwrap_or_default());
         }
 
         let next = match self.index {
             Some(index) => index.saturating_sub(1),
             None => {
-                self.draft = Some((current.to_owned(), current_context_files.to_vec()));
+                self.draft = Some(PromptHistoryEntry::new(
+                    current.to_owned(),
+                    current_context_files.to_vec(),
+                    None,
+                ));
                 self.entries.len() - 1
             }
         };

@@ -1,6 +1,8 @@
 //! Waku-style transcript surface backed by `console-core::AgentMessage`.
 
-use console_core::{AgentMessage, AssistantContentPart, AssistantMessage, ToolResult};
+use console_core::{
+    AgentMessage, AssistantContentPart, AssistantMessage, ImageAttachment, ToolResult,
+};
 use gpui::{
     App, Context, FocusHandle, FollowMode, IntoElement, ListAlignment, ListOffset, ListState,
     Render, SharedString, Window, canvas, div, list, prelude::*, px,
@@ -269,6 +271,23 @@ impl TranscriptView {
 
     pub fn message_count(&self) -> usize {
         self.messages.len()
+    }
+
+    /// The image attachments carried by the user message with this id.
+    ///
+    /// Composer history recall holds a message id rather than the image bytes
+    /// itself, so this is where a recalled prompt's staged attachments are
+    /// read back from. `None` when no loaded user message carries that id —
+    /// the message may not be in the loaded window, or may have had no images.
+    pub fn attachments_for_message(&self, message_id: &str) -> Option<Vec<ImageAttachment>> {
+        self.messages.iter().find_map(|message| match message {
+            AgentMessage::User {
+                id: Some(id),
+                attachments,
+                ..
+            } if id == message_id => Some(attachments.clone().unwrap_or_default()),
+            _ => None,
+        })
     }
 
     /// Re-anchor the list after the message set changed: keep following the
@@ -1157,6 +1176,7 @@ fn transcript_row(
             attachments,
             context_files,
             created_at,
+            ..
         } => {
             let mut bubble = UserMessageBubble::new(content.clone())
                 .created_at(*created_at)

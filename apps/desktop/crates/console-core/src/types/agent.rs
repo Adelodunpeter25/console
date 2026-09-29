@@ -59,6 +59,11 @@ pub struct AssistantMessage {
 pub enum AgentMessage {
     #[serde(rename = "user")]
     User {
+        /// Server-assigned message id. The server has always sent it; the
+        /// composer needs it to re-stage a recalled prompt's image
+        /// attachments from the transcript.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
         content: String,
         attachments: Option<Vec<ImageAttachment>>,
         #[serde(default, skip_serializing_if = "Option::is_none", rename = "contextFiles")]

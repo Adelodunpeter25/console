@@ -254,7 +254,7 @@ func (s *Service) Load(sessionID string, limit int64, before int64) (*types.Load
 		return nil, err
 	}
 
-	query := `SELECT content, created_at, rowid FROM messages`
+	query := `SELECT content, created_at, rowid, id FROM messages`
 	var args []any
 	if before > 0 {
 		query += ` WHERE rowid < ?`
@@ -275,11 +275,12 @@ func (s *Service) Load(sessionID string, limit int64, before int64) (*types.Load
 		content   string
 		createdAt int64
 		rowid     int64
+		id        string
 	}
 	fetched := make([]row, 0)
 	for msgRows.Next() {
 		var r row
-		if err := msgRows.Scan(&r.content, &r.createdAt, &r.rowid); err != nil {
+		if err := msgRows.Scan(&r.content, &r.createdAt, &r.rowid, &r.id); err != nil {
 			return nil, err
 		}
 		fetched = append(fetched, r)
@@ -295,7 +296,7 @@ func (s *Service) Load(sessionID string, limit int64, before int64) (*types.Load
 	// Oldest first for display.
 	messages := make([]json.RawMessage, 0, len(fetched))
 	for i := len(fetched) - 1; i >= 0; i-- {
-		messages = append(messages, withCreatedAt(fetched[i].content, fetched[i].createdAt))
+		messages = append(messages, withCreatedAt(fetched[i].content, fetched[i].createdAt, fetched[i].id))
 	}
 	result := &types.LoadedSession{Header: headers[0], Messages: messages, HasMore: hasMore}
 	if hasMore && len(fetched) > 0 {
@@ -308,12 +309,20 @@ func (s *Service) Load(sessionID string, limit int64, before int64) (*types.Load
 // withCreatedAt injects createdAt into a stored message object, mirroring
 // the TS loadSession (msg.createdAt = r.created_at). Non-object payloads
 // pass through untouched.
-func withCreatedAt(content string, createdAt int64) json.RawMessage {
+//
+// The row id is injected alongside it. The client keys composer history
+// recall off a user message's id so it can re-stage that message's image
+// attachments; the stored payload carries only the role-specific fields, so
+// without this every loaded message would arrive id-less.
+func withCreatedAt(content string, createdAt int64, id string) json.RawMessage {
 	var obj map[string]any
 	if err := json.Unmarshal([]byte(content), &obj); err != nil {
 		return json.RawMessage(content)
 	}
 	obj["createdAt"] = createdAt
+	if id != "" {
+		obj["id"] = id
+	}
 	out, err := json.Marshal(obj)
 	if err != nil {
 		return json.RawMessage(content)

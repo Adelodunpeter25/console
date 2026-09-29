@@ -1,5 +1,6 @@
 use console_core::types::agent::{AskQuestionRequest, PermissionRequest};
 use console_core::{ImageAttachment, SessionStatus};
+use gpui::Context;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
@@ -164,6 +165,56 @@ impl ConsoleDesktopApp {
         } else {
             self.attachments.insert(pane_id.to_string(), Rc::new(items));
         }
+    }
+
+    /// Re-stage the images a recalled prompt carried, so stepping back through
+    /// composer history with Up/Down brings each message's screenshots back as
+    /// chips alongside its text and @-mentions.
+    ///
+    /// The composer only knows the message id — image bytes live here and in
+    /// the transcript — so the chips are read back out of the loaded messages.
+    /// The chips staged before navigation began are parked in
+    /// `history_draft_attachments` and restored when the user steps forward
+    /// onto the uncommitted draft again. Ids with no loaded message (the sent
+    /// prompt the server has not echoed back yet) stage nothing rather than
+    /// clearing what is already there.
+    pub(crate) fn restore_recalled_attachments(
+        &mut self,
+        pane_id: &str,
+        message_id: Option<&str>,
+        is_draft: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if is_draft {
+            let parked = self
+                .history_draft_attachments
+                .remove(pane_id)
+                .unwrap_or_else(|| Rc::new(Vec::new()));
+            self.set_attachments_for_pane(pane_id, (*parked).clone());
+            cx.notify();
+            return;
+        }
+
+        let Some(message_id) = message_id else {
+            return;
+        };
+        // Park the pre-navigation chips on the first step back only; later
+        // steps must not overwrite them with another entry's images.
+        if !self.history_draft_attachments.contains_key(pane_id) {
+            let staged = self.attachments_for_pane(pane_id);
+            self.history_draft_attachments
+                .insert(pane_id.to_string(), staged);
+        }
+
+        let Some(attachments) = self
+            .transcript_for_pane(pane_id)
+            .read(cx)
+            .attachments_for_message(message_id)
+        else {
+            return;
+        };
+        self.set_attachments_for_pane(pane_id, attachments);
+        cx.notify();
     }
 
     /// Append staged images to a pane's chips without cloning the existing

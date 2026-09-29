@@ -152,6 +152,17 @@ impl ConsoleDesktopApp {
                         cx,
                     );
                 }
+                ComposerEvent::HistoryRecalled {
+                    message_id,
+                    is_draft,
+                } => {
+                    this.restore_recalled_attachments(
+                        &edit_pane_id,
+                        message_id.as_deref(),
+                        *is_draft,
+                        cx,
+                    );
+                }
                 _ => {}
             },
         ));

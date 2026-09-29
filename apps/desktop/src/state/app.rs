@@ -5,6 +5,7 @@
 //! `errors`, `sessions`, `layout`, `run`) as additional `impl` blocks.
 
 use console_core::{AgentMessage, ApprovalMode, ConsoleClient, WorkspaceNode};
+use console_ui::common::input::PromptHistoryEntry;
 use console_ui::markdown::render::TranscriptSelection;
 use console_ui::utils::SessionDateGroup;
 use console_ui::{
@@ -21,16 +22,22 @@ use crate::types::WorkspacePaneState;
 /// User prompts in a session, used to populate the composer's up-arrow
 /// history. Shared by `sessions` and `run`. Each entry pairs the prompt text
 /// with the full paths of any file mentions it carried, so recalling an
-/// older prompt from history can rebuild its mention chips.
-pub(crate) fn user_prompt_history(messages: &[AgentMessage]) -> Vec<(String, Vec<String>)> {
+/// older prompt from history can rebuild its mention chips, plus the id of
+/// the user message it became so the app can re-stage its image attachments.
+pub(crate) fn user_prompt_history(messages: &[AgentMessage]) -> Vec<PromptHistoryEntry> {
     messages
         .iter()
         .filter_map(|message| match message {
             AgentMessage::User {
+                id,
                 content,
                 context_files,
                 ..
-            } => Some((content.clone(), context_files.clone().unwrap_or_default())),
+            } => Some(PromptHistoryEntry::new(
+                content.clone(),
+                context_files.clone().unwrap_or_default(),
+                id.clone(),
+            )),
             _ => None,
         })
         .collect()
@@ -481,6 +488,17 @@ impl ConsoleDesktopApp {
                         }
                         cx.notify();
                     }
+                    ComposerEvent::HistoryRecalled {
+                        message_id,
+                        is_draft,
+                    } => {
+                        this.restore_recalled_attachments(
+                            "pane-main",
+                            message_id.as_deref(),
+                            *is_draft,
+                            cx,
+                        );
+                    }
                     _ => {}
                 }
             }),
@@ -570,6 +588,7 @@ impl ConsoleDesktopApp {
             composer_input,
             question_input,
             attachments: std::collections::HashMap::new(),
+            history_draft_attachments: std::collections::HashMap::new(),
             pending_permissions: std::collections::HashMap::new(),
             pending_questions: std::collections::HashMap::new(),
             question_selected: std::collections::HashMap::new(),

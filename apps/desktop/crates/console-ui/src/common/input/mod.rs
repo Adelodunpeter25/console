@@ -127,6 +127,16 @@ pub enum ComposerEvent {
     /// Backspace in an already-empty composer. The chat idiom for "remove
     /// the last staged attachment"; owners without attachments ignore it.
     BackspaceOnEmpty,
+    /// Up/Down recalled an earlier prompt. The field owns text and mention
+    /// chips but never sees attachment bytes — those live in the owning app —
+    /// so it reports which user message was recalled and lets the app
+    /// re-stage that message's images. `message_id` is `None` when the
+    /// composer stepped forward past the newest entry and restored the
+    /// uncommitted draft, signalled by `is_draft`.
+    HistoryRecalled {
+        message_id: Option<String>,
+        is_draft: bool,
+    },
 }
 
 /// Clipboard payloads whose primary representation is an image or file list.
@@ -845,22 +855,33 @@ impl ComposerInput {
     fn navigate_prompt_history(&mut self, down: bool, cx: &mut Context<Self>) -> bool {
         let current_context_files: Vec<String> =
             self.mentions.iter().map(|m| m.path.clone()).collect();
-        let Some((content, context_files)) =
+        let Some(entry) =
             self.prompt_history
                 .navigate(down, &self.content, &current_context_files)
         else {
             return false;
         };
-        self.content = content.into();
+        // After a successful navigate, a cleared index means the forward step
+        // ran off the end of the list and restored the saved draft. Stepping
+        // back always sets an index, so this is unambiguous.
+        let is_draft = !self.prompt_history.is_navigating();
+        let message_id = entry.message_id.clone();
+        self.content = entry.text.into();
         let offset = self.content.len();
         self.selected_range = offset..offset;
         self.selection_reversed = false;
         self.marked_range = None;
         self.vertical_navigation = None;
-        self.mentions = mentions_from_context_files(&self.content, &context_files);
+        self.mentions = mentions_from_context_files(&self.content, &entry.context_files);
         self.refresh_highlight();
         self.pause_blink_cursor(cx);
         cx.emit(ComposerEvent::Edited);
+        // The app owns staged attachments, so tell it which message was
+        // recalled and let it swap the chips to match.
+        cx.emit(ComposerEvent::HistoryRecalled {
+            message_id,
+            is_draft,
+        });
         cx.notify();
         true
     }
@@ -870,7 +891,7 @@ impl ComposerInput {
     /// when history navigation began.
     pub fn set_prompt_history(
         &mut self,
-        entries: Vec<(String, Vec<String>)>,
+        entries: Vec<PromptHistoryEntry>,
         cx: &mut Context<Self>,
     ) {
         self.prompt_history.set_entries(entries);
@@ -881,13 +902,18 @@ impl ComposerInput {
     /// collapsed, while older repeated prompts remain valid history entries.
     /// `context_files` are the full paths of any inline file mentions the
     /// prompt carried, so recalling it later can rebuild its mention chips.
+    /// `message_id` is the id the server assigned to the resulting user
+    /// message, when it is already known — pass `None` at submit time and let
+    /// the later `set_prompt_history` rebuild from the transcript fill it in.
     pub fn record_prompt_history(
         &mut self,
         prompt: impl Into<String>,
         context_files: Vec<String>,
+        message_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        self.prompt_history.record(prompt.into(), context_files);
+        self.prompt_history
+            .record(prompt.into(), context_files, message_id);
         cx.notify();
     }
 
@@ -1155,7 +1181,7 @@ impl ComposerInput {
                     let context_files: Vec<String> =
                         self.mentions.iter().map(|m| m.path.clone()).collect();
                     self.prompt_history
-                        .record(value.clone(), context_files.clone());
+                        .record(value.clone(), context_files.clone(), None);
                     cx.emit(ComposerEvent::Submit(value, context_files));
                     self.clear(cx);
                 }
@@ -1187,7 +1213,7 @@ impl ComposerInput {
                 .map(|mention| mention.path.clone())
                 .collect();
             self.prompt_history
-                .record(value.clone(), context_files.clone());
+                .record(value.clone(), context_files.clone(), None);
             cx.emit(ComposerEvent::SubmitSteer(value, context_files));
             self.clear(cx);
         }
