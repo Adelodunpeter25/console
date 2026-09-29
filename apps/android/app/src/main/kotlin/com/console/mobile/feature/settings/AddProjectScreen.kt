@@ -17,9 +17,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,13 +64,14 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf(false) }
+    var showHidden by remember { mutableStateOf(false) }
 
-    fun browse(path: String?) {
+    fun browse(path: String?, hidden: Boolean = showHidden) {
         loading = true
         error = null
         scope.launch {
             try {
-                val res = withContext(Dispatchers.IO) { AppContainer.fsRepository.browseDirectory(path) }
+                val res = withContext(Dispatchers.IO) { AppContainer.fsRepository.browseDirectory(path, hidden) }
                 currentPath = res.currentPath
                 parentPath = res.parentPath
                 dirs = res.entries.filter { it.isDir }
@@ -82,7 +86,28 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
     LaunchedEffect(Unit) { browse(null) }
 
     Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-        ScreenHeader(title = "Add Project", subtitle = currentPath, onBack = onBack)
+        ScreenHeader(
+            title = "Add Project",
+            subtitle = currentPath,
+            onBack = onBack,
+            actions = {
+                IconButton(
+                    onClick = {
+                        val next = !showHidden
+                        showHidden = next
+                        browse(currentPath, next)
+                    },
+                    modifier = Modifier.size(40.dp),
+                ) {
+                    Icon(
+                        imageVector = if (showHidden) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                        contentDescription = if (showHidden) "Hide hidden files" else "Show hidden files",
+                        tint = if (showHidden) ConsoleColors.TextPrimary else ConsoleColors.TextMuted,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            },
+        )
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
                 loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

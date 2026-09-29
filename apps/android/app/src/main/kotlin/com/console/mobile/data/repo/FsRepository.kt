@@ -16,10 +16,10 @@ class FsRepository(
     private val fsState: FsStateHolder,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) {
-    suspend fun browseDirectory(path: String?): FsBrowseResult = withContext(Dispatchers.IO) {
+    suspend fun browseDirectory(path: String?, showHidden: Boolean = false): FsBrowseResult = withContext(Dispatchers.IO) {
         fsState.patch { it.copy(browsing = true, error = null) }
         try {
-            val res = api.getFsBrowse(path)
+            val res = api.getFsBrowse(path, showHidden)
             fsState.patch {
                 it.copy(
                     browsePath = res.currentPath,

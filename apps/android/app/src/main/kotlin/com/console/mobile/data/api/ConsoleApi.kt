@@ -50,7 +50,7 @@ interface ConsoleApi {
     suspend fun getProjects(): List<ProjectInfo>
     suspend fun addProject(path: String): ProjectInfo
     suspend fun deleteProject(projectId: String)
-    suspend fun getFsBrowse(path: String?): FsBrowseResult
+    suspend fun getFsBrowse(path: String?, showHidden: Boolean = false): FsBrowseResult
     suspend fun getFsTree(path: String?): List<FsTreeEntry>
     suspend fun getFsEntries(path: String, depth: Int = 1): List<FsTreeEntry>
     suspend fun searchFiles(root: String, query: String, limit: Int = 20, includeDirs: Boolean = true): List<com.console.mobile.data.model.FileSearchResult>

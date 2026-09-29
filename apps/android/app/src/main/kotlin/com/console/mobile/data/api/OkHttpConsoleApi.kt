@@ -136,8 +136,14 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         http.unwrapOrRaw(raw, JsonElement.serializer(), "delete project")
     }
 
-    override suspend fun getFsBrowse(path: String?): FsBrowseResult {
-        val raw = http.get("/api/fs/browse", mapOf("path" to path))
+    override suspend fun getFsBrowse(path: String?, showHidden: Boolean): FsBrowseResult {
+        val raw = http.get(
+            "/api/fs/browse",
+            mapOf(
+                "path" to path,
+                "hidden" to if (showHidden) "true" else null,
+            ),
+        )
         return http.unwrapOrRaw(raw, FsBrowseResultSerializer, "browse fs")
     }
 
