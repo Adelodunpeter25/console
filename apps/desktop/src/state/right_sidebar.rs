@@ -284,6 +284,47 @@ impl ConsoleDesktopApp {
         }
     }
 
+    /// Resolve the checkout a session is working in.
+    ///
+    /// The session's own `cwd` is authoritative: for a worktree session it is
+    /// the worktree path, not the project root. Anything that needs a git
+    /// status/diff target for a session must come through here rather than
+    /// reading `project.path` directly, or worktree changes render empty.
+    fn session_cwd(
+        &self,
+        session_id: &str,
+        project_id: Option<&str>,
+        pane_id: &str,
+    ) -> Option<String> {
+        self.sessions
+            .iter()
+            .find(|s| s.id == session_id)
+            .and_then(|s| {
+                if !s.cwd.is_empty() {
+                    Some(s.cwd.clone())
+                } else if let Some(pid) = &s.project_id {
+                    self.projects
+                        .iter()
+                        .find(|p| &p.id == pid)
+                        .map(|p| p.path.clone())
+                } else {
+                    None
+                }
+            })
+            .or_else(|| {
+                project_id.and_then(|pid| {
+                    self.projects
+                        .iter()
+                        .find(|p| &p.id == pid)
+                        .map(|p| p.path.clone())
+                })
+            })
+            .or_else(|| {
+                self.selected_project_for_pane(pane_id)
+                    .map(|p| p.path.clone())
+            })
+    }
+
     pub fn active_inspector_target(&self) -> (Option<String>, Option<String>) {
         let pane_id = self.active_pane_id.as_deref().unwrap_or("pane-main");
 
@@ -305,39 +346,26 @@ impl ConsoleDesktopApp {
                 project_id,
                 ..
             }) => {
-                let session = self.sessions.iter().find(|s| &s.id == session_id);
-                let cwd = session
-                    .and_then(|s| {
-                        if !s.cwd.is_empty() {
-                            Some(s.cwd.clone())
-                        } else if let Some(pid) = &s.project_id {
-                            self.projects
-                                .iter()
-                                .find(|p| &p.id == pid)
-                                .map(|p| p.path.clone())
-                        } else {
-                            None
-                        }
-                    })
-                    .or_else(|| {
-                        project_id.as_ref().and_then(|pid| {
-                            self.projects
-                                .iter()
-                                .find(|p| &p.id == pid)
-                                .map(|p| p.path.clone())
-                        })
-                    })
-                    .or_else(|| {
-                        self.selected_project_for_pane(pane_id)
-                            .map(|p| p.path.clone())
-                    });
+                let cwd = self.session_cwd(session_id, project_id.as_deref(), pane_id);
+                (Some(session_id.clone()), cwd)
+            }
+            // A changes-review tab is scoped to a session, so it resolves its
+            // checkout from that session like a chat does. Folding it into the
+            // project-path arm below dropped its session id and pointed the
+            // git status/diff calls at the project root, so a worktree
+            // session's changes rendered empty.
+            Some(console_core::WorkspaceTabConfig::ChangesReview {
+                session_id,
+                project_id,
+                ..
+            }) => {
+                let cwd = self.session_cwd(session_id, project_id.as_deref(), pane_id);
                 (Some(session_id.clone()), cwd)
             }
             Some(console_core::WorkspaceTabConfig::File { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Diff { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Terminal { project_id, .. })
-            | Some(console_core::WorkspaceTabConfig::Browser { project_id, .. })
-            | Some(console_core::WorkspaceTabConfig::ChangesReview { project_id, .. }) => {
+            | Some(console_core::WorkspaceTabConfig::Browser { project_id, .. }) => {
                 let cwd = project_id
                     .as_ref()
                     .and_then(|pid| {

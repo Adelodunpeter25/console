@@ -352,16 +352,18 @@ impl ConsoleDesktopApp {
                         .unwrap_or(false)
             })
             .and_then(|c| c.diff_text.clone());
+        // Resolve against the pane's own chat checkout, not the globally
+        // last-selected session. `selected_session_id` points at whichever
+        // chat was touched last across every pane, so with a main-branch chat
+        // and a worktree chat open the diff was fetched against the wrong
+        // checkout and a worktree session's changes rendered empty.
         let cwd = self
-            .selected_session_id
-            .as_deref()
-            .and_then(|id| self.sessions.iter().find(|s| s.id == id))
-            .map(|s| s.cwd.clone())
+            .transcript_for_pane(pane_id)
+            .read(cx)
+            .session_cwd()
             .or_else(|| {
-                self.selected_project_id
-                    .as_deref()
-                    .and_then(|id| self.projects.iter().find(|p| p.id == id))
-                    .map(|p| p.path.clone())
+                self.selected_project_for_pane(pane_id)
+                    .map(|project| project.path.clone())
             });
 
         cx.spawn(async move |entity, cx| {
