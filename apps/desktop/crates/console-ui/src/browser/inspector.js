@@ -129,6 +129,91 @@
     return { componentName, sourceLocation };
   }
 
+  const IMPLICIT_ROLES = {
+    a: (el) => (el.hasAttribute('href') ? 'link' : null),
+    button: () => 'button', nav: () => 'navigation', main: () => 'main',
+    header: () => 'banner', footer: () => 'contentinfo', aside: () => 'complementary',
+    form: () => 'form', ul: () => 'list', ol: () => 'list', li: () => 'listitem',
+    table: () => 'table', img: (el) => (el.getAttribute('alt') === '' ? 'presentation' : 'img'),
+    select: () => 'combobox', textarea: () => 'textbox', dialog: () => 'dialog',
+    h1: () => 'heading', h2: () => 'heading', h3: () => 'heading',
+    h4: () => 'heading', h5: () => 'heading', h6: () => 'heading',
+    input: (el) => {
+      const t = (el.getAttribute('type') || 'text').toLowerCase();
+      if (['button', 'submit', 'reset', 'image'].includes(t)) return 'button';
+      if (t === 'checkbox') return 'checkbox';
+      if (t === 'radio') return 'radio';
+      if (t === 'range') return 'slider';
+      if (t === 'search') return 'searchbox';
+      if (t === 'hidden') return null;
+      return 'textbox';
+    },
+  };
+
+  function getRole(el) {
+    const explicit = el.getAttribute('role');
+    if (explicit) return explicit.trim().split(/\s+/)[0];
+    const fn = IMPLICIT_ROLES[el.tagName.toLowerCase()];
+    return fn ? fn(el) : null;
+  }
+
+  function isPrivate(el) {
+    return el.matches && el.matches('input[type="password"], [data-private]');
+  }
+
+  function getAccessibleName(el) {
+    const clean = (t) => (t || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    const aria = el.getAttribute('aria-label');
+    if (aria && aria.trim()) return clean(aria);
+    const by = el.getAttribute('aria-labelledby');
+    if (by) {
+      const text = by.split(/\s+/)
+        .map((id) => document.getElementById(id))
+        .filter(Boolean)
+        .map((n) => n.textContent)
+        .join(' ');
+      if (clean(text)) return clean(text);
+    }
+    if (el.labels && el.labels.length) {
+      const text = Array.from(el.labels).map((l) => l.textContent).join(' ');
+      if (clean(text)) return clean(text);
+    }
+    const alt = el.getAttribute('alt');
+    if (alt && alt.trim()) return clean(alt);
+    if (isPrivate(el)) return null;
+    const title = el.getAttribute('title');
+    const text = clean(el.innerText || el.textContent);
+    return text || clean(title) || clean(el.getAttribute('placeholder')) || null;
+  }
+
+  const STYLE_PROPS = [
+    'display', 'position', 'width', 'height', 'margin', 'padding',
+    'color', 'background-color', 'font-family', 'font-size', 'font-weight',
+    'line-height', 'border', 'border-radius', 'gap', 'flex-direction',
+    'justify-content', 'align-items', 'grid-template-columns', 'opacity', 'z-index',
+  ];
+
+  function getComputedStyles(el) {
+    const out = {};
+    try {
+      const cs = getComputedStyle(el);
+      for (const prop of STYLE_PROPS) {
+        const v = cs.getPropertyValue(prop);
+        if (!v || v === 'none' || v === 'normal' || v === 'auto' || v === '0px') continue;
+        out[prop] = v;
+      }
+    } catch (e) {}
+    return out;
+  }
+
+  function classSummary(el) {
+    if (!el.className || typeof el.className !== 'string') return '';
+    const classes = el.className.trim().split(/\s+/).filter((c) => c && !c.startsWith('__console'));
+    if (!classes.length) return '';
+    const shown = classes.slice(0, 3).map((c) => '.' + c).join('');
+    return classes.length > 3 ? `${shown}…` : shown;
+  }
+
   function updateOverlay(el) {
     if (!el || !el.isConnected) {
       hideOverlay();
@@ -156,7 +241,7 @@
 
     label.textContent = componentName
       ? `<${componentName} /> (${dim})`
-      : `${tag}${id} (${dim})`;
+      : `${tag}${id}${classSummary(el)} (${dim})`;
 
     // Position label inside if close to top edge
     if (rect.top < 26) {
@@ -221,7 +306,10 @@
       componentName: componentName || null,
       sourceLocation: sourceLocation || null,
       selector: getSelector(el),
-      htmlSnippet: el.outerHTML ? el.outerHTML.slice(0, 1000) : '',
+      htmlSnippet: isPrivate(el) ? `<${el.tagName.toLowerCase()} …private…>` : (el.outerHTML ? el.outerHTML.slice(0, 1000) : ''),
+      role: getRole(el),
+      accessibleName: getAccessibleName(el),
+      computedStyles: getComputedStyles(el),
       url: window.location.href,
       title: document.title,
       bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },

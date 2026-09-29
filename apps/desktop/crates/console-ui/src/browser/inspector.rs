@@ -22,6 +22,12 @@ pub struct BrowserElementInspection {
     pub url: String,
     pub title: String,
     pub bounds: InspectRect,
+    #[serde(default)]
+    pub role: Option<String>,
+    #[serde(default)]
+    pub accessible_name: Option<String>,
+    #[serde(default)]
+    pub computed_styles: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
