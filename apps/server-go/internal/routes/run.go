@@ -27,6 +27,7 @@ type runPromptBody struct {
 		Data     string `json:"data"`
 		MimeType string `json:"mimeType"`
 	} `json:"attachments"`
+	Annotations []types.BrowserAnnotation `json:"annotations"`
 }
 
 func bodyToPrompt(body runPromptBody) run.Prompt {
@@ -34,6 +35,7 @@ func bodyToPrompt(body runPromptBody) run.Prompt {
 		Text: strings.TrimSpace(body.Prompt), ContextFiles: body.ContextFiles,
 		ModelID: body.ModelID, Provider: body.Provider,
 		ApprovalMode: body.ApprovalMode, Thinking: body.Thinking,
+		Annotations: body.Annotations,
 	}
 	for _, a := range body.Attachments {
 		dto.Attachments = append(dto.Attachments, run.Attachment{Data: a.Data, MimeType: a.MimeType})

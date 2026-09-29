@@ -16,6 +16,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
 var (
@@ -40,6 +41,7 @@ type Prompt struct {
 	ApprovalMode string
 	Thinking     string
 	Attachments  []Attachment
+	Annotations  []types.BrowserAnnotation
 }
 
 type activeRun struct {

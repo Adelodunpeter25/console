@@ -159,6 +159,7 @@ func InitSessionDB(db *sql.DB, path string) error {
 			prompt TEXT NOT NULL,
 			context_files TEXT,
 			attachments TEXT,
+			annotations TEXT,
 			model_id TEXT,
 			provider TEXT,
 			approval_mode TEXT,
@@ -174,6 +175,7 @@ func InitSessionDB(db *sql.DB, path string) error {
 		return err
 	}
 	hasContextFiles := false
+	hasAnnotations := false
 	for rows.Next() {
 		var cid int
 		var name, columnType string
@@ -186,12 +188,20 @@ func InitSessionDB(db *sql.DB, path string) error {
 		if name == "context_files" {
 			hasContextFiles = true
 		}
+		if name == "annotations" {
+			hasAnnotations = true
+		}
 	}
 	if err := rows.Close(); err != nil {
 		return err
 	}
 	if !hasContextFiles {
 		if _, err = db.Exec(`ALTER TABLE session_queued_prompt ADD COLUMN context_files TEXT`); err != nil {
+			return err
+		}
+	}
+	if !hasAnnotations {
+		if _, err = db.Exec(`ALTER TABLE session_queued_prompt ADD COLUMN annotations TEXT`); err != nil {
 			return err
 		}
 	}

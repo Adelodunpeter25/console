@@ -21,15 +21,27 @@ pub struct RectDimensions {
 #[serde(rename_all = "camelCase")]
 pub struct BrowserElementAnnotation {
     pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
     pub url: String,
-    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub component_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_location: Option<String>,
     pub selector: String,
     pub html_snippet: String,
-    pub dimensions: RectDimensions,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dimensions: Option<RectDimensions>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accessible_name: Option<String>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub computed_styles: std::collections::BTreeMap<String, String>,
     pub user_comment: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub screenshot_base64: Option<String>,
 }
 
