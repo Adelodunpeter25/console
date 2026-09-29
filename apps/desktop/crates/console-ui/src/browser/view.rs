@@ -10,6 +10,7 @@
 //! - Start page with instant localhost dev server launchers (3000, 5173, 8080).
 //! - Keyboard actions for address focus (⌘L), navigation (⌘[/⌘]), reload (⌘R), and devtools.
 
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -24,6 +25,7 @@ use super::address::{
     AddressTarget, default_browser_title, display_url, is_secure_url, resolve_address, search_url,
     url_host,
 };
+use super::agent_script::{cap_result, wrap_script};
 use super::host::{NativeNavigationError, WebviewHost};
 use super::inspector::{BrowserElementInspection, INSPECTOR_SCRIPT, InspectorIpcMessage};
 use crate::common::input::{ComposerEvent, ComposerInput};
@@ -80,6 +82,8 @@ pub struct BrowserView {
     inspecting: bool,
     active_inspection: Option<BrowserElementInspection>,
     annotation_input: Entity<ComposerInput>,
+    /// Results posted back by agent-run scripts, keyed by request id.
+    script_results: HashMap<String, Result<String, String>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -175,6 +179,7 @@ impl BrowserView {
             inspecting: false,
             active_inspection: None,
             annotation_input,
+            script_results: HashMap::new(),
             _subscriptions: vec![submit_subscription, focus_in_address, focus_out_surface],
         };
         this.build_webview(window, cx);
@@ -349,6 +354,22 @@ impl BrowserView {
                     self.inspecting = false;
                     cx.notify();
                 }
+                InspectorIpcMessage::ScriptResult {
+                    request_id,
+                    ok,
+                    value,
+                    error,
+                } => {
+                    if self.script_results.len() >= 64 {
+                        self.script_results.clear();
+                    }
+                    let result = if ok {
+                        Ok(cap_result(value.unwrap_or_default()))
+                    } else {
+                        Err(error.unwrap_or_else(|| "Script failed".to_string()))
+                    };
+                    self.script_results.insert(request_id, result);
+                }
             }
         }
     }
@@ -376,6 +397,17 @@ impl BrowserView {
         if let Some(host) = &self.host {
             host.evaluate_script(script);
         }
+    }
+
+    /// Run an agent script whose value is posted back under `request_id`.
+    /// Collect it with `take_script_result`.
+    pub fn run_agent_script(&self, request_id: &str, script: &str) {
+        self.evaluate_script(&wrap_script(request_id, script));
+    }
+
+    /// Remove and return the result posted for `request_id`, if it arrived.
+    pub fn take_script_result(&mut self, request_id: &str) -> Option<Result<String, String>> {
+        self.script_results.remove(request_id)
     }
 
     pub fn active_inspection(&self) -> Option<&BrowserElementInspection> {

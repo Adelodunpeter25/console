@@ -153,3 +153,27 @@ func TestBrowserDecisionsFlow(t *testing.T) {
 		t.Fatalf("unexpected result: %s", res.Result)
 	}
 }
+
+func TestBrowserTool_TabsAndTabID(t *testing.T) {
+	var captured tools.BrowserActionRequest
+	handler := func(ctx context.Context, req tools.BrowserActionRequest) (tools.BrowserActionResult, error) {
+		captured = req
+		return tools.BrowserActionResult{Result: "- browser-1: \"Home\" http://localhost:3000"}, nil
+	}
+	tool := tools.NewBrowserTool(handler)
+
+	if _, err := tool.Execute(context.Background(), helpers.MustJSONRaw(t, map[string]any{"action": "tabs"})); err != nil {
+		t.Fatalf("tabs action failed: %v", err)
+	}
+	if captured.Action != "tabs" {
+		t.Fatalf("expected tabs action, got %+v", captured)
+	}
+
+	args := helpers.MustJSONRaw(t, map[string]any{"action": "get_content", "tabId": "browser-1"})
+	if _, err := tool.Execute(context.Background(), args); err != nil {
+		t.Fatalf("get_content failed: %v", err)
+	}
+	if captured.TabID != "browser-1" {
+		t.Fatalf("tabId not forwarded: %+v", captured)
+	}
+}

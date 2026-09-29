@@ -6,6 +6,7 @@
 
 mod actions;
 pub mod address;
+pub mod agent_script;
 pub mod host;
 pub mod inspector;
 pub mod view;

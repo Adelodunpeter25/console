@@ -143,6 +143,8 @@ pub struct BrowserActionRequest {
     pub script: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tab_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

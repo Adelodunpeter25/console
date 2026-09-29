@@ -1,11 +1,11 @@
 //! Browser action dispatch and execution for agent automation.
 //!
 //! Handles `AgentSessionEvent::BrowserAction` requests from the backend agent
-//! (`navigate`, `run_js`, `get_content`, `screenshot`) against open workspace browser tabs.
+//! (`navigate`, `run_js`, `get_content`, `tabs`) against open workspace browser tabs.
 
 use console_core::{BrowserActionRequest, ResolveBrowserActionDto};
 use console_ui::browser::BrowserView;
-use gpui::{App, Context, Entity};
+use gpui::{App, AsyncApp, Context, Entity, WeakEntity};
 use std::collections::HashSet;
 use std::time::Duration;
 
@@ -19,6 +19,8 @@ const TAB_LOOKUP_RETRIES: u32 = 20;
 const NAVIGATION_SETTLE_POLLS: u32 = 130;
 /// How many polls to wait for a new tab to appear (~5s) before giving up.
 const TAB_OPEN_POLLS: u32 = 33;
+/// How many polls to wait for a script result (~10s).
+const SCRIPT_RESULT_POLLS: u32 = 67;
 
 enum NavigationState {
     /// No tab exists yet for this navigation.
@@ -26,6 +28,30 @@ enum NavigationState {
     Pending,
     Settled(String),
     Failed(String),
+}
+
+/// Waits for the result of a script started with `run_agent_script`.
+async fn poll_script_result(
+    this: &WeakEntity<ConsoleDesktopApp>,
+    cx: &mut AsyncApp,
+    view: &Entity<BrowserView>,
+    script_id: &str,
+) -> Result<String, String> {
+    for _ in 0..SCRIPT_RESULT_POLLS {
+        cx.background_executor().timer(BROWSER_POLL_INTERVAL).await;
+        let Ok(found) = this.update(cx, |_, cx| {
+            view.update(cx, |bv, _| bv.take_script_result(script_id))
+        }) else {
+            return Err("Console window closed".to_string());
+        };
+        if let Some(result) = found {
+            return result;
+        }
+    }
+    Err(format!(
+        "Script produced no result after {}s (the page may be blocking script evaluation, or the script never finished)",
+        (SCRIPT_RESULT_POLLS as u64 * BROWSER_POLL_INTERVAL.as_millis() as u64) / 1000
+    ))
 }
 
 impl ConsoleDesktopApp {
@@ -49,14 +75,17 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         let action = req.action.clone();
-        let target_url = req.url.clone();
-        let script = req.script.clone();
         let request_id = req.request_id.clone();
         let sess_id = session_id.to_string();
 
         match action.as_str() {
+            "tabs" => {
+                let listing = self.describe_browser_tabs(cx);
+                self.resolve_browser_action_result(&sess_id, request_id, Some(listing), None, cx);
+            }
+
             "navigate" => {
-                let url = target_url.unwrap_or_default();
+                let url = req.url.clone().unwrap_or_default();
                 if url.is_empty() {
                     self.resolve_browser_action_result(
                         &sess_id,
@@ -68,9 +97,18 @@ impl ConsoleDesktopApp {
                     return;
                 }
 
-                // If an existing browser tab has this URL or origin, navigate it; otherwise open a new tab.
+                // An explicit tabId wins; otherwise reuse a tab already on this
+                // URL/origin; otherwise open a new tab.
+                let target = match self.pick_browser_view(req.tab_id.as_deref(), None, false, cx) {
+                    Ok(Some(entry)) if req.tab_id.is_some() => Some(entry),
+                    Ok(_) => self.find_matching_browser_view(&url, cx),
+                    Err(err) => {
+                        self.resolve_browser_action_result(&sess_id, request_id, None, Some(err), cx);
+                        return;
+                    }
+                };
                 let known_ids: HashSet<String> = self.browser_views.keys().cloned().collect();
-                let matching_view = self.find_matching_browser_view(&url, cx);
+                let matching_view = target.map(|(_, view)| view);
                 if let Some(view) = &matching_view {
                     view.update(cx, |bv, cx| {
                         bv.navigate_to_url(url.clone(), cx);
@@ -126,14 +164,45 @@ impl ConsoleDesktopApp {
                     let (result, error) = match last {
                         Some(NavigationState::Settled(msg)) => (Some(msg), None),
                         Some(NavigationState::Failed(err)) => (None, Some(err)),
-                        _ => (
-                            Some(format!(
-                                "Navigation to {} started but the page is still loading after {}s",
-                                url,
-                                (NAVIGATION_SETTLE_POLLS as u64 * BROWSER_POLL_INTERVAL.as_millis() as u64) / 1000
-                            )),
-                            None,
-                        ),
+                        _ => {
+                            // Timed out: report what has loaded so far.
+                            let partial = this
+                                .update(cx, |app, cx| {
+                                    let entry = app.navigation_view(matching_view.as_ref(), &known_ids);
+                                    entry.map(|(id, view)| {
+                                        let rid = format!("{request_id}-partial");
+                                        view.update(cx, |bv, _| {
+                                            bv.run_agent_script(
+                                                &rid,
+                                                "(document.body ? document.body.innerText : '')",
+                                            )
+                                        });
+                                        let bv = view.read(cx);
+                                        let header = format!(
+                                            "Tab: {}\nTitle: {}\nURL: {}",
+                                            id,
+                                            bv.tab_label().unwrap_or_default(),
+                                            bv.current_url().unwrap_or(&url)
+                                        );
+                                        (view.clone(), rid, header)
+                                    })
+                                })
+                                .ok()
+                                .flatten();
+                            let secs = (NAVIGATION_SETTLE_POLLS as u64
+                                * BROWSER_POLL_INTERVAL.as_millis() as u64)
+                                / 1000;
+                            let mut msg = format!(
+                                "Navigation to {url} is still loading after {secs}s."
+                            );
+                            if let Some((view, rid, header)) = partial {
+                                msg.push_str(&format!("\n{header}"));
+                                if let Ok(text) = poll_script_result(&this, cx, &view, &rid).await {
+                                    msg.push_str(&format!("\nText loaded so far:\n{text}"));
+                                }
+                            }
+                            (Some(msg), None)
+                        }
                     };
                     let _ = this.update(cx, |app, cx| {
                         app.resolve_browser_action_result(&sess_id, request_id, result, error, cx);
@@ -142,83 +211,74 @@ impl ConsoleDesktopApp {
                 .detach();
             }
 
-            "run_js" => {
-                let js = script.unwrap_or_default();
-                if js.is_empty() {
-                    self.resolve_browser_action_result(
-                        &sess_id,
-                        request_id,
-                        None,
-                        Some("Missing script for run_js action".to_string()),
-                        cx,
-                    );
-                    return;
-                }
-
-                let view = target_url
-                    .as_deref()
-                    .and_then(|u| self.find_matching_browser_view(u, cx))
-                    .or_else(|| self.get_any_active_browser_view(cx));
-
-                if let Some(view) = view {
-                    view.update(cx, |bv, _| {
-                        bv.evaluate_script(&js);
-                    });
-                    self.resolve_browser_action_result(
-                        &sess_id,
-                        request_id,
-                        Some(format!("Executed script in browser")),
-                        None,
-                        cx,
-                    );
-                } else {
-                    self.retry_browser_action_or_fail(&sess_id, req, retries_left, cx);
-                }
-            }
-
-            "get_content" => {
-                let selector = req.selector.clone();
-                let view = target_url
-                    .as_deref()
-                    .and_then(|u| self.find_matching_browser_view(u, cx))
-                    .or_else(|| self.get_any_active_browser_view(cx));
-
-                if let Some(view) = view {
-                    let page_title = view.read(cx).tab_label().unwrap_or_default();
-                    let current_url = view.read(cx).current_url().unwrap_or_default();
-                    let mut summary = format!("Title: {}\nURL: {}", page_title, current_url);
-                    if let Some(sel) = selector.as_deref().filter(|s| !s.trim().is_empty()) {
-                        summary.push_str(&format!("\nSelector: {}\nTarget element query active.", sel.trim()));
+            "run_js" | "get_content" => {
+                let is_js = action == "run_js";
+                let js = if is_js {
+                    let js = req.script.clone().unwrap_or_default();
+                    if js.is_empty() {
+                        self.resolve_browser_action_result(
+                            &sess_id,
+                            request_id,
+                            None,
+                            Some("Missing script for run_js action".to_string()),
+                            cx,
+                        );
+                        return;
                     }
-                    self.resolve_browser_action_result(
-                        &sess_id,
-                        request_id,
-                        Some(summary),
-                        None,
-                        cx,
-                    );
+                    js
                 } else {
+                    content_script(req.selector.as_deref())
+                };
+
+                let entry = match self.pick_browser_view(req.tab_id.as_deref(), req.url.as_deref(), true, cx) {
+                    Ok(entry) => entry,
+                    Err(err) => {
+                        self.resolve_browser_action_result(&sess_id, request_id, None, Some(err), cx);
+                        return;
+                    }
+                };
+                let Some((tab_id, view)) = entry else {
                     self.retry_browser_action_or_fail(&sess_id, req, retries_left, cx);
-                }
+                    return;
+                };
+
+                let script_id = request_id.clone();
+                view.update(cx, |bv, _| bv.run_agent_script(&script_id, &js));
+                cx.spawn(async move |this, cx| {
+                    let outcome = poll_script_result(&this, cx, &view, &script_id).await;
+                    let (result, error) = match outcome {
+                        Ok(value) if is_js => (Some(format!("Tab: {tab_id}\n{value}")), None),
+                        Ok(value) => {
+                            let header = this
+                                .update(cx, |_, cx| {
+                                    let bv = view.read(cx);
+                                    format!(
+                                        "Tab: {}\nTitle: {}\nURL: {}",
+                                        tab_id,
+                                        bv.tab_label().unwrap_or_default(),
+                                        bv.current_url().unwrap_or_default()
+                                    )
+                                })
+                                .unwrap_or_default();
+                            (Some(format!("{header}\n\n{value}")), None)
+                        }
+                        Err(err) => (None, Some(format!("[tab {tab_id}] {err}"))),
+                    };
+                    let _ = this.update(cx, |app, cx| {
+                        app.resolve_browser_action_result(&sess_id, request_id, result, error, cx);
+                    });
+                })
+                .detach();
             }
 
             "screenshot" => {
-                let view = target_url
-                    .as_deref()
-                    .and_then(|u| self.find_matching_browser_view(u, cx))
-                    .or_else(|| self.get_any_active_browser_view(cx));
-
-                if let Some(_view) = view {
-                    self.resolve_browser_action_result(
-                        &sess_id,
-                        request_id,
-                        Some("Screenshot captured".to_string()),
-                        None,
-                        cx,
-                    );
-                } else {
-                    self.retry_browser_action_or_fail(&sess_id, req, retries_left, cx);
-                }
+                self.resolve_browser_action_result(
+                    &sess_id,
+                    request_id,
+                    None,
+                    Some("screenshot is not supported yet. Use get_content or run_js to read the page.".to_string()),
+                    cx,
+                );
             }
 
             other => {
@@ -234,7 +294,7 @@ impl ConsoleDesktopApp {
     }
 
     /// Re-queues `req` after a short delay while retries remain; otherwise
-    /// resolves it with a "no tab" error.
+    /// resolves it with a "no tab" error that lists the open tabs.
     fn retry_browser_action_or_fail(
         &mut self,
         session_id: &str,
@@ -243,13 +303,11 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         if retries_left == 0 {
-            self.resolve_browser_action_result(
-                session_id,
-                req.request_id,
-                None,
-                Some("No active or matching browser tab found".to_string()),
-                cx,
+            let error = format!(
+                "No active or matching browser tab found. Open tabs:\n{}",
+                self.describe_browser_tabs(cx)
             );
+            self.resolve_browser_action_result(session_id, req.request_id, None, Some(error), cx);
             return;
         }
         let sid = session_id.to_string();
@@ -262,8 +320,81 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    /// One line per open browser tab: id, title, URL, and which one is active.
+    fn describe_browser_tabs(&self, cx: &App) -> String {
+        if self.browser_views.is_empty() {
+            return "No browser tabs are open. Use navigate to open one.".to_string();
+        }
+        let active = self.active_browser_entry().map(|(id, _)| id);
+        let mut ids: Vec<&String> = self.browser_views.keys().collect();
+        ids.sort();
+        ids.iter()
+            .map(|id| {
+                let bv = self.browser_views[*id].read(cx);
+                format!(
+                    "- {}{}: \"{}\" {}",
+                    id,
+                    if active.as_deref() == Some(id.as_str()) { " (active)" } else { "" },
+                    bv.tab_label().unwrap_or_default(),
+                    bv.current_url().unwrap_or("(blank)")
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// Picks the tab an action should run against.
+    /// - `tab_id` given: exactly that tab, or an error listing the open tabs.
+    /// - otherwise a tab matching `url` (when `allow_url_match`), else the
+    ///   active browser tab, else any tab.
+    /// `Ok(None)` means no tab exists yet.
+    fn pick_browser_view(
+        &self,
+        tab_id: Option<&str>,
+        url: Option<&str>,
+        allow_url_match: bool,
+        cx: &App,
+    ) -> Result<Option<(String, Entity<BrowserView>)>, String> {
+        if let Some(id) = tab_id.map(str::trim).filter(|s| !s.is_empty()) {
+            return match self.browser_views.get(id) {
+                Some(view) => Ok(Some((id.to_string(), view.clone()))),
+                None => Err(format!(
+                    "No browser tab with id '{}'. Open tabs:\n{}",
+                    id,
+                    self.describe_browser_tabs(cx)
+                )),
+            };
+        }
+        if allow_url_match {
+            if let Some(entry) = url.and_then(|u| self.find_matching_browser_view(u, cx)) {
+                return Ok(Some(entry));
+            }
+        }
+        Ok(self.active_browser_entry())
+    }
+
+    /// The tab a navigation is acting on: the reused one, or the newly opened one.
+    fn navigation_view(
+        &self,
+        existing: Option<&Entity<BrowserView>>,
+        known_ids: &HashSet<String>,
+    ) -> Option<(String, Entity<BrowserView>)> {
+        if let Some(view) = existing {
+            let id = self
+                .browser_views
+                .iter()
+                .find(|(_, v)| v.entity_id() == view.entity_id())
+                .map(|(id, _)| id.clone())
+                .unwrap_or_default();
+            return Some((id, view.clone()));
+        }
+        self.browser_views
+            .iter()
+            .find(|(id, _)| !known_ids.contains(*id))
+            .map(|(id, v)| (id.clone(), v.clone()))
+    }
+
     /// Reports whether the navigation started by a `navigate` action has finished.
-    /// `existing` is the reused tab; otherwise the newly opened tab (an id not in `known_ids`).
     fn navigation_state(
         &self,
         existing: Option<&Entity<BrowserView>>,
@@ -271,13 +402,7 @@ impl ConsoleDesktopApp {
         url: &str,
         cx: &App,
     ) -> NavigationState {
-        let view = existing.cloned().or_else(|| {
-            self.browser_views
-                .iter()
-                .find(|(id, _)| !known_ids.contains(*id))
-                .map(|(_, v)| v.clone())
-        });
-        let Some(view) = view else {
+        let Some((id, view)) = self.navigation_view(existing, known_ids) else {
             return NavigationState::NoTab;
         };
         let bv = view.read(cx);
@@ -292,30 +417,54 @@ impl ConsoleDesktopApp {
         }
         let title = bv.tab_label().unwrap_or_default();
         let current = bv.current_url().unwrap_or(url);
-        NavigationState::Settled(format!("Navigated to {}\nTitle: {}", current, title))
+        NavigationState::Settled(format!(
+            "Navigated to {}\nTab: {}\nTitle: {}",
+            current, id, title
+        ))
     }
 
-    /// Finds a `BrowserView` whose URL matches or shares the origin/prefix of `target_url`.
+    /// Finds a tab whose URL matches or shares the origin/prefix of `target_url`.
     fn find_matching_browser_view(
         &self,
         target_url: &str,
         cx: &App,
-    ) -> Option<Entity<BrowserView>> {
+    ) -> Option<(String, Entity<BrowserView>)> {
         let clean_target = target_url.trim().trim_end_matches('/');
-        for view in self.browser_views.values() {
+        let mut ids: Vec<&String> = self.browser_views.keys().collect();
+        ids.sort();
+        for id in ids {
+            let view = &self.browser_views[id];
             if let Some(url) = view.read(cx).current_url() {
                 let clean_url = url.trim().trim_end_matches('/');
-                if clean_url == clean_target || clean_url.starts_with(clean_target) || clean_target.starts_with(clean_url) {
-                    return Some(view.clone());
+                if clean_url == clean_target
+                    || clean_url.starts_with(clean_target)
+                    || clean_target.starts_with(clean_url)
+                {
+                    return Some((id.clone(), view.clone()));
                 }
             }
         }
         None
     }
 
-    /// Returns the first available browser view from `browser_views`.
-    fn get_any_active_browser_view(&self, _cx: &App) -> Option<Entity<BrowserView>> {
-        self.browser_views.values().next().cloned()
+    /// The browser tab that is active in a visible pane, else the first by id.
+    fn active_browser_entry(&self) -> Option<(String, Entity<BrowserView>)> {
+        for leaf in self.workspace_root.leaves() {
+            let Some(active_id) = leaf.active_tab_id.as_deref() else { continue };
+            for tab in &leaf.tabs {
+                if tab.id() != active_id {
+                    continue;
+                }
+                if let console_core::WorkspaceTabConfig::Browser { browser_id, .. } = tab {
+                    if let Some(view) = self.browser_views.get(browser_id) {
+                        return Some((browser_id.clone(), view.clone()));
+                    }
+                }
+            }
+        }
+        let mut ids: Vec<&String> = self.browser_views.keys().collect();
+        ids.sort();
+        ids.first().map(|id| ((*id).clone(), self.browser_views[*id].clone()))
     }
 
     /// Resolves the browser action via client run service asynchronously.
@@ -345,3 +494,24 @@ impl ConsoleDesktopApp {
         .detach();
     }
 }
+
+/// Page-side script for `get_content`: visible text, or the text of every
+/// element matching `selector` (or a "no match" message).
+fn content_script(selector: Option<&str>) -> String {
+    match selector.map(str::trim).filter(|s| !s.is_empty()) {
+        None => "(document.body ? document.body.innerText : '')".to_string(),
+        Some(sel) => {
+            let quoted = serde_json::to_string(sel).unwrap_or_else(|_| "\"\"".to_string());
+            format!(
+                "(() => {{ const sel = {quoted}; let els; \
+                 try {{ els = Array.from(document.querySelectorAll(sel)); }} \
+                 catch (e) {{ return 'Invalid selector: ' + e.message; }} \
+                 if (!els.length) return 'No match for selector: ' + sel; \
+                 const out = els.slice(0, 20).map((el, i) => '[' + i + '] ' + (el.innerText || el.textContent || '').trim()); \
+                 if (els.length > 20) out.push('...(' + els.length + ' matches total, showing 20)'); \
+                 return out.join('\\n\\n'); }})()"
+            )
+        }
+    }
+}
+
