@@ -54,11 +54,14 @@ type agWindowDescriptor struct {
 
 func agClassifyWindow(id, label string) *agWindowDescriptor {
 	source := strings.ToLower(id + " " + label)
-	switch {
-	case strings.Contains(source, "week") || strings.Contains(source, "7d") || strings.Contains(source, "7 day") || strings.Contains(source, "7-day") || strings.Contains(source, "7_day"):
+	if strings.Contains(source, "week") || strings.Contains(source, "7d") || strings.Contains(source, "7 day") || strings.Contains(source, "7-day") || strings.Contains(source, "7_day") {
 		w := weekMsAG
 		return &agWindowDescriptor{id: "weekly", label: "Weekly", durationMs: &w}
-	case strings.Contains(source, "day") || strings.Contains(source, "daily") || strings.Contains(source, "24h"):
+	}
+	if hours := agClassifyHours(source); hours != nil {
+		return hours
+	}
+	if strings.Contains(source, "day") || strings.Contains(source, "daily") || strings.Contains(source, "24h") {
 		d := dayMs
 		return &agWindowDescriptor{id: "daily", label: "Daily", durationMs: &d}
 	}
@@ -75,7 +78,53 @@ func agClassifyWindow(id, label string) *agWindowDescriptor {
 	return nil
 }
 
+// agClassifyHours maps hour-based window names ("5h", "5 hours", "hourly")
+// to canonical ids via WindowLabel so an explicitly labelled 5h window and
+// an inferred one share one identity (and durationMs) instead of flipping
+// between raw labels and guesses across fetches. Returns nil when the
+// source names no hour window.
+func agClassifyHours(source string) *agWindowDescriptor {
+	if strings.Contains(source, "hourly") {
+		id, label := WindowLabel(3600)
+		h := int64(3600 * 1000)
+		return &agWindowDescriptor{id: id, label: label, durationMs: &h}
+	}
+	// Find "<digits>h" or "<digits> hour(s)", e.g. "5h", "5-hour", "24 hours".
+	for i := 0; i < len(source); i++ {
+		if source[i] < '0' || source[i] > '9' {
+			continue
+		}
+		j := i
+		var n int64
+		for j < len(source) && source[j] >= '0' && source[j] <= '9' {
+			n = n*10 + int64(source[j]-'0')
+			j++
+		}
+		if n <= 0 || n > 168 {
+			continue
+		}
+		rest := strings.TrimLeft(source[j:], " _-")
+		if strings.HasPrefix(rest, "hours") || strings.HasPrefix(rest, "hour") || strings.HasPrefix(rest, "h") {
+			id, label := WindowLabel(float64(n * 3600))
+			ms := n * 3600 * 1000
+			return &agWindowDescriptor{id: id, label: label, durationMs: &ms}
+		}
+	}
+	return nil
+}
+
+// shortWindowMsAG is the conventional Antigravity short quota window: an
+// unlabeled entry resetting within this horizon is the 5-hour window, not
+// the daily one.
+const shortWindowMsAG = int64(6 * 3600 * 1000)
+
+const fiveHourMsAG = int64(5 * 3600 * 1000)
+
 func agInferWindowFromReset(resetAt *int64, nowMs int64) agWindowDescriptor {
+	if resetAt != nil && *resetAt > nowMs && *resetAt-nowMs <= shortWindowMsAG {
+		h := fiveHourMsAG
+		return agWindowDescriptor{id: "5h", label: "5 hours", durationMs: &h}
+	}
 	if resetAt != nil && *resetAt-nowMs > dayMs {
 		w := weekMsAG
 		return agWindowDescriptor{id: "weekly", label: "Weekly", durationMs: &w}
@@ -124,7 +173,11 @@ func agInferWindowDescriptors(infos []*agQuotaInfo, nowMs int64) map[*agQuotaInf
 			latestReset = &resetTimes[len(resetTimes)-1]
 		}
 		for _, e := range group {
-			if latestReset != nil && e.resetAt != nil && *e.resetAt == *latestReset {
+			// Latest reset in a multi-reset group is the long (weekly)
+			// window — but only when it is actually more than a day out.
+			// Otherwise every entry goes through per-reset inference so a
+			// short-window entry never merges into the daily row.
+			if latestReset != nil && e.resetAt != nil && *e.resetAt == *latestReset && *e.resetAt-nowMs > dayMs {
 				w := weekMsAG
 				out[e.info] = agWindowDescriptor{id: "weekly", label: "Weekly", durationMs: &w}
 			} else {
@@ -348,6 +401,7 @@ func ParseAntigravityPayload(payload any, provider, accountID, email, endpoint s
 
 	type dedupEntry struct {
 		amount      Amount
+		assumed     bool // amount was fabricated (no remainingFraction reported)
 		window      *Window
 		tier        string
 		tierKey     string
@@ -392,14 +446,17 @@ func ParseAntigravityPayload(payload any, provider, accountID, email, endpoint s
 			existing, has := deduped[key]
 			if !has {
 				deduped[key] = &dedupEntry{
-					amount: amount, window: window, tier: info.tier,
+					amount: amount, assumed: info.remainingFraction == nil,
+					window: window, tier: info.tier,
 					tierKey: tierKey, windowID: windowID, counterName: counterName, counterKey: counterKey,
 				}
 				continue
 			}
 
 			eFrac, cFrac := existing.amount.RemainingFraction, amount.RemainingFraction
+			currentAssumed := info.remainingFraction == nil
 			bestAmount := existing.amount
+			bestAssumed := existing.assumed
 			bestTier := existing.tier
 			if tier := info.tier; tier != "" {
 				bestTier = existing.tier
@@ -407,7 +464,16 @@ func ParseAntigravityPayload(payload any, provider, accountID, email, endpoint s
 					bestTier = tier
 				}
 			}
-			if eFrac == nil && cFrac != nil {
+			if existing.assumed && !currentAssumed {
+				// A reported fraction always beats a fabricated zero, so a
+				// resetTime-only entry can never shadow real quota data that
+				// arrives in the same fetch under the same window.
+				bestAmount = amount
+				bestAssumed = false
+				if info.tier != "" {
+					bestTier = info.tier
+				}
+			} else if eFrac == nil && cFrac != nil {
 				bestAmount = amount
 				if info.tier != "" {
 					bestTier = info.tier
@@ -424,7 +490,7 @@ func ParseAntigravityPayload(payload any, provider, accountID, email, endpoint s
 					bestWindow = window
 				}
 			}
-			existing.amount, existing.window, existing.tier = bestAmount, bestWindow, bestTier
+			existing.amount, existing.assumed, existing.window, existing.tier = bestAmount, bestAssumed, bestWindow, bestTier
 		}
 	}
 
@@ -433,6 +499,16 @@ func ParseAntigravityPayload(payload any, provider, accountID, email, endpoint s
 		label := "Usage"
 		if entry.counterName != "" {
 			label = "Usage (" + entry.counterName + ")"
+		}
+		// Name the window so the 5-hour and weekly Google rows are
+		// distinguishable wherever the label is rendered.
+		if entry.window != nil {
+			switch entry.window.ID {
+			case "5h", "daily", "weekly":
+				if entry.window.Label != "" {
+					label += " · " + entry.window.Label
+				}
+			}
 		}
 		limits = append(limits, Limit{
 			ID: provider + ":" + entry.counterKey + ":" + entry.tierKey + ":" + entry.windowID, Label: label,
