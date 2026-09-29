@@ -37,6 +37,23 @@ pub fn open_tab(root: &mut WorkspaceNode, pane_id: &str, tab: console_core::Work
     leaf.active_tab_id = Some(tab_id);
 }
 
+/// Add a tab to a pane without changing which tab is active. If the pane has
+/// no active tab yet, the new tab becomes active.
+pub fn open_tab_in_background(
+    root: &mut WorkspaceNode,
+    pane_id: &str,
+    tab: console_core::WorkspaceTabConfig,
+) {
+    let leaf = active_leaf(root, Some(pane_id));
+    let tab_id = tab.id();
+    if !leaf.tabs.iter().any(|t| t.id() == tab_id) {
+        leaf.tabs.push(tab);
+    }
+    if leaf.active_tab_id.is_none() {
+        leaf.active_tab_id = Some(tab_id);
+    }
+}
+
 /// Open a tab, or replace an existing preview tab if found.
 /// Replacement stays within its kind: a file preview replaces only a file
 /// tab, a diff preview only a diff tab. The shared preview slot can otherwise

@@ -190,6 +190,7 @@ impl ToolCalls {
             "listDir" | "list_dir" | "ls" => "List Directory".into(),
             "fetch" => "Fetch URL".into(),
             "webSearch" | "web_search" => "Web Search".into(),
+            "browser" => "Browser".into(),
             "subagent" => "Subagent".into(),
             "ask" => "Ask Question".into(),
             "todo" => "Todo".into(),
