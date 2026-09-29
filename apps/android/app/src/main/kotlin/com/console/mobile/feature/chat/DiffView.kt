@@ -32,9 +32,10 @@ import androidx.compose.ui.unit.sp
 import com.console.mobile.core.util.DiffLineType
 import com.console.mobile.core.util.DiffResult
 import com.console.mobile.core.util.getFileName
-import com.console.mobile.core.util.languageForPath
-import com.console.mobile.ui.components.CodeViewer
+import com.console.mobile.ui.code.CodeViewer
+import com.console.mobile.ui.code.languageForPath
 import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.ConsoleDimens
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
 /**
@@ -67,13 +68,14 @@ fun DiffView(diff: DiffResult, filePath: String? = null, maxCollapsedLines: Int 
         val removeLines = remember(visible) {
             visible.mapIndexedNotNull { i, line -> if (line.type == DiffLineType.Removed) i else null }.toSet()
         }
-        val viewerHeight = remember(visible.size) { ((visible.size * 21 + 16).coerceAtMost(600)).dp }
+        // Height follows the viewer's own line height, or the last line is
+        // clipped as soon as the font size changes.
+        val viewerHeight = remember(visible.size) { ((visible.size * ConsoleDimens.CodeLineHeight + 16).coerceAtMost(600)).dp }
         CodeViewer(
             code = diffText,
             language = language,
             modifier = Modifier.fillMaxWidth().height(viewerHeight),
             showLineNumbers = false,
-            fontSizeSp = 11f,
             addLines = addLines,
             removeLines = removeLines,
         )

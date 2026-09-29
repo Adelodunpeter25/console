@@ -58,11 +58,11 @@ import com.console.mobile.core.util.isFileTargetTool
 import com.console.mobile.core.util.isReadFileTool
 import com.console.mobile.core.util.isSubagentTool
 import com.console.mobile.core.util.isWriteFileTool
-import com.console.mobile.core.util.languageForPath
 import com.console.mobile.core.util.parseReadFileOutput
 import com.console.mobile.core.util.resultText
 import com.console.mobile.core.util.toolCallSummary
-import com.console.mobile.ui.components.CodeViewer
+import com.console.mobile.ui.code.CodeViewer
+import com.console.mobile.ui.code.languageForPath
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.AssistantMessage
@@ -78,6 +78,7 @@ import com.console.mobile.data.model.UserMessage
 import com.console.mobile.ui.components.ImagePreviewDialog
 import com.console.mobile.ui.components.attachmentBytes
 import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.ConsoleDimens
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
 /**
@@ -326,19 +327,26 @@ private fun ToolArguments(arguments: kotlinx.serialization.json.JsonElement?) {
 private fun ReadFileResult(raw: String, filePath: String?) {
     val (numbers, body) = remember(raw) { parseReadFileOutput(raw) }
     val language = remember(filePath) { languageForPath(filePath) }
-    // Cap the viewer like the desktop's 240px result block; the Sora editor
-    // scrolls internally past that.
-    val height = remember(body.size) { ((body.size * 18 + 16).coerceIn(80, 400)).dp }
+    // The gutter is drawn here rather than by the viewer because a truncated
+    // read carries the tool's own line numbers (which do not start at 1), and
+    // the viewer's built-in gutter would renumber them from 1.
+    val height = remember(body.size) { ((body.size * ConsoleDimens.CodeLineHeight + 16).coerceIn(80, 400)).dp }
     Text("Result", color = ConsoleColors.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-        // Gutter numbers, aligned with the editor's line grid.
-        Text(numbers.joinToString("\n"), color = ConsoleColors.TextMuted, fontSize = 11.sp, fontFamily = ConsoleMonoFamily, lineHeight = 18.sp, textAlign = TextAlign.End)
+        // Line height has to equal the viewer's or the two grids drift apart.
+        Text(
+            numbers.joinToString("\n"),
+            color = ConsoleColors.TextMuted,
+            fontSize = ConsoleDimens.CodeGutterFontSizeSp.sp,
+            fontFamily = ConsoleMonoFamily,
+            lineHeight = ConsoleDimens.CodeLineHeight.sp,
+            textAlign = TextAlign.End,
+        )
         CodeViewer(
             code = body.joinToString("\n"),
             language = language,
             modifier = Modifier.fillMaxWidth().height(height),
             showLineNumbers = false,
-            fontSizeSp = 11f,
         )
     }
 }

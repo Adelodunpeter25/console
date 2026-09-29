@@ -36,7 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.console.mobile.ui.components.CodeViewer
+import com.console.mobile.ui.code.CodeViewer
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import kotlinx.coroutines.delay
@@ -129,7 +129,6 @@ private fun CodeBlock(language: String, code: String) {
             language = normalizedLang,
             modifier = Modifier.fillMaxWidth().height(viewerHeight).padding(horizontal = 14.dp).padding(bottom = 12.dp),
             showLineNumbers = true,
-            fontSizeSp = 12.5f,
         )
     }
 }

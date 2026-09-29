@@ -1,15 +1,13 @@
-package com.console.mobile.ui.components
+package com.console.mobile.ui.code
 
-import android.graphics.Typeface
 import android.os.Bundle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
-import com.console.mobile.core.util.CODE_KEYWORDS
-import com.console.mobile.core.util.CODE_TOKEN_REGEX
 import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.ConsoleDimens
 import io.github.rosemoe.sora.lang.EmptyLanguage
 import io.github.rosemoe.sora.lang.Language
 import io.github.rosemoe.sora.lang.analysis.AnalyzeManager
@@ -70,9 +68,6 @@ class ConsoleColorScheme : EditorColorScheme() {
     override fun isDark(): Boolean = true
 }
 
-private val KEY_LINE_REGEX = Regex("""^(\s*)([A-Za-z0-9_.\-]+)(\s*[:=])""")
-private val KEY_LANGUAGES = setOf("toml", "yaml", "yml", "env", "ini", "cfg", "sh", "bash", "zsh")
-
 private fun soraColorId(token: String, line: String, matchEnd: Int): Int {
     if (token.startsWith("//") || token.startsWith("#") || token.startsWith("/*")) {
         return EditorColorScheme.COMMENT
@@ -109,7 +104,7 @@ class ConsoleAnalyzeManager(
         lines.forEachIndexed { index, line ->
             if (index % 200 == 0 && delegate.isCancelled) return@forEachIndexed
             // TOML/INI section header: whole line in type color.
-            if ((language == "toml" || language == "ini" || language == "cfg") &&
+            if (language in SECTION_LANGUAGES &&
                 line.trim().startsWith("[") && line.trim().endsWith("]")
             ) {
                 builder.addIfNeeded(index, 0, TextStyle.makeStyle(EditorColorScheme.IDENTIFIER_NAME))
@@ -135,8 +130,8 @@ class ConsoleAnalyzeManager(
         builder.determine(lines.size)
         builder.addNormalIfNull()
         val styles = Styles(builder.build())
-        addLines.forEach { styles.addLineStyle(LineBackground(it, ConstColor(0x1A34D399))) }
-        removeLines.forEach { styles.addLineStyle(LineBackground(it, ConstColor(0x1AF87171))) }
+        addLines.forEach { styles.addLineStyle(LineBackground(it, ConstColor(ConsoleColors.Syntax.DiffAddedBg.toArgb()))) }
+        removeLines.forEach { styles.addLineStyle(LineBackground(it, ConstColor(ConsoleColors.Syntax.DiffRemovedBg.toArgb()))) }
         return styles
     }
 }
@@ -175,7 +170,7 @@ fun CodeViewer(
     language: String = "",
     modifier: Modifier = Modifier,
     showLineNumbers: Boolean = true,
-    fontSizeSp: Float = 11f,
+    fontSizeSp: Float = ConsoleDimens.CodeFontSizeSp,
     addLines: Set<Int> = emptySet(),
     removeLines: Set<Int> = emptySet(),
 ) {
@@ -183,14 +178,15 @@ fun CodeViewer(
     val soraLanguage = remember(language, addLines, removeLines) {
         ConsoleLanguage(language, addLines, removeLines)
     }
+    val typeface = rememberJetBrainsMonoTypeface()
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
             CodeEditor(ctx).apply {
                 setColorScheme(colorScheme)
                 setEditorLanguage(soraLanguage)
-                typefaceText = Typeface.MONOSPACE
-                typefaceLineNumber = Typeface.MONOSPACE
+                typefaceText = typeface
+                typefaceLineNumber = typeface
                 setTextSize(fontSizeSp)
                 isLineNumberEnabled = showLineNumbers
                 isEditable = false
@@ -198,11 +194,14 @@ fun CodeViewer(
                 isHighlightCurrentBlock = false
                 isHighlightBracketPair = false
                 isCursorAnimationEnabled = false
-                // Word-wrap instead of horizontal scroll: Sora's pinned line-number
-                // gutter doesn't anchor correctly against horizontal scroll (it
-                // shifts with the scroll offset and smears into the code text), and
-                // this is a read-only viewer where wrapping is an acceptable trade-off.
-                isWordwrap = true
+                // No word wrap: code is read by structure, and wrapped lines make
+                // a diff impossible to scan. The gutter is pinned so it stays
+                // anchored while the code scrolls horizontally underneath it —
+                // without pinning it drifts with the scroll offset.
+                isWordwrap = false
+                // Written as a call, not `pinLineNumber = true`: CodeEditor has a
+                // private field by that name, which shadows the synthetic property.
+                setPinLineNumber(true)
                 setScrollBarEnabled(true)
                 tabWidth = 4
                 setText(code)

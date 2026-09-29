@@ -48,12 +48,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
-import com.console.mobile.core.util.languageForPath
 import com.console.mobile.data.model.FsTreeEntry
 import com.console.mobile.data.model.getFilePreviewBlock
 import com.console.mobile.data.model.isMarkdownPath
 import com.console.mobile.feature.chat.MarkdownText
-import com.console.mobile.ui.components.CodeViewer
+import com.console.mobile.ui.code.CodeViewer
+import com.console.mobile.ui.code.languageForPath
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.components.ScreenHeader
@@ -379,7 +379,6 @@ private fun CodePreview(content: String, path: String?) {
         language = language,
         modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 8.dp),
         showLineNumbers = true,
-        fontSizeSp = 11f,
     )
 }
 

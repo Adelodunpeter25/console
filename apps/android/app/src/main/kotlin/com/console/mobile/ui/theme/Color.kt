@@ -48,5 +48,9 @@ object ConsoleColors {
         val String = Color(0xFF4ADE80)
         val Number = Color(0xFFFB923C)
         val Comment = Color(0xFF71717A)
+        // Diff row tints. Alpha tints rather than solid fills so the syntax
+        // colours underneath stay readable.
+        val DiffAddedBg = Color(0x1A34D399)
+        val DiffRemovedBg = Color(0x1AF87171)
     }
 }
