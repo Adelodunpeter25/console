@@ -1,7 +1,7 @@
 //! Browser action dispatch and execution for agent automation.
 //!
 //! Handles `AgentSessionEvent::BrowserAction` requests from the backend agent
-//! (`navigate`, `run_js`, `get_content`, `tabs`) against open workspace browser tabs.
+//! (`navigate`, `run_js`, `get_content`, `tabs`, `switch_tab`, `close_tab`) against open workspace browser tabs.
 
 use console_core::{BrowserActionRequest, ResolveBrowserActionDto};
 use console_ui::browser::BrowserView;
@@ -310,6 +310,58 @@ impl ConsoleDesktopApp {
                 .detach();
             }
 
+            "switch_tab" | "close_tab" => {
+                let Some(requested) = req.tab_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
+                    self.resolve_browser_action_result(
+                        &sess_id,
+                        request_id,
+                        None,
+                        Some(format!(
+                            "'{action}' needs a tabId. Open tabs:\n{}",
+                            self.describe_browser_tabs(cx)
+                        )),
+                        cx,
+                    );
+                    return;
+                };
+                // Unknown ids error out with the tab listing; never fall back to another tab.
+                let (tab_id, view) = match self.pick_browser_view(Some(requested), None, false, cx) {
+                    Ok(Some(entry)) => entry,
+                    Ok(None) => return,
+                    Err(err) => {
+                        self.resolve_browser_action_result(&sess_id, request_id, None, Some(err), cx);
+                        return;
+                    }
+                };
+                let (title, url) = {
+                    let bv = view.read(cx);
+                    (
+                        bv.tab_label().unwrap_or_default(),
+                        bv.current_url().unwrap_or("(blank)").to_string(),
+                    )
+                };
+
+                let result = if action == "switch_tab" {
+                    // Only retargets the agent; the tab the user is looking at is untouched.
+                    self.agent_browser_tab = Some(tab_id.clone());
+                    format!("Tab: {tab_id}\nTitle: {title}\nURL: {url}\nSwitched agent target to this tab.")
+                } else {
+                    self.close_agent_browser_tab(&tab_id, cx);
+                    if self.agent_browser_tab.as_deref() == Some(tab_id.as_str()) {
+                        self.agent_browser_tab = self.most_recent_browser_tab();
+                    }
+                    let next = match &self.agent_browser_tab {
+                        Some(id) => format!("Agent target is now tab '{id}'."),
+                        None => "No browser tabs are open.".to_string(),
+                    };
+                    format!(
+                        "Tab: {tab_id}\nClosed: {url}\n{next}\nOpen tabs:\n{}",
+                        self.describe_browser_tabs(cx)
+                    )
+                };
+                self.resolve_browser_action_result(&sess_id, request_id, Some(result), None, cx);
+            }
+
             "wait_for" => {
                 let selector = req.selector.clone().filter(|s| !s.trim().is_empty());
                 let url_contains = req.url_contains.clone().filter(|s| !s.is_empty());
@@ -522,6 +574,56 @@ impl ConsoleDesktopApp {
             });
         })
         .detach();
+    }
+
+    /// Closes a browser tab through the normal workspace close path so the tab
+    /// strip, persistence, and the webview (and its per-page ref store) go with it.
+    fn close_agent_browser_tab(&mut self, browser_id: &str, cx: &mut Context<Self>) {
+        let key = format!("browser:{browser_id}");
+        let pane_id = self
+            .workspace_root
+            .leaves()
+            .iter()
+            .find(|leaf| leaf.tabs.iter().any(|t| t.id() == key))
+            .map(|leaf| leaf.id.clone());
+        match pane_id {
+            Some(pane_id) => self.close_tab_and_sync_pane(&pane_id, &key, cx),
+            None => {
+                // Tab lives in a stashed workspace: drop it there and free the view.
+                for root in self.project_workspace_roots.values_mut() {
+                    console_ui::workspace::ops::close_matching_tabs(root, |t| t.id() == key);
+                }
+                self.persist_workspaces();
+            }
+        }
+        // Guarantee the view is gone from the registry even in the stashed case.
+        if let Some(view) = self.browser_views.remove(browser_id) {
+            view.update(cx, |bv, cx| bv.close(cx));
+        }
+    }
+
+    /// The most recently used open browser tab (by tab `last_active_at_ms`),
+    /// else the lowest id; `None` when no browser tabs remain.
+    fn most_recent_browser_tab(&self) -> Option<String> {
+        let mut best: Option<(i64, String)> = None;
+        for leaf in self.workspace_root.leaves() {
+            for tab in &leaf.tabs {
+                if let console_core::WorkspaceTabConfig::Browser { browser_id, last_active_at_ms, .. } = tab {
+                    if !self.browser_views.contains_key(browser_id) {
+                        continue;
+                    }
+                    let ts = last_active_at_ms.unwrap_or(0);
+                    if best.as_ref().map_or(true, |(b, _)| ts > *b) {
+                        best = Some((ts, browser_id.clone()));
+                    }
+                }
+            }
+        }
+        best.map(|(_, id)| id).or_else(|| {
+            let mut ids: Vec<&String> = self.browser_views.keys().collect();
+            ids.sort();
+            ids.first().map(|id| (*id).clone())
+        })
     }
 
     /// One line per open browser tab: id, title, URL, and which one is active.

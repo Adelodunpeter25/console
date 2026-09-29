@@ -1,4 +1,4 @@
-// browser tool: native desktop webview control (navigate, run_js, get_content, tabs).
+// browser tool: native desktop webview control (navigate, run_js, get_content, tabs, switch_tab, close_tab).
 package tools
 
 import (
@@ -35,11 +35,11 @@ type BrowserActionResult struct {
 type BrowserHandler func(ctx context.Context, req BrowserActionRequest) (BrowserActionResult, error)
 
 type browserInput struct {
-	Action      string `json:"action" jsonschema:"required,enum=navigate,enum=run_js,enum=get_content,enum=tabs,enum=snapshot,enum=click,enum=type,enum=wait_for,enum=screenshot,description=Browser action: 'navigate' to a URL (returns the tab id), 'snapshot' to list the page's interactive elements with refs like e12, 'click' or 'type' to act on a ref from the latest snapshot, 'wait_for' until a selector, URL fragment, or text appears (works for client-side navigation), 'run_js' to evaluate JavaScript and get its return value, 'get_content' to read page text (or the text of a selector), 'tabs' to list open tabs, or 'screenshot' (not supported yet)."`
+	Action      string `json:"action" jsonschema:"required,enum=navigate,enum=run_js,enum=get_content,enum=tabs,enum=snapshot,enum=click,enum=type,enum=wait_for,enum=switch_tab,enum=close_tab,enum=screenshot,description=Browser action: 'navigate' to a URL (returns the tab id), 'snapshot' to list the page's interactive elements with refs like e12, 'click' or 'type' to act on a ref from the latest snapshot, 'wait_for' until a selector, URL fragment, or text appears (works for client-side navigation), 'run_js' to evaluate JavaScript and get its return value, 'get_content' to read page text (or the text of a selector), 'tabs' to list open tabs, 'switch_tab' to make a tab the one your later actions target by default (does not change what the user sees), 'close_tab' to close a tab by tabId, or 'screenshot' (not supported yet)."`
 	URL         string `json:"url,omitempty" jsonschema:"description=URL to navigate to (required for 'navigate')."`
 	Script      string `json:"script,omitempty" jsonschema:"description=JavaScript expression or function to evaluate (required for 'run_js'). The value it returns (promises are awaited) is sent back as the result."`
 	Selector    string `json:"selector,omitempty" jsonschema:"description=Optional CSS selector. For 'get_content': returns the text of matching elements, or a no-match message. For 'snapshot': only lists interactive elements inside the first match (e.g. '#search, .s-main-slot'), which keeps refs few and clean; refs are numbered from e1 within that scope and replace the previous snapshot's refs. For 'wait_for': the element to wait for."`
-	TabID       string `json:"tabId,omitempty" jsonschema:"description=Tab id from 'navigate' or 'tabs'. Omit to use the tab you last navigated or worked in (for 'navigate': a tab already on that URL, else a new tab). Pass it explicitly when several tabs are open."`
+	TabID       string `json:"tabId,omitempty" jsonschema:"description=Tab id from 'navigate' or 'tabs' (required for 'switch_tab' and 'close_tab'). Omit to use the tab you last navigated or worked in (for 'navigate': a tab already on that URL, else a new tab). Pass it explicitly when several tabs are open."`
 	URLContains string `json:"urlContains,omitempty" jsonschema:"description=For 'wait_for': substring the tab URL must contain."`
 	Text        string `json:"text,omitempty" jsonschema:"description=For 'wait_for': text the page must contain. For 'type': the text to enter."`
 	Ref         string `json:"ref,omitempty" jsonschema:"description=Element ref from the latest 'snapshot' (for 'click' and 'type'). Refs expire when the page changes; a stale ref returns a fresh snapshot."`
@@ -75,10 +75,14 @@ func NewBrowserTool(handler BrowserHandler) Tool {
 				if action == "type" && in.Text == "" {
 					return nil, NewToolError("'type' needs text.")
 				}
+			case "switch_tab", "close_tab":
+				if strings.TrimSpace(in.TabID) == "" {
+					return nil, NewToolError("'%s' needs a tabId (see the 'tabs' action).", action)
+				}
 			case "snapshot", "screenshot", "get_content", "tabs":
 				// valid
 			default:
-				return nil, NewToolError("Unknown action: '%s'. Supported actions: navigate, run_js, get_content, tabs, snapshot, click, type, wait_for, screenshot.", action)
+				return nil, NewToolError("Unknown action: '%s'. Supported actions: navigate, run_js, get_content, tabs, snapshot, click, type, wait_for, switch_tab, close_tab, screenshot.", action)
 			}
 
 			if handler == nil {
