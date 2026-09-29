@@ -25,8 +25,8 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use console_core::{
-    GitBranchInfo, ImageAttachment, Model, ProjectInfo, ProviderCatalogEntry, SelectedModel,
-    ThinkingLevel,
+    ApprovalMode, GitBranchInfo, ImageAttachment, Model, ProjectInfo, ProviderCatalogEntry,
+    SelectedModel, ThinkingLevel,
 };
 use gpui::{App, AppContext, Entity, KeyBinding, Window};
 
@@ -88,6 +88,10 @@ pub struct FloatingSubmit {
     pub branch: BranchChoice,
     pub model: Option<SelectedModel>,
     pub thinking_level: Option<ThinkingLevel>,
+    /// How much the agent may do unattended. The card seeds this from the
+    /// active pane and the user can widen or narrow it before launching, so a
+    /// throwaway chat doesn't inherit "Full access" from whatever was focused.
+    pub approval_mode: ApprovalMode,
 }
 
 /// The app-state snapshot pushed into the card on open.
@@ -101,6 +105,26 @@ pub struct FloatingSnapshot {
     pub selected_model: Option<SelectedModel>,
     pub thinking_level: Option<ThinkingLevel>,
     pub supported_thinking_levels: Vec<ThinkingLevel>,
+    pub approval_mode: ApprovalMode,
+}
+
+impl FloatingSnapshot {
+    /// The empty snapshot, for the card's default field values before the app
+    /// has pushed a real one.
+    pub fn empty() -> Self {
+        Self {
+            projects: Rc::new(Vec::new()),
+            selected_project_id: None,
+            branches: Rc::new(Vec::new()),
+            providers: Rc::new(Vec::new()),
+            models_by_provider: Rc::new(HashMap::new()),
+            favorites: Rc::new(HashSet::new()),
+            selected_model: None,
+            thinking_level: None,
+            supported_thinking_levels: Vec::new(),
+            approval_mode: ApprovalMode::default(),
+        }
+    }
 }
 
 /// The launcher's state. Lives on the app entity, which builds
@@ -114,6 +138,7 @@ pub struct FloatingComposerState {
     pub branch_menu: ContextMenuHandle,
     pub model_menu: ContextMenuHandle,
     pub thinking_menu: ContextMenuHandle,
+    pub approval_menu: ContextMenuHandle,
     pub picker_tab: PickerTab,
     pub open: bool,
     pub submitting: bool,
@@ -128,6 +153,10 @@ pub struct FloatingComposerState {
     pub selected_model: Option<SelectedModel>,
     pub thinking_level: Option<ThinkingLevel>,
     pub supported_thinking_levels: Vec<ThinkingLevel>,
+    /// Approval mode for the session this launch creates. Seeded from the
+    /// active pane on open and overridable in the card, so the mode is chosen
+    /// alongside the branch rather than inherited silently.
+    pub approval_mode: ApprovalMode,
     /// Staged images, mirrored from the app so the card can paint chips.
     pub attachments: Rc<Vec<ImageAttachment>>,
     /// The @-file / slash-command popup for the prompt field, if any.
@@ -149,6 +178,7 @@ impl FloatingComposerState {
             branch_menu: ContextMenuHandle::new(cx),
             model_menu: ContextMenuHandle::new(cx),
             thinking_menu: ContextMenuHandle::new(cx),
+            approval_menu: ContextMenuHandle::new(cx),
             picker_tab: PickerTab::Favorites,
             open: false,
             submitting: false,
@@ -163,6 +193,7 @@ impl FloatingComposerState {
             selected_model: None,
             thinking_level: None,
             supported_thinking_levels: Vec::new(),
+            approval_mode: ApprovalMode::default(),
             attachments: Rc::new(Vec::new()),
             autocomplete: None,
             autocomplete_key: None,
@@ -182,6 +213,7 @@ impl FloatingComposerState {
             selected_model,
             thinking_level,
             supported_thinking_levels,
+            approval_mode,
         } = snapshot;
 
         self.projects = projects;
@@ -193,6 +225,7 @@ impl FloatingComposerState {
         self.selected_model = selected_model;
         self.thinking_level = thinking_level;
         self.supported_thinking_levels = supported_thinking_levels;
+        self.approval_mode = approval_mode;
         // An existing-branch base is a per-launch decision, not a sticky
         // preference — reset it rather than inheriting the last one.
         self.branch = BranchChoice::default();
@@ -288,6 +321,7 @@ impl FloatingComposerState {
             model_search_query,
             thinking_level: self.thinking_level,
             supported_thinking_levels: self.supported_thinking_levels.clone(),
+            approval_mode: self.approval_mode,
             attachments: self.attachments.clone(),
             autocomplete: self.autocomplete.clone(),
             submitting: self.submitting,
@@ -325,6 +359,7 @@ impl FloatingComposerState {
             branch: self.branch.clone(),
             model: self.selected_model.clone(),
             thinking_level: self.thinking_level,
+            approval_mode: self.approval_mode,
         };
         self.submitting = true;
         self.error = None;

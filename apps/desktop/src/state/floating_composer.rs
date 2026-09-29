@@ -62,6 +62,10 @@ impl ConsoleDesktopApp {
             selected_model: self.pane_selected_model(&pane_id),
             thinking_level: self.pane_thinking_level(&pane_id),
             supported_thinking_levels: self.supported_thinking_levels_for_pane(&pane_id),
+            // Seeded so the chip reflects where the active pane already sits,
+            // but overridable — the launched session takes the card's value,
+            // not this.
+            approval_mode: self.pane_approval_mode(&pane_id),
         };
         self.floating_composer.show(snapshot, window, cx);
         cx.notify();
@@ -272,6 +276,7 @@ impl ConsoleDesktopApp {
             card.branch_menu.clone(),
             card.model_menu.clone(),
             card.thinking_menu.clone(),
+            card.approval_menu.clone(),
             model_menu,
         )
         .data(data)
@@ -333,6 +338,18 @@ impl ConsoleDesktopApp {
                         this.floating_composer.thinking_menu.close(window, cx);
                         this.floating_composer.thinking_level = Some(level);
                         this.thinking_level = Some(level);
+                        cx.notify();
+                    });
+                }
+            }
+        })
+        .on_choose_approval({
+            let entity = entity.clone();
+            move |mode: console_core::ApprovalMode, window: &mut Window, cx: &mut App| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.floating_composer.approval_menu.close(window, cx);
+                        this.floating_composer.approval_mode = mode;
                         cx.notify();
                     });
                 }
@@ -451,7 +468,10 @@ impl ConsoleDesktopApp {
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
         let client = self.client.clone();
-        let approval_mode = self.pane_approval_mode(&pane_id);
+        // The card's choice, not the pane's: the mode is picked in the card
+        // precisely so a launch doesn't inherit whatever the focused pane
+        // happened to be set to.
+        let approval_mode = submit.approval_mode;
         let prompt = submit.prompt.clone();
         let title = title_from_prompt(&prompt);
         // Attachments staged in the card move onto the new session; the card's
@@ -524,6 +544,10 @@ impl ConsoleDesktopApp {
                             this.set_pane_model(&pane_id, Some(model));
                         }
                         this.set_pane_thinking_level(&pane_id, card_thinking);
+                        // Same for approval mode: the composer the launch
+                        // leaves behind must show the mode the session is
+                        // actually running in, not the pane's previous one.
+                        this.set_pane_approval_mode(&pane_id, approval_mode);
                         // The run targets the active pane, so make sure the
                         // pane the session just opened in is the active one.
                         this.active_pane_id = Some(pane_id.clone());

@@ -9,8 +9,8 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use console_core::{
-    GitBranchInfo, ImageAttachment, Model, ProjectInfo, ProviderCatalogEntry, SelectedModel,
-    ThinkingLevel,
+    ApprovalMode, GitBranchInfo, ImageAttachment, Model, ProjectInfo, ProviderCatalogEntry,
+    SelectedModel, ThinkingLevel,
 };
 use gpui::{
     App, Entity, ExternalPaths, FontWeight, InteractiveElement, IntoElement, ParentElement,
@@ -23,6 +23,7 @@ use crate::common::{
     AutocompleteConfirm, AutocompleteDismiss, AutocompleteNext, AutocompletePrevious,
     AutocompleteView, ModelDropdownMenu, PickerTab, format_model_name, provider_svg_path,
 };
+use crate::common::{ApprovalModeDropdown, ApprovalModeIconExt};
 use crate::input::ComposerInput;
 use crate::primitives::{
     ContextMenuHandle, IconName, MenuAlign, MenuChip, MenuItem, app_icon, dropdown_menu, popover,
@@ -43,6 +44,7 @@ pub struct Data {
     pub model_search_query: String,
     pub thinking_level: Option<ThinkingLevel>,
     pub supported_thinking_levels: Vec<ThinkingLevel>,
+    pub approval_mode: ApprovalMode,
     pub attachments: Rc<Vec<ImageAttachment>>,
     pub autocomplete: Option<AutocompleteView>,
     pub submitting: bool,
@@ -55,6 +57,7 @@ pub struct FloatingComposerView {
     branch_menu: ContextMenuHandle,
     model_menu: ContextMenuHandle,
     thinking_menu: ContextMenuHandle,
+    approval_menu: ContextMenuHandle,
     model_dropdown: ModelDropdownMenu,
     data: Data,
     on_dismiss: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -62,6 +65,7 @@ pub struct FloatingComposerView {
     on_choose_branch: Rc<dyn Fn(BranchChoice, &mut Window, &mut App) + 'static>,
     on_choose_model: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     on_choose_thinking: Rc<dyn Fn(ThinkingLevel, &mut Window, &mut App) + 'static>,
+    on_choose_approval: Rc<dyn Fn(ApprovalMode, &mut Window, &mut App) + 'static>,
     on_submit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_pick_image: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_drop_files: Rc<dyn Fn(&ExternalPaths, &mut Window, &mut App) + 'static>,
@@ -81,6 +85,7 @@ impl FloatingComposerView {
         branch_menu: ContextMenuHandle,
         model_menu: ContextMenuHandle,
         thinking_menu: ContextMenuHandle,
+        approval_menu: ContextMenuHandle,
         model_dropdown: ModelDropdownMenu,
     ) -> Self {
         Self {
@@ -89,6 +94,7 @@ impl FloatingComposerView {
             branch_menu,
             model_menu,
             thinking_menu,
+            approval_menu,
             model_dropdown,
             data: Data {
                 projects: Rc::new(Vec::new()),
@@ -103,6 +109,7 @@ impl FloatingComposerView {
                 model_search_query: String::new(),
                 thinking_level: None,
                 supported_thinking_levels: Vec::new(),
+                approval_mode: ApprovalMode::default(),
                 attachments: Rc::new(Vec::new()),
                 autocomplete: None,
                 submitting: false,
@@ -113,6 +120,7 @@ impl FloatingComposerView {
             on_choose_branch: Rc::new(|_, _, _| {}),
             on_choose_model: Rc::new(|_, _, _, _| {}),
             on_choose_thinking: Rc::new(|_, _, _| {}),
+            on_choose_approval: Rc::new(|_, _, _| {}),
             on_submit: Rc::new(|_, _, _| {}),
             on_pick_image: Rc::new(|_, _| {}),
             on_drop_files: Rc::new(|_, _, _| {}),
@@ -168,6 +176,14 @@ impl FloatingComposerView {
         f: impl Fn(ThinkingLevel, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_choose_thinking = Rc::new(f);
+        self
+    }
+
+    pub fn on_choose_approval(
+        mut self,
+        f: impl Fn(ApprovalMode, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_choose_approval = Rc::new(f);
         self
     }
 
@@ -242,7 +258,9 @@ impl FloatingComposerView {
         let submitting = data.submitting;
         let error = data.error.clone();
 
-        // ---- header: project selector on the left ----
+        // ---- header: project + branch selectors on the left ----
+        // Both answer "where does this work happen", so they sit together
+        // above the prompt; the footer keeps the behavioural choices.
         let project_label = data
             .projects
             .iter()
@@ -285,12 +303,16 @@ impl FloatingComposerView {
             project_trigger.into_any_element()
         };
 
-        // ---- footer: branch + model + thinking selectors ----
+        // ---- branch selector, painted in the header beside the project ----
         let branch_trigger = MenuChip::new("floating-branch-chip")
-            .height(px(26.0))
+            // Matches the project chip beside it in the header.
+            .height(px(28.0))
             .outlined()
             .icon(IconName::GitBranch.path(), theme.text_tertiary)
-            .label(data.branch.label());
+            .label(data.branch.label())
+            // The header now shares its row with the project chip, so a long
+            // branch name is capped rather than pushing the card wider.
+            .max_w(px(220.0));
         let on_choose_branch = self.on_choose_branch.clone();
         let branches = data.branches.clone();
         let current = data.branch.clone();
@@ -356,6 +378,40 @@ impl FloatingComposerView {
             &self.model_menu,
             MenuAlign::AboveLeft,
             move |_handle, _window, _cx| model_dropdown.clone().into_any_element(),
+        );
+
+        // ---- footer: approval + model + thinking selectors ----
+        // Approval mode is a real choice at launch time: the session the card
+        // creates would otherwise silently inherit whatever the focused pane
+        // was set to. Full access is tinted with the warning colour, as in the
+        // docked composer.
+        let approval_is_open = self.approval_menu.is_open();
+        let approval_trigger = MenuChip::new("floating-approval-chip")
+            .height(px(26.0))
+            .outlined()
+            .background(theme.composer)
+            .selected(approval_is_open)
+            .icon(
+                data.approval_mode.icon().path(),
+                if data.approval_mode == ApprovalMode::FullAccess {
+                    theme.warning
+                } else {
+                    theme.text_tertiary
+                },
+            )
+            .label(data.approval_mode.label());
+        let on_choose_approval = self.on_choose_approval.clone();
+        let approval_control = popover(
+            approval_trigger,
+            &self.approval_menu,
+            MenuAlign::AboveLeft,
+            move |_handle, _window, _cx| {
+                ApprovalModeDropdown::new(data.approval_mode, {
+                    let on_choose_approval = on_choose_approval.clone();
+                    move |mode, window, cx| on_choose_approval(mode, window, cx)
+                })
+                .into_any_element()
+            },
         );
 
         let thinking_control = if data.supported_thinking_levels.is_empty() {
@@ -539,7 +595,9 @@ impl FloatingComposerView {
                             .gap(px(8.0))
                             .border_b_1()
                             .border_color(theme.border)
-                            .child(project_control),
+                            .child(project_control)
+                            .child(branch_control)
+                            .child(div().flex_1()),
                     )
                     // staged images
                     .when_some(attachments, |el, attachments| el.child(attachments))
@@ -603,7 +661,7 @@ impl FloatingComposerView {
                             .items_center()
                             .gap(px(6.0))
                             .child(attach_button)
-                            .child(branch_control)
+                            .child(approval_control)
                             .child(model_control)
                             .child(thinking_control)
                             .child(div().flex_1())
