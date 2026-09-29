@@ -151,6 +151,10 @@ pub struct BrowserActionRequest {
     pub text: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeout_ms: Option<u64>,
+    #[serde(default, rename = "ref", skip_serializing_if = "Option::is_none")]
+    pub element_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submit: Option<bool>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

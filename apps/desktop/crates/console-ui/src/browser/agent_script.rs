@@ -15,6 +15,21 @@ pub fn wrap_script(request_id: &str, script: &str) -> String {
         .replace("__MAX_CHARS__", &MAX_RESULT_CHARS.to_string())
 }
 
+const ELEMENT_TEMPLATE: &str = include_str!("element_script.js");
+
+/// Script for the ref-based `snapshot` / `click` / `type` actions. Meant to be
+/// passed to `run_agent_script`, which awaits and returns its value.
+pub fn element_script(op: &str, element_ref: Option<&str>, text: Option<&str>, submit: bool, selector: Option<&str>) -> String {
+    let request = serde_json::json!({
+        "op": op,
+        "ref": element_ref.map(str::trim).unwrap_or(""),
+        "text": text.unwrap_or(""),
+        "submit": submit,
+        "selector": selector.map(str::trim).unwrap_or(""),
+    });
+    ELEMENT_TEMPLATE.replace("__REQUEST__", &request.to_string())
+}
+
 /// Cap `text` at `MAX_RESULT_CHARS` characters, marking the cut.
 pub fn cap_result(text: String) -> String {
     let total = text.chars().count();

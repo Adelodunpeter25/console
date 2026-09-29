@@ -24,13 +24,15 @@ Make the agent `browser` tool return data the model can act on, not confirmation
 - "No tab found" errors list the open tabs.
 - Navigation timeouts return title, URL, and text loaded so far.
 
-## Phase 4 (separate pass): snapshot and refs
-- `snapshot` returns numbered elements, e.g. `[ref=e12] button "Contact me"`, reusing role/name data from the inspector script.
-- `click` and `type` take a ref. Refs are tied to a page-load counter and expire on navigation; a stale ref returns a fresh snapshot.
+## Phase 4: snapshot and refs (done)
+- `snapshot` returns numbered elements, e.g. `[ref=e12] button "Contact me"`, using the same role/name rules as the inspector script (`element_script.js`). Capped at 200 elements; an optional `selector` scopes it.
+- `click` and `type` take a ref (`type` also takes `text` and optional `submit` to press Enter). Refs live on the page's `window`, so a full page load drops them, and a detached element is caught too; a stale ref returns a fresh snapshot.
+- Password fields are never echoed in snapshots.
 
 ## Later
 - `screenshot` via the webview's native snapshot, returned as an image.
-- `back`, `forward`, `reload`, `wait_for`, `logs`.
+- `back`, `forward`, `reload`, `logs`.
+- `wait_for` is done (selector, URL fragment, or text).
 
 ## Notes
 - The browser is a visible tab in the user's desktop window with their own session, not headless.

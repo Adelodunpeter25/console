@@ -232,6 +232,84 @@ impl ConsoleDesktopApp {
                 .detach();
             }
 
+            "snapshot" | "click" | "type" => {
+                let element_ref = req.element_ref.clone().filter(|s| !s.trim().is_empty());
+                if action != "snapshot" && element_ref.is_none() {
+                    self.resolve_browser_action_result(
+                        &sess_id,
+                        request_id,
+                        None,
+                        Some(format!("'{action}' needs a ref from a snapshot")),
+                        cx,
+                    );
+                    return;
+                }
+                if action == "type" && req.text.is_none() {
+                    self.resolve_browser_action_result(
+                        &sess_id,
+                        request_id,
+                        None,
+                        Some("'type' needs text".to_string()),
+                        cx,
+                    );
+                    return;
+                }
+                let entry = match self.pick_browser_view(req.tab_id.as_deref(), None, false, cx) {
+                    Ok(entry) => entry,
+                    Err(err) => {
+                        self.resolve_browser_action_result(&sess_id, request_id, None, Some(err), cx);
+                        return;
+                    }
+                };
+                let Some((tab_id, view)) = entry else {
+                    self.retry_browser_action_or_fail(&sess_id, req, retries_left, cx);
+                    return;
+                };
+                let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
+                self.agent_browser_tab = Some(tab_id.clone());
+
+                let js = console_ui::browser::agent_script::element_script(
+                    &action,
+                    element_ref.as_deref(),
+                    req.text.as_deref(),
+                    req.submit.unwrap_or(false),
+                    req.selector.as_deref(),
+                );
+                let is_snapshot = action == "snapshot";
+                let script_id = request_id.clone();
+                view.update(cx, |bv, _| bv.run_agent_script(&script_id, &js));
+                cx.spawn(async move |this, cx| {
+                    let outcome = poll_script_result(&this, cx, &view, &script_id).await;
+                    let (result, error) = match outcome {
+                        Ok(value) => {
+                            let header = this
+                                .update(cx, |_, cx| {
+                                    let bv = view.read(cx);
+                                    format!(
+                                        "Tab: {}\nTitle: {}\nURL: {}",
+                                        tab_id,
+                                        bv.tab_label().unwrap_or_default(),
+                                        bv.current_url().unwrap_or_default()
+                                    )
+                                })
+                                .unwrap_or_default();
+                            let note = note.map(|n| format!("{n}\n")).unwrap_or_default();
+                            let hint = if is_snapshot {
+                                ""
+                            } else {
+                                "\n(Take a new snapshot if the page changed.)"
+                            };
+                            (Some(format!("{note}{header}\n\n{value}{hint}")), None)
+                        }
+                        Err(err) => (None, Some(format!("[tab {tab_id}] {err}"))),
+                    };
+                    let _ = this.update(cx, |app, cx| {
+                        app.resolve_browser_action_result(&sess_id, request_id, result, error, cx);
+                    });
+                })
+                .detach();
+            }
+
             "wait_for" => {
                 let selector = req.selector.clone().filter(|s| !s.trim().is_empty());
                 let url_contains = req.url_contains.clone().filter(|s| !s.is_empty());

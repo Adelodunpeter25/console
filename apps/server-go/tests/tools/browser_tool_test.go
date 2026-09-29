@@ -201,3 +201,34 @@ func TestBrowserTool_WaitForValidatesAndForwards(t *testing.T) {
 		t.Fatalf("wait_for fields not forwarded: %+v", captured)
 	}
 }
+
+func TestBrowserTool_SnapshotClickTypeValidateAndForward(t *testing.T) {
+	var captured tools.BrowserActionRequest
+	handler := func(ctx context.Context, req tools.BrowserActionRequest) (tools.BrowserActionResult, error) {
+		captured = req
+		return tools.BrowserActionResult{Result: "ok"}, nil
+	}
+	tool := tools.NewBrowserTool(handler)
+
+	for _, args := range []map[string]any{
+		{"action": "click"},
+		{"action": "type", "ref": "e1"},
+		{"action": "type", "text": "hi"},
+	} {
+		if _, err := tool.Execute(context.Background(), helpers.MustJSONRaw(t, args)); err == nil {
+			t.Fatalf("expected validation error for %v", args)
+		}
+	}
+
+	if _, err := tool.Execute(context.Background(), helpers.MustJSONRaw(t, map[string]any{"action": "snapshot"})); err != nil {
+		t.Fatalf("snapshot should need no args: %v", err)
+	}
+	if _, err := tool.Execute(context.Background(), helpers.MustJSONRaw(t, map[string]any{
+		"action": "type", "ref": " e3 ", "text": "headphones", "submit": true,
+	})); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if captured.Ref != "e3" || captured.Text != "headphones" || !captured.Submit {
+		t.Fatalf("type fields not forwarded: %+v", captured)
+	}
+}
