@@ -304,13 +304,13 @@ impl FloatingComposerView {
         };
 
         // ---- branch selector, painted in the header beside the project ----
+        // Same treatment as the project chip beside it: no outline, no filled
+        // background, same height — the header reads as one control group.
         let branch_trigger = MenuChip::new("floating-branch-chip")
-            // Matches the project chip beside it in the header.
             .height(px(28.0))
-            .outlined()
             .icon(IconName::GitBranch.path(), theme.text_tertiary)
             .label(data.branch.label())
-            // The header now shares its row with the project chip, so a long
+            // The header shares its row with the project chip, so a long
             // branch name is capped rather than pushing the card wider.
             .max_w(px(220.0));
         let on_choose_branch = self.on_choose_branch.clone();
@@ -369,6 +369,9 @@ impl FloatingComposerView {
         let model_trigger = MenuChip::new("floating-model-chip")
             .height(px(26.0))
             .outlined()
+            // Matches the approval chip beside it, so the footer controls sit
+            // on the same surface instead of one looking recessed.
+            .background(theme.composer)
             .selected(model_is_open)
             .icon(provider_svg_path(&model_provider), theme.text)
             .label(model_label);
@@ -661,8 +664,8 @@ impl FloatingComposerView {
                             .items_center()
                             .gap(px(6.0))
                             .child(attach_button)
-                            .child(approval_control)
                             .child(model_control)
+                            .child(approval_control)
                             .child(thinking_control)
                             .child(div().flex_1())
                             // Spinner replaces nothing — it sits just before
