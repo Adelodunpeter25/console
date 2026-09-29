@@ -439,6 +439,35 @@ func newTurnTranslator(hub *Hub) *turnTranslator {
 	return &turnTranslator{hub: hub}
 }
 
+// stripResultImages returns a copy of r with inline image parts replaced by a
+// short text placeholder. Subscribers (the desktop) don't render tool-result
+// images, and multi-megabyte base64 frames stall their SSE parser. The model
+// still receives the original result.
+func stripResultImages(r tools.ToolResult) tools.ToolResult {
+	const placeholder = "[image omitted from event stream]"
+	switch v := r.Content.(type) {
+	case []map[string]any:
+		out := make([]map[string]any, len(v))
+		for i, item := range v {
+			out[i] = item
+			if item["type"] == "image" {
+				out[i] = map[string]any{"type": "text", "text": placeholder}
+			}
+		}
+		r.Content = out
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = item
+			if m, ok := item.(map[string]any); ok && m["type"] == "image" {
+				out[i] = map[string]any{"type": "text", "text": placeholder}
+			}
+		}
+		r.Content = out
+	}
+	return r
+}
+
 func (t *turnTranslator) flushTools() {
 	if t.toolOpen {
 		t.hub.Broadcast(loop.Event{Kind: loop.EventToolExecutionEnd, Results: t.results})
@@ -479,8 +508,9 @@ func (t *turnTranslator) translate(event loop.Event) {
 			t.hub.Broadcast(loop.Event{Kind: loop.EventToolExecutionStart, Calls: t.calls})
 			t.toolOpen = true
 		}
-		t.hub.Broadcast(loop.Event{Kind: loop.EventToolExecutionResult, Result: event.Result})
-		t.results = append(t.results, *event.Result)
+		ui := stripResultImages(*event.Result)
+		t.hub.Broadcast(loop.Event{Kind: loop.EventToolExecutionResult, Result: &ui})
+		t.results = append(t.results, ui)
 	case loop.EventModelStreamEnd, loop.EventTurnEnd:
 		t.flushTools()
 		t.hub.Broadcast(event)
