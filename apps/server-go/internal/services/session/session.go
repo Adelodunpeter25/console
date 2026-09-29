@@ -82,7 +82,7 @@ func (s *Service) Create(opts types.CreateSessionOptions) (types.SessionHeader, 
 		INSERT INTO sessions
 			(id, title, cwd, project_id, model_id, provider, message_count, status, approval_mode, thinking_level, created_at, updated_at,
 				worktree_path, worktree_branch, worktree_repo)
-		VALUES (?, ?, ?, ?, ?, ?, 0, 'idle', ?, ?, ?,
+		VALUES (?, ?, ?, ?, ?, ?, 0, 'idle', ?, ?, ?, ?,
 			?, ?, ?)`,
 		id, title, cwd, projectID, modelID, provider, approvalMode, opts.ThinkingLevel, now, now,
 		worktreeCol(opts.ResolvedWorktree, func(w *types.SessionWorktree) string { return w.Path }),

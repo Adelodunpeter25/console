@@ -66,11 +66,14 @@ func TestWorktreeAddListRemove(t *testing.T) {
 	if !found {
 		t.Fatalf("added worktree missing from list: %+v", list)
 	}
-	if err := svc.WorktreeRemove(repo, wt, false); err != nil {
+	if err := svc.WorktreeRemove(repo, wt, "feature-x", false); err != nil {
 		t.Fatalf("WorktreeRemove clean: %v", err)
 	}
 	if _, err := os.Stat(wt); !os.IsNotExist(err) {
 		t.Fatalf("worktree dir still exists after remove")
+	}
+	if branchExists(t, repo, "feature-x") {
+		t.Fatalf("branch feature-x still exists after clean remove; want deleted")
 	}
 }
 
@@ -89,11 +92,17 @@ func TestWorktreeRemoveRefusesDirty(t *testing.T) {
 	if err != nil || !dirty {
 		t.Fatalf("IsDirty = %v, %v; want true, nil", dirty, err)
 	}
-	if err := svc.WorktreeRemove(repo, wt, false); !errors.Is(err, services.ErrWorktreeDirty) {
+	if err := svc.WorktreeRemove(repo, wt, "dirty-branch", false); !errors.Is(err, services.ErrWorktreeDirty) {
 		t.Fatalf("remove dirty = %v; want ErrWorktreeDirty", err)
 	}
-	if err := svc.WorktreeRemove(repo, wt, true); err != nil {
+	if !branchExists(t, repo, "dirty-branch") {
+		t.Fatalf("branch deleted despite refused dirty remove")
+	}
+	if err := svc.WorktreeRemove(repo, wt, "dirty-branch", true); err != nil {
 		t.Fatalf("force remove dirty: %v", err)
+	}
+	if branchExists(t, repo, "dirty-branch") {
+		t.Fatalf("branch dirty-branch still exists after force remove; want -D deleted")
 	}
 }
 
@@ -169,8 +178,78 @@ func TestBranchOfAndOrphans(t *testing.T) {
 	if err := svc.RemoveOrphan(root, wt, true); err != nil {
 		t.Fatalf("force remove orphan: %v", err)
 	}
+	if branchExists(t, repo, "lonely-branch") {
+		t.Fatalf("branch lonely-branch still exists after force orphan remove")
+	}
 	orphans, err = svc.ScanOrphans(root, nil)
 	if err != nil || len(orphans) != 0 {
 		t.Fatalf("orphans after remove = %+v, %v", orphans, err)
+	}
+}
+
+func branchExists(t *testing.T, repo, branch string) bool {
+	t.Helper()
+	cmd := exec.Command("git", "rev-parse", "--verify", "refs/heads/"+branch)
+	cmd.Dir = repo
+	return cmd.Run() == nil
+}
+
+func TestWorktreeRemoveKeepsUnmergedBranch(t *testing.T) {
+	svc := services.NewWorktreeService()
+	repo := initRepo(t, true)
+	wt := filepath.Join(t.TempDir(), "wt")
+	if err := svc.WorktreeAdd(repo, wt, "unmerged-branch"); err != nil {
+		t.Fatalf("WorktreeAdd: %v", err)
+	}
+	git(t, wt, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "agent work")
+	if err := svc.WorktreeRemove(repo, wt, "unmerged-branch", false); err != nil {
+		t.Fatalf("WorktreeRemove clean-but-unmerged: %v", err)
+	}
+	if _, err := os.Stat(wt); !os.IsNotExist(err) {
+		t.Fatalf("worktree dir still exists after remove")
+	}
+	if !branchExists(t, repo, "unmerged-branch") {
+		t.Fatalf("unmerged branch was deleted by safe remove; want kept")
+	}
+	if err := svc.DeleteBranch(repo, "unmerged-branch", true); err != nil {
+		t.Fatalf("DeleteBranch force: %v", err)
+	}
+	if branchExists(t, repo, "unmerged-branch") {
+		t.Fatalf("branch still exists after force delete")
+	}
+}
+
+func TestWorktreeRemoveAutoDetectsBranch(t *testing.T) {
+	svc := services.NewWorktreeService()
+	repo := initRepo(t, true)
+	wt := filepath.Join(t.TempDir(), "wt")
+	if err := svc.WorktreeAdd(repo, wt, "auto-branch"); err != nil {
+		t.Fatalf("WorktreeAdd: %v", err)
+	}
+	if err := svc.WorktreeRemove(repo, wt, "", false); err != nil {
+		t.Fatalf("WorktreeRemove auto-detect: %v", err)
+	}
+	if branchExists(t, repo, "auto-branch") {
+		t.Fatalf("branch auto-branch still exists after auto-detect remove")
+	}
+}
+
+func TestDeleteBranchGuards(t *testing.T) {
+	svc := services.NewWorktreeService()
+	repo := initRepo(t, true)
+	if err := svc.DeleteBranch(repo, "", false); err != nil {
+		t.Fatalf("empty branch: %v", err)
+	}
+	if err := svc.DeleteBranch(repo, "main", true); err != nil {
+		t.Fatalf("protected branch: %v", err)
+	}
+	if !branchExists(t, repo, "main") {
+		t.Fatalf("protected branch main was deleted")
+	}
+	if err := svc.DeleteBranch(repo, "does-not-exist", false); err != nil {
+		t.Fatalf("missing branch safe: %v", err)
+	}
+	if err := svc.DeleteBranch(repo, "does-not-exist", true); err != nil {
+		t.Fatalf("missing branch force: %v", err)
 	}
 }

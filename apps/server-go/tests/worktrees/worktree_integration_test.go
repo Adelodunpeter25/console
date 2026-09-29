@@ -189,16 +189,60 @@ func TestPermanentDeleteCleansWorktree(t *testing.T) {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("worktree dir still exists: %s", path)
 	}
-	// Branch stays (leave-always v1 policy).
+	// Clean worktree with no unique commits: branch goes with it.
 	branches := services.NewGitService().ListBranches(repo)
-	stillThere := false
 	for _, b := range branches.Branches {
 		if b.Name == branch {
-			stillThere = true
+			t.Fatalf("branch %q still exists after clean delete; want removed", branch)
 		}
 	}
-	if !stillThere {
-		t.Fatalf("branch %q was deleted, want leave-always", branch)
+	if h, _ := sessions.Header(header.ID); h != nil {
+		t.Fatalf("session row still present")
+	}
+}
+
+func TestPermanentDeleteKeepsUnmergedBranch(t *testing.T) {
+	isolateHome(t)
+	manager := openWorktreeManager(t)
+	sessions := services.NewSessionService(manager)
+	repo := initWorktreeRepo(t)
+
+	header := createWorkedSession(t, sessions, repo, "unmerged work")
+	branch := header.Worktree.Branch
+	path := header.Worktree.Path
+	runGit(t, path, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "agent work")
+
+	if ok, err := sessions.SoftDelete(header.ID); err != nil || !ok {
+		t.Fatalf("SoftDelete = %v, %v", ok, err)
+	}
+	// Committed work is clean, so the worktree dir is gone already —
+	// but the unmerged branch must survive the safe `-d`.
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("worktree dir still exists after SoftDelete: %s", path)
+	}
+	branches := services.NewGitService().ListBranches(repo)
+	kept := false
+	for _, b := range branches.Branches {
+		if b.Name == branch {
+			kept = true
+		}
+	}
+	if !kept {
+		t.Fatalf("unmerged branch %q was deleted on SoftDelete; want kept", branch)
+	}
+	deleted, err := sessions.PermanentDelete(header.ID)
+	if err != nil || !deleted {
+		t.Fatalf("PermanentDelete = %v, %v", deleted, err)
+	}
+	branches = services.NewGitService().ListBranches(repo)
+	kept = false
+	for _, b := range branches.Branches {
+		if b.Name == branch {
+			kept = true
+		}
+	}
+	if !kept {
+		t.Fatalf("unmerged branch %q was deleted; want kept", branch)
 	}
 	if h, _ := sessions.Header(header.ID); h != nil {
 		t.Fatalf("session row still present")

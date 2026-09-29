@@ -45,7 +45,7 @@ var ErrSessionNotFound = errors.New("session not found")
 // Core operations
 func (s *SessionService) Create(opts types.CreateSessionOptions) (types.SessionHeader, error) {
 	provisioned := false
-	var wtRepo, wtPath string
+	var wtRepo, wtPath, wtBranch string
 	if opts.Worktree != nil {
 		if opts.ProjectNull {
 			return types.SessionHeader{}, ErrWorktreeScratchpad
@@ -67,14 +67,15 @@ func (s *SessionService) Create(opts types.CreateSessionOptions) (types.SessionH
 			return types.SessionHeader{}, err
 		}
 		provisioned = true
+		wtBranch = branch
 		opts.Cwd = wtPath
 		opts.ResolvedWorktree = &types.SessionWorktree{Path: wtPath, Branch: branch, Repo: wtRepo}
 	}
 	header, err := s.inner.Create(opts)
 	if err != nil && provisioned {
 		// Roll back the provisioned worktree so a half-created session
-		// never lingers.
-		_ = s.wt.WorktreeRemove(wtRepo, wtPath, true)
+		// never lingers. Force: nothing could have committed yet.
+		_ = s.wt.WorktreeRemove(wtRepo, wtPath, wtBranch, true)
 		return types.SessionHeader{}, err
 	}
 	if err == nil && header.Cwd != "" && manager != nil {
@@ -127,7 +128,7 @@ func (s *SessionService) AttachWorktree(sessionID string, spec *types.CreateWork
 		return types.SessionHeader{}, err
 	}
 	if err := s.inner.UpdateWorktree(sessionID, wtPath, branch, repoDir); err != nil {
-		_ = s.wt.WorktreeRemove(repoDir, wtPath, true)
+		_ = s.wt.WorktreeRemove(repoDir, wtPath, branch, true)
 		return types.SessionHeader{}, err
 	}
 	if manager != nil {
@@ -191,12 +192,13 @@ func (s *SessionService) Header(sessionID string) (*types.SessionHeader, error) 
 
 // SoftDelete marks a session deleted (unconditional, idempotent success for
 // known ids — mirrors the TS deleteSession). When the session owns a clean
-// worktree, the worktree is removed immediately as part of this call: no
-// reason to make the user wait a week for disk space back on a worktree
-// with nothing in it. A dirty worktree (uncommitted work) is left alone —
-// the session still deletes, but the worktree and its branch stay on disk
-// until permanent delete (with force) or the retention sweep, exactly like
-// today. This is best-effort and never blocks or fails the delete itself.
+// worktree, the worktree and its branch are removed immediately as part of
+// this call: no reason to make the user wait a week for disk space back on
+// a worktree with nothing in it. A dirty worktree (uncommitted work) is
+// left alone — the session still deletes, but the worktree and its branch
+// stay on disk until permanent delete or the retention sweep. A branch with
+// unique commits is likewise kept (safe `-d`). This is best-effort and
+// never blocks or fails the delete itself.
 func (s *SessionService) SoftDelete(sessionID string) (bool, error) {
 	deleted, err := s.inner.SoftDelete(sessionID)
 	if err != nil || !deleted {
@@ -204,7 +206,7 @@ func (s *SessionService) SoftDelete(sessionID string) (bool, error) {
 	}
 	if wt, wtErr := s.inner.WorktreeOf(sessionID); wtErr == nil && wt != nil {
 		if dirty, dirtyErr := s.wt.IsDirty(wt.Path); dirtyErr == nil && !dirty {
-			_ = s.wt.WorktreeRemove(wt.Repo, wt.Path, false)
+			_ = s.wt.WorktreeRemove(wt.Repo, wt.Path, wt.Branch, false)
 		}
 		// Dirty (or undetermined) worktrees are left in place on purpose:
 		// never silently destroy uncommitted work. They're cleaned up later
@@ -228,7 +230,8 @@ func (s *SessionService) PermanentDelete(sessionID string) (bool, error) {
 	}
 	if wt != nil {
 		// Owned worktree goes first: dirty blocks the whole delete.
-		if err := s.wt.WorktreeRemove(wt.Repo, wt.Path, false); err != nil {
+		// Branch follows the same safe rule — unmerged branches are kept.
+		if err := s.wt.WorktreeRemove(wt.Repo, wt.Path, wt.Branch, false); err != nil {
 			return false, err
 		}
 	}

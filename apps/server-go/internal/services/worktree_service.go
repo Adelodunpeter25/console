@@ -9,6 +9,7 @@ package services
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -143,9 +144,21 @@ func (s *WorktreeService) IsDirty(path string) (bool, error) {
 // unless force is true — never silently destroys work. A path that no
 // longer exists on disk is already gone: prune stale metadata and succeed
 // so permanent delete can never get stuck behind a missing dir.
-func (s *WorktreeService) WorktreeRemove(repoDir, path string, force bool) error {
+//
+// Branch cleanup: the branch created for this worktree (pass it explicitly
+// when known, or "" to auto-detect via BranchOf) is deleted best-effort
+// after the worktree is gone. Safe delete (`-d`) by default so a branch
+// with unique commits is kept; force=true uses `-D`. Branch cleanup never
+// fails the removal itself.
+func (s *WorktreeService) WorktreeRemove(repoDir, path, branch string, force bool) error {
+	if branch == "" {
+		if b, err := s.BranchOf(path); err == nil {
+			branch = b
+		}
+	}
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		_, _ = runGit(repoDir, "worktree", "prune")
+		_ = s.DeleteBranch(repoDir, branch, force)
 		return nil
 	}
 	if !force {
@@ -161,7 +174,47 @@ func (s *WorktreeService) WorktreeRemove(repoDir, path string, force bool) error
 	if force {
 		args = append(args, "--force")
 	}
-	_, err := runGit(repoDir, args...)
+	if _, err := runGit(repoDir, args...); err != nil {
+		return err
+	}
+	_ = s.DeleteBranch(repoDir, branch, force)
+	_, _ = runGit(repoDir, "worktree", "prune")
+	return nil
+}
+
+// DeleteBranch removes a worktree-owned branch best-effort. Safe delete
+// (`-d`) by default keeps branches with unique unmerged commits; force
+// uses `-D`. Empty, detached (""), HEAD, and protected default branches
+// (main/master) are never touched. Never returns an error for a missing
+// or unmerged branch — only for unexpected git failures under force.
+func (s *WorktreeService) DeleteBranch(repoDir, branch string, force bool) error {
+	if branch == "" || branch == "HEAD" {
+		return nil
+	}
+	if branch == "main" || branch == "master" {
+		return nil
+	}
+	args := []string{"branch", "-d", branch}
+	if force {
+		args = []string{"branch", "-D", branch}
+	}
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repoDir
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	msg := strings.ToLower(string(out) + " " + err.Error())
+	if strings.Contains(msg, "not found") ||
+		strings.Contains(msg, "not fully merged") ||
+		strings.Contains(msg, "is not merged") ||
+		strings.Contains(msg, "no branch") ||
+		strings.Contains(msg, "unknown revision") {
+		return nil
+	}
+	if !force {
+		return nil
+	}
 	return err
 }
 
@@ -244,7 +297,8 @@ func (s *WorktreeService) ScanOrphans(root string, owned []string) ([]WorktreeEn
 // RemoveOrphan removes a worktree dir with no owning session. The path must
 // live under root (containment — never touch dirs outside the worktree
 // root). Dirty still blocks without force; force on an unreadable worktree
-// falls back to deleting the dir.
+// falls back to deleting the dir. The worktree's branch follows the same
+// safe/force rule as WorktreeRemove (safe `-d` keeps unmerged work).
 func (s *WorktreeService) RemoveOrphan(root, path string, force bool) error {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
@@ -258,6 +312,7 @@ func (s *WorktreeService) RemoveOrphan(root, path string, force bool) error {
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return errors.New("path is outside the worktree root")
 	}
+	branch, _ := s.BranchOf(absPath)
 	repoDir, err := s.MainRepoDir(absPath)
 	if err != nil {
 		if !force {
@@ -266,7 +321,7 @@ func (s *WorktreeService) RemoveOrphan(root, path string, force bool) error {
 		_ = os.RemoveAll(absPath)
 		return nil
 	}
-	if err := s.WorktreeRemove(repoDir, absPath, force); err != nil {
+	if err := s.WorktreeRemove(repoDir, absPath, branch, force); err != nil {
 		return err
 	}
 	_, _ = runGit(repoDir, "worktree", "prune")
