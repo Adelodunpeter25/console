@@ -54,22 +54,16 @@ func (s *SessionService) Create(opts types.CreateSessionOptions) (types.SessionH
 			return types.SessionHeader{}, ErrWorktreeNeedsCwd
 		}
 		wtRepo = opts.Cwd
-		if opts.ID == "" {
-			opts.ID = utils.RandomID()
-		}
-		branch := opts.Worktree.Branch
-		if branch == "" {
-			branch = RandomCodename(opts.ID)
-		}
 		root, err := DefaultRoot()
 		if err != nil {
 			return types.SessionHeader{}, err
 		}
-		wtPath = filepath.Join(root, opts.ID)
 		if err := os.MkdirAll(root, 0o755); err != nil {
 			return types.SessionHeader{}, err
 		}
-		if err := s.wt.WorktreeAdd(wtRepo, wtPath, branch); err != nil {
+		var branch string
+		wtPath, branch, err = s.provisionWorktree(wtRepo, root, opts.Worktree.Branch)
+		if err != nil {
 			return types.SessionHeader{}, err
 		}
 		provisioned = true
@@ -117,12 +111,9 @@ func (s *SessionService) AttachWorktree(sessionID string, spec *types.CreateWork
 	}
 
 	repoDir := header.Cwd
-	branch := ""
+	var wantBranch string
 	if spec != nil {
-		branch = spec.Branch
-	}
-	if branch == "" {
-		branch = RandomCodename(sessionID)
+		wantBranch = spec.Branch
 	}
 	root, err := DefaultRoot()
 	if err != nil {
@@ -131,8 +122,8 @@ func (s *SessionService) AttachWorktree(sessionID string, spec *types.CreateWork
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return types.SessionHeader{}, err
 	}
-	wtPath := filepath.Join(root, sessionID)
-	if err := s.wt.WorktreeAdd(repoDir, wtPath, branch); err != nil {
+	wtPath, branch, err := s.provisionWorktree(repoDir, root, wantBranch)
+	if err != nil {
 		return types.SessionHeader{}, err
 	}
 	if err := s.inner.UpdateWorktree(sessionID, wtPath, branch, repoDir); err != nil {
@@ -150,6 +141,35 @@ func (s *SessionService) AttachWorktree(sessionID string, spec *types.CreateWork
 		return types.SessionHeader{}, ErrSessionNotFound
 	}
 	return *updated, nil
+}
+
+// provisionWorktree creates a worktree at <root>/<branch> and returns its
+// path and branch. An empty wantBranch generates a random adjective-city
+// codename that doubles as the directory name; generated names retry on
+// collision since the word-pair space is small.
+func (s *SessionService) provisionWorktree(repoDir, root, wantBranch string) (string, string, error) {
+	if wantBranch != "" {
+		wtPath := filepath.Join(root, wantBranch)
+		if err := s.wt.WorktreeAdd(repoDir, wtPath, wantBranch); err != nil {
+			return "", "", err
+		}
+		return wtPath, wantBranch, nil
+	}
+	for range 20 {
+		branch := RandomCodename()
+		wtPath := filepath.Join(root, branch)
+		if _, err := os.Stat(wtPath); err == nil {
+			continue
+		}
+		if err := s.wt.WorktreeAdd(repoDir, wtPath, branch); err != nil {
+			if strings.Contains(err.Error(), "already exists") {
+				continue
+			}
+			return "", "", err
+		}
+		return wtPath, branch, nil
+	}
+	return "", "", errors.New("could not pick a unique worktree name; please retry")
 }
 
 func (s *SessionService) ListFiltered(f session.ListFilter) ([]types.SessionHeader, error) {

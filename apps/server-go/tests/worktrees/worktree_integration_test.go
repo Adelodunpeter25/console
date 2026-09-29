@@ -86,8 +86,11 @@ func TestCreateWithWorktree(t *testing.T) {
 	if header.Cwd != header.Worktree.Path {
 		t.Fatalf("cwd %q != worktree path %q", header.Cwd, header.Worktree.Path)
 	}
-	if branch := header.Worktree.Branch; strings.Count(branch, "-") != 2 {
-		t.Fatalf("unexpected branch %q; want adjective-city-shortid", branch)
+	if branch := header.Worktree.Branch; strings.Count(branch, "-") != 1 {
+		t.Fatalf("unexpected branch %q; want adjective-city", branch)
+	}
+	if base := filepath.Base(header.Worktree.Path); base != header.Worktree.Branch {
+		t.Fatalf("worktree dir %q != branch %q", base, header.Worktree.Branch)
 	}
 	if header.Worktree.Repo != repo {
 		t.Fatalf("repo %q != %q", header.Worktree.Repo, repo)
@@ -126,6 +129,9 @@ func TestCreateWithExplicitBranch(t *testing.T) {
 	}
 	if header.Worktree == nil || header.Worktree.Branch != "my-feature" {
 		t.Fatalf("branch not honored: %+v", header.Worktree)
+	}
+	if base := filepath.Base(header.Worktree.Path); base != "my-feature" {
+		t.Fatalf("worktree dir %q != branch %q", base, header.Worktree.Branch)
 	}
 }
 

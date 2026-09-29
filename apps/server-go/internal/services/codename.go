@@ -6,7 +6,6 @@ package services
 
 import (
 	"math/rand"
-	"strings"
 )
 
 var codenameAdjectives = []string{
@@ -25,25 +24,11 @@ var codenameCities = []string{
 }
 
 // RandomCodename returns a random "adjective-city" branch name, e.g.
-// "bright-denver". id is used to derive a short, deterministic-per-call
-// tiebreaker suffix so concurrent sessions can never collide on the same
-// branch name even if they happen to roll the same word pair.
-func RandomCodename(id string) string {
+// "bright-denver". The same value doubles as the worktree directory name
+// (<root>/<codename>), so callers retry on collision — the word-pair space
+// is small and concurrent sessions can roll the same pair.
+func RandomCodename() string {
 	adj := codenameAdjectives[rand.Intn(len(codenameAdjectives))]
 	city := codenameCities[rand.Intn(len(codenameCities))]
-	base := adj + "-" + city
-
-	short := strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			return r
-		}
-		return -1
-	}, strings.ToLower(id))
-	if len(short) > 6 {
-		short = short[:6]
-	}
-	if short == "" {
-		return base
-	}
-	return base + "-" + short
+	return adj + "-" + city
 }
