@@ -255,6 +255,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 		Role:         loop.RoleUser,
 		Content:      dto.Text,
 		ContextFiles: dto.ContextFiles,
+		Annotations:  dto.Annotations,
 	}
 	for _, a := range dto.Attachments {
 		user.Attachments = append(user.Attachments, loop.ImageAttachment{Data: a.Data, MimeType: a.MimeType})

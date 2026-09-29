@@ -115,7 +115,9 @@ func EstimateBreakdown(sections []NamedText, systemPrompt string, defs []tools.D
 }
 
 func (b *Breakdown) addUser(msg UserMessage) {
-	tokens := proseTokens(msg.Content) + len(msg.Attachments)*breakdownImage
+	// Annotations are materialized onto the content the model reads, so they
+	// count as user text.
+	tokens := proseTokens(msg.Content+renderAnnotations(msg.Annotations)) + len(msg.Attachments)*breakdownImage
 	if isSummary(msg.Content) {
 		b.Summaries += tokens
 		return

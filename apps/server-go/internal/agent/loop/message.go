@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
 type MessageRole string
@@ -79,26 +80,46 @@ type ToolCallPart struct {
 }
 
 type UserMessage struct {
-	Role         MessageRole       `json:"role"`
-	Content      string            `json:"content"`
-	ContextFiles []string          `json:"contextFiles,omitempty"`
-	Attachments  []ImageAttachment `json:"attachments,omitempty"`
+	Role         MessageRole               `json:"role"`
+	Content      string                    `json:"content"`
+	ContextFiles []string                  `json:"contextFiles,omitempty"`
+	Attachments  []ImageAttachment         `json:"attachments,omitempty"`
+	Annotations  []types.BrowserAnnotation `json:"annotations,omitempty"`
+}
+
+// RenderedAnnotations returns the <browser_annotation> markup for a set of
+// annotations, or "" when there is nothing to send. Token estimators use it to
+// measure what the model actually receives, since the materializer appends
+// exactly this text to the message content.
+func RenderedAnnotations(annotations []types.BrowserAnnotation) string {
+	return renderAnnotations(annotations)
 }
 
 // materializeUserMessage keeps the persisted/displayed message clean while
 // giving the model the selected paths in the same text form used previously.
 // Context files are relative to the session working directory; tools resolve
-// them when they are actually used.
+// them when they are actually used. Browser annotations are rendered as
+// <browser_annotation> blocks the same way, so the stored message keeps the
+// structured fields and only the agent-facing copy grows the markup.
 func materializeUserMessage(user UserMessage) UserMessage {
-	if len(user.ContextFiles) == 0 {
+	if len(user.ContextFiles) == 0 && len(user.Annotations) == 0 {
 		return user
 	}
-	refs := make([]string, 0, len(user.ContextFiles))
-	for _, path := range user.ContextFiles {
+	if refs := strings.Join(contextFileRefs(user.ContextFiles), ""); refs != "" {
+		user.Content += "\n" + refs
+	}
+	if blocks := renderAnnotations(user.Annotations); blocks != "" {
+		user.Content += blocks
+	}
+	return user
+}
+
+func contextFileRefs(paths []string) []string {
+	refs := make([]string, 0, len(paths))
+	for _, path := range paths {
 		refs = append(refs, "   "+path+" ")
 	}
-	user.Content += "\n" + strings.Join(refs, "")
-	return user
+	return refs
 }
 
 // MaterializeHistory returns the agent-facing copy of stored history. The

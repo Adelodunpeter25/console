@@ -33,11 +33,11 @@ func EstimateMessageTokens(history []any) int {
 	for _, m := range history {
 		switch msg := m.(type) {
 		case loop.UserMessage:
-			totalChars += len([]rune(msg.Content))
+			totalChars += len([]rune(msg.Content)) + loop.AnnotationChars(msg.Annotations)
 			imageTokens += len(msg.Attachments) * imageTokensEach
 		case *loop.UserMessage:
 			if msg != nil {
-				totalChars += len([]rune(msg.Content))
+				totalChars += len([]rune(msg.Content)) + loop.AnnotationChars(msg.Annotations)
 				imageTokens += len(msg.Attachments) * imageTokensEach
 			}
 		case loop.AssistantMessage:
@@ -69,11 +69,11 @@ func EstimatePayloadTokens(history []any, systemPrompt string, defs []tools.Defi
 	for _, m := range history {
 		switch msg := m.(type) {
 		case loop.UserMessage:
-			proseChars += len([]rune(msg.Content))
+			proseChars += len([]rune(msg.Content)) + loop.AnnotationChars(msg.Annotations)
 			imageTokens += len(msg.Attachments) * imageTokensEach
 		case *loop.UserMessage:
 			if msg != nil {
-				proseChars += len([]rune(msg.Content))
+				proseChars += len([]rune(msg.Content)) + loop.AnnotationChars(msg.Annotations)
 				imageTokens += len(msg.Attachments) * imageTokensEach
 			}
 		case loop.AssistantMessage:
