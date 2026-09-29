@@ -275,13 +275,6 @@ fun ChatScreen(
                             RunActivity(activity = runs.last(), running = true, cwd = cwd)
                         }
                     }
-                    // Live tool calls not yet in runs.
-                    if (chat.activeToolCalls.isNotEmpty()) {
-                        items(chat.activeToolCalls.size) { i ->
-                            val call = chat.activeToolCalls[i]
-                            ToolActivityRow(name = call.name, isRunning = true, isError = false, detail = "Running")
-                        }
-                    }
                     }
                     EdgeScrollIndicator(
                         state = listState,

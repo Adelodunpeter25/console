@@ -43,6 +43,15 @@ class ChatPersistence(
         const val PERSIST_VERSION = 1
         const val MAX_PERSISTED_SESSIONS = 25
         const val MAX_PERSISTED_MESSAGES = 50
+        /**
+         * Draft images kept in the on-disk cache. This is a storage bound, not
+         * a UX limit — the composer accepts any number (see AttachmentStrip,
+         * which paginates). The cache re-encodes every attachment to base64
+         * inside one JSON blob written to SharedPreferences on a 300ms
+         * throttle, so the count has to stay small or each save rewrites
+         * megabytes. A draft larger than this loses the overflow on restore.
+         */
+        const val MAX_PERSISTED_ATTACHMENTS = 3
         const val SAVE_THROTTLE_MS = 300L
 
         fun create(context: Context): ChatPersistence {
@@ -96,7 +105,7 @@ class ChatPersistence(
                     messages = withIds,
                     runs = partial.runs,
                     input = partial.input,
-                    attachments = partial.attachments,
+                    attachments = partial.attachments.take(MAX_PERSISTED_ATTACHMENTS),
                     draftUpdatedAt = partial.draftUpdatedAt,
                 )
             }
@@ -127,7 +136,7 @@ class ChatPersistence(
                     messages = s.messages.takeLast(MAX_PERSISTED_MESSAGES),
                     runs = s.runs,
                     input = s.input,
-                    attachments = s.attachments,
+                    attachments = s.attachments.take(MAX_PERSISTED_ATTACHMENTS),
                     draftUpdatedAt = s.draftUpdatedAt,
                 )
             }

@@ -84,7 +84,7 @@ import com.console.mobile.ui.theme.ConsoleMonoFamily
 /**
  * Port of components/chat/messages/message-bubbles.tsx.
  * UserBubble (right, elevated bg + attachments + copy), AssistantBubble
- * (thinking collapsible + markdown + streaming caret + Done row), ToolActivityRow.
+ * (thinking collapsible + markdown + streaming caret + Done row), ToolCallRow.
  */
 @Composable
 fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> = emptyList()) {
@@ -200,36 +200,6 @@ fun ThinkingBlock(text: String, isStreaming: Boolean) {
         if (expanded) {
             Box(modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.03f)).padding(horizontal = 12.dp, vertical = 10.dp)) {
                 Text(text, color = ConsoleColors.TextSecondary, fontSize = 13.sp, fontFamily = ConsoleMonoFamily, lineHeight = 20.sp)
-            }
-        }
-    }
-}
-
-/** Compact collapsible tool-activity row (running / done / failed). */
-@Composable
-fun ToolActivityRow(name: String, isRunning: Boolean, isError: Boolean, detail: String?) {
-    var expanded by remember { mutableStateOf(false) }
-    val statusColor = if (isError) Color(0xFFF87171) else if (isRunning) Color(0xFFFB923C) else Color(0xFF34D399)
-    val statusBg = statusColor.copy(alpha = 0.1f)
-    val shape = RoundedCornerShape(12.dp)
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp).clip(shape).background(Color.White.copy(alpha = 0.04f)).clickable { expanded = !expanded }) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(statusBg), contentAlignment = Alignment.Center) {
-                if (isRunning) CircularProgressIndicator(color = statusColor, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                else if (isError) Icon(Icons.Filled.Warning, contentDescription = null, tint = statusColor, modifier = Modifier.size(14.dp))
-                else Icon(getToolIcon(name), contentDescription = null, tint = statusColor, modifier = Modifier.size(14.dp))
-            }
-            Text(getToolLabel(name), color = ConsoleColors.TextPrimary, fontSize = 13.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp))
-            if (isRunning) {
-                Text(detail ?: "Running", color = ConsoleColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-            } else {
-                Text(if (isError) "FAILED" else "DONE", color = statusColor, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = ConsoleMonoFamily)
-                Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(12.dp))
-            }
-        }
-        if (expanded && !detail.isNullOrEmpty()) {
-            Box(modifier = Modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.02f)).padding(horizontal = 14.dp, vertical = 10.dp)) {
-                Text(detail, color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, lineHeight = 17.sp)
             }
         }
     }
