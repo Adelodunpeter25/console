@@ -156,7 +156,13 @@ impl ConsoleDesktopApp {
             project_id: self.pane_project_id(&pane_id),
             last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
-        workspace_ops::open_tab(&mut self.workspace_root, &pane_id, tab);
+        if focus {
+            workspace_ops::open_tab(&mut self.workspace_root, &pane_id, tab);
+        } else {
+            // Background open (agent-initiated): add the tab but leave the
+            // user's current tab and pane focus alone.
+            workspace_ops::open_tab_in_background(&mut self.workspace_root, &pane_id, tab);
+        }
         self.active_pane_id = Some(pane_id);
         self.sync_workspace_webviews(cx);
         self.persist_workspaces();
