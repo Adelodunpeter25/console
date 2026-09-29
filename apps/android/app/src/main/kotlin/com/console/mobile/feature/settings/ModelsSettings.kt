@@ -40,7 +40,7 @@ import com.console.mobile.core.util.formatModelName
 import com.console.mobile.data.model.MODEL_ROLES
 import com.console.mobile.data.model.ROLE_SMOL
 import com.console.mobile.data.model.ROLE_VISION
-import com.console.mobile.feature.chat.ModelPickerSheet
+import com.console.mobile.ui.components.picker.ModelPickerSheet
 import com.console.mobile.ui.components.ProviderIcon
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
