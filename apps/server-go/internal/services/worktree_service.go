@@ -59,7 +59,9 @@ func isGitRepo(dir string) bool {
 	return err == nil && strings.TrimSpace(out) == "true"
 }
 
-// WorktreeAdd creates <branch> and checks it out at path.
+// WorktreeAdd creates <branch> and checks it out at path, always branching
+// from origin/HEAD (the repo's default branch on the remote) so the new
+// worktree starts clean regardless of what the local HEAD is.
 // Refuses non-repos loudly and repos with no commits yet (unborn HEAD).
 func (s *WorktreeService) WorktreeAdd(repoDir, path, branch string) error {
 	if !isGitRepo(repoDir) {
@@ -68,8 +70,29 @@ func (s *WorktreeService) WorktreeAdd(repoDir, path, branch string) error {
 	if _, err := runGit(repoDir, "rev-parse", "--verify", "HEAD"); err != nil {
 		return ErrUnbornHEAD
 	}
-	_, err := runGit(repoDir, "worktree", "add", "-b", branch, path)
+	base := resolveDefaultBranch(repoDir)
+	_, err := runGit(repoDir, "worktree", "add", "-b", branch, path, base)
 	return err
+}
+
+// resolveDefaultBranch returns the remote ref to branch new worktrees from.
+// It tries, in order:
+//  1. origin/HEAD (set when the repo was cloned — most reliable)
+//  2. origin/main
+//  3. origin/master
+//  4. HEAD (local fallback — same as the old behaviour)
+func resolveDefaultBranch(repoDir string) string {
+	// Try origin/HEAD first — git sets this on clone and it always points
+	// at the remote's default branch.
+	if out, err := runGit(repoDir, "rev-parse", "--verify", "origin/HEAD"); err == nil && strings.TrimSpace(out) != "" {
+		return "origin/HEAD"
+	}
+	for _, candidate := range []string{"origin/main", "origin/master"} {
+		if out, err := runGit(repoDir, "rev-parse", "--verify", candidate); err == nil && strings.TrimSpace(out) != "" {
+			return candidate
+		}
+	}
+	return "HEAD"
 }
 
 // WorktreeList parses `git worktree list --porcelain` for repoDir.
