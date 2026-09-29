@@ -11,7 +11,7 @@ High-level direction only — implementation details live in `docs/`.
 
 ## Agent capabilities
 
-- [ ] Browser use — agent controls a built-in browser on desktop (navigate, click, type, screenshot)
+- [x] Browser use — agent controls a built-in browser on desktop (navigate, click, type, screenshot)
 - [ ] Computer use — agent controls the computer (keyboard, mouse, screen)
 
 ## Accounts
