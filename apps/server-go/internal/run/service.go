@@ -80,6 +80,13 @@ func NewService(sessions *services.SessionService) *Service {
 	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots()}
 	s.decisions.Notify = func(ctx context.Context, sessionID string, event loop.Event) {
 		s.notifyEvent(ctx, sessionID, event)
+		// A pending question/approval pauses the run until the user
+		// answers, so the session reads as needing attention rather than
+		// working. Events are not written here: a stale needs_attention
+		// outliving the decision would misreport a live run.
+		if event.Kind == loop.EventAskQuestion || event.Kind == loop.EventPermissionRequest {
+			s.setStatus(sessionID, "needs_attention")
+		}
 	}
 	return s
 }

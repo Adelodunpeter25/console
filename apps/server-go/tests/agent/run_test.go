@@ -12,6 +12,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
@@ -157,6 +158,81 @@ func TestRunDoubleStartAndAbort(t *testing.T) {
 	}
 }
 
+// sessionStatus reads the indexed status column the session list and the
+// mobile home badge render.
+func sessionStatus(t *testing.T, sessions *services.SessionService, sessionID string) string {
+	t.Helper()
+	loaded, err := sessions.Load(sessionID, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded == nil {
+		t.Fatalf("session %s not found", sessionID)
+	}
+	return loaded.Header.Status
+}
+
+// A run must publish working/done status transitions. Session lists and the
+// mobile home badge read the indexed status column, so a run that never
+// writes it leaves the session stuck at its "idle" default.
+func TestRunStatusLifecycle(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	release := make(chan struct{})
+	entered := make(chan struct{})
+	var once bool
+	svc.Lookup = func(id string) (loop.Provider, error) {
+		return &blockingProvider{release: release, entered: entered, enteredOnce: &once}, nil
+	}
+	header := helpers.CreateRunSession(t, sessions)
+	if got := sessionStatus(t, sessions, header.ID); got != "idle" {
+		t.Fatalf("fresh session status: %q, want idle", got)
+	}
+	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "go", Provider: "mock", ModelID: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-entered
+	if got := sessionStatus(t, sessions, header.ID); got != "working" {
+		t.Fatalf("running status: %q, want working", got)
+	}
+	close(release)
+	helpers.WaitSettled(t, hub)
+	if got := sessionStatus(t, sessions, header.ID); got != "done" {
+		t.Fatalf("settled status: %q, want done", got)
+	}
+}
+
+// An aborted run settles done, not needs_attention: an abort is a user
+// action, so it must not raise an attention banner.
+func TestRunStatusAbortedSettlesDone(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	release := make(chan struct{})
+	entered := make(chan struct{})
+	var once, released bool
+	svc.Lookup = func(id string) (loop.Provider, error) {
+		return &blockingProvider{release: release, released: &released, entered: entered, enteredOnce: &once}, nil
+	}
+	header := helpers.CreateRunSession(t, sessions)
+	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "go", Provider: "mock", ModelID: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-entered
+	if !svc.Abort(header.ID) {
+		t.Fatal("abort must succeed")
+	}
+	close(release)
+	helpers.WaitSettled(t, hub)
+	if hub.Outcome != run.OutcomeAborted {
+		t.Fatalf("outcome: %s", hub.Outcome)
+	}
+	if got := sessionStatus(t, sessions, header.ID); got != "done" {
+		t.Fatalf("aborted status: %q, want done", got)
+	}
+}
+
 func TestRunUnknownSessionAndProvider(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
@@ -189,7 +265,9 @@ func (b *blockingProvider) RunTurn(ctx context.Context, req loop.TurnRequest, s 
 	}
 	select {
 	case <-b.release:
-		*(b.released) = true
+		if b.released != nil {
+			*(b.released) = true
+		}
 		s.Push(loop.Event{Kind: loop.EventText, Text: "late"})
 		s.Complete()
 		return nil

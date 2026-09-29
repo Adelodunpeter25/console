@@ -20,6 +20,19 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
+// setStatus persists the indexed session status that session lists and the
+// mobile home badge read back. Best-effort: a status write must never fail a
+// run, and a stale value is repaired by the settle-on-read path in
+// routes/sessions.go when the run is no longer active.
+func (s *Service) setStatus(sessionID, status string) {
+	if s.sessions == nil {
+		return
+	}
+	if err := s.sessions.UpdateStatus(sessionID, status); err != nil {
+		slog.Warn("run: session status update failed", "session", sessionID, "status", status, "error", err)
+	}
+}
+
 // execute drives one turn per loop iteration, draining a staged prompt as
 // the next turn when the previous settled cleanly. A failed turn holds
 // (not auto-runs, not drops) any staged prompt. One hub spans the whole
@@ -47,6 +60,9 @@ func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, f
 
 	current, currentCtx := first, ctx
 	currentProvider, currentProviderID := firstProvider, firstProviderID
+	// Mark working once per run, not per turn: a drained staged prompt keeps
+	// the same run (and therefore the same status) across its turns.
+	s.setStatus(sessionID, "working")
 	hub.Broadcast(loop.Event{Kind: loop.EventSessionStart})
 	var runErr error
 	for {
@@ -70,8 +86,16 @@ func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, f
 			}
 			hub.Broadcast(loop.Event{Kind: loop.EventSessionEnd})
 			if currentCtx.Err() != nil {
+				// Abort/steer is a user action, not a failure: settle done
+				// (TS parity), never needs_attention.
+				s.setStatus(sessionID, "done")
 				hub.Close(OutcomeAborted)
 			} else {
+				if runErr == nil {
+					s.setStatus(sessionID, "done")
+				} else {
+					s.setStatus(sessionID, "needs_attention")
+				}
 				hub.Close(OutcomeDone)
 				if runErr == nil {
 					s.notifyDone(sessionID)
