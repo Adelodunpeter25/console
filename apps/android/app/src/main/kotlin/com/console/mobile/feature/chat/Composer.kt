@@ -19,9 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,6 +44,10 @@ import com.console.mobile.core.util.detectComposerTrigger
 import com.console.mobile.data.model.FileSearchResult
 import com.console.mobile.data.model.SlashCommandInfo
 import com.console.mobile.ui.theme.ConsoleColors
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
+import io.github.lyxnx.compose.ui.tablericons.outline.Plus
+import io.github.lyxnx.compose.ui.tablericons.outline.Send
 import kotlinx.coroutines.delay
 
 /**
@@ -196,7 +197,7 @@ private fun ComposerInput(
             modifier = Modifier.size(37.dp).clip(CircleShape).clickable(onClickLabel = "Attach image", onClick = attach),
             contentAlignment = Alignment.Center,
         ) {
-            androidx.compose.material3.Icon(Icons.Filled.Add, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
+            androidx.compose.material3.Icon(TablerIcons.Outline.Plus, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
         }
         BasicTextField(
             value = fieldValue,
@@ -232,7 +233,7 @@ private fun ComposerInput(
                     .clickable(onClickLabel = "Stop", onClick = onStop),
                 contentAlignment = Alignment.Center,
             ) {
-                androidx.compose.material3.Icon(Icons.Filled.Stop, contentDescription = "Stop generating", tint = Color.Black, modifier = Modifier.size(14.dp))
+                androidx.compose.material3.Icon(TablerIcons.Outline.PlayerStop, contentDescription = "Stop generating", tint = Color.Black, modifier = Modifier.size(14.dp))
             }
         } else {
             Box(
@@ -241,7 +242,7 @@ private fun ComposerInput(
                     .clickable(enabled = canSend, onClickLabel = "Send", onClick = onSend),
                 contentAlignment = Alignment.Center,
             ) {
-                androidx.compose.material3.Icon(Icons.Filled.ArrowUpward, contentDescription = null, tint = if (canSend) Color.Black else ConsoleColors.TextMuted, modifier = Modifier.size(15.dp))
+                androidx.compose.material3.Icon(TablerIcons.Outline.Send, contentDescription = null, tint = if (canSend) Color.Black else ConsoleColors.TextMuted, modifier = Modifier.size(15.dp))
             }
         }
     }

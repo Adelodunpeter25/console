@@ -37,6 +37,11 @@ enum class PillButtonVariant { Filled, Outline, Destructive }
  * content padding is the only padding applied — no stacked default min-height.
  * Defaults to a 999dp stadium shape; pass `cornerRadius` to match a card's rounding
  * (e.g. 16dp) instead.
+ *
+ * [accent] overrides the variant's colours entirely with a tinted fill, border and
+ * label in that hue — for semantic pairs that need a colour the variants do not
+ * cover (e.g. green "Allow" / red "Deny" on a permission prompt). Leave null to
+ * use the variant's own palette.
  */
 @Composable
 fun PillButton(
@@ -51,9 +56,11 @@ fun PillButton(
     cornerRadius: Dp = 999.dp,
     horizontalPadding: Dp = 14.dp,
     verticalPadding: Dp = 8.dp,
+    accent: Color? = null,
 ) {
     val shape: Shape = RoundedCornerShape(cornerRadius)
     val contentColor = when {
+        accent != null -> if (enabled) accent else accent.copy(alpha = 0.4f)
         variant == PillButtonVariant.Filled && enabled -> Color.Black
         variant == PillButtonVariant.Filled -> Color.Black.copy(alpha = 0.4f)
         variant == PillButtonVariant.Destructive -> ConsoleColors.Destructive
@@ -62,10 +69,12 @@ fun PillButton(
     var m = modifier
     if (fullWidth) m = m.fillMaxWidth()
     m = m.clip(shape)
-    m = when (variant) {
-        PillButtonVariant.Filled -> m.background(if (enabled) Color.White else Color.White.copy(alpha = 0.4f))
-        PillButtonVariant.Outline -> m.border(1.dp, ConsoleColors.Border, shape)
-        PillButtonVariant.Destructive -> m.background(ConsoleColors.Destructive.copy(alpha = 0.05f)).border(1.dp, ConsoleColors.Destructive.copy(alpha = 0.3f), shape)
+    m = when {
+        accent != null -> m.background(accent.copy(alpha = if (enabled) 0.15f else 0.05f))
+            .border(1.dp, accent.copy(alpha = if (enabled) 0.3f else 0.1f), shape)
+        variant == PillButtonVariant.Filled -> m.background(if (enabled) Color.White else Color.White.copy(alpha = 0.4f))
+        variant == PillButtonVariant.Outline -> m.border(1.dp, ConsoleColors.Border, shape)
+        else -> m.background(ConsoleColors.Destructive.copy(alpha = 0.05f)).border(1.dp, ConsoleColors.Destructive.copy(alpha = 0.3f), shape)
     }
     m = m.clickable(enabled = enabled && !loading, onClick = onClick)
         .padding(horizontal = horizontalPadding, vertical = verticalPadding)

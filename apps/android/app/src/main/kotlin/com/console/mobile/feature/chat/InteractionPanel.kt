@@ -41,7 +41,11 @@ import com.console.mobile.core.chat.PendingPermission
 import com.console.mobile.core.chat.PendingQuestion
 import com.console.mobile.data.model.AskQuestionRequest
 import com.console.mobile.data.model.PermissionRequest
+import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.theme.ConsoleColors
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.ShieldCheck
+import io.github.lyxnx.compose.ui.tablericons.outline.ShieldX
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -96,40 +100,36 @@ private fun PermissionPanel(request: PermissionRequest, sessionId: String) {
         }
         Row(modifier = Modifier.padding(start = 28.dp, top = 12.dp)) {
             val allowLabel = if (request.requiresUpgrade) "Allow once" else "Allow"
-            TextButton(
-                onClick = {
-                    busy = "allow"
-                    scope.launch {
-                        AppContainer.chatRepository.approvePermission(sessionId, request.requestId, true)
-                        busy = null
-                    }
-                },
-                enabled = busy == null,
-                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFF34D399).copy(alpha = 0.15f)).border(1.dp, Color(0xFF34D399).copy(alpha = 0.3f), RoundedCornerShape(12.dp)).padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (busy == "allow") CircularProgressIndicator(color = Color(0xFF34D399), strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                    else Icon(Icons.Filled.Shield, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(14.dp))
-                    Text(allowLabel, color = Color(0xFF34D399), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
+            val approve = { allow: Boolean ->
+                busy = if (allow) "allow" else "deny"
+                scope.launch {
+                    AppContainer.chatRepository.approvePermission(sessionId, request.requestId, allow)
+                    busy = null
                 }
             }
-            TextButton(
-                onClick = {
-                    busy = "deny"
-                    scope.launch {
-                        AppContainer.chatRepository.approvePermission(sessionId, request.requestId, false)
-                        busy = null
-                    }
-                },
+            PillButton(
+                text = allowLabel,
+                onClick = { approve(true) },
+                icon = TablerIcons.Outline.ShieldCheck,
+                loading = busy == "allow",
                 enabled = busy == null,
-                modifier = Modifier.padding(start = 10.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFFF87171).copy(alpha = 0.15f)).border(1.dp, Color(0xFFF87171).copy(alpha = 0.3f), RoundedCornerShape(12.dp)).padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (busy == "deny") CircularProgressIndicator(color = Color(0xFFF87171), strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                    else Icon(Icons.Filled.Shield, contentDescription = null, tint = Color(0xFFF87171), modifier = Modifier.size(14.dp))
-                    Text("Deny", color = Color(0xFFF87171), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
-                }
-            }
+                accent = Color(0xFF34D399),
+                cornerRadius = 12.dp,
+                horizontalPadding = 16.dp,
+                verticalPadding = 8.dp,
+            )
+            PillButton(
+                text = "Deny",
+                onClick = { approve(false) },
+                icon = TablerIcons.Outline.ShieldX,
+                loading = busy == "deny",
+                enabled = busy == null,
+                accent = Color(0xFFF87171),
+                modifier = Modifier.padding(start = 10.dp),
+                cornerRadius = 12.dp,
+                horizontalPadding = 16.dp,
+                verticalPadding = 8.dp,
+            )
         }
     }
 }
