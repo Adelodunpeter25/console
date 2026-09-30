@@ -199,9 +199,15 @@ fun CodeViewer(
                 // anchored while the code scrolls horizontally underneath it —
                 // without pinning it drifts with the scroll offset.
                 isWordwrap = false
-                // Written as a call, not `pinLineNumber = true`: CodeEditor has a
-                // private field by that name, which shadows the synthetic property.
-                setPinLineNumber(true)
+                // The line numbers must NOT be pinned. With wrapping off the code
+                // scrolls horizontally, and 0.21.1's pinned panel does not inset
+                // the text viewport — it only paints over it, so scrolled code
+                // bleeds out to the left of the numbers. Unpinned, the numbers
+                // travel with the content and can never overlap it. The cost is
+                // that they scroll off-screen on long lines; `setLineNumberMarginLeft`
+                // does not reserve the inset, and there is no separable panel API
+                // in this version to fix it properly.
+                setPinLineNumber(false)
                 setScrollBarEnabled(true)
                 tabWidth = 4
                 setText(code)

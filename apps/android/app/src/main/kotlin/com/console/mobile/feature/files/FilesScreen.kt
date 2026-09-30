@@ -55,6 +55,7 @@ import com.console.mobile.feature.chat.MarkdownText
 import com.console.mobile.ui.code.CodeViewer
 import com.console.mobile.ui.code.languageForPath
 import com.console.mobile.ui.components.EmptyState
+import com.console.mobile.ui.components.ConsoleSearchField
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
@@ -241,21 +242,12 @@ fun FilesScreen(onBack: () -> Unit) {
             },
         )
         // Search bar.
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search files") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(15.dp)) },
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = ConsoleColors.Card, unfocusedContainerColor = ConsoleColors.Card, focusedBorderColor = ConsoleColors.BorderSubtle, unfocusedBorderColor = ConsoleColors.BorderSubtle, focusedTextColor = ConsoleColors.TextPrimary, unfocusedTextColor = ConsoleColors.TextPrimary, cursorColor = ConsoleColors.TextPrimary),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1f),
-            )
-            if (searchQuery.isNotEmpty()) {
-                Text("Clear", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp).clickable { searchQuery = "" })
-            }
-        }
+        ConsoleSearchField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = "Search files",
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 8.dp),
+        )
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
                 projectRoot == null -> EmptyState(title = "No project selected", description = "Add a project folder in Settings → Projects.")
