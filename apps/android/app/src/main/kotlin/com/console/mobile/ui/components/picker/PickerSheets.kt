@@ -16,13 +16,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -47,6 +44,7 @@ import com.console.mobile.data.model.ApprovalMode
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.Model
 import com.console.mobile.data.model.ProjectInfo
+import com.console.mobile.ui.components.ConsoleSearchField
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
@@ -160,20 +158,11 @@ fun ModelPickerSheet(
                     }
                 }
             }
-            OutlinedTextField(
+            ConsoleSearchField(
                 value = search,
                 onValueChange = { search = it },
-                placeholder = { Text("Search models…") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp)) },
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = ConsoleColors.CardAlt, unfocusedContainerColor = ConsoleColors.CardAlt,
-                    focusedBorderColor = ConsoleColors.BorderSubtle, unfocusedBorderColor = ConsoleColors.BorderSubtle,
-                    focusedTextColor = ConsoleColors.TextPrimary, unfocusedTextColor = ConsoleColors.TextPrimary,
-                    cursorColor = ConsoleColors.TextPrimary,
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().height(48.dp).padding(bottom = 12.dp),
+                placeholder = "Search models…",
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
             )
             val models: List<Model> = activeProvider?.let { providerState.modelsByProvider[it] } ?: emptyList()
             val q = search.trim().lowercase()

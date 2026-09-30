@@ -36,6 +36,59 @@ import androidx.compose.ui.unit.sp
 import com.console.mobile.ui.theme.ConsoleColors
 
 /**
+ * The search input itself: pill, magnifier, text, and a clear affordance.
+ *
+ * Built on `BasicTextField` with an explicit `textStyle` rather than
+ * Material3's `OutlinedTextField`. The M3 field resolves its text colour from
+ * `OutlinedTextFieldDefaults.colors(...)`, whose focused/unfocused text colour
+ * params are deprecated in Material3 1.4 and no longer reach the painter — the
+ * text renders in the scheme's `onSurface` and vanishes on a dark background.
+ * Setting the colour on the text style is unconditional, so it cannot drift.
+ */
+@Composable
+fun ConsoleSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "Search",
+) {
+    Row(
+        modifier = modifier.height(48.dp)
+            .clip(CircleShape)
+            .background(ConsoleColors.Card)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.Search, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(18.dp))
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.weight(1f).padding(start = 8.dp),
+            singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(color = ConsoleColors.TextPrimary, fontSize = 14.sp),
+            cursorBrush = SolidColor(ConsoleColors.TextPrimary),
+            decorationBox = { innerTextField ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty()) {
+                        Text(placeholder, color = ConsoleColors.TextMuted, fontSize = 14.sp, maxLines = 1)
+                    }
+                    innerTextField()
+                }
+            },
+        )
+        if (value.isNotBlank()) {
+            Box(
+                modifier = Modifier.size(24.dp).clip(CircleShape)
+                    .clickable(onClickLabel = "Clear") { onValueChange("") },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.Close, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(14.dp))
+            }
+        }
+    }
+}
+
+/**
  * Port of components/common/search-bar.tsx.
  * Sticky bottom search field + round compose button.
  */
@@ -58,39 +111,12 @@ fun ConsoleSearchBar(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.weight(1f).padding(end = 8.dp).height(48.dp)
-                .clip(CircleShape).background(ConsoleColors.Card)
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Filled.Search, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(18.dp))
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier.weight(1f).padding(start = 8.dp),
-                singleLine = true,
-                textStyle = androidx.compose.ui.text.TextStyle(color = ConsoleColors.TextPrimary, fontSize = 14.sp),
-                cursorBrush = SolidColor(ConsoleColors.TextPrimary),
-                decorationBox = { innerTextField ->
-                    Box(contentAlignment = Alignment.CenterStart) {
-                        if (value.isEmpty()) {
-                            Text(placeholder, color = ConsoleColors.TextMuted, fontSize = 14.sp, maxLines = 1)
-                        }
-                        innerTextField()
-                    }
-                },
-            )
-            if (value.isNotBlank()) {
-                Box(
-                    modifier = Modifier.size(24.dp).clip(CircleShape)
-                        .clickable(onClickLabel = "Clear") { onValueChange("") },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Filled.Close, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(14.dp))
-                }
-            }
-        }
+        ConsoleSearchField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = placeholder,
+            modifier = Modifier.weight(1f).padding(end = 8.dp),
+        )
         if (onComposePress != null) {
             Surface(
                 shape = CircleShape,
