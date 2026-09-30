@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.BrandGit
-import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
+import io.github.lyxnx.compose.ui.tablericons.outline.Files
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
 import com.console.mobile.AppContainer
 import com.console.mobile.core.chat.ChatSessionState
@@ -244,7 +244,7 @@ fun ChatScreen(
             },
             actions = {
                 IconButton(onClick = { jumpToProjectTab(MobileTab.Files) }, modifier = Modifier.size(40.dp)) {
-                    Icon(TablerIcons.Outline.FolderOpen, contentDescription = "Open file explorer", tint = Color.White)
+                    Icon(TablerIcons.Outline.Files, contentDescription = "Open file explorer", tint = Color.White)
                 }
                 IconButton(onClick = { jumpToProjectTab(MobileTab.Changes) }, modifier = Modifier.size(40.dp)) {
                     Icon(TablerIcons.Outline.BrandGit, contentDescription = "Open changes", tint = Color.White)

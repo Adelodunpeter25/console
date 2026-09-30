@@ -16,7 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
+import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import io.github.lyxnx.compose.ui.tablericons.outline.Lock
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.formatModelName
@@ -65,7 +65,7 @@ fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean) {
     LazyRow(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, start = 6.dp, end = 6.dp, bottom = 4.dp)) {
         item {
             PickerChip(
-                icon = if (projectLocked) TablerIcons.Outline.Lock else TablerIcons.Outline.FolderOpen,
+                icon = if (projectLocked) TablerIcons.Outline.Lock else TablerIcons.Outline.Folder,
                 label = selectedProject?.name ?: "Select Folder",
                 modifier = Modifier.padding(end = 8.dp),
             ) {
