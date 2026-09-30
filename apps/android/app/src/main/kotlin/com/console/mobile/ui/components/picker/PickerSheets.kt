@@ -162,6 +162,12 @@ fun ModelPickerSheet(
         AppContainer.providerRepository.loadProviders()
         AppContainer.providerRepository.loadFavorites()
     }
+    // Load the models for whichever provider tab is showing. Without this the
+    // provider tabs never fetch anything — only the favourites tab does, which
+    // is why it appeared to be the only one with a working loading state.
+    LaunchedEffect(activeProvider) {
+        activeProvider?.let { AppContainer.providerRepository.loadModels(it) }
+    }
     // Favourite rows can live under any provider, so load them all before the
     // favourites tab can render an empty list it does not deserve.
     LaunchedEffect(showFavorites) {
