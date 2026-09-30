@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -16,6 +17,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -27,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,9 +48,11 @@ import com.console.mobile.data.model.ApprovalMode
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.Model
 import com.console.mobile.data.model.ProjectInfo
+import com.console.mobile.data.model.favoriteKey
 import com.console.mobile.ui.components.ConsoleSearchField
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
+import kotlinx.coroutines.launch
 
 /**
  * Selection sheets shared by the composer strip and settings. These are
@@ -60,13 +66,15 @@ fun PickerSheetTitle(title: String) {
     Text(title, color = ConsoleColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 12.dp))
 }
 
-/** One selectable row: title, optional subtitle, and a check on the selection. */
+/** One selectable row: title, optional subtitle, and a check on the selection.
+ * [trailing] renders beside the check — the model picker's star. */
 @Composable
 fun PickerRow(
     title: String,
     subtitle: String? = null,
     selected: Boolean = false,
     monoSubtitle: Boolean = false,
+    trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     Row(
@@ -88,6 +96,10 @@ fun PickerRow(
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
+        }
+        if (trailing != null) {
+            trailing()
+            Spacer(modifier = Modifier.size(8.dp))
         }
         if (selected) Icon(Icons.Filled.Check, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(16.dp))
     }
@@ -122,7 +134,14 @@ fun ProjectPickerSheet(projects: List<ProjectInfo>, selectedId: String?, locked:
     }
 }
 
-/** Provider → model browser. Used by the composer strip and the model-role settings page. */
+/** A starred model, resolved far enough to render a row in the favourites tab. */
+private data class FavoriteEntry(
+    val provider: String,
+    val model: Model,
+    val providerLabel: String,
+)
+
+/** Provider → model browser, with the desktop's favourites tab and per-row star. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelPickerSheet(
@@ -133,24 +152,70 @@ fun ModelPickerSheet(
     onSelect: (String, String?) -> Unit,
 ) {
     val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
     var search by remember { mutableStateOf("") }
+    var showFavorites by remember { mutableStateOf(false) }
     var activeProvider by remember(providerState.providers) {
         mutableStateOf(selectedProvider ?: providerState.providers.firstOrNull()?.name)
     }
-    LaunchedEffect(Unit) { AppContainer.providerRepository.loadProviders() }
-    LaunchedEffect(activeProvider) { activeProvider?.let { AppContainer.providerRepository.loadModels(it) } }
+    LaunchedEffect(Unit) {
+        AppContainer.providerRepository.loadProviders()
+        AppContainer.providerRepository.loadFavorites()
+    }
+    // Favourite rows can live under any provider, so load them all before the
+    // favourites tab can render an empty list it does not deserve.
+    LaunchedEffect(showFavorites) {
+        if (showFavorites) providerState.providers.forEach { AppContainer.providerRepository.loadModels(it.name) }
+    }
+
+    val modelsByProvider = providerState.modelsByProvider
+    val favorites = providerState.favorites
+    val favoriteEntries: List<FavoriteEntry> = favorites.mapNotNull { key ->
+        val sep = key.indexOf(':')
+        if (sep <= 0) return@mapNotNull null
+        val provider = key.substring(0, sep)
+        val modelId = key.substring(sep + 1)
+        val model = modelsByProvider[provider]?.firstOrNull { it.id == modelId } ?: return@mapNotNull null
+        val entry = providerState.providers.firstOrNull { it.name == provider }
+        FavoriteEntry(provider, model, entry?.displayName?.ifBlank { provider } ?: provider)
+    }
+
+    fun toggleFavorite(providerId: String, modelId: String) {
+        val isFav = favoriteKey(providerId, modelId) in favorites
+        scope.launch { AppContainer.providerRepository.setFavorite(providerId, modelId, !isFav) }
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = ConsoleColors.Background) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 40.dp)) {
             PickerSheetTitle(title)
             if (providerState.providers.isNotEmpty()) {
                 LazyRow(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                    item {
+                        // Favourites tab: a star button ahead of the provider
+                        // chips, matching the desktop's tab bar.
+                        Box(
+                            modifier = Modifier.padding(end = 8.dp).size(34.dp).clip(RoundedCornerShape(8.dp))
+                                .background(if (showFavorites) Color.White.copy(alpha = 0.12f) else ConsoleColors.CardAlt)
+                                .clickable { showFavorites = true },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Filled.Star,
+                                contentDescription = "Favorites",
+                                tint = if (showFavorites) ConsoleColors.TextPrimary else ConsoleColors.TextSecondary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
                     items(providerState.providers) { p ->
-                        val sel = p.name == activeProvider
+                        val sel = !showFavorites && p.name == activeProvider
                         Box(
                             modifier = Modifier.padding(end = 8.dp).clip(RoundedCornerShape(8.dp))
                                 .background(if (sel) Color.White.copy(alpha = 0.12f) else ConsoleColors.CardAlt)
-                                .clickable { activeProvider = p.name }
+                                .clickable {
+                                    showFavorites = false
+                                    activeProvider = p.name
+                                }
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             Text(p.displayName.ifBlank { p.name }, color = if (sel) ConsoleColors.TextPrimary else ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
@@ -164,29 +229,64 @@ fun ModelPickerSheet(
                 placeholder = "Search models…",
                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
             )
-            val models: List<Model> = activeProvider?.let { providerState.modelsByProvider[it] } ?: emptyList()
             val q = search.trim().lowercase()
-            val filtered = if (q.isEmpty()) models else models.filter { it.id.lowercase().contains(q) }
             val loading = activeProvider?.let { providerState.loadingModels[it] } == true || providerState.loadingProviders
-            when {
-                loading && models.isEmpty() -> PickerPlaceholder(spinner = true)
-                filtered.isEmpty() -> PickerPlaceholder(if (search.isNotEmpty()) "No matching models found" else "No models available")
-                else ->
-                    // The list must own the remaining sheet height and scroll within it.
-                    // A plain Column here grew past the sheet on long provider lists
-                    // (antigravity) with no way to reach the overflow items.
-                    LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                        items(filtered.take(100), key = { it.id }) { m ->
+
+            // Star button for a row. Filled once starred, outline otherwise.
+            @Composable
+            fun starFor(providerId: String, modelId: String) {
+                val isFav = favoriteKey(providerId, modelId) in favorites
+                Icon(
+                    if (isFav) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                    contentDescription = if (isFav) "Remove from favorites" else "Add to favorites",
+                    tint = if (isFav) Color(0xFFFACC15) else ConsoleColors.TextMuted,
+                    modifier = Modifier.size(18.dp).clickable { toggleFavorite(providerId, modelId) },
+                )
+            }
+
+            if (showFavorites) {
+                val visibleFavorites = if (q.isEmpty()) favoriteEntries else favoriteEntries.filter { it.model.id.lowercase().contains(q) }
+                when {
+                    providerState.loadingFavorites && favoriteEntries.isEmpty() -> PickerPlaceholder(spinner = true)
+                    visibleFavorites.isEmpty() -> PickerPlaceholder(if (search.isNotEmpty()) "No matching favorites" else "No favorites yet — tap a star to pin a model")
+                    else -> LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                        items(visibleFavorites, key = { favoriteKey(it.provider, it.model.id) }) { entry ->
                             PickerRow(
-                                title = formatModelName(m.id),
-                                // The formatted name is already the row title, so
-                                // the id under it repeated itself — the context
-                                // window is the useful second line (desktop parity).
-                                subtitle = "${formatContextWindow(m.contextWindow)} context",
-                                selected = m.id == selectedModel,
-                            ) { onSelect(m.id, activeProvider) }
+                                title = formatModelName(entry.model.id),
+                                // Provider is not shown as a tab here, so it
+                                // belongs on the row (desktop parity).
+                                subtitle = "${entry.providerLabel} · ${formatContextWindow(entry.model.contextWindow)} context",
+                                selected = entry.model.id == selectedModel && entry.provider == selectedProvider,
+                                trailing = { starFor(entry.provider, entry.model.id) },
+                            ) { onSelect(entry.model.id, entry.provider) }
                         }
                     }
+                }
+            } else {
+                val models: List<Model> = activeProvider?.let { providerState.modelsByProvider[it] } ?: emptyList()
+                val filtered = if (q.isEmpty()) models else models.filter { it.id.lowercase().contains(q) }
+                when {
+                    loading && models.isEmpty() -> PickerPlaceholder(spinner = true)
+                    filtered.isEmpty() -> PickerPlaceholder(if (search.isNotEmpty()) "No matching models found" else "No models available")
+                    else ->
+                        // The list must own the remaining sheet height and scroll within it.
+                        // A plain Column here grew past the sheet on long provider lists
+                        // (antigravity) with no way to reach the overflow items.
+                        LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                            items(filtered.take(100), key = { it.id }) { m ->
+                                val providerId = activeProvider.orEmpty()
+                                PickerRow(
+                                    title = formatModelName(m.id),
+                                    // The formatted name is already the row title, so
+                                    // the id under it repeated itself — the context
+                                    // window is the useful second line (desktop parity).
+                                    subtitle = "${formatContextWindow(m.contextWindow)} context",
+                                    selected = m.id == selectedModel,
+                                    trailing = { starFor(providerId, m.id) },
+                                ) { onSelect(m.id, activeProvider) }
+                            }
+                        }
+                }
             }
         }
     }

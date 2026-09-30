@@ -36,6 +36,9 @@ data class ModelFavorite(
     val modelId: String,
 )
 
+/** Star key format, matching the desktop's `"{provider}:{model_id}"`. */
+fun favoriteKey(provider: String, modelId: String): String = "$provider:$modelId"
+
 @Serializable
 data class ProviderCatalogEntry(
     val name: String,

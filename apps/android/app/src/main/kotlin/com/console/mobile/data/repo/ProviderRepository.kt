@@ -3,7 +3,9 @@ package com.console.mobile.data.repo
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.Model
+import com.console.mobile.data.model.ModelFavorite
 import com.console.mobile.data.model.ProviderCatalogEntry
+import com.console.mobile.data.model.favoriteKey
 import com.console.mobile.data.store.ProviderStateHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -83,6 +85,36 @@ class ProviderRepository(
         } catch (e: Exception) {
             providerState.setRolesError(e.message ?: "Failed to save model roles")
             false
+        }
+    }
+
+    fun loadFavorites() {
+        if (providerState.state.value.loadingFavorites) return
+        scope.launch {
+            providerState.setLoadingFavorites(true)
+            try {
+                val favorites = withContext(Dispatchers.IO) { api.listFavorites() }
+                providerState.setFavorites(favorites.mapTo(mutableSetOf()) { favoriteKey(it.provider, it.modelId) })
+            } catch (_: Exception) {
+                providerState.setLoadingFavorites(false)
+            }
+        }
+    }
+
+    /**
+     * Star or unstar a model. The optimistic update keeps the star responsive;
+     * a failure restores the previous value rather than leaving the UI lying.
+     */
+    suspend fun setFavorite(providerId: String, modelId: String, isFavorite: Boolean) {
+        val key = favoriteKey(providerId, modelId)
+        val before = providerState.state.value.favorites
+        providerState.setFavorites(if (isFavorite) before + key else before - key)
+        try {
+            withContext(Dispatchers.IO) {
+                api.setFavorite(ModelFavorite(provider = providerId, modelId = modelId), isFavorite)
+            }
+        } catch (_: Exception) {
+            providerState.setFavorites(before)
         }
     }
 

@@ -20,6 +20,9 @@ data class ProviderState(
     val loadingRoles: Boolean = false,
     val savingRoles: Boolean = false,
     val rolesError: String? = null,
+    /** Starred models, keyed `"provider:modelId"` (desktop's key format). */
+    val favorites: Set<String> = emptySet(),
+    val loadingFavorites: Boolean = false,
 )
 
 class ProviderStateHolder(initial: ProviderState = ProviderState()) {
@@ -38,6 +41,8 @@ class ProviderStateHolder(initial: ProviderState = ProviderState()) {
     fun setLoadingRoles(v: Boolean) { _state.value = _state.value.copy(loadingRoles = v) }
     fun setSavingRoles(v: Boolean) { _state.value = _state.value.copy(savingRoles = v) }
     fun setRolesError(e: String?) { _state.value = _state.value.copy(rolesError = e, savingRoles = false) }
+    fun setFavorites(v: Set<String>) { _state.value = _state.value.copy(favorites = v, loadingFavorites = false) }
+    fun setLoadingFavorites(v: Boolean) { _state.value = _state.value.copy(loadingFavorites = v) }
     fun clear() { _state.value = ProviderState() }
 
     fun resolveProvider(modelId: String, fallback: String?): String? {
