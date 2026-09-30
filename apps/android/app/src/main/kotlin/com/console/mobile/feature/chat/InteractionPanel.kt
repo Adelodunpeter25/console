@@ -6,19 +6,23 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +48,7 @@ import com.console.mobile.core.chat.PendingQuestion
 import com.console.mobile.data.model.AskQuestionRequest
 import com.console.mobile.data.model.PermissionRequest
 import com.console.mobile.ui.components.PillButton
+import com.console.mobile.ui.components.PillButtonVariant
 import com.console.mobile.ui.theme.ConsoleColors
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
@@ -180,7 +185,13 @@ private fun QuestionPanel(
     val shape = RoundedCornerShape(16.dp)
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 8.dp).clip(shape)
+        modifier = Modifier.fillMaxWidth()
+            // The panel hosts a text field, so it has to ride above the IME or
+            // the keyboard covers the answer box and the Submit row. Navigation
+            // bars are excluded because the window already insets for them —
+            // same treatment as Composer.kt.
+            .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars))
+            .padding(horizontal = 12.dp).padding(bottom = 8.dp).clip(shape)
             .background(Color(0xFF18181B))
             .border(1.dp, Color.White.copy(alpha = 0.15f), shape)
             .padding(16.dp),
@@ -238,14 +249,18 @@ private fun QuestionPanel(
         )
         Row(modifier = Modifier.fillMaxWidth().padding(start = 28.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (request.skippable) {
-                TextButton(onClick = onSkip, enabled = !submitting, modifier = Modifier.clip(RoundedCornerShape(999.dp)).border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(999.dp)).padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Text("Skip", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                }
+                PillButton(
+                    text = "Skip",
+                    onClick = onSkip,
+                    enabled = !submitting,
+                    variant = PillButtonVariant.Outline,
+                )
             } else {
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.weight(1f))
             }
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
-            TextButton(
+            Spacer(modifier = Modifier.weight(1f))
+            PillButton(
+                text = if (isLast) (if (total > 1) "Submit all" else "Submit") else "Next",
                 onClick = {
                     if (custom.trim().isNotEmpty()) onAnswerText(custom.trim())
                     else if (selected.isNotEmpty()) {
@@ -253,11 +268,8 @@ private fun QuestionPanel(
                     }
                 },
                 enabled = hasAnswer && !submitting,
-                modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(if (hasAnswer && !submitting) Color.White else Color.White.copy(alpha = 0.1f)).padding(horizontal = 20.dp, vertical = 10.dp),
-            ) {
-                if (submitting) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(12.dp))
-                else Text(if (isLast) (if (total > 1) "Submit all" else "Submit") else "Next", color = if (hasAnswer && !submitting) Color.Black else Color.White.copy(alpha = 0.6f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
+                loading = submitting,
+            )
         }
     }
 }
