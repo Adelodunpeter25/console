@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
+import com.console.mobile.core.util.formatContextWindow
 import com.console.mobile.core.util.formatModelName
 import com.console.mobile.data.model.ApprovalMode
 import com.console.mobile.data.model.ApprovalModeOption
@@ -189,7 +190,10 @@ fun ModelPickerSheet(
                         items(filtered.take(100), key = { it.id }) { m ->
                             PickerRow(
                                 title = formatModelName(m.id),
-                                subtitle = m.id,
+                                // The formatted name is already the row title, so
+                                // the id under it repeated itself — the context
+                                // window is the useful second line (desktop parity).
+                                subtitle = "${formatContextWindow(m.contextWindow)} context",
                                 selected = m.id == selectedModel,
                             ) { onSelect(m.id, activeProvider) }
                         }

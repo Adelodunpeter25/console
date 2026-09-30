@@ -7,6 +7,11 @@ fun folderName(path: String?): String {
     return if (i != -1) trimmed.substring(i + 1) else trimmed
 }
 
+/** Human-size context window, mirroring the desktop's `format_context_window`:
+ * 1_000_000 -> "1M", 272_000 -> "272k". */
+fun formatContextWindow(contextWindow: Int): String =
+    if (contextWindow >= 1_000_000) "${contextWindow / 1_000_000}M" else "${contextWindow / 1000}k"
+
 fun formatModelName(modelId: String?): String {
     if (modelId.isNullOrEmpty()) return ""
     return modelId.split('-', '_').joinToString(" ") { part ->

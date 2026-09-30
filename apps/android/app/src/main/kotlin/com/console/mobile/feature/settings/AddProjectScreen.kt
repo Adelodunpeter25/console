@@ -124,22 +124,25 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
                         PillButton(text = "Retry", onClick = { browse(currentPath) }, modifier = Modifier.padding(top = 16.dp))
                     }
                 }
-                dirs.isEmpty() -> EmptyState(title = "No subfolders", description = "This folder has no subfolders. You can still add it as a project below.", icon = { Icon(Icons.Filled.Folder, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(32.dp)) })
-                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                else -> Column(modifier = Modifier.fillMaxSize()) {
+                    // "Up one level" must stay reachable when there is nothing
+                    // else to tap: in a folder with no subfolders it is the only
+                    // way back out, since the header back button leaves the screen.
                     if (parentPath != null) {
-                        item(key = "up") {
-                            Row(modifier = Modifier.fillMaxWidth().clickable { browse(parentPath) }.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Filled.ArrowUpward, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp).padding(end = 4.dp))
-                                Text("Up one level", color = ConsoleColors.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
-                            }
-                        }
+                        UpOneLevelRow(onClick = { browse(parentPath) })
                     }
-                    items(dirs, key = { it.path }) { d ->
-                        Row(modifier = Modifier.fillMaxWidth().clickable { browse(d.path) }.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(ConsoleColors.CardAlt).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Filled.Folder, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp))
+                    if (dirs.isEmpty()) {
+                        EmptyState(title = "No subfolders", description = "This folder has no subfolders. You can still add it as a project below.", icon = { Icon(Icons.Filled.Folder, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(32.dp)) })
+                    } else {
+                        LazyColumn(modifier = Modifier.weight(1f)) {
+                            items(dirs, key = { it.path }) { d ->
+                                Row(modifier = Modifier.fillMaxWidth().clickable { browse(d.path) }.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Box(modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(ConsoleColors.CardAlt).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Filled.Folder, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp))
+                                    }
+                                    Text(d.name, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 12.dp))
+                                }
                             }
-                            Text(d.name, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 12.dp))
                         }
                     }
                 }
@@ -169,5 +172,18 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
                 icon = Icons.Filled.Check,
             )
         }
+    }
+}
+
+/** Navigate to the parent directory. Rendered outside the folder list so it
+ * survives in folders that have no subfolders to list. */
+@Composable
+private fun UpOneLevelRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.ArrowUpward, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp).padding(end = 4.dp))
+        Text("Up one level", color = ConsoleColors.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
     }
 }
