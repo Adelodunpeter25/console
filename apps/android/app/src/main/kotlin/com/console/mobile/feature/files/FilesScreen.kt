@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,11 +31,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -84,6 +87,7 @@ fun FilesScreen(onBack: () -> Unit) {
     var searchQuery by remember { mutableStateOf("") }
     var debounced by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<FsTreeEntry>?>(null) }
+    val resultsListState = rememberLazyListState()
     var searching by remember { mutableStateOf(false) }
     var entries by remember { mutableStateOf<List<FsTreeEntry>>(emptyList()) }
     var entriesLoading by remember { mutableStateOf(false) }
@@ -180,8 +184,13 @@ fun FilesScreen(onBack: () -> Unit) {
     if (sel != null) {
         val fileName = sel.split("/").lastOrNull() ?: sel
         val block = getFilePreviewBlock(fileName, selectedSize)
+        val relativePath = projectRoot?.let { root ->
+            val normalizedRoot = root.trimEnd('/')
+            if (sel.startsWith("$normalizedRoot/")) sel.removePrefix("$normalizedRoot/") else sel
+        } ?: sel
+        val subtitle = listOfNotNull(project?.name?.takeIf { it.isNotBlank() }, relativePath).joinToString(" · ")
         Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-            ScreenHeader(title = fileName, subtitle = sel, onBack = { selectedPath = null })
+            ScreenHeader(title = fileName, subtitle = subtitle, centerTitle = false, onBack = { selectedPath = null })
             Box(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp).padding(bottom = 16.dp)) {
                 when {
                     block != null -> Column(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, RoundedCornerShape(12.dp)).padding(20.dp)) {
@@ -248,6 +257,13 @@ fun FilesScreen(onBack: () -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 8.dp),
         )
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            // Scrolling the results means the user has seen enough to act on
+            // one of them, so get the keyboard out of the way.
+            val keyboard = LocalSoftwareKeyboardController.current
+            LaunchedEffect(resultsListState) {
+                snapshotFlow { resultsListState.isScrollInProgress }
+                    .collect { scrolling -> if (scrolling) keyboard?.hide() }
+            }
             when {
                 projectRoot == null -> EmptyState(title = "No project selected", description = "Add a project folder in Settings → Projects.")
                 entriesLoading && entries.isEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -268,7 +284,7 @@ fun FilesScreen(onBack: () -> Unit) {
                     } else if (results.isEmpty()) {
                         EmptyState(title = "No results", description = "No files match \"$searchQuery\".")
                     } else {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(state = resultsListState, modifier = Modifier.fillMaxSize()) {
                             items(results, key = { it.path }) { r ->
                                 TreeRowEntry(entry = r, depth = 0, selected = false, expanded = false, onPressDir = { toggleDir(r.path) }, onPressFile = { selectFile(r.path, null) })
                             }
