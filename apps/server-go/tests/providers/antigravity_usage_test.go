@@ -92,7 +92,8 @@ func TestParseAntigravityHourSpellings(t *testing.T) {
 	}
 }
 
-// Unlabeled entry resetting soon is the short window, not daily.
+// Unlabeled Google entries without a fraction are the weekly window, no
+// matter how close the reset is — reset distance must never relabel them.
 func TestParseAntigravityUnlabeledShortReset(t *testing.T) {
 	now := time.Now().UnixMilli()
 	payload := map[string]any{"models": map[string]any{
@@ -102,8 +103,28 @@ func TestParseAntigravityUnlabeledShortReset(t *testing.T) {
 	if report == nil || len(report.Limits) != 1 {
 		t.Fatalf("report: %+v", report)
 	}
+	if report.Limits[0].ID != "antigravity:google:default:weekly" {
+		t.Fatalf("id: %q", report.Limits[0].ID)
+	}
+}
+
+// A Google fraction that resets soon (or never) is the 5-hour window.
+func TestParseAntigravityGoogleFractionShortReset(t *testing.T) {
+	now := time.Now().UnixMilli()
+	payload := map[string]any{"models": map[string]any{
+		"gemini-a": agGoogleModel(map[string]any{
+			"resetTime": agISO(t, 2*time.Hour), "remainingFraction": 0.8,
+		}),
+	}}
+	report := usage.ParseAntigravityPayload(payload, "antigravity", "", "", "", now)
+	if report == nil || len(report.Limits) != 1 {
+		t.Fatalf("report: %+v", report)
+	}
 	if report.Limits[0].ID != "antigravity:google:default:5h" {
 		t.Fatalf("id: %q", report.Limits[0].ID)
+	}
+	if report.Limits[0].Label != "Usage (Google) · 5 hours" {
+		t.Fatalf("label: %q", report.Limits[0].Label)
 	}
 }
 
@@ -112,16 +133,23 @@ func TestParseAntigravityUnlabeledShortReset(t *testing.T) {
 func TestParseAntigravityReportedBeatsAssumed(t *testing.T) {
 	now := time.Now().UnixMilli()
 	reset := agISO(t, 14*time.Hour)
+	anthropic := func(quota map[string]any) map[string]any {
+		return map[string]any{
+			"modelProvider": "MODEL_PROVIDER_ANTHROPIC",
+			"apiProvider":   "API_PROVIDER_ANTHROPIC_VERTEX",
+			"quotaInfo":     quota,
+		}
+	}
 	payload := map[string]any{"models": map[string]any{
-		"gemini-a": agGoogleModel(map[string]any{"resetTime": reset}),
-		"gemini-b": agGoogleModel(map[string]any{"resetTime": reset, "remainingFraction": 0.7}),
+		"claude-a": anthropic(map[string]any{"resetTime": reset}),
+		"claude-b": anthropic(map[string]any{"resetTime": reset, "remainingFraction": 0.7}),
 	}}
 	report := usage.ParseAntigravityPayload(payload, "antigravity", "", "", "", now)
 	if report == nil || len(report.Limits) != 1 {
 		t.Fatalf("report: %+v", report)
 	}
 	got := report.Limits[0]
-	if got.ID != "antigravity:google:default:daily" {
+	if got.ID != "antigravity:anthropic:default:daily" {
 		t.Fatalf("id: %q", got.ID)
 	}
 	if got.Amount.RemainingFraction == nil || *got.Amount.RemainingFraction != 0.7 {
@@ -146,15 +174,44 @@ func TestParseAntigravityRealSnapshotShape(t *testing.T) {
 	if report == nil {
 		t.Fatal("expected report")
 	}
-	google := agFindLimit(report.Limits, "antigravity:google:default:daily")
+	google := agFindLimit(report.Limits, "antigravity:google:default:weekly")
 	if google == nil {
-		t.Fatalf("missing google daily row: %+v", report.Limits)
+		t.Fatalf("missing google weekly row: %+v", report.Limits)
 	}
-	if google.Label != "Usage (Google) · Daily" {
+	if google.Label != "Usage (Google) · Weekly" {
 		t.Fatalf("google label: %q", google.Label)
 	}
 	anthropic := agFindLimit(report.Limits, "antigravity:anthropic:default:weekly")
 	if anthropic == nil {
 		t.Fatalf("missing anthropic weekly row: %+v", report.Limits)
+	}
+}
+
+// The gpt-oss vertex model is dropped — Anthropic only, no OpenAI row.
+func TestParseAntigravityOpenAIDropped(t *testing.T) {
+	now := time.Now().UnixMilli()
+	payload := map[string]any{"models": map[string]any{
+		"gpt-a": map[string]any{
+			"modelProvider": "MODEL_PROVIDER_OPENAI",
+			"apiProvider":   "API_PROVIDER_OPENAI_VERTEX",
+			"quotaInfo":     map[string]any{"resetTime": agISO(t, 40*time.Hour), "remainingFraction": 0.5},
+		},
+		"claude-a": map[string]any{
+			"modelProvider": "MODEL_PROVIDER_ANTHROPIC",
+			"apiProvider":   "API_PROVIDER_ANTHROPIC_VERTEX",
+			"quotaInfo":     map[string]any{"resetTime": agISO(t, 40*time.Hour), "remainingFraction": 0.5},
+		},
+	}}
+	report := usage.ParseAntigravityPayload(payload, "antigravity", "", "", "", now)
+	if report == nil {
+		t.Fatal("expected report")
+	}
+	for _, l := range report.Limits {
+		if l.Scope.Provider == "antigravity" && (l.ID == "antigravity:openai:default:weekly" || l.Label == "Usage (OpenAI) · Weekly") {
+			t.Fatalf("openai row survived: %+v", l)
+		}
+	}
+	if agFindLimit(report.Limits, "antigravity:anthropic:default:weekly") == nil {
+		t.Fatalf("anthropic row missing: %+v", report.Limits)
 	}
 }

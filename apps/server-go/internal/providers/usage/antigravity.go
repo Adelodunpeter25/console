@@ -113,24 +113,42 @@ func agClassifyHours(source string) *agWindowDescriptor {
 	return nil
 }
 
-// shortWindowMsAG is the conventional Antigravity short quota window: an
-// unlabeled entry resetting within this horizon is the 5-hour window, not
-// the daily one.
+// shortWindowMsAG bounds the short Google quota window: a Google entry that
+// reports a fraction and resets within this horizon (or has no reset) is the
+// 5-hour window. Reset distance alone never labels anything 5h — the same
+// entry would otherwise flip labels as its reset approaches.
 const shortWindowMsAG = int64(6 * 3600 * 1000)
 
 const fiveHourMsAG = int64(5 * 3600 * 1000)
 
 func agInferWindowFromReset(resetAt *int64, nowMs int64) agWindowDescriptor {
-	if resetAt != nil && *resetAt > nowMs && *resetAt-nowMs <= shortWindowMsAG {
-		h := fiveHourMsAG
-		return agWindowDescriptor{id: "5h", label: "5 hours", durationMs: &h}
-	}
 	if resetAt != nil && *resetAt-nowMs > dayMs {
 		w := weekMsAG
 		return agWindowDescriptor{id: "weekly", label: "Weekly", durationMs: &w}
 	}
 	d := dayMs
 	return agWindowDescriptor{id: "daily", label: "Daily", durationMs: &d}
+}
+
+// agGoogleWindow resolves the window for a truly unlabeled Google entry
+// (no windowId/windowLabel from the API or a daily/weekly quota field).
+// Google's API never names its windows, so reset distance alone cannot tell
+// the weekly window from the 5-hour one: entries without a reported fraction
+// are the weekly window, entries with one that reset soon (or never) are the
+// 5-hour window, anything else falls back to reset-distance inference.
+func agGoogleWindow(info agQuotaInfo, fallback agWindowDescriptor, nowMs int64) agWindowDescriptor {
+	if info.windowID != "" || info.windowLabel != "" {
+		return fallback
+	}
+	if info.remainingFraction == nil {
+		w := weekMsAG
+		return agWindowDescriptor{id: "weekly", label: "Weekly", durationMs: &w}
+	}
+	if reset := agParseISOMs(info.resetTime); reset == nil || *reset-nowMs <= shortWindowMsAG {
+		h := fiveHourMsAG
+		return agWindowDescriptor{id: "5h", label: "5 hours", durationMs: &h}
+	}
+	return fallback
 }
 
 func agQuotaInferenceKey(info agQuotaInfo) string {
@@ -419,21 +437,30 @@ func ParseAntigravityPayload(payload any, provider, accountID, email, endpoint s
 		infos := agNormalizeQuotaInfos(modelInfo)
 		descriptors := agInferWindowDescriptors(infos, nowMs)
 		for _, info := range infos {
+			counterName := agFormatCounterName(*info)
+			counterKey := strings.ToLower(counterName)
+			if counterKey == "" {
+				counterKey = "default"
+			}
+			// The gpt-oss vertex model is noise next to the Anthropic
+			// quota — Anthropic only.
+			if counterKey == "openai" {
+				continue
+			}
 			amount := agBuildAmount(*info)
 			var descriptor *agWindowDescriptor
 			if d, ok := descriptors[info]; ok {
 				descriptor = &d
+			}
+			if counterKey == "google" && descriptor != nil {
+				g := agGoogleWindow(*info, *descriptor, nowMs)
+				descriptor = &g
 			}
 			window := agParseWindow(*info, descriptor)
 
 			tierKey := strings.ToLower(info.tier)
 			if tierKey == "" {
 				tierKey = "default"
-			}
-			counterName := agFormatCounterName(*info)
-			counterKey := strings.ToLower(counterName)
-			if counterKey == "" {
-				counterKey = "default"
 			}
 			windowID := "default"
 			if window != nil {
