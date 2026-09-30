@@ -43,7 +43,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.LinkOff
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.normalizeBackendUrl
-import com.console.mobile.core.util.urlHost
+import com.console.mobile.core.util.urlHostPort
 import com.console.mobile.data.store.Environment
 import com.console.mobile.ui.components.ConfirmButton
 import com.console.mobile.ui.components.PillButton
@@ -128,7 +128,7 @@ fun ConnectionSettings(onBack: () -> Unit) {
                                             }
                                         }
                                     }
-                                    Text(urlHost(env.url), color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                                    Text(urlHostPort(env.url), color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                                 }
                                 Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(18.dp))
                             }

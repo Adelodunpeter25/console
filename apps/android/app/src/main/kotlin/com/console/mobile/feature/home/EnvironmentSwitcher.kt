@@ -43,7 +43,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import io.github.lyxnx.compose.ui.tablericons.outline.Server
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.normalizeBackendUrl
-import com.console.mobile.core.util.urlHost
+import com.console.mobile.core.util.urlHostPort
 import com.console.mobile.data.store.Environment
 import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.theme.ConsoleColors
@@ -183,7 +183,7 @@ fun EnvironmentSwitcher(modifier: Modifier = Modifier) {
                                 )
                                 Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                                     Text(env.name, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                    Text(urlHost(env.url), color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                                    Text(urlHostPort(env.url), color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                                 }
                                 if (isActive) {
                                     Icon(TablerIcons.Outline.Check, contentDescription = "Active", tint = Color(0xFF34D399))
