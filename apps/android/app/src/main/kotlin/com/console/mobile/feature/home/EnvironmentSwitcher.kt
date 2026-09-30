@@ -17,7 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,6 +52,8 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Server
 
 /**
  * Port of components/environments/environment-switcher.tsx.
@@ -103,7 +104,7 @@ fun EnvironmentSwitcher(modifier: Modifier = Modifier) {
                 .border(1.dp, ConsoleColors.Border, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.Dns, contentDescription = "Switch environment", tint = ConsoleColors.TextPrimary)
+            Icon(TablerIcons.Outline.Server, contentDescription = "Switch environment", tint = ConsoleColors.TextPrimary)
         }
     }
 

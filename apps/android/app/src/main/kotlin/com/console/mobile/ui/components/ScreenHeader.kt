@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -23,6 +23,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.ui.theme.ConsoleColors
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Settings
 
 /**
  * Port of components/layout/screen-header.tsx.
@@ -91,10 +93,13 @@ fun ScreenHeader(
                 shape = CircleShape,
                 color = ConsoleColors.Card,
                 border = BorderStroke(1.dp, ConsoleColors.Border),
-                modifier = Modifier.size(40.dp),
+                // 12dp to match the back button's trailing gap. Without it the
+                // settings circle butts straight against a preceding header
+                // action (the home screen's environment switcher).
+                modifier = Modifier.padding(start = 12.dp).size(40.dp),
             ) {
                 IconButton(onClick = { onSettingsPress?.invoke() }) {
-                    Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = ConsoleColors.TextPrimary)
+                    Icon(TablerIcons.Outline.Settings, contentDescription = "Settings", tint = ConsoleColors.TextPrimary)
                 }
             }
         }
