@@ -8,7 +8,6 @@ import com.composables.icons.lucide.FilePen
 import com.composables.icons.lucide.FilePlus
 import com.composables.icons.lucide.FileText
 import com.composables.icons.lucide.Files
-import com.composables.icons.lucide.Folder
 import com.composables.icons.lucide.FolderSearch
 import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.ListTodo
@@ -21,6 +20,8 @@ import com.composables.icons.lucide.Users
 import com.composables.icons.lucide.Wrench
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -62,8 +63,8 @@ val TOOL_ICONS: Map<String, ImageVector> = mapOf(
     "bash" to Lucide.Terminal, "shell" to Lucide.Terminal, "command" to Lucide.Terminal,
     "bashJob" to Lucide.SquareTerminal, "bash_job" to Lucide.SquareTerminal,
     "grep" to Lucide.Search, "search_files" to Lucide.Search,
-    "glob" to Lucide.FolderSearch, "list_files" to Lucide.Folder,
-    "list_dir" to Lucide.Folder, "listDir" to Lucide.Folder, "ls" to Lucide.Folder,
+    "glob" to Lucide.FolderSearch, "list_files" to TablerIcons.Outline.FolderOpen,
+    "list_dir" to TablerIcons.Outline.FolderOpen, "listDir" to TablerIcons.Outline.FolderOpen, "ls" to TablerIcons.Outline.FolderOpen,
     "webFetch" to Lucide.Globe, "fetch" to Lucide.Globe,
     "webSearch" to Lucide.Globe, "web_search" to Lucide.Globe, "browser" to Lucide.Globe,
     "subagent" to Lucide.Users,

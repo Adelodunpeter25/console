@@ -16,7 +16,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
@@ -39,6 +38,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import com.console.mobile.AppContainer
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.PillButton
@@ -132,13 +133,13 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
                         UpOneLevelRow(onClick = { browse(parentPath) })
                     }
                     if (dirs.isEmpty()) {
-                        EmptyState(title = "No subfolders", description = "This folder has no subfolders. You can still add it as a project below.", icon = { Icon(Icons.Filled.Folder, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(32.dp)) })
+                        EmptyState(title = "No subfolders", description = "This folder has no subfolders. You can still add it as a project below.", icon = { Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(32.dp)) })
                     } else {
                         LazyColumn(modifier = Modifier.weight(1f)) {
                             items(dirs, key = { it.path }) { d ->
                                 Row(modifier = Modifier.fillMaxWidth().clickable { browse(d.path) }.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Box(modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(ConsoleColors.CardAlt).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Filled.Folder, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp))
+                                        Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp))
                                     }
                                     Text(d.name, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 12.dp))
                                 }

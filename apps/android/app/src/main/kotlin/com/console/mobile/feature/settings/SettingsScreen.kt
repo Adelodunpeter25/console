@@ -16,12 +16,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import com.composables.icons.lucide.ChartBar
 import com.composables.icons.lucide.ChevronRight
-import com.composables.icons.lucide.Folder
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Settings2
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.User
 import com.composables.icons.lucide.Wifi
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -93,7 +94,7 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
         val roles = providerState.modelRoles.count { it.value.isNotBlank() }
         LandingRow(icon = Lucide.Settings2, title = "Models", summary = if (roles == 0) "Chat model only" else "$roles role${if (roles == 1) "" else "s"} configured") { onOpen(SettingsSection.Models) }
         val n = projectState.projects.size
-        LandingRow(icon = Lucide.Folder, title = "Projects", summary = "$n project folder${if (n == 1) "" else "s"}") { onOpen(SettingsSection.Projects) }
+        LandingRow(icon = TablerIcons.Outline.FolderOpen, title = "Projects", summary = "$n project folder${if (n == 1) "" else "s"}") { onOpen(SettingsSection.Projects) }
         val d = projectState.deletedSessions.size
         LandingRow(icon = Lucide.Trash2, title = "Deleted Chats", summary = "$d deleted chat${if (d == 1) "" else "s"}") { onOpen(SettingsSection.DeletedChats) }
     }

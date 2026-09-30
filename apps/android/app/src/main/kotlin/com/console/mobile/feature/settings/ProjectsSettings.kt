@@ -15,7 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -38,6 +37,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import com.console.mobile.AppContainer
 import com.console.mobile.data.model.ProjectInfo
 import com.console.mobile.ui.components.ConfirmButton
@@ -88,7 +89,7 @@ fun ProjectsSettings(onBack: () -> Unit, onAddProject: () -> Unit) {
                 icon = { Icon(Icons.Filled.Warning, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(32.dp)) },
             )
         } else if (projectState.projects.isEmpty()) {
-            EmptyState(title = "No project folders", description = "Add a project folder from your host filesystem to start creating sessions.", icon = { Icon(Icons.Filled.Folder, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(32.dp)) })
+            EmptyState(title = "No project folders", description = "Add a project folder from your host filesystem to start creating sessions.", icon = { Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(32.dp)) })
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                 items(projectState.projects, key = { it.id }) { proj ->
@@ -118,7 +119,7 @@ private fun ProjectRow(proj: ProjectInfo, busy: Boolean, onDelete: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(ConsoleColors.CardAlt).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Folder, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp))
+            Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp))
         }
         Column(modifier = Modifier.weight(1f).padding(start = 12.dp).padding(end = 12.dp)) {
             Text(proj.name, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)

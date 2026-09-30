@@ -21,8 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
@@ -47,6 +45,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Folder
+import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import com.console.mobile.AppContainer
 import com.console.mobile.data.model.FsTreeEntry
 import com.console.mobile.data.model.getFilePreviewBlock
@@ -349,7 +350,7 @@ private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expa
         }
         if (entry.isDir) {
             Icon(
-                if (expanded) Icons.Filled.FolderOpen else Icons.Filled.Folder,
+                if (expanded) TablerIcons.Outline.FolderOpen else TablerIcons.Outline.Folder,
                 contentDescription = null,
                 tint = ConsoleColors.TextSecondary,
                 modifier = Modifier.size(17.dp),

@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
@@ -66,7 +65,7 @@ import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.feature.home.EnvironmentSwitcher
 import com.console.mobile.ui.theme.ConsoleColors
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.Folder
+import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -211,7 +210,7 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                    Icon(TablerIcons.Outline.Folder, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(14.dp))
+                                    Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(14.dp))
                                     Text(section.projectName, color = ConsoleColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
                                 }
                                 if (section.projectId != null && section.projectName != "Drafts") {

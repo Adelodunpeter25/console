@@ -14,7 +14,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Difference
@@ -35,6 +34,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import com.console.mobile.AppContainer
 import com.console.mobile.core.chat.ChatSessionState
 import com.console.mobile.core.chat.createChatSessionState
@@ -242,7 +243,7 @@ fun ChatScreen(
             },
             actions = {
                 IconButton(onClick = { jumpToProjectTab(MobileTab.Files) }, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Filled.Folder, contentDescription = "Open file explorer", tint = Color.White)
+                    Icon(TablerIcons.Outline.FolderOpen, contentDescription = "Open file explorer", tint = Color.White)
                 }
                 IconButton(onClick = { jumpToProjectTab(MobileTab.Changes) }, modifier = Modifier.size(40.dp)) {
                     Icon(Icons.Filled.Difference, contentDescription = "Open changes", tint = Color.White)
